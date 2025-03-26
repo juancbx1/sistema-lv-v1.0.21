@@ -1,25 +1,8 @@
 {
   "name": "sistema-lv-v1.0.21",
   "version": "1.0.0",
-  "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "vercel-build": "echo 'Build complete'"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/juancbx1/sistema-lv-v1.0.21.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/juancbx1/sistema-lv-v1.0.21/issues"
-  },
-  "homepage": "https://github.com/juancbx1/sistema-lv-v1.0.21#readme",
-  "description": "",
-  "dependencies": {
-    "dotenv": "^16.4.7",
-    "express": "^4.21.2",
-    "pg": "^8.14.1"
-  }
+  "dependencies": {}
 }
