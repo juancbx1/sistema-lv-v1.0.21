@@ -1,30 +1,6 @@
-// js/pages/login.js
-import { obterUsuarios } from '../js/utils/storage.js';
+// public/js/login.js
 import { sincronizarPermissoesUsuario } from '../js/utils/auth.js';
-import { permissoesPorTipo } from '../js/utils/permissoes.js'; 
-
-const loginForm = document.getElementById('loginForm');
-const nomeUsuarioInput = document.getElementById('nomeUsuario');
-const senhaInput = document.getElementById('senha');
-const keepLoggedInInput = document.getElementById('keepLoggedIn');
-const submitBtn = loginForm?.querySelector('button[type="submit"]');
-const loadingSpinner = submitBtn?.querySelector('.loading-spinner');
-
-// Mostrar/Esconder Senha
-const togglePassword = document.querySelector('.toggle-password');
-togglePassword.addEventListener('click', () => {
-    const senhaInput = document.getElementById('senha');
-    const isPassword = senhaInput.type === 'password';
-    senhaInput.type = isPassword ? 'text' : 'password';
-    togglePassword.classList.toggle('fa-eye', isPassword);
-    togglePassword.classList.toggle('fa-eye-slash', !isPassword);
-});
-
-// Função para validar nome de usuário
-function validarNomeUsuario(nomeUsuario) {
-    const re = /^[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)*$/;
-    return re.test(nomeUsuario);
-}
+import { permissoesPorTipo } from '../js/utils/permissoes.js';
 
 // Função para mostrar erro
 function mostrarErro(input, mensagem) {
@@ -43,7 +19,24 @@ function limparErro(input) {
     errorMessage.style.display = 'none';
 }
 
-loginForm?.addEventListener('submit', function(e) {
+// Mostrar/Esconder Senha
+const togglePassword = document.querySelector('.toggle-password');
+togglePassword.addEventListener('click', () => {
+    const senhaInput = document.getElementById('senha');
+    const isPassword = senhaInput.type === 'password';
+    senhaInput.type = isPassword ? 'text' : 'password';
+    togglePassword.classList.toggle('fa-eye', isPassword);
+    togglePassword.classList.toggle('fa-eye-slash', !isPassword);
+});
+
+const loginForm = document.getElementById('loginForm');
+const nomeUsuarioInput = document.getElementById('nomeUsuario');
+const senhaInput = document.getElementById('senha');
+const keepLoggedInInput = document.getElementById('keepLoggedIn');
+const submitBtn = loginForm?.querySelector('button[type="submit"]');
+const loadingSpinner = submitBtn?.querySelector('.loading-spinner');
+
+loginForm?.addEventListener('submit', async function(e) {
     e.preventDefault();
 
     const nomeUsuario = nomeUsuarioInput.value.trim();
@@ -53,14 +46,14 @@ loginForm?.addEventListener('submit', function(e) {
     // Validações
     let hasError = false;
 
-    if (!validarNomeUsuario(nomeUsuario)) {
-        mostrarErro(nomeUsuarioInput, 'O usuário só pode conter letras, números e pontos (ex: joao.silva).');
+    if (!nomeUsuario) {
+        mostrarErro(nomeUsuarioInput, 'Por favor, insira o nome de usuário.');
         hasError = true;
     } else {
         limparErro(nomeUsuarioInput);
     }
 
-    if (senha.length < 1) {
+    if (!senha) {
         mostrarErro(senhaInput, 'Por favor, insira sua senha.');
         hasError = true;
     } else {
@@ -72,97 +65,60 @@ loginForm?.addEventListener('submit', function(e) {
     submitBtn.disabled = true;
     loadingSpinner.style.display = 'inline-block';
 
-    setTimeout(() => {
-        const usuarios = obterUsuarios();
-        const usuario = usuarios.find(u => u.nomeUsuario === nomeUsuario && u.senha === senha);
+    try {
+        const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usuario: nomeUsuario, senha: senha })
+        });
 
-        if (usuario) {
-            const tipos = usuario.tipos && Array.isArray(usuario.tipos) ? usuario.tipos : (usuario.tipo ? [usuario.tipo] : []);
+        const data = await response.json();
 
-            if (tipos.length === 0) {
-                alert('Erro: O usuário não possui tipos definidos.');
-                submitBtn.disabled = false;
-                loadingSpinner.style.display = 'none';
-                return;
-            }
+        if (response.ok) {
+            // Login bem-sucedido
+            const usuarioLogado = {
+                nomeUsuario: nomeUsuario,
+                tipos: [data.tipo], // API retorna "admin" ou "user", ajustamos pra array
+                permissoes: permissoesPorTipo[data.tipo] || []
+            };
 
-            const usuarioLogado = { ...usuario, tipos };
-            delete usuarioLogado.tipo;
-
-            // Sincroniza as permissões
+            // Sincroniza permissões usando auth.js
             sincronizarPermissoesUsuario(usuarioLogado);
 
-            // Filtra permissões para admins, removendo antigas
-            const permissoesValidasAdmin = new Set(permissoesPorTipo['admin']);
-            usuarioLogado.permissoes = usuarioLogado.permissoes.filter(permissao => permissoesValidasAdmin.has(permissao));
-
-            // Salva o estado de "mantenha logado" no localStorage
             localStorage.setItem('keepLoggedIn', keepLoggedIn);
-
-            // Salva o usuário logado
             localStorage.setItem('usuarioLogado', JSON.stringify(usuarioLogado));
 
-            const permissoes = usuarioLogado.permissoes || [];
-            const isCostureira = tipos.includes('costureira');
-
+            const isCostureira = usuarioLogado.tipos.includes('costureira');
             if (isCostureira) {
-                if (permissoes.includes('acesso-costureira-dashboard')) {
-                    window.location.href = '/costureira/dashboard.html';
-                } else {
-                    alert('Usuário não tem permissão para acessar a dashboard de costureira.');
-                    localStorage.removeItem('usuarioLogado');
-                    localStorage.removeItem('keepLoggedIn');
-                    submitBtn.disabled = false;
-                    loadingSpinner.style.display = 'none';
-                }
+                window.location.href = '/costureira/dashboard.html';
             } else {
-                if (permissoes.includes('acesso-home')) {
-                    window.location.href = '/public/admin/home.html';
-                } else {
-                    alert('Usuário não tem permissões para acessar nenhuma página. Entre em contato com o administrador.');
-                    localStorage.removeItem('usuarioLogado');
-                    localStorage.removeItem('keepLoggedIn');
-                    submitBtn.disabled = false;
-                    loadingSpinner.style.display = 'none';
-                }
+                window.location.href = '/public/admin/home.html';
             }
         } else {
-            alert('Usuário ou senha incorretos!');
-            submitBtn.disabled = false;
-            loadingSpinner.style.display = 'none';
+            alert(data.message); // "Credenciais inválidas"
         }
-    }, 1000);
+    } catch (error) {
+        console.error('Erro ao fazer login:', error);
+        alert('Erro ao conectar com o servidor.');
+    } finally {
+        submitBtn.disabled = false;
+        loadingSpinner.style.display = 'none';
+    }
 });
 
-// Verifica se o usuário marcou "mantenha logado" anteriormente
+// Verifica "mantenha logado"
 document.addEventListener('DOMContentLoaded', () => {
-    if (window.location.pathname === '/' || window.location.pathname.includes('index.html')) {
-        const keepLoggedIn = localStorage.getItem('keepLoggedIn') === 'true';
-        if (keepLoggedIn) {
-            const usuarioLogado = localStorage.getItem('usuarioLogado');
-            if (usuarioLogado) {
-                const usuario = JSON.parse(usuarioLogado);
-                const permissoes = usuario.permissoes || [];
-                const tipos = usuario.tipos || [];
-                const isCostureira = tipos.includes('costureira');
-
-                if (isCostureira) {
-                    if (permissoes.includes('acesso-costureira-dashboard') && !window.location.pathname.includes('/costureira/dashboard.html')) {
-                        window.location.href = '/costureira/dashboard.html';
-                    } else {
-                        alert('Usuário não tem permissão para acessar a dashboard de costureira.');
-                        localStorage.removeItem('usuarioLogado');
-                        localStorage.removeItem('keepLoggedIn');
-                    }
-                } else {
-                    if (permissoes.includes('acesso-home') && !window.location.pathname.includes('/public/admin/home.html')) {
-                        window.location.href = '/public/admin/home.html';
-                    } else {
-                        alert('Usuário não tem permissões para acessar nenhuma página. Entre em contato com o administrador.');
-                        localStorage.removeItem('usuarioLogado');
-                        localStorage.removeItem('keepLoggedIn');
-                    }
-                }
+    const keepLoggedIn = localStorage.getItem('keepLoggedIn') === 'true';
+    if (keepLoggedIn) {
+        const usuarioLogadoRaw = localStorage.getItem('usuarioLogado');
+        if (usuarioLogadoRaw) {
+            const usuarioLogado = JSON.parse(usuarioLogadoRaw);
+            sincronizarPermissoesUsuario(usuarioLogado);
+            const isCostureira = usuarioLogado.tipos.includes('costureira');
+            if (isCostureira && !window.location.pathname.includes('/costureira/dashboard.html')) {
+                window.location.href = '/costureira/dashboard.html';
+            } else if (!isCostureira && !window.location.pathname.includes('/public/admin/home.html')) {
+                window.location.href = '/public/admin/home.html';
             }
         }
     }
