@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     menuContainer.id = 'menu-lateral-container';
     document.body.appendChild(menuContainer);
 
-    fetch('/public/admin/menu-lateral.html')
+    fetch('/admin/menu-lateral.html')
         .then(response => {
             if (!response.ok) throw new Error('Falha ao carregar menu-lateral.html');
             return response.text();
