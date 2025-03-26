@@ -1,0 +1,360 @@
+/* Reset básico */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    color: #2c3e50;
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+    max-width: 100vw;
+}
+
+/* Menu Hambúrguer (Mobile) */
+.hamburger-menu {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    font-size: 1.8rem;
+    color: #2c3e50;
+    cursor: pointer;
+    z-index: 2000;
+    transition: color 0.3s ease;
+    display: none; /* Oculto por padrão no desktop */
+}
+
+/* Container */
+.container {
+    max-width: 75%;
+    width: 100%;
+    margin: 40px 20px 40px 270px; /* Espaço para o menu lateral no desktop */
+    padding: 0 20px;
+}
+
+/* Home Admin */
+.home-admin {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.linha-superior {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.linha-inferior {
+    width: 100%;
+}
+
+/* Cards de Identificação */
+.cards-identificacao {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    flex: 1;
+    min-width: 0;
+}
+
+.card-identificacao, .card-teaser {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    width: 100%;
+}
+
+.card-identificacao h2 {
+    font-size: 1.5rem;
+    color: #2c3e50;
+    margin-bottom: 10px;
+}
+
+.card-identificacao h2 span {
+    color: #3498db;
+    font-weight: 600;
+}
+
+.card-identificacao p {
+    font-size: 1.4rem;
+    color: #718096;
+}
+
+.card-teaser {
+    background: #4a5568;
+    color: #ffffff;
+}
+
+.card-teaser h3 {
+    font-size: 1.3rem;
+    margin-bottom: 10px;
+}
+
+.card-teaser p {
+    font-size: 0.95rem;
+    font-style: italic;
+    opacity: 0.9;
+}
+
+/* Card Ações */
+.card-acoes {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    flex: 1;
+    min-width: 0;
+}
+
+.card-acoes h2 {
+    font-size: 1.5rem;
+    color: #2c3e50;
+    margin-bottom: 15px;
+}
+
+.acoes-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.acao-btn {
+    display: block;
+    padding: 10px 20px;
+    background: #3498db;
+    color: #ffffff;
+    text-decoration: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: center;
+    transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.acao-btn:hover {
+    background: #2980b9;
+    transform: translateY(-2px);
+}
+
+/* Card Produção */
+.card-producao {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    width: 100%;
+}
+
+.producao-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.producao-header h2 {
+    font-size: 1.5rem;
+    color: #2c3e50;
+}
+
+.btn-refresh {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: #38a169;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.btn-refresh:hover {
+    background: #2f855a;
+    transform: translateY(-2px);
+}
+
+.btn-refresh i {
+    font-size: 1rem;
+}
+
+#graficoProducaoTempoReal {
+    width: 80%;
+    height: 300px;
+    max-width: 80%;
+    display: block;
+}
+
+/* Breakpoints */
+
+/* iPhone XR (max-width: 414px) */
+@media (max-width: 414px) {
+    body {
+        padding: 0 10px;
+    }
+
+    .hamburger-menu {
+        display: block; /* Aparece no mobile */
+    }
+
+    .menu-lateral {
+        left: -250px; /* Escondido por padrão no mobile */
+    }
+
+    .menu-lateral.active {
+        left: 0; /* Mostra quando ativado pelo hambúrguer */
+    }
+
+    .container {
+        max-width: 100%;
+        width: 100%;
+ 
+    }
+
+    .linha-superior {
+        flex-direction: column;
+    }
+
+    .cards-identificacao, .card-acoes {
+        width: 100%;
+    }
+
+    .card-identificacao h2, .card-acoes h2, .producao-header h2 {
+        font-size: 1.3rem;
+    }
+
+    .card-teaser h3 {
+        font-size: 1.2rem;
+    }
+
+    .acao-btn {
+        font-size: 0.9rem;
+        padding: 8px 16px;
+    }
+
+    .btn-refresh {
+        padding: 6px 12px;
+        font-size: 0.9rem;
+    }
+
+    #graficoProducaoTempoReal {
+        height: 200px;
+    }
+}
+
+/* Mobile (max-width: 576px) */
+@media (max-width: 576px) {
+    .hamburger-menu {
+        display: block; /* Aparece no mobile */
+    }
+
+
+    .menu-lateral.active {
+        left: 0; /* Mostra quando ativado */
+    }
+
+    .container {
+        max-width: 100%;
+        width: 100%;
+        margin: 40px 5px 20px 0; /* Remove margem à esquerda no mobile */
+        padding: 0 15px;
+    }
+
+    .linha-superior {
+        flex-direction: column;
+    }
+
+    .cards-identificacao, .card-acoes {
+        width: 100%;
+    }
+
+    .card-identificacao h2, .card-acoes h2, .producao-header h2 {
+        font-size: 1.4rem;
+    }
+
+    .card-teaser h3 {
+        font-size: 1.25rem;
+    }
+
+    .acao-btn {
+        font-size: 0.95rem;
+    }
+
+    .btn-refresh {
+        font-size: 0.9rem;
+    }
+
+    #graficoProducaoTempoReal {
+        height: 250px;
+    }
+}
+
+/* iPad Pro (768px a 1024px) */
+@media (min-width: 768px) and (max-width: 1024px) {
+    .hamburger-menu {
+        display: none; /* Oculto no tablet/desktop */
+    }
+
+    .menu-lateral {
+        left: 0; /* Sempre visível */
+    }
+
+    .container {
+        max-width:100%;
+        width: 100%;
+        margin: 40px auto 30px 10px; /* Espaço para o menu lateral */
+
+    }
+
+    .linha-superior {
+        flex-direction: row;
+    }
+
+    .cards-identificacao, .card-acoes {
+        flex: 1;
+    }
+
+    .card-identificacao h2, .card-acoes h2, .producao-header h2 {
+        font-size: 1.5rem;
+    }
+
+    .card-teaser h3 {
+        font-size: 1.3rem;
+    }
+
+    .acao-btn {
+        font-size: 1rem;
+    }
+
+    .btn-refresh {
+        font-size: 0.95rem;
+    }
+
+    #graficoProducaoTempoReal {
+        height: 280px;
+    }
+}
+
+/* Desktop (acima de 1024px) */
+@media (min-width: 1025px) {
+    .hamburger-menu {
+        display: none; /* Oculto no desktop */
+    }
+
+    .menu-lateral {
+        left: 0; /* Sempre visível */
+    }
+
+    .container {
+        margin: 40px auto 40px 290px; /* Espaço para o menu lateral */
+    }
+}

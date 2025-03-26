@@ -1,0 +1,276 @@
+/* css/menu-lateral.css */
+.menu-lateral {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 250px;
+    height: 100vh;
+    max-height: 100vh;
+    background-color: #ffffff;
+    color: #0f3c5a;
+    padding: 20px 0;
+    padding-bottom: 20px;
+    box-shadow: 3px 0 15px rgba(0, 0, 0, 0.3);
+    overflow-y: auto;
+    z-index: 1000;
+    transition: transform 0.3s ease;
+    box-sizing: border-box;
+}
+
+.menu-header {
+    padding: 20px;
+    border-bottom: 1px solid #2e3b55;
+    text-align: center;
+}
+
+.user-info {
+    display: flex;
+    flex-direction: column; /* Empilha a foto, botão e texto verticalmente */
+    align-items: center; /* Centraliza horizontalmente */
+    justify-content: center;
+    gap: 10px;
+    font-size: 1.2rem;
+    color: #0f3c5a;
+    font-weight: 600;
+}
+
+.user-photo-wrapper {
+    position: relative;
+    width: 80px; /* Tamanho maior para a miniatura */
+    height: 80px;
+    border-radius: 50%; /* Torna a miniatura redonda */
+    overflow: hidden;
+    border: 2px solid #6e8efb; /* Borda para destacar */
+}
+
+#userPhoto {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* Garante que a imagem preencha o círculo sem distorção */
+}
+
+
+.user-info i {
+    font-size: 2rem;
+    color: #356687;
+}
+
+/* Destaque no texto "Bem-vindo, Fulano" */
+#usuarioLogado {
+    font-size: 1.3rem; /* Aumenta o tamanho da fonte */
+    font-weight: 700; /* Negrito */
+    color: #0f3c5a;
+    background-color: rgba(164, 255, 164, 0.027);/* Fundo leve para destaque */
+    padding: 5px 10px;
+    border-radius: 5px;
+}
+
+.user-info #nomeUsuario {
+    color: #356687;
+}
+
+.menu-lateral ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.menu-lateral li {
+    margin: 5px 0;
+}
+
+.menu-lateral a {
+    color: #0f3c5a;
+    text-decoration: none;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.menu-lateral a:hover {
+    background-color: #f9f9f9;
+    color: #0f3c5a;
+}
+
+.menu-lateral a.active {
+    background-color: #356687;
+    color: #ffffff;
+    font-weight: 500;
+}
+
+/* Estilo das seções expansíveis */
+.menu-section-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    cursor: pointer;
+    color: #0f3c5a;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.menu-section-title:hover {
+    background-color: #3498db;
+    color: #ffffff;
+}
+
+.menu-section-title::before {
+    content: '\f054';
+    font-family: 'Font Awesome 5 Free', 'FontAwesome';
+    font-weight: 900;
+    font-size: 0.8rem;
+    transition: transform 0.3s ease;
+    display: inline-block;
+    margin-right: 5px;
+}
+
+.menu-section-title.expanded::before {
+    transform: rotate(90deg);
+}
+
+.menu-subsection {
+    display: block;
+    background-color: #f9f9f9;
+    padding: 0;
+}
+
+.menu-subsection li a {
+    padding: 10px 20px 10px 40px;
+    font-size: 0.9rem;
+    color: #0f3c5a;
+}
+
+.menu-subsection li a:hover {
+    background-color: #3498db;
+    color: #ffffff;
+}
+
+/* Ajuste no logout-btn para centralizar */
+.logout-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center; /* Centraliza o conteúdo */
+    gap: 10px;
+    width: 160px; /* Ajustado para caber bem no menu */
+    padding: 12px 20px;
+    background-color: #e74c3c;
+    color: white;
+    border: none;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    margin: 20px auto; /* Centraliza o botão no menu */
+    position: static; /* Remove o posicionamento relativo */
+    border-radius: 5px;
+}
+
+.logout-btn:hover {
+    background-color: #c0392b;
+}
+
+
+/* Botão Hambúrguer */
+.hamburger-menu {
+    display: none; /* Escondido por padrão no desktop */
+    position: fixed;
+    font-size: 1.2rem;
+    color: #2c3e50;
+    cursor: pointer;
+    z-index: 1100;
+    background: #ffffff;
+    padding: 8px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    top: 10px;
+    left: 10px;
+}
+
+/* Ícones padrão */
+.hamburger-menu .fa-bars {
+    display: inline-block;
+}
+
+.hamburger-menu .fa-times {
+    display: none;
+}
+
+/* Quando o menu está ativo, alterna os ícones */
+.hamburger-menu.active .fa-bars {
+    display: none;
+}
+
+.hamburger-menu.active .fa-times {
+    display: inline-block;
+}
+
+
+/* Ajustes para responsividade */
+@media (max-width: 768px) {
+    .menu-lateral {
+        width: 200px; /* Mantém a largura consistente */
+        transform: translateX(-100%);
+    }
+
+    .menu-lateral.active {
+        transform: translateX(0);
+    }
+
+    .logout-btn {
+        width: 140px; /* Ajusta a largura para o menu menor */
+        margin: 20px auto;
+    }
+
+    .user-info {
+        white-space: normal;
+        flex-wrap: wrap;
+        text-align: center;
+    }
+}
+
+/* Ajustes para mobile (max-width: 576px) */
+@media (max-width: 576px) {
+    .hamburger-menu {
+        display: block; /* Mostra o botão hambúrguer no mobile */
+        top: 10px;
+        left: 10px;
+    }
+
+    .menu-lateral {
+        width: 200px; /* Mantém a largura consistente */
+        transform: translateX(-100%);
+    }
+
+    .menu-lateral.active {
+        transform: translateX(0);
+    }
+
+    .logout-btn {
+        width: 140px;
+        margin: 20px auto;
+    }
+}
+
+/* Ajustes para iPad Pro (768px a 1024px) */
+@media (min-width: 768px) and (max-width: 1024px) {
+    .hamburger-menu {
+        display: block;
+        top: 10px;
+        left: 10px;
+    }
+
+    .menu-lateral {
+        width: 200px; /* Mantém a largura consistente */
+        transform: translateX(-100%);
+    }
+
+    .menu-lateral.active {
+        transform: translateX(0);
+    }
+
+    .logout-btn {
+        width: 140px;
+        margin: 20px auto;
+    }
+}

@@ -1,0 +1,134 @@
+<!-- // admin/ordens-de-producao.html-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ordens de Produção</title>
+    <link rel="stylesheet" href="../css/ordens-de-producao.css">
+    <link rel="stylesheet" href="../css/base-style.css">
+    <link rel="stylesheet" href="../css/menu-lateral.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+     <!-- Botão Hambúrguer -->
+     <div class="hamburger-menu">
+        <i class="fas fa-bars"></i>
+        <i class="fas fa-times"></i>
+    </div>
+
+    <div class="container-op">
+        <!-- Lista de Ordens de Produção -->
+<section class="lista-op" id="opListView">
+    <div class="filters-card">
+        <h1>Ordens de Produção</h1>
+        <div class="cabecalho-editar-op">
+            <input type="text" id="searchOP" class="busca-op" placeholder="Buscar por produto ou número...">
+            <button class="botao-incluir-op" id="btnIncluirOP" onclick="window.location.hash = '#adicionar'">Incluir OP</button>
+        </div>
+        <div id="statusFilter">
+            <button class="status-btn active" data-status="todas">Todas</button>
+            <button class="status-btn" data-status="em-aberto">Em Aberto <span class="status-bolinha status-em-aberto"></span></button>
+            <button class="status-btn" data-status="produzindo">Produzindo <span class="status-bolinha status-produzindo"></span></button>
+            <button class="status-btn" data-status="finalizado">Finalizado <span class="status-bolinha status-finalizado"></span></button>
+            <button class="status-btn" data-status="cancelada">Cancelada <span class="status-bolinha status-cancelada"></span></button>
+        </div>
+    </div>
+    <table class="tabela-op">
+        <thead>
+            <tr>
+                <th>Status</th>
+                <th>N° OP</th>
+                <th>Produto</th>
+                <th>Variação</th>
+                <th>Qtde</th>
+            </tr>
+        </thead>
+        <tbody id="opTableBody"></tbody>
+    </table>
+</section>
+        
+
+        <!-- Formulário de Inclusão de OP -->
+        <section class="formulario-op" id="opFormView" style="display: none;">
+            <button class="botao-voltar-op" onclick="window.location.hash = ''">Voltar</button>
+            <h2>Incluir nova OP</h2>
+            <form id="opForm">
+                <div class="grupo-form-op">
+                    <label class="label-small">Escolha qual produto produzir</label>
+                    <select class="input-produto-novaOP" id="produtoOP" required>
+                        <option value="" >Selecione um produto</option>
+                    </select>
+                </div>
+                <div class="grupo-form-op" id="variantesContainer" style="display: none;">
+                    <label class="label-small">Escolha qual variação deseja produzir</label>
+                    <div class="variantes-selects"></div>
+                </div>
+                <div class="grupo-form-op">
+                    <label class="label-small">Qtde: </label>
+                    <input type="number" class="input-quantidade-novaOP" id="quantidadeOP" min="1" required style="width: 100px;">
+                </div>
+                <div class="grupo-form-op">
+                    <label class="label-small">Número da OP:</label>
+                    <input type="text" id="numeroOP" class="input-numero-novaOP" readonly>
+                </div>
+                <div class="grupo-form-op">
+                    <label class="label-small">Entregar OP em:</label>
+                    <input type="date" id="dataEntregaOP" class="input-data-novaOP" required>
+                </div>
+                <div class="grupo-form-op">
+                    <label class="label-small">Observações: </label>
+                    <textarea id="observacoesOP" rows="4"></textarea>
+                </div>
+                <div class="botoes-form-op">
+                    <button type="submit" class="botao-salvar-op">Salvar</button>
+                    <button type="button" class="botao-cancelar-op" onclick="window.location.hash = ''">Cancelar</button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Edição de OP -->
+<!-- Edição de OP -->
+<section class="editar-op" id="opEditView" style="display: none;">
+    <div class="cabecalho-op">
+        <button class="botao-voltar-op" id="voltarOP">Voltar</button>
+        <button id="cancelarOP" class="botao-cancelar-op">Cancelar</button>
+    </div>
+    <h2 id="opNumero"></h2>
+    <div class="edit-op-container">
+        <div class="form-group">
+            <label for="editProdutoOP">Produto</label>
+            <input type="text" id="editProdutoOP" class="input-produto" readonly>
+        </div>
+        <div class="form-group" id="editVarianteContainer" style="display: none;">
+            <label for="editVarianteOP">Variação</label>
+            <input type="text" id="editVarianteOP" class="input-variante" readonly>
+        </div>
+        <div class="form-group">
+            <label for="editQuantidadeOP">Qtde</label>
+            <div class="input-wrapper">
+                <input type="number" id="editQuantidadeOP" class="input-quantidade-principal" min="1" required>
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="editDataEntregaOP">Data Prevista</label>
+            <div class="input-wrapper">
+                <input type="date" id="editDataEntregaOP" class="input-data" required>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="input-etapas-processos">Etapas</label>
+            <div id="etapasContainer" class="etapas-container"></div>
+        </div>
+    </div>
+    <div class="botoes-form-op">
+        <button id="finalizarOP" class="botao-finalizar-op">Finalizar</button>
+    </div>
+</section>
+
+    </div>
+    <script src="../js/admin-ordens-de-producao.js" type="module"></script>
+    <script src="../js/carregar-menu-lateral.js" type="module"></script>
+    <script src="../js/utils/menu-hamburguer.js" type="module"></script>
+</body>
+</html>

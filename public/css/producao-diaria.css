@@ -1,0 +1,272 @@
+/* css/producao-diaria.css */
+/* Estilo específico para a seção de produção diária */
+.producao-diaria {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+/* Estilo do gráfico */
+.grafico-card {
+    width: 100%;
+}
+
+#graficoDiario {
+    max-height: 400px;
+    width: 100%;
+}
+
+/* Estilo do card Produção Individual */
+.individual-card {
+    width: 100%;
+}
+
+.costureiras-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+}
+
+.costureiras-buttons button {
+    padding: 10px 20px;
+    background-color: #e2e8f0; /* Cor padrão das abas inativas de embalagem-de-produtos */
+    color: #718096;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1em;
+    font-weight: 600;
+    transition: background-color 0.3s ease, color 0.3s ease, transform 0.2s ease;
+}
+
+.costureiras-buttons button.active {
+    background-color: #3182ce; /* Cor ativa das abas de embalagem-de-produtos */
+    color: #fff;
+}
+
+.costureiras-buttons button:hover:not(.active) {
+    background-color: #cbd5e0;
+    transform: translateY(-2px);
+}
+
+
+/* Estilo da Tabela de Detalhes da Produção */
+#detalhesContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.detalhes-section {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease;
+}
+
+.detalhes-section h2 {
+    font-size: 1.8em;
+    color: #2c3e50;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 10px;
+}
+
+.tabela-container {
+    width: 100%;
+}
+
+#corpoTabelaIndividual {
+    width: 100%;
+}
+
+#tabelaIndividual {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: #ffffff;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+#tabelaIndividual thead {
+    background: #3498db;
+    color: white;
+}
+
+#tabelaIndividual th {
+    padding: 10px;
+    font-size: 0.9em;
+    font-weight: 600;
+    text-align: left;
+    white-space: nowrap;
+}
+
+#tabelaIndividual tbody tr {
+    transition: background 0.3s ease;
+}
+
+#tabelaIndividual tbody tr:nth-child(even) {
+    background: #f8f9fa;
+}
+
+#tabelaIndividual tbody tr:hover {
+    background: #ecf0f1;
+}
+
+#tabelaIndividual td {
+    padding: 10px;
+    font-size: 0.85em;
+    color: #2c3e50;
+    border-bottom: 1px solid #dfe6e9;
+    white-space: nowrap; /* Impede que o texto quebre em várias linhas */
+}
+
+/* Estilo do card Detalhes da Produção */
+.detalhes-card {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+}
+
+.tabela-card {
+    width: 100%;
+}
+
+
+.total-card {
+    text-align: center;
+}
+
+#totalProcessos {
+    font-size: 1.5em;
+    color: #3498db;
+    font-weight: 600;
+}
+
+/* Breakpoint para telas menores (max-width: 414px, como iPhone XR) */
+@media (max-width: 414px) {
+    .container {
+        margin-left: 0;
+        margin-right: 0;
+        padding: 15px;
+    }
+
+    .grafico-card h2,
+    .individual-card h2,
+    .detalhes-card h2,
+    .total-card h2 {
+        font-size: 1.5rem;
+    }
+
+    #graficoDiario {
+        max-height: 300px;
+    }
+
+    .costureiras-buttons button {
+        padding: 8px 15px;
+        font-size: 0.9em;
+    }
+
+    .tabela-container {
+        overflow-x: auto; /* Adiciona rolagem horizontal */
+        -webkit-overflow-scrolling: touch; /* Melhora a rolagem em dispositivos iOS */
+    }
+
+    #tabelaIndividual {
+        min-width: 600px; /* Garante que a tabela não colapse demais */
+    }
+
+    #tabelaIndividual th,
+    #tabelaIndividual td {
+        font-size: 0.7rem;
+        padding: 6px;
+    }
+
+    #totalProcessos {
+        font-size: 1.3em;
+    }
+}
+
+/* Breakpoint para Mobile (max-width: 576px) */
+@media (max-width: 576px) {
+    .container {
+        margin-left: 0;
+        margin-right: 0;
+        padding: 20px;
+    }
+
+    .grafico-card h2,
+    .individual-card h2,
+    .detalhes-card h2,
+    .total-card h2 {
+        font-size: 1.6rem;
+    }
+
+    #graficoDiario {
+        max-height: 350px;
+    }
+
+    .costureiras-buttons button {
+        padding: 8px 18px;
+        font-size: 0.95em;
+    }
+
+    .tabela-container {
+        overflow-x: auto; /* Adiciona rolagem horizontal */
+        -webkit-overflow-scrolling: touch; /* Melhora a rolagem em dispositivos iOS */
+    }
+
+    #tabelaIndividual {
+        min-width: 600px; /* Garante que a tabela não colapse demais */
+    }
+
+    #tabelaIndividual th,
+    #tabelaIndividual td {
+        font-size: 0.8rem;
+        padding: 8px;
+    }
+
+    #totalProcessos {
+        font-size: 1.4em;
+    }
+}
+
+/* Breakpoint para iPad Pro (768px a 1024px) */
+@media (min-width: 768px) and (max-width: 1024px) {
+    .container {
+        margin-left: 0;
+        margin-right: 0;
+        padding: 25px;
+        max-width: 100%;
+    }
+
+    .grafico-card h2,
+    .individual-card h2,
+    .detalhes-card h2,
+    .total-card h2 {
+        font-size: 1.7rem;
+    }
+
+    #graficoDiario {
+        max-height: 400px;
+    }
+
+    .costureiras-buttons button {
+        padding: 10px 20px;
+        font-size: 1em;
+    }
+
+    #tabelaIndividual th,
+    #tabelaIndividual td {
+        font-size: 0.9rem;
+        padding: 10px;
+    }
+
+    #totalProcessos {
+        font-size: 1.5em;
+    }
+}

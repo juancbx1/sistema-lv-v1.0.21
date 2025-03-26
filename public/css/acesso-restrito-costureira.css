@@ -1,0 +1,138 @@
+/* css/acesso-restrito-costureira.css */
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Arial', sans-serif;
+    background-color: #f4f4f9;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+.container {
+    text-align: center;
+    background-color: #fff;
+    padding: 40px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    max-width: 400px;
+    width: 100%;
+}
+
+.lock-icon {
+    font-size: 60px;
+    color: #ff6b6b;
+    margin-bottom: 20px;
+}
+
+h1 {
+    font-size: 24px;
+    color: #333;
+    margin-bottom: 10px;
+}
+
+p {
+    font-size: 16px;
+    color: #666;
+    margin-bottom: 20px;
+}
+
+.home-btn {
+    background-color: #ff6b6b;
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    font-size: 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.home-btn:hover {
+    background-color: #e55a5a;
+}
+
+/* Breakpoint para telas menores (max-width: 414px, como iPhone XR) */
+@media (max-width: 414px) {
+    .container {
+        padding: 20px;
+        max-width: 90%;
+    }
+
+    .lock-icon {
+        font-size: 40px;
+        margin-bottom: 15px;
+    }
+
+    h1 {
+        font-size: 20px;
+        margin-bottom: 8px;
+    }
+
+    p {
+        font-size: 14px;
+        margin-bottom: 15px;
+    }
+
+    .home-btn {
+        padding: 8px 16px;
+        font-size: 14px;
+    }
+}
+
+/* Breakpoint para Mobile (max-width: 576px) */
+@media (max-width: 576px) {
+    .container {
+        padding: 25px;
+        max-width: 85%;
+    }
+
+    .lock-icon {
+        font-size: 50px;
+        margin-bottom: 18px;
+    }
+
+    h1 {
+        font-size: 22px;
+        margin-bottom: 10px;
+    }
+
+    p {
+        font-size: 15px;
+        margin-bottom: 18px;
+    }
+
+    .home-btn {
+        padding: 9px 18px;
+        font-size: 15px;
+    }
+}
+
+/* Breakpoint para iPad Pro (768px a 1024px) */
+@media (min-width: 768px) and (max-width: 1024px) {
+    .container {
+        padding: 35px;
+        max-width: 500px;
+    }
+
+    .lock-icon {
+        font-size: 70px;
+        margin-bottom: 25px;
+    }
+
+    h1 {
+        font-size: 28px;
+        margin-bottom: 12px;
+    }
+
+    p {
+        font-size: 18px;
+        margin-bottom: 25px;
+    }
+
+    .home-btn {
+        padding: 12px 24px;
+        font-size: 18px;
+    }
+}

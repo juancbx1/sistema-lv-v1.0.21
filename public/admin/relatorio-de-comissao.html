@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Relatório de Comissão</title>
+
+    <!-- Impedir renderização até a verificação de autenticação -->
+    <script>
+        (function verificarAutenticacaoSincrona() {
+            const usuarioLogadoRaw = localStorage.getItem('usuarioLogado');
+            let usuarioLogado;
+            try {
+                usuarioLogado = JSON.parse(usuarioLogadoRaw);
+            } catch (e) {
+                console.error('[verificarAutenticacaoSincrona] Erro ao parsear usuarioLogado:', e);
+                window.location.replace('/index.html');
+                return;
+            }
+
+            if (!usuarioLogado || !usuarioLogado.permissoes) {
+                console.log('[verificarAutenticacaoSincrona] Nenhum usuário logado ou sem permissões, redirecionando para index.html');
+                window.location.replace('/index.html');
+                return;
+            }
+
+            const permissoesUsuario = usuarioLogado.permissoes || [];
+            const paginaAtual = 'relatorio-de-comissao.html';
+            const permissaoAcesso = `acesso-${paginaAtual.replace('.html', '')}`;
+
+            console.log('[verificarAutenticacaoSincrona] Permissões do usuário:', permissoesUsuario);
+            console.log('[verificarAutenticacaoSincrona] Permissão de acesso requerida:', permissaoAcesso);
+
+            if (!permissoesUsuario.includes(permissaoAcesso)) {
+                console.log(`[verificarAutenticacaoSincrona] Acesso negado à ${paginaAtual}.`);
+                window.location.replace('/public/admin/acesso-negado.html');
+                return;
+            }
+
+            console.log('[verificarAutenticacaoSincrona] Autenticação bem-sucedida, exibindo DOM');
+            document.documentElement.style.display = '';
+        })();
+    </script>
+
+    <link rel="stylesheet" href="../css/relatorio-de-comissao.css">
+    <link rel="stylesheet" href="../css/global-style.css">
+    <link rel="stylesheet" href="../css/menu-lateral.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+
+    <div class="rc-container">
+        <section class="rc-report-section">
+            <div class="rc-filter-panel">
+                <h2>Filtros</h2>
+                <div class="rc-filter-group">
+                    <div class="rc-filter-item">
+                        <label for="rc-filter-costureira">Costureira</label>
+                        <select id="rc-filter-costureira"></select>
+                    </div>
+                    <div class="rc-filter-item">
+                        <label for="rc-filter-ciclo">Ciclo</label>
+                        <select id="rc-filter-ciclo"></select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rc-stats-panel">
+                <div class="rc-quantity-wrapper">
+                    <div class="rc-quantity-box">
+                        <h3>Quantidade Total de Processos</h3>
+                        <p id="rc-total-processos">0</p>
+                    </div>
+                    <div class="rc-quantity-box">
+                        <h3>Quantidade Total de Pontos</h3>
+                        <p id="rc-total-pontos">0</p>
+                    </div>
+                </div>
+                <div class="rc-weeks-box">
+                    <h3>Semanas do Ciclo</h3>
+                    <div class="rc-weeks-list" id="rc-weeks-list"></div>
+                </div>
+                <div class="rc-comission-box">
+                    <h3>Comissão do Ciclo</h3>
+                    <p id="rc-comission-value">R$ 0,00</p>
+                </div>
+            </div>
+
+            <div class="rc-chart-panel">
+                <h2>Comparativo de Comissão - Últimas Semanas</h2>
+                <div class="rc-filter-group">
+                    <div class="rc-filter-item">
+                        <label for="rc-chart-costureira">Costureira</label>
+                        <select id="rc-chart-costureira"></select>
+                    </div>
+                    <div class="rc-filter-item">
+                        <label for="rc-chart-week1">Última Semana</label>
+                        <select id="rc-chart-week1"></select>
+                    </div>
+                    <div class="rc-filter-item">
+                        <label for="rc-chart-week2">Penúltima Semana</label>
+                        <select id="rc-chart-week2"></select>
+                    </div>
+                </div>
+                <canvas id="rc-chart-canvas"></canvas>
+            </div>
+        </section>
+    </div>
+
+    <script src="../../src/pages/admin-relatorio-de-comissao.js" type="module"></script>
+    <script src="../../src/pages/carregar-menu-lateral.js" type="module"></script>
+    <script src="../../src/utils/menu-hamburguer.js" type="module"></script>
+</body>
+</html>

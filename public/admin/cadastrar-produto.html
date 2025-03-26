@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastrar Produto</title>
+      <!-- Script inline para autenticação síncrona -->
+      <script>
+        (function verificarAutenticacaoSincrona() {
+            const usuarioLogadoRaw = localStorage.getItem('usuarioLogado');
+            let usuarioLogado;
+            try {
+                usuarioLogado = JSON.parse(usuarioLogadoRaw);
+            } catch (e) {
+                console.error('[verificarAutenticacaoSincrona] Erro ao parsear usuarioLogado:', e);
+                window.location.replace('/index.html');
+                return;
+            }
+    
+            if (!usuarioLogado || !usuarioLogado.permissoes) {
+                console.log('[verificarAutenticacaoSincrona] Nenhum usuário logado ou sem permissões, redirecionando para index.html');
+                document.documentElement.style.display = 'none';
+                window.stop();
+                window.location.replace('/index.html');
+                return;
+            }
+    
+            const permissoesUsuario = usuarioLogado.permissoes || [];
+            const paginaAtual = 'cadastrar-produto.html';
+            const permissaoAcesso = `acesso-${paginaAtual.replace('.html', '')}`;
+    
+            console.log('[verificarAutenticacaoSincrona] Permissões do usuário:', permissoesUsuario);
+            console.log('[verificarAutenticacaoSincrona] Permissão de acesso requerida:', permissaoAcesso);
+    
+            if (!permissoesUsuario.includes(permissaoAcesso)) {
+                console.log(`[verificarAutenticacaoSincrona] Acesso negado à ${paginaAtual}.`);
+                document.documentElement.style.display = 'none';
+                window.stop();
+                window.location.replace('/admin/acesso-negado.html');
+                return;
+            }
+    
+            document.documentElement.style.display = '';
+        })();
+    </script>
+    <link rel="stylesheet" href="../css/cadastrar-produto.css">
+    <link rel="stylesheet" href="../css/global-style.css">
+    <link rel="stylesheet" href="../css/menu-lateral.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="../../src/pages/admin-cadastrar-produto.js" type="module"></script>
+</head>
+<body>
+    <div class="hamburger-menu">
+        <i class="fas fa-bars"></i>
+        <i class="fas fa-times"></i>
+    </div>
+    <div id="mensagemPermissao" class="alert alert-error" style="display: none;"></div>
+    <div class="container-produto">
+        <section class="lista-produtos" id="productListView" aria-label="Lista de produtos">
+            <div class="cabecalho-lista-produto">
+                <h1>Produtos</h1>
+                <input type="text" id="searchProduct" class="busca-produto" placeholder="Buscar por nome..." aria-label="Buscar produtos">
+            </div>
+            <div class="filtro-tipo-produto" id="typeFilter" role="tablist">
+                <button class="cp-type-btn active" data-type="todos" role="tab" aria-selected="true">Todos</button>
+                <button class="cp-type-btn" data-type="simples" role="tab" aria-selected="false">Simples</button>
+                <button class="cp-type-btn" data-type="variacoes" role="tab" aria-selected="false">Variações</button>
+                <button class="cp-type-btn" data-type="kits" role="tab" aria-selected="false">Kits</button>
+            </div>
+            <table class="tabela-lista-produtos" aria-label="Tabela de produtos">
+                <thead>
+                    <tr>
+                        <th scope="col"></th>
+                        <th scope="col">Produto</th>
+                        <th scope="col">Código (SKU)</th>
+                        <th scope="col">Unidade</th>
+                        <th scope="col">Estoque</th>
+                        <th scope="col">Tipo</th>
+                    </tr>
+                </thead>
+                <tbody id="productTableBody"></tbody>
+            </table>
+        </section>
+
+        <section class="formulario-produto" id="productFormView" style="display: none;" aria-label="Formulário de edição de produto">
+            <button class="botao-voltar-produto" onclick="window.location.hash = ''" aria-label="Voltar à lista">Voltar</button>
+            <h2 id="editProductName"></h2>
+            <div class="filtro-abas-produto" id="tabFilter" role="tablist">
+                <button class="cp-tab-btn active" data-tab="dados-gerais" onclick="switchTab('dados-gerais')" role="tab" aria-selected="true">Dados Gerais</button>
+                <button class="cp-tab-btn" data-tab="ficha-tecnica" onclick="switchTab('ficha-tecnica')" role="tab" aria-selected="false">Ficha Técnica</button>
+                <button class="cp-tab-btn" data-tab="producao" onclick="switchTab('producao')" role="tab" aria-selected="false">Produção</button>
+            </div>
+            <div class="abas-conteudo">
+                <div class="conteudo-aba-produto active" id="dados-gerais" role="tabpanel">
+                    <form id="productForm">
+                        <div class="grupo-form-produto">
+                            <label for="sku">Código (SKU):</label>
+                            <input type="text" id="sku" required aria-required="true">
+                        </div>
+                        <div class="grupo-form-produto">
+                            <label>Tipo:</label>
+                            <div class="tipo-checkboxes">
+                                <label><input type="checkbox" name="tipo" value="simples" onchange="toggleTabs()"> Simples</label>
+                                <label><input type="checkbox" name="tipo" value="variacoes" onchange="toggleTabs()"> Variações</label>
+                                <label><input type="checkbox" name="tipo" value="kits" onchange="toggleTabs()"> Kits</label>
+                            </div>
+                        </div>
+                        <div class="grupo-form-produto">
+                            <label for="gtin">GTIN/EAN:</label>
+                            <input type="text" id="gtin">
+                        </div>
+                        <div class="grupo-form-produto">
+                            <label for="unidade">Unidade:</label>
+                            <select id="unidade" required aria-required="true">
+                                <option value="">Selecione a unidade</option>
+                                <option value="pç">Peça (pç)</option>
+                                <option value="m">Metro (m)</option>
+                                <option value="kg">Quilograma (kg)</option>
+                            </select>
+                        </div>
+                        <div class="grupo-form-produto">
+                            <label for="estoque">Estoque:</label>
+                            <input type="number" id="estoque" disabled aria-disabled="true">
+                        </div>
+                        <button type="submit" class="botao-enviar-produto">Editar Produto</button>
+                    </form>
+                </div>
+
+                <div class="conteudo-aba-produto" id="ficha-tecnica" role="tabpanel">
+                    <div class="grupo-form-produto">
+                        <label for="imagemProduto">Imagem do Produto:</label>
+                        <input type="file" id="imagemProduto" accept="image/*" aria-label="Carregar imagem do produto">
+                        <img id="previewImagem" style="display: none; max-width: 200px; margin-top: 1rem;" alt="Pré-visualização da imagem do produto">
+                        <button id="removeImagem" style="display: none;" class="botao-remover-produto" aria-label="Remover imagem">Remover Imagem</button>
+                    </div>
+                </div>
+
+                <div class="conteudo-aba-produto" id="producao" role="tabpanel">
+                    <div class="grupo-form-produto">
+                        <h3>Estrutura</h3>
+                        <table class="tabela-estrutura-produto" aria-label="Estrutura do produto">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Produto</th>
+                                    <th scope="col">Unidade</th>
+                                    <th scope="col">Quantidade</th>
+                                    <th scope="col">Custo</th>
+                                    <th scope="col">Total</th>
+                                    <th scope="col">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="estruturaBody"></tbody>
+                            <tfoot>
+                                <tr>
+                                    <th scope="row">Totais</th>
+                                    <td></td>
+                                    <td id="totalQuantidade">0</td>
+                                    <td></td>
+                                    <td id="totalCusto">0,00</td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                        <button class="botao-adicionar-estrutura" onclick="addStructureRow()" aria-label="Adicionar componente">Adicionar Componente</button>
+                    </div>
+                    <div class="grupo-form-produto">
+                        <h3>Etapas de Produção</h3>
+                        <table class="cp-table" aria-label="Etapas de produção">
+                            <thead>
+                                <tr>
+                                    <th scope="col" style="width: 5%;"></th>
+                                    <th scope="col" style="width: 30%;">Processos</th>
+                                    <th scope="col" style="width: 25%;">Máquina</th>
+                                    <th scope="col" style="width: 25%;">Feito Por</th>
+                                    <th scope="col" style="width: 15%;">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stepsBody" draggable="true"></tbody>
+                        </table>
+                        <button type="button" class="botao-adicionar-etapa" onclick="addStepRow()" aria-label="Adicionar etapa">Adicionar Etapa</button>
+                    </div>
+                </div>
+
+                <div class="conteudo-aba-produto" id="variacoes" role="tabpanel">
+                    <div class="grupo-form-produto">
+                        <h3>Variações do Produto</h3>
+                        <div id="variacoesContainer"></div>
+                        <button class="botao-adicionar-variacao" onclick="addVariacaoRow()" aria-label="Adicionar variação">Adicionar Outra Variação</button>
+                    </div>
+                    <div class="grupo-form-produto" id="gradeVariacoes">
+                        <h3>Grade das Variações</h3>
+                        <p>Atribua imagens ou edite informações específicas para as variações.</p>
+                        <table class="tabela-grade-variacoes" aria-label="Grade de variações">
+                            <thead id="gradeHeader">
+                                <tr>
+                                    <th scope="col">Variação</th>
+                                    <th scope="col">Composto Por</th>
+                                    <th scope="col">Código (SKU)</th>
+                                    <th scope="col">Imagens</th>
+                                    <th scope="col">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="gradeBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Popup para Nova Variação -->
+            <div id="variacaoPopup" class="popup-produto" style="display: none;" role="dialog" aria-labelledby="novaVariacaoTitle">
+                <div class="conteudo-popup-produto">
+                    <h3 id="novaVariacaoTitle">Nova Variação</h3>
+                    <div class="grupo-form-produto">
+                        <label for="novaVariacaoDescricao">Descrição</label>
+                        <input type="text" id="novaVariacaoDescricao" class="entrada-produto" aria-label="Descrição da nova variação">
+                    </div>
+                    <div class="botoes-popup-produto">
+                        <button class="botao-confirmar-produto" onclick="confirmarNovaVariacao()" aria-label="Confirmar nova variação">Confirmar</button>
+                        <button class="botao-cancelar-produto" onclick="fecharPopup()" aria-label="Cancelar">Cancelar</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Popup para Upload de Imagem na Grade -->
+            <div id="gradeImagePopup" class="popup-produto" style="display: none;" role="dialog" aria-labelledby="gradeImageTitle">
+                <div class="conteudo-popup-produto">
+                    <h3 id="gradeImageTitle">Imagem da Variação</h3>
+                    <div class="grupo-form-produto">
+                        <label for="gradeImageInput">Carregar Imagem</label>
+                        <input type="file" id="gradeImageInput" accept="image/*" aria-label="Carregar imagem da variação">
+                    </div>
+                    <div class="botoes-popup-produto">
+                        <button class="botao-confirmar-produto" onclick="confirmarImagemGrade()" aria-label="Confirmar imagem">Confirmar</button>
+                        <button class="botao-cancelar-produto" onclick="fecharImagemPopup()" aria-label="Cancelar">Cancelar</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="configurarVariacaoView" class="popup-produto" style="display: none;" role="dialog" aria-labelledby="configurarVariacaoTitle">
+                <div class="conteudo-popup-produto">
+                    <h3 id="configurarVariacaoTitle"></h3>
+                    <div class="grupo-form-produto">
+                        <label for="produtoKitSelect">Produto</label>
+                        <select id="produtoKitSelect" onchange="loadVariacoesKit()" aria-label="Selecionar produto para kit">
+                            <option value="">Selecione um produto</option>
+                        </select>
+                    </div>
+                    <div class="grupo-form-produto">
+                        <label for="variacaoKitSelect">Variação</label>
+                        <div class="variacao-kit-container">
+                            <select id="variacaoKitSelect" aria-label="Selecionar variação do kit"></select>
+                            <button id="addVariacaoKitBtn" class="botao-confirmar-produto" aria-label="Adicionar variação ao kit">OK</button>
+                        </div>
+                    </div>
+                    <div class="grupo-form-produto">
+                        <label>Composição</label>
+                        <div id="composicaoKitContainer" class="composicao-kit"></div>
+                    </div>
+                    <div class="botoes-popup-produto">
+                        <button class="botao-confirmar-produto" onclick="salvarComposicaoKit()" aria-label="Configurar kit">Configurar</button>
+                        <button class="botao-cancelar-produto" onclick="window.location.hash = '#editando'" aria-label="Cancelar">Cancelar</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+    
+    <script src="../../src/pages/carregar-menu-lateral.js" type="module"></script>
+    <script src="../../src/utils/menu-hamburguer.js" type="module"></script>
+</body>
+</html>

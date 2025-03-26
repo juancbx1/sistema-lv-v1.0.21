@@ -1,0 +1,179 @@
+body {
+    font-family: sans-serif;
+    background-color: #f4f6f9;
+    margin: 0;
+    padding: 20px;
+    line-height: 1.6;
+    margin-left: 250px; /* Espaço reservado para o menu à esquerda */
+    transition: margin-left 0.3s ease; /* Para animação suave, se aplicável */
+    font-size: 14px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.usuarios-cadastrados {
+    padding: 20px;
+}
+
+.usuarios-cadastrados h1 {
+    font-size: 28px;
+    color: #333;
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.filtro-tipo {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 30px;
+}
+
+.filtro-tipo label {
+    font-size: 16px;
+    color: #555;
+    margin-right: 10px;
+    line-height: 40px;
+}
+
+.filtro-tipo select {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+    background-color: white;
+    cursor: pointer;
+    transition: border-color 0.3s ease;
+}
+
+.filtro-tipo select:focus {
+    border-color: #4CAF50;
+    outline: none;
+}
+
+.usuarios-lista {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.usuario-card {
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    position: relative;
+    animation: cardFadeIn 0.5s ease-in-out;
+}
+
+@keyframes cardFadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.usuario-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+.usuario-card.excluido {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+}
+
+.usuario-info p {
+    margin: 10px 0;
+    font-size: 14px;
+    color: #555;
+}
+
+.usuario-info span {
+    font-weight: 600;
+    color: #333;
+}
+
+.dado-oculto {
+    color: #888;
+}
+
+.toggle-visibilidade {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #4CAF50;
+    margin-left: 5px;
+}
+
+.nivel-select {
+    padding: 5px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    margin-left: 5px;
+}
+
+.nome-usuario-texto {
+    margin-right: 5px;
+}
+
+.nome-usuario-input {
+    padding: 5px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-right: 5px;
+}
+
+.editar-nome-usuario,
+.salvar-nome-usuario,
+.editar-nivel,
+.salvar-nivel,
+.btn-excluir {
+    padding: 5px 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: 5px;
+}
+
+.editar-nome-usuario,
+.editar-nivel {
+    background-color: #3b82f6;
+    color: white;
+}
+
+.editar-nome-usuario:hover,
+.editar-nivel:hover {
+    background-color: #2563eb;
+}
+
+.salvar-nome-usuario,
+.salvar-nivel {
+    background-color: #10b981;
+    color: white;
+}
+
+.salvar-nome-usuario:hover,
+.salvar-nivel:hover {
+    background-color: #059669;
+}
+
+.btn-excluir {
+    background-color: #ef4444;
+    color: white;
+}
+
+.btn-excluir:hover {
+    background-color: #dc2626;
+}
+
+.filtro-tipo {
+    margin-bottom: 20px;
+}
+
+.filtro-tipo select {
+    padding: 5px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+}

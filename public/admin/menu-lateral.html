@@ -1,0 +1,59 @@
+  <!-- // admin/menu-lateral.html-->
+  <div class="menu-lateral">
+    <div class="menu-header">
+        <div class="user-info">
+            <div class="user-photo-wrapper">
+                <img id="userPhoto" src="../images/semFoto.png" alt="Foto do usuário">
+            </div>
+            <input type="file" id="uploadPhoto" accept="image/*" style="display: none;">
+            <span id="usuarioLogado">Bem-vindo, <span id="nomeUsuario">Usuário</span></span>
+        </div>
+    </div>
+    <ul>
+        <li><a href="home.html"><i class="fas fa-home"></i> Home</a></li>
+
+        <!-- Seção Produtos (expansível) -->
+        <li class="menu-section">
+            <span class="menu-section-title"><i class="fas fa-box"></i> Produção & Estoque</span>
+            <ul class="menu-subsection">
+                <li><a href="cadastrar-produto.html">Cadastrar Produto</a></li>
+                <li><a href="ordens-de-producao.html">Ordens de Produção</a></li>
+                <li><a href="embalagem-de-produtos.html">Embalagem de Produtos</a></li>
+            </ul>
+        </li>
+
+        <!-- Seção Cadastro de Usuários (expansível) -->
+        <li class="menu-section">
+            <span class="menu-section-title"><i class="fas fa-users"></i> Cadastro de Usuários</span>
+            <ul class="menu-subsection">
+                <li><a href="cadastrar-usuario.html">Cadastrar Usuário</a></li>
+                <li><a href="usuarios-cadastrados.html">Usuários Cadastrados</a></li>
+            </ul>
+        </li>
+
+        <!-- Seção Processos (expansível) -->
+        <li class="menu-section">
+            <span class="menu-section-title"><i class="fas fa-cogs"></i> Processos</span>
+            <ul class="menu-subsection">
+                <li><a href="gerenciar-producao.html">Gerenciar Produção</a></li>
+                <li><a href="permissoes-usuarios.html">Permissão dos Usuários</a></li>
+                <li><a href="producao-diaria.html">Produção Diária</a></li>
+                <li><a href="ponto-por-processo.html">Ponto por Processo</a></li>
+                <li><a href="relatorio-de-assinaturas.html">Relatório de Assinaturas</a></li>
+            </ul>
+        </li>
+
+        <!-- Seção Comissionamento (expansível) -->
+        <li class="menu-section">
+            <span class="menu-section-title"><i class="fas fa-dollar-sign"></i> Comissionamento</span>
+            <ul class="menu-subsection">
+                <li><a href="relatorio-de-comissao.html">Relatório de Comissão</a></li>
+            </ul>
+        </li>
+    </ul>
+    <div class="menu-spacer"></div> <!-- Adicionado para reservar espaço -->
+    <button id="logoutBtn" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Sair</button>
+    </div>
+</div>
+
+

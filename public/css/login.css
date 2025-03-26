@@ -1,0 +1,352 @@
+/* css/login.css */
+
+/* Estilos base */
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Arial', sans-serif;
+    background: linear-gradient(135deg, #e4e4e4 0%, #f1f1f1 100%);
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+}
+
+/* Card principal */
+.login-card {
+    background: white;
+    padding: 2rem;
+    border-radius: 15px;
+    width: 100%;
+    max-width: 400px;
+    position: relative;
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes chaseBorder {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 400% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+
+input[type='checkbox'] {
+    accent-color: #4b5563;
+  }
+
+
+/* Resto do CSS permanece o mesmo */
+.login-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.login-header h1 {
+    font-size: 1.5rem;
+    color: #213328;
+    line-height: 1.2;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.login-header .highlight {
+    font-size: 1.2rem;
+    color:#213328;
+    font-weight: 400;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    font-size: 0.9rem;
+    color: #4b5563;
+    margin-bottom: 0.5rem;
+}
+
+.input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-wrapper input {
+    width: 100%;
+    padding: 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 5px;
+    font-size: 0.8rem;
+    transition: border-color 0.3s ease;
+}
+
+.input-wrapper input:focus {
+    outline: none;
+    border-color: #3D4B42;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.input-wrapper .domain {
+    position: absolute;
+    right: 10px;
+    color: #4b5563;
+    font-size: 0.8rem;
+    font-weight: 500;
+    pointer-events: none;
+}
+
+.input-wrapper .toggle-password {
+    position: absolute;
+    right: 10px;
+    cursor: pointer;
+    color: #9ca3af;
+}
+
+.error-message {
+    display: none;
+    color: #ef4444;
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
+}
+
+.form-group.error .error-message {
+    display: block;
+}
+
+.keep-logged {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.keep-logged input {
+    margin-right: 0.5rem;
+  
+}
+
+.keep-logged label {
+    font-size: 0.9rem;
+    color: #4b5563;
+
+}
+
+.forgot-password {
+    text-align: right;
+    margin-bottom: 1rem;
+}
+
+.forgot-password-link {
+    font-size: 0.9rem;
+    color: #213328;
+    text-decoration: none;
+}
+
+.forgot-password-link:hover {
+    text-decoration: underline;
+}
+
+.login-btn {
+    width: 100%;
+
+    padding: 1rem;
+    background: linear-gradient(
+        45deg,
+        #3D4B42,
+        #213328
+    );
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: background-position 0.3s ease, transform 0.1s ease;
+    position: relative;
+    animation: buttonGlow 2s ease-in-out infinite;
+}
+
+.login-btn:hover {
+    background-position: 100% 0;
+    transform: scale(1.02);
+}
+
+
+.login-btn:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+    animation: none;
+}
+
+.loading-spinner {
+    display: none;
+    margin-left: 0.5rem;
+}
+
+.login-btn:disabled .loading-spinner {
+    display: inline-block;
+}
+
+/* Breakpoint para Mobile (até 576px) */
+@media (max-width: 576px) {
+    body {
+        padding: 1rem;
+    }
+
+    .login-container {
+        height: auto;
+        padding: 1rem 0;
+    }
+
+    .login-card-wrapper {
+        border-radius: 14px;
+    }
+
+    .login-card {
+        max-width: 80%;
+        width: calc(100% - 2rem);
+        padding: 2rem;
+        border-radius: 10px;
+    }
+
+    .login-header h1 {
+        font-size: 1.2rem;
+    }
+
+    .login-header .highlight {
+        font-size: 1rem;
+    }
+
+    .form-group {
+        margin-bottom: 1rem;
+    }
+
+    .form-group label {
+        font-size: 0.85rem;
+    }
+
+    .input-wrapper input {
+        padding: 0.5rem;
+        font-size: 0.8rem;
+    }
+
+    .input-wrapper .domain {
+        font-size: 0.8rem;
+    }
+
+    .input-wrapper .toggle-password {
+        font-size: 0.9rem;
+    }
+
+    .error-message {
+        font-size: 0.75rem;
+    }
+
+    .forgot-password-link {
+        font-size: 0.85rem;
+    }
+
+    .login-btn {
+        padding: 0.5rem;
+        font-size: 0.9rem;
+    }
+}
+
+/* Breakpoint para iPad Pro (768px a 1024px) */
+@media (min-width: 768px) and (max-width: 1024px) {
+
+    .login-card {
+        max-width: 70%;
+        padding: 4rem;
+        border-radius: 12px;
+    }
+
+    .login-header h1 {
+        font-size: 2.5rem;
+    }
+
+    .login-header .highlight {
+        font-size: 1.8rem;
+    }
+
+    .form-group label {
+        font-size: 2rem;
+    }
+
+    .input-wrapper input {
+        padding: 0.85rem;
+        font-size: 1.7rem;
+    }
+
+    .input-wrapper .domain {
+        font-size: 1.8rem;
+    }
+
+    .input-wrapper .toggle-password {
+        font-size: 1.5rem;
+    }
+
+    .error-message {
+        font-size: 1.5rem;
+    }
+
+    .forgot-password-link {
+        font-size: 1.5rem;
+    }
+
+    .login-btn {
+        padding: 1rem;
+        font-size: 1.5rem;
+    }
+
+    
+.keep-logged {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.keep-logged input {
+    margin-right: 0.5rem;
+  
+}
+
+.keep-logged label {
+    font-size: 2rem;
+    color: #4b5563;
+
+
+}
+
+input[type='checkbox'] {
+    accent-color: #4b5563;
+    border: 0px;
+    width: 25px;
+    height: 25px;
+
+  }
+}

@@ -1,0 +1,157 @@
+.gerenciar-producao {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+/* Estilo da Tabela */
+#tabelaProducoes {
+    width: 100%;
+    min-width: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: #ffffff;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* Definir larguras relativas para as colunas */
+#tabelaProducoes th:nth-child(1), /* ID */
+#tabelaProducoes td:nth-child(1) {
+    width: 8%;
+}
+
+#tabelaProducoes th:nth-child(2), /* Funcionário */
+#tabelaProducoes td:nth-child(2) {
+    width: 15%;
+    white-space: normal;
+    word-break: break-word;
+}
+
+#tabelaProducoes th:nth-child(3), /* Produto */
+#tabelaProducoes td:nth-child(3) {
+    width: 12%;
+    white-space: normal;
+    word-break: break-word;
+}
+
+#tabelaProducoes th:nth-child(4), /* Proc./Máq. */
+#tabelaProducoes td:nth-child(4) {
+    width: 15%;
+    white-space: normal;
+    word-break: break-word;
+}
+
+#tabelaProducoes th:nth-child(5), /* OP */
+#tabelaProducoes td:nth-child(5) {
+    width: 8%;
+}
+
+#tabelaProducoes th:nth-child(6), /* Qtde */
+#tabelaProducoes td:nth-child(6) {
+    width: 6%;
+}
+
+#tabelaProducoes th:nth-child(7), /* Data/Hora */
+#tabelaProducoes td:nth-child(7) {
+    width: 14%;
+    white-space: normal;
+    word-break: break-word;
+}
+
+#tabelaProducoes th:nth-child(8), /* Assinou? */
+#tabelaProducoes td:nth-child(8) {
+    width: 6%;
+}
+
+#tabelaProducoes th:nth-child(9), /* Por */
+#tabelaProducoes td:nth-child(9) {
+    width: 8%;
+}
+
+#tabelaProducoes th:nth-child(10), /* Ação */
+#tabelaProducoes td:nth-child(10) {
+    width: 10%;
+}
+
+/* Estilo dos Botões Editar e Excluir */
+.btn-editar-registro, .btn-excluir-registro {
+    display: block;
+    width: 100%;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 600;
+    transition: background 0.3s ease, transform 0.2s ease;
+    margin: 4px 0;
+}
+
+.btn-editar-registro {
+    background: #3498db;
+    color: white;
+}
+
+.btn-editar-registro:hover {
+    background: #2980b9;
+    transform: translateY(-2px);
+}
+
+.btn-excluir-registro {
+    background: #e74c3c;
+    color: white;
+}
+
+.btn-excluir-registro:hover {
+    background: #c0392b;
+    transform: translateY(-2px);
+}
+
+/* Estilo da Paginação */
+.pagination {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.pagination button {
+    padding: 10px 15px;
+    border: none;
+    border-radius: 6px;
+    background: #3498db;
+    color: white;
+    font-size: 0.95em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.pagination button:hover {
+    background: #2980b9;
+    transform: translateY(-2px);
+}
+
+.pagination button.active {
+    background: #2c3e50;
+}
+
+.pagination button:disabled {
+    background: #b0bec5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.pagination span {
+    padding: 10px;
+    color: #7f8c8d;
+    font-size: 1em;
+}
+
+/* Estilo para Usuários Deletados */
+.deletado {
+    color: #e74c3c;
+    font-style: italic;
+    display: block;
+}

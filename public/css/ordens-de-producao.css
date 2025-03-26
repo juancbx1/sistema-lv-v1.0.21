@@ -1,0 +1,615 @@
+/* Estilo do Container Principal */
+.container-op {
+    margin-left: 270px;
+    padding: 30px;
+    max-width: 1200px;
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+/* Estilo do Cabeçalho */
+.cabecalho-op {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+.cabecalho-editar-op{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    margin-top: 20px;
+    margin-bottom: 20px;
+
+}
+
+.cabecalho-op h1 {
+    font-size: 2rem;
+    color: #2c3e50;
+}
+
+.botao-incluir-op{
+margin-right: 20px;
+
+}
+.busca-op {
+    padding: 10px;
+    border: 1px solid #dfe6e9;
+    border-radius: 8px;
+    font-size: 1em;
+    background: #f9f9f9;
+    width: 300px;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.busca-op:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 8px rgba(52, 152, 219, 0.2);
+    outline: none;
+}
+
+/* Filtros de Status */
+#statusFilter {
+    margin-bottom: 20px;
+    display: flex;
+    gap: 10px;
+}
+
+.status-btn {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    background-color: #e0e0e0;
+    display: flex;
+    align-items: center;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.status-btn:hover {
+    transform: translateY(-2px);
+}
+
+.status-btn.active {
+    background-color: #2196f3;
+    color: white;
+}
+
+.status-bolinha {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-left: 8px;
+}
+
+/* Cores das etapas (mantidas como estavam) */
+.status-em-aberto {
+    background-color: #ffeb3b; /* Amarelo */
+}
+
+.status-produzindo {
+    background-color: #4caf50; /* Verde */
+}
+
+.status-finalizado {
+    background-color: #2196f3; /* Azul */
+}
+
+.status-cancelada {
+    background-color: #f44336; /* Vermelho */
+}
+
+/* Animação de piscar (mantida como estava) */
+.status-produzindo.blink,
+.status-btn[data-status="produzindo"] .status-produzindo,
+.tabela-op td:first-child .status-produzindo {
+    animation: blink 1.5s infinite;
+}
+
+.tabela-op{
+
+    margin-top: 20px;
+}
+
+
+@keyframes blink {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* Estilo do Container de Edição de OP */
+.edit-op-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Estilo para quebrar linha nos inputs de Quantidade e Data Prevista */
+.form-group .input-wrapper {
+    display: block;
+    margin-top: 5px;
+}
+
+/* Estilo das Etapas na View de Edição */
+.input-etapas-processos {
+    font-size: 1em;
+    font-weight: 600;
+    color: #34495e;
+}
+
+.etapas-container {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.etapa-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    transition: background-color 0.3s ease;
+}
+
+.etapa-row:hover {
+    background-color: #f1f1f1;
+}
+
+/* Círculo do número da etapa */
+.etapa-numero {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    font-size: 1rem;
+    font-weight: bold;
+    color: #fff;
+    margin-right: 1rem;
+    flex-shrink: 0;
+}
+
+/* Cores das etapas (mantidas como estavam) */
+.etapa-cinza {
+    background-color: #95a5a6; /* Cinza para não trabalhado */
+}
+
+.etapa-azul {
+    background-color: #3498db; /* Azul para trabalhado */
+}
+
+.etapa-verde {
+    background-color: #2ecc71; /* Verde para etapa atual */
+    animation: blink 1s infinite; /* Piscar */
+}
+
+.etapa-top-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 5px;
+    flex-wrap: wrap;
+}
+
+/* Estilo para selects e inputs nas etapas */
+.input-processo,
+.select-usuario {
+    padding: 10px;
+    border: 1px solid #dfe6e9;
+    border-radius: 8px;
+    font-size: 1em;
+    background: #f9f9f9;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.input-processo {
+    width: 150px;
+}
+
+.select-usuario {
+    width: 220px;
+}
+
+.input-processo:focus,
+.select-usuario:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 8px rgba(52, 152, 219, 0.2);
+    outline: none;
+}
+
+.quantidade-lancar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 0.5rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    width: auto;
+    min-width: 200px;
+}
+
+.quantidade-input {
+    width: 80px;
+    padding: 5px;
+    text-align: center;
+    border: 1px solid #dfe6e9;
+    border-radius: 8px;
+    font-size: 14px;
+    background: #f9f9f9;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.quantidade-input:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 8px rgba(52, 152, 219, 0.2);
+    outline: none;
+}
+
+.etapa-processo {
+    border: 1px solid #dfe6e9;
+    padding: 5px;
+    background-color: #f0f0f0;
+    color: #333;
+    width: 150px;
+    margin-right: 10px;
+    border-radius: 8px;
+}
+
+/* Estilo para o botão "Definir" */
+.botao-definir {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+    margin-left: 10px;
+    border-radius: 8px;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.botao-definir:hover:not(:disabled) {
+    background-color: #0056b3;
+    transform: translateY(-2px);
+}
+
+.botao-definir:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+/* Estilo para o botão "Lançar" */
+.botao-lancar {
+    background-color: #cccccc;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    cursor: not-allowed;
+    margin-left: 10px;
+    border-radius: 8px;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.botao-lancar:not(:disabled) {
+    background-color: #28a745;
+    cursor: pointer;
+}
+
+.botao-lancar:not(:disabled):hover {
+    background-color: #218838;
+    transform: translateY(-2px);
+}
+
+.botao-lancar.lancado {
+    background-color: #28a745;
+    cursor: default;
+}
+
+/* Estilo para inputs específicos */
+.input-produto-novaOP,
+.input-produto,
+.variantes-selects select {
+    width: 250px;
+    margin-top: 5px;
+    padding: 10px;
+    border: 1px solid #dfe6e9;
+    border-radius: 8px;
+    font-size: 1em;
+    background: #f9f9f9;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+#editVarianteContainer{
+    margin-top: 10px;
+
+}
+
+#editQuantidadeOP,
+#editDataEntregaOP{
+    margin-top: -5px;
+}
+
+.input-quantidade-principal,
+.input-quantidade-novaOP,
+.input-numero-novaOP,
+.input-data,
+.input-data-novaOP,
+#observacoesOP {
+    width: 250px;
+    margin-top: 20px;
+    padding: 10px;
+    border: 1px solid #dfe6e9;
+    border-radius: 8px;
+    font-size: 1em;
+    background: #f9f9f9;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.input-numero-novaOP{
+    background-color: rgb(211, 211, 211);
+    color: rgb(127, 140, 141);
+    cursor: not-allowed;
+    opacity: 0.65;
+
+}
+
+
+.input-numero-novaOP,
+.input-quantidade-principal{
+    width: 70px;
+}
+
+.botoes-form-op {
+    display: flex;
+    justify-content: flex-start;
+    gap: 1rem;
+    margin-top: 20px;
+}
+
+.edit-info {
+    font-size: 14px;
+    color: #666;
+}
+
+/* Popup de Etapas */
+.popup-etapas {
+    border-radius: 8px;
+    max-width: 400px;
+    text-align: center;
+}
+
+.popup-etapas h3 {
+    margin-bottom: 15px;
+}
+
+.popup-etapas div {
+    margin: 10px 0;
+    text-align: left;
+}
+
+.popup-etapas button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.popup-etapas button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+/* Breakpoint para telas menores (max-width: 414px, como iPhone XR) */
+@media (max-width: 414px) {
+    .container-op {
+        padding: 10px;
+
+    }
+
+    .filters-card {
+        padding-left: 45px; /* Ajuste para telas menores */
+        padding-right: 10px;
+    }
+
+    .cabecalho-op h1 {
+        font-size: 0.5rem;
+    }
+
+    .busca-op {
+        font-size: 0.7rem;
+        padding: 8px;
+    }
+
+    .status-btn {
+        font-size: 10px;
+        padding: 5px 8px;
+    }
+
+    .tabela-op th,
+    .tabela-op td {
+        font-size: 0.1rem;
+        padding: 600px;
+    }
+}
+
+
+/* Breakpoint para Mobile (max-width: 576px) */
+@media (max-width: 576px) {
+    .container-op {
+        margin-left: 0; /* Remove a margem do menu lateral */
+        padding: 15px;
+        width: 100%;
+    }
+
+    /* Garante que o container ocupe toda a largura */
+    .container-op {
+        width: 100%;
+    }
+
+    .filters-card {
+        padding-left: 50px; /* Espaço para o botão hambúrguer */
+        padding-right: 15px;
+        padding-top: 15px;
+        padding-bottom: 15px;
+    }
+
+    .cabecalho-editar-op {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .busca-op {
+        width: 100%; /* Ocupa toda a largura */
+    }
+
+    .botao-incluir-op {
+        width: 100%;
+        margin-right: 0;
+    }
+
+    #statusFilter {
+        flex-wrap: wrap; /* Permite que os botões quebrem linha */
+        gap: 5px;
+    }
+
+    .status-btn {
+        font-size: 12px;
+        padding: 6px 10px;
+    }
+
+    .tabela-op th,
+    .tabela-op td {
+        font-size: 0.75rem;
+        padding: 8px;
+    }
+
+    .formulario-op,
+    .editar-op {
+        padding: 15px;
+    }
+
+    .input-produto-novaOP,
+    .input-produto,
+    .variantes-selects select,
+    .input-quantidade-principal,
+    .input-quantidade-novaOP,
+    .input-numero-novaOP,
+    .input-data,
+    .input-data-novaOP,
+    #observacoesOP {
+        width: 100%; /* Ajusta para ocupar toda a largura */
+        margin-top: 10px;
+    }
+
+    .botoes-form-op {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .botao-salvar-op,
+    .botao-cancelar-op,
+    .botao-finalizar-op {
+        width: 100%;
+    }
+
+    .etapa-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+    }
+
+    .input-processo,
+    .select-usuario {
+        width: 100%;
+    }
+
+    .quantidade-lancar {
+        min-width: 100%;
+    }
+}
+
+/* Breakpoint para iPad Pro (768px a 1024px) */
+@media (min-width: 768px) and (max-width: 1024px) {
+    .container-op {
+        margin-left: 0; /* Remove a margem do menu lateral (será ajustado para hambúrguer) */
+        padding: 20px;
+    }
+
+    .filters-card {
+        padding-left: 50px; /* Espaço para o botão hambúrguer */
+    }
+
+    .cabecalho-editar-op {
+        flex-direction: row;
+        gap: 15px;
+    }
+
+    .busca-op {
+        width: 250px;
+    }
+
+    .botao-incluir-op {
+        width: auto;
+        margin-right: 0;
+    }
+
+    #statusFilter {
+        gap: 8px;
+    }
+
+    .status-btn {
+        font-size: 13px;
+        padding: 7px 11px;
+    }
+
+    .tabela-op th,
+    .tabela-op td {
+        font-size: 0.85rem;
+        padding: 9px;
+    }
+
+    .formulario-op,
+    .editar-op {
+        padding: 20px;
+    }
+
+    .input-produto-novaOP,
+    .input-produto,
+    .variantes-selects select,
+    .input-quantidade-principal,
+    .input-quantidade-novaOP,
+    .input-numero-novaOP,
+    .input-data,
+    .input-data-novaOP,
+    #observacoesOP {
+        width: 200px;
+    }
+
+    .botoes-form-op {
+        gap: 15px;
+    }
+
+    .etapa-row {
+        gap: 8px;
+    }
+
+    .input-processo,
+    .select-usuario {
+        width: 180px;
+    }
+
+    .quantidade-lancar {
+        min-width: 180px;
+    }
+}

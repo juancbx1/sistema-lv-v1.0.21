@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Usuários Cadastrados</title>
+    <script>
+        (function verificarAutenticacaoSincrona() {
+            const usuarioLogadoRaw = localStorage.getItem('usuarioLogado');
+            let usuarioLogado;
+            try {
+                usuarioLogado = JSON.parse(usuarioLogadoRaw);
+            } catch (e) {
+                console.error('[verificarAutenticacaoSincrona] Erro ao parsear usuarioLogado:', e);
+                window.location.replace('/index.html');
+                return;
+            }
+
+            if (!usuarioLogado || !usuarioLogado.permissoes) {
+                console.log('[verificarAutenticacaoSincrona] Nenhum usuário logado ou sem permissões, redirecionando para index.html');
+                window.location.replace('/index.html');
+                return;
+            }
+
+            const permissoesUsuario = usuarioLogado.permissoes || [];
+            const paginaAtual = 'usuarios-cadastrados.html';
+            const permissaoAcesso = `acesso-${paginaAtual.replace('.html', '')}`;
+
+            console.log('[verificarAutenticacaoSincrona] Permissões do usuário:', permissoesUsuario);
+            console.log('[verificarAutenticacaoSincrona] Permissão de acesso requerida:', permissaoAcesso);
+
+            if (!permissoesUsuario.includes(permissaoAcesso)) {
+                console.log(`[verificarAutenticacaoSincrona] Acesso negado à ${paginaAtual}.`);
+                window.location.replace('/public/admin/acesso-negado.html');
+                return;
+            }
+
+            document.documentElement.style.display = '';
+        })();
+    </script>
+    <link rel="stylesheet" href="../css/global-style.css">
+    <link rel="stylesheet" href="../css/menu-lateral.css">
+    <link rel="stylesheet" href="../css/usuarios-cadastrados.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <section class="usuarios-cadastrados">
+            <h1>Usuários Cadastrados</h1>
+            <div class="filtro-tipo">
+                <label for="filtroTipoUsuario">Filtrar por Tipo:</label>
+                <select id="filtroTipoUsuario">
+                    <option value="">Todos</option>
+                    <option value="administrador">Administrador</option>
+                    <option value="supervisor">Supervisor</option>
+                    <option value="lider_setor">Líder de Setor</option>
+                    <option value="costureira">Costureira</option>
+                    <option value="tiktik">TikTik</option>
+                    <option value="cortador">Cortador</option>
+                    <option value="excluidos">Excluídos</option>
+                </select>
+            </div>
+            <div id="usuariosLista" class="usuarios-lista"></div>
+        </section>
+    </div>
+
+    <script src="../../src/pages/admin-usuarios-cadastrados.js" type="module"></script>
+    <script src="../../src/pages/carregar-menu-lateral.js" type="module"></script>
+    <script src="../../src/utils/menu-hamburguer.js" type="module"></script>
+</body>
+</html>

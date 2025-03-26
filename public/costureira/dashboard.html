@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="../css/costureira-style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+</head>
+<body>
+    <!-- Popup de Assinatura -->
+    <div id="assinaturaPopup" class="popup" style="display: none;">
+        <div class="popup-content">
+            <h2>Assinatura de Produção</h2>
+            <p>Confirme os processos registrados antes de continuar:</p>
+            <ul id="processosParaAssinatura" class="processos-assinatura-lista"></ul>
+            <p class="aviso">Em caso de divergência, procure um supervisor antes de assinar. Após 17h30, a assinatura é obrigatória.</p>
+            <div class="confirmation">
+                <input type="checkbox" id="confirmacaoAssinatura" name="confirmacao">
+                <label for="confirmacaoAssinatura">"Confirmo que os registros listados estão corretos!"</label>
+            </div>
+            <button id="assinarProducaoBtn" disabled>Assinar Agora</button>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header class="dashboard-header">
+        <div class="header-content">
+            <h1 id="saudacaoCostureira"></h1>
+            <div class="user-info">
+                <span id="nivelCostureira" class="nivel-destaque">
+                    Nível: <span id="nivelValor"><i class="fas fa-trophy"></i> [Nível]</span>
+                </span>
+                <button id="logoutBtn" class="logout-btn btn-danger">Sair</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Conteúdo do Dashboard -->
+    <div class="container dashboard-content">
+        <section class="dashboard-cards">
+            <!-- Card Alcance de Meta -->
+            <div class="card meta-card">
+                <h2>Alcance de Meta</h2>
+                <div class="meta-controls">
+                    <select id="metaSelect"></select>
+                    <button id="editarMetaBtn" class="action-btn btn-primary">Editar Meta</button>
+                </div>
+                <div class="progress-section">
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div id="progressoBarra" class="progress-fill"></div>
+                        </div>
+                        <p class="processos-destaque">Pontos: <span id="quantidadeProcessos">0</span></p>
+                    </div>
+                    <p id="processosFaltantes" class="processos-faltantes">Faltam 0 pontos para atingir a sua Meta</p>
+                    <p id="comissaoGarantida" class="comissao-info">Comissão já garantida: <span id="valorComissao">R$ 0,00</span></p>
+                    <p id="semMetaBatida" class="sem-meta" style="display: none;">Você ainda não bateu nenhuma meta</p>
+                </div>
+            </div>
+
+            <!-- Card Produção do Dia -->
+            <div class="card producao-dia">
+                <h2>Produção do Dia</h2>
+                <canvas id="graficoProducaoDia"></canvas>
+            </div>
+
+            <!-- Card Próxima Comissão -->
+            <div class="card proxima-comissao">
+                <h2>Próxima Comissão</h2>
+                <p><em>Algo incrível está chegando...</em></p>
+            </div>
+
+            <!-- Card Detalhamento de Processos -->
+            <div class="card detalhamento-card">
+                <h2>Detalhamento de Processos</h2>
+                <div class="filtros">
+                    <div class="filtro-container">
+                        <span id="filtroDia" class="filtro-texto active">Filtrar por Dia</span>
+                        <input type="text" id="datepickerDia" class="datepicker" placeholder="Selecione o dia">
+                    </div>
+                    <div class="filtro-container">
+                        <span id="filtroSemana" class="filtro-texto">Filtrar por Semana</span>
+                        <input type="text" id="datepickerSemana" class="datepicker" placeholder="Selecione a semana">
+                    </div>
+                </div>
+                <p id="totalProcessos" class="total-processos">TOTAL DE PROCESSOS: 0</p>
+                <div class="processos-wrapper">
+                    <ul id="listaProcessos" class="processos-lista"></ul>
+                </div>
+                <div id="paginacaoContainer" class="paginacao">
+                    <button id="btnAnterior" class="paginacao-btn btn-primary">Anterior</button>
+                    <div id="paginacaoNumeros" class="paginacao-numeros"></div>
+                    <button id="btnProximo" class="paginacao-btn btn-primary">Próximo</button>
+                </div>
+            </div>
+        </section>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+    <script src="../js/pages/costureira-dashboard.js" type="module"></script>
+</body>
+</html>

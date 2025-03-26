@@ -1,0 +1,14 @@
+/* Reset básico */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: sans-serif;
+    background-color: #f4f6f8; /* Cinza claro de fundo */
+    color: #333;
+    margin-left: 250px; /* Espaço reservado para o menu à esquerda */
+    transition: margin-left 0.3s ease; /* Para animação suave, se aplicável */
+}

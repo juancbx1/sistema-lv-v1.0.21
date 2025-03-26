@@ -1,0 +1,99 @@
+<!-- admin/producao-diaria.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Produção Diária</title>
+<!-- Impedir renderização até a verificação de autenticação -->
+<script>
+    (function verificarAutenticacaoSincrona() {
+        const usuarioLogadoRaw = localStorage.getItem('usuarioLogado');
+        let usuarioLogado;
+        try {
+            usuarioLogado = JSON.parse(usuarioLogadoRaw);
+        } catch (e) {
+            console.error('[verificarAutenticacaoSincrona] Erro ao parsear usuarioLogado:', e);
+            window.location.replace('/index.html');
+            return;
+        }
+
+        if (!usuarioLogado || !usuarioLogado.permissoes) {
+            console.log('[verificarAutenticacaoSincrona] Nenhum usuário logado ou sem permissões, redirecionando para index.html');
+            window.location.replace('/index.html');
+            return;
+        }
+
+        const permissoesUsuario = usuarioLogado.permissoes || [];
+        const paginaAtual = 'producao-diaria.html';
+        const permissaoAcesso = `acesso-${paginaAtual.replace('.html', '')}`;
+
+        console.log('[verificarAutenticacaoSincrona] Permissões do usuário:', permissoesUsuario);
+        console.log('[verificarAutenticacaoSincrona] Permissão de acesso requerida:', permissaoAcesso);
+
+        if (!permissoesUsuario.includes(permissaoAcesso)) {
+            console.log(`[verificarAutenticacaoSincrona] Acesso negado à ${paginaAtual}.`);
+            window.location.replace('/public/admin/acesso-negado.html');
+            return;
+        }
+
+        console.log('[verificarAutenticacaoSincrona] Autenticação bem-sucedida, exibindo DOM');
+        document.documentElement.style.display = '';
+    })();
+</script>
+
+    <link rel="stylesheet" href="../css/base-style.css">
+    <link rel="stylesheet" href="../css/menu-lateral.css">
+    <link rel="stylesheet" href="../css/producao-diaria.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div class="hamburger-menu">
+        <i class="fas fa-bars"></i>
+        <i class="fas fa-times"></i>
+    </div>
+
+    <div class="container">
+        <section class="producao-diaria">
+            <div class="grafico-card filters-card">
+                <h2 id="tituloGrafico">Produção do Dia</h2>
+                <canvas id="graficoDiario"></canvas>
+            </div>
+
+            <div class="individual-card filters-card">
+                <h2>Produção Individual</h2>
+                <div class="costureiras-buttons" id="costureirasButtons"></div>
+            </div>
+
+            <div class="detalhes-card filters-card" id="detalhesContainer" style="display: none;">
+                <h2>Detalhes da Produção</h2>
+                <div class="tabela-container">
+                    <table id="tabelaIndividual">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Produto</th>
+                                <th>Variação</th>
+                                <th>Proc./Máq.</th>
+                                <th>Qtd.</th>
+                                <th>Retirado Por</th>
+                                <th>Horário</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corpoTabelaIndividual"></tbody>
+                    </table>
+                </div>
+                <div class="total-card filters-card">
+                    <h2>Total de Processos</h2>
+                    <p id="totalProcessos">0</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script src="../../src/pages/admin-producao-diaria.js" type="module"></script>
+    <script src="../../src/pages/carregar-menu-lateral.js" type="module"></script>
+    <script src="../../src/utils/menu-hamburguer.js" type="module"></script>
+</body>
+</html>

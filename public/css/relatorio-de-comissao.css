@@ -1,0 +1,215 @@
+
+/* Navegação */
+.rc-nav {
+    background-color: #2c3e50; /* Azul escuro moderno */
+    padding: 1rem;
+}
+
+.rc-nav ul {
+    list-style: none;
+    display: flex;
+    justify-content: space-around;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.rc-nav li a {
+    color: #ecf0f1; /* Cinza claro para texto */
+    text-decoration: none;
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    transition: color 0.3s;
+}
+
+.rc-nav li a:hover {
+    color: #3498db; /* Azul claro ao passar o mouse */
+}
+
+.rc-logout-btn {
+    background-color: #e74c3c; /* Vermelho para destaque */
+    border: none;
+    color: #fff;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+}
+
+.rc-logout-btn:hover {
+    background-color: #c0392b;
+}
+
+/* Container Principal */
+.rc-container {
+    max-width: 1200px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+
+/* Seção de Relatório */
+.rc-report-section {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+/* Painel de Filtros */
+.rc-filter-panel {
+    background-color: #fff;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.rc-filter-panel h2 {
+    color: #2c3e50;
+    margin-bottom: 1rem;
+}
+
+.rc-filter-group {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.rc-filter-item {
+    display: flex;
+    flex-direction: column;
+    min-width: 200px;
+}
+
+.rc-filter-item label {
+    margin-bottom: 0.5rem;
+    color: #7f8c8d; /* Cinza médio */
+    font-weight: 500;
+}
+
+.rc-filter-item select {
+    padding: 0.5rem;
+    border: 1px solid #dcdcdc;
+    border-radius: 4px;
+    background-color: #f9f9f9;
+    color: #333;
+    font-size: 1rem;
+}
+
+/* Painel de Estatísticas */
+.rc-stats-panel {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+}
+
+.rc-quantity-wrapper {
+    display: flex;
+    gap: 1rem;
+    width: 40%; /* Ajuste conforme necessário */
+}
+
+.rc-quantity-box, .rc-weeks-box, .rc-comission-box {
+    background-color: #fff;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 150px; /* Altura fixa para todos os cards */
+}
+
+.rc-quantity-box {
+    flex: 1; /* Divide igualmente o espaço no wrapper */
+    width: 100%;
+}
+
+.rc-weeks-box {
+    width: 40%;
+}
+
+.rc-comission-box {
+    width: 20%;
+}
+
+.rc-quantity-box h3, .rc-weeks-box h3, .rc-comission-box h3 {
+    color: #2c3e50;
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
+    text-align: center;
+}
+
+.rc-quantity-box p, .rc-comission-box p {
+    font-size: 1.5rem;
+    color: #3498db; /* Azul para valores */
+    font-weight: 600;
+}
+
+.rc-comission-box p.nao-bateu {
+    color: #e74c3c; /* Vermelho para "não bateu" */
+    font-size: 1rem;
+    font-weight: 400;
+}
+
+.rc-weeks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+    /* Removido overflow-y e max-height para tirar o scroll */
+}
+
+.rc-weeks-list .rc-week-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    background-color: #ecf0f1;
+    border-radius: 4px;
+    transition: all 0.3s;
+}
+
+.rc-week-item button {
+    background: none;
+    border: none;
+    color: #2c3e50;
+    font-weight: 500;
+    cursor: default;
+}
+
+.rc-week-item button.semana-atual {
+    color: #fff; /* Texto branco */
+    background-color: #3498db; /* Fundo azul */
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    font-size: 1.1rem; /* Maior */
+    font-weight: 600;
+    width: 100%; /* Ocupa todo o espaço */
+    text-align: left;
+}
+
+.rc-week-item span {
+    color: #7f8c8d;
+}
+
+.rc-week-item span.processos-atual {
+    color: #fff; /* Texto branco */
+    font-weight: 600;
+}
+
+/* Painel do Gráfico */
+.rc-chart-panel {
+    background-color: #fff;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.rc-chart-panel h2 {
+    color: #2c3e50;
+    margin-bottom: 1rem;
+}
+
+.rc-chart-canvas {
+    max-height: 400px;
+    width: 100%;
+}
