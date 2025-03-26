@@ -92,7 +92,7 @@ loginForm?.addEventListener('submit', async function(e) {
             if (isCostureira) {
                 window.location.href = '/costureira/dashboard.html';
             } else {
-                window.location.href = '/public/admin/home.html';
+                window.location.href = '/admin/home.html';
             }
         } else {
             alert(data.message); // "Credenciais inválidas"
@@ -117,8 +117,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const isCostureira = usuarioLogado.tipos.includes('costureira');
             if (isCostureira && !window.location.pathname.includes('/costureira/dashboard.html')) {
                 window.location.href = '/costureira/dashboard.html';
-            } else if (!isCostureira && !window.location.pathname.includes('/public/admin/home.html')) {
-                window.location.href = '/public/admin/home.html';
+            } else if (!isCostureira && !window.location.pathname.includes('/admin/home.html')) {
+                window.location.href = '/admin/home.html';
             }
         }
     }
