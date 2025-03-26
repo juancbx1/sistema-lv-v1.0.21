@@ -8,6 +8,16 @@
     ],
     "routes": [
       {
+        "src": "/login",
+        "dest": "server.js",
+        "methods": ["POST"]
+      },
+      {
+        "src": "/cadastrar",
+        "dest": "server.js",
+        "methods": ["POST"]
+      },
+      {
         "src": "/(.*)",
         "dest": "server.js"
       }
