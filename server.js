@@ -4,7 +4,6 @@ const app = express();
 
 app.use(express.json());
 
-// Rota pra cadastrar usuário
 app.post('/cadastrar', async (req, res) => {
   const { nome, senha } = req.body;
   try {
@@ -18,7 +17,6 @@ app.post('/cadastrar', async (req, res) => {
   }
 });
 
-// Rota pra login
 app.post('/login', async (req, res) => {
   const { nome, senha } = req.body;
   try {
