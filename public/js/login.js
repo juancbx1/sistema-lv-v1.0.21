@@ -78,7 +78,7 @@ loginForm?.addEventListener('submit', async function(e) {
             // Login bem-sucedido
             const usuarioLogado = {
                 nomeUsuario: nomeUsuario,
-                tipos: [data.tipo], // API retorna "admin" ou "user", ajustamos pra array
+                tipos: [data.tipo], // API retorna "admin" ou "user"
                 permissoes: permissoesPorTipo[data.tipo] || []
             };
 
