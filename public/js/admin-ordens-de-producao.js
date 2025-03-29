@@ -1,27 +1,113 @@
 import { verificarAutenticacao } from '/js/utils/auth.js';
 import { PRODUTOS, PRODUTOSKITS } from '/js/utils/prod-proc-maq.js';
 
+let filteredOPsGlobal = [];
+
+function mostrarPopupMensagem(mensagem, tipo = 'erro') {
+  const popup = document.createElement('div');
+  popup.className = `popup-mensagem popup-${tipo}`;
+  popup.style.position = 'fixed';
+  popup.style.top = '50%';
+  popup.style.left = '50%';
+  popup.style.transform = 'translate(-50%, -50%)';
+  popup.style.backgroundColor = tipo === 'erro' ? '#f8d7da' : '#d4edda';
+  popup.style.color = tipo === 'erro' ? '#721c24' : '#155724';
+  popup.style.padding = '20px';
+  popup.style.borderRadius = '5px';
+  popup.style.boxShadow = '0 0 10px rgba(0,0,0,0.3)';
+  popup.style.zIndex = '1000';
+  popup.style.maxWidth = '400px';
+  popup.style.textAlign = 'center';
+
+  const mensagemTexto = document.createElement('p');
+  mensagemTexto.textContent = mensagem;
+  popup.appendChild(mensagemTexto);
+
+  const fecharBtn = document.createElement('button');
+  fecharBtn.textContent = 'Fechar';
+  fecharBtn.style.marginTop = '10px';
+  fecharBtn.style.padding = '5px 10px';
+  fecharBtn.style.backgroundColor = tipo === 'erro' ? '#dc3545' : '#28a745';
+  fecharBtn.style.color = '#fff';
+  fecharBtn.style.border = 'none';
+  fecharBtn.style.borderRadius = '3px';
+  fecharBtn.style.cursor = 'pointer';
+
+  fecharBtn.addEventListener('click', () => {
+    document.body.removeChild(popup);
+  });
+
+  popup.appendChild(fecharBtn);
+  document.body.appendChild(popup);
+
+  setTimeout(() => {
+    if (document.body.contains(popup)) {
+      document.body.removeChild(popup);
+    }
+  }, 5000);
+}
+
 // Cache para produtos
 let produtosCache = null;
+let produtosPromise = null; // Armazena a promessa em andamento
+
 
 // Conjunto para rastrear IDs únicos
 const usedIds = new Set();
 
-// Função para buscar produtos da API
+// Função para buscar produtos da API com cache no localStorage
+// Função para buscar produtos da API com cache no localStorage
 async function obterProdutos() {
+  const cachedData = localStorage.getItem('produtosCacheData');
+  if (cachedData) {
+    const { produtos, timestamp } = JSON.parse(cachedData);
+    const now = Date.now();
+    const cacheDuration = 5 * 60 * 1000; // 5 minutos em milissegundos
+    if (now - timestamp < cacheDuration) {
+      produtosCache = produtos;
+      console.log('[obterProdutos] Retornando produtos do localStorage');
+      return produtosCache;
+    }
+  }
+
   if (produtosCache) {
     console.log('[obterProdutos] Retornando produtos do cache');
     return produtosCache;
   }
 
-  const token = localStorage.getItem('token');
-  const response = await fetch('/api/produtos', {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-  if (!response.ok) throw new Error('Erro ao carregar produtos');
-  produtosCache = await response.json();
-  console.log('[obterProdutos] Produtos buscados e armazenados no cache:', produtosCache);
-  return produtosCache;
+  if (produtosPromise) {
+    console.log('[obterProdutos] Aguardando promessa existente');
+    return await produtosPromise;
+  }
+
+  try {
+    produtosPromise = (async () => {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/produtos', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error('Erro ao carregar produtos');
+      produtosCache = await response.json();
+      const cacheData = {
+        produtos: produtosCache,
+        timestamp: Date.now(),
+      };
+      localStorage.setItem('produtosCacheData', JSON.stringify(cacheData));
+      console.log('[obterProdutos] Produtos buscados e armazenados no cache e localStorage:', produtosCache);
+      return produtosCache;
+    })();
+
+    return await produtosPromise;
+  } finally {
+    produtosPromise = null; // Limpar a promessa após a conclusão
+  }
+}
+
+// Função para limpar o cache (chamar no logout, por exemplo)
+export function limparCacheProdutos() {
+  produtosCache = null;
+  localStorage.removeItem('produtosCacheData');
+  console.log('[obterProdutos] Cache de produtos limpo');
 }
 
 // Funções para interagir com a API de ordens de produção
@@ -93,21 +179,27 @@ async function loadProdutosSelect() {
   const produtoSelect = document.getElementById('produtoOP');
   if (!produtoSelect) return;
 
-  produtoSelect.innerHTML = '<option value="">Selecione um produto</option>';
-  const produtos = await obterProdutos();
-  const produtosFiltrados = produtos.filter(produto => 
-    PRODUTOS.includes(produto.nome) && !PRODUTOSKITS.includes(produto.nome)
-  );
-  produtosFiltrados.forEach(produto => {
-    const option = document.createElement('option');
-    option.value = produto.nome;
-    option.textContent = produto.nome;
-    produtoSelect.appendChild(option);
-  });
+  produtoSelect.innerHTML = '<option value="">Carregando produtos...</option>';
+  try {
+    const produtos = await obterProdutos();
+    produtoSelect.innerHTML = '<option value="">Selecione um produto</option>';
+    const produtosFiltrados = produtos.filter(produto => 
+      PRODUTOS.includes(produto.nome) && !PRODUTOSKITS.includes(produto.nome)
+    );
+    produtosFiltrados.forEach(produto => {
+      const option = document.createElement('option');
+      option.value = produto.nome;
+      option.textContent = produto.nome;
+      produtoSelect.appendChild(option);
+    });
+  } catch (error) {
+    console.error('[loadProdutosSelect] Erro ao carregar produtos:', error);
+    produtoSelect.innerHTML = '<option value="">Erro ao carregar produtos</option>';
+  }
 }
 
 // Função para carregar variantes
-async function loadVariantesSelects(produtoNome) {
+async function loadVariantesSelects(produtoNome, produtos = null) {
   const variantesContainer = document.getElementById('variantesContainer');
   const variantesSelects = document.querySelector('.variantes-selects');
   if (!variantesContainer || !variantesSelects) return;
@@ -118,8 +210,8 @@ async function loadVariantesSelects(produtoNome) {
     return;
   }
 
-  const produtos = await obterProdutos();
-  const produto = produtos.find(p => p.nome === produtoNome);
+  const produtosData = produtos || await obterProdutos();
+  const produto = produtosData.find(p => p.nome === produtoNome);
 
   let variantesDisponiveis = [];
   if (produto.variantes && produto.variantes.length > 0) {
@@ -146,12 +238,17 @@ async function loadVariantesSelects(produtoNome) {
 
 // Gera o próximo número de OP
 async function getNextOPNumber() {
-  const ordens = await obterOrdensDeProducao();
-  const numeros = ordens.map(op => parseInt(op.numero)).filter(n => !isNaN(n));
-  const maxNumero = numeros.length > 0 ? Math.max(...numeros) : 0;
-  const nextNumero = (maxNumero + 1).toString();
-  console.log('[getNextOPNumber] Próximo número de OP:', nextNumero);
-  return nextNumero;
+  try {
+    const ordens = await obterOrdensDeProducao();
+    const numeros = ordens.map(op => parseInt(op.numero)).filter(n => !isNaN(n));
+    const maxNumero = numeros.length > 0 ? Math.max(...numeros) : 0;
+    const nextNumero = (maxNumero + 1).toString();
+    console.log('[getNextOPNumber] Próximo número de OP:', nextNumero);
+    return nextNumero;
+  } catch (error) {
+    console.error('[getNextOPNumber] Erro ao calcular próximo número de OP:', error);
+    throw error;
+  }
 }
 
 // Define a data atual ajustada ao horário local
@@ -166,57 +263,84 @@ function setCurrentDate() {
 // Carrega a tabela de ordens de produção
 async function loadOPTable(filterStatus = 'todas', search = '') {
   const opTableBody = document.getElementById('opTableBody');
-  opTableBody.innerHTML = ''; // Garante que a tabela seja limpa antes de renderizar
+  opTableBody.innerHTML = '<tr><td colspan="5"><div class="spinner">Carregando ordens...</div></td></tr>';
 
-  const ordensDeProducao = await obterOrdensDeProducao();
-  console.log('[loadOPTable] Ordens de produção carregadas:', ordensDeProducao);
+  try {
+    const ordensDeProducao = await obterOrdensDeProducao();
+    console.log('[loadOPTable] Ordens de produção carregadas:', ordensDeProducao);
 
-  // Remover duplicatas com base no número da OP (garantia extra no frontend)
-  const ordensUnicas = [];
-  const numerosVistos = new Set();
-  ordensDeProducao.forEach(op => {
-    if (!numerosVistos.has(op.numero)) {
-      numerosVistos.add(op.numero);
-      ordensUnicas.push(op);
+    const ordensUnicas = [];
+    const numerosVistos = new Set();
+    ordensDeProducao.forEach(op => {
+      if (!numerosVistos.has(op.numero)) {
+        numerosVistos.add(op.numero);
+        ordensUnicas.push(op);
+      }
+    });
+
+    let filteredOPs = ordensUnicas;
+    if (filterStatus === 'todas') {
+      filteredOPs = ordensUnicas.filter(op => op.status !== 'cancelada' && op.status !== 'finalizado');
+    } else {
+      filteredOPs = ordensUnicas.filter(op => op.status === filterStatus);
     }
-  });
 
-  let filteredOPs = ordensUnicas;
-  if (filterStatus === 'todas') {
-    filteredOPs = ordensUnicas.filter(op => op.status !== 'cancelada' && op.status !== 'finalizado');
-  } else {
-    filteredOPs = ordensUnicas.filter(op => op.status === filterStatus);
-  }
+    filteredOPs = filteredOPs.filter(op => 
+      op.produto.toLowerCase().includes(search.toLowerCase()) || 
+      op.numero.toString().includes(search) ||
+      (op.variante && op.variante.toLowerCase().includes(search.toLowerCase()))
+    );
 
-  filteredOPs = filteredOPs.filter(op => 
-    op.produto.toLowerCase().includes(search.toLowerCase()) || 
-    op.numero.toString().includes(search) ||
-    (op.variante && op.variante.toLowerCase().includes(search.toLowerCase()))
-  );
+    const fragment = document.createDocumentFragment();
+    filteredOPs.forEach((op, index) => {
+      if (!op.edit_id) {
+        op.edit_id = generateUniqueId();
+        usedIds.add(op.edit_id);
+      }
+      const tr = document.createElement('tr');
+      tr.dataset.index = index;
+      tr.dataset.numero = op.numero;
+      tr.style.cursor = permissoes.includes('editar-op') ? 'pointer' : 'default';
+      tr.innerHTML = `
+        <td><span class="status-bolinha status-${op.status} ${op.status === 'produzindo' ? 'blink' : ''}"></span></td>
+        <td>${op.numero}</td>
+        <td>${op.produto}</td>
+        <td>${op.variante || '-'}</td>
+        <td>${op.quantidade}</td>
+      `;
+      fragment.appendChild(tr);
+    });
 
-  filteredOPs.forEach((op, index) => {
-    if (!op.edit_id) {
-      op.edit_id = generateUniqueId();
-      usedIds.add(op.edit_id); // Adiciona ao conjunto de IDs usados
-    }
-    const tr = document.createElement('tr');
-    tr.dataset.index = index;
-    tr.dataset.numero = op.numero; // Adiciona o número da OP como identificador
-    tr.style.cursor = permissoes.includes('editar-op') ? 'pointer' : 'default';
-    tr.innerHTML = `
-      <td><span class="status-bolinha status-${op.status} ${op.status === 'produzindo' ? 'blink' : ''}"></span></td>
-      <td>${op.numero}</td>
-      <td>${op.produto}</td>
-      <td>${op.variante || '-'}</td>
-      <td>${op.quantidade}</td>
-    `;
+    opTableBody.innerHTML = '';
+    opTableBody.appendChild(fragment);
+
+    // Remover listeners antigos para evitar acumulação
+    opTableBody.removeEventListener('click', handleOPTableClick);
     if (permissoes.includes('editar-op')) {
-      tr.addEventListener('click', () => {
-        window.location.hash = `#editar/${op.edit_id}`;
-      });
+      opTableBody.addEventListener('click', handleOPTableClick);
     }
-    opTableBody.appendChild(tr);
-  });
+
+    function handleOPTableClick(e) {
+      console.log('[loadOPTable] Clique na tabela detectado');
+      const tr = e.target.closest('tr');
+      if (tr) {
+        const index = parseInt(tr.dataset.index);
+        console.log('[loadOPTable] Linha clicada, index:', index);
+        const op = filteredOPs[index];
+        if (op) {
+          console.log('[loadOPTable] Ordem selecionada:', op.numero, 'Edit ID:', op.edit_id);
+          window.location.hash = `#editar/${op.edit_id}`;
+        } else {
+          console.error('[loadOPTable] Ordem não encontrada para o índice:', index);
+        }
+      } else {
+        console.log('[loadOPTable] Clique fora de uma linha (tr)');
+      }
+    }
+  } catch (error) {
+    console.error('[loadOPTable] Erro ao carregar ordens de produção:', error);
+    opTableBody.innerHTML = '<tr><td colspan="5">Erro ao carregar ordens de produção. Tente novamente.</td></tr>';
+  }
 }
 
 // Filtra ordens de produção
@@ -237,7 +361,7 @@ if (statusFilter) {
   });
 }
 
-async function updateFinalizarButtonState(op) {
+async function updateFinalizarButtonState(op, produtos) {
   const finalizarBtn = document.getElementById('finalizarOP');
   if (!finalizarBtn || !op) return;
 
@@ -251,9 +375,9 @@ async function updateFinalizarButtonState(op) {
 
   // Validar todas as etapas
   let todasEtapasCompletas = true;
-  if (op.etapas && op.etapas.length > 0) {
+  if (op.etapas && Array.isArray(op.etapas) && op.etapas.length > 0) {
     for (const etapa of op.etapas) {
-      const tipoUsuario = await getTipoUsuarioPorProcesso(etapa.processo, op.produto);
+      const tipoUsuario = await getTipoUsuarioPorProcesso(etapa.processo, op.produto, produtos);
       const exigeQuantidade = tipoUsuario === 'costureira' || tipoUsuario === 'tiktik';
       const etapaCompleta = etapa.usuario && (!exigeQuantidade || (etapa.lancado && etapa.quantidade > 0));
       if (!etapaCompleta) {
@@ -270,24 +394,52 @@ async function updateFinalizarButtonState(op) {
   finalizarBtn.style.backgroundColor = podeFinalizar ? '#4CAF50' : '#ccc';
 }
 
+async function verificarEtapasEStatus(op, produtos) {
+  if (!op.etapas || !Array.isArray(op.etapas)) return false;
+
+  const todasEtapasCompletas = await Promise.all(op.etapas.map(async (etapa) => {
+    const tipoUsuario = await getTipoUsuarioPorProcesso(etapa.processo, op.produto, produtos);
+    const exigeQuantidade = tipoUsuario === 'costureira' || tipoUsuario === 'tiktik';
+    return etapa.usuario && (!exigeQuantidade || (etapa.lancado && etapa.quantidade > 0));
+  }));
+
+  const resultado = todasEtapasCompletas.every(completa => completa);
+
+  if (op.status === 'finalizado' && !resultado) {
+    op.status = 'produzindo';
+    await saveOPChanges(op);
+  }
+
+  return resultado;
+}
+
 // Salva alterações na OP
 async function saveOPChanges(op) {
   await atualizarOrdemDeProducao(op);
   console.log(`[saveOPChanges] Ordem de Produção #${op.numero} atualizada no banco de dados`);
 }
 
-
 async function loadEtapasEdit(op, skipReload = false) {
   console.log(`[loadEtapasEdit] Iniciando carregamento das etapas para OP: ${op ? op.numero : 'undefined'}`);
   const etapasContainer = document.getElementById('etapasContainer');
   const finalizarBtn = document.getElementById('finalizarOP');
 
-  if (!op || !op.etapas) {
-    console.error('[loadEtapasEdit] OP ou etapas não encontradas:', op);
+  if (!op || !etapasContainer || !finalizarBtn) {
+    console.error('[loadEtapasEdit] OP, etapasContainer ou finalizarBtn não encontrados:', { op, etapasContainer, finalizarBtn });
     return;
   }
 
-  const todasEtapasCompletas = await verificarEtapasEStatus(op);
+  if (!op.etapas || !Array.isArray(op.etapas)) {
+    console.error('[loadEtapasEdit] Etapas não encontradas ou inválidas na OP:', op);
+    return;
+  }
+
+  if (!skipReload) {
+    etapasContainer.innerHTML = '<div class="spinner">Carregando etapas...</div>';
+  }
+
+  const produtos = await obterProdutos();
+  const todasEtapasCompletas = await verificarEtapasEStatus(op, produtos);
   if (op.status === 'finalizado' && !todasEtapasCompletas) {
     op.status = 'produzindo';
     await saveOPChanges(op);
@@ -306,11 +458,11 @@ async function loadEtapasEdit(op, skipReload = false) {
   const tiposUsuarios = await Promise.all(
     op.etapas.map(async (etapa) => ({
       processo: etapa.processo,
-      tipoUsuario: await getTipoUsuarioPorProcesso(etapa.processo, op.produto),
+      tipoUsuario: await getTipoUsuarioPorProcesso(etapa.processo, op.produto, produtos),
     }))
   );
 
-  const etapaAtualIndex = await determinarEtapaAtual(op);
+  const etapaAtualIndex = await determinarEtapaAtual(op, produtos);
   console.log(`[loadEtapasEdit] Etapa atual index calculada: ${etapaAtualIndex}`);
 
   for (let index = 0; index < op.etapas.length; index++) {
@@ -368,7 +520,7 @@ async function loadEtapasEdit(op, skipReload = false) {
     let quantidadeDiv = null;
 
     if (exigeQuantidade && (etapa.usuario || usuarioSelect.value)) {
-      quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, index === etapaAtualIndex, row);
+      quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, index === etapaAtualIndex, row, produtos);
       row.appendChild(quantidadeDiv);
     }
 
@@ -385,74 +537,64 @@ async function loadEtapasEdit(op, skipReload = false) {
 
       definirBtn.addEventListener('click', async () => {
         if (!usuarioSelect.value) {
-          alert('Por favor, selecione um cortador antes de definir.');
+          mostrarPopupMensagem('Por favor, selecione um cortador antes de definir.', 'erro');
           return;
         }
         etapa.usuario = usuarioSelect.value;
         await saveOPChanges(op);
         await loadEtapasEdit(op, true);
-        await atualizarVisualEtapas(op);
-        await updateFinalizarButtonState(op);
+        await atualizarVisualEtapas(op, produtos);
+        await updateFinalizarButtonState(op, produtos);
       });
     } else {
       usuarioSelect.addEventListener('change', async () => {
         if (op.status === 'finalizado' || op.status === 'cancelada') return;
-        etapa.usuario = usuarioSelect.value;
+        const novoUsuario = usuarioSelect.value;
+        if (etapa.usuario === novoUsuario) return;
+        etapa.usuario = novoUsuario;
         await saveOPChanges(op);
         if (exigeQuantidade && etapa.usuario && !row.querySelector('.quantidade-lancar')) {
-          quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, index === etapaAtualIndex, row);
+          quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, index === etapaAtualIndex, row, produtos);
           row.appendChild(quantidadeDiv);
         }
-        await atualizarVisualEtapas(op);
-        await updateFinalizarButtonState(op);
+        await atualizarVisualEtapas(op, produtos);
+        await updateFinalizarButtonState(op, produtos);
       });
     }
   }
 
-  await atualizarVisualEtapas(op);
-  await updateFinalizarButtonState(op);
+  await atualizarVisualEtapas(op, produtos);
+  await updateFinalizarButtonState(op, produtos);
 }
 
 
-// Função para salvar produção
-async function salvarProducao(op, etapa, etapaIndex) {
-  // Buscar o produto para obter a máquina associada ao processo
-  const produtos = await obterProdutos();
+async function salvarProducao(op, etapa, etapaIndex, produtos) {
   const produto = produtos.find(p => p.nome === op.produto);
   if (!produto) {
     throw new Error(`Produto ${op.produto} não encontrado.`);
   }
 
-  // Verificar se o produto é um kit
   const isKit = produto.tipos && produto.tipos.includes('kits');
   if (isKit) {
     throw new Error(`O produto ${op.produto} é um kit e não possui etapas de produção.`);
   }
 
-  // Buscar a etapa correspondente no produto
   const etapaProduto = produto.etapas?.[etapaIndex];
   if (!etapaProduto) {
     throw new Error(`Etapa ${etapaIndex} não encontrada para o produto ${op.produto}.`);
   }
 
-  // Verificar se o processo da etapa corresponde ao processo esperado
   if (etapaProduto.processo !== etapa.processo) {
     throw new Error(`Processo ${etapa.processo} não corresponde à etapa ${etapaIndex} do produto ${op.produto}.`);
   }
 
-  // Obter a máquina associada à etapa
   const maquina = etapaProduto.maquina;
   if (!maquina) {
     throw new Error(`Máquina não definida para o processo ${etapa.processo} do produto ${op.produto}.`);
   }
 
-  // Obter a variação da OP
-  const variacao = op.variante;
-  if (!variacao) {
-    throw new Error(`Variação não definida para a OP ${op.numero}.`);
-  }
+  const variacao = op.variante || null;
 
-  // Montar os dados para a requisição
   const dados = {
     opNumero: op.numero,
     etapaIndex: etapaIndex,
@@ -466,12 +608,10 @@ async function salvarProducao(op, etapa, etapaIndex) {
     lancadoPor: usuarioLogado?.nome || 'Sistema',
   };
 
-  // Validação dos campos obrigatórios
   if (!dados.opNumero) throw new Error('Número da OP não informado.');
   if (dados.etapaIndex === undefined || dados.etapaIndex === null) throw new Error('Índice da etapa não informado.');
   if (!dados.processo) throw new Error('Processo não informado.');
   if (!dados.produto) throw new Error('Produto não informado.');
-  if (!dados.variacao) throw new Error('Variação não informada.');
   if (!dados.maquina) throw new Error('Máquina não informada.');
   if (!dados.quantidade || dados.quantidade <= 0) throw new Error('Quantidade inválida.');
   if (!dados.funcionario) throw new Error('Funcionário não informado.');
@@ -493,11 +633,15 @@ async function salvarProducao(op, etapa, etapaIndex) {
     if (!responseProducoes.ok) {
       const error = await responseProducoes.json();
       if (error.details === 'jwt expired') {
-        alert('Sua sessão expirou. Por favor, faça login novamente.');
+        mostrarPopupMensagem('Sua sessão expirou. Por favor, faça login novamente.', 'erro');
         localStorage.removeItem('token');
         localStorage.removeItem('usuarioLogado');
+        limparCacheProdutos();
         window.location.href = '/login.html';
         return;
+      }
+      if (responseProducoes.status === 403) {
+        mostrarPopupMensagem('Você não tem permissão para lançar produção.', 'erro');
       }
       throw new Error(`Erro ao salvar produção: ${error.error}`);
     }
@@ -511,26 +655,35 @@ async function salvarProducao(op, etapa, etapaIndex) {
 }
 
 // Função para lançar etapa
-async function lancarEtapa(op, etapaIndex, quantidade) {
+async function lancarEtapa(op, etapaIndex, quantidade, produtos) {
   const etapa = op.etapas[etapaIndex];
   etapa.quantidade = parseInt(quantidade);
-  etapa.ultimoLancamentoId = await salvarProducao(op, etapa, etapaIndex);
+  etapa.ultimoLancamentoId = await salvarProducao(op, etapa, etapaIndex, produtos);
   etapa.lancado = true;
   await saveOPChanges(op);
-  await updateFinalizarButtonState(op);
+  await updateFinalizarButtonState(op, produtos);
+}
+
+// Função de debounce
+function debounce(func, wait) {
+  let timeout;
+  return function (...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, args), wait);
+  };
 }
 
 // Função auxiliar para criar a linha de quantidade e botão "Lançar"
-function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row) {
+function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row, produtos) {
   let quantidadeDiv = row.querySelector('.quantidade-lancar');
-  if (!quantidadeDiv) { // Corrigido o erro de sintaxe
+  if (!quantidadeDiv) {
     quantidadeDiv = document.createElement('div');
     quantidadeDiv.className = 'quantidade-lancar';
     quantidadeDiv.style.display = 'flex';
     quantidadeDiv.style.alignItems = 'center';
-    row.appendChild(quantidadeDiv); // Garantir que o elemento seja adicionado ao DOM
+    row.appendChild(quantidadeDiv);
   } else {
-    quantidadeDiv.innerHTML = ''; // Limpar o conteúdo, mas manter o elemento
+    quantidadeDiv.innerHTML = '';
   }
 
   const quantidadeInput = document.createElement('input');
@@ -544,8 +697,14 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row) {
   let lancarBtn = document.createElement('button');
   lancarBtn.className = 'botao-lancar';
   lancarBtn.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
-  lancarBtn.disabled = !usuarioSelect.value || !quantidadeInput.value || parseInt(quantidadeInput.value) <= 0 || !isEditable || etapa.lancado;
+  const podeLancar = permissoes.includes('lancar-producao');
+  lancarBtn.disabled = !podeLancar || !usuarioSelect.value || !quantidadeInput.value || parseInt(quantidadeInput.value) <= 0 || !isEditable || etapa.lancado;
   lancarBtn.dataset.etapaIndex = op.etapas.indexOf(etapa);
+
+  if (!podeLancar) {
+    lancarBtn.style.opacity = '0.5';
+    lancarBtn.style.cursor = 'not-allowed';
+  }
 
   quantidadeDiv.appendChild(quantidadeInput);
   quantidadeDiv.appendChild(lancarBtn);
@@ -557,37 +716,58 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row) {
     lancarBtn = document.createElement('button');
     lancarBtn.className = 'botao-lancar';
     lancarBtn.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
-    lancarBtn.disabled = !usuarioSelect.value || !quantidadeInput.value || parseInt(quantidadeInput.value) <= 0 || !isEditable || etapa.lancado;
+    lancarBtn.disabled = !podeLancar || !usuarioSelect.value || !quantidadeInput.value || parseInt(quantidadeInput.value) <= 0 || !isEditable || etapa.lancado;
     lancarBtn.dataset.etapaIndex = op.etapas.indexOf(etapa);
+
+    if (!podeLancar) {
+      lancarBtn.style.opacity = '0.5';
+      lancarBtn.style.cursor = 'not-allowed';
+    }
 
     lancarBtn.addEventListener('click', async () => {
       if (lancarBtn.disabled) return;
-
+    
       const etapaIndex = parseInt(lancarBtn.dataset.etapaIndex);
       const editId = window.location.hash.split('/')[1];
       const ordensDeProducao = await obterOrdensDeProducao();
       const opLocal = ordensDeProducao.find(o => o.edit_id === editId);
-
-      if (!opLocal || !opLocal.etapas[etapaIndex]) {
-        alert('Erro: Ordem de Produção ou etapa não encontrada.');
+    
+      if (!opLocal || !opLocal.etapas || !opLocal.etapas[etapaIndex]) {
+        mostrarPopupMensagem('Erro: Ordem de Produção ou etapa não encontrada.', 'erro');
         return;
       }
-
-      const etapasFuturas = await getEtapasFuturasValidas(opLocal, etapaIndex);
+    
+      const etapasFuturas = await getEtapasFuturasValidas(opLocal, etapaIndex, produtos);
       if (etapasFuturas.length > 0) {
-        mostrarPopupEtapasFuturas(opLocal, etapaIndex, etapasFuturas, quantidadeInput.value);
+        mostrarPopupEtapasFuturas(opLocal, etapaIndex, etapasFuturas, quantidadeInput.value, produtos);
       } else {
-        await lancarEtapa(opLocal, etapaIndex, quantidadeInput.value);
-        etapa.lancado = true; // Garantir que o estado seja atualizado
-        etapa.quantidade = parseInt(quantidadeInput.value); // Garantir que a quantidade seja salva
-        await saveOPChanges(opLocal);
-        quantidadeInput.disabled = true; // Desabilitar o input após o lançamento
-        lancarBtn.textContent = 'Lançado'; // Mudar o texto do botão
-        lancarBtn.disabled = true; // Desabilitar o botão
-        lancarBtn.classList.add('lancado'); // Adicionar classe para estilização (se necessário)
-        await loadEtapasEdit(opLocal, true);
-        await atualizarVisualEtapas(opLocal);
-        await updateFinalizarButtonState(opLocal);
+        try {
+          await lancarEtapa(opLocal, etapaIndex, quantidadeInput.value, produtos);
+          // Recarregar a OP para garantir consistência
+          const updatedOrdens = await obterOrdensDeProducao();
+          const updatedOp = updatedOrdens.find(o => o.edit_id === editId);
+          if (updatedOp) {
+            Object.assign(opLocal, updatedOp);
+            etapa.lancado = true;
+            etapa.quantidade = parseInt(quantidadeInput.value);
+            quantidadeInput.disabled = true;
+            lancarBtn.textContent = 'Lançado';
+            lancarBtn.disabled = true;
+            lancarBtn.classList.add('lancado');
+            await loadEtapasEdit(opLocal, true);
+            await atualizarVisualEtapas(opLocal, produtos);
+            await updateFinalizarButtonState(opLocal, produtos);
+            mostrarPopupMensagem('Produção lançada com sucesso!', 'sucesso');
+          } else {
+            throw new Error('Ordem de Produção não encontrada após lançamento.');
+          }
+        } catch (error) {
+          console.error('[criarQuantidadeDiv] Erro ao lançar etapa:', error);
+          mostrarPopupMensagem('Erro ao lançar produção. Tente novamente.', 'erro');
+          lancarBtn.textContent = 'Lançar';
+          lancarBtn.disabled = false;
+          quantidadeInput.disabled = false;
+        }
       }
     });
 
@@ -596,7 +776,9 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row) {
 
   usuarioSelect.addEventListener('change', async () => {
     if (op.status === 'finalizado' || op.status === 'cancelada') return;
-    etapa.usuario = usuarioSelect.value;
+    const novoUsuario = usuarioSelect.value;
+    if (etapa.usuario === novoUsuario) return;
+    etapa.usuario = novoUsuario;
     await saveOPChanges(op);
     quantidadeInput.disabled = !usuarioSelect.value || !isEditable || etapa.lancado;
     if (!quantidadeInput.disabled) quantidadeInput.focus();
@@ -604,8 +786,8 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row) {
       quantidadeInput.value = etapa.quantidade || '';
     }
     updateLancarBtn();
-    await atualizarVisualEtapas(op);
-    await updateFinalizarButtonState(op);
+    await atualizarVisualEtapas(op, produtos);
+    await updateFinalizarButtonState(op, produtos);
   });
 
   const handleInputChange = async () => {
@@ -618,10 +800,11 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row) {
     quantidadeInput.value = novaQuantidade > 0 ? novaQuantidade : '';
     await saveOPChanges(op);
     updateLancarBtn();
-    await atualizarVisualEtapas(op);
+    await atualizarVisualEtapas(op, produtos);
   };
 
-  quantidadeInput.addEventListener('input', handleInputChange);
+  const debouncedHandleInputChange = debounce(handleInputChange, 500);
+  quantidadeInput.addEventListener('input', debouncedHandleInputChange);
   handleInputChange();
   updateLancarBtn();
 
@@ -629,19 +812,21 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row) {
 }
 
 // Função para identificar etapas futuras válidas
-async function getEtapasFuturasValidas(op, etapaIndex) {
-  const produtos = await obterProdutos();
+async function getEtapasFuturasValidas(op, etapaIndex, produtos) {
   const produto = produtos.find(p => p.nome === op.produto);
   const etapasProduto = produto?.etapas || [];
-  const etapasOP = op.etapas;
+  const etapasOP = op.etapas || [];
+  if (etapaIndex >= etapasProduto.length || etapaIndex >= etapasOP.length) return [];
+
   const etapaAtual = etapasProduto[etapaIndex];
   const maquinaAtual = etapaAtual?.maquina || 'Não Usa';
-  const tipoUsuarioAtual = await getTipoUsuarioPorProcesso(etapaAtual.processo, op.produto);
+  const tipoUsuarioAtual = await getTipoUsuarioPorProcesso(etapaAtual.processo, op.produto, produtos);
 
   const etapasFuturas = [];
   for (let i = etapaIndex + 1; i < etapasOP.length; i++) {
     const proximaEtapa = etapasProduto[i];
-    const tipoUsuarioProximo = await getTipoUsuarioPorProcesso(proximaEtapa.processo, op.produto);
+    if (!proximaEtapa) break;
+    const tipoUsuarioProximo = await getTipoUsuarioPorProcesso(proximaEtapa.processo, op.produto, produtos);
     const maquinaProxima = proximaEtapa?.maquina || 'Não Usa';
 
     if (tipoUsuarioProximo !== 'costureira' || maquinaProxima !== maquinaAtual) break;
@@ -652,7 +837,8 @@ async function getEtapasFuturasValidas(op, etapaIndex) {
 }
 
 // Função para exibir o popup
-function mostrarPopupEtapasFuturas(op, etapaIndex, etapasFuturas, quantidade) {
+function mostrarPopupEtapasFuturas(op, etapaIndex, etapasFuturas, quantidade, produtos) {
+  console.log('[mostrarPopupEtapasFuturas] Exibindo popup para etapas futuras:', etapasFuturas);
   const popup = document.createElement('div');
   popup.className = 'popup-etapas';
   popup.style.position = 'fixed';
@@ -773,24 +959,26 @@ function mostrarPopupEtapasFuturas(op, etapaIndex, etapasFuturas, quantidade) {
       .filter(cb => cb.checkbox.checked)
       .map(cb => cb.index);
 
-    await lancarEtapa(op, etapaIndex, quantidade);
+    console.log('[mostrarPopupEtapasFuturas] Salvando etapas selecionadas:', selectedIndices);
+    await lancarEtapa(op, etapaIndex, quantidade, produtos);
     const usuarioAtual = op.etapas[etapaIndex].usuario;
     for (const index of selectedIndices) {
       op.etapas[index].usuario = usuarioAtual;
-      await lancarEtapa(op, index, quantidade);
+      await lancarEtapa(op, index, quantidade, produtos);
     }
 
     document.body.removeChild(popup);
-    loadEtapasEdit(op, true);
-    atualizarVisualEtapas(op);
-    await updateFinalizarButtonState(op);
+    await loadEtapasEdit(op, true);
+    await atualizarVisualEtapas(op, produtos);
+    await updateFinalizarButtonState(op, produtos);
   });
 
-  cancelBtn.addEventListener('click', () => {
+  cancelBtn.addEventListener('click', async () => {
+    console.log('[mostrarPopupEtapasFuturas] Popup cancelado');
     document.body.removeChild(popup);
-    loadEtapasEdit(op, true);
-    atualizarVisualEtapas(op);
-    updateFinalizarButtonState(op);
+    await loadEtapasEdit(op, true);
+    await atualizarVisualEtapas(op, produtos);
+    await updateFinalizarButtonState(op, produtos);
   });
 
   document.body.appendChild(popup);
@@ -798,8 +986,8 @@ function mostrarPopupEtapasFuturas(op, etapaIndex, etapasFuturas, quantidade) {
 }
 
 // Mapeia processos para tipos de usuário
-async function getTipoUsuarioPorProcesso(processo, produtoNome) {
-  const produtos = await obterProdutos(); // Agora usa o cache
+async function getTipoUsuarioPorProcesso(processo, produtoNome, produtos) {
+  // [AJUSTE] Usar produtos passados como parâmetro em vez de chamar obterProdutos
   const produto = produtos.find(p => p.nome === produtoNome);
   if (produto && produto.etapas) {
     const etapa = produto.etapas.find(e => e.processo === processo);
@@ -808,10 +996,11 @@ async function getTipoUsuarioPorProcesso(processo, produtoNome) {
   return '';
 }
 
-async function determinarEtapaAtual(op) {
+async function determinarEtapaAtual(op, produtos) {
   for (let index = 0; index < op.etapas.length; index++) {
     const etapa = op.etapas[index];
-    const tipoUsuario = await getTipoUsuarioPorProcesso(etapa.processo, op.produto);
+    // [AJUSTE] Passar produtos para getTipoUsuarioPorProcesso
+    const tipoUsuario = await getTipoUsuarioPorProcesso(etapa.processo, op.produto, produtos);
     const exigeQuantidade = tipoUsuario === 'costureira' || tipoUsuario === 'tiktik';
     if (exigeQuantidade ? !etapa.lancado : !etapa.usuario) {
       return index;
@@ -820,11 +1009,24 @@ async function determinarEtapaAtual(op) {
   return op.etapas.length;
 }
 
-async function atualizarVisualEtapas(op) {
-  if (!op || !op.etapas) return;
+async function atualizarVisualEtapas(op, produtos) {
+  if (!op || !op.etapas) {
+    console.error('[atualizarVisualEtapas] OP ou etapas não definidas:', op);
+    return;
+  }
 
   const etapasRows = document.querySelectorAll('.etapa-row');
-  const etapaAtualIndex = await determinarEtapaAtual(op);
+  const etapaAtualIndex = await determinarEtapaAtual(op, produtos);
+  console.log('[atualizarVisualEtapas] Etapas no DOM:', etapasRows.length, 'Etapas na OP:', op.etapas.length);
+
+  // Garantir que o número de elementos no DOM corresponda ao número de etapas
+  if (etapasRows.length !== op.etapas.length) {
+    console.error('[atualizarVisualEtapas] Inconsistência entre DOM e dados. Recarregando etapas...');
+    const etapasContainer = document.getElementById('etapasContainer');
+    etapasContainer.innerHTML = ''; // Limpar o DOM
+    await loadEtapasEdit(op, false); // Recarregar as etapas do zero
+    return;
+  }
 
   for (let index = 0; index < etapasRows.length; index++) {
     const row = etapasRows[index];
@@ -832,7 +1034,13 @@ async function atualizarVisualEtapas(op) {
     const usuarioSelect = row.querySelector('.select-usuario');
     let quantidadeDiv = row.querySelector('.quantidade-lancar');
     const etapa = op.etapas[index];
-    const tipoUsuario = await getTipoUsuarioPorProcesso(etapa.processo, op.produto);
+
+    if (!etapa) {
+      console.error('[atualizarVisualEtapas] Etapa não encontrada para o índice:', index);
+      continue;
+    }
+
+    const tipoUsuario = await getTipoUsuarioPorProcesso(etapa.processo, op.produto, produtos);
     const exigeQuantidade = tipoUsuario === 'costureira' || tipoUsuario === 'tiktik';
     const concluida = exigeQuantidade ? etapa.lancado : etapa.usuario;
 
@@ -865,7 +1073,7 @@ async function atualizarVisualEtapas(op) {
         botaoLancar.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
         if (etapa.lancado) botaoLancar.classList.add('lancado');
       } else if (exigeQuantidade && etapa.usuario) {
-        quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, true, row);
+        quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, true, row, produtos);
         row.appendChild(quantidadeDiv);
       }
     } else {
@@ -887,25 +1095,10 @@ async function atualizarVisualEtapas(op) {
   }
 }
 
-async function verificarEtapasEStatus(op) {
-  const todasEtapasCompletas = await Promise.all(op.etapas.map(async (etapa) => {
-    const tipoUsuario = await getTipoUsuarioPorProcesso(etapa.processo, op.produto);
-    const exigeQuantidade = tipoUsuario === 'costureira' || tipoUsuario === 'tiktik';
-    return etapa.usuario && (!exigeQuantidade || (etapa.lancado && etapa.quantidade > 0));
-  }));
-
-  const resultado = todasEtapasCompletas.every(completa => completa);
-
-  if (op.status === 'finalizado' && !resultado) {
-    op.status = 'produzindo';
-    await saveOPChanges(op);
-  }
-
-  return resultado;
-}
 
 // Função para alternar entre os modos de visualização
 async function toggleView() {
+  console.log('[toggleView] Iniciando toggleView, hash atual:', window.location.hash);
   const hash = window.location.hash;
   const opListView = document.getElementById('opListView');
   const opFormView = document.getElementById('opFormView');
@@ -916,15 +1109,18 @@ async function toggleView() {
     return;
   }
 
+  console.log('[toggleView] Buscando ordens de produção...');
   const ordensDeProducao = await obterOrdensDeProducao();
+  console.log('[toggleView] Ordens de produção obtidas:', ordensDeProducao.length);
 
   if (hash.startsWith('#editar/') && permissoes.includes('editar-op')) {
     const editId = hash.split('/')[1];
+    console.log('[toggleView] Modo edição, editId:', editId);
     const op = ordensDeProducao.find(o => o.edit_id === editId);
 
     if (!op) {
       console.error(`[toggleView] Ordem de Produção não encontrada para editId: ${editId}`);
-      alert('Ordem de Produção não encontrada.');
+      mostrarPopupMensagem('Ordem de Produção não encontrada.', 'erro');
       window.location.hash = '';
       return;
     }
@@ -936,17 +1132,24 @@ async function toggleView() {
     editQuantidadeInput.disabled = true;
     editQuantidadeInput.style.backgroundColor = '#d3d3d3';
 
-    // Ajuste para o campo "Data Prevista"
     const editDataEntregaInput = document.getElementById('editDataEntregaOP');
-    editDataEntregaInput.value = op.data_entrega || ''; // Preencher com o valor de "Entregar OP em"
-    editDataEntregaInput.readOnly = true; // Bloquear edição
-    editDataEntregaInput.style.backgroundColor = '#d3d3d3'; // Visual de campo bloqueado
+    const dataEntrega = op.data_entrega ? new Date(op.data_entrega).toISOString().split('T')[0] : '';
+    editDataEntregaInput.value = dataEntrega;
+    editDataEntregaInput.readOnly = true;
+    editDataEntregaInput.style.backgroundColor = '#d3d3d3';
 
+    const editVarianteContainer = document.getElementById('editVarianteContainer');
+    const editVarianteInput = document.getElementById('editVarianteOP');
     if (op.variante) {
-      document.getElementById('editVarianteContainer').style.display = 'block';
-      document.getElementById('editVarianteOP').value = op.variante || '';
+      // Tratar múltiplas variações separadas por " | "
+      const variantes = op.variante.split(' | ').join(', ');
+      editVarianteInput.value = variantes;
+      editVarianteContainer.style.display = 'block';
+      // Ajustar o CSS para evitar quebra de layout
+      editVarianteInput.style.width = '100%';
+      editVarianteInput.style.boxSizing = 'border-box';
     } else {
-      document.getElementById('editVarianteContainer').style.display = 'none';
+      editVarianteContainer.style.display = 'none';
     }
 
     opListView.style.display = 'none';
@@ -954,18 +1157,19 @@ async function toggleView() {
     opEditView.style.display = 'block';
     document.getElementById('opNumero').textContent = `OP n°: ${op.numero}`;
 
+    console.log('[toggleView] Carregando etapas para edição...');
     await loadEtapasEdit(op);
-    setTimeout(async () => {
-      await atualizarVisualEtapas(op);
-      await updateFinalizarButtonState(op);
-    }, 100);
+    console.log('[toggleView] Etapas carregadas com sucesso');
   } else if (hash === '#adicionar' && permissoes.includes('criar-op')) {
+    console.log('[toggleView] Modo adicionar nova OP');
     opListView.style.display = 'none';
     opFormView.style.display = 'block';
     opEditView.style.display = 'none';
+    console.log('[toggleView] Carregando produtos para o formulário...');
     await loadProdutosSelect();
     setCurrentDate();
-    loadVariantesSelects('');
+    console.log('[toggleView] Carregando variantes...');
+    await loadVariantesSelects('');
     document.getElementById('numeroOP').value = await getNextOPNumber();
     document.getElementById('quantidadeOP').value = '';
     const quantidadeInput = document.getElementById('quantidadeOP');
@@ -977,9 +1181,11 @@ async function toggleView() {
     const produtoSelect = document.getElementById('produtoOP');
     if (produtoSelect) {
       produtoSelect.value = '';
-      loadVariantesSelects('');
+      await loadVariantesSelects('');
     }
+    console.log('[toggleView] Formulário de adição configurado');
   } else {
+    console.log('[toggleView] Modo lista de OPs');
     await loadOPTable();
     opListView.style.display = 'block';
     opFormView.style.display = 'none';
@@ -1008,9 +1214,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   permissoes = auth.permissoes || [];
   console.log('[admin-ordens-de-producao] Autenticação bem-sucedida, usuário:', usuarioLogado.nome, 'Permissões:', permissoes);
 
+  // Verificar permissões específicas
+  console.log('[admin-ordens-de-producao] Permissão para criar OP:', permissoes.includes('criar-op'));
+  console.log('[admin-ordens-de-producao] Permissão para editar OP:', permissoes.includes('editar-op'));
+
+
   // Carregar IDs existentes do banco de dados
   const ordensDeProducao = await obterOrdensDeProducao();
-  ordensDeProducao.forEach(op => usedIds.add(op.edit_id));
+  ordensDeProducao.forEach(op => {
+    if (op.edit_id) usedIds.add(op.edit_id);
+  });
 
   // Elementos DOM
   const opListView = document.getElementById('opListView');
@@ -1037,6 +1250,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cancelarOP = document.getElementById('cancelarOP');
   const voltarOP = document.getElementById('voltarOP');
 
+ 
+
   if ([opListView, opFormView, opEditView, opTableBody, searchOP, statusFilter, opForm,
       produtoOP, quantidadeOP, numeroOP, variantesContainer, variantesSelects, dataEntregaOP,
       observacoesOP, editProdutoOP, editVarianteOP, editVarianteContainer, editQuantidadeOP,
@@ -1044,20 +1259,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     throw new Error('Elementos DOM necessários não encontrados');
   }
 
+  window.addEventListener('hashchange', () => {
+    console.log('[hashchange] Hash alterado para:', window.location.hash);
+    toggleView();
+  });
 
-  
-  // Eventos
-// Função de debounce
-function debounce(func, wait) {
-  let timeout;
-  return function (...args) {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func.apply(this, args), wait);
-  };
-}
-
-// Ajuste no evento hashchange
-window.addEventListener('hashchange', debounce(toggleView, 100));
 
   const incluirOPBtn = document.getElementById('incluirOP');
   if (incluirOPBtn) {
@@ -1065,6 +1271,11 @@ window.addEventListener('hashchange', debounce(toggleView, 100));
     if (!permissoes.includes('criar-op')) {
       incluirOPBtn.style.opacity = '0.5';
       incluirOPBtn.style.cursor = 'not-allowed';
+    } else {
+      incluirOPBtn.addEventListener('click', () => {
+        console.log('[incluirOPBtn] Botão "Incluir OP" clicado');
+        window.location.hash = '#adicionar';
+      });
     }
   }
 
@@ -1079,32 +1290,40 @@ window.addEventListener('hashchange', debounce(toggleView, 100));
       const variantesSelects = document.querySelectorAll('.variantes-selects select');
       const varianteValues = Array.from(variantesSelects).map(select => select.value);
       const variante = varianteValues.length > 0 ? varianteValues.join(' | ') : '';
-  
-      if (!produto || !quantidade || !dataEntrega) {
-        alert('Preencha todos os campos obrigatórios!');
+
+      if (!produto) {
+        mostrarPopupMensagem('Por favor, selecione um produto.', 'erro');
+        return;
+      }
+      if (!quantidade || quantidade <= 0) {
+        mostrarPopupMensagem('Por favor, insira uma quantidade válida.', 'erro');
+        return;
+      }
+      if (!dataEntrega) {
+        mostrarPopupMensagem('Por favor, selecione a data de entrega.', 'erro');
         return;
       }
       if (variantesSelects.length > 0 && varianteValues.some(v => !v)) {
-        alert('Por favor, preencha todas as variações.');
+        mostrarPopupMensagem('Por favor, preencha todas as variações.', 'erro');
         return;
       }
-  
+
       const ordensDeProducao = await obterOrdensDeProducao();
       if (ordensDeProducao.some(op => op.numero === numero)) {
-        alert(`Erro: Já existe uma Ordem de Produção com o número ${numero}!`);
+        mostrarPopupMensagem(`Erro: Já existe uma Ordem de Produção com o número ${numero}!`, 'erro');
         return;
       }
-  
+
       const produtos = await obterProdutos();
       const produtoObj = produtos.find(p => p.nome === produto);
       const etapas = produtoObj?.etapas || [];
-  
+
       const novaOP = {
         numero,
         produto,
         variante: variante || null,
         quantidade,
-        data_entrega: dataEntrega, // Garantir que a data seja salva
+        data_entrega: dataEntrega,
         observacoes,
         status: 'em-aberto',
         edit_id: generateUniqueId(),
@@ -1116,20 +1335,29 @@ window.addEventListener('hashchange', debounce(toggleView, 100));
           ultimoLancamentoId: null
         }))
       };
-  
-      await salvarOrdemDeProducao(novaOP);
-      alert(`Ordem de Produção #${novaOP.numero} salva com sucesso!`);
-      window.location.hash = '';
-      await toggleView();
+
+      try {
+        await salvarOrdemDeProducao(novaOP);
+        mostrarPopupMensagem(`Ordem de Produção #${novaOP.numero} salva com sucesso!`, 'sucesso');
+        window.location.hash = '';
+        await toggleView();
+      } catch (error) {
+        console.error('[opForm.submit] Erro ao salvar ordem de produção:', error);
+        mostrarPopupMensagem('Erro ao salvar ordem de produção. Tente novamente.', 'erro');
+      }
     });
   }
 
   if (produtoOP) {
-    produtoOP.addEventListener('change', (e) => loadVariantesSelects(e.target.value));
+    const produtos = await obterProdutos();
+    produtoOP.addEventListener('change', async (e) => {
+      await loadVariantesSelects(e.target.value, produtos);
+    });
   }
 
   if (searchOP) {
-    searchOP.addEventListener('input', () => filterOPs());
+    const debouncedFilterOPs = debounce(() => filterOPs(), 300);
+    searchOP.addEventListener('input', debouncedFilterOPs);
   }
 
   if (finalizarOP) {
@@ -1141,7 +1369,7 @@ window.addEventListener('hashchange', debounce(toggleView, 100));
         op.status = 'finalizado';
         op.data_final = new Date().toISOString();
         await saveOPChanges(op);
-        alert(`Ordem de Produção #${op.numero} finalizada com sucesso!`);
+        mostrarPopupMensagem(`Ordem de Produção #${op.numero} finalizada com sucesso!`, 'sucesso');
         window.location.hash = '';
         await toggleView();
       }
@@ -1155,13 +1383,13 @@ window.addEventListener('hashchange', debounce(toggleView, 100));
       const op = ordensDeProducao.find(o => o.edit_id === editId);
       if (op) {
         if (op.status === 'cancelada') {
-          alert(`Erro: A Ordem de Produção #${op.numero} já está cancelada!`);
+          mostrarPopupMensagem(`Erro: A Ordem de Produção #${op.numero} já está cancelada!`, 'erro');
           return;
         }
         if (confirm(`Tem certeza que deseja cancelar a Ordem de Produção #${op.numero}? Esta ação não pode ser desfeita.`)) {
           op.status = 'cancelada';
           await saveOPChanges(op);
-          alert(`Ordem de Produção #${op.numero} cancelada com sucesso!`);
+          mostrarPopupMensagem(`Ordem de Produção #${op.numero} cancelada com sucesso!`, 'sucesso');
           window.location.hash = '';
           await toggleView();
         }
@@ -1172,21 +1400,31 @@ window.addEventListener('hashchange', debounce(toggleView, 100));
   if (voltarOP) {
     voltarOP.addEventListener('click', async () => {
       window.location.hash = '';
-      // Evitar múltiplas chamadas ao toggleView
       if (window.location.hash === '') {
         await toggleView();
       }
     });
   }
 
-  if (!permissoes.includes('editar-op')) {
+  // Adicionar evento de logout (se existir um botão de logout)
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+      limparCacheProdutos();
+      usedIds.clear();
+      localStorage.removeItem('token');
+      localStorage.removeItem('usuarioLogado');
+      window.location.href = '/login.html';
+    });
+  }
+
+  if (!permissoes.includes('editar-op') || !permissoes.includes('lancar-producao')) {
     document.querySelectorAll('input, select, button.botao-lancar, button#finalizarOP').forEach(el => {
       el.disabled = true;
       el.style.opacity = '0.5';
       el.style.cursor = 'not-allowed';
     });
   }
-  // Chamar toggleView explicitamente na inicialização
-  await toggleView();
 
+  await toggleView();
 });

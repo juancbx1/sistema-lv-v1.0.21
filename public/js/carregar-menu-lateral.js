@@ -84,6 +84,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else {
         console.log('Menu Lateral - 4. Logout cancelado.');
       }
+      limparCacheProdutos();
     });
 
     // Inicializar o menu hambúrguer

@@ -22,7 +22,7 @@ export const permissoesDisponiveis = [
     { id: 'editar-registro-producao', label: 'Editar Registro de Produção' }, // Para gerenciar-producao.html
     { id: 'excluir-registro-producao', label: 'Excluir Registro de Produção' }, // Para gerenciar-producao.html
     { id: 'cadastrar-produto', label: 'Cadastrar Produto' }, // Para cadastrar-produto.html
-    { id: 'lancar-producao', label: 'Lançar Produção' },
+    { id: 'lancar-producao', label: 'Lançar Produção (Opera com editar OPs)' },
     { id: 'embalar-produto', label: 'Embalagem de Produto' } // Para embalagem-de-produtos.html
 ];
 

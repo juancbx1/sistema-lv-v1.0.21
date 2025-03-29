@@ -31,8 +31,7 @@ export const MAQUINAS = [
 export const PROCESSOS = [
     'Fechamento',
     'Finalização',
-    'Acabamento 1',
-    'Acabamento 2',
+    'Acabamento Borda',
     'Bainha',
     'Baguilha',
     'Cós/Elástico',

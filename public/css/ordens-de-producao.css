@@ -614,3 +614,74 @@ margin-right: 20px;
         min-width: 180px;
     }
 }
+
+/* pop up de erro para usuario que quer lançar sem permissão */
+.popup-mensagem {
+    font-family: Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+  }
+  
+  .popup-mensagem.popup-erro {
+    border: 1px solid #f5c6cb;
+  }
+  
+  .popup-mensagem.popup-sucesso {
+    border: 1px solid #c3e6cb;
+  }
+  
+  .popup-mensagem p {
+    margin: 0 0 10px 0;
+  }
+  
+  .popup-mensagem button {
+    transition: background-color 0.3s;
+  }
+  
+  .popup-mensagem button:hover {
+    background-color: #c82333; /* Para erro */
+  }
+  
+  .popup-mensagem.popup-sucesso button:hover {
+    background-color: #218838; /* Para sucesso */
+  }
+
+  /*estilo spinner */
+  .spinner {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    font-size: 16px;
+    color: #666;
+  }
+  
+  .spinner::before {
+    content: '';
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    margin-right: 10px;
+    border: 3px solid #ccc;
+    border-top: 3px solid #007bff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  #editVarianteContainer {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  #editVarianteOP {
+    width: 100%;
+    box-sizing: border-box;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }

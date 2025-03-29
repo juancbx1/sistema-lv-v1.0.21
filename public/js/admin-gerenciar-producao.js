@@ -135,6 +135,8 @@ import { verificarAutenticacao, logout } from '/js/utils/auth.js';
     }
   }
 
+
+  
   async function aplicarFiltros(page = 1, dataInicial = null) {
     console.log('[aplicarFiltros] Iniciando aplicação de filtros, página:', page, 'dataInicial:', dataInicial);
     currentPage = page;
@@ -234,31 +236,110 @@ import { verificarAutenticacao, logout } from '/js/utils/auth.js';
 
         producoesPagina.forEach((p) => {
           const usuario = usuarios.find(u => u.nome === p.funcionario);
-          const nomeFuncionario = usuario ? usuario.nome : `${p.funcionario} <span class="deletado">(usuário deletado do sistema)</span>`;
           const foiAssinado = p.assinada ? 'Sim' : 'Não';
           const edicoesTexto = p.edicoes > 0 ? `(E ${p.edicoes}x)` : '';
           const [data, hora] = p.dataHoraFormatada.split(', ');
-          const dataHora = `${data},<br>${hora} ${edicoesTexto}`;
-
+      
           const tr = document.createElement('tr');
           tr.dataset.id = p.id;
-          tr.innerHTML = `
-            <td>${p.id}</td>
-            <td>${nomeFuncionario}</td>
-            <td>${p.produto}</td>
-            <td>${p.processo} / ${p.maquina}</td>
-            <td>${p.opNumero || '-'}</td>
-            <td>${p.quantidade}</td>
-            <td>${dataHora}</td>
-            <td>${foiAssinado}</td>
-            <td>${p.lancadoPor || 'Desconhecido'}</td>
-            <td>
-              ${permissoes.includes('editar-registro-producao') ? '<button class="btn-editar-registro">Editar</button>' : ''}
-              ${permissoes.includes('excluir-registro-producao') ? '<button class="btn-excluir-registro">Excluir</button>' : ''}
-            </td>
-          `;
+      
+          // ID
+          const tdId = document.createElement('td');
+          tdId.setAttribute('data-label', 'ID');
+          tdId.textContent = p.id;
+          tr.appendChild(tdId);
+      
+          // Funcionário
+          const tdFuncionario = document.createElement('td');
+          tdFuncionario.setAttribute('data-label', 'Funcionário');
+          if (usuario) {
+              tdFuncionario.textContent = usuario.nome;
+          } else {
+              const funcionarioText = document.createTextNode(p.funcionario + ' ');
+              tdFuncionario.appendChild(funcionarioText);
+              const spanDeletado = document.createElement('span');
+              spanDeletado.className = 'deletado';
+              spanDeletado.textContent = '(usuário deletado do sistema)';
+              tdFuncionario.appendChild(spanDeletado);
+          }
+          tr.appendChild(tdFuncionario);
+      
+          // Produto
+          const tdProduto = document.createElement('td');
+          tdProduto.setAttribute('data-label', 'Produto');
+          tdProduto.textContent = p.produto;
+          tr.appendChild(tdProduto);
+      
+          // Proc./Máq.
+          const tdProcMaq = document.createElement('td');
+          tdProcMaq.setAttribute('data-label', 'Proc./Máq.');
+          tdProcMaq.textContent = `${p.processo} / ${p.maquina}`;
+          tr.appendChild(tdProcMaq);
+      
+          // OP
+          const tdOp = document.createElement('td');
+          tdOp.setAttribute('data-label', 'OP');
+          tdOp.textContent = p.opNumero || '-';
+          tr.appendChild(tdOp);
+      
+          // Qtde
+          const tdQtde = document.createElement('td');
+          tdQtde.setAttribute('data-label', 'Qtde');
+          tdQtde.textContent = p.quantidade;
+          tr.appendChild(tdQtde);
+      
+          // Data/Hora
+          const tdDataHora = document.createElement('td');
+          tdDataHora.setAttribute('data-label', 'Data/Hora');
+          const dataText = document.createTextNode(`${data}, ${hora} `);
+          tdDataHora.appendChild(dataText);
+          if (edicoesTexto) {
+              const edicoesSpan = document.createElement('span');
+              edicoesSpan.textContent = edicoesTexto;
+              tdDataHora.appendChild(edicoesSpan);
+          }
+          tr.appendChild(tdDataHora);
+      
+          // Assinou?
+          const tdAssinou = document.createElement('td');
+          tdAssinou.setAttribute('data-label', 'Assinou?');
+          tdAssinou.textContent = foiAssinado;
+          tr.appendChild(tdAssinou);
+      
+          // Por
+          const tdPor = document.createElement('td');
+          tdPor.setAttribute('data-label', 'Por');
+          tdPor.textContent = p.lancadoPor || 'Desconhecido';
+          tr.appendChild(tdPor);
+      
+          // Ação
+          // Ação
+const tdAcao = document.createElement('td');
+tdAcao.setAttribute('data-label', 'Ação');
+
+// Cria uma div para agrupar os botões
+const divBotoes = document.createElement('div');
+divBotoes.className = 'botoes-acao'; // Adiciona uma classe para estilização, se necessário
+
+if (permissoes.includes('editar-registro-producao')) {
+    const btnEditar = document.createElement('button');
+    btnEditar.className = 'btn-editar-registro';
+    btnEditar.textContent = 'Editar';
+    divBotoes.appendChild(btnEditar);
+}
+if (permissoes.includes('excluir-registro-producao')) {
+    const btnExcluir = document.createElement('button');
+    btnExcluir.className = 'btn-excluir-registro';
+    btnExcluir.textContent = 'Excluir';
+    divBotoes.appendChild(btnExcluir);
+}
+
+// Adiciona a div com os botões ao <td>
+tdAcao.appendChild(divBotoes);
+tr.appendChild(tdAcao);
+      
           corpoTabela.appendChild(tr);
-        });
+      });
 
         console.log('[aplicarFiltros] Tabela preenchida com', producoesPagina.length, 'registros');
         document.querySelectorAll('.btn-excluir-registro').forEach(btn => {
