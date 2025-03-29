@@ -1,50 +1,47 @@
-// js/pages/admin-cadastrar-produto.js
-import { verificarAutenticacaoSincrona } from './utils/auth.js';
-import { obterProdutos, salvarProdutos } from './utils/storage.js';
-import { resizeImage } from './utils/image-utils.js';
-import { PRODUTOS, PRODUTOSKITS, MAQUINAS, PROCESSOS } from './utils/prod-proc-maq.js';
+// public/js/admin-cadastrar-produto.js
+import { verificarAutenticacao } from '/js/utils/auth.js';
+import { obterProdutos, salvarProdutos } from '/js/utils/storage.js';
+import { resizeImage } from '/js/utils/image-utils.js';
+import { PRODUTOS, PRODUTOSKITS, MAQUINAS, PROCESSOS } from '/js/utils/prod-proc-maq.js';
 
-// Verificação de autenticação síncrona no topo do script
-const auth = verificarAutenticacaoSincrona('cadastrar-produto.html', ['acesso-cadastrar-produto']);
-if (!auth) {
-    console.error('[admin-cadastrar-produto] Autenticação falhou. Usuário logado:', localStorage.getItem('usuarioLogado'));
-    window.location.href = '/admin/acesso-negado.html';
-    throw new Error('Autenticação falhou, redirecionando para acesso-negado.html...');
-}
+// Variável global para armazenar produtos
+let produtos = [];
+let variacoesAlteradas = false; // Rastreia alterações não salvas em "Variações do Produto"
+let gradeAlteradas = false; // Rastreia alterações não salvas em "Grade das Variações"
+let variacoesTemp = []; // Armazena temporariamente as variações antes de salvar
+let gradeTemp = []; // Armazena temporariamente a grade antes de salvar
 
-const permissoes = auth.permissoes || [];
-const usuarioLogado = auth.usuario;
-console.log('Inicializando cadastrar-produto para usuário:', usuarioLogado.nome, 'Permissões:', permissoes);
-
-
-const productListView = document.getElementById('productListView');
-const productFormView = document.getElementById('productFormView');
-const configurarVariacaoView = document.getElementById('configurarVariacaoView');
-const productTableBody = document.getElementById('productTableBody');
-const searchProduct = document.getElementById('searchProduct');
-const productForm = document.getElementById('productForm');
-const editProductName = document.getElementById('editProductName');
-const sku = document.getElementById('sku');
-const gtin = document.getElementById('gtin');
-const unidade = document.getElementById('unidade');
-const estoque = document.getElementById('estoque');
-const imagemProduto = document.getElementById('imagemProduto');
-const previewImagem = document.getElementById('previewImagem');
-const removeImagem = document.getElementById('removeImagem');
-const estruturaBody = document.getElementById('estruturaBody');
-const stepsBody = document.getElementById('stepsBody');
-const tabFilter = document.getElementById('tabFilter');
-const gradeHeader = document.getElementById('gradeHeader');
-const gradeBody = document.getElementById('gradeBody');
-const variacaoPopup = document.getElementById('variacaoPopup');
-const novaVariacaoDescricao = document.getElementById('novaVariacaoDescricao');
-const gradeImagePopup = document.getElementById('gradeImagePopup');
-const gradeImageInput = document.getElementById('gradeImageInput');
-const produtoKitSelect = document.getElementById('produtoKitSelect');
-const variacaoKitSelect = document.getElementById('variacaoKitSelect');
-const addVariacaoKitBtn = document.getElementById('addVariacaoKitBtn');
-const composicaoKitContainer = document.getElementById('composicaoKitContainer');
-const configurarVariacaoTitle = document.getElementById('configurarVariacaoTitle');
+// Elementos DOM agrupados em um objeto
+const elements = {
+    productListView: document.getElementById('productListView'),
+    productFormView: document.getElementById('productFormView'),
+    configurarVariacaoView: document.getElementById('configurarVariacaoView'),
+    productTableBody: document.getElementById('productTableBody'),
+    searchProduct: document.getElementById('searchProduct'),
+    productForm: document.getElementById('productForm'),
+    editProductName: document.getElementById('editProductName'),
+    sku: document.getElementById('sku'),
+    gtin: document.getElementById('gtin'),
+    unidade: document.getElementById('unidade'),
+    estoque: document.getElementById('estoque'),
+    imagemProduto: document.getElementById('imagemProduto'),
+    previewImagem: document.getElementById('previewImagem'),
+    removeImagem: document.getElementById('removeImagem'),
+    estruturaBody: document.getElementById('estruturaBody'),
+    stepsBody: document.getElementById('stepsBody'),
+    tabFilter: document.getElementById('tabFilter'),
+    gradeHeader: document.getElementById('gradeHeader'),
+    gradeBody: document.getElementById('gradeBody'),
+    variacaoPopup: document.getElementById('variacaoPopup'),
+    novaVariacaoDescricao: document.getElementById('novaVariacaoDescricao'),
+    gradeImagePopup: document.getElementById('gradeImagePopup'),
+    gradeImageInput: document.getElementById('gradeImageInput'),
+    produtoKitSelect: document.getElementById('produtoKitSelect'),
+    variacaoKitSelect: document.getElementById('variacaoKitSelect'),
+    addVariacaoKitBtn: document.getElementById('addVariacaoKitBtn'),
+    composicaoKitContainer: document.getElementById('composicaoKitContainer'),
+    configurarVariacaoTitle: document.getElementById('configurarVariacaoTitle')
+};
 
 let editingProduct = null;
 let currentSelectIndex = null;
@@ -52,112 +49,148 @@ let currentGradeIndex = null;
 let currentKitVariationIndex = null;
 let kitComposicaoTemp = [];
 
+// Função para clonar objeto profundamente
+function deepClone(obj) {
+    return JSON.parse(JSON.stringify(obj));
+}
 
-// Função para inicializar a página
-function inicializarPagina() {
-    loadProductTable('todos');
+// Inicialização
+async function inicializarPagina() {
+    document.documentElement.setAttribute('hidden', 'true'); // Oculta o DOM inicialmente
+
+    const auth = await verificarAutenticacao('cadastrar-produto.html', ['acesso-cadastrar-produto']);
+    if (!auth) {
+        console.error('[admin-cadastrar-produto] Autenticação falhou. Usuário logado:', localStorage.getItem('usuarioLogado'));
+        return; // O redirecionamento é feito em verificarAutenticacao
+    }
+
+    const permissoes = auth.permissoes || [];
+    const usuarioLogado = auth.usuario;
+    console.log('Inicializando cadastrar-produto para usuário:', usuarioLogado.nome, 'Permissões:', permissoes);
+
+    await loadProductTable('todos');
     toggleView();
+    document.documentElement.removeAttribute('hidden'); // Mostra o DOM após carregar
 }
 
-// Executa a inicialização imediatamente após a definição da função
-inicializarPagina(); // Chama a inicialização logo após a autenticação
+async function loadProductTable(filterType = 'todos', search = '') {
+    try {
+        produtos = await obterProdutos();
+        console.log('[loadProductTable] Produtos obtidos:', produtos);
 
-// Expor a função globalmente
-window.atualizarProdutoNoStorage = atualizarProdutoNoStorage;
+        const allProductNames = [...PRODUTOS, ...PRODUTOSKITS];
+        const novosProdutos = [];
+        allProductNames.forEach(nome => {
+            if (!produtos.find(p => p.nome === nome)) {
+                novosProdutos.push({
+                    nome,
+                    sku: '',
+                    tipos: PRODUTOSKITS.includes(nome) ? ['kits'] : [],
+                    isKit: PRODUTOSKITS.includes(nome),
+                    gtin: '',
+                    unidade: '',
+                    estoque: 0,
+                    imagem: '',
+                    variacoes: [],
+                    estrutura: [],
+                    etapas: [],
+                    grade: []
+                });
+            }
+        });
 
-function loadProductTable(filterType = 'todos', search = '') {
-    let produtos = obterProdutos() || [];
-    const allProductNames = [...PRODUTOS, ...PRODUTOSKITS];
-
-    allProductNames.forEach(nome => {
-        if (!produtos.find(p => p.nome === nome)) {
-            produtos.push({
-                nome,
-                sku: '',
-                tipos: PRODUTOSKITS.includes(nome) ? ['kits'] : [],
-                isKit: PRODUTOSKITS.includes(nome), // Adiciona isKit baseado em PRODUTOSKITS
-                gtin: '',
-                unidade: '',
-                estoque: 0,
-                imagem: '',
-                variacoes: [],
-                estrutura: [],
-                etapas: [],
-                grade: []
-            });
+        if (novosProdutos.length > 0) {
+            console.log('[loadProductTable] Salvando novos produtos:', novosProdutos);
+            await salvarProdutos(novosProdutos);
+            produtos = await obterProdutos();
+            console.log('[loadProductTable] Produtos após salvar:', produtos);
         }
-    });
 
-    // Garantir que produtos existentes tenham isKit definido
-    produtos = produtos.map(produto => ({
-        ...produto,
-        isKit: produto.tipos && produto.tipos.includes('kits')
-    }));
+        const mappedProdutos = produtos.map(produto => ({
+            ...produto,
+            isKit: produto.tipos && produto.tipos.includes('kits')
+        }));
 
-    produtos = [...new Map(produtos.map(p => [p.nome, p])).values()];
-    salvarProdutos(produtos);
+        const filteredProdutos = mappedProdutos
+            .filter(p => allProductNames.includes(p.nome))
+            .filter(p =>
+                (filterType === 'todos' || (p.tipos && p.tipos.includes(filterType))) &&
+                p.nome.toLowerCase().includes(search.toLowerCase())
+            );
 
-    const filteredProdutos = produtos
-        .filter(p => allProductNames.includes(p.nome))
-        .filter(p => 
-            (filterType === 'todos' || (p.tipos && p.tipos.includes(filterType))) &&
-            p.nome.toLowerCase().includes(search.toLowerCase())
-        );
-
-    productTableBody.innerHTML = '';
-    filteredProdutos.forEach(produto => {
-        const tr = document.createElement('tr');
-        tr.style.cursor = 'pointer';
-        tr.dataset.nome = produto.nome;
-        tr.innerHTML = `
-            <td>${produto.imagem ? `<img src="${produto.imagem}" class="miniatura-produto" onclick="editProduct('${produto.nome}')">` : '<span class="espaco-miniatura-produto"></span>'}</td>
-            <td>${produto.nome}</td>
-            <td>${produto.sku || '-'}</td>
-            <td>${produto.unidade || '-'}</td>
-            <td>${produto.estoque || 0}</td>
-            <td>${produto.tipos ? produto.tipos.join(', ') : '-'}</td>
-        `;
-        tr.addEventListener('click', () => editProduct(produto.nome));
-        productTableBody.appendChild(tr);
-    });
+        elements.productTableBody.innerHTML = '';
+        filteredProdutos.forEach(produto => {
+            const tr = document.createElement('tr');
+            tr.style.cursor = 'pointer';
+            tr.dataset.nome = produto.nome;
+            tr.innerHTML = `
+                <td>${produto.imagem ? `<img src="${produto.imagem}" class="miniatura-produto" onclick="editProduct('${produto.nome}')">` : '<span class="espaco-miniatura-produto"></span>'}</td>
+                <td>${produto.nome}</td>
+                <td>${produto.sku || '-'}</td>
+                <td>${produto.unidade || '-'}</td>
+                <td>${produto.estoque || 0}</td>
+                <td>${produto.tipos ? produto.tipos.join(', ') : '-'}</td>
+            `;
+            tr.addEventListener('click', () => editProduct(produto.nome));
+            elements.productTableBody.appendChild(tr);
+        });
+    } catch (error) {
+        console.error('[loadProductTable] Erro:', error);
+    }
 }
 
+inicializarPagina();
 
-function editProduct(nome) {
-    const produtos = obterProdutos() || [];
-    editingProduct = produtos.find(p => p.nome === nome);
-    if (editingProduct) {
-        console.log(`[editProduct] Carregando produto ${nome} do localStorage:`, editingProduct);
+async function editProduct(nome) {
+    const produtoOriginal = produtos.find(p => p.nome === nome);
+    if (produtoOriginal) {
+        // Sempre criar um clone limpo do produto original
+        editingProduct = deepClone(produtoOriginal);
+        console.log(`[editProduct] Carregando produto ${nome}:`, editingProduct);
+
+        // Limpar qualquer estado temporário de duplicidade, se não for o mesmo produto
+        const produtoComDuplicidade = localStorage.getItem('produtoComDuplicidade');
+        if (produtoComDuplicidade) {
+            const produtoTemp = JSON.parse(produtoComDuplicidade);
+            if (produtoTemp.id === produtoOriginal.id) {
+                editingProduct = deepClone(produtoTemp);
+            } else {
+                localStorage.removeItem('produtoComDuplicidade'); // Limpar se for outro produto
+            }
+        }
+
         window.location.hash = '#editando';
         localStorage.setItem('ultimoProdutoEditado', nome);
         loadEditForm(editingProduct);
     } else {
+        console.error(`[editProduct] Produto ${nome} não encontrado`);
         window.location.hash = '';
+        editingProduct = null;
     }
 }
 
 function loadEditForm(produto) {
-    console.log('[loadEditForm] Carregando formulário para produto:', produto.nome);
-    console.log('[loadEditForm] Grade do produto:', produto.grade);
-    editProductName.textContent = `Editando: ${produto.nome}`;
-    sku.value = produto.sku || '';
+    console.log('[loadEditForm] Carregando formulário para:', produto.nome);
+    console.log('[loadEditForm] Tipos do produto:', produto.tipos);
+    elements.editProductName.textContent = `Editando: ${produto.nome}`;
+    elements.sku.value = produto.sku || '';
     document.querySelectorAll('input[name="tipo"]').forEach(cb => {
         cb.checked = produto.tipos ? produto.tipos.includes(cb.value) : false;
     });
-    gtin.value = produto.gtin || '';
-    unidade.value = produto.unidade || '';
-    estoque.value = produto.estoque || '';
+    elements.gtin.value = produto.gtin || '';
+    elements.unidade.value = produto.unidade || '';
+    elements.estoque.value = produto.estoque || '';
     if (produto.imagem) {
-        previewImagem.src = produto.imagem;
-        previewImagem.style.display = 'block';
-        removeImagem.style.display = 'inline-block';
+        elements.previewImagem.src = produto.imagem;
+        elements.previewImagem.style.display = 'block';
+        elements.removeImagem.style.display = 'inline-block';
     } else {
-        previewImagem.src = '';
-        previewImagem.style.display = 'none';
-        removeImagem.style.display = 'none';
+        elements.previewImagem.src = '';
+        elements.previewImagem.style.display = 'none';
+        elements.removeImagem.style.display = 'none';
     }
 
-    estruturaBody.innerHTML = '';
+    elements.estruturaBody.innerHTML = '';
     (produto.estrutura || []).forEach(item => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -168,43 +201,115 @@ function loadEditForm(produto) {
             <td><input type="text" value="${item.total.toFixed(2)}" readonly></td>
             <td><button class="cp-remove-btn" onclick="this.parentElement.parentElement.remove(); updateStructureTotals()">X</button></td>
         `;
-        estruturaBody.appendChild(tr);
+        elements.estruturaBody.appendChild(tr);
     });
     updateStructureTotals();
 
-    // Recarregar etapas do produto
-    stepsBody.innerHTML = '';
+    elements.stepsBody.innerHTML = '';
     (produto.etapas || []).forEach((etapa, index) => {
         addStepRow(etapa.processo || '', etapa.maquina || '', etapa.feitoPor || '', index);
     });
     window.updateProcessosOptions();
 
-    loadVariacoes(produto);
-    loadGrade(produto);
+    console.log('[loadEditForm] Chamando loadVariacoes');
+    loadVariacoes(produto); // Garantir que isso é chamado
+    console.log('[loadEditForm] Chamando loadGrade');
+    loadGrade(produto);     // Garantir que isso é chamado
+    console.log('[loadEditForm] Chamando toggleTabs');
     toggleTabs();
-    initializeDragAndDrop();
+    
+     // Definir aba inicial com base no tipo do produto
+     const tipos = produto.tipos || [];
+     const abaInicial = tipos.includes('variacoes') || tipos.includes('kits') ? 'variacoes' : 'dados-gerais';
+     console.log('[loadEditForm] Ativando aba inicial:', abaInicial);
+     switchTab(abaInicial);
+     initializeDragAndDrop();
 
-    const ultimaAba = localStorage.getItem('ultimaAbaAtiva') || 'dados-gerais';
-    switchTab(ultimaAba);
+    // Verificar duplicatas ao carregar
+    const produtoComDuplicidade = localStorage.getItem('produtoComDuplicidade');
+    if (produtoComDuplicidade) {
+        const produtoTemp = JSON.parse(produtoComDuplicidade);
+        if (produtoTemp.id === produto.id && temDuplicatasDeSku()) {
+            editingProduct = deepClone(produtoTemp);
+            loadGrade(produtoTemp); // Recarregar grade com estado temporário
+            bloquearCampos('Corrija o SKU duplicado antes de continuar editando.');
+            const erroInputs = elements.gradeBody.querySelectorAll('.cp-grade-sku');
+            erroInputs.forEach((input, idx) => {
+                const grade = editingProduct.grade || [];
+                const sku = grade[idx]?.sku || '';
+                const allSkus = produtos
+                    .filter(prod => prod.id !== editingProduct.id)
+                    .flatMap(prod => [prod.sku, ...(prod.grade || []).map(g => g.sku)])
+                    .filter(s => s);
+                const gradeSkus = grade.map(g => g.sku).filter((s, i) => i !== idx);
+                if (sku && (allSkus.includes(sku) || gradeSkus.includes(sku))) {
+                    input.classList.add('error');
+                    let errorSpan = input.nextElementSibling;
+                    if (!errorSpan || !errorSpan.classList.contains('error-message')) {
+                        errorSpan = document.createElement('span');
+                        errorSpan.className = 'error-message';
+                        input.parentNode.appendChild(errorSpan);
+                    }
+                    errorSpan.textContent = 'Este SKU já está em uso!';
+                    errorSpan.style.display = 'inline';
+                }
+            });
+        }
+    }
 }
 
 function loadVariacoes(produto) {
+    console.log('[loadVariacoes] Variações do produto:', produto.variacoes);
     const variacoesContainer = document.getElementById('variacoesContainer');
+    if (!variacoesContainer) {
+        console.error('[loadVariacoes] #variacoesContainer não encontrado no DOM');
+        return;
+    }
     variacoesContainer.innerHTML = '';
-    const variacoes = produto.variacoes || [{ chave: 'cor', valores: '' }];
-    variacoes.forEach((variacao, index) => addVariacaoRow(variacao.chave, variacao.valores, index));
+
+    // Se variacoes está vazio, mas há grade, reconstruir variacoes
+    let variacoesIniciais = produto.variacoes || [];
+    if (!variacoesIniciais.length && produto.grade && produto.grade.length > 0) {
+        const variacoesInferidas = {};
+        produto.grade.forEach(item => {
+            const partes = item.variacao.split(' | ');
+            partes.forEach((parte, idx) => {
+                if (!variacoesInferidas[idx]) {
+                    variacoesInferidas[idx] = new Set();
+                }
+                variacoesInferidas[idx].add(parte);
+            });
+        });
+
+        variacoesIniciais = Object.keys(variacoesInferidas).map((idx, i) => ({
+            chave: i === 0 ? 'cor' : (i === 1 ? 'tamanho' : `variacao${i}`),
+            valores: Array.from(variacoesInferidas[idx]).join(',')
+        }));
+        console.log('[loadVariacoes] Variações inferidas a partir da grade:', variacoesIniciais);
+        editingProduct.variacoes = deepClone(variacoesIniciais);
+    }
+
+    // Definir variações iniciais (mesmo para kits)
+    variacoesTemp = deepClone(variacoesIniciais.length > 0 ? variacoesIniciais : [{ chave: 'cor', valores: '' }]);
+    console.log('[loadVariacoes] Variações temporárias:', variacoesTemp);
+    variacoesTemp.forEach((variacao, index) => {
+        console.log('[loadVariacoes] Adicionando variação:', variacao, 'índice:', index);
+        addVariacaoRow(variacao.chave, variacao.valores, index);
+    });
+
+    variacoesAlteradas = false;
 }
 
 function loadGrade(produto) {
-    console.log('[loadGrade] Iniciando carregamento da grade para produto:', produto.nome);
-    console.log('[loadGrade] Grade atual do produto:', produto.grade);
-
-    const variacoesAtuais = Array.from(document.querySelectorAll('.cp-variacao-row')).map((row, i) => ({
+    console.log('[loadGrade] Produto:', produto);
+    const variacoesContainer = document.getElementById('variacoesContainer');
+    const variacoesAtuais = Array.from(variacoesContainer.querySelectorAll('.cp-variacao-row')).map((row, i) => ({
         chave: document.getElementById(`chaveVariacao${i}`)?.value || '',
-        valores: Array.from(row.querySelectorAll('.cp-tag')).map(tag => tag.textContent).join(',')
+        valores: document.getElementById(`valoresVariacao${i}`)?.value || ''
     }));
+    console.log('[loadGrade] Variações atuais:', variacoesAtuais);
 
-    gradeHeader.innerHTML = `
+    elements.gradeHeader.innerHTML = `
         <tr>
             <th>Variação</th>
             <th>Composto Por</th>
@@ -214,200 +319,233 @@ function loadGrade(produto) {
         </tr>
     `;
 
-    const hasValidVariacoes = variacoesAtuais.every(v => v.valores && v.valores.trim() !== '');
-    if (!hasValidVariacoes) {
-        console.log('[loadGrade] Nenhuma variação válida encontrada, limpando grade.');
-        gradeBody.innerHTML = '';
-        produto.grade = [];
-        atualizarProdutoNoStorage();
+    const isKit = produto.tipos && produto.tipos.includes('kits');
+    gradeTemp = deepClone(produto.grade || []);
+
+    // Gerar grade com base nas variações/valores, tanto para produtos normais quanto para kits
+    if (!variacoesAtuais.every(v => v.valores && v.valores.trim() !== '')) {
+        console.log('[loadGrade] Variações inválidas, exibindo mensagem');
+        elements.gradeBody.innerHTML = '<tr><td colspan="5">Adicione valores às variações acima para gerar a grade.</td></tr>';
+        gradeTemp = [];
         return;
     }
 
     const gradeGerada = generateGradeCombinations(variacoesAtuais);
     console.log('[loadGrade] Grade gerada:', gradeGerada);
 
-    let grade = produto.grade || [];
-    const isKit = produto.tipos && produto.tipos.includes('kits');
-
     const updatedGrade = [];
-    const variacoesGeradasNomes = gradeGerada.map(g => g.variacao);
-
-    grade.forEach(item => {
-        if (variacoesGeradasNomes.includes(item.variacao)) {
-            updatedGrade.push({
-                ...item,
-                composicao: item.composicao || (isKit ? [] : [{ variacao: '-', quantidade: 1 }])
-            });
-            console.log(`[loadGrade] Variação ${item.variacao} - Composição preservada:`, item.composicao);
-        } else {
-            console.log(`[loadGrade] Variação ${item.variacao} removida da grade.`);
-        }
-    });
-
     gradeGerada.forEach(nova => {
-        if (!updatedGrade.find(g => g.variacao === nova.variacao)) {
-            updatedGrade.push({
-                variacao: nova.variacao,
-                sku: '',
-                imagem: '', // Inicializa vazio para novas variações
-                composicao: isKit ? [] : [{ variacao: '-', quantidade: 1 }]
-            });
-            console.log(`[loadGrade] Nova variação adicionada: ${nova.variacao}`);
-        }
+        const existente = gradeTemp.find(g => g.variacao === nova.variacao) || {
+            variacao: nova.variacao,
+            sku: '',
+            imagem: '',
+            composicao: isKit ? [] : ['-'] // Inicializar composição vazia para kits
+        };
+        updatedGrade.push(existente);
     });
+    gradeTemp = updatedGrade;
 
-    grade = updatedGrade;
+    elements.gradeBody.innerHTML = '';
+    if (gradeTemp.length === 0) {
+        elements.gradeBody.innerHTML = '<tr><td colspan="5">Nenhuma variação configurada. Clique em "Adicionar Outra Variação" para começar.</td></tr>';
+        return;
+    }
 
-    gradeBody.innerHTML = '';
-    grade.forEach((item, idx) => {
-        console.log(`[loadGrade] Renderizando variação ${item.variacao} com imagem:`, item.imagem);
+    gradeTemp.forEach((item, idx) => {
+        console.log('[loadGrade] Renderizando item da grade:', item);
         const tr = document.createElement('tr');
         tr.dataset.index = idx;
-        let composicaoHtml = isKit
-            ? item.composicao && item.composicao.length > 0 && item.composicao[0].variacao !== '-'
+        const composicaoHtml = isKit
+            ? item.composicao?.length > 0 && item.composicao[0].variacao !== '-'
                 ? `<div class="composicao-tags">${item.composicao.map(c => `<span class="composicao-tag">${c.variacao} (${c.quantidade})</span>`).join('')}<button class="composicao-tag composicao-edit-btn" onclick="abrirConfigurarVariacao('${idx}')">Editar</button></div>`
                 : `<div class="composicao-tags"><button class="composicao-tag composicao-edit-btn" onclick="abrirConfigurarVariacao('${idx}')">Editar</button></div>`
             : '-';
         tr.innerHTML = `
             <td>${item.variacao}</td>
             <td>${composicaoHtml}</td>
-            <td><input type="text" class="cp-grade-sku" value="${item.sku || ''}" onblur="validarSku('${idx}', this)" placeholder="SKU"><span class="sku-error" style="display: none;">SKU duplicado!</span></td>
-            <td class="cp-grade-img"><div class="img-placeholder" onclick="abrirImagemPopup('${idx}')">${item.imagem ? `<img src="${item.imagem}" class="cp-variacao-img" alt="Imagem da variação ${item.variacao}">` : ''}</div></td>
-            <td class="cp-actions"><button class="cp-remove-btn" onclick="excluirGrade('${idx}')">X</button></td>
+            <td><input type="text" class="cp-grade-sku" value="${item.sku || ''}" onblur="validarSku('${idx}', this); marcarGradeAlteradas()"><span class="error-message"></span></td>
+            <td class="cp-grade-img"><div class="img-placeholder" onclick="abrirImagemPopup('${idx}')">${item.imagem ? `<img src="${item.imagem}" class="cp-variacao-img">` : ''}</div></td>
+            <td><button class="cp-remove-btn" onclick="excluirGrade('${idx}')">X</button></td>
         `;
-        gradeBody.appendChild(tr);
+        elements.gradeBody.appendChild(tr);
     });
-
-    produto.grade = grade;
-    console.log('[loadGrade] Grade final do produto:', produto.grade);
-    atualizarProdutoNoStorage();
+    console.log('[loadGrade] Grade temporária final:', gradeTemp);
+    gradeAlteradas = false;
 }
 
+window.marcarGradeAlteradas = function() {
+    gradeAlteradas = true;
+};
+
+window.salvarGrade = async function() {
+    const gradeRows = Array.from(elements.gradeBody.querySelectorAll('tr'));
+    // Filtrar apenas as linhas que ainda existem no DOM e têm a célula de variação
+    const validRows = gradeRows.filter(tr => tr.cells[0]);
+
+    gradeTemp = validRows.map((tr, idx) => {
+        const variacao = tr.cells[0].textContent;
+        const existingItem = gradeTemp.find(item => item.variacao === variacao) || {};
+        return {
+            variacao: variacao,
+            sku: tr.cells[2]?.querySelector('.cp-grade-sku')?.value || existingItem.sku || '',
+            imagem: tr.cells[3]?.querySelector('img')?.src || existingItem.imagem || '',
+            composicao: existingItem.composicao || []
+        };
+    });
+
+    editingProduct.grade = deepClone(gradeTemp);
+    gradeAlteradas = false;
+    console.log('[salvarGrade] Grade atualizada localmente:', editingProduct.grade);
+
+    // Salvar no backend
+    try {
+        await atualizarProdutoNoStorage();
+        alert('Grade salva com sucesso!');
+    } catch (error) {
+        console.error('[salvarGrade] Erro ao salvar no backend:', error);
+        alert('Erro ao salvar a grade. Verifique o console para mais detalhes.');
+    }
+};
+
+window.addEventListener('beforeunload', (e) => {
+    if (variacoesAlteradas || gradeAlteradas) {
+        const mensagem = 'Você tem alterações não salvas em "Variações" ou "Grade". Tem certeza que deseja sair?';
+        e.preventDefault();
+        e.returnValue = mensagem;
+        return mensagem;
+    }
+});
+
 function generateGradeCombinations(variacoes) {
-    if (!variacoes || variacoes.length === 0 || !variacoes.every(v => v.valores && v.valores.trim())) return [];
+    if (!variacoes || !variacoes.every(v => v.valores)) return [];
     const valoresPorChave = variacoes.map(v => v.valores.split(',').map(val => val.trim()).filter(val => val));
-    if (valoresPorChave.length === 0 || valoresPorChave.some(arr => arr.length === 0)) return [];
-
     const combinations = valoresPorChave.reduce((acc, curr) => {
-        if (acc.length === 0) return curr.map(val => [val]);
-        return acc.flatMap(combo => curr.map(val => [...combo, val]));
+        return acc.length === 0 ? curr.map(val => [val]) : acc.flatMap(combo => curr.map(val => [...combo, val]));
     }, []);
-
-    return combinations.map(combo => ({
-        variacao: combo.join(' | '),
-        sku: '',
-        imagem: '',
-        composicao: []
-    }));
+    return combinations.map(combo => ({ variacao: combo.join(' | '), sku: '', imagem: '', composicao: [] }));
 }
 
 function filterProducts(type) {
     document.querySelectorAll('.cp-type-btn').forEach(btn => btn.classList.remove('active'));
     const activeBtn = document.querySelector(`.cp-type-btn[data-type="${type}"]`);
     if (activeBtn) activeBtn.classList.add('active');
-    loadProductTable(type, searchProduct.value);
+    loadProductTable(type, elements.searchProduct.value);
 }
 
 function toggleView() {
     const hash = window.location.hash;
     if (hash === '#editando') {
-        console.log('[toggleView] Hash #editando, editingProduct existe?', !!editingProduct);
         if (!editingProduct) {
             const ultimoProdutoEditado = localStorage.getItem('ultimoProdutoEditado');
-            const produtos = obterProdutos() || [];
-            editingProduct = produtos.find(p => p.nome === ultimoProdutoEditado);
-            if (editingProduct) {
-                console.log('[toggleView] Recarregando editingProduct do localStorage e chamando loadEditForm');
+            const produtoOriginal = produtos.find(p => p.nome === ultimoProdutoEditado);
+            if (produtoOriginal) {
+                editingProduct = deepClone(produtoOriginal);
                 loadEditForm(editingProduct);
             } else {
-                console.log('[toggleView] Produto não encontrado, limpando hash');
                 window.location.hash = '';
                 localStorage.removeItem('ultimaAbaAtiva');
+                editingProduct = null;
             }
         }
-        productListView.style.display = 'none';
-        productFormView.style.display = 'block';
-        configurarVariacaoView.style.display = 'none';
+        elements.productListView.style.display = 'none';
+        elements.productFormView.style.display = 'block';
+        elements.configurarVariacaoView.style.display = 'none';
     } else if (hash.startsWith('#configurar-variacao/')) {
-        productListView.style.display = 'none';
-        productFormView.style.display = 'block';
-        configurarVariacaoView.style.display = 'flex';
+        elements.productListView.style.display = 'none';
+        elements.productFormView.style.display = 'block';
+        elements.configurarVariacaoView.style.display = 'flex';
         const index = hash.split('/')[1];
         carregarConfigurarVariacao(index);
     } else {
-        productListView.style.display = 'block';
-        productFormView.style.display = 'none';
-        configurarVariacaoView.style.display = 'none';
+        if (variacoesAlteradas || gradeAlteradas) {
+            const confirmar = confirm('Você tem alterações não salvas em "Variações" ou "Grade". Deseja sair sem salvar?');
+            if (!confirmar) {
+                window.location.hash = '#editando';
+                return;
+            }
+        }
+        elements.productListView.style.display = 'block';
+        elements.productFormView.style.display = 'none';
+        elements.configurarVariacaoView.style.display = 'none';
         document.querySelectorAll('.cp-type-btn').forEach(btn => btn.classList.remove('active'));
         const todosBtn = document.querySelector('.cp-type-btn[data-type="todos"]');
         if (todosBtn) todosBtn.classList.add('active');
-        loadProductTable('todos', searchProduct.value);
+        loadProductTable('todos', elements.searchProduct.value);
         localStorage.removeItem('ultimaAbaAtiva');
+        editingProduct = null;
+        variacoesAlteradas = false;
+        gradeAlteradas = false;
+        variacoesTemp = [];
+        gradeTemp = [];
     }
 }
 
-window.switchTab = function(tab) {
+window.switchTab = function(tabId) {
+    console.log('[switchTab] Alternando para aba:', tabId);
     document.querySelectorAll('.cp-tab-btn').forEach(btn => btn.classList.remove('active'));
-    const activeBtn = document.querySelector(`.cp-tab-btn[data-tab="${tab}"]`);
-    if (activeBtn) activeBtn.classList.add('active');
+    document.querySelectorAll('.conteudo-aba-produto').forEach(tab => tab.classList.remove('active'));
 
-    document.querySelectorAll('.conteudo-aba-produto').forEach(content => content.classList.remove('active'));
-    const activeTab = document.getElementById(tab);
-    if (activeTab) {
-        activeTab.classList.add('active');
-        localStorage.setItem('ultimaAbaAtiva', tab);
+    const btn = document.querySelector(`.cp-tab-btn[data-tab="${tabId}"]`);
+    const tab = document.getElementById(tabId);
+
+    if (btn && tab) {
+        btn.classList.add('active');
+        tab.classList.add('active');
+        localStorage.setItem('ultimaAbaAtiva', tabId);
+        console.log('[switchTab] Aba ativada:', tabId);
+    } else {
+        console.error('[switchTab] Botão ou aba não encontrado para:', tabId);
     }
 };
 
 window.toggleTabs = function() {
     const tiposSelecionados = Array.from(document.querySelectorAll('input[name="tipo"]:checked')).map(cb => cb.value);
+    console.log('[toggleTabs] Tipos selecionados:', tiposSelecionados);
     const variacoesTabBtn = document.querySelector('.cp-tab-btn[data-tab="variacoes"]');
     const variacoesTab = document.getElementById('variacoes');
-    const producaoTabBtn = document.querySelector('.cp-tab-btn[data-tab="producao"]');
-    const producaoTab = document.getElementById('producao');
 
     if (tiposSelecionados.includes('variacoes') || tiposSelecionados.includes('kits')) {
         if (!variacoesTabBtn) {
+            console.log('[toggleTabs] Criando botão da aba Variações');
             const btn = document.createElement('button');
             btn.className = 'cp-tab-btn';
             btn.dataset.tab = 'variacoes';
             btn.textContent = 'Variações';
             btn.onclick = () => switchTab('variacoes');
-            tabFilter.appendChild(btn);
+            elements.tabFilter.appendChild(btn);
+        } else {
+            console.log('[toggleTabs] Botão da aba Variações já existe');
         }
     } else if (variacoesTabBtn) {
+        console.log('[toggleTabs] Removendo botão da aba Variações');
         variacoesTabBtn.remove();
         variacoesTab.classList.remove('active');
     }
 
-    if (tiposSelecionados.includes('kits')) {
-        if (producaoTabBtn) producaoTabBtn.style.display = 'none';
-        producaoTab.classList.remove('active');
-    } else if (producaoTabBtn) {
-        producaoTabBtn.style.display = 'inline-block';
+    // Garantir que uma aba esteja ativa
+    if (!document.querySelector('.cp-tab-btn.active')) {
+        console.log('[toggleTabs] Nenhuma aba ativa, definindo padrão');
+        const defaultTab = tiposSelecionados.includes('variacoes') || tiposSelecionados.includes('kits') ? 'variacoes' : 'dados-gerais';
+        switchTab(defaultTab);
     }
-
-    if (!document.querySelector('.cp-tab-btn.active')) switchTab(localStorage.getItem('ultimaAbaAtiva') || 'dados-gerais');
 };
 
-removeImagem.addEventListener('click', () => {
-    imagemProduto.value = '';
-    previewImagem.src = '';
-    previewImagem.style.display = 'none';
-    removeImagem.style.display = 'none';
+elements.removeImagem.addEventListener('click', () => {
+    elements.imagemProduto.value = '';
+    elements.previewImagem.src = '';
+    elements.previewImagem.style.display = 'none';
+    elements.removeImagem.style.display = 'none';
     editingProduct.imagem = '';
-    atualizarProdutoNoStorage();
 });
 
-imagemProduto.addEventListener('change', e => {
+elements.imagemProduto.addEventListener('change', e => {
     const arquivo = e.target.files[0];
     if (!arquivo) return;
     resizeImage(arquivo, imagemRedimensionada => {
-        previewImagem.src = imagemRedimensionada;
-        previewImagem.style.display = 'block';
-        removeImagem.style.display = 'inline-block';
+        elements.previewImagem.src = imagemRedimensionada;
+        elements.previewImagem.style.display = 'block';
+        elements.removeImagem.style.display = 'inline-block';
         editingProduct.imagem = imagemRedimensionada;
-        atualizarProdutoNoStorage();
     });
 });
 
@@ -421,14 +559,13 @@ window.addStructureRow = function() {
         <td><input type="text" readonly></td>
         <td><button class="cp-remove-btn" onclick="this.parentElement.parentElement.remove(); updateStructureTotals()">X</button></td>
     `;
-    estruturaBody.appendChild(tr);
-    atualizarProdutoNoStorage();
+    elements.estruturaBody.appendChild(tr);
 };
 
 window.addStepRow = function(processo = '', maquina = '', feitoPor = '', index = null) {
     const tr = document.createElement('tr');
     tr.draggable = true;
-    tr.dataset.index = index !== null ? index : stepsBody.children.length;
+    tr.dataset.index = index !== null ? index : elements.stepsBody.children.length;
     tr.innerHTML = `
         <td><span class="icone-arrastar">☰</span></td>
         <td><select class="processo-select">
@@ -443,21 +580,21 @@ window.addStepRow = function(processo = '', maquina = '', feitoPor = '', index =
             <option value="">Selecione um tipo</option>
             ${['costureira', 'tiktik', 'cortador'].map(tipo => `<option value="${tipo}" ${tipo === feitoPor ? 'selected' : ''}>${tipo.charAt(0).toUpperCase() + tipo.slice(1)}</option>`).join('')}
         </select></td>
-        <td><button class="botao-remover-produto" onclick="this.parentElement.parentElement.remove(); updateProcessosOptions(); atualizarProdutoNoStorage()">X</button></td>
+        <td><button class="botao-remover-produto" onclick="this.parentElement.parentElement.remove(); updateProcessosOptions()">X</button></td>
     `;
-    stepsBody.appendChild(tr);
+    elements.stepsBody.appendChild(tr);
 
-    // Adicionar listeners de evento programaticamente
     const processoSelect = tr.querySelector('.processo-select');
     const maquinaSelect = tr.querySelector('.maquina-select');
     const feitoPorSelect = tr.querySelector('.feito-por-select');
 
     processoSelect.addEventListener('change', () => {
         updateProcessosOptions();
-        atualizarProdutoNoStorage();
     });
-    maquinaSelect.addEventListener('change', atualizarProdutoNoStorage);
-    feitoPorSelect.addEventListener('change', atualizarProdutoNoStorage);
+    maquinaSelect.addEventListener('change', () => {
+    });
+    feitoPorSelect.addEventListener('change', () => {
+    });
 
     window.updateProcessosOptions();
 };
@@ -471,7 +608,7 @@ window.addVariacaoRow = function(chave = 'cor', valores = '', index = null) {
     div.innerHTML = `
         <div class="grupo-form-produto">
             <label for="chaveVariacao${idx}">Variação</label>
-            <select id="chaveVariacao${idx}" class="cp-select-variacao" onchange="verificarOutro(this, ${idx})">
+            <select id="chaveVariacao${idx}" class="cp-select-variacao" onchange="verificarOutro(this, ${idx}); marcarVariacoesAlteradas()">
                 <option value="cor" ${chave === 'cor' ? 'selected' : ''}>Cor</option>
                 <option value="tamanho" ${chave === 'tamanho' ? 'selected' : ''}>Tamanho</option>
                 <option value="outro" ${chave === 'outro' ? 'selected' : ''}>Outro...</option>
@@ -479,14 +616,25 @@ window.addVariacaoRow = function(chave = 'cor', valores = '', index = null) {
             </select>
         </div>
         <div class="grupo-form-produto">
-            <label for="valoresVariacao${idx}">Valores</label>
-            <div id="valoresVariacao${idx}" class="cp-tag-container"></div>
+            <label for="valoresVariacao${idx}">Valores (separados por vírgula)</label>
+            <input type="text" id="valoresVariacao${idx}" class="valores-variacao-input" value="${valores}" oninput="marcarVariacoesAlteradas()">
+            <button class="botao-editar-variacao" onclick="editarValoresVariacao(${idx})">Editar</button>
         </div>
         <button class="cp-remove-btn" onclick="removerVariacaoRow(this, ${idx})">X</button>
     `;
     variacoesContainer.appendChild(div);
-    criarTags(`valoresVariacao${idx}`, valores);
-    atualizarProdutoNoStorage();
+    variacoesTemp.push({ chave, valores: valores.split(',').map(v => v.trim()).filter(v => v) });
+};
+
+window.marcarVariacoesAlteradas = function() {
+    variacoesAlteradas = true;
+};
+
+window.editarValoresVariacao = function(index) {
+    const input = document.getElementById(`valoresVariacao${index}`);
+    input.disabled = false;
+    input.focus();
+    variacoesAlteradas = true;
 };
 
 window.removerVariacaoRow = function(btn, index) {
@@ -494,8 +642,30 @@ window.removerVariacaoRow = function(btn, index) {
     const chave = document.getElementById(`chaveVariacao${index}`)?.value || '';
     row.remove();
     removeVariacaoFromGrade(chave, index);
-    atualizarProdutoNoStorage();
+    variacoesTemp.splice(index, 1);
+    variacoesAlteradas = true;
     loadGrade(editingProduct);
+
+    // Salvar automaticamente as variações no backend
+    salvarVariacoes();
+};
+
+window.salvarVariacoes = function() {
+    const variacoesRows = Array.from(document.querySelectorAll('.cp-variacao-row'));
+    variacoesTemp = variacoesRows.map((row, i) => ({
+        chave: document.getElementById(`chaveVariacao${i}`)?.value || '',
+        valores: document.getElementById(`valoresVariacao${i}`)?.value || ''
+    }));
+
+    editingProduct.variacoes = variacoesTemp.map(v => ({
+        chave: v.chave,
+        valores: v.valores
+    }));
+
+    variacoesAlteradas = false;
+    alert('Variações salvas com sucesso!');
+    console.log('[salvarVariacoes] Variações salvas:', editingProduct.variacoes);
+    loadGrade(editingProduct); // Atualizar a grade com base nas variações salvas
 };
 
 function removeVariacaoFromGrade(chaveRemovida, indexRemovido) {
@@ -520,13 +690,13 @@ function removeVariacaoFromGrade(chaveRemovida, indexRemovido) {
 window.verificarOutro = function(select, index) {
     if (select.value === 'outro') {
         currentSelectIndex = index;
-        variacaoPopup.style.display = 'flex';
-        novaVariacaoDescricao.value = '';
+        elements.variacaoPopup.style.display = 'flex';
+        elements.novaVariacaoDescricao.value = '';
     }
 };
 
 window.confirmarNovaVariacao = function() {
-    const descricao = novaVariacaoDescricao.value.trim();
+    const descricao = elements.novaVariacaoDescricao.value.trim();
     if (descricao) {
         const select = document.getElementById(`chaveVariacao${currentSelectIndex}`);
         const options = Array.from(select.options).map(opt => opt.value.toLowerCase());
@@ -546,7 +716,7 @@ window.confirmarNovaVariacao = function() {
 };
 
 window.fecharPopup = function() {
-    variacaoPopup.style.display = 'none';
+    elements.variacaoPopup.style.display = 'none';
     currentSelectIndex = null;
 };
 
@@ -617,7 +787,7 @@ function removerTagFromGrade(valorRemovido) {
 window.updateStructureTotals = function() {
     let totalQuantidade = 0;
     let totalCusto = 0;
-    estruturaBody.querySelectorAll('tr').forEach(tr => {
+    elements.estruturaBody.querySelectorAll('tr').forEach(tr => {
         const quantidade = parseFloat(tr.querySelector('input:nth-child(3)').value) || 0;
         const custo = parseFloat(tr.querySelector('input:nth-child(4)').value) || 0;
         const total = quantidade * custo;
@@ -627,13 +797,12 @@ window.updateStructureTotals = function() {
     });
     document.getElementById('totalQuantidade').textContent = totalQuantidade;
     document.getElementById('totalCusto').textContent = totalCusto.toFixed(2);
-    atualizarProdutoNoStorage();
 };
 
 window.updateProcessosOptions = function() {
-    const selects = stepsBody.querySelectorAll('.processo-select');
+    const selects = elements.stepsBody.querySelectorAll('.processo-select');
     const processosUsados = Array.from(selects).map(select => select.value).filter(v => v);
-    
+
     selects.forEach(select => {
         const currentValue = select.value;
         select.innerHTML = `<option value="">Selecione um processo</option>`;
@@ -652,7 +821,7 @@ window.updateProcessosOptions = function() {
 };
 
 function initializeDragAndDrop() {
-    stepsBody.addEventListener('dragstart', e => {
+    elements.stepsBody.addEventListener('dragstart', e => {
         const tr = e.target.closest('tr');
         if (tr) {
             tr.classList.add('dragging');
@@ -660,182 +829,280 @@ function initializeDragAndDrop() {
         }
     });
 
-    stepsBody.addEventListener('dragend', e => {
+    elements.stepsBody.addEventListener('dragend', e => {
         const tr = e.target.closest('tr');
         if (tr) tr.classList.remove('dragging');
     });
 
-    stepsBody.addEventListener('dragover', e => e.preventDefault());
+    elements.stepsBody.addEventListener('dragover', e => e.preventDefault());
 
-    stepsBody.addEventListener('drop', e => {
+    elements.stepsBody.addEventListener('drop', e => {
         e.preventDefault();
         const fromIndex = e.dataTransfer.getData('text/plain');
         const toRow = e.target.closest('tr');
         if (!toRow) return;
-
+    
         const toIndex = toRow.dataset.index;
-        const rows = Array.from(stepsBody.querySelectorAll('tr'));
+        const rows = Array.from(elements.stepsBody.querySelectorAll('tr'));
         const fromRow = rows.find(row => row.dataset.index === fromIndex);
-
+    
         if (fromRow && toRow && fromRow !== toRow) {
             if (parseInt(fromIndex) < parseInt(toIndex)) {
                 toRow.after(fromRow);
             } else {
                 toRow.before(fromRow);
             }
-
-            // Reindexar todas as linhas após o drag-and-drop
-            rows.forEach((row, index) => {
-                row.dataset.index = index;
-            });
-
-            atualizarProdutoNoStorage();
+            rows.forEach((row, index) => row.dataset.index = index);
         }
     });
 }
 
-function atualizarProdutoNoStorage() {
-    if (!editingProduct) return;
+function bloquearCampos(mensagem = '', erroNaGrade = false) {
+    const camposEditaveis = document.querySelectorAll(
+        '#productForm input, #productForm select, #productForm button:not(.cp-remove-btn), #productForm textarea'
+    );
+    camposEditaveis.forEach(campo => {
+        if (!campo.classList.contains('cp-grade-sku')) { // Exceto o campo SKU com erro
+            campo.disabled = true;
+        }
+    });
 
-    const produtos = obterProdutos() || [];
-    const index = produtos.findIndex(p => p.nome === editingProduct.nome);
-    if (index === -1) {
-        console.error('[atualizarProdutoNoStorage] Produto não encontrado no localStorage:', editingProduct.nome);
-        return;
+    // Remover qualquer aviso anterior
+    const avisoAnterior = document.getElementById('aviso-duplicidade');
+    if (avisoAnterior) avisoAnterior.remove();
+
+    if (mensagem) {
+        // Determinar a aba onde o erro deve ser exibido
+        const abaAlvo = erroNaGrade ? 'variacoes' : 'dados-gerais';
+        const abaElement = document.getElementById(abaAlvo);
+
+        // Criar o elemento de aviso
+        const aviso = document.createElement('div');
+        aviso.id = 'aviso-duplicidade';
+        aviso.style.color = 'red';
+        aviso.style.marginBottom = '10px';
+        aviso.textContent = mensagem;
+
+        // Adicionar o aviso no início da aba correta
+        abaElement.prepend(aviso);
+
+        // Redirecionar para a aba correta, se necessário
+        const abaAtiva = document.querySelector('.conteudo-aba-produto.active').id;
+        if (abaAtiva !== abaAlvo) {
+            switchTab(abaAlvo);
+        }
+    }
+}
+
+function desbloquearCampos() {
+    const camposEditaveis = document.querySelectorAll(
+        '#productForm input, #productForm select, #productForm button:not(.cp-remove-btn), #productForm textarea'
+    );
+    camposEditaveis.forEach(campo => {
+        campo.disabled = false;
+    });
+    const aviso = document.getElementById('aviso-duplicidade');
+    if (aviso) aviso.remove();
+}
+
+
+function temDuplicatasDeSku() {
+    const grade = editingProduct.grade || [];
+    const currentSkus = [
+        elements.sku.value,
+        ...grade.map(g => g.sku)
+    ].filter(sku => sku);
+
+    // Verificar duplicatas dentro do produto atual
+    const duplicatasInternas = currentSkus.some((sku, i) => 
+        currentSkus.indexOf(sku) !== i
+    );
+
+    // Verificar duplicatas em outros produtos
+    const allSkus = produtos
+        .filter(prod => prod.id !== editingProduct.id)
+        .flatMap(prod => [
+            prod.sku,
+            ...(prod.grade || []).map(g => g.sku)
+        ])
+        .filter(s => s);
+
+    const duplicatasGlobais = currentSkus.some(sku => allSkus.includes(sku));
+
+    // Determinar se o erro está na grade
+    const erroNaGrade = duplicatasInternas || grade.some(g => g.sku && allSkus.includes(g.sku));
+
+    return { hasDuplicates: duplicatasInternas || duplicatasGlobais, erroNaGrade };
+}
+
+window.validarSku = function(index, input) {
+    const skuValue = input.value.trim();
+    const grade = Array.from(elements.gradeBody.querySelectorAll('tr')).map(tr => ({
+        sku: tr.cells[2].querySelector('.cp-grade-sku').value || ''
+    }));
+    const currentIndex = parseInt(index);
+
+    let errorSpan = input.nextElementSibling;
+    if (!errorSpan || !errorSpan.classList.contains('error-message')) {
+        errorSpan = document.createElement('span');
+        errorSpan.className = 'error-message';
+        input.parentNode.appendChild(errorSpan);
     }
 
-    const variacoes = Array.from(document.querySelectorAll('.cp-variacao-row')).map((row, i) => {
-        const chave = document.getElementById(`chaveVariacao${i}`)?.value || '';
-        const valores = Array.from(row.querySelectorAll('.cp-tag')).map(tag => tag.textContent).join(',');
-        return { chave, valores };
-    });
+    const isDuplicateInGrade = grade.some((item, i) => item.sku === skuValue && i !== currentIndex);
 
-    const grade = editingProduct.grade || [];
-    const updatedGrade = grade.map(item => {
-        const tr = Array.from(gradeBody.querySelectorAll('tr')).find(tr => tr.cells[0].textContent === item.variacao);
-        if (tr) {
-            return {
-                ...item,
-                sku: tr.cells[2].querySelector('.cp-grade-sku')?.value || item.sku || '',
-                imagem: tr.cells[3].querySelector('img')?.src || item.imagem || ''
-            };
-        }
-        return item;
-    });
+    const allSkus = produtos
+        .filter(prod => prod.id !== editingProduct.id)
+        .flatMap(prod => [
+            prod.sku,
+            ...(prod.grade || []).map(g => g.sku)
+        ])
+        .filter(sku => sku && sku !== (editingProduct.grade[currentIndex]?.sku || ''));
 
-    const etapas = Array.from(stepsBody.querySelectorAll('tr')).map(tr => ({
-        processo: tr.querySelector('.processo-select')?.value || '',
-        maquina: tr.querySelector('.maquina-select')?.value || '',
-        feitoPor: tr.querySelector('.feito-por-select')?.value || ''
-    }));
+    const isDuplicateGlobally = allSkus.includes(skuValue);
+
+    if ((isDuplicateInGrade || isDuplicateGlobally) && skuValue) {
+        input.classList.add('error');
+        errorSpan.textContent = 'Este SKU já está em uso!';
+        errorSpan.style.display = 'inline';
+        bloquearCampos('Corrija o SKU duplicado antes de continuar editando.', true);
+        localStorage.setItem('produtoComDuplicidade', JSON.stringify(editingProduct));
+    } else {
+        input.classList.remove('error');
+        errorSpan.textContent = '';
+        errorSpan.style.display = 'none';
+        desbloquearCampos();
+        localStorage.removeItem('produtoComDuplicidade');
+        gradeAlteradas = true; // Marcar que a grade foi alterada
+    }
+};
+
+async function atualizarProdutoNoStorage() {
+    if (!editingProduct) return;
 
     const tiposSelecionados = Array.from(document.querySelectorAll('input[name="tipo"]:checked')).map(cb => cb.value);
+    const isKit = tiposSelecionados.includes('kits');
+
     const updatedProduct = {
         ...editingProduct,
-        sku: sku.value || '',
+        sku: elements.sku.value || '',
         tipos: tiposSelecionados,
-        isKit: tiposSelecionados.includes('kits'), // Adiciona isKit baseado nos tipos selecionados
-        gtin: gtin.value || '',
-        unidade: unidade.value || '',
-        estoque: parseInt(estoque.value) || 0,
-        imagem: previewImagem.src || '',
-        variacoes: variacoes.length > 0 ? variacoes : editingProduct.variacoes || [],
-        estrutura: Array.from(estruturaBody.querySelectorAll('tr')).map(tr => ({
+        isKit: isKit,
+        gtin: elements.gtin.value || '',
+        unidade: elements.unidade.value || '',
+        estoque: parseInt(elements.estoque.value) || 0,
+        imagem: elements.previewImagem.src || '',
+        variacoes: Array.from(document.querySelectorAll('.cp-variacao-row')).map((row, i) => ({
+            chave: document.getElementById(`chaveVariacao${i}`)?.value || '',
+            valores: document.getElementById(`valoresVariacao${i}`)?.value || ''
+        })),
+        estrutura: Array.from(elements.estruturaBody.querySelectorAll('tr')).map(tr => ({
             produto: tr.querySelector('input:nth-child(1)')?.value || '',
             unidade: tr.querySelector('input:nth-child(2)')?.value || '',
             quantidade: parseFloat(tr.querySelector('input:nth-child(3)')?.value) || 0,
             custo: parseFloat(tr.querySelector('input:nth-child(4)')?.value) || 0,
             total: parseFloat(tr.querySelector('input:nth-child(5)')?.value) || 0
         })),
-        etapas: etapas.filter(etapa => etapa.processo || etapa.maquina || etapa.feitoPor),
-        grade: updatedGrade
+        etapas: isKit ? [] : Array.from(elements.stepsBody.querySelectorAll('tr')).map(tr => ({
+            processo: tr.querySelector('.processo-select')?.value || '',
+            maquina: tr.querySelector('.maquina-select')?.value || '',
+            feitoPor: tr.querySelector('.feito-por-select')?.value || ''
+        })),
+        grade: (editingProduct.grade || []).map(item => {
+            const tr = Array.from(elements.gradeBody.querySelectorAll('tr')).find(tr => tr.cells[0].textContent === item.variacao);
+            return tr ? {
+                ...item,
+                sku: tr.cells[2].querySelector('.cp-grade-sku')?.value || item.sku || '',
+                imagem: tr.cells[3].querySelector('img')?.src || item.imagem || ''
+            } : item;
+        })
     };
 
-    console.log('[atualizarProdutoNoStorage] Produto atualizado:', updatedProduct);
-    produtos[index] = updatedProduct;
-    salvarProdutos(produtos);
-    editingProduct = updatedProduct;
-    console.log('[atualizarProdutoNoStorage] Produtos salvos no localStorage:', obterProdutos());
-}
-
-window.validarSku = function(index, input) {
-    const grade = Array.from(gradeBody.querySelectorAll('tr')).map(tr => ({
-        sku: tr.cells[2].querySelector('.cp-grade-sku').value || ''
-    }));
-    const skuValue = input.value.trim();
-    const errorSpan = input.nextElementSibling;
-    const isDuplicate = grade.some((item, i) => item.sku === skuValue && i !== parseInt(index));
-
-    if (isDuplicate && skuValue) {
-        errorSpan.style.display = 'inline';
-        input.classList.add('error');
-    } else {
-        errorSpan.style.display = 'none';
-        input.classList.remove('error');
-        atualizarProdutoNoStorage();
+    // Verificar duplicatas antes de salvar
+    const { hasDuplicates, erroNaGrade } = temDuplicatasDeSku();
+    if (hasDuplicates) {
+        console.log('[atualizarProdutoNoStorage] Salvamento bloqueado devido a SKUs duplicados.');
+        bloquearCampos('Corrija o SKU duplicado antes de continuar editando.', erroNaGrade);
+        localStorage.setItem('produtoComDuplicidade', JSON.stringify(updatedProduct));
+        return;
     }
-};
+
+    try {
+        console.log('[atualizarProdutoNoStorage] Enviando produto para o backend:', updatedProduct);
+        const usuarioLogado = JSON.parse(localStorage.getItem('usuarioLogado') || '{}');
+        const usuarioId = usuarioLogado.id;
+
+        const response = await fetch(`/api/produtos?id=${usuarioId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(updatedProduct)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Erro ao salvar produto: ${response.status} - ${errorText}`);
+        }
+
+        const savedProduct = await response.json();
+        console.log('[atualizarProdutoNoStorage] Produto salvo com sucesso:', savedProduct);
+        editingProduct = deepClone(savedProduct);
+        produtos = produtos.map(p => p.id === savedProduct.id ? deepClone(savedProduct) : p);
+        desbloquearCampos();
+        localStorage.removeItem('produtoComDuplicidade');
+    } catch (error) {
+        console.error('[atualizarProdutoNoStorage] Erro:', error);
+        alert('Erro ao salvar o produto. Verifique o console para mais detalhes.');
+    }
+}
 
 window.abrirImagemPopup = function(index) {
     currentGradeIndex = index;
-    gradeImageInput.value = '';
-    gradeImagePopup.style.display = 'flex';
+    elements.gradeImageInput.value = '';
+    elements.gradeImagePopup.style.display = 'flex';
 };
 
 window.confirmarImagemGrade = function() {
-    const arquivo = gradeImageInput.files[0];
+    const arquivo = elements.gradeImageInput.files[0];
     if (arquivo) {
         resizeImage(arquivo, imagemRedimensionada => {
-            const tr = gradeBody.querySelector(`tr[data-index="${currentGradeIndex}"]`);
+            const tr = elements.gradeBody.querySelector(`tr[data-index="${currentGradeIndex}"]`);
             const imgDiv = tr.querySelector('.img-placeholder');
             imgDiv.innerHTML = `<img src="${imagemRedimensionada}" class="cp-variacao-img" alt="Imagem da variação">`;
             const grade = editingProduct.grade || [];
-            grade[currentGradeIndex].imagem = imagemRedimensionada; // Salva a imagem no objeto grade
+            grade[currentGradeIndex].imagem = imagemRedimensionada;
             console.log(`[confirmarImagemGrade] Imagem salva para variação ${grade[currentGradeIndex].variacao}:`, imagemRedimensionada);
-            atualizarProdutoNoStorage();
+            gradeAlteradas = true; // Marcar que a grade foi alterada
             fecharImagemPopup();
         });
     }
 };
 
 window.fecharImagemPopup = function() {
-    gradeImagePopup.style.display = 'none';
+    elements.gradeImagePopup.style.display = 'none';
     currentGradeIndex = null;
 };
 
-
 window.excluirGrade = function(index) {
-    const tr = gradeBody.querySelector(`tr[data-index="${index}"]`);
+    const tr = elements.gradeBody.querySelector(`tr[data-index="${index}"]`);
     if (!tr) return;
     const variacaoExcluida = tr.cells[0].textContent.split(' | ');
     tr.remove();
 
-    const variacoesContainer = document.getElementById('variacoesContainer');
-    const variacoesRows = Array.from(variacoesContainer.querySelectorAll('.cp-variacao-row'));
+    // Atualizar gradeTemp
+    gradeTemp = gradeTemp.filter((_, i) => i !== parseInt(index));
+    gradeAlteradas = true;
 
-    variacoesRows.forEach((row, rowIdx) => {
-        const valores = Array.from(row.querySelectorAll('.cp-tag')).map(tag => tag.textContent);
-        const valorExcluido = variacaoExcluida[rowIdx];
-        const gradeRestante = Array.from(gradeBody.querySelectorAll('tr')).map(tr => tr.cells[0].textContent);
-
-        if (valores.includes(valorExcluido)) {
-            const valorAindaExiste = gradeRestante.some(variacao => variacao.split(' | ')[rowIdx] === valorExcluido);
-            if (!valorAindaExiste) {
-                const tagIdx = valores.indexOf(valorExcluido);
-                if (tagIdx !== -1) {
-                    row.querySelectorAll('.cp-tag')[tagIdx].remove();
-                    if (!Array.from(row.querySelectorAll('.cp-tag')).length) row.remove();
-                }
-            }
-        }
+    // Reindexar as linhas no DOM
+    Array.from(elements.gradeBody.querySelectorAll('tr')).forEach((row, idx) => {
+        row.dataset.index = idx;
     });
 
-    editingProduct.grade = editingProduct.grade.filter((_, i) => i !== parseInt(index));
-    atualizarProdutoNoStorage();
-    loadGrade(editingProduct);
+    // Salvar no backend
+    salvarGrade();
 };
 
-// Funções para Configuração de Variação do Kit
 window.abrirConfigurarVariacao = function(index) {
     currentKitVariationIndex = index;
     window.location.hash = `#configurar-variacao/${index}`;
@@ -843,81 +1110,70 @@ window.abrirConfigurarVariacao = function(index) {
 
 function carregarConfigurarVariacao(index) {
     kitComposicaoTemp = [];
-    produtoKitSelect.value = '';
-    produtoKitSelect.disabled = false;
-    variacaoKitSelect.innerHTML = '<option value="">Selecione uma variação</option>';
-    composicaoKitContainer.innerHTML = '';
+    elements.produtoKitSelect.value = '';
+    elements.produtoKitSelect.disabled = false;
+    elements.variacaoKitSelect.innerHTML = '<option value="">Selecione uma variação</option>';
+    elements.composicaoKitContainer.innerHTML = '';
 
     const grade = editingProduct.grade || [];
     const variacao = grade[index];
-    configurarVariacaoTitle.textContent = `Configurar ${editingProduct.nome} - ${variacao.variacao}`;
-    kitComposicaoTemp = variacao.composicao ? [...variacao.composicao] : [];
-    console.log('[carregarConfigurarVariacao] Carregando composição para variação', variacao.variacao, ':', kitComposicaoTemp);
+    elements.configurarVariacaoTitle.textContent = `Configurar ${editingProduct.nome} - ${variacao.variacao}`;
+    kitComposicaoTemp = variacao.composicao ? deepClone(variacao.composicao) : [];
 
-    const produtos = (obterProdutos() || []).filter(p => PRODUTOS.includes(p.nome) && p.nome !== editingProduct.nome);
-    produtoKitSelect.innerHTML = '<option value="">Selecione um produto</option>';
-    produtos.forEach(prod => {
+    const produtosFiltrados = produtos.filter(p => PRODUTOS.includes(p.nome) && p.nome !== editingProduct.nome);
+    elements.produtoKitSelect.innerHTML = '<option value="">Selecione um produto</option>';
+    produtosFiltrados.forEach(prod => {
         const option = document.createElement('option');
         option.value = prod.nome;
         option.textContent = prod.nome;
-        produtoKitSelect.appendChild(option);
+        elements.produtoKitSelect.appendChild(option);
     });
 
     if (kitComposicaoTemp.length > 0) {
-        const primeiroProduto = produtos.find(p => p.grade && p.grade.some(g => g.variacao === kitComposicaoTemp[0].variacao));
+        const primeiroProduto = produtosFiltrados.find(p => p.grade && p.grade.some(g => g.variacao === kitComposicaoTemp[0].variacao));
         if (primeiroProduto) {
-            produtoKitSelect.value = primeiroProduto.nome;
-            produtoKitSelect.disabled = true;
+            elements.produtoKitSelect.value = primeiroProduto.nome;
+            elements.produtoKitSelect.disabled = true;
             loadVariacoesKit();
         }
     }
     renderizarComposicaoKit();
 }
 
-function composicaoHtmlFromTemp(composicao) {
-    return composicao && composicao.length > 0 && composicao[0].variacao !== '-' 
-        ? `<div class="composicao-tags">${composicao.map(c => `<span class="composicao-tag">${c.variacao} (${c.quantidade})</span>`).join('')}<button class="composicao-tag composicao-edit-btn" onclick="abrirConfigurarVariacao('${currentKitVariationIndex}')">Editar</button></div>` 
-        : `<div class="composicao-tags"><button class="composicao-tag composicao-edit-btn" onclick="abrirConfigurarVariacao('${currentKitVariationIndex}')">Editar</button></div>`;
-}
-
 window.loadVariacoesKit = function() {
-    const produtoNome = produtoKitSelect.value;
+    const produtoNome = elements.produtoKitSelect.value;
     if (!produtoNome) return;
 
-    const produtos = (obterProdutos() || []).filter(p => PRODUTOS.includes(p.nome));
     const produto = produtos.find(p => p.nome === produtoNome);
-    variacaoKitSelect.innerHTML = '<option value="">Selecione uma variação</option>';
+    elements.variacaoKitSelect.innerHTML = '<option value="">Selecione uma variação</option>';
 
     if (produto && produto.grade) {
         produto.grade.forEach(item => {
             const option = document.createElement('option');
             option.value = item.variacao;
             option.textContent = item.variacao;
-            variacaoKitSelect.appendChild(option); // Não adicionar 'used' ou 'disabled'
+            elements.variacaoKitSelect.appendChild(option);
         });
     }
 
-    if (!produtoKitSelect.disabled) {
-        produtoKitSelect.disabled = true;
-        Array.from(produtoKitSelect.options).forEach(opt => {
+    if (!elements.produtoKitSelect.disabled) {
+        elements.produtoKitSelect.disabled = true;
+        Array.from(elements.produtoKitSelect.options).forEach(opt => {
             if (opt.value && opt.value !== produtoNome) opt.disabled = true;
         });
     }
 };
 
-addVariacaoKitBtn.addEventListener('click', () => {
-    const variacao = variacaoKitSelect.value;
+elements.addVariacaoKitBtn.addEventListener('click', () => {
+    const variacao = elements.variacaoKitSelect.value;
     if (!variacao || variacao === 'Selecione uma variação') return;
 
-    // Adicionar a variação diretamente, sem verificar duplicatas
     kitComposicaoTemp.push({ variacao, quantidade: 1 });
-    console.log('[addVariacaoKitBtn] Nova composição adicionada:', kitComposicaoTemp);
     renderizarComposicaoKit();
-    // Não desabilitar a opção no select, apenas atualizar a interface
 });
 
 function renderizarComposicaoKit() {
-    composicaoKitContainer.innerHTML = '';
+    elements.composicaoKitContainer.innerHTML = '';
     kitComposicaoTemp.forEach((comp, idx) => {
         const div = document.createElement('div');
         div.className = 'composicao-kit-row';
@@ -926,19 +1182,16 @@ function renderizarComposicaoKit() {
             <input type="number" min="1" value="${comp.quantidade}" onchange="atualizarQuantidadeKit(${idx}, this.value)">
             <button class="cp-remove-btn" onclick="removerComposicaoKit(${idx})">X</button>
         `;
-        composicaoKitContainer.appendChild(div);
+        elements.composicaoKitContainer.appendChild(div);
     });
-
-    // Não reabilitar o produtoKitSelect se a composição estiver vazia, apenas manter o estado
-};
+}
 
 window.atualizarQuantidadeKit = function(index, value) {
     kitComposicaoTemp[index].quantidade = parseInt(value) || 1;
-    console.log('[atualizarQuantidadeKit] Quantidade atualizada para variação', kitComposicaoTemp[index].variacao, ':', kitComposicaoTemp);
     renderizarComposicaoKit();
-    const tr = gradeBody.querySelector(`tr[data-index="${currentKitVariationIndex}"]`);
+    const tr = elements.gradeBody.querySelector(`tr[data-index="${currentKitVariationIndex}"]`);
     if (tr) {
-        const composicaoHtml = kitComposicaoTemp && kitComposicaoTemp.length > 0 && kitComposicaoTemp[0].variacao !== '-'
+        const composicaoHtml = kitComposicaoTemp.length > 0 && kitComposicaoTemp[0].variacao !== '-'
             ? `<div class="composicao-tags">${kitComposicaoTemp.map(c => `<span class="composicao-tag">${c.variacao} (${c.quantidade})</span>`).join('')}<button class="composicao-tag composicao-edit-btn" onclick="abrirConfigurarVariacao('${currentKitVariationIndex}')">Editar</button></div>`
             : `<div class="composicao-tags"><button class="composicao-tag composicao-edit-btn" onclick="abrirConfigurarVariacao('${currentKitVariationIndex}')">Editar</button></div>`;
         tr.cells[1].innerHTML = composicaoHtml;
@@ -946,13 +1199,11 @@ window.atualizarQuantidadeKit = function(index, value) {
 };
 
 window.removerComposicaoKit = function(index) {
-    const variacaoRemovida = kitComposicaoTemp[index].variacao;
     kitComposicaoTemp.splice(index, 1);
-    console.log('[removerComposicaoKit] Variação removida:', variacaoRemovida, 'Composição atual:', kitComposicaoTemp);
     renderizarComposicaoKit();
-    const tr = gradeBody.querySelector(`tr[data-index="${currentKitVariationIndex}"]`);
+    const tr = elements.gradeBody.querySelector(`tr[data-index="${currentKitVariationIndex}"]`);
     if (tr) {
-        const composicaoHtml = kitComposicaoTemp && kitComposicaoTemp.length > 0 && kitComposicaoTemp[0].variacao !== '-'
+        const composicaoHtml = kitComposicaoTemp.length > 0 && kitComposicaoTemp[0].variacao !== '-'
             ? `<div class="composicao-tags">${kitComposicaoTemp.map(c => `<span class="composicao-tag">${c.variacao} (${c.quantidade})</span>`).join('')}<button class="composicao-tag composicao-edit-btn" onclick="abrirConfigurarVariacao('${currentKitVariationIndex}')">Editar</button></div>`
             : `<div class="composicao-tags"><button class="composicao-tag composicao-edit-btn" onclick="abrirConfigurarVariacao('${currentKitVariationIndex}')">Editar</button></div>`;
         tr.cells[1].innerHTML = composicaoHtml;
@@ -965,105 +1216,104 @@ window.salvarComposicaoKit = function() {
         return;
     }
     const grade = editingProduct.grade || [];
-    grade[currentKitVariationIndex].composicao = [...kitComposicaoTemp];
-    console.log('[salvarComposicaoKit] Salvando composição para variação', grade[currentKitVariationIndex].variacao, ':', grade[currentKitVariationIndex].composicao);
-    atualizarProdutoNoStorage();
+    grade[currentKitVariationIndex].composicao = deepClone(kitComposicaoTemp);
+    gradeAlteradas = true; // Marcar que a grade foi alterada
 
-    // Atualizar a tabela "Grade das Variações" diretamente
-    const tr = gradeBody.querySelector(`tr[data-index="${currentKitVariationIndex}"]`);
+    const tr = elements.gradeBody.querySelector(`tr[data-index="${currentKitVariationIndex}"]`);
     if (tr) {
         const isKit = editingProduct.tipos && editingProduct.tipos.includes('kits');
-        const composicaoHtml = isKit
-            ? kitComposicaoTemp && kitComposicaoTemp.length > 0 && kitComposicaoTemp[0].variacao !== '-'
-                ? `<div class="composicao-tags">${kitComposicaoTemp.map(c => `<span class="composicao-tag">${c.variacao} (${c.quantidade})</span>`).join('')}<button class="composicao-tag composicao-edit-btn" onclick="abrirConfigurarVariacao('${currentKitVariationIndex}')">Editar</button></div>`
-                : `<div class="composicao-tags"><button class="composicao-tag composicao-edit-btn" onclick="abrirConfigurarVariacao('${currentKitVariationIndex}')">Editar</button></div>`
-            : '-';
+        const composicaoHtml = isKit && kitComposicaoTemp.length > 0 && kitComposicaoTemp[0].variacao !== '-'
+            ? `<div class="composicao-tags">${kitComposicaoTemp.map(c => `<span class="composicao-tag">${c.variacao} (${c.quantidade})</span>`).join('')}<button class="composicao-tag composicao-edit-btn" onclick="abrirConfigurarVariacao('${currentKitVariationIndex}')">Editar</button></div>`
+            : `<div class="composicao-tags"><button class="composicao-tag composicao-edit-btn" onclick="abrirConfigurarVariacao('${currentKitVariationIndex}')">Editar</button></div>`;
         tr.cells[1].innerHTML = composicaoHtml;
     }
 
-    // Voltar para a tela de edição
     window.location.hash = '#editando';
 };
 
-productForm.addEventListener('submit', e => {
+elements.productForm.addEventListener('submit', async e => {
     e.preventDefault();
     if (!editingProduct) return;
 
-    const produtos = obterProdutos() || [];
-    const index = produtos.findIndex(p => p.nome === editingProduct.nome);
-
     const tiposSelecionados = Array.from(document.querySelectorAll('input[name="tipo"]:checked')).map(cb => cb.value);
-    if (tiposSelecionados.length === 0) {
-        alert('Selecione pelo menos um tipo para o produto!');
+    if (!tiposSelecionados.length) {
+        alert('Selecione pelo menos um tipo!');
         return;
     }
 
     const grade = editingProduct.grade || [];
     const updatedGrade = grade.map(item => {
-        const tr = Array.from(gradeBody.querySelectorAll('tr')).find(tr => tr.cells[0].textContent === item.variacao);
+        const tr = Array.from(elements.gradeBody.querySelectorAll('tr')).find(tr => tr.cells[0].textContent === item.variacao);
         if (tr) {
             return {
                 ...item,
-                sku: tr.cells[2].querySelector('.cp-grade-sku').value || item.sku || '',
+                sku: tr.cells[2].querySelector('.cp-grade-sku')?.value || item.sku || '',
                 imagem: tr.cells[3].querySelector('img')?.src || item.imagem || ''
             };
         }
         return item;
     });
 
-    const skuDuplicados = updatedGrade.some((item, i) => 
+    // Verificar duplicatas antes de salvar
+    const allSkus = produtos.flatMap(p => [
+        p.sku,
+        ...(p.grade || []).map(g => g.sku)
+    ]).filter(sku => sku);
+    const currentSkus = [elements.sku.value, ...updatedGrade.map(g => g.sku)].filter(sku => sku);
+    const hasDuplicates = currentSkus.some(sku => 
+        allSkus.includes(sku) && sku !== editingProduct.sku && !editingProduct.grade.some(g => g.sku === sku)
+    );
+
+    if (hasDuplicates) {
+        alert('Existem SKUs duplicados. Corrija antes de salvar.');
+        return;
+    }
+
+    const skuDuplicadosNaGrade = updatedGrade.some((item, i) =>
         updatedGrade.some((other, j) => i !== j && item.sku && item.sku === other.sku)
     );
 
-    if (skuDuplicados) {
+    if (skuDuplicadosNaGrade) {
         alert('Existem SKUs duplicados na grade. Corrija antes de salvar.');
         return;
     }
 
-    const variacoes = Array.from(document.querySelectorAll('.cp-variacao-row')).map((row, i) => ({
-        chave: document.getElementById(`chaveVariacao${i}`).value,
-        valores: Array.from(row.querySelectorAll('.cp-tag')).map(tag => tag.textContent).join(',')
-    }));
-
-    const etapas = Array.from(stepsBody.querySelectorAll('tr')).map(tr => ({
-        processo: tr.querySelector('.processo-select')?.value || '',
-        maquina: tr.querySelector('.maquina-select')?.value || '',
-        feitoPor: tr.querySelector('.feito-por-select')?.value || ''
-    }));
-
-    const updatedProduct = {
-        ...editingProduct,
-        sku: sku.value || '',
-        tipos: tiposSelecionados,
-        isKit: tiposSelecionados.includes('kits'), // Adiciona isKit baseado nos tipos selecionados
-        gtin: gtin.value || '',
-        unidade: unidade.value || '',
-        estoque: parseInt(estoque.value) || 0,
-        imagem: previewImagem.src || '',
-        variacoes,
-        estrutura: Array.from(estruturaBody.querySelectorAll('tr')).map(tr => ({
-            produto: tr.querySelector('input:nth-child(1)')?.value || '',
-            unidade: tr.querySelector('input:nth-child(2)')?.value || '',
-            quantidade: parseFloat(tr.querySelector('input:nth-child(3)')?.value) || 0,
-            custo: parseFloat(tr.querySelector('input:nth-child(4)')?.value) || 0,
-            total: parseFloat(tr.querySelector('input:nth-child(5)')?.value) || 0
-        })),
-        etapas: etapas.filter(etapa => etapa.processo || etapa.maquina || etapa.feitoPor),
-        grade: updatedGrade
-    };
-
-    produtos[index] = updatedProduct;
-    salvarProdutos(produtos);
-    editingProduct = updatedProduct;
+    await atualizarProdutoNoStorage();
     alert('Produto atualizado com sucesso!');
+    window.location.hash = '';
 });
 
 window.addEventListener('hashchange', toggleView);
-searchProduct.addEventListener('input', () => {
+elements.searchProduct.addEventListener('input', () => {
     const activeFilter = document.querySelector('.cp-type-btn.active')?.dataset.type || 'todos';
-    loadProductTable(activeFilter, searchProduct.value);
+    loadProductTable(activeFilter, elements.searchProduct.value);
 });
 
 document.querySelectorAll('.cp-type-btn').forEach(btn => {
     btn.addEventListener('click', () => filterProducts(btn.dataset.type));
 });
+
+// Exportar funções globais
+window.atualizarProdutoNoStorage = atualizarProdutoNoStorage;
+window.editProduct = editProduct;
+window.switchTab = switchTab;
+window.toggleTabs = toggleTabs;
+window.addStructureRow = addStructureRow;
+window.addStepRow = addStepRow;
+window.addVariacaoRow = addVariacaoRow;
+window.removerVariacaoRow = removerVariacaoRow;
+window.verificarOutro = verificarOutro;
+window.confirmarNovaVariacao = confirmarNovaVariacao;
+window.fecharPopup = fecharPopup;
+window.updateStructureTotals = updateStructureTotals;
+window.updateProcessosOptions = updateProcessosOptions;
+window.validarSku = validarSku;
+window.abrirImagemPopup = abrirImagemPopup;
+window.confirmarImagemGrade = confirmarImagemGrade;
+window.fecharImagemPopup = fecharImagemPopup;
+window.excluirGrade = excluirGrade;
+window.abrirConfigurarVariacao = abrirConfigurarVariacao;
+window.loadVariacoesKit = loadVariacoesKit;
+window.atualizarQuantidadeKit = atualizarQuantidadeKit;
+window.removerComposicaoKit = removerComposicaoKit;
+window.salvarComposicaoKit = salvarComposicaoKit;

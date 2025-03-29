@@ -12,7 +12,12 @@ body {
     min-height: 100vh;
     overflow-x: hidden;
     line-height: 1.6;
+    visibility: hidden; /* Esconde o corpo por padrão */
 }
+
+body.autenticado {
+    visibility: visible; /* Mostra o corpo após autenticação */
+  }
 
 /* Container principal */
 .container {

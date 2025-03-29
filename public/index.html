@@ -4,52 +4,52 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Sistema Lojas Variara</title>
-    <link rel="stylesheet" href="css/login.css">
+    <link rel="stylesheet" href="/css/login.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
     <div class="login-container">
-            <div class="login-card">
-                <div class="login-header">
-                    <h1>
-                        Sistema<br>
-                        <span class="highlight">Lojas Variara</span>
-                    </h1>
-                </div>
-                <form id="loginForm">
-                    <div class="form-group">
-                        <label for="nomeUsuario">Usuário</label>
-                        <div class="input-wrapper">
-                            <input type="text" id="nomeUsuario" placeholder="Digite seu usuário" required>
-                            <span class="domain">@sistemalv.com.br</span>
-                        </div>
-                        <span class="error-message"></span>
-                    </div>
-                    <div class="form-group">
-                        <label for="senha">Senha</label>
-                        <div class="input-wrapper">
-                            <input type="password" id="senha" placeholder="Digite sua senha" required>
-                            <i class="fas fa-eye toggle-password" data-target="senha"></i>
-                        </div>
-                        <span class="error-message"></span>
-                    </div>
-                    <div class="form-group keep-logged">
-                        <label>
-                            <input type="checkbox" id="keepLoggedIn">
-                            Mantenha-me logado
-                        </label>
-                    </div>
-                    <div class="forgot-password">
-                        <a href="#" class="forgot-password-link">Esqueceu sua senha?</a>
-                    </div>
-                    <button type="submit" class="login-btn">
-                        Entrar
-                        <span class="loading-spinner"><i class="fas fa-spinner fa-spin"></i></span>
-                    </button>
-                </form>
+        <div class="login-card">
+            <div class="login-header">
+                <h1>
+                    Sistema<br>
+                    <span class="highlight">Lojas Variara</span>
+                </h1>
             </div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="nomeUsuario">Usuário</label>
+                    <div class="input-wrapper">
+                        <input type="text" id="nomeUsuario" placeholder="Digite seu usuário" required>
+                        <span class="domain">@sistemalv.com.br</span>
+                    </div>
+                    <span class="error-message"></span>
+                </div>
+                <div class="form-group">
+                    <label for="senha">Senha</label>
+                    <div class="input-wrapper">
+                        <input type="password" id="senha" placeholder="Digite sua senha" required>
+                        <i class="fas fa-eye toggle-password" data-target="senha"></i>
+                    </div>
+                    <span class="error-message"></span>
+                </div>
+                <div class="form-group keep-logged">
+                    <label>
+                        <input type="checkbox" id="keepLoggedIn">
+                        Me mantenha logado
+                    </label>
+                </div>
+                <div class="forgot-password">
+                    <a href="#" class="forgot-password-link">Esqueceu sua senha?</a>
+                </div>
+                <button type="submit" class="login-btn" disabled>
+                    Entrar
+                    <span class="loading-spinner" style="display: none;"><i class="fas fa-spinner fa-spin"></i></span>
+                </button>
+            </form>
+        </div>
     </div>
 
-    <script src="./js/login.js" type="module"></script>
+    <script type="module" src="/js/login.js"></script> <!-- Ajuste o caminho para consistência -->
 </body>
 </html>

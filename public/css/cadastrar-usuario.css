@@ -12,7 +12,13 @@ body {
     line-height: 1.6;
     margin-left: 250px;
     transition: margin-left 0.3s ease;
+    visibility: hidden; /* Esconde o corpo por padrão */
 }
+
+body.autenticado {
+    visibility: visible; /* Mostra o corpo após autenticação */
+  }
+
 
 /* Main Content */
 .main-content {

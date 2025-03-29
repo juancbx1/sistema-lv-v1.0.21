@@ -7,8 +7,6 @@ export const PRODUTOS = [
     'Fronha',
     'Touca de Cetim (Dupla Face)',
     'Faixa de Cabelo',
-    'Biquini (Parte de Cima)',
-    'Biquini (Parte de Baixo)',
     'Top Faixa',
     'Calcinha',
     'Cropped',

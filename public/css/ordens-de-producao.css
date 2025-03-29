@@ -229,6 +229,11 @@ margin-right: 20px;
     outline: none;
 }
 
+.botao-lancar.lancado {
+    background-color: #ccc; /* Cor cinza para indicar que está desabilitado */
+    cursor: not-allowed;
+  }
+
 .quantidade-lancar {
     display: flex;
     gap: 10px;
@@ -311,10 +316,6 @@ margin-right: 20px;
     transform: translateY(-2px);
 }
 
-.botao-lancar.lancado {
-    background-color: #28a745;
-    cursor: default;
-}
 
 /* Estilo para inputs específicos */
 .input-produto-novaOP,

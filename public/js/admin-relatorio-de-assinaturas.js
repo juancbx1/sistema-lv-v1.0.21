@@ -1,6 +1,6 @@
 // js/pages/admin-relatorio-de-assinaturas.js
-import { verificarAutenticacaoSincrona } from './utils/auth.js';
-import { obterUsuarios } from './utils/storage.js';
+import { verificarAutenticacaoSincrona } from '/js/utils/auth.js';
+import { obterUsuarios } from '/js/utils/storage.js';
 
 // Verificação de autenticação síncrona no topo do script
 const auth = verificarAutenticacaoSincrona('relatorio-de-assinaturas.html', ['acesso-relatorio-de-assinaturas']);

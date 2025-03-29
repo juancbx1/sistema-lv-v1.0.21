@@ -5,46 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Produção Diária</title>
-<!-- Impedir renderização até a verificação de autenticação -->
-<script>
-    (function verificarAutenticacaoSincrona() {
-        const usuarioLogadoRaw = localStorage.getItem('usuarioLogado');
-        let usuarioLogado;
-        try {
-            usuarioLogado = JSON.parse(usuarioLogadoRaw);
-        } catch (e) {
-            console.error('[verificarAutenticacaoSincrona] Erro ao parsear usuarioLogado:', e);
-            window.location.replace('/index.html');
-            return;
-        }
-
-        if (!usuarioLogado || !usuarioLogado.permissoes) {
-            console.log('[verificarAutenticacaoSincrona] Nenhum usuário logado ou sem permissões, redirecionando para index.html');
-            window.location.replace('/index.html');
-            return;
-        }
-
-        const permissoesUsuario = usuarioLogado.permissoes || [];
-        const paginaAtual = 'producao-diaria.html';
-        const permissaoAcesso = `acesso-${paginaAtual.replace('.html', '')}`;
-
-        console.log('[verificarAutenticacaoSincrona] Permissões do usuário:', permissoesUsuario);
-        console.log('[verificarAutenticacaoSincrona] Permissão de acesso requerida:', permissaoAcesso);
-
-        if (!permissoesUsuario.includes(permissaoAcesso)) {
-            console.log(`[verificarAutenticacaoSincrona] Acesso negado à ${paginaAtual}.`);
-            window.location.replace('/public/admin/acesso-negado.html');
-            return;
-        }
-
-        console.log('[verificarAutenticacaoSincrona] Autenticação bem-sucedida, exibindo DOM');
-        document.documentElement.style.display = '';
-    })();
-</script>
-
-    <link rel="stylesheet" href="../css/base-style.css">
-    <link rel="stylesheet" href="../css/menu-lateral.css">
-    <link rel="stylesheet" href="../css/producao-diaria.css">
+    <link rel="stylesheet" href="/css/base-style.css">
+    <link rel="stylesheet" href="/css/menu-lateral.css">
+    <link rel="stylesheet" href="/css/producao-diaria.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
@@ -92,8 +55,7 @@
         </section>
     </div>
 
-    <script src="../../src/pages/admin-producao-diaria.js" type="module"></script>
-    <script src="../../src/pages/carregar-menu-lateral.js" type="module"></script>
-    <script src="../../src/utils/menu-hamburguer.js" type="module"></script>
+    <script src="/js/admin-producao-diaria.js" type="module"></script>
+    <script src="/js/carregar-menu-lateral.js" type="module"></script>
 </body>
 </html>

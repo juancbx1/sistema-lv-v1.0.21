@@ -1,12 +1,12 @@
 // js/pages/relatorio-comissao.js
-import { obterUsuarios } from './utils/storage.js';
-import { obterProdutos } from './utils/storage.js';
-import { criarGrafico } from './utils/chart-utils.js';
-import { formatarData } from './utils/date-utils.js';
-import { ciclos } from './utils/ciclos.js';
-import { preencherSelectCostureiras } from './utils/dom-utils.js';
-import { calcularComissaoSemanal } from './utils/metas.js';
-import {  verificarAutenticacaoSincrona } from './utils/auth.js';
+import { obterUsuarios } from '/js/utils/storage.js';
+import { obterProdutos } from '/js/utils/storage.js';
+import { criarGrafico } from '/js/utils/chart-utils.js';
+import { formatarData } from '/js/utils/date-utils.js';
+import { ciclos } from '/js/utils/ciclos.js';
+import { preencherSelectCostureiras } from '/js/utils/dom-utils.js';
+import { calcularComissaoSemanal } from '/js/utils/metas.js';
+import {  verificarAutenticacaoSincrona } from '/js/utils/auth.js';
 
 // Verificação de Autenticação
 const auth = verificarAutenticacaoSincrona('relatorio-de-comissao.html', ['acesso-relatorio-de-comissao']);

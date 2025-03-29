@@ -11,4 +11,9 @@ body {
     color: #333;
     margin-left: 250px; /* Espaço reservado para o menu à esquerda */
     transition: margin-left 0.3s ease; /* Para animação suave, se aplicável */
+    visibility: hidden; /* Esconde o corpo por padrão */
 }
+
+body.autenticado {
+    visibility: visible; /* Mostra o corpo após autenticação */
+  }

@@ -1,71 +1,126 @@
-// js/pages/carregar-menu-lateral.js
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('Menu Lateral - 1. Estado inicial do usuarioLogado:', localStorage.getItem('usuarioLogado'));
+// /js/carregar-menu-lateral.js
+document.addEventListener('DOMContentLoaded', async () => {
+  const token = localStorage.getItem('token');
+  let usuarioLogado = null;
 
-    const menuContainer = document.createElement('div');
-    menuContainer.id = 'menu-lateral-container';
-    document.body.appendChild(menuContainer);
+  if (!token) {
+    console.log('Nenhum token encontrado, redirecionando para login');
+    window.location.href = '/index.html';
+    return;
+  }
 
-    fetch('/admin/menu-lateral.html')
-        .then(response => {
-            if (!response.ok) throw new Error('Falha ao carregar menu-lateral.html');
-            return response.text();
-        })
-        .then(data => {
-            menuContainer.innerHTML = data;
-            console.log('Menu Lateral - Fetch concluído com sucesso.');
+  try {
+    const response = await fetch('/api/usuarios/me', {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (response.ok) {
+      usuarioLogado = await response.json();
+    } else {
+      console.error('Erro ao buscar usuário logado:', response.status);
+      window.location.href = '/admin/acesso-negado.html'; // Redireciona sem remover token
+      return;
+    }
+  } catch (error) {
+    console.error('Erro na requisição ao /api/usuarios/me:', error);
+    window.location.href = '/admin/acesso-negado.html'; // Redireciona sem remover token
+    return;
+  }
 
-            const usuarioLogado = JSON.parse(localStorage.getItem('usuarioLogado'));
-            console.log('Menu Lateral - 2. Usuário logado recuperado:', usuarioLogado);
+  console.log('Menu Lateral - 1. Usuário logado recuperado:', usuarioLogado);
 
-            const nomeUsuarioSpan = document.getElementById('nomeUsuario');
-            if (usuarioLogado && usuarioLogado.nome) {
-                nomeUsuarioSpan.textContent = usuarioLogado.nome;
-                console.log('Menu Lateral - 3. Nome do usuário exibido:', usuarioLogado.nome);
-            } else {
-                nomeUsuarioSpan.textContent = 'Usuário Desconhecido';
-                console.log('Menu Lateral - 3. Usuário desconhecido exibido.');
-            }
+  const menuContainer = document.createElement('div');
+  menuContainer.id = 'menu-lateral-container';
+  document.body.appendChild(menuContainer);
 
-            const menuSections = document.querySelectorAll('.menu-section-title');
-            menuSections.forEach(section => {
-                const subsection = section.nextElementSibling;
-                subsection.style.display = 'block';
-                section.classList.add('expanded');
+  try {
+    const response = await fetch('/admin/menu-lateral.html');
+    if (!response.ok) throw new Error('Falha ao carregar menu-lateral.html');
+    const data = await response.text();
+    menuContainer.innerHTML = data;
+    console.log('Menu Lateral - Fetch concluído com sucesso.');
 
-                section.addEventListener('click', () => {
-                    const isExpanded = subsection.style.display === 'block';
-                    subsection.style.display = isExpanded ? 'none' : 'block';
-                    section.classList.toggle('expanded', !isExpanded);
-                });
-            });
+    const nomeUsuarioSpan = document.getElementById('nomeUsuario');
+    if (usuarioLogado && usuarioLogado.nome) {
+      nomeUsuarioSpan.textContent = usuarioLogado.nome;
+      console.log('Menu Lateral - 2. Nome do usuário exibido:', usuarioLogado.nome);
+    } else {
+      nomeUsuarioSpan.textContent = 'Usuário Desconhecido';
+      console.log('Menu Lateral - 2. Usuário desconhecido exibido.');
+    }
 
-            const currentPage = window.location.pathname.split('/').pop();
-            const menuLinks = document.querySelectorAll('.menu-lateral a');
-            menuLinks.forEach(link => {
-                const href = link.getAttribute('href');
-                if (href === currentPage) {
-                    link.classList.add('active');
-                }
-            });
+    // Configurar seções expansíveis
+    const menuSections = document.querySelectorAll('.menu-section-title');
+    menuSections.forEach(section => {
+      const subsection = section.nextElementSibling;
+      subsection.style.display = 'block';
+      section.classList.add('expanded');
 
-            const logoutBtn = document.getElementById('logoutBtn');
-            logoutBtn?.addEventListener('click', () => {
-                console.log('Menu Lateral - 4. Botão de logout clicado.');
-                const confirmLogout = confirm('Tem certeza que deseja sair?');
-                if (confirmLogout) {
-                    console.log('Menu Lateral - 5. Logout confirmado. Removendo usuarioLogado.');
-                    localStorage.removeItem('usuarioLogado');
-                    console.log('Menu Lateral - 6. Estado do usuarioLogado após logout:', localStorage.getItem('usuarioLogado'));
-                    window.location.href = '../index.html';
-                } else {
-                    console.log('Menu Lateral - 5. Logout cancelado.');
-                }
-            });
+      section.addEventListener('click', () => {
+        const isExpanded = subsection.style.display === 'block';
+        subsection.style.display = isExpanded ? 'none' : 'block';
+        section.classList.toggle('expanded', !isExpanded);
+      });
+    });
 
-            console.log('Menu Lateral - 7. Estado final do usuarioLogado:', localStorage.getItem('usuarioLogado'));
-        })
-        .catch(error => {
-            console.error('Erro ao carregar o menu lateral:', error);
-        });
+    // Marcar página atual
+    const currentPage = window.location.pathname.split('/').pop();
+    const menuLinks = document.querySelectorAll('.menu-lateral a');
+    menuLinks.forEach(link => {
+      const href = link.getAttribute('href');
+      if (href === currentPage) {
+        link.classList.add('active');
+      }
+    });
+
+    // Configurar logout
+    const logoutBtn = document.getElementById('logoutBtn');
+    logoutBtn?.addEventListener('click', () => {
+      console.log('Menu Lateral - 3. Botão de logout clicado.');
+      const confirmLogout = confirm('Tem certeza que deseja sair?');
+      if (confirmLogout) {
+        console.log('Menu Lateral - 4. Logout confirmado. Removendo token.');
+        localStorage.removeItem('token');
+        window.location.href = '/index.html';
+      } else {
+        console.log('Menu Lateral - 4. Logout cancelado.');
+      }
+    });
+
+    // Inicializar o menu hambúrguer
+    const hamburgerMenu = document.querySelector('.hamburger-menu');
+    const menuLateral = document.querySelector('.menu-lateral');
+
+    if (!hamburgerMenu || !menuLateral) {
+      console.warn('Elementos .hamburger-menu ou .menu-lateral não encontrados.');
+      return;
+    }
+
+    console.log('Menu hambúrguer inicializado com sucesso!');
+
+    hamburgerMenu.addEventListener('click', () => {
+      menuLateral.classList.toggle('active');
+      hamburgerMenu.classList.toggle('active');
+      console.log('Menu hambúrguer clicado. Estado do menu:', menuLateral.classList.contains('active') ? 'aberto' : 'fechado');
+    });
+
+    menuLinks.forEach(link => {
+      link.addEventListener('click', () => {
+        menuLateral.classList.remove('active');
+        hamburgerMenu.classList.remove('active');
+        console.log('Link clicado. Menu fechado.');
+      });
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!menuLateral.contains(e.target) && !hamburgerMenu.contains(e.target)) {
+        menuLateral.classList.remove('active');
+        hamburgerMenu.classList.remove('active');
+        console.log('Clicado fora do menu. Menu fechado.');
+      }
+    });
+
+  } catch (error) {
+    console.error('Erro ao carregar o menu lateral:', error);
+    window.location.href = '/admin/acesso-negado.html'; // Redireciona sem remover token
+  }
 });

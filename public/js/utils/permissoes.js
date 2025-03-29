@@ -1,4 +1,4 @@
-// js/utils/permissoes.js
+// /js/utils/permissoes.js
 export const permissoesDisponiveis = [
     { id: 'acesso-home', label: 'Acesso à Home' }, // Para home.html
     { id: 'acesso-costureira-dashboard', label: 'Acesso à Dashboard Costureira' }, // Acesso a dashboards de costureira
@@ -22,6 +22,7 @@ export const permissoesDisponiveis = [
     { id: 'editar-registro-producao', label: 'Editar Registro de Produção' }, // Para gerenciar-producao.html
     { id: 'excluir-registro-producao', label: 'Excluir Registro de Produção' }, // Para gerenciar-producao.html
     { id: 'cadastrar-produto', label: 'Cadastrar Produto' }, // Para cadastrar-produto.html
+    { id: 'lancar-producao', label: 'Lançar Produção' },
     { id: 'embalar-produto', label: 'Embalagem de Produto' } // Para embalagem-de-produtos.html
 ];
 
@@ -56,6 +57,7 @@ export const permissoesPorTipo = {
         'gerenciar-permissoes',
         'editar-registro-producao',
         'excluir-registro-producao',
+        'lancar-producao',
         'embalar-produto',
         
     ]

@@ -284,6 +284,55 @@ button[class*='botao-'] {
     color: #333;
 }
 
+/* mensagem de erro de variacoes */
+.error {
+    border: 2px solid red;
+}
+.error-message {
+    color: red;
+    font-size: 12px;
+    margin-left: 5px;
+    display: none;
+}
+
+.botao-salvar-variacoes,
+.botao-salvar-grade {
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.botao-salvar-variacoes:hover,
+.botao-salvar-grade:hover {
+    background-color: #45a049;
+}
+
+.botao-editar-variacao {
+    background-color: #007bff;
+    color: white;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    margin-left: 5px;
+}
+
+.botao-editar-variacao:hover {
+    background-color: #0056b3;
+}
+
+.valores-variacao-input {
+    width: 100%;
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+}
+
+
 /* Variações */
 .cp-variacao-row {
     display: flex;

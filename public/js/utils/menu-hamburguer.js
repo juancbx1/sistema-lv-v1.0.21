@@ -1,4 +1,4 @@
-// utils/menu-hamburguer.js
+// /js/utils/menu-hamburguer.js
 document.addEventListener('DOMContentLoaded', () => {
     // Pequeno atraso para garantir que o DOM esteja completamente carregado
     setTimeout(() => {

@@ -3,52 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <title>Relatório de Comissão</title>
-
-    <!-- Impedir renderização até a verificação de autenticação -->
-    <script>
-        (function verificarAutenticacaoSincrona() {
-            const usuarioLogadoRaw = localStorage.getItem('usuarioLogado');
-            let usuarioLogado;
-            try {
-                usuarioLogado = JSON.parse(usuarioLogadoRaw);
-            } catch (e) {
-                console.error('[verificarAutenticacaoSincrona] Erro ao parsear usuarioLogado:', e);
-                window.location.replace('/index.html');
-                return;
-            }
-
-            if (!usuarioLogado || !usuarioLogado.permissoes) {
-                console.log('[verificarAutenticacaoSincrona] Nenhum usuário logado ou sem permissões, redirecionando para index.html');
-                window.location.replace('/index.html');
-                return;
-            }
-
-            const permissoesUsuario = usuarioLogado.permissoes || [];
-            const paginaAtual = 'relatorio-de-comissao.html';
-            const permissaoAcesso = `acesso-${paginaAtual.replace('.html', '')}`;
-
-            console.log('[verificarAutenticacaoSincrona] Permissões do usuário:', permissoesUsuario);
-            console.log('[verificarAutenticacaoSincrona] Permissão de acesso requerida:', permissaoAcesso);
-
-            if (!permissoesUsuario.includes(permissaoAcesso)) {
-                console.log(`[verificarAutenticacaoSincrona] Acesso negado à ${paginaAtual}.`);
-                window.location.replace('/public/admin/acesso-negado.html');
-                return;
-            }
-
-            console.log('[verificarAutenticacaoSincrona] Autenticação bem-sucedida, exibindo DOM');
-            document.documentElement.style.display = '';
-        })();
-    </script>
-
-    <link rel="stylesheet" href="../css/relatorio-de-comissao.css">
-    <link rel="stylesheet" href="../css/global-style.css">
-    <link rel="stylesheet" href="../css/menu-lateral.css">
+    <link rel="stylesheet" href="/css/relatorio-de-comissao.css">
+    <link rel="stylesheet" href="/css/global-style.css">
+    <link rel="stylesheet" href="/css/menu-lateral.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
-
+  <!-- Botão Hambúrguer -->
+  <div class="hamburger-menu">
+    <i class="fas fa-bars"></i>
+    <i class="fas fa-times"></i>
+</div>
     <div class="rc-container">
         <section class="rc-report-section">
             <div class="rc-filter-panel">
@@ -107,8 +73,7 @@
         </section>
     </div>
 
-    <script src="../../src/pages/admin-relatorio-de-comissao.js" type="module"></script>
-    <script src="../../src/pages/carregar-menu-lateral.js" type="module"></script>
-    <script src="../../src/utils/menu-hamburguer.js" type="module"></script>
+    <script src="/js/admin-relatorio-de-comissao.js" type="module"></script>
+    <script src="/js/carregar-menu-lateral.js" type="module"></script>
 </body>
 </html>
