@@ -9,11 +9,10 @@ console.log('Script costureira-dashboard.js carregado');
 // Variáveis globais
 let usuarioLogado = null;
 let processosExibidos = 0;
-let filtroAtivo = 'dia'; // Alterado para 'dia' como padrão
+let filtroAtivo = 'dia'; // Padrão: dia
 let dataSelecionadaDia = new Date();
 let dataSelecionadaSemana = new Date();
 
-// Função para buscar produções do servidor
 async function obterProducoes() {
     const token = localStorage.getItem('token');
     if (!token) throw new Error('Token não encontrado');
@@ -152,13 +151,13 @@ function atualizarCardMeta(producoes, produtos) {
     producoesSemana.forEach(p => {
         const produtoNomeNormalizado = normalizarTexto(p.produto);
         const produto = produtos.find(prod => normalizarTexto(prod.nome) === produtoNomeNormalizado);
-        if (produto && Array.isArray(produto.etapas)) {
-            const etapa = produto.etapas.find(e => e.processo === p.processo);
-            const pontosPorProcesso = etapa && etapa.pontos ? etapa.pontos : 1;
+        if (produto && Array.isArray(produto.etapas) && Array.isArray(produto.pontos)) {
+            const etapaIndex = produto.etapas.findIndex(e => e.processo === p.processo);
+            const pontosPorProcesso = etapaIndex !== -1 && produto.pontos[etapaIndex] ? produto.pontos[etapaIndex] : 1;
             totalPontosPonderados += p.quantidade * pontosPorProcesso;
         } else {
-            console.warn(`Produto ou processo não encontrado: ${p.produto} - ${p.processo}`);
-            totalPontosPonderados += p.quantidade;
+            console.warn(`Produto ou processo não encontrado ou sem pontos: ${p.produto} - ${p.processo}`);
+            totalPontosPonderados += p.quantidade; // Usa 1 como default se não houver pontos
         }
     });
 
@@ -288,7 +287,6 @@ async function assinarProducoes() {
         const agora = new Date();
         const assinaturas = JSON.parse(localStorage.getItem('assinaturas')) || [];
 
-        // Atualizar cada produção não assinada no servidor
         for (const producao of producoesNaoAssinadas) {
             console.log('[assinarProducoes] Assinando produção:', producao.id);
             const requestBody = {
@@ -315,7 +313,6 @@ async function assinarProducoes() {
             }
         }
 
-        // Criar registro de assinatura
         const registroAssinatura = {
             id: gerarIdUnico(),
             costureira: usuarioLogado.nome,
@@ -372,6 +369,13 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
     const btnProximo = document.getElementById('btnProximo');
     const paginacaoNumeros = document.getElementById('paginacaoNumeros');
 
+    if (!filtroDiaTexto || !filtroSemanaTexto || !totalProcessosEl || !listaProcessos || !btnAnterior || !btnProximo || !paginacaoNumeros) {
+        console.error('Um ou mais elementos necessários não foram encontrados no DOM:', {
+            filtroDiaTexto, filtroSemanaTexto, totalProcessosEl, listaProcessos, btnAnterior, btnProximo, paginacaoNumeros
+        });
+        return;
+    }
+
     const producoesAssinadas = producoes.filter(p => 
         p.funcionario === usuarioLogado.nome && p.assinada
     ).sort((a, b) => new Date(b.data) - new Date(a.data));
@@ -406,7 +410,24 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
     }
 
     function calcularTotalProcessos(producoesFiltradas) {
-        return producoesFiltradas.reduce((sum, p) => sum + (p.quantidade || 0), 0);
+        let totalPontosPonderados = 0;
+        producoesFiltradas.forEach(p => {
+            const produtoNomeNormalizado = normalizarTexto(p.produto);
+            const produto = produtos.find(prod => normalizarTexto(prod.nome) === produtoNomeNormalizado);
+            if (produto && Array.isArray(produto.etapas) && Array.isArray(produto.pontos)) {
+                const etapaIndex = produto.etapas.findIndex(e => e.processo === p.processo);
+                const dataProducao = new Date(p.data);
+                const pontosExpirados = produto.pontos_expiracao && new Date(produto.pontos_expiracao) < dataProducao;
+                const pontosPorProcesso = etapaIndex !== -1 && produto.pontos[etapaIndex] 
+                    ? (pontosExpirados ? 1 : produto.pontos[etapaIndex])
+                    : 1;
+                totalPontosPonderados += p.quantidade * pontosPorProcesso;
+            } else {
+                console.warn(`Produto ou processo não encontrado ou sem pontos: ${p.produto} - ${p.processo}`);
+                totalPontosPonderados += p.quantidade; // Default 1
+            }
+        });
+        return totalPontosPonderados;
     }
 
     function renderizarPaginacao(producoesFiltradas) {
@@ -416,7 +437,7 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
         for (let i = 1; i <= totalPaginas; i++) {
             const btn = document.createElement('button');
             btn.textContent = i;
-            btn.classList.add(i === paginaAtual ? 'active' : '');
+            btn.classList.add(i === paginaAtual ? 'active' : 'inactive');
             btn.addEventListener('click', () => {
                 paginaAtual = i;
                 renderizarProcessos();
@@ -430,6 +451,7 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
     }
 
     function renderizarProcessos() {
+        console.log('Renderizando processos...');
         const producoesFiltradas = filtrarProducoes();
         const inicio = (paginaAtual - 1) * itensPorPagina;
         const fim = inicio + itensPorPagina;
@@ -439,8 +461,12 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
             ? processosParaExibir.map(p => {
                 const produtoNomeNormalizado = normalizarTexto(p.produto);
                 const produto = produtos.find(prod => normalizarTexto(prod.nome) === produtoNomeNormalizado);
-                const etapa = produto && Array.isArray(produto.etapas) ? produto.etapas.find(e => e.processo === p.processo) : null;
-                const pontosPorProcesso = etapa && etapa.pontos ? etapa.pontos : 1;
+                const etapaIndex = produto && Array.isArray(produto.etapas) ? produto.etapas.findIndex(e => e.processo === p.processo) : -1;
+                const dataProducao = new Date(p.data);
+                const pontosExpirados = produto && produto.pontos_expiracao && new Date(produto.pontos_expiracao) < dataProducao;
+                const pontosPorProcesso = etapaIndex !== -1 && Array.isArray(produto.pontos) && produto.pontos[etapaIndex] 
+                    ? (pontosExpirados ? 1 : produto.pontos[etapaIndex])
+                    : 1;
                 const totalPontosItem = p.quantidade * pontosPorProcesso;
                 const pontoTexto = totalPontosItem === 1 ? 'ponto' : 'pontos';
                 const variacao = p.variacao || 'N/A';
@@ -451,7 +477,7 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
             : '<li>Nenhuma produção assinada encontrada para o período selecionado.</li>';
 
         const total = calcularTotalProcessos(producoesFiltradas);
-        totalProcessosEl.textContent = `TOTAL DE PROCESSOS: ${total}`;
+        totalProcessosEl.textContent = `TOTAL DE PONTOS: ${total}`;
         renderizarPaginacao(producoesFiltradas);
     }
 
@@ -461,7 +487,9 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
         btnAnterior.disabled = paginaAtual === 1;
         btnProximo.disabled = paginaAtual === totalPaginas || totalPaginas === 0;
         paginacaoNumeros.querySelectorAll('button').forEach(btn => {
-            btn.classList.toggle('active', parseInt(btn.textContent) === paginaAtual);
+            const isActive = parseInt(btn.textContent) === paginaAtual;
+            btn.classList.remove('active', 'inactive');
+            btn.classList.add(isActive ? 'active' : 'inactive');
         });
     }
 
@@ -483,6 +511,7 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
     };
 
     filtroDiaTexto.onclick = () => {
+        console.log('Clique em filtroDia');
         paginaAtual = 1;
         filtroAtivo = 'dia';
         filtroDiaTexto.classList.add('active');
@@ -491,6 +520,7 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
     };
 
     filtroSemanaTexto.onclick = () => {
+        console.log('Clique em filtroSemana');
         paginaAtual = 1;
         filtroAtivo = 'semana';
         filtroSemanaTexto.classList.add('active');
@@ -502,6 +532,7 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
         dateFormat: 'dd/mm/yy',
         defaultDate: dataSelecionadaDia,
         onSelect: function(dateText) {
+            console.log('Seleção de data no datepickerDia:', dateText);
             const [dia, mes, ano] = dateText.split('/');
             dataSelecionadaDia = new Date(ano, mes - 1, dia);
             paginaAtual = 1;
@@ -516,6 +547,7 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
         dateFormat: 'dd/mm/yy',
         defaultDate: dataSelecionadaSemana,
         onSelect: function(dateText) {
+            console.log('Seleção de data no datepickerSemana:', dateText);
             const [dia, mes, ano] = dateText.split('/');
             dataSelecionadaSemana = new Date(ano, mes - 1, dia);
             paginaAtual = 1;
@@ -532,7 +564,7 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
     fimSemanaAtual.setDate(inicioSemanaAtual.getDate() + 6);
     $("#datepickerSemana").val(`${inicioSemanaAtual.toLocaleDateString('pt-BR')} - ${fimSemanaAtual.toLocaleDateString('pt-BR')}`);
 
-    // Definir "Dia" como padrão na inicialização
+    console.log('Inicializando filtros: dia como padrão');
     filtroAtivo = 'dia';
     filtroDiaTexto.classList.add('active');
     filtroSemanaTexto.classList.remove('active');
@@ -550,11 +582,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         dateFormat: 'dd/mm/yy',
         defaultDate: dataSelecionadaDia,
         onSelect: async function(dateText) {
+            console.log('Evento datepickerDia:', dateText);
             const [dia, mes, ano] = dateText.split('/');
             dataSelecionadaDia = new Date(ano, mes - 1, dia);
             filtroAtivo = 'dia';
-            document.getElementById('filtroDia').classList.add('active');
-            document.getElementById('filtroSemana').classList.remove('active');
+            const filtroDia = document.getElementById('filtroDia');
+            const filtroSemana = document.getElementById('filtroSemana');
+            if (filtroDia) filtroDia.classList.add('active');
+            if (filtroSemana) filtroSemana.classList.remove('active');
             const producoes = await obterProducoes();
             const produtos = await obterProdutos();
             atualizarDetalhamentoProcessos(producoes, produtos);
@@ -565,11 +600,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         dateFormat: 'dd/mm/yy',
         defaultDate: dataSelecionadaSemana,
         onSelect: async function(dateText) {
+            console.log('Evento datepickerSemana:', dateText);
             const [dia, mes, ano] = dateText.split('/');
             dataSelecionadaSemana = new Date(ano, mes - 1, dia);
             filtroAtivo = 'semana';
-            document.getElementById('filtroSemana').classList.add('active');
-            document.getElementById('filtroDia').classList.remove('active');
+            const filtroSemana = document.getElementById('filtroSemana');
+            const filtroDia = document.getElementById('filtroDia');
+            if (filtroSemana) filtroSemana.classList.add('active');
+            if (filtroDia) filtroDia.classList.remove('active');
             const producoes = await obterProducoes();
             const produtos = await obterProdutos();
             atualizarDetalhamentoProcessos(producoes, produtos);
@@ -593,7 +631,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         editarMetaBtn.textContent = 'Editar Meta';
         const producoes = await obterProducoes();
         const produtos = await obterProdutos();
-        atualizarCardMeta(producoes, produtos);
+        atualizarCardMeta(produces, produtos);
     });
 
     document.getElementById('editarMetaBtn').addEventListener('click', async () => {

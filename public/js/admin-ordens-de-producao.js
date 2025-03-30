@@ -75,7 +75,6 @@ async function obterProdutos() {
   }
 
   if (produtosPromise) {
-    console.log('[obterProdutos] Aguardando promessa existente');
     return await produtosPromise;
   }
 
@@ -321,20 +320,16 @@ async function loadOPTable(filterStatus = 'todas', search = '') {
     }
 
     function handleOPTableClick(e) {
-      console.log('[loadOPTable] Clique na tabela detectado');
       const tr = e.target.closest('tr');
       if (tr) {
         const index = parseInt(tr.dataset.index);
-        console.log('[loadOPTable] Linha clicada, index:', index);
         const op = filteredOPs[index];
         if (op) {
-          console.log('[loadOPTable] Ordem selecionada:', op.numero, 'Edit ID:', op.edit_id);
           window.location.hash = `#editar/${op.edit_id}`;
         } else {
           console.error('[loadOPTable] Ordem não encontrada para o índice:', index);
         }
       } else {
-        console.log('[loadOPTable] Clique fora de uma linha (tr)');
       }
     }
   } catch (error) {
@@ -443,7 +438,6 @@ async function loadEtapasEdit(op, skipReload = false) {
   if (op.status === 'finalizado' && !todasEtapasCompletas) {
     op.status = 'produzindo';
     await saveOPChanges(op);
-    console.log(`[loadEtapasEdit] OP ${op.numero} ajustada para "produzindo" porque nem todas as etapas estão completas.`);
   }
 
   if (!skipReload) {
@@ -608,7 +602,6 @@ async function salvarProducao(op, etapa, etapaIndex, produtos) {
     data: new Date().toLocaleString('sv', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T'), // Ex.: "2025-03-30T10:36:06"
     lancadoPor: usuarioLogado?.nome || 'Sistema',
   };
-  console.log('[salvarProducao] ID gerado:', dados.id);
   console.log('[salvarProducao] Dados enviados para o servidor:', dados);
 
   if (!dados.opNumero) throw new Error('Número da OP não informado.');
@@ -1099,18 +1092,15 @@ async function atualizarVisualEtapas(op, produtos) {
 
 // Função para alternar entre os modos de visualização
 async function toggleView() {
-  console.log('[toggleView] Iniciando toggleView, hash atual:', window.location.hash);
   const hash = window.location.hash;
   const opListView = document.getElementById('opListView');
   const opFormView = document.getElementById('opFormView');
   const opEditView = document.getElementById('opEditView');
 
   if (!opListView || !opFormView || !opEditView) {
-    console.log('[toggleView] Elementos DOM principais não encontrados');
     return;
   }
 
-  console.log('[toggleView] Buscando ordens de produção...');
   const ordensDeProducao = await obterOrdensDeProducao();
   console.log('[toggleView] Ordens de produção obtidas:', ordensDeProducao.length);
 
@@ -1158,18 +1148,14 @@ async function toggleView() {
     opEditView.style.display = 'block';
     document.getElementById('opNumero').textContent = `OP n°: ${op.numero}`;
 
-    console.log('[toggleView] Carregando etapas para edição...');
     await loadEtapasEdit(op);
     console.log('[toggleView] Etapas carregadas com sucesso');
   } else if (hash === '#adicionar' && permissoes.includes('criar-op')) {
-    console.log('[toggleView] Modo adicionar nova OP');
     opListView.style.display = 'none';
     opFormView.style.display = 'block';
     opEditView.style.display = 'none';
-    console.log('[toggleView] Carregando produtos para o formulário...');
     await loadProdutosSelect();
     setCurrentDate();
-    console.log('[toggleView] Carregando variantes...');
     await loadVariantesSelects('');
     document.getElementById('numeroOP').value = await getNextOPNumber();
     document.getElementById('quantidadeOP').value = '';
@@ -1184,9 +1170,7 @@ async function toggleView() {
       produtoSelect.value = '';
       await loadVariantesSelects('');
     }
-    console.log('[toggleView] Formulário de adição configurado');
   } else {
-    console.log('[toggleView] Modo lista de OPs');
     await loadOPTable();
     opListView.style.display = 'block';
     opFormView.style.display = 'none';
@@ -1213,12 +1197,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   usuarioLogado = auth.usuario;
   permissoes = auth.permissoes || [];
-  console.log('[admin-ordens-de-producao] Autenticação bem-sucedida, usuário:', usuarioLogado.nome, 'Permissões:', permissoes);
-
-  // Verificar permissões específicas
-  console.log('[admin-ordens-de-producao] Permissão para criar OP:', permissoes.includes('criar-op'));
-  console.log('[admin-ordens-de-producao] Permissão para editar OP:', permissoes.includes('editar-op'));
-
 
   // Carregar IDs existentes do banco de dados
   const ordensDeProducao = await obterOrdensDeProducao();
@@ -1274,7 +1252,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       incluirOPBtn.style.cursor = 'not-allowed';
     } else {
       incluirOPBtn.addEventListener('click', () => {
-        console.log('[incluirOPBtn] Botão "Incluir OP" clicado');
         window.location.hash = '#adicionar';
       });
     }

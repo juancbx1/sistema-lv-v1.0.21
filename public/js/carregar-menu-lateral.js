@@ -26,8 +26,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  console.log('Menu Lateral - 1. Usuário logado recuperado:', usuarioLogado);
-
   const menuContainer = document.createElement('div');
   menuContainer.id = 'menu-lateral-container';
   document.body.appendChild(menuContainer);
@@ -37,7 +35,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!response.ok) throw new Error('Falha ao carregar menu-lateral.html');
     const data = await response.text();
     menuContainer.innerHTML = data;
-    console.log('Menu Lateral - Fetch concluído com sucesso.');
 
     const nomeUsuarioSpan = document.getElementById('nomeUsuario');
     if (usuarioLogado && usuarioLogado.nome) {
@@ -75,14 +72,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Configurar logout
     const logoutBtn = document.getElementById('logoutBtn');
     logoutBtn?.addEventListener('click', () => {
-      console.log('Menu Lateral - 3. Botão de logout clicado.');
       const confirmLogout = confirm('Tem certeza que deseja sair?');
       if (confirmLogout) {
-        console.log('Menu Lateral - 4. Logout confirmado. Removendo token.');
         localStorage.removeItem('token');
         window.location.href = '/index.html';
       } else {
-        console.log('Menu Lateral - 4. Logout cancelado.');
       }
       limparCacheProdutos();
     });
@@ -96,19 +90,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    console.log('Menu hambúrguer inicializado com sucesso!');
-
     hamburgerMenu.addEventListener('click', () => {
       menuLateral.classList.toggle('active');
       hamburgerMenu.classList.toggle('active');
-      console.log('Menu hambúrguer clicado. Estado do menu:', menuLateral.classList.contains('active') ? 'aberto' : 'fechado');
     });
 
     menuLinks.forEach(link => {
       link.addEventListener('click', () => {
         menuLateral.classList.remove('active');
         hamburgerMenu.classList.remove('active');
-        console.log('Link clicado. Menu fechado.');
       });
     });
 
@@ -116,7 +106,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!menuLateral.contains(e.target) && !hamburgerMenu.contains(e.target)) {
         menuLateral.classList.remove('active');
         hamburgerMenu.classList.remove('active');
-        console.log('Clicado fora do menu. Menu fechado.');
       }
     });
 

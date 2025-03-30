@@ -24,7 +24,6 @@ export async function sincronizarPermissoesUsuario(usuario) {
   }
 
   usuario.permissoes = Array.from(permissoesAtualizadas).filter(p => permissoesValidas.has(p));
-  console.log('[sincronizarPermissoesUsuario] Permissões sincronizadas:', usuario.permissoes);
   return usuario;
 }
 

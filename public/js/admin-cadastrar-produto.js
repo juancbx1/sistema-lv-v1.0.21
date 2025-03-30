@@ -3,6 +3,8 @@ import { verificarAutenticacao } from '/js/utils/auth.js';
 import { obterProdutos, salvarProdutos } from '/js/utils/storage.js';
 import { resizeImage } from '/js/utils/image-utils.js';
 import { PRODUTOS, PRODUTOSKITS, MAQUINAS, PROCESSOS } from '/js/utils/prod-proc-maq.js';
+import { invalidateCache } from '/js/utils/storage.js'; // Importar a função de invalidação
+
 
 // Variável global para armazenar produtos
 let produtos = [];
@@ -301,13 +303,22 @@ function loadVariacoes(produto) {
 }
 
 function loadGrade(produto) {
-    console.log('[loadGrade] Produto:', produto);
+    console.log('[loadGrade] Carregando grade para produto:', produto.nome, 'Grade atual:', produto.grade);
     const variacoesContainer = document.getElementById('variacoesContainer');
+    if (!variacoesContainer) {
+        console.error('[loadGrade] #variacoesContainer não encontrado no DOM');
+        return;
+    }
     const variacoesAtuais = Array.from(variacoesContainer.querySelectorAll('.cp-variacao-row')).map((row, i) => ({
         chave: document.getElementById(`chaveVariacao${i}`)?.value || '',
         valores: document.getElementById(`valoresVariacao${i}`)?.value || ''
     }));
-    console.log('[loadGrade] Variações atuais:', variacoesAtuais);
+    console.log('[loadGrade] Variações atuais do DOM:', variacoesAtuais);
+
+    // Limpar completamente o gradeBody
+    while (elements.gradeBody.firstChild) {
+        elements.gradeBody.removeChild(elements.gradeBody.firstChild);
+    }
 
     elements.gradeHeader.innerHTML = `
         <tr>
@@ -321,17 +332,20 @@ function loadGrade(produto) {
 
     const isKit = produto.tipos && produto.tipos.includes('kits');
     gradeTemp = deepClone(produto.grade || []);
+    console.log('[loadGrade] gradeTemp inicializado:', gradeTemp);
 
-    // Gerar grade com base nas variações/valores, tanto para produtos normais quanto para kits
     if (!variacoesAtuais.every(v => v.valores && v.valores.trim() !== '')) {
         console.log('[loadGrade] Variações inválidas, exibindo mensagem');
-        elements.gradeBody.innerHTML = '<tr><td colspan="5">Adicione valores às variações acima para gerar a grade.</td></tr>';
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="5">Adicione valores às variações acima para gerar a grade.</td>';
+        elements.gradeBody.appendChild(tr);
         gradeTemp = [];
+        editingProduct.grade = []; // Sincronizar editingProduct.grade
         return;
     }
 
     const gradeGerada = generateGradeCombinations(variacoesAtuais);
-    console.log('[loadGrade] Grade gerada:', gradeGerada);
+    console.log('[loadGrade] Grade gerada a partir das variações:', gradeGerada);
 
     const updatedGrade = [];
     gradeGerada.forEach(nova => {
@@ -339,22 +353,25 @@ function loadGrade(produto) {
             variacao: nova.variacao,
             sku: '',
             imagem: '',
-            composicao: isKit ? [] : ['-'] // Inicializar composição vazia para kits
+            composicao: isKit ? [] : ['-']
         };
         updatedGrade.push(existente);
     });
     gradeTemp = updatedGrade;
+    editingProduct.grade = deepClone(gradeTemp); // Sincronizar editingProduct.grade com gradeTemp
+    console.log('[loadGrade] gradeTemp atualizado:', gradeTemp);
 
-    elements.gradeBody.innerHTML = '';
     if (gradeTemp.length === 0) {
-        elements.gradeBody.innerHTML = '<tr><td colspan="5">Nenhuma variação configurada. Clique em "Adicionar Outra Variação" para começar.</td></tr>';
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="5">Nenhuma variação configurada. Clique em "Adicionar Outra Variação" para começar.</td>';
+        elements.gradeBody.appendChild(tr);
         return;
     }
 
     gradeTemp.forEach((item, idx) => {
-        console.log('[loadGrade] Renderizando item da grade:', item);
+        console.log('[loadGrade] Renderizando item - Índice:', idx, 'Item:', item);
         const tr = document.createElement('tr');
-        tr.dataset.index = idx;
+        tr.dataset.index = idx.toString();
         const composicaoHtml = isKit
             ? item.composicao?.length > 0 && item.composicao[0].variacao !== '-'
                 ? `<div class="composicao-tags">${item.composicao.map(c => `<span class="composicao-tag">${c.variacao} (${c.quantidade})</span>`).join('')}<button class="composicao-tag composicao-edit-btn" onclick="abrirConfigurarVariacao('${idx}')">Editar</button></div>`
@@ -369,7 +386,8 @@ function loadGrade(produto) {
         `;
         elements.gradeBody.appendChild(tr);
     });
-    console.log('[loadGrade] Grade temporária final:', gradeTemp);
+
+    console.log('[loadGrade] Grade temporária final:', gradeTemp, 'Total de linhas no DOM:', elements.gradeBody.children.length);
     gradeAlteradas = false;
 }
 
@@ -378,8 +396,12 @@ window.marcarGradeAlteradas = function() {
 };
 
 window.salvarGrade = async function() {
+    if (!editingProduct) {
+        alert('Erro: Nenhum produto está sendo editado.');
+        return;
+    }
+
     const gradeRows = Array.from(elements.gradeBody.querySelectorAll('tr'));
-    // Filtrar apenas as linhas que ainda existem no DOM e têm a célula de variação
     const validRows = gradeRows.filter(tr => tr.cells[0]);
 
     gradeTemp = validRows.map((tr, idx) => {
@@ -397,24 +419,16 @@ window.salvarGrade = async function() {
     gradeAlteradas = false;
     console.log('[salvarGrade] Grade atualizada localmente:', editingProduct.grade);
 
-    // Salvar no backend
     try {
-        await atualizarProdutoNoStorage();
+        const savedProduct = await salvarProdutoNoBackend();
+        console.log('[salvarGrade] Salvamento no backend concluído com sucesso:', savedProduct.grade);
         alert('Grade salva com sucesso!');
     } catch (error) {
-        console.error('[salvarGrade] Erro ao salvar no backend:', error);
-        alert('Erro ao salvar a grade. Verifique o console para mais detalhes.');
+        console.error('[salvarGrade] Erro ao salvar no backend:', error.message, error.stack);
+        alert('Erro ao salvar a grade: ' + error.message);
+        throw error;
     }
 };
-
-window.addEventListener('beforeunload', (e) => {
-    if (variacoesAlteradas || gradeAlteradas) {
-        const mensagem = 'Você tem alterações não salvas em "Variações" ou "Grade". Tem certeza que deseja sair?';
-        e.preventDefault();
-        e.returnValue = mensagem;
-        return mensagem;
-    }
-});
 
 function generateGradeCombinations(variacoes) {
     if (!variacoes || !variacoes.every(v => v.valores)) return [];
@@ -645,12 +659,10 @@ window.removerVariacaoRow = function(btn, index) {
     variacoesTemp.splice(index, 1);
     variacoesAlteradas = true;
     loadGrade(editingProduct);
-
-    // Salvar automaticamente as variações no backend
-    salvarVariacoes();
+    variacoesAlteradas = true; // Apenas marque como alterado, o usuário deve salvar manualmente
 };
 
-window.salvarVariacoes = function() {
+window.salvarVariacoes = async function() {
     const variacoesRows = Array.from(document.querySelectorAll('.cp-variacao-row'));
     variacoesTemp = variacoesRows.map((row, i) => ({
         chave: document.getElementById(`chaveVariacao${i}`)?.value || '',
@@ -663,9 +675,19 @@ window.salvarVariacoes = function() {
     }));
 
     variacoesAlteradas = false;
-    alert('Variações salvas com sucesso!');
-    console.log('[salvarVariacoes] Variações salvas:', editingProduct.variacoes);
-    loadGrade(editingProduct); // Atualizar a grade com base nas variações salvas
+    console.log('[salvarVariacoes] Variações atualizadas localmente:', editingProduct.variacoes);
+
+    try {
+        const savedProduct = await salvarProdutoNoBackend();
+        console.log('[salvarVariacoes] Variações salvas no backend com sucesso:', savedProduct.variacoes);
+        alert('Variações salvas com sucesso!');
+    } catch (error) {
+        console.error('[salvarVariacoes] Erro ao salvar no backend:', error.message, error.stack);
+        alert('Erro ao salvar as variações: ' + error.message);
+        throw error;
+    }
+
+    loadGrade(editingProduct);
 };
 
 function removeVariacaoFromGrade(chaveRemovida, indexRemovido) {
@@ -710,8 +732,8 @@ window.confirmarNovaVariacao = function() {
         option.selected = true;
         select.insertBefore(option, select.querySelector('option[value="outro"]'));
         fecharPopup();
-        atualizarProdutoNoStorage();
-        loadGrade(editingProduct);
+        variacoesAlteradas = true; // Apenas marcar como alterado
+        loadGrade(editingProduct); // Atualizar a grade no DOM
     }
 };
 
@@ -747,7 +769,7 @@ function criarTags(containerId, valores) {
                 span.onclick = () => editarTag(span);
                 container.insertBefore(span, input);
                 input.value = '';
-                atualizarProdutoNoStorage();
+                salvarProdutoNoBackend();
                 loadGrade(editingProduct);
             }
         }
@@ -770,8 +792,8 @@ function editarTag(span) {
         }
         span.style.display = 'inline-block';
         input.remove();
-        atualizarProdutoNoStorage();
-        loadGrade(editingProduct);
+        variacoesAlteradas = true; // Apenas marcar como alterado
+        loadGrade(editingProduct); // Atualizar a grade no DOM
     };
     input.onkeydown = e => { if (e.key === 'Enter') input.blur(); };
     span.style.display = 'none';
@@ -938,16 +960,18 @@ function temDuplicatasDeSku() {
 window.validarSku = function(index, input) {
     const skuValue = input.value.trim();
     const grade = Array.from(elements.gradeBody.querySelectorAll('tr')).map(tr => ({
-        sku: tr.cells[2].querySelector('.cp-grade-sku').value || ''
+        sku: tr.cells[2].querySelector('.cp-grade-sku')?.value || ''
     }));
     const currentIndex = parseInt(index);
 
     let errorSpan = input.nextElementSibling;
-    if (!errorSpan || !errorSpan.classList.contains('error-message')) {
-        errorSpan = document.createElement('span');
-        errorSpan.className = 'error-message';
-        input.parentNode.appendChild(errorSpan);
+    if (errorSpan && errorSpan.classList.contains('error-message')) {
+        errorSpan.remove(); // Remover mensagem antiga
     }
+
+    errorSpan = document.createElement('span');
+    errorSpan.className = 'error-message';
+    input.parentNode.appendChild(errorSpan);
 
     const isDuplicateInGrade = grade.some((item, i) => item.sku === skuValue && i !== currentIndex);
 
@@ -973,12 +997,15 @@ window.validarSku = function(index, input) {
         errorSpan.style.display = 'none';
         desbloquearCampos();
         localStorage.removeItem('produtoComDuplicidade');
-        gradeAlteradas = true; // Marcar que a grade foi alterada
+        gradeAlteradas = true;
     }
 };
 
-async function atualizarProdutoNoStorage() {
-    if (!editingProduct) return;
+async function salvarProdutoNoBackend() {
+    if (!editingProduct) {
+        console.error('[salvarProdutoNoBackend] Nenhum produto está sendo editado.');
+        return;
+    }
 
     const tiposSelecionados = Array.from(document.querySelectorAll('input[name="tipo"]:checked')).map(cb => cb.value);
     const isKit = tiposSelecionados.includes('kits');
@@ -1018,42 +1045,52 @@ async function atualizarProdutoNoStorage() {
         })
     };
 
-    // Verificar duplicatas antes de salvar
     const { hasDuplicates, erroNaGrade } = temDuplicatasDeSku();
     if (hasDuplicates) {
-        console.log('[atualizarProdutoNoStorage] Salvamento bloqueado devido a SKUs duplicados.');
+        console.log('[salvarProdutoNoBackend] Salvamento bloqueado devido a SKUs duplicados.');
         bloquearCampos('Corrija o SKU duplicado antes de continuar editando.', erroNaGrade);
         localStorage.setItem('produtoComDuplicidade', JSON.stringify(updatedProduct));
         return;
     }
 
     try {
-        console.log('[atualizarProdutoNoStorage] Enviando produto para o backend:', updatedProduct);
-        const usuarioLogado = JSON.parse(localStorage.getItem('usuarioLogado') || '{}');
-        const usuarioId = usuarioLogado.id;
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.error('[salvarProdutoNoBackend] Nenhum token encontrado. Redirecionando para login.');
+            alert('Sessão expirada. Por favor, faça login novamente.');
+            window.location.href = '/index.html';
+            return;
+        }
 
-        const response = await fetch(`/api/produtos?id=${usuarioId}`, {
+        console.log('[salvarProdutoNoBackend] Enviando produto para o backend:', updatedProduct);
+        const response = await fetch('/api/produtos', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify(updatedProduct)
         });
 
         if (!response.ok) {
             const errorText = await response.text();
+            console.error('[salvarProdutoNoBackend] Resposta do servidor:', response.status, errorText);
             throw new Error(`Erro ao salvar produto: ${response.status} - ${errorText}`);
         }
 
         const savedProduct = await response.json();
-        console.log('[atualizarProdutoNoStorage] Produto salvo com sucesso:', savedProduct);
+        console.log('[salvarProdutoNoBackend] Produto salvo com sucesso:', savedProduct);
         editingProduct = deepClone(savedProduct);
         produtos = produtos.map(p => p.id === savedProduct.id ? deepClone(savedProduct) : p);
         desbloquearCampos();
         localStorage.removeItem('produtoComDuplicidade');
+        invalidateCache('produtosCadastrados');
+        console.log('[salvarProdutoNoBackend] Cache invalidado após salvamento');
+        return savedProduct; // Retornar o produto salvo para uso posterior
     } catch (error) {
-        console.error('[atualizarProdutoNoStorage] Erro:', error);
-        alert('Erro ao salvar o produto. Verifique o console para mais detalhes.');
+        console.error('[salvarProdutoNoBackend] Erro detalhado:', error.message, error.stack);
+        alert('Erro ao salvar o produto: ' + error.message);
+        throw error;
     }
 }
 
@@ -1085,40 +1122,81 @@ window.fecharImagemPopup = function() {
 };
 
 window.excluirGrade = function(index) {
-    const tr = elements.gradeBody.querySelector(`tr[data-index="${index}"]`);
-    if (!tr) return;
-    const variacaoExcluida = tr.cells[0].textContent.split(' | ');
-    tr.remove();
+    const parsedIndex = parseInt(index);
+    if (isNaN(parsedIndex) || !editingProduct || !editingProduct.grade || !Array.isArray(editingProduct.grade) || parsedIndex < 0 || parsedIndex >= gradeTemp.length) {
+        console.error('[excluirGrade] Índice inválido:', index, 'Tamanho da gradeTemp:', gradeTemp.length, 'Grade:', editingProduct.grade);
+        return;
+    }
 
-    // Atualizar gradeTemp
-    gradeTemp = gradeTemp.filter((_, i) => i !== parseInt(index));
+    const tr = elements.gradeBody.querySelector(`tr[data-index="${parsedIndex}"]`);
+    if (!tr) {
+        console.error('[excluirGrade] Linha não encontrada para índice:', parsedIndex, 'DOM atual:', elements.gradeBody.innerHTML);
+        return;
+    }
+
+    const variacaoExcluida = tr.cells[0].textContent;
+    console.log('[excluirGrade] Excluindo variação:', variacaoExcluida, 'Índice:', parsedIndex);
+
+    gradeTemp = gradeTemp.filter((_, i) => i !== parsedIndex);
+    editingProduct.grade = deepClone(gradeTemp);
     gradeAlteradas = true;
 
-    // Reindexar as linhas no DOM
-    Array.from(elements.gradeBody.querySelectorAll('tr')).forEach((row, idx) => {
-        row.dataset.index = idx;
-    });
-
-    // Salvar no backend
+    console.log('[excluirGrade] Grade após exclusão:', editingProduct.grade);
+    loadGrade(editingProduct);
     salvarGrade();
 };
 
+
 window.abrirConfigurarVariacao = function(index) {
-    currentKitVariationIndex = index;
-    window.location.hash = `#configurar-variacao/${index}`;
+    const parsedIndex = parseInt(index);
+    if (isNaN(parsedIndex) || !editingProduct || !editingProduct.grade || !Array.isArray(editingProduct.grade)) {
+        console.error('[abrirConfigurarVariacao] Índice ou grade inválidos:', index, 'Produto:', editingProduct);
+        alert('Erro: Índice de variação inválido ou produto não carregado!');
+        return;
+    }
+    if (parsedIndex < 0 || parsedIndex >= editingProduct.grade.length) {
+        console.error('[abrirConfigurarVariacao] Índice fora dos limites:', parsedIndex, 'Tamanho da grade:', editingProduct.grade.length, 'Grade:', editingProduct.grade);
+        alert('Erro: Índice de variação fora dos limites!');
+        return;
+    }
+    console.log('[abrirConfigurarVariacao] Abrindo configuração para índice:', parsedIndex, 'Variação:', editingProduct.grade[parsedIndex]);
+    currentKitVariationIndex = parsedIndex;
+    window.location.hash = `#configurar-variacao/${parsedIndex}`;
 };
 
 function carregarConfigurarVariacao(index) {
-    kitComposicaoTemp = [];
+    const parsedIndex = parseInt(index);
+    if (isNaN(parsedIndex) || (!index && index !== 0)) {
+        console.error('[carregarConfigurarVariacao] Índice inválido:', index);
+        alert('Índice de variação inválido. Voltando para a edição.');
+        window.location.hash = '#editando';
+        return;
+    }
+
+    if (!editingProduct || !editingProduct.grade || !Array.isArray(editingProduct.grade)) {
+        console.error('[carregarConfigurarVariacao] Produto ou grade não inicializados. Produto:', editingProduct);
+        alert('Erro: Produto não está corretamente carregado.');
+        window.location.hash = '#editando';
+        return;
+    }
+
+    if (parsedIndex < 0 || parsedIndex >= editingProduct.grade.length) {
+        console.error('[carregarConfigurarVariacao] Índice fora dos limites:', parsedIndex, 'Tamanho da grade:', editingProduct.grade.length, 'Grade:', editingProduct.grade);
+        alert('Índice de variação fora dos limites. Voltando para a edição.');
+        window.location.hash = '#editando';
+        return;
+    }
+
+    currentKitVariationIndex = parsedIndex;
+    kitComposicaoTemp = deepClone(editingProduct.grade[parsedIndex].composicao || []);
+    console.log('[carregarConfigurarVariacao] Carregando composição para variação:', editingProduct.grade[parsedIndex].variacao, 'Composição:', kitComposicaoTemp);
+
     elements.produtoKitSelect.value = '';
     elements.produtoKitSelect.disabled = false;
     elements.variacaoKitSelect.innerHTML = '<option value="">Selecione uma variação</option>';
     elements.composicaoKitContainer.innerHTML = '';
 
-    const grade = editingProduct.grade || [];
-    const variacao = grade[index];
-    elements.configurarVariacaoTitle.textContent = `Configurar ${editingProduct.nome} - ${variacao.variacao}`;
-    kitComposicaoTemp = variacao.composicao ? deepClone(variacao.composicao) : [];
+    elements.configurarVariacaoTitle.textContent = `Configurar ${editingProduct.nome} - ${editingProduct.grade[parsedIndex].variacao}`;
 
     const produtosFiltrados = produtos.filter(p => PRODUTOS.includes(p.nome) && p.nome !== editingProduct.nome);
     elements.produtoKitSelect.innerHTML = '<option value="">Selecione um produto</option>';
@@ -1129,15 +1207,17 @@ function carregarConfigurarVariacao(index) {
         elements.produtoKitSelect.appendChild(option);
     });
 
-    if (kitComposicaoTemp.length > 0) {
-        const primeiroProduto = produtosFiltrados.find(p => p.grade && p.grade.some(g => g.variacao === kitComposicaoTemp[0].variacao));
-        if (primeiroProduto) {
-            elements.produtoKitSelect.value = primeiroProduto.nome;
-            elements.produtoKitSelect.disabled = true;
-            loadVariacoesKit();
-        }
-    }
     renderizarComposicaoKit();
+
+    // Associar evento ao botão "Configurar" correto
+    const configurarBtn = document.getElementById('saveKitConfigBtn');
+    if (configurarBtn) {
+        configurarBtn.removeEventListener('click', salvarComposicaoKit);
+        configurarBtn.addEventListener('click', salvarComposicaoKit);
+        console.log('[carregarConfigurarVariacao] Evento click associado ao botão Configurar:', configurarBtn);
+    } else {
+        console.error('[carregarConfigurarVariacao] Botão Configurar (#saveKitConfigBtn) não encontrado no DOM');
+    }
 }
 
 window.loadVariacoesKit = function() {
@@ -1170,6 +1250,8 @@ elements.addVariacaoKitBtn.addEventListener('click', () => {
 
     kitComposicaoTemp.push({ variacao, quantidade: 1 });
     renderizarComposicaoKit();
+    console.log('[addVariacaoKitBtn] Composição adicionada localmente (sem salvamento automático):', kitComposicaoTemp);
+    // Remover gradeAlteradas = true aqui
 });
 
 function renderizarComposicaoKit() {
@@ -1189,46 +1271,55 @@ function renderizarComposicaoKit() {
 window.atualizarQuantidadeKit = function(index, value) {
     kitComposicaoTemp[index].quantidade = parseInt(value) || 1;
     renderizarComposicaoKit();
-    const tr = elements.gradeBody.querySelector(`tr[data-index="${currentKitVariationIndex}"]`);
-    if (tr) {
-        const composicaoHtml = kitComposicaoTemp.length > 0 && kitComposicaoTemp[0].variacao !== '-'
-            ? `<div class="composicao-tags">${kitComposicaoTemp.map(c => `<span class="composicao-tag">${c.variacao} (${c.quantidade})</span>`).join('')}<button class="composicao-tag composicao-edit-btn" onclick="abrirConfigurarVariacao('${currentKitVariationIndex}')">Editar</button></div>`
-            : `<div class="composicao-tags"><button class="composicao-tag composicao-edit-btn" onclick="abrirConfigurarVariacao('${currentKitVariationIndex}')">Editar</button></div>`;
-        tr.cells[1].innerHTML = composicaoHtml;
-    }
+    gradeAlteradas = true;
 };
 
 window.removerComposicaoKit = function(index) {
     kitComposicaoTemp.splice(index, 1);
     renderizarComposicaoKit();
-    const tr = elements.gradeBody.querySelector(`tr[data-index="${currentKitVariationIndex}"]`);
-    if (tr) {
-        const composicaoHtml = kitComposicaoTemp.length > 0 && kitComposicaoTemp[0].variacao !== '-'
-            ? `<div class="composicao-tags">${kitComposicaoTemp.map(c => `<span class="composicao-tag">${c.variacao} (${c.quantidade})</span>`).join('')}<button class="composicao-tag composicao-edit-btn" onclick="abrirConfigurarVariacao('${currentKitVariationIndex}')">Editar</button></div>`
-            : `<div class="composicao-tags"><button class="composicao-tag composicao-edit-btn" onclick="abrirConfigurarVariacao('${currentKitVariationIndex}')">Editar</button></div>`;
-        tr.cells[1].innerHTML = composicaoHtml;
-    }
+    gradeAlteradas = true;
 };
 
-window.salvarComposicaoKit = function() {
+window.salvarComposicaoKit = async function() {
+    console.log('[salvarComposicaoKit] Iniciando salvamento. currentKitVariationIndex:', currentKitVariationIndex, 'kitComposicaoTemp:', kitComposicaoTemp);
+    if (!currentKitVariationIndex && currentKitVariationIndex !== 0) {
+        alert('Nenhuma variação de kit selecionada para configuração!');
+        return;
+    }
+
+    if (!editingProduct || !editingProduct.grade || !Array.isArray(editingProduct.grade)) {
+        alert('Erro: Produto ou grade não estão corretamente inicializados.');
+        return;
+    }
+
+    if (currentKitVariationIndex < 0 || currentKitVariationIndex >= editingProduct.grade.length) {
+        alert('Índice de variação inválido!');
+        return;
+    }
+
     if (kitComposicaoTemp.length === 0) {
         alert('Adicione pelo menos uma variação ao kit!');
         return;
     }
-    const grade = editingProduct.grade || [];
-    grade[currentKitVariationIndex].composicao = deepClone(kitComposicaoTemp);
-    gradeAlteradas = true; // Marcar que a grade foi alterada
 
-    const tr = elements.gradeBody.querySelector(`tr[data-index="${currentKitVariationIndex}"]`);
-    if (tr) {
-        const isKit = editingProduct.tipos && editingProduct.tipos.includes('kits');
-        const composicaoHtml = isKit && kitComposicaoTemp.length > 0 && kitComposicaoTemp[0].variacao !== '-'
-            ? `<div class="composicao-tags">${kitComposicaoTemp.map(c => `<span class="composicao-tag">${c.variacao} (${c.quantidade})</span>`).join('')}<button class="composicao-tag composicao-edit-btn" onclick="abrirConfigurarVariacao('${currentKitVariationIndex}')">Editar</button></div>`
-            : `<div class="composicao-tags"><button class="composicao-tag composicao-edit-btn" onclick="abrirConfigurarVariacao('${currentKitVariationIndex}')">Editar</button></div>`;
-        tr.cells[1].innerHTML = composicaoHtml;
+    console.log('[salvarComposicaoKit] Salvando composição para índice:', currentKitVariationIndex, 'Composição:', kitComposicaoTemp);
+    editingProduct.grade[currentKitVariationIndex].composicao = deepClone(kitComposicaoTemp);
+    gradeTemp = deepClone(editingProduct.grade);
+    gradeAlteradas = false; // Resetar após salvar
+
+    try {
+        const savedProduct = await salvarProdutoNoBackend();
+        console.log('[salvarComposicaoKit] Composição do kit salva no backend com sucesso:', savedProduct.grade[currentKitVariationIndex]);
+        alert('Composição do kit salva com sucesso!');
+        kitComposicaoTemp = deepClone(savedProduct.grade[currentKitVariationIndex].composicao || []); // Atualizar kitComposicaoTemp
+
+        // Recarregar a grade após o salvamento
+        loadGrade(savedProduct); // Usar o produto salvo para garantir consistência
+        window.location.hash = '#editando'; // Fechar o popup
+    } catch (error) {
+        console.error('[salvarComposicaoKit] Erro ao salvar no backend:', error.message, error.stack);
+        alert('Erro ao salvar a composição do kit: ' + error.message);
     }
-
-    window.location.hash = '#editando';
 };
 
 elements.productForm.addEventListener('submit', async e => {
@@ -1278,7 +1369,7 @@ elements.productForm.addEventListener('submit', async e => {
         return;
     }
 
-    await atualizarProdutoNoStorage();
+    await salvarProdutoNoBackend();
     alert('Produto atualizado com sucesso!');
     window.location.hash = '';
 });
@@ -1294,7 +1385,7 @@ document.querySelectorAll('.cp-type-btn').forEach(btn => {
 });
 
 // Exportar funções globais
-window.atualizarProdutoNoStorage = atualizarProdutoNoStorage;
+window.salvarProdutoNoBackend = salvarProdutoNoBackend;
 window.editProduct = editProduct;
 window.switchTab = switchTab;
 window.toggleTabs = toggleTabs;

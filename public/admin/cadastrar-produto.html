@@ -5,16 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cadastrar Produto</title>
     <link rel="stylesheet" href="/css/cadastrar-produto.css">
-    <link rel="stylesheet" href="/css/global-style.css">
     <link rel="stylesheet" href="/css/menu-lateral.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <style>
-        /* Ocultar o conteúdo até a autenticação */
-        html[hidden] body {
-            display: none;
-        }
-    </style>
-
 </head>
 <body>
     <div class="hamburger-menu">
@@ -24,8 +16,9 @@
     <div id="mensagemPermissao" class="alert alert-error" style="display: none;"></div>
     <div class="container-produto">
         <section class="lista-produtos" id="productListView" aria-label="Lista de produtos">
+            <div class="card-header-filter">
             <div class="cabecalho-lista-produto">
-                <h1>Produtos</h1>
+                <h2>Produtos Cadastrados</h2>
                 <input type="text" id="searchProduct" class="busca-produto" placeholder="Buscar por nome..." aria-label="Buscar produtos">
             </div>
             <div class="filtro-tipo-produto" id="typeFilter" role="tablist">
@@ -33,6 +26,7 @@
                 <button class="cp-type-btn" data-type="simples" role="tab" aria-selected="false">Simples</button>
                 <button class="cp-type-btn" data-type="variacoes" role="tab" aria-selected="false">Variações</button>
                 <button class="cp-type-btn" data-type="kits" role="tab" aria-selected="false">Kits</button>
+            </div>
             </div>
             <table class="tabela-lista-produtos" aria-label="Tabela de produtos">
                 <thead>
@@ -226,7 +220,7 @@
                         <div id="composicaoKitContainer" class="composicao-kit"></div>
                     </div>
                     <div class="botoes-popup-produto">
-                        <button class="botao-confirmar-produto" onclick="salvarComposicaoKit()" aria-label="Configurar kit">Configurar</button>
+                        <button id="saveKitConfigBtn" class="botao-confirmar-produto" aria-label="Configurar kit">Configurar</button>
                         <button class="botao-cancelar-produto" onclick="window.location.hash = '#editando'" aria-label="Cancelar">Cancelar</button>
                     </div>
                 </div>

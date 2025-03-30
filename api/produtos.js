@@ -1,10 +1,13 @@
 import pkg from 'pg';
 const { Pool } = pkg;
+import jwt from 'jsonwebtoken';
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false }
 });
+
+const SECRET_KEY = process.env.JWT_SECRET;
 
 export default async function handler(req, res) {
     const { method } = req;
@@ -18,8 +21,8 @@ export default async function handler(req, res) {
         } else if (method === 'POST') {
             const produto = req.body;
             const query = `
-                INSERT INTO produtos (nome, sku, gtin, unidade, estoque, imagem, tipos, variacoes, estrutura, etapas, grade, is_kit)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                INSERT INTO produtos (nome, sku, gtin, unidade, estoque, imagem, tipos, variacoes, estrutura, etapas, grade, is_kit, pontos, pontos_expiracao, pontos_criacao)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
                 ON CONFLICT (nome)
                 DO UPDATE SET
                     sku = EXCLUDED.sku,
@@ -32,7 +35,10 @@ export default async function handler(req, res) {
                     estrutura = EXCLUDED.estrutura,
                     etapas = EXCLUDED.etapas,
                     grade = EXCLUDED.grade,
-                    is_kit = EXCLUDED.is_kit
+                    is_kit = EXCLUDED.is_kit,
+                    pontos = EXCLUDED.pontos,
+                    pontos_expiracao = EXCLUDED.pontos_expiracao,
+                    pontos_criacao = EXCLUDED.pontos_criacao
                 RETURNING *;
             `;
             const values = [
@@ -47,7 +53,10 @@ export default async function handler(req, res) {
                 JSON.stringify(produto.estrutura || []),
                 JSON.stringify(produto.etapas || []),
                 JSON.stringify(produto.grade || []),
-                produto.isKit || false
+                produto.isKit || false,
+                JSON.stringify(produto.pontos || []),
+                produto.pontos_expiracao || null,
+                produto.pontos_criacao || new Date().toISOString() // Data de criação padrão como agora
             ];
             console.log('Salvando produto:', produto);
             const result = await pool.query(query, values);
