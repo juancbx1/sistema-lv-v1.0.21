@@ -1366,24 +1366,32 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (finalizarOP) {
     finalizarOP.addEventListener('click', async () => {
-      const editId = window.location.hash.split('/')[1];
-      const ordensDeProducao = await obterOrdensDeProducao();
-      const op = ordensDeProducao.find(o => o.edit_id === editId);
-      if (op && !finalizarOP.disabled) {
-        op.status = 'finalizado';
-        op.data_final = new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }).replace(/(\d+)\/(\d+)\/(\d+), (\d+):(\d+):(\d+) (AM|PM)/, (match, month, day, year, hour, minute, second, period) => {
-          let h = parseInt(hour);
-          if (period === 'PM' && h !== 12) h += 12;
-          if (period === 'AM' && h === 12) h = 0;
-          return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')} ${h.toString().padStart(2, '0')}:${minute}:${second}`;
-        });
-        await saveOPChanges(op);
-        mostrarPopupMensagem(`Ordem de Produção #${op.numero} finalizada com sucesso!`, 'sucesso');
-        window.location.hash = '';
-        await toggleView();
-      }
+        const editId = window.location.hash.split('/')[1];
+        const ordensDeProducao = await obterOrdensDeProducao();
+        const op = ordensDeProducao.find(o => o.edit_id === editId);
+
+        if (op && !finalizarOP.disabled) {
+            op.status = 'finalizado';
+
+            // Obtém a data atual em UTC
+            const agora = new Date();
+            
+            // Ajusta para o fuso horário de São Paulo (-3 horas)
+            agora.setHours(agora.getHours() - 3);
+
+            // Formata a data no formato desejado: YYYY-MM-DD HH:MM:SS
+            const dataFinalFormatada = agora.toISOString().replace('T', ' ').substring(0, 19);
+
+            op.data_final = dataFinalFormatada;
+
+            await saveOPChanges(op);
+            mostrarPopupMensagem(`Ordem de Produção #${op.numero} finalizada com sucesso!`, 'sucesso');
+            window.location.hash = '';
+            await toggleView();
+        }
     });
-  }
+}
+
 
   if (cancelarOP) {
     cancelarOP.addEventListener('click', async () => {
