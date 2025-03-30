@@ -4,7 +4,7 @@ const { Pool } = pkg;
 import jwt from 'jsonwebtoken';
 
 console.log('[api/producoes] Iniciando carregamento do módulo...'); // Log inicial
-
+console.log('[api/producoes] Fuso horário do servidor:', new Date().toString());
 const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
 });

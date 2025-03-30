@@ -254,13 +254,7 @@ function setCurrentDate() {
   const dataEntrega = document.getElementById('dataEntregaOP');
   if (dataEntrega) {
     const agora = new Date();
-    
-    // Ajusta para o fuso de São Paulo (-3 horas)
-    agora.setHours(agora.getHours() - 3);
-    
-    // Converte para o formato YYYY-MM-DD (padrão para inputs de data)
     const hoje = agora.toISOString().split('T')[0];
-
     dataEntrega.value = hoje;
   }
 }
@@ -610,10 +604,7 @@ async function salvarProducao(op, etapa, etapaIndex, produtos) {
     maquina: maquina,
     quantidade: parseInt(etapa.quantidade),
     funcionario: etapa.usuario,
-    data: new Date(new Date().getTime() - 3 * 60 * 60 * 1000)
-  .toISOString()
-  .replace('T', ' ')
-  .substring(0, 19),
+    data: new Date().toISOString().replace('T', ' ').substring(0, 19),
 
     lancadoPor: usuarioLogado?.nome || 'Sistema',
   };
