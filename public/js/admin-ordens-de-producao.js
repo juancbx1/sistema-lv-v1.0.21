@@ -250,14 +250,21 @@ async function getNextOPNumber() {
   }
 }
 
-// Define a data atual ajustada ao horário local
 function setCurrentDate() {
   const dataEntrega = document.getElementById('dataEntregaOP');
   if (dataEntrega) {
-    const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }).split('/').reverse().join('-');
+    const agora = new Date();
+    
+    // Ajusta para o fuso de São Paulo (-3 horas)
+    agora.setHours(agora.getHours() - 3);
+    
+    // Converte para o formato YYYY-MM-DD (padrão para inputs de data)
+    const hoje = agora.toISOString().split('T')[0];
+
     dataEntrega.value = hoje;
   }
 }
+
 
 // Carrega a tabela de ordens de produção
 async function loadOPTable(filterStatus = 'todas', search = '') {
