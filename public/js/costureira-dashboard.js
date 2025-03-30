@@ -9,7 +9,7 @@ console.log('Script costureira-dashboard.js carregado');
 // Variáveis globais
 let usuarioLogado = null;
 let processosExibidos = 0;
-let filtroAtivo = 'semana';
+let filtroAtivo = 'dia'; // Alterado para 'dia' como padrão
 let dataSelecionadaDia = new Date();
 let dataSelecionadaSemana = new Date();
 
@@ -532,9 +532,10 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
     fimSemanaAtual.setDate(inicioSemanaAtual.getDate() + 6);
     $("#datepickerSemana").val(`${inicioSemanaAtual.toLocaleDateString('pt-BR')} - ${fimSemanaAtual.toLocaleDateString('pt-BR')}`);
 
-    filtroAtivo = 'semana';
-    filtroSemanaTexto.classList.add('active');
-    filtroDiaTexto.classList.remove('active');
+    // Definir "Dia" como padrão na inicialização
+    filtroAtivo = 'dia';
+    filtroDiaTexto.classList.add('active');
+    filtroSemanaTexto.classList.remove('active');
     renderizarProcessos();
 }
 
