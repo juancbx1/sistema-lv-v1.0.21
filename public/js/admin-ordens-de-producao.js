@@ -3,25 +3,6 @@ import { PRODUTOS, PRODUTOSKITS } from '/js/utils/prod-proc-maq.js';
 
 let filteredOPsGlobal = [];
 
-function getCurrentDateTimeInSaoPaulo() {
-  const options = {
-    timeZone: 'America/Sao_Paulo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  };
-
-  const date = getCurrentDateTimeInSaoPaulo();
-  const [datePart, timePart] = date.split(', ');
-  const [month, day, year] = datePart.split('/');
-  const [hour, minute, second] = timePart.split(':');
-
-  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
-}
-
 function mostrarPopupMensagem(mensagem, tipo = 'erro') {
   const popup = document.createElement('div');
   popup.className = `popup-mensagem popup-${tipo}`;
@@ -69,7 +50,6 @@ function mostrarPopupMensagem(mensagem, tipo = 'erro') {
 // Cache para produtos
 let produtosCache = null;
 let produtosPromise = null; // Armazena a promessa em andamento
-
 
 
 // Conjunto para rastrear IDs únicos
@@ -274,7 +254,7 @@ async function getNextOPNumber() {
 function setCurrentDate() {
   const dataEntrega = document.getElementById('dataEntregaOP');
   if (dataEntrega) {
-    const hoje = getCurrentDateTimeInSaoPaulo();
+    const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }).split('/').reverse().join('-');
     dataEntrega.value = hoje;
   }
 }
@@ -623,7 +603,12 @@ async function salvarProducao(op, etapa, etapaIndex, produtos) {
     maquina: maquina,
     quantidade: parseInt(etapa.quantidade),
     funcionario: etapa.usuario,
-    data: getCurrentDateTimeInSaoPaulo(),
+    data: new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }).replace(/(\d+)\/(\d+)\/(\d+), (\d+):(\d+):(\d+) (AM|PM)/, (match, month, day, year, hour, minute, second, period) => {
+      let h = parseInt(hour);
+      if (period === 'PM' && h !== 12) h += 12;
+      if (period === 'AM' && h === 12) h = 0;
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')} ${h.toString().padStart(2, '0')}:${minute}:${second}`;
+    }),
     lancadoPor: usuarioLogado?.nome || 'Sistema',
   };
 
@@ -1386,7 +1371,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       const op = ordensDeProducao.find(o => o.edit_id === editId);
       if (op && !finalizarOP.disabled) {
         op.status = 'finalizado';
-        op.data_final = getCurrentDateTimeInSaoPaulo();
+        op.data_final = new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }).replace(/(\d+)\/(\d+)\/(\d+), (\d+):(\d+):(\d+) (AM|PM)/, (match, month, day, year, hour, minute, second, period) => {
+          let h = parseInt(hour);
+          if (period === 'PM' && h !== 12) h += 12;
+          if (period === 'AM' && h === 12) h = 0;
+          return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')} ${h.toString().padStart(2, '0')}:${minute}:${second}`;
+        });
         await saveOPChanges(op);
         mostrarPopupMensagem(`Ordem de Produção #${op.numero} finalizada com sucesso!`, 'sucesso');
         window.location.hash = '';
