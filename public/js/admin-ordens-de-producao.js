@@ -596,6 +596,7 @@ async function salvarProducao(op, etapa, etapaIndex, produtos) {
   const variacao = op.variante || null;
 
   const dados = {
+    id: Date.now().toString(),
     opNumero: op.numero,
     etapaIndex: etapaIndex,
     processo: etapa.processo,
@@ -604,10 +605,11 @@ async function salvarProducao(op, etapa, etapaIndex, produtos) {
     maquina: maquina,
     quantidade: parseInt(etapa.quantidade),
     funcionario: etapa.usuario,
-    data: new Date().toISOString().replace('T', ' ').substring(0, 19),
-
+    data: new Date().toLocaleString('sv', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T'), // Ex.: "2025-03-30T10:36:06"
     lancadoPor: usuarioLogado?.nome || 'Sistema',
   };
+  console.log('[salvarProducao] ID gerado:', dados.id);
+  console.log('[salvarProducao] Dados enviados para o servidor:', dados);
 
   if (!dados.opNumero) throw new Error('Número da OP não informado.');
   if (dados.etapaIndex === undefined || dados.etapaIndex === null) throw new Error('Índice da etapa não informado.');
@@ -618,8 +620,6 @@ async function salvarProducao(op, etapa, etapaIndex, produtos) {
   if (!dados.funcionario) throw new Error('Funcionário não informado.');
   if (!dados.data) throw new Error('Data não informada.');
   if (!dados.lancadoPor) throw new Error('Usuário lançador não identificado.');
-
-  console.log('[salvarProducao] Enviando dados para /api/producoes:', dados);
 
   try {
     const responseProducoes = await fetch('/api/producoes', {
