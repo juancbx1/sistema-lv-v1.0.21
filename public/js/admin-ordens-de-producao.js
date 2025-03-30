@@ -610,12 +610,11 @@ async function salvarProducao(op, etapa, etapaIndex, produtos) {
     maquina: maquina,
     quantidade: parseInt(etapa.quantidade),
     funcionario: etapa.usuario,
-    data: new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }).replace(/(\d+)\/(\d+)\/(\d+), (\d+):(\d+):(\d+) (AM|PM)/, (match, month, day, year, hour, minute, second, period) => {
-      let h = parseInt(hour);
-      if (period === 'PM' && h !== 12) h += 12;
-      if (period === 'AM' && h === 12) h = 0;
-      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')} ${h.toString().padStart(2, '0')}:${minute}:${second}`;
-    }),
+    data: new Date(new Date().getTime() - 3 * 60 * 60 * 1000)
+  .toISOString()
+  .replace('T', ' ')
+  .substring(0, 19),
+
     lancadoPor: usuarioLogado?.nome || 'Sistema',
   };
 
