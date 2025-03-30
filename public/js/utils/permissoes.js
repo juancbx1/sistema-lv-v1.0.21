@@ -1,4 +1,3 @@
-// /js/utils/permissoes.js
 export const permissoesDisponiveis = [
     { id: 'acesso-home', label: 'Acesso à Home' }, // Para home.html
     { id: 'acesso-costureira-dashboard', label: 'Acesso à Dashboard Costureira' }, // Acesso a dashboards de costureira

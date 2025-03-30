@@ -62,39 +62,68 @@ export default async function handler(req, res) {
       
     } else if (method === 'GET') {
       console.log('[api/producoes] Processando GET...');
-      if (!usuarioLogado.permissoes.includes('acesso-gerenciar-producao')) {
-        return res.status(403).json({ error: 'Permissão negada' });
+      if (!usuarioLogado.permissoes.includes('acesso-gerenciar-producao') && !usuarioLogado.tipos.includes('costureira')) {
+          return res.status(403).json({ error: 'Permissão negada' });
       }
-
-      const result = await pool.query('SELECT * FROM producoes ORDER BY data DESC');
+      const query = usuarioLogado.tipos.includes('costureira') && !usuarioLogado.permissoes.includes('acesso-gerenciar-producao')
+          ? 'SELECT * FROM producoes WHERE funcionario = $1 ORDER BY data DESC'
+          : 'SELECT * FROM producoes ORDER BY data DESC';
+      const result = await pool.query(query, usuarioLogado.tipos.includes('costureira') && !usuarioLogado.permissoes.includes('acesso-gerenciar-producao') ? [usuarioLogado.nome] : []);
+      console.log('[api/producoes] Resultado da query:', result.rows);
       res.status(200).json(result.rows);
+
     } else if (method === 'PUT') {
-      console.log('[api/produces] Processando PUT...');
-      if (!usuarioLogado.permissoes.includes('editar-registro-producao')) {
-        return res.status(403).json({ error: 'Permissão negada' });
+      console.log('[api/producoes] Processando PUT...');
+      console.log('[api/producoes] Dados recebidos:', req.body);
+      console.log('[api/producoes] Usuário logado:', usuarioLogado);
+  
+      const { id, quantidade, edicoes, editadoPorAdmin, assinada } = req.body;
+  
+      if (!id || (quantidade === undefined && assinada === undefined) || edicoes === undefined) {
+          console.log('[api/producoes] Erro: Dados incompletos');
+          return res.status(400).json({ error: 'Dados incompletos' });
       }
-
-      const { id, quantidade, edicoes, editadoPorAdmin } = req.body;
-
-      if (!id || !quantidade || edicoes === undefined) {
-        return res.status(400).json({ error: 'Dados incompletos' });
-      }
-
+  
       const checkResult = await pool.query('SELECT * FROM producoes WHERE id = $1', [id]);
       if (checkResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Produção não encontrada' });
+          console.log('[api/producoes] Erro: Produção não encontrada para ID:', id);
+          return res.status(404).json({ error: 'Produção não encontrada' });
       }
-
+  
+      const producao = checkResult.rows[0];
+      console.log('[api/producoes] Produção encontrada:', producao);
+  
+      // Verificar permissões
+      const isCostureira = usuarioLogado.tipos.includes('costureira');
+      const isOwner = producao.funcionario === usuarioLogado.nome;
+      const onlySigning = quantidade === undefined && assinada !== undefined && edicoes === producao.edicoes && editadoPorAdmin === undefined;
+  
+      console.log('[api/producoes] Verificando permissões:');
+      console.log('[api/producoes] - É costureira:', isCostureira);
+      console.log('[api/producoes] - É dono da produção:', isOwner);
+      console.log('[api/producoes] - Apenas assinando:', onlySigning);
+      console.log('[api/producoes] - Tem editar-registro-producao:', usuarioLogado.permissoes.includes('editar-registro-producao'));
+  
+      if (!usuarioLogado.permissoes.includes('editar-registro-producao') && !(isCostureira && isOwner && onlySigning)) {
+          console.log('[api/producoes] Permissão negada para usuário:', usuarioLogado.nome);
+          return res.status(403).json({ error: 'Permissão negada' });
+      }
+  
       const result = await pool.query(
-        `UPDATE producoes 
-         SET quantidade = $1, edicoes = $2, editado_por_admin = $3
-         WHERE id = $4 RETURNING *`,
-        [quantidade, edicoes, editadoPorAdmin || null, id]
+          `UPDATE producoes 
+           SET quantidade = COALESCE($1, quantidade), 
+               edicoes = $2, 
+               editado_por_admin = COALESCE($3, editado_por_admin),
+               assinada = COALESCE($4, assinada)
+           WHERE id = $5 RETURNING *`,
+          [quantidade, edicoes, editadoPorAdmin || null, assinada, id]
       );
-
+  
+      console.log('[api/producoes] Produção atualizada:', result.rows[0]);
       res.status(200).json(result.rows[0]);
+
     } else if (method === 'DELETE') {
-      console.log('[api/produces] Processando DELETE...');
+      console.log('[api/producoes] Processando DELETE...');
       if (!usuarioLogado.permissoes.includes('excluir-registro-producao')) {
         return res.status(403).json({ error: 'Permissão negada' });
       }

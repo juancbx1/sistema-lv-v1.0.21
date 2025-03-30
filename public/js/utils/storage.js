@@ -1,9 +1,13 @@
 import { PRODUTOS, PRODUTOSKITS } from './prod-proc-maq.js';
 
 export async function obterProdutos() {
+    const token = localStorage.getItem('token');
     const response = await fetch('/api/produtos', {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+        },
     });
     if (!response.ok) throw new Error('Erro ao buscar produtos');
     return await response.json();

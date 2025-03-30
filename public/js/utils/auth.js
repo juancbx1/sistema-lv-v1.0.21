@@ -1,4 +1,3 @@
-// /js/utils/auth.js
 import { permissoesDisponiveis, permissoesPorTipo } from '/js/utils/permissoes.js';
 
 export const permissoesValidas = new Set(permissoesDisponiveis.map(p => p.id));

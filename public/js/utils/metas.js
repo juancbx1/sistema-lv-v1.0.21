@@ -1,5 +1,5 @@
 // js/utils/metas.js
-import { obterProdutos } from '../utils/storage';
+import { obterProdutos } from '/js/utils/storage.js';
 
 // Definição das metas por nível
 const metasPorNivel = {
@@ -56,6 +56,7 @@ export function obterMetasPorNivelEmPontos(nivel) {
         processos: meta.processos // Mantém processos originais para referência
     }));
 }
+
 
 // Função para calcular a comissão semanal (mantida em processos para relatórios)
 export function calcularComissaoSemanal(totalProcessos, nivel, producoes = []) {

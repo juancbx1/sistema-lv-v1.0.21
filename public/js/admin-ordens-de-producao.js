@@ -3,6 +3,25 @@ import { PRODUTOS, PRODUTOSKITS } from '/js/utils/prod-proc-maq.js';
 
 let filteredOPsGlobal = [];
 
+function getCurrentDateTimeInSaoPaulo() {
+  const options = {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  };
+
+  const date = getCurrentDateTimeInSaoPaulo();
+  const [datePart, timePart] = date.split(', ');
+  const [month, day, year] = datePart.split('/');
+  const [hour, minute, second] = timePart.split(':');
+
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+}
+
 function mostrarPopupMensagem(mensagem, tipo = 'erro') {
   const popup = document.createElement('div');
   popup.className = `popup-mensagem popup-${tipo}`;
@@ -52,10 +71,10 @@ let produtosCache = null;
 let produtosPromise = null; // Armazena a promessa em andamento
 
 
+
 // Conjunto para rastrear IDs únicos
 const usedIds = new Set();
 
-// Função para buscar produtos da API com cache no localStorage
 // Função para buscar produtos da API com cache no localStorage
 async function obterProdutos() {
   const cachedData = localStorage.getItem('produtosCacheData');
@@ -255,7 +274,7 @@ async function getNextOPNumber() {
 function setCurrentDate() {
   const dataEntrega = document.getElementById('dataEntregaOP');
   if (dataEntrega) {
-    const hoje = new Date().toISOString().split('T')[0];
+    const hoje = getCurrentDateTimeInSaoPaulo();
     dataEntrega.value = hoje;
   }
 }
@@ -604,7 +623,7 @@ async function salvarProducao(op, etapa, etapaIndex, produtos) {
     maquina: maquina,
     quantidade: parseInt(etapa.quantidade),
     funcionario: etapa.usuario,
-    data: new Date().toISOString(),
+    data: getCurrentDateTimeInSaoPaulo(),
     lancadoPor: usuarioLogado?.nome || 'Sistema',
   };
 
@@ -1367,7 +1386,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const op = ordensDeProducao.find(o => o.edit_id === editId);
       if (op && !finalizarOP.disabled) {
         op.status = 'finalizado';
-        op.data_final = new Date().toISOString();
+        op.data_final = getCurrentDateTimeInSaoPaulo();
         await saveOPChanges(op);
         mostrarPopupMensagem(`Ordem de Produção #${op.numero} finalizada com sucesso!`, 'sucesso');
         window.location.hash = '';

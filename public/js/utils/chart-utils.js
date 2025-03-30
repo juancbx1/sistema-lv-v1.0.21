@@ -1,4 +1,3 @@
-// utils/chart-utils.js
 export function criarGrafico(ctx, tipo, labels, datasetLabel, data, backgroundColor, borderColor) {
     return new Chart(ctx, {
         type: tipo,
@@ -9,26 +8,60 @@ export function criarGrafico(ctx, tipo, labels, datasetLabel, data, backgroundCo
                 data,
                 backgroundColor,
                 borderColor,
-                borderWidth: 1
+                borderWidth: 2,
+                borderRadius: 8, // Bordas arredondadas
+                barThickness: 25, // Largura fixa das barras
             }]
         },
         options: {
-            responsive: true, // Torna o gráfico responsivo
-            maintainAspectRatio: true, // Mantém a proporção do gráfico
-            aspectRatio: 2, // Proporção largura/altura (ajustável conforme necessário)
+            responsive: true,
+            maintainAspectRatio: true,
+            aspectRatio: 2,
             scales: {
-                y: { 
-                    beginAtZero: true, 
-                    title: { display: true, text: 'Processos' }
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Quantidade Produzida',
+                        font: { size: 14, weight: 'bold' }
+                    },
+                    grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                    ticks: { font: { size: 12 }, stepSize: 10 }
                 },
                 x: {
-                    title: { display: true, text: 'Horas' }
+                    title: {
+                        display: true,
+                        text: 'Costureiras',
+                        font: { size: 14, weight: 'bold' }
+                    },
+                    grid: { display: false },
+                    ticks: {
+                        font: { size: 12 },
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
                 }
             },
             plugins: {
                 legend: {
-                    display: false // Opcional: remove a legenda se não for necessária
+                    display: true,
+                    position: 'top',
+                    labels: { font: { size: 14, weight: 'bold' } }
+                },
+                tooltip: {
+                    enabled: true,
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    titleFont: { size: 14 },
+                    bodyFont: { size: 12 },
+                    padding: 10,
+                    callbacks: {
+                        label: (context) => `${context.raw} processos`
+                    }
                 }
+            },
+            animation: {
+                duration: 1200,
+                easing: 'easeOutCubic'
             }
         }
     });

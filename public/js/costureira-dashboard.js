@@ -1,73 +1,80 @@
-// js/pages/costureira-dashboard.js
-import { verificarAutenticacaoSincrona, logout } from './utils/auth.js';
-import { criarGrafico } from './utils/chart-utils.js';
-import { calcularComissaoSemanal, obterMetasPorNivel } from './utils/metas.js';
-import { getCicloAtual } from './utils/ciclos.js';
-import { obterProdutos } from './utils/storage.js';
+import { verificarAutenticacao, logout } from '/js/utils/auth.js';
+import { criarGrafico } from '/js/utils/chart-utils.js';
+import { calcularComissaoSemanal, obterMetasPorNivel } from '/js/utils/metas.js';
+import { getCicloAtual } from '/js/utils/ciclos.js';
+import { obterProdutos } from '/js/utils/storage.js';
 
 console.log('Script costureira-dashboard.js carregado');
 
+// Variáveis globais
+let usuarioLogado = null;
+let processosExibidos = 0;
+let filtroAtivo = 'semana';
+let dataSelecionadaDia = new Date();
+let dataSelecionadaSemana = new Date();
+
+// Função para buscar produções do servidor
+async function obterProducoes() {
+    const token = localStorage.getItem('token');
+    if (!token) throw new Error('Token não encontrado');
+    console.log('[obterProducoes] Fazendo requisição para /api/producoes com token:', token.slice(0, 10) + '...');
+    const response = await fetch('/api/producoes', {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    });
+    const responseText = await response.text();
+    console.log('[obterProducoes] Resposta bruta do servidor:', responseText);
+    if (!response.ok) throw new Error(`Erro ao carregar produções: ${responseText}`);
+    const producoes = JSON.parse(responseText);
+    console.log('[obterProducoes] Produções carregadas:', producoes);
+    return producoes;
+}
+
 function normalizarTexto(texto) {
     return texto
-        .replace(/[\u200B-\u200D\uFEFF]/g, '') // Remove caracteres invisíveis
-        .normalize('NFD') // Decompõe caracteres acentuados
-        .replace(/[\u0300-\u036f]/g, '') // Remove diacríticos (acentos)
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
         .trim()
         .toLowerCase();
 }
 
-function verificarAutenticacaoCostureira() {
-    const usuarioLogado = JSON.parse(localStorage.getItem('usuarioLogado'));
-    console.log('[verificarAutenticacaoCostureira] Usuário logado:', usuarioLogado);
-    console.log('[verificarAutenticacaoCostureira] Permissões do usuário:', usuarioLogado?.permissoes);
-    console.log('[verificarAutenticacaoCostureira] Tipos do usuário:', usuarioLogado?.tipos);
-
-    const tipos = usuarioLogado?.tipos || [];
-    const isCostureira = tipos.includes('costureira');
-    if (!isCostureira) {
-        console.warn('[verificarAutenticacaoCostureira] Usuário não é do tipo costureira. Redirecionando para login...');
+async function verificarAutenticacaoCostureira() {
+    console.log('[verificarAutenticacaoCostureira] Iniciando verificação de autenticação...');
+    const auth = await verificarAutenticacao('costureira-dashboard', ['acesso-costureira-dashboard']);
+    if (!auth) {
+        console.warn('[verificarAutenticacaoCostureira] Autenticação falhou, redirecionando para login...');
         window.location.href = '/index.html';
         return null;
     }
-
-    const auth = verificarAutenticacaoSincrona('dashboard', ['acesso-costureira-dashboard'], () => true);
-    if (!auth) {
-        console.warn('[verificarAutenticacaoCostureira] Usuário não tem permissão para acessar a dashboard. Redirecionando para acesso restrito...');
-        window.location.href = '/costureira/acesso-restrito-costureira.html';
-        return null;
-    }
-
-    console.log('Usuário logado:', auth.usuario);
+    console.log('[verificarAutenticacaoCostureira] Autenticação bem-sucedida, usuário:', auth.usuario);
     return auth.usuario;
 }
 
-const usuarioLogado = verificarAutenticacaoCostureira();
-if (!usuarioLogado) {
-    throw new Error('Autenticação falhou, redirecionando...');
-}
-
-function verificarDadosLocalStorage() {
-    const producoes = JSON.parse(localStorage.getItem('producoes')) || [];
-    const produtos = JSON.parse(localStorage.getItem('produtos')) || [];
-    console.log('Verificação de dados no localStorage:');
+function verificarDadosServidor(producoes, produtos) {
+    console.log('Verificação de dados do servidor:');
     console.log('Produções:', producoes);
     console.log('Produtos:', produtos);
 
     const produtosNaoEncontrados = new Set();
     producoes.forEach(p => {
         const produtoNomeNormalizado = normalizarTexto(p.produto);
-        const produto = produtos.find(prod => {
-            const nomeProdNormalizado = normalizarTexto(prod.nome);
-            return nomeProdNormalizado === produtoNomeNormalizado;
-        });
-        if (!produto) {
-            produtosNaoEncontrados.add(p.produto);
-        }
+        const produto = produtos.find(prod => normalizarTexto(prod.nome) === produtoNomeNormalizado);
+        if (!produto) produtosNaoEncontrados.add(p.produto);
     });
 
     if (produtosNaoEncontrados.size > 0) {
         console.warn('Produtos em produções não encontrados na lista de produtos:', Array.from(produtosNaoEncontrados));
     }
+}
+
+function atualizarSaudacao() {
+    const hora = new Date().getHours();
+    let saudacao;
+    if (hora >= 5 && hora < 12) saudacao = 'Bom dia';
+    else if (hora >= 12 && hora < 18) saudacao = 'Boa tarde';
+    else saudacao = 'Boa noite';
+    document.getElementById('saudacaoCostureira').textContent = `${saudacao}, ${usuarioLogado.nome}!`;
 }
 
 function getMetaSelecionada() {
@@ -97,32 +104,25 @@ function carregarMetas(metaAtual) {
     console.log('Metas em processos carregadas (exibidas como pontos):', metas);
 }
 
-function atualizarSaudacao() {
-    const hora = new Date().getHours();
-    let saudacao;
-    if (hora >= 5 && hora < 12) saudacao = 'Bom dia';
-    else if (hora >= 12 && hora < 18) saudacao = 'Boa tarde';
-    else saudacao = 'Boa noite';
-    document.getElementById('saudacaoCostureira').textContent = `${saudacao}, ${usuarioLogado.nome}!`;
+async function atualizarDashboard() {
+    try {
+        const producoes = await obterProducoes();
+        const produtos = await obterProdutos();
+        console.log('Produções carregadas do servidor:', producoes);
+        verificarDadosServidor(producoes, produtos);
+        atualizarSaudacao();
+        document.getElementById('nivelValor').innerHTML = `<i class="fas fa-trophy"></i> ${usuarioLogado.nivel || 1}`;
+        atualizarCardMeta(producoes, produtos);
+        atualizarGraficoProducao(producoes);
+        verificarAssinaturaProducao(producoes);
+        atualizarDetalhamentoProcessos(producoes, produtos);
+    } catch (error) {
+        console.error('[atualizarDashboard] Erro ao carregar dados:', error.message);
+        alert('Erro ao carregar dashboard. Tente novamente.');
+    }
 }
 
-function gerarIdUnico() {
-    return 'assinatura_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-}
-
-function atualizarDashboard() {
-    const producoes = JSON.parse(localStorage.getItem('producoes')) || [];
-    console.log('Produções carregadas:', producoes);
-    verificarDadosLocalStorage();
-    atualizarSaudacao();
-    document.getElementById('nivelValor').innerHTML = `<i class="fas fa-trophy"></i> ${usuarioLogado.nivel || 1}`;
-    atualizarCardMeta(producoes);
-    atualizarGraficoProducao(producoes);
-    verificarAssinaturaProducao(producoes);
-    atualizarDetalhamentoProcessos(producoes);
-}
-
-function atualizarCardMeta(producoes) {
+function atualizarCardMeta(producoes, produtos) {
     const metaSelect = document.getElementById('metaSelect');
     let metaSelecionada = getMetaSelecionada();
 
@@ -148,27 +148,17 @@ function atualizarCardMeta(producoes) {
     });
     console.log('Produções da semana:', producoesSemana);
 
-    const produtos = obterProdutos();
-    console.log('Produtos carregados:', produtos);
     let totalPontosPonderados = 0;
     producoesSemana.forEach(p => {
         const produtoNomeNormalizado = normalizarTexto(p.produto);
-        const produto = produtos.find(prod => {
-            const nomeProdNormalizado = normalizarTexto(prod.nome);
-            return nomeProdNormalizado === produtoNomeNormalizado;
-        });
-        if (produto && Array.isArray(produto.processos)) {
-            const processoIndex = produto.processos.indexOf(p.processo);
-            const pontosPorProcesso = processoIndex !== -1 && Array.isArray(produto.pontos) ? (produto.pontos[processoIndex] || 1) : 1;
+        const produto = produtos.find(prod => normalizarTexto(prod.nome) === produtoNomeNormalizado);
+        if (produto && Array.isArray(produto.etapas)) {
+            const etapa = produto.etapas.find(e => e.processo === p.processo);
+            const pontosPorProcesso = etapa && etapa.pontos ? etapa.pontos : 1;
             totalPontosPonderados += p.quantidade * pontosPorProcesso;
         } else {
-            console.warn(`Produto não encontrado ou sem processos: ${p.produto}`, {
-                producao: p,
-                produtosDisponiveis: produtos,
-                produtoNomeNormalizado: produtoNomeNormalizado,
-                nomesProdutosDisponiveis: produtos.map(prod => normalizarTexto(prod.nome))
-            });
-            totalPontosPonderados += p.quantidade; // Usa 1 ponto por quantidade como fallback
+            console.warn(`Produto ou processo não encontrado: ${p.produto} - ${p.processo}`);
+            totalPontosPonderados += p.quantidade;
         }
     });
 
@@ -203,8 +193,6 @@ function atualizarCardMeta(producoes) {
     console.log('Card Meta atualizado - Total pontos:', totalPontos, 'Meta em processos:', metaSelecionada);
 }
 
-
-
 function atualizarGraficoProducao(producoes) {
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
@@ -227,7 +215,6 @@ function atualizarGraficoProducao(producoes) {
     const ctx = document.getElementById('graficoProducaoDia').getContext('2d');
     if (window.graficoProducao) window.graficoProducao.destroy();
     
-    // Redimensiona o canvas antes de criar o gráfico
     ctx.canvas.style.width = '100%';
     ctx.canvas.style.height = 'auto';
 
@@ -282,70 +269,101 @@ function verificarAssinaturaProducao(producoes) {
     }
 }
 
-function assinarProducoes() {
-    const producoes = JSON.parse(localStorage.getItem('producoes')) || [];
-    const assinaturas = JSON.parse(localStorage.getItem('assinaturas')) || [];
-    const agora = new Date();
-    const producoesNaoAssinadas = producoes.filter(p => p.funcionario === usuarioLogado.nome && !p.assinada);
+function gerarIdUnico() {
+    return 'assinatura_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
 
-    producoes.forEach(p => {
-        if (p.funcionario === usuarioLogado.nome && !p.assinada) {
-            p.assinada = true;
-            p.dataAssinatura = agora.toISOString();
+async function assinarProducoes() {
+    try {
+        const producoes = await obterProducoes();
+        const producoesNaoAssinadas = producoes.filter(p => p.funcionario === usuarioLogado.nome && !p.assinada);
+
+        if (producoesNaoAssinadas.length === 0) {
+            document.getElementById('assinaturaPopup').style.display = 'none';
+            document.querySelector('.dashboard-content').style.display = 'block';
+            return;
         }
-    });
 
-    const registroAssinatura = {
-        id: gerarIdUnico(),
-        costureira: usuarioLogado.nome,
-        dataHora: agora.toISOString(),
-        dispositivo: navigator.userAgent,
-        producoesAssinadas: producoesNaoAssinadas.map(p => ({
-            idProducao: p.id,
-            produto: p.produto,
-            processo: p.processo,
-            quantidade: p.quantidade,
-            dataProducao: p.data
-        }))
-    };
+        const token = localStorage.getItem('token');
+        const agora = new Date();
+        const assinaturas = JSON.parse(localStorage.getItem('assinaturas')) || [];
 
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                registroAssinatura.localizacao = {
-                    latitude: position.coords.latitude,
-                    longitude: position.coords.longitude
-                };
-                salvarRegistroAssinatura(registroAssinatura, producoes, assinaturas);
-            },
-            (error) => {
-                console.warn('Geolocalização não disponível:', error.message);
-                registroAssinatura.localizacao = 'Não disponível';
-                salvarRegistroAssinatura(registroAssinatura, producoes, assinaturas);
-            },
-            { timeout: 5000 }
-        );
-    } else {
-        registroAssinatura.localizacao = 'Geolocalização não suportada';
-        salvarRegistroAssinatura(registroAssinatura, producoes, assinaturas);
+        // Atualizar cada produção não assinada no servidor
+        for (const producao of producoesNaoAssinadas) {
+            console.log('[assinarProducoes] Assinando produção:', producao.id);
+            const requestBody = {
+                id: producao.id,
+                quantidade: producao.quantidade,
+                edicoes: producao.edicoes || 0,
+                assinada: true,
+            };
+            console.log('[assinarProducoes] Enviando requisição PUT com corpo:', requestBody);
+            const response = await fetch('/api/producoes', {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody),
+            });
+
+            const responseText = await response.text();
+            console.log('[assinarProducoes] Resposta do servidor para produção', producao.id, ':', responseText);
+
+            if (!response.ok) {
+                throw new Error(`Erro ao assinar produção ${producao.id}: ${responseText}`);
+            }
+        }
+
+        // Criar registro de assinatura
+        const registroAssinatura = {
+            id: gerarIdUnico(),
+            costureira: usuarioLogado.nome,
+            dataHora: agora.toISOString(),
+            dispositivo: navigator.userAgent,
+            producoesAssinadas: producoesNaoAssinadas.map(p => ({
+                idProducao: p.id,
+                produto: p.produto,
+                processo: p.processo,
+                quantidade: p.quantidade,
+                dataProducao: p.data
+            }))
+        };
+
+        if (navigator.geolocation) {
+            await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        registroAssinatura.localizacao = {
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude
+                        };
+                        resolve();
+                    },
+                    (error) => {
+                        console.warn('Geolocalização não disponível:', error.message);
+                        registroAssinatura.localizacao = 'Não disponível';
+                        resolve();
+                    },
+                    { timeout: 5000 }
+                );
+            });
+        } else {
+            registroAssinatura.localizacao = 'Geolocalização não suportada';
+        }
+
+        assinaturas.push(registroAssinatura);
+        localStorage.setItem('assinaturas', JSON.stringify(assinaturas));
+        document.getElementById('assinaturaPopup').style.display = 'none';
+        document.querySelector('.dashboard-content').style.display = 'block';
+        await atualizarDashboard();
+    } catch (error) {
+        console.error('[assinarProducoes] Erro:', error.message);
+        alert('Erro ao assinar produções: ' + error.message);
     }
 }
 
-function salvarRegistroAssinatura(registro, producoes, assinaturas) {
-    assinaturas.push(registro);
-    localStorage.setItem('producoes', JSON.stringify(producoes));
-    localStorage.setItem('assinaturas', JSON.stringify(assinaturas));
-    document.getElementById('assinaturaPopup').style.display = 'none';
-    document.querySelector('.dashboard-content').style.display = 'block';
-    atualizarDashboard();
-}
-
-let processosExibidos = 0;
-let filtroAtivo = 'semana';
-let dataSelecionadaDia = new Date();
-let dataSelecionadaSemana = new Date();
-
-function atualizarDetalhamentoProcessos(producoes) {
+function atualizarDetalhamentoProcessos(producoes, produtos) {
     const filtroDiaTexto = document.getElementById('filtroDia');
     const filtroSemanaTexto = document.getElementById('filtroSemana');
     const totalProcessosEl = document.getElementById('totalProcessos');
@@ -359,7 +377,6 @@ function atualizarDetalhamentoProcessos(producoes) {
     ).sort((a, b) => new Date(b.data) - new Date(a.data));
     console.log('Produções assinadas:', producoesAssinadas);
 
-    const produtos = obterProdutos();
     let paginaAtual = 1;
     const itensPorPagina = 8;
 
@@ -422,15 +439,15 @@ function atualizarDetalhamentoProcessos(producoes) {
             ? processosParaExibir.map(p => {
                 const produtoNomeNormalizado = normalizarTexto(p.produto);
                 const produto = produtos.find(prod => normalizarTexto(prod.nome) === produtoNomeNormalizado);
-                const processoIndex = produto && Array.isArray(produto.processos) ? produto.processos.indexOf(p.processo) : -1;
-                const pontosPorProcesso = produto && processoIndex !== -1 && Array.isArray(produto.pontos) ? (produto.pontos[processoIndex] || 1) : 1;
+                const etapa = produto && Array.isArray(produto.etapas) ? produto.etapas.find(e => e.processo === p.processo) : null;
+                const pontosPorProcesso = etapa && etapa.pontos ? etapa.pontos : 1;
                 const totalPontosItem = p.quantidade * pontosPorProcesso;
                 const pontoTexto = totalPontosItem === 1 ? 'ponto' : 'pontos';
                 const variacao = p.variacao || 'N/A';
-                const quemRetirou = p.lancadoPor || 'Desconhecido';
+                const quemRetirou = p.lancado_por || 'Desconhecido';
 
-                return `<li>${new Date(p.data).toLocaleDateString('pt-BR')} - ${p.produto} [${variacao}] - [${p.processo}] - [${quemRetirou}] - [${totalPontosItem} ${pontoTexto}], ${new Date(p.data).toLocaleTimeString('pt-BR')}</li>`;
-              }).join('')
+                return `<li>${new Date(p.data).toLocaleDateString('pt-BR')} - ${p.produto} [${variacao}] - [${p.processo}] - [Retirado por: ${quemRetirou}] - [Somados: +${totalPontosItem} ${pontoTexto}], [Hora retirada ${new Date(p.data).toLocaleTimeString('pt-BR')}]</li>`;
+            }).join('')
             : '<li>Nenhuma produção assinada encontrada para o período selecionado.</li>';
 
         const total = calcularTotalProcessos(producoesFiltradas);
@@ -514,7 +531,6 @@ function atualizarDetalhamentoProcessos(producoes) {
     const fimSemanaAtual = new Date(inicioSemanaAtual);
     fimSemanaAtual.setDate(inicioSemanaAtual.getDate() + 6);
     $("#datepickerSemana").val(`${inicioSemanaAtual.toLocaleDateString('pt-BR')} - ${fimSemanaAtual.toLocaleDateString('pt-BR')}`);
-    dataSelecionadaSemana = new Date();
 
     filtroAtivo = 'semana';
     filtroSemanaTexto.classList.add('active');
@@ -523,42 +539,86 @@ function atualizarDetalhamentoProcessos(producoes) {
 }
 
 // Eventos
-document.getElementById('metaSelect').addEventListener('change', () => {
-    const metaSelect = document.getElementById('metaSelect');
-    const editarMetaBtn = document.getElementById('editarMetaBtn');
-    const novaMeta = parseInt(metaSelect.value);
-    salvarMetaSelecionada(novaMeta);
-    metaSelect.disabled = true;
-    editarMetaBtn.textContent = 'Editar Meta';
-    const producoes = JSON.parse(localStorage.getItem('producoes')) || [];
-    atualizarCardMeta(producoes);
-});
+document.addEventListener('DOMContentLoaded', async () => {
+    usuarioLogado = await verificarAutenticacaoCostureira();
+    if (!usuarioLogado) {
+        throw new Error('Autenticação falhou, redirecionando...');
+    }
 
-document.getElementById('editarMetaBtn').addEventListener('click', () => {
-    const metaSelect = document.getElementById('metaSelect');
-    const editarMetaBtn = document.getElementById('editarMetaBtn');
-    if (metaSelect.disabled) {
-        metaSelect.disabled = false;
-        editarMetaBtn.textContent = 'Escolher Meta';
-        metaSelect.focus();
-    } else {
+    $("#datepickerDia").datepicker({
+        dateFormat: 'dd/mm/yy',
+        defaultDate: dataSelecionadaDia,
+        onSelect: async function(dateText) {
+            const [dia, mes, ano] = dateText.split('/');
+            dataSelecionadaDia = new Date(ano, mes - 1, dia);
+            filtroAtivo = 'dia';
+            document.getElementById('filtroDia').classList.add('active');
+            document.getElementById('filtroSemana').classList.remove('active');
+            const producoes = await obterProducoes();
+            const produtos = await obterProdutos();
+            atualizarDetalhamentoProcessos(producoes, produtos);
+        }
+    }).datepicker('setDate', dataSelecionadaDia);
+
+    $("#datepickerSemana").datepicker({
+        dateFormat: 'dd/mm/yy',
+        defaultDate: dataSelecionadaSemana,
+        onSelect: async function(dateText) {
+            const [dia, mes, ano] = dateText.split('/');
+            dataSelecionadaSemana = new Date(ano, mes - 1, dia);
+            filtroAtivo = 'semana';
+            document.getElementById('filtroSemana').classList.add('active');
+            document.getElementById('filtroDia').classList.remove('active');
+            const producoes = await obterProducoes();
+            const produtos = await obterProdutos();
+            atualizarDetalhamentoProcessos(producoes, produtos);
+        }
+    });
+
+    const inicioSemanaAtual = new Date();
+    inicioSemanaAtual.setDate(inicioSemanaAtual.getDate() - inicioSemanaAtual.getDay());
+    const fimSemanaAtual = new Date(inicioSemanaAtual);
+    fimSemanaAtual.setDate(inicioSemanaAtual.getDate() + 6);
+    $("#datepickerSemana").val(`${inicioSemanaAtual.toLocaleDateString('pt-BR')} - ${fimSemanaAtual.toLocaleDateString('pt-BR')}`);
+
+    await atualizarDashboard();
+
+    document.getElementById('metaSelect').addEventListener('change', async () => {
+        const metaSelect = document.getElementById('metaSelect');
+        const editarMetaBtn = document.getElementById('editarMetaBtn');
+        const novaMeta = parseInt(metaSelect.value);
+        salvarMetaSelecionada(novaMeta);
         metaSelect.disabled = true;
         editarMetaBtn.textContent = 'Editar Meta';
-        const producoes = JSON.parse(localStorage.getItem('producoes')) || [];
-        atualizarCardMeta(producoes);
-    }
+        const producoes = await obterProducoes();
+        const produtos = await obterProdutos();
+        atualizarCardMeta(producoes, produtos);
+    });
+
+    document.getElementById('editarMetaBtn').addEventListener('click', async () => {
+        const metaSelect = document.getElementById('metaSelect');
+        const editarMetaBtn = document.getElementById('editarMetaBtn');
+        if (metaSelect.disabled) {
+            metaSelect.disabled = false;
+            editarMetaBtn.textContent = 'Escolher Meta';
+            metaSelect.focus();
+        } else {
+            metaSelect.disabled = true;
+            editarMetaBtn.textContent = 'Editar Meta';
+            const producoes = await obterProducoes();
+            const produtos = await obterProdutos();
+            atualizarCardMeta(producoes, produtos);
+        }
+    });
+
+    document.getElementById('confirmacaoAssinatura').addEventListener('change', () => {
+        const checkbox = document.getElementById('confirmacaoAssinatura');
+        document.getElementById('assinarProducaoBtn').disabled = !checkbox.checked;
+    });
+
+    document.getElementById('assinarProducaoBtn').addEventListener('click', assinarProducoes);
+
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+        logout();
+    });
 });
-
-document.getElementById('confirmacaoAssinatura').addEventListener('change', () => {
-    const checkbox = document.getElementById('confirmacaoAssinatura');
-    document.getElementById('assinarProducaoBtn').disabled = !checkbox.checked;
-});
-
-document.getElementById('assinarProducaoBtn').addEventListener('click', assinarProducoes);
-
-document.getElementById('logoutBtn').addEventListener('click', () => {
-    logout();
-});
-
-// Inicialização
-atualizarDashboard();
