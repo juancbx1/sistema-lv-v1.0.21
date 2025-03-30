@@ -1,20 +1,53 @@
-// js/pages/admin-embalagem-de-produtos.js
-import { verificarAutenticacaoSincrona } from './utils/auth.js';
-import { obterUsuarios, obterProdutos } from './utils/storage.js';
+import { verificarAutenticacao } from '/js/utils/auth.js';
+import { obterProdutos, invalidateCache, getCachedData  } from '/js/utils/storage.js';
 
-// Verificação de autenticação síncrona no topo do script
-const auth = verificarAutenticacaoSincrona('embalagem-de-produtos.html', ['acesso-embalagem-de-produtos']);
-if (!auth) {
-    window.location.href = 'acesso-negado.html';
-    throw new Error('Autenticação falhou, redirecionando para acesso-negado.html...');
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        // Verifica autenticação assíncrona
+        const auth = await verificarAutenticacao('embalagem-de-produtos.html', ['acesso-embalagem-de-produtos']);
+        if (!auth) {
+            window.location.href = 'acesso-negado.html';
+            return; // Sai da função se a autenticação falhar
+        }
+
+        const permissoes = auth.permissoes || [];
+        const usuario = auth.usuario;
+        console.log('[admin-embalagem-de-produtos] Autenticação bem-sucedida, permissões:', permissoes);
+
+        // Inicializa a página com os dados do usuário e permissões
+        await inicializar(usuario, permissoes); // Adicionei await aqui
+    } catch (error) {
+        console.error('[DOMContentLoaded] Erro na autenticação:', error);
+        window.location.href = 'acesso-negado.html';
+    }
+});
+
+async function fetchFromAPI(endpoint, options = {}) {
+    const token = localStorage.getItem('token');
+    const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...options.headers,
+    };
+
+    try {
+        const response = await fetch(`/api${endpoint}`, {
+            ...options,
+            headers,
+        });
+        if (!response.ok) {
+            throw new Error(`Erro na requisição: ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error(`[fetchFromAPI] Erro ao acessar ${endpoint}:`, error);
+        throw error;
+    }
 }
 
-const permissoes = auth.permissoes || [];
-console.log('[admin-embalagem-de-produtos] Autenticação bem-sucedida, permissões:', permissoes);
-
 // Função para verificar se há kits disponíveis para a variação
-function temKitsDisponiveis(produto, variante) {
-    const produtosCadastrados = obterProdutos() || [];
+async function temKitsDisponiveis(produto, variante) {
+    const produtosCadastrados = await obterProdutos() || [];
     console.log('[temKitsDisponiveis] Todos os produtos cadastrados:', produtosCadastrados);
 
     const kits = produtosCadastrados.filter(p => p.isKit);
@@ -32,11 +65,10 @@ function temKitsDisponiveis(produto, variante) {
         return kit.grade.some(g => {
             if (!g.composicao || g.composicao.length === 0) {
                 console.log(`[temKitsDisponiveis] Variação ${g.variacao} do kit ${kit.nome} não tem composição.`);
-                return false;
+            return false;
             }
 
             return g.composicao.some(c => {
-                // Se o campo 'produto' não existir, assume-se que é o produto base (parâmetro 'produto')
                 const produtoComposicao = c.produto || produto;
                 const variacaoComposicao = c.variacao === '-' ? '' : c.variacao.toLowerCase();
                 const isMatch = produtoComposicao === produto && variacaoComposicao === varianteAtual;
@@ -50,10 +82,8 @@ function temKitsDisponiveis(produto, variante) {
     return hasKits;
 }
 
-
-// Função para carregar os kits disponíveis
-function carregarKitsDisponiveis(produto, variante) {
-    const produtosCadastrados = obterProdutos() || [];
+async function carregarKitsDisponiveis(produto, variante) {
+    const produtosCadastrados = await obterProdutos() || [];
     const kitsList = document.getElementById('kits-list');
     kitsList.innerHTML = '';
 
@@ -108,8 +138,8 @@ function carregarKitsDisponiveis(produto, variante) {
 }
 
 // Função para carregar as variações de um kit específico
-function carregarVariacoesKit(nomeKit, produto, variante) {
-    const produtosCadastrados = obterProdutos() || [];
+async function carregarVariacoesKit(nomeKit, produto, variante) {
+    const produtosCadastrados = await obterProdutos() || [];
     const kitVariacoesSelect = document.getElementById('kit-variacoes');
     if (!kitVariacoesSelect) {
         console.error('[carregarVariacoesKit] Elemento #kit-variacoes não encontrado no DOM');
@@ -176,8 +206,8 @@ function carregarVariacoesKit(nomeKit, produto, variante) {
 
 
 // Função para carregar a mini tabela do kit selecionado
-function carregarTabelaKit(kitNome, variacao, varianteAtual) {
-    const produtosCadastrados = obterProdutos() || [];
+async function carregarTabelaKit(kitNome, variacao, varianteAtual) {
+    const produtosCadastrados = await obterProdutos() || [];
     const kit = produtosCadastrados.find(p => p.nome === kitNome);
     const kitTableBody = document.getElementById('kit-table-body');
     const kitErrorMessage = document.getElementById('kit-error-message');
@@ -193,7 +223,7 @@ function carregarTabelaKit(kitNome, variacao, varianteAtual) {
         return;
     }
 
-    const ordensFinalizadas = obterOrdensFinalizadas();
+    const ordensFinalizadas = await obterOrdensFinalizadas();
     const produtosAgrupados = {};
     ordensFinalizadas.forEach(op => {
         const chave = `${op.produto}:${op.variante || '-'}`;
@@ -273,8 +303,8 @@ function carregarTabelaKit(kitNome, variacao, varianteAtual) {
 
 
 // Função para enviar o kit ao estoque
-function enviarKitParaEstoque(kitNome, variacao, qtdKits) {
-    const produtosCadastrados = obterProdutos() || [];
+async function enviarKitParaEstoque(kitNome, variacao, qtdKits) {
+    const produtosCadastrados = await obterProdutos() || [];
     const kit = produtosCadastrados.find(p => p.nome === kitNome);
     const variacaoKit = kit.grade.find(g => g.variacao === variacao);
     const composicao = variacaoKit.composicao || [];
@@ -290,11 +320,18 @@ function enviarKitParaEstoque(kitNome, variacao, qtdKits) {
     localStorage.removeItem('embalagemAtual');
 }
 
-// Funções auxiliares
-function obterOrdensFinalizadas() {
-    const ordensDeProducao = JSON.parse(localStorage.getItem('ordensDeProducao')) || [];
-    console.log('[obterOrdensFinalizadas] Ordens finalizadas encontradas:', ordensDeProducao.length);
-    return ordensDeProducao.filter(op => op.status === 'finalizado');
+
+// obterOrdensFinalizadas para usar cache
+async function obterOrdensFinalizadas() {
+    const fetchOrdens = async () => {
+        const ordens = await fetchFromAPI('/ordens-de-producao', { method: 'GET' });
+        console.log('[obterOrdensFinalizadas] Ordens buscadas da API:', ordens.length);
+        return ordens.filter(op => op.status === 'finalizado');
+    };
+    
+    const ordensFinalizadas = await getCachedData('ordensFinalizadas', fetchOrdens); // Defina getCachedData ou importe de storage.js
+    console.log('[obterOrdensFinalizadas] Ordens finalizadas encontradas:', ordensFinalizadas.length);
+    return ordensFinalizadas;
 }
 
 function obterQuantidadeDisponivel(op) {
@@ -304,63 +341,100 @@ function obterQuantidadeDisponivel(op) {
     return qtd;
 }
 
-function atualizarQuantidadeEmbalada(produto, variante, quantidadeEnviada) {
-    let embalagens = JSON.parse(localStorage.getItem('embalagens')) || {};
-    const chave = `${produto}:${variante}`;
-    if (!embalagens[chave]) {
-        embalagens[chave] = { produto, variante, quantidadeEmbalada: 0 };
-    }
-    embalagens[chave].quantidadeEmbalada += quantidadeEnviada;
-    console.log(`[atualizarQuantidadeEmbalada] Produto: ${produto}, Variante: ${variante}, Quantidade Embalada Atualizada: ${embalagens[chave].quantidadeEmbalada}`);
-    localStorage.setItem('embalagens', JSON.stringify(embalagens));
-}
+async function atualizarQuantidadeEmbalada(produto, variante, quantidadeEnviada) {
+    try {
+        const ordens = await fetchFromAPI('/ordens-de-producao', { method: 'GET' });
+        const ordem = ordens.find(op => op.produto === produto && op.variante === variante);
 
-function obterQuantidadeDisponivelAjustada(produto, variante, quantidadeOriginal) {
-    const embalagens = JSON.parse(localStorage.getItem('embalagens')) || {};
-    const chave = `${produto}:${variante}`;
-    const quantidadeEmbalada = embalagens[chave]?.quantidadeEmbalada || 0;
-    const qtdAjustada = quantidadeOriginal - quantidadeEmbalada;
-    console.log(`[obterQuantidadeDisponivelAjustada] Produto: ${produto}, Variante: ${variante}, Original: ${quantidadeOriginal}, Embalada: ${quantidadeEmbalada}, Ajustada: ${qtdAjustada}`);
-    return Math.max(0, qtdAjustada); // Garantir que não retorne valores negativos
-}
-
-function carregarTabelaProdutos() {
-    console.log('[carregarTabelaProdutos] Iniciando carregamento da tabela');
-    const ordensFinalizadas = obterOrdensFinalizadas();
-    const produtosAgrupados = {};
-    const produtosCadastrados = JSON.parse(localStorage.getItem('produtos')) || [];
-
-    ordensFinalizadas.forEach(op => {
-        const produto = op.produto;
-        const variante = op.variante || '-';
-        const qtdOriginal = obterQuantidadeDisponivel(op);
-        const qtdAjustada = obterQuantidadeDisponivelAjustada(produto, variante, qtdOriginal);
-
-        if (qtdAjustada > 0) {
-            const chave = `${produto}:${variante}`;
-            if (!produtosAgrupados[chave]) {
-                produtosAgrupados[chave] = {
-                    produto,
-                    variante,
-                    quantidade: 0,
-                    opNumeros: new Set()
-                };
-            }
-            produtosAgrupados[chave].quantidade += qtdOriginal;
-            produtosAgrupados[chave].opNumeros.add(op.numero);
+        if (!ordem) {
+            console.error('[atualizarQuantidadeEmbalada] Ordem não encontrada');
+            return;
         }
-    });
 
+        const dadosAtualizados = {
+            edit_id: ordem.edit_id,
+            quantidadeEmbalada: (ordem.quantidadeEmbalada || 0) + quantidadeEnviada
+        };
+
+        await fetchFromAPI('/ordens-de-producao', {
+            method: 'PUT',
+            body: JSON.stringify(dadosAtualizados)
+        });
+
+        console.log(`[atualizarQuantidadeEmbalada] Produto: ${produto}, Variante: ${variante}, Quantidade Embalada Atualizada`);
+
+        // Invalidar o cache após atualizar o estoque
+        invalidateCache('ordensFinalizadas');
+    } catch (error) {
+        console.error('[atualizarQuantidadeEmbalada] Erro ao atualizar quantidade:', error);
+    }
+}
+
+async function obterQuantidadeDisponivelAjustada(produto, variante, quantidadeOriginal) {
+    try {
+        const ordens = await obterOrdensFinalizadas(); // Usa o cache
+        const ordem = ordens.find(op => op.produto === produto && op.variante === variante);
+
+        let quantidadeEmbalada = 0;
+        if (ordem && ordem.quantidadeEmbalada) {
+            quantidadeEmbalada = ordem.quantidadeEmbalada;
+        }
+
+        const qtdAjustada = quantidadeOriginal - quantidadeEmbalada;
+        console.log(`[obterQuantidadeDisponivelAjustada] Produto: ${produto}, Variante: ${variante}, Original: ${quantidadeOriginal}, Embalada: ${quantidadeEmbalada}, Ajustada: ${qtdAjustada}`);
+        return Math.max(0, qtdAjustada);
+    } catch (error) {
+        console.error('[obterQuantidadeDisponivelAjustada] Erro ao ajustar quantidade:', error);
+        return quantidadeOriginal; // Retorna a quantidade original em caso de erro
+    }
+}
+
+async function carregarTabelaProdutos() {
+    console.log('[carregarTabelaProdutos] Iniciando carregamento da tabela');
+
+    try {
+        const ordensFinalizadas = await obterOrdensFinalizadas(); // Usa cache
+        const produtosCadastrados = await obterProdutos(); // Usa cache
+        const produtosAgrupados = {};
+
+        await Promise.all(ordensFinalizadas.map(async op => {
+            const produto = op.produto;
+            const variante = op.variante || '-';
+            const qtdOriginal = obterQuantidadeDisponivel(op);
+            const qtdAjustada = await obterQuantidadeDisponivelAjustada(produto, variante, qtdOriginal);
+
+            if (qtdAjustada > 0) {
+                const chave = `${produto}:${variante}`;
+                if (!produtosAgrupados[chave]) {
+                    produtosAgrupados[chave] = {
+                        produto,
+                        variante,
+                        quantidade: 0,
+                        opNumeros: new Set()
+                    };
+                }
+                produtosAgrupados[chave].quantidade += qtdOriginal;
+                produtosAgrupados[chave].opNumeros.add(op.numero);
+            }
+        }));
+
+        await atualizarTabela(produtosAgrupados, produtosCadastrados);
+    } catch (error) {
+        console.error('[carregarTabelaProdutos] Erro ao carregar tabela:', error);
+    }
+}
+
+async function atualizarTabela(produtosAgrupados, produtosCadastrados) {
     const tbody = document.getElementById('produtosTableBody');
     if (!tbody) {
-        console.error('[carregarTabelaProdutos] Elemento #produtosTableBody não encontrado');
+        console.error('[atualizarTabela] Elemento #produtosTableBody não encontrado');
         return;
     }
     tbody.innerHTML = '';
-    console.log('[carregarTabelaProdutos] Tabela limpa, populando com:', Object.values(produtosAgrupados));
+    console.log('[atualizarTabela] Tabela limpa, populando com:', Object.values(produtosAgrupados));
 
-    Object.values(produtosAgrupados).forEach(item => {
-        const qtdAjustada = obterQuantidadeDisponivelAjustada(item.produto, item.variante, item.quantidade);
+    await Promise.all(Object.values(produtosAgrupados).map(async item => {
+        const qtdAjustada = await obterQuantidadeDisponivelAjustada(item.produto, item.variante, item.quantidade);
         const opNumerosString = Array.from(item.opNumeros).join(', ');
         const produtoCadastrado = produtosCadastrados.find(p => p.nome === item.produto);
         const gradeItem = produtoCadastrado?.grade?.find(g => g.variacao === item.variante);
@@ -376,8 +450,8 @@ function carregarTabelaProdutos() {
             <td>${qtdAjustada}</td>
             <td>${opNumerosString}</td>
         `;
-        tr.addEventListener('click', () => {
-            console.log(`[carregarTabelaProdutos] Clicado em Produto: ${item.produto}, Variante: ${item.variante}, Qtd: ${qtdAjustada}`);
+        tr.addEventListener('click', async () => {
+            console.log(`[atualizarTabela] Clicado em Produto: ${item.produto}, Variante: ${item.variante}, Qtd: ${qtdAjustada}`);
             const mainView = document.getElementById('mainView');
             const embalagemView = document.getElementById('embalarView');
             if (mainView && embalagemView) {
@@ -389,18 +463,19 @@ function carregarTabelaProdutos() {
                     variante: item.variante,
                     quantidade: qtdAjustada
                 }));
-                carregarEmbalagem(item.produto, item.variante, qtdAjustada);
+                await carregarEmbalagem(item.produto, item.variante, qtdAjustada);
             } else {
-                console.error('[carregarTabelaProdutos] mainView ou embalagemView não encontrados');
+                console.error('[atualizarTabela] mainView ou embalagemView não encontrados');
             }
         });
         tbody.appendChild(tr);
-    });
-    console.log('[carregarTabelaProdutos] Tabela carregada com sucesso');
+    }));
+    console.log('[atualizarTabela] Tabela carregada com sucesso');
 }
 
+
 // Atualizar a função carregarEmbalagem para incluir a aba Kit
-function carregarEmbalagem(produto, variante, quantidade) {
+async function carregarEmbalagem(produto, variante, quantidade) {
     console.log(`[carregarEmbalagem] Carregando para Produto: ${produto}, Variante: ${variante}, Qtd: ${quantidade}`);
     const embalagemTitle = document.getElementById('embalagemTitle');
     const produtoNome = document.getElementById('produtoNome');
@@ -417,7 +492,7 @@ function carregarEmbalagem(produto, variante, quantidade) {
         return;
     }
 
-    const produtosCadastrados = obterProdutos() || [];
+    const produtosCadastrados = await obterProdutos() || [];
     const produtoCadastrado = produtosCadastrados.find(p => p.nome === produto);
     const gradeItem = produtoCadastrado?.grade?.find(g => g.variacao === (variante === '-' ? '' : variante));
     const imagem = gradeItem?.imagem || '';
@@ -431,7 +506,7 @@ function carregarEmbalagem(produto, variante, quantidade) {
     qtdEnviar.value = '';
     estoqueBtn.disabled = true;
 
-    const temKits = temKitsDisponiveis(produto, variante);
+    const temKits = await temKitsDisponiveis(produto, variante);
     if (temKits) {
         kitTabBtn.style.display = 'inline-block';
         kitTabPanel.classList.remove('hidden');
@@ -487,31 +562,32 @@ function carregarEmbalagem(produto, variante, quantidade) {
         }
     });
 
-    novoEstoqueBtn.addEventListener('click', () => {
-        const quantidadeEnviada = parseInt(newQtdEnviar.value);
-        console.log(`[carregarEmbalagem] Botão Estoque clicado, Qtd Enviar: ${quantidadeEnviada}`);
-        if (quantidadeEnviada < 1 || quantidadeEnviada > quantidadeOriginal) {
-            console.warn('[carregarEmbalagem] Quantidade inválida detectada');
-            alert('Quantidade inválida!');
-            return;
-        }
+    // Ajustar o evento do botão "Estoque" em carregarEmbalagem
+novoEstoqueBtn.addEventListener('click', async () => {
+    const quantidadeEnviada = parseInt(newQtdEnviar.value);
+    console.log(`[carregarEmbalagem] Botão Estoque clicado, Qtd Enviar: ${quantidadeEnviada}`);
+    if (quantidadeEnviada < 1 || quantidadeEnviada > quantidadeOriginal) {
+        console.warn('[carregarEmbalagem] Quantidade inválida detectada');
+        alert('Quantidade inválida!');
+        return;
+    }
 
-        atualizarQuantidadeEmbalada(produto, variante, quantidadeEnviada);
-        console.log(`[carregarEmbalagem] Salvando no estoque: Produto: ${produto}, Variante: ${variante}, Quantidade: ${quantidadeEnviada}`);
-        carregarTabelaProdutos();
-        alert(`Enviado ${quantidadeEnviada} unidade(s) de ${produto}${variante !== '-' ? `: ${variante}` : ''} para o estoque!`);
-        console.log('[carregarEmbalagem] Processo concluído, retornando à tela principal');
-        window.location.hash = '';
-        localStorage.removeItem('embalagemAtual');
-    });
+    await atualizarQuantidadeEmbalada(produto, variante, quantidadeEnviada);
+    console.log(`[carregarEmbalagem] Salvando no estoque: Produto: ${produto}, Variante: ${variante}, Quantidade: ${quantidadeEnviada}`);
+    await carregarTabelaProdutos(); // Recarrega a tabela com dados atualizados
+    alert(`Enviado ${quantidadeEnviada} unidade(s) de ${produto}${variante !== '-' ? `: ${variante}` : ''} para o estoque!`);
+    console.log('[carregarEmbalagem] Processo concluído, retornando à tela principal');
+    window.location.hash = '';
+    localStorage.removeItem('embalagemAtual');
+});
 
     if (temKits) {
-        carregarKitsDisponiveis(produto, variante);
+        await carregarKitsDisponiveis(produto, variante);
     }
 }
 
 // Atualizar a função alternarAba para destacar o kit ativo
-function alternarAba(event) {
+async function alternarAba(event) {
     const tab = event.target.dataset.tab;
     console.log(`[alternarAba] Alternando para aba: ${tab}`);
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -523,16 +599,18 @@ function alternarAba(event) {
         if (tab === 'kit') {
             const embalagemAtual = JSON.parse(localStorage.getItem('embalagemAtual'));
             if (embalagemAtual) {
-                carregarKitsDisponiveis(embalagemAtual.produto, embalagemAtual.variante);
+                await carregarKitsDisponiveis(embalagemAtual.produto, embalagemAtual.variante);
             }
         }
     }
 }
 
 // Garantir que os eventos estejam corretamente configurados
-function inicializar() {
-    console.log('[inicializar] Inicializando a página');
-    carregarTabelaProdutos();
+async function inicializar(usuario, permissoes) {
+    console.log('[inicializar] Inicializando a página com usuário:', usuario);
+
+    // Carrega a tabela de produtos direto do banco de dados
+    await carregarTabelaProdutos();
 
     const searchProduto = document.getElementById('searchProduto');
     if (searchProduto) {
@@ -565,7 +643,7 @@ function inicializar() {
         btn.addEventListener('click', alternarAba);
     });
 
-    window.addEventListener('hashchange', () => {
+    window.addEventListener('hashchange', async () => {
         const hash = window.location.hash;
         console.log(`[inicializar] Hash alterado para: ${hash}`);
         const mainView = document.getElementById('mainView');
@@ -576,12 +654,12 @@ function inicializar() {
                 embalagemView.style.display = 'block';
                 const embalagemAtual = JSON.parse(localStorage.getItem('embalagemAtual'));
                 if (embalagemAtual) {
-                    carregarEmbalagem(embalagemAtual.produto, embalagemAtual.variante, embalagemAtual.quantidade);
+                    await carregarEmbalagem(embalagemAtual.produto, embalagemAtual.variante, embalagemAtual.quantidade);
                 }
             } else {
                 mainView.style.display = 'block';
                 embalagemView.style.display = 'none';
-                carregarTabelaProdutos();
+                await carregarTabelaProdutos();
             }
         }
     });
@@ -594,7 +672,7 @@ function inicializar() {
             embalagemView.style.display = 'block';
             const embalagemAtual = JSON.parse(localStorage.getItem('embalagemAtual'));
             if (embalagemAtual) {
-                carregarEmbalagem(embalagemAtual.produto, embalagemAtual.variante, embalagemAtual.quantidade);
+                await carregarEmbalagem(embalagemAtual.produto, embalagemAtual.variante, embalagemAtual.quantidade);
             }
         } else {
             mainView.style.display = 'block';
@@ -603,8 +681,3 @@ function inicializar() {
     }
     console.log('[inicializar] Inicialização concluída');
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('[DOMContentLoaded] DOM carregado, inicializando página');
-    inicializar();
-});
