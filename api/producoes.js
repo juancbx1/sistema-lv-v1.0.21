@@ -56,7 +56,6 @@ export default async function handler(req, res) {
       }
     
       console.log('[api/producoes] Data recebida (antes da conversão):', data);
-      // Substituir 'T' por espaço e adicionar o offset de São Paulo (UTC-3)
       const dataLocal = data.replace('T', ' ') + ' -03:00';
       console.log('[api/producoes] Data com fuso horário:', dataLocal);
     
@@ -80,6 +79,45 @@ export default async function handler(req, res) {
       const result = await pool.query(query, usuarioLogado.tipos.includes('costureira') && !usuarioLogado.permissoes.includes('acesso-gerenciar-producao') ? [usuarioLogado.nome] : []);
       console.log('[api/producoes] Resultado da query:', result.rows);
       res.status(200).json(result.rows);
+
+    } else if (method === 'PUT') {
+      console.log('[api/producoes] Processando PUT...');
+      const { id, quantidade, edicoes, assinada } = req.body;
+      console.log('[api/produces] Dados recebidos:', req.body);
+
+      if (!id || (quantidade === undefined && assinada === undefined) || edicoes === undefined) {
+        return res.status(400).json({ error: 'Dados incompletos' });
+      }
+
+      // Verificar se a produção existe
+      const checkResult = await pool.query('SELECT * FROM producoes WHERE id = $1', [id]);
+      if (checkResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Produção não encontrada' });
+      }
+
+      const producao = checkResult.rows[0];
+
+      // Verificar permissões: costureiras só podem assinar suas próprias produções
+      const isCostureira = usuarioLogado.tipos.includes('costureira');
+      const isOwner = producao.funcionario === usuarioLogado.nome;
+      const onlySigning = quantidade === undefined && assinada !== undefined;
+
+      if (!usuarioLogado.permissoes.includes('editar-registro-producao') && !(isCostureira && isOwner && onlySigning)) {
+        return res.status(403).json({ error: 'Permissão negada' });
+      }
+
+      // Atualizar a produção
+      const result = await pool.query(
+        `UPDATE producoes 
+         SET quantidade = COALESCE($1, quantidade), 
+             edicoes = $2, 
+             assinada = COALESCE($3, assinada)
+         WHERE id = $4 RETURNING *`,
+        [quantidade, edicoes, assinada, id]
+      );
+
+      console.log('[api/producoes] Produção atualizada:', result.rows[0]);
+      res.status(200).json(result.rows[0]);
 
     } else {
       res.setHeader('Allow', ['GET', 'POST', 'PUT', 'DELETE']);
