@@ -56,13 +56,26 @@ export default async function handler(req, res) {
       }
     
       console.log('[api/producoes] Data recebida (antes da conversão):', data);
-      const dataLocal = data.replace('T', ' ') + ' -03:00';
-      console.log('[api/producoes] Data com fuso horário:', dataLocal);
-    
+      const parsedDate = data;
+
+      const checkDuplicate = await pool.query(
+        `SELECT * FROM producoes 
+         WHERE op_numero = $1 
+         AND etapa_index = $2 
+         AND funcionario = $3 
+         AND processo = $4 
+         AND DATE_TRUNC('day', data) = $5::date`,
+        [opNumero, etapaIndex, funcionario, processo, parsedDate.split('T')[0]]
+      );
+
+      if (checkDuplicate.rows.length > 0) {
+        return res.status(409).json({ error: 'Já existe um lançamento para esta OP, etapa, funcionário e data.' });
+      }
+
       const result = await pool.query(
         `INSERT INTO producoes (id, op_numero, etapa_index, processo, produto, variacao, maquina, quantidade, funcionario, data, lancado_por)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-        [id, opNumero, etapaIndex, processo, produto, variacao, maquina, quantidade, funcionario, dataLocal, lancadoPor]
+        [id, opNumero, etapaIndex, processo, produto, variacao, maquina, quantidade, funcionario, parsedDate, lancadoPor]
       );
     
       res.status(201).json({ ...result.rows[0], id });
@@ -81,7 +94,7 @@ export default async function handler(req, res) {
       res.status(200).json(result.rows);
 
     } else if (method === 'PUT') {
-      console.log('[api/producoes] Processando PUT...');
+      console.log('[api/produces] Processando PUT...');
       const { id, quantidade, edicoes, assinada } = req.body;
       console.log('[api/produces] Dados recebidos:', req.body);
 
@@ -89,7 +102,6 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Dados incompletos' });
       }
 
-      // Verificar se a produção existe
       const checkResult = await pool.query('SELECT * FROM producoes WHERE id = $1', [id]);
       if (checkResult.rows.length === 0) {
         return res.status(404).json({ error: 'Produção não encontrada' });
@@ -97,7 +109,6 @@ export default async function handler(req, res) {
 
       const producao = checkResult.rows[0];
 
-      // Verificar permissões: costureiras só podem assinar suas próprias produções
       const isCostureira = usuarioLogado.tipos.includes('costureira');
       const isOwner = producao.funcionario === usuarioLogado.nome;
       const onlySigning = quantidade === undefined && assinada !== undefined;
@@ -106,7 +117,6 @@ export default async function handler(req, res) {
         return res.status(403).json({ error: 'Permissão negada' });
       }
 
-      // Atualizar a produção
       const result = await pool.query(
         `UPDATE producoes 
          SET quantidade = COALESCE($1, quantidade), 
@@ -119,6 +129,35 @@ export default async function handler(req, res) {
       console.log('[api/producoes] Produção atualizada:', result.rows[0]);
       res.status(200).json(result.rows[0]);
 
+    } else if (method === 'DELETE') {
+      console.log('[api/produces] Processando DELETE...');
+      if (!usuarioLogado.permissoes.includes('excluir-registro-producao')) {
+        return res.status(403).json({ error: 'Permissão negada' });
+      }
+
+      const { id } = req.body;
+      console.log('[api/produces] Dados recebidos para exclusão:', { id });
+
+      if (!id) {
+        return res.status(400).json({ error: 'ID não fornecido no corpo da requisição' });
+      }
+
+      // Verificar se o registro existe antes de excluir
+      const checkResult = await pool.query('SELECT * FROM producoes WHERE id = $1', [id]);
+      if (checkResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Produção não encontrada' });
+      }
+
+      const producaoExcluida = checkResult.rows[0];
+
+      // Excluir o registro
+      const deleteResult = await pool.query(
+        'DELETE FROM producoes WHERE id = $1 RETURNING *',
+        [id]
+      );
+
+      console.log('[api/produces] Produção excluída:', deleteResult.rows[0]);
+      res.status(200).json(deleteResult.rows[0] || { message: 'Registro excluído com sucesso', id });
     } else {
       res.setHeader('Allow', ['GET', 'POST', 'PUT', 'DELETE']);
       res.status(405).end(`Método ${method} não permitido`);

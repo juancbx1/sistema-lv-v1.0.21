@@ -10,7 +10,6 @@ import { verificarAutenticacao, logout } from '/js/utils/auth.js';
 
   let permissoes = auth.permissoes || [];
   let usuarioLogado = auth.usuario;
-  console.log('[admin-gerenciar-producao] Autenticação bem-sucedida, permissões:', permissoes);
 
   let currentPage = 1;
   const registrosPorPagina = 20;
@@ -75,13 +74,11 @@ import { verificarAutenticacao, logout } from '/js/utils/auth.js';
       }
 
       const usuarios = await response.json();
-      console.log('[carregarFiltroFuncionarios] Usuários carregados:', usuarios);
 
       const funcionarios = usuarios.filter(u => {
         const tipos = u.tipos && Array.isArray(u.tipos) ? u.tipos : (u.tipo ? [u.tipo] : []);
         return tipos.includes('costureira') || tipos.includes('tiktik');
       });
-      console.log('[carregarFiltroFuncionarios] Funcionários filtrados (costureira/tiktik):', funcionarios);
 
       selectFuncionario.innerHTML = '<option value="">Todos</option>';
       funcionarios.forEach(f => {
@@ -138,10 +135,8 @@ import { verificarAutenticacao, logout } from '/js/utils/auth.js';
 
   
   async function aplicarFiltros(page = 1, dataInicial = null) {
-    console.log('[aplicarFiltros] Iniciando aplicação de filtros, página:', page, 'dataInicial:', dataInicial);
     currentPage = page;
     const producoes = await carregarProducoesDoBackend();
-    console.log('[aplicarFiltros] Produções carregadas:', producoes);
 
     // Buscar usuários da API
     let usuarios = [];
@@ -160,7 +155,6 @@ import { verificarAutenticacao, logout } from '/js/utils/auth.js';
       }
 
       usuarios = await response.json();
-      console.log('[aplicarFiltros] Usuários carregados:', usuarios);
     } catch (error) {
       console.error('[aplicarFiltros] Erro ao carregar usuários:', error);
     }
@@ -171,7 +165,6 @@ import { verificarAutenticacao, logout } from '/js/utils/auth.js';
     const filtroProcesso = document.getElementById('filtroProcesso')?.value || '';
     const filtroProduto = document.getElementById('filtroProduto')?.value || '';
     const filtroAssinatura = document.getElementById('filtroAssinatura')?.value || '';
-    console.log('[aplicarFiltros] Filtros aplicados:', { filtroFuncionario, filtroData, filtroMaquina, filtroProcesso, filtroProduto, filtroAssinatura });
 
     let filteredProducoes = producoes.filter(p => {
       let dataProducao;
@@ -204,7 +197,6 @@ import { verificarAutenticacao, logout } from '/js/utils/auth.js';
       return matchesFuncionario && matchesData && matchesMaquina && matchesProcesso && matchesProduto && matchesAssinatura;
     });
 
-    console.log('[aplicarFiltros] Produções filtradas:', filteredProducoes);
     filteredProducoes.sort((a, b) => new Date(b.data) - new Date(a.data));
 
     const totalRegistros = filteredProducoes.length;
@@ -212,8 +204,6 @@ import { verificarAutenticacao, logout } from '/js/utils/auth.js';
     const inicio = (currentPage - 1) * registrosPorPagina;
     const fim = inicio + registrosPorPagina;
     const producoesPagina = filteredProducoes.slice(inicio, fim);
-    console.log('[aplicarFiltros] Produções da página atual:', producoesPagina);
-
     const corpoTabela = document.getElementById('corpoTabelaProducoes');
     const paginacao = document.getElementById('paginacao');
     const tabelaProducoes = document.getElementById('tabelaProducoes');
@@ -341,7 +331,6 @@ tr.appendChild(tdAcao);
           corpoTabela.appendChild(tr);
       });
 
-        console.log('[aplicarFiltros] Tabela preenchida com', producoesPagina.length, 'registros');
         document.querySelectorAll('.btn-excluir-registro').forEach(btn => {
           btn.addEventListener('click', () => {
             const id = btn.closest('tr').dataset.id;
@@ -370,7 +359,7 @@ tr.appendChild(tdAcao);
     }
     const confirmacao = confirm("Tem certeza que deseja excluir o registro?");
     if (!confirmacao) return;
-
+  
     try {
       const token = localStorage.getItem('token');
       const response = await fetch('/api/producoes', {
@@ -381,14 +370,15 @@ tr.appendChild(tdAcao);
         },
         body: JSON.stringify({ id }),
       });
-
+  
       if (!response.ok) {
-        throw new Error(`Erro ao excluir produção: ${response.statusText}`);
+        const errorData = await response.json();
+        throw new Error(`Erro ao excluir produção: ${errorData.error || response.statusText}`);
       }
-
+  
       const producaoExcluida = await response.json();
       console.log('[excluirRegistro] Registro excluído do backend:', producaoExcluida);
-
+  
       // Atualizar a OP correspondente
       const ordensDeProducaoResponse = await fetch('/api/ordens-de-producao', {
         method: 'GET',
@@ -397,26 +387,27 @@ tr.appendChild(tdAcao);
           'Content-Type': 'application/json',
         },
       });
-
+  
       if (!ordensDeProducaoResponse.ok) {
         throw new Error('Erro ao buscar ordens de produção');
       }
-
+  
       const ordensDeProducao = await ordensDeProducaoResponse.json();
       const op = ordensDeProducao.find(o => o.numero === producaoExcluida.op_numero);
       if (!op) {
         console.warn('[excluirRegistro] OP não encontrada para opNumero:', producaoExcluida.op_numero);
         aplicarFiltros(currentPage);
+        alert('Registro excluído com sucesso!');
         return;
       }
-
+  
       const etapa = op.etapas.find(e => e.ultimoLancamentoId === String(id));
       if (etapa) {
         etapa.quantidade = '';
         etapa.lancado = false;
         etapa.ultimoLancamentoId = null;
         delete etapa.editadoPorAdmin;
-
+  
         // Recalcular o status da OP
         let todasEtapasCompletas = true;
         for (const etapa of op.etapas) {
@@ -428,7 +419,7 @@ tr.appendChild(tdAcao);
             break;
           }
         }
-
+  
         if (op.status === 'finalizado' && !todasEtapasCompletas) {
           op.status = 'produzindo';
           console.log(`[excluirRegistro] OP ${op.numero} voltou para o status "produzindo" devido a exclusão de registro.`);
@@ -436,8 +427,8 @@ tr.appendChild(tdAcao);
           op.status = 'em-aberto';
           console.log(`[excluirRegistro] OP ${op.numero} voltou para o status "em-aberto" porque não há etapas iniciadas.`);
         }
-
-        await fetch('/api/ordens-de-producao', {
+  
+        const updateOpResponse = await fetch('/api/ordens-de-producao', {
           method: 'PUT',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -445,9 +436,14 @@ tr.appendChild(tdAcao);
           },
           body: JSON.stringify(op),
         });
+  
+        if (!updateOpResponse.ok) {
+          throw new Error('Erro ao atualizar ordem de produção');
+        }
       }
-
+  
       aplicarFiltros(currentPage);
+      alert('Registro excluído com sucesso!');
     } catch (error) {
       console.error('[excluirRegistro] Erro:', error);
       alert('Erro ao excluir registro: ' + error.message);
@@ -587,7 +583,6 @@ tr.appendChild(tdAcao);
   }
 
   function atualizarPaginacao(totalPaginas) {
-    console.log('[atualizarPaginacao] Atualizando paginação, total de páginas:', totalPaginas);
     const paginacao = document.getElementById('paginacao');
     if (!paginacao) {
       console.error('[atualizarPaginacao] Elemento #paginacao não encontrado no DOM');
@@ -661,7 +656,6 @@ tr.appendChild(tdAcao);
   }
 
   function limparFiltros() {
-    console.log('[limparFiltros] Limpando filtros');
     const filtroFuncionario = document.getElementById('filtroCostureira');
     const filtroData = document.getElementById('filtroData');
     const filtroMaquina = document.getElementById('filtroMaquina');
@@ -680,7 +674,6 @@ tr.appendChild(tdAcao);
   }
 
   function inicializar() {
-    console.log('[inicializar] Iniciando inicialização da página');
     const hoje = new Date();
     const ano = hoje.getFullYear();
     const mes = String(hoje.getMonth() + 1).padStart(2, '0');
@@ -689,9 +682,7 @@ tr.appendChild(tdAcao);
     const filtroDataElement = document.getElementById('filtroData');
     if (filtroDataElement) {
       filtroDataElement.value = dataLocal; // Definir a data atual como padrão
-      console.log('[inicializar] Data padrão definida:', dataLocal);
     } else {
-      console.error('[inicializar] Elemento #filtroData não encontrado no DOM');
     }
 
     carregarFiltroFuncionarios();
@@ -705,7 +696,6 @@ tr.appendChild(tdAcao);
     document.getElementById('filtroProduto')?.addEventListener('change', () => aplicarFiltros(1));
     document.getElementById('filtroAssinatura')?.addEventListener('change', () => aplicarFiltros(1));
     document.getElementById('limparFiltros')?.addEventListener('click', limparFiltros);
-    console.log('[inicializar] Inicialização concluída');
   }
 
   inicializar();

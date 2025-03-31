@@ -2,6 +2,8 @@ import { verificarAutenticacao } from '/js/utils/auth.js';
 import { PRODUTOS, PRODUTOSKITS } from '/js/utils/prod-proc-maq.js';
 
 let filteredOPsGlobal = [];
+let lancamentosEmAndamento = new Set(); // Usa Set para evitar duplicatas de IDs
+
 
 function mostrarPopupMensagem(mensagem, tipo = 'erro') {
   const popup = document.createElement('div');
@@ -241,7 +243,6 @@ async function getNextOPNumber() {
     const numeros = ordens.map(op => parseInt(op.numero)).filter(n => !isNaN(n));
     const maxNumero = numeros.length > 0 ? Math.max(...numeros) : 0;
     const nextNumero = (maxNumero + 1).toString();
-    console.log('[getNextOPNumber] Próximo número de OP:', nextNumero);
     return nextNumero;
   } catch (error) {
     console.error('[getNextOPNumber] Erro ao calcular próximo número de OP:', error);
@@ -266,8 +267,6 @@ async function loadOPTable(filterStatus = 'todas', search = '') {
 
   try {
     const ordensDeProducao = await obterOrdensDeProducao();
-    console.log('[loadOPTable] Ordens de produção carregadas:', ordensDeProducao);
-
     const ordensUnicas = [];
     const numerosVistos = new Set();
     ordensDeProducao.forEach(op => {
@@ -561,7 +560,6 @@ async function loadEtapasEdit(op, skipReload = false) {
   await updateFinalizarButtonState(op, produtos);
 }
 
-
 async function salvarProducao(op, etapa, etapaIndex, produtos) {
   const produto = produtos.find(p => p.nome === op.produto);
   if (!produto) {
@@ -599,7 +597,7 @@ async function salvarProducao(op, etapa, etapaIndex, produtos) {
     maquina: maquina,
     quantidade: parseInt(etapa.quantidade),
     funcionario: etapa.usuario,
-    data: new Date().toLocaleString('sv', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T'), // Ex.: "2025-03-30T10:36:06"
+    data: new Date().toLocaleString('sv', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T'), // Formato: "2025-03-30T20:15:23"
     lancadoPor: usuarioLogado?.nome || 'Sistema',
   };
   console.log('[salvarProducao] Dados enviados para o servidor:', dados);
@@ -636,8 +634,11 @@ async function salvarProducao(op, etapa, etapaIndex, produtos) {
       }
       if (responseProducoes.status === 403) {
         mostrarPopupMensagem('Você não tem permissão para lançar produção.', 'erro');
+      } else if (responseProducoes.status === 409) {
+        mostrarPopupMensagem('Já existe um lançamento para esta OP, etapa e funcionário. Nenhum novo registro foi criado.', 'aviso');
+        return null;
       }
-      throw new Error(`Erro ao salvar produção: ${error.error}`);
+      throw new Error(`Erro ao salvar produção: ${error.error || 'Erro desconhecido'}`);
     }
 
     const producao = await responseProducoes.json();
@@ -648,14 +649,20 @@ async function salvarProducao(op, etapa, etapaIndex, produtos) {
   }
 }
 
+
 // Função para lançar etapa
 async function lancarEtapa(op, etapaIndex, quantidade, produtos) {
   const etapa = op.etapas[etapaIndex];
   etapa.quantidade = parseInt(quantidade);
-  etapa.ultimoLancamentoId = await salvarProducao(op, etapa, etapaIndex, produtos);
-  etapa.lancado = true;
-  await saveOPChanges(op);
-  await updateFinalizarButtonState(op, produtos);
+  const novoId = await salvarProducao(op, etapa, etapaIndex, produtos);
+  if (novoId) {
+    etapa.ultimoLancamentoId = novoId;
+    etapa.lancado = true;
+    await saveOPChanges(op);
+    await updateFinalizarButtonState(op, produtos);
+    return true; // Indica sucesso
+  }
+  return false; // Indica falha
 }
 
 // Função de debounce
@@ -693,7 +700,6 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row, produtos)
   lancarBtn.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
   const podeLancar = permissoes.includes('lancar-producao');
   lancarBtn.disabled = !podeLancar || !usuarioSelect.value || !quantidadeInput.value || parseInt(quantidadeInput.value) <= 0 || !isEditable || etapa.lancado;
-  lancarBtn.dataset.etapaIndex = op.etapas.indexOf(etapa);
 
   if (!podeLancar) {
     lancarBtn.style.opacity = '0.5';
@@ -719,24 +725,40 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row, produtos)
     }
 
     lancarBtn.addEventListener('click', async () => {
-      if (lancarBtn.disabled) return;
-    
+      if (lancarBtn.disabled || lancamentosEmAndamento.has(op.edit_id + '-' + etapa.processo)) return;
+
+      // Marca que o lançamento está em andamento
+      lancamentosEmAndamento.add(op.edit_id + '-' + etapa.processo);
+      lancarBtn.disabled = true;
+      lancarBtn.textContent = 'Processando...';
+
       const etapaIndex = parseInt(lancarBtn.dataset.etapaIndex);
       const editId = window.location.hash.split('/')[1];
       const ordensDeProducao = await obterOrdensDeProducao();
       const opLocal = ordensDeProducao.find(o => o.edit_id === editId);
-    
+
       if (!opLocal || !opLocal.etapas || !opLocal.etapas[etapaIndex]) {
         mostrarPopupMensagem('Erro: Ordem de Produção ou etapa não encontrada.', 'erro');
+        lancamentosEmAndamento.delete(op.edit_id + '-' + etapa.processo);
+        lancarBtn.disabled = false;
+        lancarBtn.textContent = 'Lançar';
         return;
       }
-    
+
       const etapasFuturas = await getEtapasFuturasValidas(opLocal, etapaIndex, produtos);
-      if (etapasFuturas.length > 0) {
-        mostrarPopupEtapasFuturas(opLocal, etapaIndex, etapasFuturas, quantidadeInput.value, produtos);
-      } else {
-        try {
-          await lancarEtapa(opLocal, etapaIndex, quantidadeInput.value, produtos);
+      try {
+        let sucesso = false;
+        if (etapasFuturas.length > 0) {
+          await mostrarPopupEtapasFuturas(opLocal, etapaIndex, etapasFuturas, quantidadeInput.value, produtos);
+          sucesso = true; // Assume sucesso se o popup for concluído
+        } else {
+          const novoId = await lancarEtapa(opLocal, etapaIndex, quantidadeInput.value, produtos);
+          if (novoId) {
+            sucesso = true;
+          }
+        }
+
+        if (sucesso) {
           // Recarregar a OP para garantir consistência
           const updatedOrdens = await obterOrdensDeProducao();
           const updatedOp = updatedOrdens.find(o => o.edit_id === editId);
@@ -755,12 +777,16 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row, produtos)
           } else {
             throw new Error('Ordem de Produção não encontrada após lançamento.');
           }
-        } catch (error) {
-          console.error('[criarQuantidadeDiv] Erro ao lançar etapa:', error);
-          mostrarPopupMensagem('Erro ao lançar produção. Tente novamente.', 'erro');
-          lancarBtn.textContent = 'Lançar';
-          lancarBtn.disabled = false;
-          quantidadeInput.disabled = false;
+        }
+      } catch (error) {
+        console.error('[criarQuantidadeDiv] Erro ao lançar etapa:', error);
+        mostrarPopupMensagem('Erro ao lançar produção. Tente novamente.', 'erro');
+        lancarBtn.textContent = 'Lançar';
+        lancarBtn.disabled = false;
+      } finally {
+        // Só remove a flag se houver erro ou se já estava lançado
+        if (!etapa.lancado) {
+          lancamentosEmAndamento.delete(op.edit_id + '-' + etapa.processo);
         }
       }
     });
@@ -832,7 +858,6 @@ async function getEtapasFuturasValidas(op, etapaIndex, produtos) {
 
 // Função para exibir o popup
 function mostrarPopupEtapasFuturas(op, etapaIndex, etapasFuturas, quantidade, produtos) {
-  console.log('[mostrarPopupEtapasFuturas] Exibindo popup para etapas futuras:', etapasFuturas);
   const popup = document.createElement('div');
   popup.className = 'popup-etapas';
   popup.style.position = 'fixed';
@@ -953,7 +978,6 @@ function mostrarPopupEtapasFuturas(op, etapaIndex, etapasFuturas, quantidade, pr
       .filter(cb => cb.checkbox.checked)
       .map(cb => cb.index);
 
-    console.log('[mostrarPopupEtapasFuturas] Salvando etapas selecionadas:', selectedIndices);
     await lancarEtapa(op, etapaIndex, quantidade, produtos);
     const usuarioAtual = op.etapas[etapaIndex].usuario;
     for (const index of selectedIndices) {
@@ -968,7 +992,6 @@ function mostrarPopupEtapasFuturas(op, etapaIndex, etapasFuturas, quantidade, pr
   });
 
   cancelBtn.addEventListener('click', async () => {
-    console.log('[mostrarPopupEtapasFuturas] Popup cancelado');
     document.body.removeChild(popup);
     await loadEtapasEdit(op, true);
     await atualizarVisualEtapas(op, produtos);
@@ -1011,7 +1034,6 @@ async function atualizarVisualEtapas(op, produtos) {
 
   const etapasRows = document.querySelectorAll('.etapa-row');
   const etapaAtualIndex = await determinarEtapaAtual(op, produtos);
-  console.log('[atualizarVisualEtapas] Etapas no DOM:', etapasRows.length, 'Etapas na OP:', op.etapas.length);
 
   // Garantir que o número de elementos no DOM corresponda ao número de etapas
   if (etapasRows.length !== op.etapas.length) {
@@ -1102,11 +1124,8 @@ async function toggleView() {
   }
 
   const ordensDeProducao = await obterOrdensDeProducao();
-  console.log('[toggleView] Ordens de produção obtidas:', ordensDeProducao.length);
-
   if (hash.startsWith('#editar/') && permissoes.includes('editar-op')) {
     const editId = hash.split('/')[1];
-    console.log('[toggleView] Modo edição, editId:', editId);
     const op = ordensDeProducao.find(o => o.edit_id === editId);
 
     if (!op) {
@@ -1116,7 +1135,6 @@ async function toggleView() {
       return;
     }
 
-    console.log('[toggleView] Editando OP:', op.numero);
     document.getElementById('editProdutoOP').value = op.produto || '';
     const editQuantidadeInput = document.getElementById('editQuantidadeOP');
     editQuantidadeInput.value = op.quantidade || '';
@@ -1149,7 +1167,6 @@ async function toggleView() {
     document.getElementById('opNumero').textContent = `OP n°: ${op.numero}`;
 
     await loadEtapasEdit(op);
-    console.log('[toggleView] Etapas carregadas com sucesso');
   } else if (hash === '#adicionar' && permissoes.includes('criar-op')) {
     opListView.style.display = 'none';
     opFormView.style.display = 'block';
@@ -1239,7 +1256,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   window.addEventListener('hashchange', () => {
-    console.log('[hashchange] Hash alterado para:', window.location.hash);
     toggleView();
   });
 
