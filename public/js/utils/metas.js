@@ -4,16 +4,16 @@ import { obterProdutos } from '/js/utils/storage.js';
 // Definição das metas por nível
 const metasPorNivel = {
     1: [
-        { processos: 3000, valor: 110 },
-        { processos: 2900, valor: 90 },
-        { processos: 2700, valor: 70 },
-        { processos: 2500, valor: 40 }
+        { processos: 2175, valor: 40 },
+        { processos: 2375, valor: 50 },
+        { processos: 2575, valor: 70 },
+        { processos: 3075, valor: 110 }
     ],
     2: [
-        { processos: 2500, valor: 115 },
-        { processos: 2400, valor: 95 },
-        { processos: 2300, valor: 75 },
-        { processos: 2100, valor: 45 }
+        { processos: 2050, valor: 50 },
+        { processos: 2200, valor: 70 },
+        { processos: 2400, valor: 90 },
+        { processos: 2925, valor: 130 }
     ],
     3: [
         { processos: 2300, valor: 115 },
