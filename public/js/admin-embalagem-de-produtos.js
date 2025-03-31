@@ -45,6 +45,51 @@ async function fetchFromAPI(endpoint, options = {}) {
     }
 }
 
+// Dentro do script, verifique o tamanho da tela
+function adjustForMobile() {
+    if (window.innerWidth <= 414) {
+        const table = document.getElementById('produtosTable');
+        const tableBody = document.getElementById('produtosTableBody');
+        const productsSection = document.querySelector('.products-section');
+
+        // Criar container para os cards
+        const cardContainer = document.createElement('div');
+        cardContainer.className = 'product-card-container';
+
+        // Converter cada linha da tabela em um card
+        Array.from(tableBody.getElementsByTagName('tr')).forEach(row => {
+            const cells = row.getElementsByTagName('td');
+            if (cells.length > 0) {
+                const card = document.createElement('div');
+                card.className = 'product-card';
+                card.dataset.productId = row.dataset.productId; // Preservar qualquer ID ou dado
+
+                // Adicionar campos ao card
+                card.innerHTML = `
+                    <div><strong>Produto:</strong> ${cells[0].textContent}</div>
+                    <div><strong>Variação:</strong> ${cells[1].textContent}</div>
+                    <div class="thumbnail">${cells[2].innerHTML}</div> <!-- Miniatura -->
+                    <div><strong>Qtd Disp.:</strong> ${cells[3].textContent}</div>
+                    <div><strong>OP:</strong> ${cells[4].textContent}</div>
+                `;
+
+                // Manter a funcionalidade de clique (se houver)
+                card.addEventListener('click', () => row.click());
+
+                cardContainer.appendChild(card);
+            }
+        });
+
+        // Substituir a tabela pelos cards
+        productsSection.insertBefore(cardContainer, table.nextSibling);
+        table.style.display = 'none';
+    }
+}
+
+// Chamar a função ao carregar e redimensionar
+window.addEventListener('load', adjustForMobile);
+window.addEventListener('resize', adjustForMobile);
+
 // Função para verificar se há kits disponíveis para a variação
 async function temKitsDisponiveis(produto, variante) {
     const produtosCadastrados = await obterProdutos() || [];
