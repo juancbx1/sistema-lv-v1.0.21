@@ -215,14 +215,20 @@ async function carregarTabelaKit(kitNome, variacao, varianteAtual) {
     kitTableBody.innerHTML = '';
     kitErrorMessage.classList.add('hidden');
 
-    const variacaoKit = kit.grade.find(g => g.variacao === variacao);
-    const composicao = variacaoKit.composicao || [];
-
-    if (composicao.length === 0) {
-        kitErrorMessage.textContent = 'Este kit não possui composição definida.';
+    if (!kit || !kit.grade) {
+        kitErrorMessage.textContent = 'Kit não encontrado ou sem grade definida.';
         kitErrorMessage.classList.remove('hidden');
         return;
     }
+
+    const variacaoKit = kit.grade.find(g => g.variacao === variacao);
+    if (!variacaoKit || !variacaoKit.composicao || variacaoKit.composicao.length === 0) {
+        kitErrorMessage.textContent = 'Esta variação do kit não possui composição definida.';
+        kitErrorMessage.classList.remove('hidden');
+        return;
+    }
+
+    const composicao = variacaoKit.composicao;
 
     const ordensFinalizadas = await obterOrdensFinalizadas();
     const produtosAgrupados = {};
@@ -235,7 +241,7 @@ async function carregarTabelaKit(kitNome, variacao, varianteAtual) {
         }
     });
 
-    const varianteAtualNormalizada = varianteAtual === '-' ? '' : varianteAtual;
+    const varianteAtualNormalizada = varianteAtual === '-' ? '' : varianteAtual.toLowerCase();
     let menorQuantidadePossivel = Infinity;
 
     const embalagemAtual = JSON.parse(localStorage.getItem('embalagemAtual'));
@@ -245,7 +251,7 @@ async function carregarTabelaKit(kitNome, variacao, varianteAtual) {
         const chave = `${produtoBase}:${item.variacao}`;
         let qtdDisponivel = produtosAgrupados[chave] || 0;
 
-        if (item.variacao === varianteAtualNormalizada) {
+        if (item.variacao.toLowerCase() === varianteAtualNormalizada) {
             qtdDisponivel = embalagemAtual ? embalagemAtual.quantidade : qtdDisponivel;
         }
 
@@ -257,17 +263,46 @@ async function carregarTabelaKit(kitNome, variacao, varianteAtual) {
         kitTableBody.appendChild(tr);
 
         const qtdPossivel = Math.floor(qtdDisponivel / item.quantidade);
-        menorQuantidadePossivel = Math.min(menorQuantidadePossivel, qtdPossivel);
+        if (!isNaN(qtdPossivel) && qtdPossivel >= 0) {
+            menorQuantidadePossivel = Math.min(menorQuantidadePossivel, qtdPossivel);
+        }
     });
 
+    // Garantir que o elemento seja criado antes de definir o texto
     const kitFooter = document.getElementById('kit-footer');
+    if (!kitFooter) {
+        console.error('[carregarTabelaKit] Elemento #kit-footer não encontrado no DOM');
+        return;
+    }
+
+    const qtdDisponivelElement = document.getElementById('qtd-disponivel-kits');
+    if (!qtdDisponivelElement && kitFooter) {
+        console.warn('[carregarTabelaKit] Elemento #qtd-disponivel-kits não encontrado, recriando no footer');
+        const div = document.createElement('div');
+        div.className = 'qtd-disponivel-container';
+        div.innerHTML = '<p>Qtd Disponível: <span id="qtd-disponivel-kits"></span></p>';
+        kitFooter.appendChild(div);
+    }
+
+    const qtdDisponivelElementUpdated = document.getElementById('qtd-disponivel-kits');
+    if (qtdDisponivelElementUpdated) {
+        if (isNaN(menorQuantidadePossivel) || menorQuantidadePossivel <= 0) {
+            qtdDisponivelElementUpdated.textContent = 'Insuficiente para montar Kit';
+        } else {
+            qtdDisponivelElementUpdated.textContent = menorQuantidadePossivel;
+        }
+    } else {
+        console.error('[carregarTabelaKit] Não foi possível encontrar ou criar o elemento #qtd-disponivel-kits');
+        return;
+    }
+
     kitFooter.innerHTML = `
         <div class="qtd-disponivel-container">
-            <p>Qtd Disponível: <span id="qtd-disponivel-kits">${menorQuantidadePossivel}</span></p>
+            <p>Qtd Disponível: <span id="qtd-disponivel-kits">${qtdDisponivelElementUpdated.textContent}</span></p>
         </div>
         <div class="qtd-enviar-container">
             <label>Quantidade a enviar: 
-                <input type="number" id="qtd-enviar-kits" min="0" max="${menorQuantidadePossivel}" value="0">
+                <input type="number" id="qtd-enviar-kits" min="0" max="${isNaN(menorQuantidadePossivel) || menorQuantidadePossivel <= 0 ? 0 : menorQuantidadePossivel}" value="0">
             </label>
             <button id="kit-estoque-btn">Estoque</button>
         </div>
@@ -279,7 +314,10 @@ async function carregarTabelaKit(kitNome, variacao, varianteAtual) {
 
     qtdEnviarKits.addEventListener('input', () => {
         let qtdInformada = parseInt(qtdEnviarKits.value) || 0;
-        if (qtdInformada > menorQuantidadePossivel) {
+        if (isNaN(menorQuantidadePossivel) || menorQuantidadePossivel <= 0) {
+            qtdInformada = 0;
+            qtdEnviarKits.value = 0;
+        } else if (qtdInformada > menorQuantidadePossivel) {
             qtdEnviarKits.value = menorQuantidadePossivel;
             qtdInformada = menorQuantidadePossivel;
         }
@@ -294,7 +332,7 @@ async function carregarTabelaKit(kitNome, variacao, varianteAtual) {
 
     kitEstoqueBtn.addEventListener('click', () => {
         const qtdKits = parseInt(qtdEnviarKits.value) || 0;
-        if (qtdKits > 0 && qtdKits <= menorQuantidadePossivel) {
+        if (qtdKits > 0 && qtdKits <= (isNaN(menorQuantidadePossivel) ? 0 : menorQuantidadePossivel)) {
             enviarKitParaEstoque(kitNome, variacao, qtdKits);
         }
     });
