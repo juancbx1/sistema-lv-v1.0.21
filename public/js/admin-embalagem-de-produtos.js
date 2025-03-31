@@ -50,7 +50,8 @@ async function temKitsDisponiveis(produto, variante) {
     const produtosCadastrados = await obterProdutos() || [];
     console.log('[temKitsDisponiveis] Todos os produtos cadastrados:', produtosCadastrados);
 
-    const kits = produtosCadastrados.filter(p => p.isKit);
+    // Ajuste: usar p.is_kit em vez de p.isKit
+    const kits = produtosCadastrados.filter(p => p.is_kit);
     const varianteAtual = variante === '-' ? '' : variante.toLowerCase();
 
     console.log(`[temKitsDisponiveis] Verificando kits para Produto: ${produto}, Variante: ${varianteAtual}`);
@@ -65,7 +66,7 @@ async function temKitsDisponiveis(produto, variante) {
         return kit.grade.some(g => {
             if (!g.composicao || g.composicao.length === 0) {
                 console.log(`[temKitsDisponiveis] Variação ${g.variacao} do kit ${kit.nome} não tem composição.`);
-            return false;
+                return false;
             }
 
             return g.composicao.some(c => {
@@ -97,8 +98,9 @@ async function carregarKitsDisponiveis(produto, variante) {
     const varianteNormalizada = variante === '-' ? '' : variante.toLowerCase();
     console.log(`[carregarKitsDisponiveis] Filtrando kits para Produto: ${produto}, Variante: ${varianteNormalizada}`);
 
+    // Ajuste: usar p.is_kit em vez de p.isKit
     const kitsFiltrados = produtosCadastrados.filter(kit => {
-        if (!kit.isKit || !kit.grade) return false;
+        if (!kit.is_kit || !kit.grade) return false;
 
         const match = kit.grade.some(grade => {
             return grade.composicao && grade.composicao.some(item => {
@@ -126,14 +128,14 @@ async function carregarKitsDisponiveis(produto, variante) {
         button.addEventListener('click', () => {
             document.querySelectorAll('#kits-list button').forEach(btn => btn.classList.remove('active'));
             button.classList.add('active');
-            carregarVariacoesKit(kit.nome, produto, variante); // Passa produto e variante
+            carregarVariacoesKit(kit.nome, produto, variante);
         });
         kitsList.appendChild(button);
     });
 
     if (kitsList.children.length > 0) {
         kitsList.children[0].classList.add('active');
-        carregarVariacoesKit(kitsFiltrados[0].nome, produto, variante); // Passa produto e variante
+        carregarVariacoesKit(kitsFiltrados[0].nome, produto, variante);
     }
 }
 
@@ -149,7 +151,8 @@ async function carregarVariacoesKit(nomeKit, produto, variante) {
 
     console.log(`[carregarVariacoesKit] Filtrando variações do kit ${nomeKit} para Produto: ${produto}, Variante: ${variante}`);
 
-    const kit = produtosCadastrados.find(p => p.isKit && p.nome === nomeKit);
+    // Ajuste: usar p.is_kit em vez de p.isKit
+    const kit = produtosCadastrados.find(p => p.is_kit && p.nome === nomeKit);
     if (!kit || !kit.grade) {
         console.log(`[carregarVariacoesKit] Kit ${nomeKit} não encontrado ou sem grade.`);
         return;
@@ -188,7 +191,6 @@ async function carregarVariacoesKit(nomeKit, produto, variante) {
         kitVariacoesSelect.appendChild(option);
     });
 
-    // Adicionar evento ao select
     kitVariacoesSelect.addEventListener('change', () => {
         const variacaoSelecionada = kitVariacoesSelect.value;
         if (variacaoSelecionada) {
@@ -197,7 +199,6 @@ async function carregarVariacoesKit(nomeKit, produto, variante) {
         }
     });
 
-    // Carregar automaticamente a primeira variação
     if (variacoesFiltradas.length > 0) {
         kitVariacoesSelect.value = variacoesFiltradas[0].variacao;
         carregarTabelaKit(nomeKit, variacoesFiltradas[0].variacao, variante);
@@ -486,8 +487,10 @@ async function carregarEmbalagem(produto, variante, quantidade) {
     const embalagemThumbnail = document.getElementById('embalagemThumbnail');
     const kitTabBtn = document.querySelector('[data-tab="kit"]');
     const kitTabPanel = document.getElementById('kit-tab');
+    const unidadeTabBtn = document.querySelector('[data-tab="unidade"]');
+    const unidadeTabPanel = document.getElementById('unidade-tab');
 
-    if (!embalagemTitle || !produtoNome || !varianteNome || !qtdDisponivel || !qtdEnviar || !estoqueBtn || !embalagemThumbnail || !kitTabBtn || !kitTabPanel) {
+    if (!embalagemTitle || !produtoNome || !varianteNome || !qtdDisponivel || !qtdEnviar || !estoqueBtn || !embalagemThumbnail || !kitTabBtn || !kitTabPanel || !unidadeTabBtn || !unidadeTabPanel) {
         console.error('[carregarEmbalagem] Um ou mais elementos DOM não foram encontrados');
         return;
     }
@@ -507,32 +510,30 @@ async function carregarEmbalagem(produto, variante, quantidade) {
     estoqueBtn.disabled = true;
 
     const temKits = await temKitsDisponiveis(produto, variante);
+    console.log(`[carregarEmbalagem] Produto ${produto} com variante ${variante} tem kits disponíveis? ${temKits}`);
+
+    // Configuração das abas
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.add('hidden'));
+
     if (temKits) {
         kitTabBtn.style.display = 'inline-block';
         kitTabPanel.classList.remove('hidden');
+        kitTabBtn.classList.add('active'); // Ativa a aba "Kits" por padrão
+        await carregarKitsDisponiveis(produto, variante); // Carrega os kits
+        console.log('[carregarEmbalagem] Aba "Kits" ativada por padrão');
     } else {
         kitTabBtn.style.display = 'none';
         kitTabPanel.classList.add('hidden');
-        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-        document.querySelector('[data-tab="unidade"]').classList.add('active');
-        document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.add('hidden'));
-        document.getElementById('unidade-tab').classList.remove('hidden');
+        unidadeTabBtn.classList.add('active'); // Ativa "Unidade" se não houver kits
+        unidadeTabPanel.classList.remove('hidden');
+        console.log('[carregarEmbalagem] Aba "Unidade" ativada por padrão (sem kits)');
     }
 
+    // Configuração do botão "Estoque" para a aba "Unidade"
     const novoBotao = estoqueBtn.cloneNode(true);
     estoqueBtn.parentNode.replaceChild(novoBotao, estoqueBtn);
     const novoEstoqueBtn = document.getElementById('estoqueBtn');
-
-    const unidadeTab = document.getElementById('unidade-tab');
-    if (unidadeTab) {
-        if (temKits) {
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelector('[data-tab="unidade"]').classList.add('active');
-            document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.add('hidden'));
-            unidadeTab.classList.remove('hidden');
-            console.log('[carregarEmbalagem] Aba Unidade ativada');
-        }
-    }
 
     let quantidadeOriginal = quantidade;
     let isChanged = false;
@@ -562,28 +563,22 @@ async function carregarEmbalagem(produto, variante, quantidade) {
         }
     });
 
-    // Ajustar o evento do botão "Estoque" em carregarEmbalagem
-novoEstoqueBtn.addEventListener('click', async () => {
-    const quantidadeEnviada = parseInt(newQtdEnviar.value);
-    console.log(`[carregarEmbalagem] Botão Estoque clicado, Qtd Enviar: ${quantidadeEnviada}`);
-    if (quantidadeEnviada < 1 || quantidadeEnviada > quantidadeOriginal) {
-        console.warn('[carregarEmbalagem] Quantidade inválida detectada');
-        alert('Quantidade inválida!');
-        return;
-    }
+    novoEstoqueBtn.addEventListener('click', async () => {
+        const quantidadeEnviada = parseInt(newQtdEnviar.value);
+        console.log(`[carregarEmbalagem] Botão Estoque clicado, Qtd Enviar: ${quantidadeEnviada}`);
+        if (quantidadeEnviada < 1 || quantidadeEnviada > quantidadeOriginal) {
+            console.warn('[carregarEmbalagem] Quantidade inválida detectada');
+            alert('Quantidade inválida!');
+            return;
+        }
 
-    await atualizarQuantidadeEmbalada(produto, variante, quantidadeEnviada);
-    console.log(`[carregarEmbalagem] Salvando no estoque: Produto: ${produto}, Variante: ${variante}, Quantidade: ${quantidadeEnviada}`);
-    await carregarTabelaProdutos(); // Recarrega a tabela com dados atualizados
-    alert(`Enviado ${quantidadeEnviada} unidade(s) de ${produto}${variante !== '-' ? `: ${variante}` : ''} para o estoque!`);
-    console.log('[carregarEmbalagem] Processo concluído, retornando à tela principal');
-    window.location.hash = '';
-    localStorage.removeItem('embalagemAtual');
-});
-
-    if (temKits) {
-        await carregarKitsDisponiveis(produto, variante);
-    }
+        await atualizarQuantidadeEmbalada(produto, variante, quantidadeEnviada);
+        console.log(`[carregarEmbalagem] Salvando no estoque: Produto: ${produto}, Variante: ${variante}, Quantidade: ${quantidadeEnviada}`);
+        await carregarTabelaProdutos();
+        alert(`Enviado ${quantidadeEnviada} unidade(s) de ${produto}${variante !== '-' ? `: ${variante}` : ''} para o estoque!`);
+        window.location.hash = '';
+        localStorage.removeItem('embalagemAtual');
+    });
 }
 
 // Atualizar a função alternarAba para destacar o kit ativo

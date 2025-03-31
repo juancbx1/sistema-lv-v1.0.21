@@ -20,6 +20,11 @@ export default async function handler(req, res) {
             res.status(200).json(result.rows);
         } else if (method === 'POST') {
             const produto = req.body;
+            console.log('[POST] Produto recebido do cliente:', produto);
+        
+            // Garantir que is_kit seja um booleano
+            const isKitValue = produto.isKit === true || produto.tipos && produto.tipos.includes('kits');
+        
             const query = `
                 INSERT INTO produtos (nome, sku, gtin, unidade, estoque, imagem, tipos, variacoes, estrutura, etapas, grade, is_kit, pontos, pontos_expiracao, pontos_criacao)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
@@ -53,14 +58,14 @@ export default async function handler(req, res) {
                 JSON.stringify(produto.estrutura || []),
                 JSON.stringify(produto.etapas || []),
                 JSON.stringify(produto.grade || []),
-                produto.isKit || false,
+                isKitValue, // Usar valor explícito
                 JSON.stringify(produto.pontos || []),
                 produto.pontos_expiracao || null,
-                produto.pontos_criacao || new Date().toISOString() // Data de criação padrão como agora
+                produto.pontos_criacao || new Date().toISOString()
             ];
-            console.log('Salvando produto:', produto);
+            console.log('[POST] Valores preparados para a query:', values);
             const result = await pool.query(query, values);
-            console.log('Produto salvo com sucesso:', result.rows[0]);
+            console.log('[POST] Produto salvo com sucesso:', result.rows[0]);
             res.status(200).json(result.rows[0]);
         } else {
             res.setHeader('Allow', ['GET', 'POST']);

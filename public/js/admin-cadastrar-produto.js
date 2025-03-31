@@ -58,26 +58,26 @@ function deepClone(obj) {
 
 // Inicialização
 async function inicializarPagina() {
-    document.documentElement.setAttribute('hidden', 'true'); // Oculta o DOM inicialmente
+    document.documentElement.setAttribute('hidden', 'true');
 
     const auth = await verificarAutenticacao('cadastrar-produto.html', ['acesso-cadastrar-produto']);
     if (!auth) {
         console.error('[admin-cadastrar-produto] Autenticação falhou. Usuário logado:', localStorage.getItem('usuarioLogado'));
-        return; // O redirecionamento é feito em verificarAutenticacao
+        return;
     }
 
     const permissoes = auth.permissoes || [];
     const usuarioLogado = auth.usuario;
     console.log('Inicializando cadastrar-produto para usuário:', usuarioLogado.nome, 'Permissões:', permissoes);
 
-    await loadProductTable('todos');
+    // Forçar atualização dos produtos na inicialização
+    await loadProductTable('todos', '', true); // Passar forceRefresh como true
     toggleView();
-    document.documentElement.removeAttribute('hidden'); // Mostra o DOM após carregar
+    document.documentElement.removeAttribute('hidden');
 }
-
-async function loadProductTable(filterType = 'todos', search = '') {
+async function loadProductTable(filterType = 'todos', search = '', forceRefresh = false) {
     try {
-        produtos = await obterProdutos();
+        produtos = await obterProdutos(forceRefresh); // Passar forceRefresh para obterProdutos
         console.log('[loadProductTable] Produtos obtidos:', produtos);
 
         const allProductNames = [...PRODUTOS, ...PRODUTOSKITS];
@@ -88,7 +88,7 @@ async function loadProductTable(filterType = 'todos', search = '') {
                     nome,
                     sku: '',
                     tipos: PRODUTOSKITS.includes(nome) ? ['kits'] : [],
-                    isKit: PRODUTOSKITS.includes(nome),
+                    isKit: PRODUTOSKITS.includes(nome), // Garantir que novos kits tenham isKit: true
                     gtin: '',
                     unidade: '',
                     estoque: 0,
@@ -104,13 +104,13 @@ async function loadProductTable(filterType = 'todos', search = '') {
         if (novosProdutos.length > 0) {
             console.log('[loadProductTable] Salvando novos produtos:', novosProdutos);
             await salvarProdutos(novosProdutos);
-            produtos = await obterProdutos();
+            produtos = await obterProdutos(true); // Forçar atualização após salvar novos produtos
             console.log('[loadProductTable] Produtos após salvar:', produtos);
         }
 
         const mappedProdutos = produtos.map(produto => ({
             ...produto,
-            isKit: produto.tipos && produto.tipos.includes('kits')
+            isKit: produto.is_kit // Usar o valor direto do banco
         }));
 
         const filteredProdutos = mappedProdutos
@@ -140,6 +140,7 @@ async function loadProductTable(filterType = 'todos', search = '') {
         console.error('[loadProductTable] Erro:', error);
     }
 }
+
 
 inicializarPagina();
 
@@ -1009,6 +1010,7 @@ async function salvarProdutoNoBackend() {
 
     const tiposSelecionados = Array.from(document.querySelectorAll('input[name="tipo"]:checked')).map(cb => cb.value);
     const isKit = tiposSelecionados.includes('kits');
+    console.log('[salvarProdutoNoBackend] Tipos selecionados:', tiposSelecionados, 'isKit:', isKit);
 
     const updatedProduct = {
         ...editingProduct,
@@ -1086,7 +1088,7 @@ async function salvarProdutoNoBackend() {
         localStorage.removeItem('produtoComDuplicidade');
         invalidateCache('produtosCadastrados');
         console.log('[salvarProdutoNoBackend] Cache invalidado após salvamento');
-        return savedProduct; // Retornar o produto salvo para uso posterior
+        return savedProduct;
     } catch (error) {
         console.error('[salvarProdutoNoBackend] Erro detalhado:', error.message, error.stack);
         alert('Erro ao salvar o produto: ' + error.message);
