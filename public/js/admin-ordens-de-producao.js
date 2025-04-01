@@ -1,3 +1,4 @@
+window.saveOPChanges = null; // Inicializa como null para garantir que existe
 import { verificarAutenticacao } from '/js/utils/auth.js';
 import { PRODUTOS, PRODUTOSKITS } from '/js/utils/prod-proc-maq.js';
 
@@ -413,7 +414,7 @@ async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = '
     let paginationHTML = '';
     if (totalPages > 1) {
       paginationHTML += `<button class="pagination-btn prev" data-page="${Math.max(1, page - 1)}" ${page === 1 ? 'disabled' : ''}>Anterior</button>`;
-      paginationHTML += `<span class="pagination-current">Página ${page} de ${totalPages}</span>`;
+      paginationHTML += `<span class="pagination-current">Pág. ${page} de ${totalPages}</span>`;
       paginationHTML += `<button class="pagination-btn next" data-page="${Math.min(totalPages, page + 1)}" ${page === totalPages ? 'disabled' : ''}>Próximo</button>`;
     }
 
@@ -517,6 +518,9 @@ async function saveOPChanges(op) {
   console.log(`[saveOPChanges] Ordem de Produção #${op.numero} atualizada no banco de dados`);
 }
 
+window.saveOPChanges = saveOPChanges; // Torna a função global
+
+
 async function loadEtapasEdit(op, skipReload = false) {
   console.log(`[loadEtapasEdit] Iniciando carregamento das etapas para OP: ${op ? op.numero : 'undefined'}`);
   const etapasContainer = document.getElementById('etapasContainer');
@@ -532,26 +536,30 @@ async function loadEtapasEdit(op, skipReload = false) {
     return;
   }
 
+  // Mostra o spinner apenas se não for um reload parcial
   if (!skipReload) {
     etapasContainer.innerHTML = '<div class="spinner">Carregando etapas...</div>';
   }
 
+  // Carrega produtos e usuários uma vez antes do loop
   const produtos = await obterProdutos();
-  const todasEtapasCompletas = await verificarEtapasEStatus(op, produtos);
-  if (op.status === 'finalizado' && !todasEtapasCompletas) {
-    op.status = 'produzindo';
-    await saveOPChanges(op);
-  }
-
-  if (!skipReload) {
-    etapasContainer.innerHTML = '';
-  }
-
   const responseUsuarios = await fetch('/api/usuarios', {
     headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
   });
   const usuarios = await responseUsuarios.json();
 
+  // Verifica etapas e status uma vez
+  const todasEtapasCompletas = await verificarEtapasEStatus(op, produtos);
+  if (op.status === 'finalizado' && !todasEtapasCompletas) {
+    op.status = 'produzindo';
+    await saveOPChanges(op); // Chama a função restaurada
+  }
+
+  // Calcula o índice da etapa atual uma vez
+  const etapaAtualIndex = await determinarEtapaAtual(op, produtos);
+  console.log(`[loadEtapasEdit] Etapa atual index calculada: ${etapaAtualIndex}`);
+
+  // Pré-calcula os tipos de usuário para evitar chamadas repetidas no loop
   const tiposUsuarios = await Promise.all(
     op.etapas.map(async (etapa) => ({
       processo: etapa.processo,
@@ -559,9 +567,12 @@ async function loadEtapasEdit(op, skipReload = false) {
     }))
   );
 
-  const etapaAtualIndex = await determinarEtapaAtual(op, produtos);
-  console.log(`[loadEtapasEdit] Etapa atual index calculada: ${etapaAtualIndex}`);
+  // Limpa o container apenas se necessário
+  if (!skipReload) {
+    etapasContainer.innerHTML = ''; // Limpa apenas uma vez antes de construir
+  }
 
+  const fragment = document.createDocumentFragment(); // Usa fragment para evitar reflows múltiplos
   for (let index = 0; index < op.etapas.length; index++) {
     const etapa = op.etapas[index];
     console.log(`[loadEtapasEdit] Processando etapa ${index + 1}: ${etapa.processo}, lancado: ${etapa.lancado}, usuario: ${etapa.usuario || ''}`);
@@ -571,9 +582,8 @@ async function loadEtapasEdit(op, skipReload = false) {
       row = document.createElement('div');
       row.className = 'etapa-row';
       row.dataset.index = index;
-      etapasContainer.appendChild(row);
     } else {
-      row.innerHTML = '';
+      row.innerHTML = ''; // Limpa apenas o conteúdo interno se já existe
     }
 
     const numero = document.createElement('span');
@@ -638,26 +648,34 @@ async function loadEtapasEdit(op, skipReload = false) {
           return;
         }
         etapa.usuario = usuarioSelect.value;
-        await saveOPChanges(op);
-        await loadEtapasEdit(op, true);
+        await saveOPChanges(op); // Chama a função restaurada
+        await loadEtapasEdit(op, true); // Reload parcial
         await atualizarVisualEtapas(op, produtos);
         await updateFinalizarButtonState(op, produtos);
       });
     } else {
-      usuarioSelect.addEventListener('change', async () => {
+      usuarioSelect.addEventListener('change', debounce(async () => {
         if (op.status === 'finalizado' || op.status === 'cancelada') return;
         const novoUsuario = usuarioSelect.value;
         if (etapa.usuario === novoUsuario) return;
         etapa.usuario = novoUsuario;
-        await saveOPChanges(op);
+        await saveOPChanges(op); // Chama a função restaurada
         if (exigeQuantidade && etapa.usuario && !row.querySelector('.quantidade-lancar')) {
           quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, index === etapaAtualIndex, row, produtos);
           row.appendChild(quantidadeDiv);
         }
         await atualizarVisualEtapas(op, produtos);
         await updateFinalizarButtonState(op, produtos);
-      });
+      }, 300)); // Debounce para evitar chamadas repetidas
     }
+
+    if (!skipReload) {
+      fragment.appendChild(row); // Adiciona ao fragment apenas na primeira carga
+    }
+  }
+
+  if (!skipReload) {
+    etapasContainer.appendChild(fragment); // Adiciona tudo de uma vez ao DOM
   }
 
   await atualizarVisualEtapas(op, produtos);
@@ -1186,9 +1204,11 @@ async function atualizarVisualEtapas(op, produtos) {
 
   if (op.status !== 'finalizado' && op.status !== 'cancelada') {
     op.status = op.etapas.some(e => e.usuario || e.quantidade) ? 'produzindo' : 'em-aberto';
-    await saveOPChanges(op);
+    await saveOPChanges(op); // Chama a função restaurada
   }
 }
+
+
 
 async function toggleView() {
   const hash = window.location.hash;

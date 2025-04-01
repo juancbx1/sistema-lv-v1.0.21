@@ -16,41 +16,67 @@ import { verificarAutenticacao, logout } from '/js/utils/auth.js';
 
   async function carregarProducoesDoBackend() {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/producoes', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+        const token = localStorage.getItem('token');
 
-      if (!response.ok) {
-        throw new Error(`Erro ao buscar produções: ${response.statusText}`);
-      }
+        // Buscar as produções
+        const responseProducoes = await fetch('/api/producoes', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+        });
 
-      const producoes = await response.json();
-      console.log('[carregarProducoesDoBackend] Produções carregadas do backend:', producoes);
-      return producoes.map(p => ({
-        id: p.id,
-        opNumero: p.op_numero,
-        etapaIndex: p.etapa_index,
-        processo: p.processo,
-        produto: p.produto,
-        maquina: p.maquina,
-        quantidade: p.quantidade,
-        funcionario: p.funcionario,
-        data: p.data,
-        dataHoraFormatada: new Date(p.data).toLocaleString('pt-BR'),
-        assinada: p.assinada || false,
-        lancadoPor: p.lancado_por,
-        edicoes: p.edicoes || 0,
-      }));
+        if (!responseProducoes.ok) {
+            throw new Error(`Erro ao buscar produções: ${responseProducoes.statusText}`);
+        }
+
+        const producoes = await responseProducoes.json();
+
+        // Buscar as ordens de produção
+        const responseOrdens = await fetch('/api/ordens-de-producao?all=true', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+        });
+
+        if (!responseOrdens.ok) {
+            throw new Error(`Erro ao buscar ordens de produção: ${responseOrdens.statusText}`);
+        }
+
+        const ordens = await responseOrdens.json();
+        console.log('[carregarProducoesDoBackend] Ordens carregadas:', ordens);
+
+        // Mapear as produções e adicionar a variação
+        return producoes.map(p => {
+            // Encontrar a ordem correspondente pelo número da OP
+            const ordem = ordens.find(o => o.numero === p.op_numero);
+            const variacao = ordem ? (ordem.variante || '-') : '-'; // Se não houver ordem ou variante, usa '-'
+
+            return {
+                id: p.id,
+                opNumero: p.op_numero,
+                etapaIndex: p.etapa_index,
+                processo: p.processo,
+                produto: p.produto,
+                variacao: variacao, // Nova propriedade adicionada
+                maquina: p.maquina,
+                quantidade: p.quantidade,
+                funcionario: p.funcionario,
+                data: p.data,
+                dataHoraFormatada: new Date(p.data).toLocaleString('pt-BR'),
+                assinada: p.assinada || false,
+                lancadoPor: p.lancado_por,
+                edicoes: p.edicoes || 0,
+            };
+        });
     } catch (error) {
-      console.error('[carregarProducoesDoBackend] Erro:', error);
-      return [];
+        console.error('[carregarProducoesDoBackend] Erro:', error);
+        return [];
     }
-  }
+}
 
   async function carregarFiltroFuncionarios() {
     const selectFuncionario = document.getElementById('filtroCostureira');
@@ -231,13 +257,7 @@ import { verificarAutenticacao, logout } from '/js/utils/auth.js';
           const [data, hora] = p.dataHoraFormatada.split(', ');
       
           const tr = document.createElement('tr');
-          tr.dataset.id = p.id;
-      
-          // ID
-          const tdId = document.createElement('td');
-          tdId.setAttribute('data-label', 'ID');
-          tdId.textContent = p.id;
-          tr.appendChild(tdId);
+          tr.dataset.id = p.id; // Mantemos o ID no dataset para ações como editar/excluir
       
           // Funcionário
           const tdFuncionario = document.createElement('td');
@@ -259,6 +279,12 @@ import { verificarAutenticacao, logout } from '/js/utils/auth.js';
           tdProduto.setAttribute('data-label', 'Produto');
           tdProduto.textContent = p.produto;
           tr.appendChild(tdProduto);
+      
+          // Variação
+          const tdVariacao = document.createElement('td');
+          tdVariacao.setAttribute('data-label', 'Variação');
+          tdVariacao.textContent = p.variacao;
+          tr.appendChild(tdVariacao);
       
           // Proc./Máq.
           const tdProcMaq = document.createElement('td');
@@ -303,30 +329,26 @@ import { verificarAutenticacao, logout } from '/js/utils/auth.js';
           tr.appendChild(tdPor);
       
           // Ação
-          // Ação
-const tdAcao = document.createElement('td');
-tdAcao.setAttribute('data-label', 'Ação');
-
-// Cria uma div para agrupar os botões
-const divBotoes = document.createElement('div');
-divBotoes.className = 'botoes-acao'; // Adiciona uma classe para estilização, se necessário
-
-if (permissoes.includes('editar-registro-producao')) {
-    const btnEditar = document.createElement('button');
-    btnEditar.className = 'btn-editar-registro';
-    btnEditar.textContent = 'Editar';
-    divBotoes.appendChild(btnEditar);
-}
-if (permissoes.includes('excluir-registro-producao')) {
-    const btnExcluir = document.createElement('button');
-    btnExcluir.className = 'btn-excluir-registro';
-    btnExcluir.textContent = 'Excluir';
-    divBotoes.appendChild(btnExcluir);
-}
-
-// Adiciona a div com os botões ao <td>
-tdAcao.appendChild(divBotoes);
-tr.appendChild(tdAcao);
+          const tdAcao = document.createElement('td');
+          tdAcao.setAttribute('data-label', 'Ação');
+          const divBotoes = document.createElement('div');
+          divBotoes.className = 'botoes-acao';
+      
+          if (permissoes.includes('editar-registro-producao')) {
+              const btnEditar = document.createElement('button');
+              btnEditar.className = 'btn-editar-registro';
+              btnEditar.textContent = 'Editar';
+              divBotoes.appendChild(btnEditar);
+          }
+          if (permissoes.includes('excluir-registro-producao')) {
+              const btnExcluir = document.createElement('button');
+              btnExcluir.className = 'btn-excluir-registro';
+              btnExcluir.textContent = 'Excluir';
+              divBotoes.appendChild(btnExcluir);
+          }
+      
+          tdAcao.appendChild(divBotoes);
+          tr.appendChild(tdAcao);
       
           corpoTabela.appendChild(tr);
       });
@@ -354,101 +376,101 @@ tr.appendChild(tdAcao);
 
   async function excluirRegistro(id) {
     if (!permissoes.includes('excluir-registro-producao')) {
-      alert('Você não tem permissão para excluir registros.');
-      return;
+        alert('Você não tem permissão para excluir registros.');
+        return;
     }
     const confirmacao = confirm("Tem certeza que deseja excluir o registro?");
     if (!confirmacao) return;
-  
+
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/producoes', {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ id }),
-      });
-  
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Erro ao excluir produção: ${errorData.error || response.statusText}`);
-      }
-  
-      const producaoExcluida = await response.json();
-      console.log('[excluirRegistro] Registro excluído do backend:', producaoExcluida);
-  
-      // Atualizar a OP correspondente
-      const ordensDeProducaoResponse = await fetch('/api/ordens-de-producao', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-  
-      if (!ordensDeProducaoResponse.ok) {
-        throw new Error('Erro ao buscar ordens de produção');
-      }
-  
-      const ordensDeProducao = await ordensDeProducaoResponse.json();
-      const op = ordensDeProducao.find(o => o.numero === producaoExcluida.op_numero);
-      if (!op) {
-        console.warn('[excluirRegistro] OP não encontrada para opNumero:', producaoExcluida.op_numero);
+        const token = localStorage.getItem('token');
+        const response = await fetch('/api/producoes', {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ id }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Erro ao excluir produção: ${errorData.error || response.statusText}`);
+        }
+
+        const producaoExcluida = await response.json();
+        console.log('[excluirRegistro] Registro excluído do backend:', producaoExcluida);
+
+        // Buscar todas as ordens de produção com all=true
+        const ordensDeProducaoResponse = await fetch('/api/ordens-de-producao?all=true', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+        });
+
+        if (!ordensDeProducaoResponse.ok) {
+            throw new Error('Erro ao buscar ordens de produção');
+        }
+
+        const ordensDeProducao = await ordensDeProducaoResponse.json();
+        const op = ordensDeProducao.find(o => o.numero === producaoExcluida.op_numero);
+        if (!op) {
+            console.warn('[excluirRegistro] OP não encontrada para opNumero:', producaoExcluida.op_numero);
+            aplicarFiltros(currentPage);
+            alert('Registro excluído com sucesso!');
+            return;
+        }
+
+        const etapa = op.etapas.find(e => e.ultimoLancamentoId === String(id));
+        if (etapa) {
+            etapa.quantidade = '';
+            etapa.lancado = false;
+            etapa.ultimoLancamentoId = null;
+            delete etapa.editadoPorAdmin;
+
+            // Recalcular o status da OP
+            let todasEtapasCompletas = true;
+            for (const etapa of op.etapas) {
+                const tipoUsuario = await getTipoUsuarioPorProcesso(etapa.processo, op.produto);
+                const exigeQuantidade = tipoUsuario === 'costureira' || tipoUsuario === 'tiktik';
+                const etapaCompleta = etapa.usuario && (!exigeQuantidade || (etapa.lancado && etapa.quantidade > 0));
+                if (!etapaCompleta) {
+                    todasEtapasCompletas = false;
+                    break;
+                }
+            }
+
+            if (op.status === 'finalizado' && !todasEtapasCompletas) {
+                op.status = 'produzindo';
+                console.log(`[excluirRegistro] OP ${op.numero} voltou para o status "produzindo" devido a exclusão de registro.`);
+            } else if (!op.etapas.some(e => e.usuario || e.quantidade)) {
+                op.status = 'em-aberto';
+                console.log(`[excluirRegistro] OP ${op.numero} voltou para o status "em-aberto" porque não há etapas iniciadas.`);
+            }
+
+            const updateOpResponse = await fetch('/api/ordens-de-producao', {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(op),
+            });
+
+            if (!updateOpResponse.ok) {
+                throw new Error('Erro ao atualizar ordem de produção');
+            }
+        }
+
         aplicarFiltros(currentPage);
         alert('Registro excluído com sucesso!');
-        return;
-      }
-  
-      const etapa = op.etapas.find(e => e.ultimoLancamentoId === String(id));
-      if (etapa) {
-        etapa.quantidade = '';
-        etapa.lancado = false;
-        etapa.ultimoLancamentoId = null;
-        delete etapa.editadoPorAdmin;
-  
-        // Recalcular o status da OP
-        let todasEtapasCompletas = true;
-        for (const etapa of op.etapas) {
-          const tipoUsuario = await getTipoUsuarioPorProcesso(etapa.processo, op.produto);
-          const exigeQuantidade = tipoUsuario === 'costureira' || tipoUsuario === 'tiktik';
-          const etapaCompleta = etapa.usuario && (!exigeQuantidade || (etapa.lancado && etapa.quantidade > 0));
-          if (!etapaCompleta) {
-            todasEtapasCompletas = false;
-            break;
-          }
-        }
-  
-        if (op.status === 'finalizado' && !todasEtapasCompletas) {
-          op.status = 'produzindo';
-          console.log(`[excluirRegistro] OP ${op.numero} voltou para o status "produzindo" devido a exclusão de registro.`);
-        } else if (!op.etapas.some(e => e.usuario || e.quantidade)) {
-          op.status = 'em-aberto';
-          console.log(`[excluirRegistro] OP ${op.numero} voltou para o status "em-aberto" porque não há etapas iniciadas.`);
-        }
-  
-        const updateOpResponse = await fetch('/api/ordens-de-producao', {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(op),
-        });
-  
-        if (!updateOpResponse.ok) {
-          throw new Error('Erro ao atualizar ordem de produção');
-        }
-      }
-  
-      aplicarFiltros(currentPage);
-      alert('Registro excluído com sucesso!');
     } catch (error) {
-      console.error('[excluirRegistro] Erro:', error);
-      alert('Erro ao excluir registro: ' + error.message);
+        console.error('[excluirRegistro] Erro:', error);
+        alert('Erro ao excluir registro: ' + error.message);
     }
-  }
+}
 
   async function editarRegistro(id) {
     if (!permissoes.includes('editar-registro-producao')) {
