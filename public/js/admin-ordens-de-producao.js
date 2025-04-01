@@ -2,8 +2,14 @@ import { verificarAutenticacao } from '/js/utils/auth.js';
 import { PRODUTOS, PRODUTOSKITS } from '/js/utils/prod-proc-maq.js';
 
 let filteredOPsGlobal = [];
-let lancamentosEmAndamento = new Set(); // Usa Set para evitar duplicatas de IDs
-
+let lancamentosEmAndamento = new Set();
+let ordensCache = null;
+let ordensPromise = null;
+let currentPage = 1;
+const itemsPerPage = 10;
+let permissoes = [];
+let usuarioLogado = null;
+const usedIds = new Set();
 
 function mostrarPopupMensagem(mensagem, tipo = 'erro') {
   const popup = document.createElement('div');
@@ -51,19 +57,14 @@ function mostrarPopupMensagem(mensagem, tipo = 'erro') {
 
 // Cache para produtos
 let produtosCache = null;
-let produtosPromise = null; // Armazena a promessa em andamento
+let produtosPromise = null;
 
-
-// Conjunto para rastrear IDs únicos
-const usedIds = new Set();
-
-// Função para buscar produtos da API com cache no localStorage
 async function obterProdutos() {
   const cachedData = localStorage.getItem('produtosCacheData');
   if (cachedData) {
     const { produtos, timestamp } = JSON.parse(cachedData);
     const now = Date.now();
-    const cacheDuration = 5 * 60 * 1000; // 5 minutos em milissegundos
+    const cacheDuration = 5 * 60 * 1000;
     if (now - timestamp < cacheDuration) {
       produtosCache = produtos;
       console.log('[obterProdutos] Retornando produtos do localStorage');
@@ -99,26 +100,105 @@ async function obterProdutos() {
 
     return await produtosPromise;
   } finally {
-    produtosPromise = null; // Limpar a promessa após a conclusão
+    produtosPromise = null;
   }
 }
 
-// Função para limpar o cache (chamar no logout, por exemplo)
 export function limparCacheProdutos() {
   produtosCache = null;
   localStorage.removeItem('produtosCacheData');
   console.log('[obterProdutos] Cache de produtos limpo');
 }
 
-// Funções para interagir com a API de ordens de produção
-async function obterOrdensDeProducao() {
-  const token = localStorage.getItem('token');
-  const response = await fetch('/api/ordens-de-producao', {
-    headers: { 'Authorization': `Bearer ${token}` },
+function ordenarOPs(ops, criterio, ordem = 'asc') {
+  return ops.sort((a, b) => {
+    switch (criterio) {
+      case 'status':
+        // Usar numero como fallback
+        return ordem === 'asc' ? parseInt(a.numero) - parseInt(b.numero) : parseInt(b.numero) - parseInt(a.numero);
+      case 'numero':
+        return ordem === 'asc' ? parseInt(a.numero) - parseInt(b.numero) : parseInt(b.numero) - parseInt(a.numero);
+      case 'produto':
+        return ordem === 'asc' ? a.produto.localeCompare(b.produto) : b.produto.localeCompare(a.produto);
+      case 'variante':
+        const varA = a.variante || '-';
+        const varB = b.variante || '-';
+        return ordem === 'asc' ? varA.localeCompare(varB) : varB.localeCompare(varA);
+      case 'quantidade':
+        return ordem === 'asc' ? parseInt(a.quantidade) - parseInt(b.quantidade) : parseInt(b.quantidade) - parseInt(a.quantidade);
+      default:
+        return 0;
+    }
   });
-  if (!response.ok) throw new Error('Erro ao carregar ordens de produção');
-  return await response.json();
 }
+
+async function obterOrdensDeProducao(page = 1, fetchAll = false) {
+  const cachedData = localStorage.getItem('ordensCacheData');
+  if (!fetchAll && cachedData) { // Só usa cache se não for fetchAll
+    const { ordens, timestamp, total, pages } = JSON.parse(cachedData);
+    const now = Date.now();
+    const cacheDuration = 5 * 60 * 1000; // 5 minutos
+    if (now - timestamp < cacheDuration) {
+      ordensCache = { rows: ordens, total, pages };
+      console.log('[obterOrdensDeProducao] Retornando ordens do localStorage');
+      return ordensCache;
+    }
+  }
+
+  if (!fetchAll && ordensCache) { // Só usa cache se não for fetchAll
+    console.log('[obterOrdensDeProducao] Retornando ordens do cache');
+    return ordensCache;
+  }
+
+  if (ordensPromise) {
+    return await ordensPromise;
+  }
+
+  try {
+    ordensPromise = (async () => {
+      const token = localStorage.getItem('token');
+      const url = fetchAll
+        ? '/api/ordens-de-producao?all=true'
+        : `/api/ordens-de-producao?page=${page}&limit=${itemsPerPage}`;
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error('Erro ao carregar ordens de produção');
+      const data = await response.json();
+
+      // Normaliza o retorno para sempre ser um objeto paginado
+      ordensCache = fetchAll
+        ? { rows: data, total: data.length, pages: 1 }
+        : data;
+
+      if (!fetchAll) { // Cache só para chamadas paginadas
+        const cacheData = {
+          ordens: ordensCache.rows,
+          timestamp: Date.now(),
+          total: ordensCache.total,
+          pages: ordensCache.pages,
+        };
+        localStorage.setItem('ordensCacheData', JSON.stringify(cacheData));
+      }
+      console.log('[obterOrdensDeProducao] Ordens buscadas e armazenadas:', fetchAll ? 'todas' : 'paginadas');
+      return ordensCache;
+    })();
+
+    return await ordensPromise;
+  } finally {
+    ordensPromise = null;
+  }
+}
+
+
+export function limparCacheOrdens() {
+  ordensCache = null;
+  localStorage.removeItem('ordensCacheData');
+  console.log('[obterOrdensDeProducao] Cache de ordens limpo');
+}
+
+// Expondo a função globalmente para o console
+window.limparCacheOrdens = limparCacheOrdens;
 
 async function salvarOrdemDeProducao(ordem) {
   const token = localStorage.getItem('token');
@@ -154,7 +234,6 @@ async function atualizarOrdemDeProducao(ordem) {
   return await response.json();
 }
 
-// Gera um ID único de 9 dígitos
 function generateUniqueId() {
   let id;
   do {
@@ -164,7 +243,6 @@ function generateUniqueId() {
   return id;
 }
 
-// Função auxiliar para personalizar o placeholder do select de usuários
 function getUsuarioPlaceholder(tipoUsuario) {
   switch (tipoUsuario) {
     case 'costureira': return 'Selecione a(o) Costureira(o)';
@@ -174,7 +252,6 @@ function getUsuarioPlaceholder(tipoUsuario) {
   }
 }
 
-// Função para carregar produtos no select, excluindo kits
 async function loadProdutosSelect() {
   const produtoSelect = document.getElementById('produtoOP');
   if (!produtoSelect) return;
@@ -198,7 +275,6 @@ async function loadProdutosSelect() {
   }
 }
 
-// Função para carregar variantes
 async function loadVariantesSelects(produtoNome, produtos = null) {
   const variantesContainer = document.getElementById('variantesContainer');
   const variantesSelects = document.querySelector('.variantes-selects');
@@ -236,10 +312,10 @@ async function loadVariantesSelects(produtoNome, produtos = null) {
   }
 }
 
-// Gera o próximo número de OP
 async function getNextOPNumber() {
   try {
-    const ordens = await obterOrdensDeProducao();
+    const ordensData = await obterOrdensDeProducao(1, true); // Busca todas as OPs
+    const ordens = ordensData.rows; // Acessa .rows
     const numeros = ordens.map(op => parseInt(op.numero)).filter(n => !isNaN(n));
     const maxNumero = numeros.length > 0 ? Math.max(...numeros) : 0;
     const nextNumero = (maxNumero + 1).toString();
@@ -259,14 +335,19 @@ function setCurrentDate() {
   }
 }
 
-
-// Carrega a tabela de ordens de produção
-async function loadOPTable(filterStatus = 'todas', search = '') {
+async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = 'status', sortOrdem = 'desc', page = 1) {
   const opTableBody = document.getElementById('opTableBody');
+  const paginationContainer = document.createElement('div');
+  paginationContainer.id = 'paginationContainer';
+  paginationContainer.className = 'pagination-container';
+
   opTableBody.innerHTML = '<tr><td colspan="5"><div class="spinner">Carregando ordens...</div></td></tr>';
 
   try {
-    const ordensDeProducao = await obterOrdensDeProducao();
+    // Usa fetchAll=true para carregar todas as OPs
+    const data = await obterOrdensDeProducao(1, true);
+    let ordensDeProducao = data.rows;
+
     const ordensUnicas = [];
     const numerosVistos = new Set();
     ordensDeProducao.forEach(op => {
@@ -289,14 +370,25 @@ async function loadOPTable(filterStatus = 'todas', search = '') {
       (op.variante && op.variante.toLowerCase().includes(search.toLowerCase()))
     );
 
+    filteredOPs = ordenarOPs(filteredOPs, sortCriterio, sortOrdem);
+
+    // Paginação no frontend com base no total real de OPs
+    const totalItems = filteredOPs.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    const startIndex = (page - 1) * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+    const paginatedOPs = filteredOPs.slice(startIndex, endIndex);
+
+    filteredOPsGlobal = filteredOPs;
+
     const fragment = document.createDocumentFragment();
-    filteredOPs.forEach((op, index) => {
+    paginatedOPs.forEach((op, index) => {
       if (!op.edit_id) {
         op.edit_id = generateUniqueId();
         usedIds.add(op.edit_id);
       }
       const tr = document.createElement('tr');
-      tr.dataset.index = index;
+      tr.dataset.index = startIndex + index;
       tr.dataset.numero = op.numero;
       tr.style.cursor = permissoes.includes('editar-op') ? 'pointer' : 'default';
       tr.innerHTML = `
@@ -312,54 +404,68 @@ async function loadOPTable(filterStatus = 'todas', search = '') {
     opTableBody.innerHTML = '';
     opTableBody.appendChild(fragment);
 
-    // Remover listeners antigos para evitar acumulação
     opTableBody.removeEventListener('click', handleOPTableClick);
     if (permissoes.includes('editar-op')) {
       opTableBody.addEventListener('click', handleOPTableClick);
     }
 
-    function handleOPTableClick(e) {
-      const tr = e.target.closest('tr');
-      if (tr) {
-        const index = parseInt(tr.dataset.index);
-        const op = filteredOPs[index];
-        if (op) {
-          window.location.hash = `#editar/${op.edit_id}`;
-        } else {
-          console.error('[loadOPTable] Ordem não encontrada para o índice:', index);
-        }
-      } else {
-      }
+    // Renderiza a paginação
+    let paginationHTML = '';
+    if (totalPages > 1) {
+      paginationHTML += `<button class="pagination-btn prev" data-page="${Math.max(1, page - 1)}" ${page === 1 ? 'disabled' : ''}>Anterior</button>`;
+      paginationHTML += `<span class="pagination-current">Página ${page} de ${totalPages}</span>`;
+      paginationHTML += `<button class="pagination-btn next" data-page="${Math.min(totalPages, page + 1)}" ${page === totalPages ? 'disabled' : ''}>Próximo</button>`;
     }
+
+    paginationContainer.innerHTML = paginationHTML;
+    const existingPagination = document.getElementById('paginationContainer');
+    if (existingPagination) {
+      existingPagination.replaceWith(paginationContainer);
+    } else {
+      opTableBody.parentElement.parentElement.appendChild(paginationContainer); // Adiciona após a tabela
+    }
+
+    document.querySelectorAll('.pagination-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const newPage = parseInt(btn.dataset.page);
+        loadOPTable(filterStatus, search, sortCriterio, sortOrdem, newPage);
+      });
+    });
+
   } catch (error) {
     console.error('[loadOPTable] Erro ao carregar ordens de produção:', error);
     opTableBody.innerHTML = '<tr><td colspan="5">Erro ao carregar ordens de produção. Tente novamente.</td></tr>';
   }
 }
 
-// Filtra ordens de produção
-function filterOPs() {
-  const activeStatus = statusFilter.querySelector('.status-btn.active')?.dataset.status || 'todas';
-  loadOPTable(activeStatus, searchOP.value);
+
+
+function handleOPTableClick(e) {
+  const tr = e.target.closest('tr');
+  if (tr) {
+    const index = parseInt(tr.dataset.index);
+    const op = filteredOPsGlobal[index];
+    if (op) {
+      window.location.hash = `#editar/${op.edit_id}`;
+    } else {
+      console.error('[handleOPTableClick] Ordem não encontrada para o índice:', index);
+    }
+  }
 }
 
-// Configura os botões de filtro
-const statusFilter = document.getElementById('statusFilter');
-if (statusFilter) {
-  statusFilter.querySelectorAll('.status-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      statusFilter.querySelectorAll('.status-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      filterOPs();
-    });
-  });
+function filterOPs(page = 1) {
+  const statusFilter = document.getElementById('statusFilter');
+  const searchOP = document.getElementById('searchOP');
+  const activeStatus = statusFilter.querySelector('.status-btn.active')?.dataset.status || 'todas';
+  const sortCriterio = document.querySelector('.tabela-op th[data-sort]')?.id.replace('sort', '') || 'status';
+  const sortOrdem = document.querySelector('.tabela-op th[data-sort]')?.dataset.sort || 'desc';
+  loadOPTable(activeStatus, searchOP.value, sortCriterio, sortOrdem, page);
 }
 
 async function updateFinalizarButtonState(op, produtos) {
   const finalizarBtn = document.getElementById('finalizarOP');
   if (!finalizarBtn || !op) return;
 
-  // Validar campos principais
   const editProduto = document.getElementById('editProdutoOP')?.value || op.produto;
   const editQuantidade = parseInt(document.getElementById('editQuantidadeOP')?.value) || op.quantidade || 0;
   const editDataEntrega = document.getElementById('editDataEntregaOP')?.value || op.data_entrega;
@@ -367,7 +473,6 @@ async function updateFinalizarButtonState(op, produtos) {
 
   const camposPrincipaisPreenchidos = editProduto && editQuantidade > 0 && editDataEntrega && (op.variante ? editVariante : true);
 
-  // Validar todas as etapas
   let todasEtapasCompletas = true;
   if (op.etapas && Array.isArray(op.etapas) && op.etapas.length > 0) {
     for (const etapa of op.etapas) {
@@ -407,7 +512,6 @@ async function verificarEtapasEStatus(op, produtos) {
   return resultado;
 }
 
-// Salva alterações na OP
 async function saveOPChanges(op) {
   await atualizarOrdemDeProducao(op);
   console.log(`[saveOPChanges] Ordem de Produção #${op.numero} atualizada no banco de dados`);
@@ -562,28 +666,18 @@ async function loadEtapasEdit(op, skipReload = false) {
 
 async function salvarProducao(op, etapa, etapaIndex, produtos) {
   const produto = produtos.find(p => p.nome === op.produto);
-  if (!produto) {
-    throw new Error(`Produto ${op.produto} não encontrado.`);
-  }
+  if (!produto) throw new Error(`Produto ${op.produto} não encontrado.`);
 
   const isKit = produto.tipos && produto.tipos.includes('kits');
-  if (isKit) {
-    throw new Error(`O produto ${op.produto} é um kit e não possui etapas de produção.`);
-  }
+  if (isKit) throw new Error(`O produto ${op.produto} é um kit e não possui etapas de produção.`);
 
   const etapaProduto = produto.etapas?.[etapaIndex];
-  if (!etapaProduto) {
-    throw new Error(`Etapa ${etapaIndex} não encontrada para o produto ${op.produto}.`);
-  }
+  if (!etapaProduto) throw new Error(`Etapa ${etapaIndex} não encontrada para o produto ${op.produto}.`);
 
-  if (etapaProduto.processo !== etapa.processo) {
-    throw new Error(`Processo ${etapa.processo} não corresponde à etapa ${etapaIndex} do produto ${op.produto}.`);
-  }
+  if (etapaProduto.processo !== etapa.processo) throw new Error(`Processo ${etapa.processo} não corresponde à etapa ${etapaIndex} do produto ${op.produto}.`);
 
   const maquina = etapaProduto.maquina;
-  if (!maquina) {
-    throw new Error(`Máquina não definida para o processo ${etapa.processo} do produto ${op.produto}.`);
-  }
+  if (!maquina) throw new Error(`Máquina não definida para o processo ${etapa.processo} do produto ${op.produto}.`);
 
   const variacao = op.variante || null;
 
@@ -595,9 +689,9 @@ async function salvarProducao(op, etapa, etapaIndex, produtos) {
     produto: op.produto,
     variacao: variacao,
     maquina: maquina,
-    quantidade: parseInt(etapa.quantidade),
-    funcionario: etapa.usuario,
-    data: new Date().toLocaleString('sv', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T'), // Formato: "2025-03-30T20:15:23"
+    quantidade: parseInt(etapa.quantidade) || 0,
+    funcionario: etapa.usuario || 'Sistema', // Valor padrão se não houver usuário
+    data: new Date().toLocaleString('sv', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T'),
     lancadoPor: usuarioLogado?.nome || 'Sistema',
   };
   console.log('[salvarProducao] Dados enviados para o servidor:', dados);
@@ -608,7 +702,7 @@ async function salvarProducao(op, etapa, etapaIndex, produtos) {
   if (!dados.produto) throw new Error('Produto não informado.');
   if (!dados.maquina) throw new Error('Máquina não informada.');
   if (!dados.quantidade || dados.quantidade <= 0) throw new Error('Quantidade inválida.');
-  if (!dados.funcionario) throw new Error('Funcionário não informado.');
+  // Removido o check de funcionário, já que agora tem valor padrão
   if (!dados.data) throw new Error('Data não informada.');
   if (!dados.lancadoPor) throw new Error('Usuário lançador não identificado.');
 
@@ -649,8 +743,6 @@ async function salvarProducao(op, etapa, etapaIndex, produtos) {
   }
 }
 
-
-// Função para lançar etapa
 async function lancarEtapa(op, etapaIndex, quantidade, produtos) {
   const etapa = op.etapas[etapaIndex];
   etapa.quantidade = parseInt(quantidade);
@@ -660,12 +752,11 @@ async function lancarEtapa(op, etapaIndex, quantidade, produtos) {
     etapa.lancado = true;
     await saveOPChanges(op);
     await updateFinalizarButtonState(op, produtos);
-    return true; // Indica sucesso
+    return true;
   }
-  return false; // Indica falha
+  return false;
 }
 
-// Função de debounce
 function debounce(func, wait) {
   let timeout;
   return function (...args) {
@@ -674,7 +765,6 @@ function debounce(func, wait) {
   };
 }
 
-// Função auxiliar para criar a linha de quantidade e botão "Lançar"
 function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row, produtos) {
   let quantidadeDiv = row.querySelector('.quantidade-lancar');
   if (!quantidadeDiv) {
@@ -727,14 +817,14 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row, produtos)
     lancarBtn.addEventListener('click', async () => {
       if (lancarBtn.disabled || lancamentosEmAndamento.has(op.edit_id + '-' + etapa.processo)) return;
 
-      // Marca que o lançamento está em andamento
       lancamentosEmAndamento.add(op.edit_id + '-' + etapa.processo);
       lancarBtn.disabled = true;
       lancarBtn.textContent = 'Processando...';
 
       const etapaIndex = parseInt(lancarBtn.dataset.etapaIndex);
       const editId = window.location.hash.split('/')[1];
-      const ordensDeProducao = await obterOrdensDeProducao();
+      const ordensData = await obterOrdensDeProducao(1, true); // Busca todas as OPs
+      const ordensDeProducao = ordensData.rows; // Acessa .rows
       const opLocal = ordensDeProducao.find(o => o.edit_id === editId);
 
       if (!opLocal || !opLocal.etapas || !opLocal.etapas[etapaIndex]) {
@@ -750,17 +840,15 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row, produtos)
         let sucesso = false;
         if (etapasFuturas.length > 0) {
           await mostrarPopupEtapasFuturas(opLocal, etapaIndex, etapasFuturas, quantidadeInput.value, produtos);
-          sucesso = true; // Assume sucesso se o popup for concluído
+          sucesso = true;
         } else {
           const novoId = await lancarEtapa(opLocal, etapaIndex, quantidadeInput.value, produtos);
-          if (novoId) {
-            sucesso = true;
-          }
+          if (novoId) sucesso = true;
         }
 
         if (sucesso) {
-          // Recarregar a OP para garantir consistência
-          const updatedOrdens = await obterOrdensDeProducao();
+          const updatedOrdensData = await obterOrdensDeProducao(1, true);
+          const updatedOrdens = updatedOrdensData.rows; // Acessa .rows
           const updatedOp = updatedOrdens.find(o => o.edit_id === editId);
           if (updatedOp) {
             Object.assign(opLocal, updatedOp);
@@ -784,7 +872,6 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row, produtos)
         lancarBtn.textContent = 'Lançar';
         lancarBtn.disabled = false;
       } finally {
-        // Só remove a flag se houver erro ou se já estava lançado
         if (!etapa.lancado) {
           lancamentosEmAndamento.delete(op.edit_id + '-' + etapa.processo);
         }
@@ -802,9 +889,7 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row, produtos)
     await saveOPChanges(op);
     quantidadeInput.disabled = !usuarioSelect.value || !isEditable || etapa.lancado;
     if (!quantidadeInput.disabled) quantidadeInput.focus();
-    else {
-      quantidadeInput.value = etapa.quantidade || '';
-    }
+    else quantidadeInput.value = etapa.quantidade || '';
     updateLancarBtn();
     await atualizarVisualEtapas(op, produtos);
     await updateFinalizarButtonState(op, produtos);
@@ -831,7 +916,6 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row, produtos)
   return quantidadeDiv;
 }
 
-// Função para identificar etapas futuras válidas
 async function getEtapasFuturasValidas(op, etapaIndex, produtos) {
   const produto = produtos.find(p => p.nome === op.produto);
   const etapasProduto = produto?.etapas || [];
@@ -856,7 +940,6 @@ async function getEtapasFuturasValidas(op, etapaIndex, produtos) {
   return etapasFuturas;
 }
 
-// Função para exibir o popup
 function mostrarPopupEtapasFuturas(op, etapaIndex, etapasFuturas, quantidade, produtos) {
   const popup = document.createElement('div');
   popup.className = 'popup-etapas';
@@ -1002,9 +1085,7 @@ function mostrarPopupEtapasFuturas(op, etapaIndex, etapasFuturas, quantidade, pr
   validateCheckboxes();
 }
 
-// Mapeia processos para tipos de usuário
 async function getTipoUsuarioPorProcesso(processo, produtoNome, produtos) {
-  // [AJUSTE] Usar produtos passados como parâmetro em vez de chamar obterProdutos
   const produto = produtos.find(p => p.nome === produtoNome);
   if (produto && produto.etapas) {
     const etapa = produto.etapas.find(e => e.processo === processo);
@@ -1016,7 +1097,6 @@ async function getTipoUsuarioPorProcesso(processo, produtoNome, produtos) {
 async function determinarEtapaAtual(op, produtos) {
   for (let index = 0; index < op.etapas.length; index++) {
     const etapa = op.etapas[index];
-    // [AJUSTE] Passar produtos para getTipoUsuarioPorProcesso
     const tipoUsuario = await getTipoUsuarioPorProcesso(etapa.processo, op.produto, produtos);
     const exigeQuantidade = tipoUsuario === 'costureira' || tipoUsuario === 'tiktik';
     if (exigeQuantidade ? !etapa.lancado : !etapa.usuario) {
@@ -1035,12 +1115,11 @@ async function atualizarVisualEtapas(op, produtos) {
   const etapasRows = document.querySelectorAll('.etapa-row');
   const etapaAtualIndex = await determinarEtapaAtual(op, produtos);
 
-  // Garantir que o número de elementos no DOM corresponda ao número de etapas
   if (etapasRows.length !== op.etapas.length) {
     console.error('[atualizarVisualEtapas] Inconsistência entre DOM e dados. Recarregando etapas...');
     const etapasContainer = document.getElementById('etapasContainer');
-    etapasContainer.innerHTML = ''; // Limpar o DOM
-    await loadEtapasEdit(op, false); // Recarregar as etapas do zero
+    etapasContainer.innerHTML = '';
+    await loadEtapasEdit(op, false);
     return;
   }
 
@@ -1111,19 +1190,17 @@ async function atualizarVisualEtapas(op, produtos) {
   }
 }
 
-
-// Função para alternar entre os modos de visualização
 async function toggleView() {
   const hash = window.location.hash;
   const opListView = document.getElementById('opListView');
   const opFormView = document.getElementById('opFormView');
   const opEditView = document.getElementById('opEditView');
 
-  if (!opListView || !opFormView || !opEditView) {
-    return;
-  }
+  if (!opListView || !opFormView || !opEditView) return;
 
-  const ordensDeProducao = await obterOrdensDeProducao();
+  const ordensData = await obterOrdensDeProducao(1, true); // Sempre busca todas as OPs
+  const ordensDeProducao = ordensData.rows; // Sempre acessa .rows
+
   if (hash.startsWith('#editar/') && permissoes.includes('editar-op')) {
     const editId = hash.split('/')[1];
     const op = ordensDeProducao.find(o => o.edit_id === editId);
@@ -1150,11 +1227,9 @@ async function toggleView() {
     const editVarianteContainer = document.getElementById('editVarianteContainer');
     const editVarianteInput = document.getElementById('editVarianteOP');
     if (op.variante) {
-      // Tratar múltiplas variações separadas por " | "
       const variantes = op.variante.split(' | ').join(', ');
       editVarianteInput.value = variantes;
       editVarianteContainer.style.display = 'block';
-      // Ajustar o CSS para evitar quebra de layout
       editVarianteInput.style.width = '100%';
       editVarianteInput.style.boxSizing = 'border-box';
     } else {
@@ -1188,10 +1263,15 @@ async function toggleView() {
       await loadVariantesSelects('');
     }
   } else {
-    await loadOPTable();
+    // Só atualiza se necessário, evitando duplicação na inicialização
+    if (window.location.hash !== '') { // Evita refresh ao carregar a página inicial
+      limparCacheOrdens(); // Limpa o cache ao voltar para a página principal
+      await loadOPTable('todas', '', 'status', 'desc', 1); // Mini-refresh com todas as OPs
+    }
     opListView.style.display = 'block';
     opFormView.style.display = 'none';
     opEditView.style.display = 'none';
+    const statusFilter = document.getElementById('statusFilter');
     const todasBtn = statusFilter.querySelector('[data-status="todas"]');
     if (todasBtn) {
       statusFilter.querySelectorAll('.status-btn').forEach(btn => btn.classList.remove('active'));
@@ -1200,11 +1280,7 @@ async function toggleView() {
   }
 }
 
-// Variáveis globais
-let permissoes = [];
-let usuarioLogado = null;
 
-// Inicialização
 document.addEventListener('DOMContentLoaded', async () => {
   const auth = await verificarAutenticacao('ordens-de-producao.html', ['acesso-ordens-de-producao']);
   if (!auth) {
@@ -1215,8 +1291,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   usuarioLogado = auth.usuario;
   permissoes = auth.permissoes || [];
 
-  // Carregar IDs existentes do banco de dados
-  const ordensDeProducao = await obterOrdensDeProducao();
+  const ordensData = await obterOrdensDeProducao(1, true); // Busca todas as OPs inicialmente
+  const ordensDeProducao = ordensData.rows; // Sempre acessa .rows
   ordensDeProducao.forEach(op => {
     if (op.edit_id) usedIds.add(op.edit_id);
   });
@@ -1227,6 +1303,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const opEditView = document.getElementById('opEditView');
   const opTableBody = document.getElementById('opTableBody');
   const searchOP = document.getElementById('searchOP');
+  const statusFilter = document.getElementById('statusFilter');
   const opForm = document.getElementById('opForm');
   const produtoOP = document.getElementById('produtoOP');
   const quantidadeOP = document.getElementById('quantidadeOP');
@@ -1246,8 +1323,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cancelarOP = document.getElementById('cancelarOP');
   const voltarOP = document.getElementById('voltarOP');
 
- 
-
   if ([opListView, opFormView, opEditView, opTableBody, searchOP, statusFilter, opForm,
       produtoOP, quantidadeOP, numeroOP, variantesContainer, variantesSelects, dataEntregaOP,
       observacoesOP, editProdutoOP, editVarianteOP, editVarianteContainer, editQuantidadeOP,
@@ -1255,10 +1330,60 @@ document.addEventListener('DOMContentLoaded', async () => {
     throw new Error('Elementos DOM necessários não encontrados');
   }
 
-  window.addEventListener('hashchange', () => {
-    toggleView();
+  const sortHeaders = {
+    'sortStatus': 'status',
+    'sortNumero': 'numero',
+    'sortProduto': 'produto',
+    'sortVariante': 'variante',
+    'sortQuantidade': 'quantidade'
+  };
+
+  Object.entries(sortHeaders).forEach(([headerId, criterio]) => {
+    const header = document.getElementById(headerId);
+    if (header) {
+      header.addEventListener('click', () => {
+        let newOrder = 'asc';
+        if (header.dataset.sort === 'asc') {
+          newOrder = 'desc';
+        } else if (header.dataset.sort === 'desc') {
+          newOrder = 'asc';
+        } else {
+          newOrder = 'asc';
+        }
+        header.dataset.sort = newOrder;
+
+        Object.keys(sortHeaders).forEach(h => {
+          if (h !== headerId) document.getElementById(h).dataset.sort = '';
+        });
+
+        const activeStatus = statusFilter.querySelector('.status-btn.active')?.dataset.status || 'todas';
+        loadOPTable(activeStatus, searchOP.value, criterio, newOrder);
+      });
+    }
   });
 
+  const statusHeader = document.getElementById('sortStatus');
+  if (statusHeader) statusHeader.dataset.sort = 'desc';
+
+  // Carrega a tabela uma vez na inicialização
+  await loadOPTable('todas', '', 'status', 'desc', 1);
+
+  if (statusFilter) {
+    statusFilter.querySelectorAll('.status-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        statusFilter.querySelectorAll('.status-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        filterOPs(1);
+      });
+    });
+  }
+
+  if (searchOP) {
+    const debouncedFilterOPs = debounce((page = 1) => filterOPs(page), 300);
+    searchOP.addEventListener('input', () => debouncedFilterOPs(1));
+  }
+
+  window.addEventListener('hashchange', toggleView);
 
   const incluirOPBtn = document.getElementById('incluirOP');
   if (incluirOPBtn) {
@@ -1302,7 +1427,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      const ordensDeProducao = await obterOrdensDeProducao();
+      const ordensData = await obterOrdensDeProducao(1, true);
+      const ordensDeProducao = ordensData.rows;
       if (ordensDeProducao.some(op => op.numero === numero)) {
         mostrarPopupMensagem(`Erro: Já existe uma Ordem de Produção com o número ${numero}!`, 'erro');
         return;
@@ -1334,7 +1460,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         await salvarOrdemDeProducao(novaOP);
         mostrarPopupMensagem(`Ordem de Produção #${novaOP.numero} salva com sucesso!`, 'sucesso');
         window.location.hash = '';
-        await toggleView();
+        limparCacheOrdens(); // Limpa o cache para garantir dados atualizados
+        await loadOPTable('todas', '', 'status', 'desc', 1); // Mini-refresh com todas as OPs
       } catch (error) {
         console.error('[opForm.submit] Erro ao salvar ordem de produção:', error);
         mostrarPopupMensagem('Erro ao salvar ordem de produção. Tente novamente.', 'erro');
@@ -1349,44 +1476,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  if (searchOP) {
-    const debouncedFilterOPs = debounce(() => filterOPs(), 300);
-    searchOP.addEventListener('input', debouncedFilterOPs);
-  }
-
   if (finalizarOP) {
     finalizarOP.addEventListener('click', async () => {
-        const editId = window.location.hash.split('/')[1];
-        const ordensDeProducao = await obterOrdensDeProducao();
-        const op = ordensDeProducao.find(o => o.edit_id === editId);
+      const editId = window.location.hash.split('/')[1];
+      const ordensData = await obterOrdensDeProducao(1, true);
+      const ordensDeProducao = ordensData.rows; // Acessa .rows
+      const op = ordensDeProducao.find(o => o.edit_id === editId);
 
-        if (op && !finalizarOP.disabled) {
-            op.status = 'finalizado';
+      if (op && !finalizarOP.disabled) {
+        op.status = 'finalizado';
+        const agora = new Date();
+        agora.setHours(agora.getHours() - 3);
+        const dataFinalFormatada = agora.toISOString().replace('T', ' ').substring(0, 19);
+        op.data_final = dataFinalFormatada;
 
-            // Obtém a data atual em UTC
-            const agora = new Date();
-            
-            // Ajusta para o fuso horário de São Paulo (-3 horas)
-            agora.setHours(agora.getHours() - 3);
-
-            // Formata a data no formato desejado: YYYY-MM-DD HH:MM:SS
-            const dataFinalFormatada = agora.toISOString().replace('T', ' ').substring(0, 19);
-
-            op.data_final = dataFinalFormatada;
-
-            await saveOPChanges(op);
-            mostrarPopupMensagem(`Ordem de Produção #${op.numero} finalizada com sucesso!`, 'sucesso');
-            window.location.hash = '';
-            await toggleView();
-        }
+        await saveOPChanges(op);
+        mostrarPopupMensagem(`Ordem de Produção #${op.numero} finalizada com sucesso!`, 'sucesso');
+        window.location.hash = '';
+        await toggleView();
+      }
     });
-}
-
+  }
 
   if (cancelarOP) {
     cancelarOP.addEventListener('click', async () => {
       const editId = window.location.hash.split('/')[1];
-      const ordensDeProducao = await obterOrdensDeProducao();
+      const ordensData = await obterOrdensDeProducao(1, true);
+      const ordensDeProducao = ordensData.rows; // Acessa .rows
       const op = ordensDeProducao.find(o => o.edit_id === editId);
       if (op) {
         if (op.status === 'cancelada') {
@@ -1407,13 +1523,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (voltarOP) {
     voltarOP.addEventListener('click', async () => {
       window.location.hash = '';
-      if (window.location.hash === '') {
-        await toggleView();
-      }
+      if (window.location.hash === '') await toggleView();
     });
   }
 
-  // Adicionar evento de logout (se existir um botão de logout)
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) {
     logoutBtn.addEventListener('click', () => {
@@ -1432,6 +1545,4 @@ document.addEventListener('DOMContentLoaded', async () => {
       el.style.cursor = 'not-allowed';
     });
   }
-
-  await toggleView();
 });

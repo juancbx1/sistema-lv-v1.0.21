@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 
 const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
+  timezone: 'UTC',
 });
 
 const SECRET_KEY = process.env.JWT_SECRET;
@@ -16,20 +17,44 @@ const verificarToken = (req) => {
 };
 
 export default async function handler(req, res) {
-  const { method } = req;
+  const { method, query } = req;
 
   try {
     const usuarioLogado = verificarToken(req);
 
     if (method === 'GET') {
-      const result = await pool.query('SELECT * FROM ordens_de_producao');
-      res.status(200).json(result.rows);
+      const fetchAll = query.all === 'true'; // Verifica se o parâmetro all=true foi passado
+      if (fetchAll) {
+        // Retorna todas as OPs sem paginação
+        const result = await pool.query('SELECT * FROM ordens_de_producao ORDER BY numero DESC');
+        res.status(200).json(result.rows);
+      } else {
+        // Retorna OPs paginadas
+        const page = parseInt(query.page) || 1;
+        const limit = parseInt(query.limit) || 10;
+        const offset = (page - 1) * limit;
+
+        const result = await pool.query(
+          'SELECT * FROM ordens_de_producao ORDER BY numero DESC LIMIT $1 OFFSET $2',
+          [limit, offset]
+        );
+
+        const totalResult = await pool.query('SELECT COUNT(*) FROM ordens_de_producao');
+        const total = parseInt(totalResult.rows[0].count);
+
+        res.status(200).json({
+          rows: result.rows,
+          total: total,
+          page: page,
+          pages: Math.ceil(total / limit),
+        });
+      }
     } else if (method === 'POST') {
       if (!usuarioLogado.permissoes.includes('criar-op')) {
         return res.status(403).json({ error: 'Permissão negada' });
       }
       const { numero, produto, variante, quantidade, data_entrega, observacoes, status, etapas } = req.body;
-      const editId = Date.now().toString(); // Gera um ID único temporário
+      const editId = Date.now().toString();
       const result = await pool.query(
         `INSERT INTO ordens_de_producao (numero, produto, variante, quantidade, data_entrega, observacoes, status, edit_id, etapas)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,

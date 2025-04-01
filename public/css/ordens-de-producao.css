@@ -1,4 +1,24 @@
-/* Estilo do Container Principal */
+/* Reset básico */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    min-height: 100vh;
+    overflow-x: hidden;
+    line-height: 1.6;
+    visibility: hidden; /* Esconde o corpo por padrão */
+}
+
+body.autenticado {
+    visibility: visible; /* Mostra o corpo após autenticação */
+}
+
+/* Container principal */
 .container-op {
     margin-left: 270px;
     padding: 30px;
@@ -6,6 +26,323 @@
     display: flex;
     flex-direction: column;
     gap: 30px;
+}
+
+/* Estilo dos Cards (genérico para filtros, registros, formulários, etc.) */
+.filters-card,
+.registros-card,
+.formulario-op,
+.editar-op,
+.embalagem-section,
+.products-section {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease;
+    margin-top: 20px;
+}
+
+.filters-card:hover,
+.registros-card:hover,
+.formulario-op:hover,
+.editar-op:hover,
+.embalagem-section:hover,
+.products-section:hover {
+    transform: translateY(-5px);
+}
+
+.filters-card h1,
+.filters-card h2,
+.registros-card h1,
+.registros-card h2,
+.formulario-op h1,
+.formulario-op h2,
+.editar-op h1,
+.editar-op h2,
+.embalagem-section h1,
+.embalagem-section h2,
+.products-section h1,
+.products-section h2 {
+    font-size: 1.8em;
+    color: #2c3e50;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 10px;
+}
+
+/* Estilo dos Formulários e Filtros */
+.filter-container,
+.form-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+.filter-group,
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.filter-group label,
+.form-group label {
+    font-size: 1em;
+    font-weight: 600;
+    color: #34495e;
+}
+
+.filter-group input,
+.filter-group select,
+.filter-group textarea,
+.form-group input,
+.form-group select,
+.form-group textarea {
+    padding: 10px;
+    border: 1px solid #dfe6e9;
+    border-radius: 8px;
+    font-size: 1em;
+    background: #f9f9f9;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.filter-group input:focus,
+.filter-group select:focus,
+.filter-group textarea:focus,
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 8px rgba(52, 152, 219, 0.2);
+    outline: none;
+}
+
+.filter-group textarea,
+.form-group textarea {
+    resize: vertical;
+}
+
+/* Estilo de Inputs Desabilitados */
+.filter-group input[readonly],
+.filter-group input:disabled,
+.filter-group select:disabled,
+.form-group input[readonly],
+.form-group input:disabled,
+.form-group select:disabled {
+    background-color: #ecf0f1;
+    color: #7f8c8d;
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+
+/* Estilo dos Botões Genéricos */
+.btn,
+#limparFiltros,
+.botao-incluir-op,
+.botao-voltar-op,
+.botao-salvar-op,
+.botao-cancelar-op,
+.botao-finalizar-op,
+.btn-voltar,
+.btn-estoque {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1em;
+    font-weight: 600;
+    transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.btn:hover:not(:disabled),
+#limparFiltros:hover:not(:disabled),
+.botao-incluir-op:hover:not(:disabled),
+.botao-voltar-op:hover:not(:disabled),
+.botao-salvar-op:hover:not(:disabled),
+.botao-cancelar-op:hover:not(:disabled),
+.botao-finalizar-op:hover:not(:disabled),
+.btn-voltar:hover:not(:disabled),
+.btn-estoque:hover:not(:disabled) {
+    transform: translateY(-2px);
+}
+
+.btn:disabled,
+#limparFiltros:disabled,
+.botao-incluir-op:disabled,
+.botao-voltar-op:disabled,
+.botao-salvar-op:disabled,
+.botao-cancelar-op:disabled,
+.botao-finalizar-op:disabled,
+.btn-voltar:disabled,
+.btn-estoque:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Botão Primário (ex.: Salvar, Incluir) */
+.btn-primary,
+.botao-incluir-op,
+.botao-salvar-op,
+.botao-finalizar-op {
+    background: #3498db;
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled),
+.botao-incluir-op:hover:not(:disabled),
+.botao-salvar-op:hover:not(:disabled),
+.botao-finalizar-op:hover:not(:disabled) {
+    background: #2980b9;
+}
+
+/* Botão Secundário (ex.: Voltar) */
+.btn-secondary,
+.botao-voltar-op,
+.btn-voltar {
+    background: #7f8c8d;
+    color: white;
+    margin-bottom: 10px;
+}
+
+.btn-secondary:hover:not(:disabled),
+.botao-voltar-op:hover:not(:disabled),
+.btn-voltar:hover:not(:disabled) {
+    background: #6c7778;
+}
+
+/* Botão de Cancelar/Excluir */
+.btn-danger,
+#limparFiltros,
+.botao-cancelar-op {
+    background: #e74c3c;
+    color: white;
+}
+
+.btn-danger:hover:not(:disabled),
+#limparFiltros:hover:not(:disabled),
+.botao-cancelar-op:hover:not(:disabled) {
+    background: #c0392b;
+}
+
+/* Estilo da Tabela Genérica */
+#tabelaProducoes,
+.tabela-op,
+#produtosTable {
+    width: 100%;
+    border-collapse: separate; /* Restaurado para comportamento original */
+    border-spacing: 5px;
+    background: #ffffff;
+    border-radius: 10px;
+    overflow-x: auto; /* Permite rolagem horizontal se necessário */
+    display: block; /* Garante que a tabela seja tratada como bloco */
+}
+
+#tabelaProducoes thead,
+.tabela-op thead,
+#produtosTable thead {
+    background: #3498db;
+    color: white;
+}
+
+/* Ajuste das colunas para responsividade */
+.tabela-op th,
+.tabela-op td {
+    padding: 10px;
+    font-size: 0.9em;
+    font-weight: 600;
+    text-align: left;
+    max-width: 0; /* Permite que o conteúdo seja quebrado */
+    overflow: hidden;
+    text-overflow: ellipsis; /* Adiciona "..." se o texto for muito longo */
+}
+
+.tabela-op th#sortStatus,
+.tabela-op td:first-child {
+    width: 20%; /* Sugestão de proporção */
+}
+
+.tabela-op th#sortNumero,
+.tabela-op td:nth-child(2) {
+    width: 20%; /* Sugestão de proporção */
+}
+
+.tabela-op th#sortProduto,
+.tabela-op td:nth-child(3) {
+    width: 35%; /* Sugestão de proporção */
+    word-break: break-word; /* Quebra de linha para texto longo */
+}
+
+.tabela-op th#sortVariante,
+.tabela-op td:nth-child(4) {
+    width: 25%; /* Sugestão de proporção */
+    word-break: break-word; /* Quebra de linha para texto longo */
+}
+
+.tabela-op th#sortQuantidade,
+.tabela-op td:nth-child(5) {
+    width: 15%; /* Sugestão de proporção */
+}
+
+/* Estilo para garantir responsividade em mobile */
+.tabela-op tbody {
+    display: block;
+    width: 100%;
+}
+
+.tabela-op tr {
+    display: table;
+    width: 100%;
+    table-layout: fixed; /* Garante que as colunas respeitem as larguras definidas */
+}
+
+#tabelaProducoes tbody tr,
+.tabela-op tbody tr,
+#produtosTable tbody tr {
+    transition: background 0.3s ease;
+}
+
+#tabelaProducoes tbody tr:nth-child(even),
+.tabela-op tbody tr:nth-child(even),
+#produtosTable tbody tr:nth-child(even) {
+    background: #f8f9fa;
+}
+
+#tabelaProducoes tbody tr:hover,
+.tabela-op tbody tr:hover,
+#produtosTable tbody tr:hover {
+    background: #ecf0f1;
+}
+
+#tabelaProducoes td,
+.tabela-op td,
+#produtosTable td {
+    padding: 10px;
+    font-size: 0.85em;
+    color: #2c3e50;
+    border-bottom: 1px solid #dfe6e9;
+    word-break: break-word; /* Quebra de linha para texto longo */
+}
+
+/* Estilo da Mensagem de "Sem Registros" */
+.no-records-message {
+    text-align: center;
+    padding: 30px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    border: 1px dashed #dfe6e9;
+    color: #7f8c8d;
+    font-size: 1.2em;
+    display: none; /* Inicialmente escondido */
+}
+
+.no-records-message p {
+    margin: 0;
+}
+
+.no-records-message span {
+    font-weight: 600;
+    color: #3498db;
 }
 
 /* Estilo do Cabeçalho */
@@ -17,14 +354,13 @@
     margin-bottom: 20px;
 }
 
-.cabecalho-editar-op{
+.cabecalho-editar-op {
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 20px;
     margin-top: 20px;
     margin-bottom: 20px;
-
 }
 
 .cabecalho-op h1 {
@@ -32,10 +368,10 @@
     color: #2c3e50;
 }
 
-.botao-incluir-op{
-margin-right: 20px;
-
+.botao-incluir-op {
+    margin-right: 20px;
 }
+
 .busca-op {
     padding: 10px;
     border: 1px solid #dfe6e9;
@@ -112,16 +448,51 @@ margin-right: 20px;
     animation: blink 1.5s infinite;
 }
 
-.tabela-op{
-
+.tabela-op {
     margin-top: 20px;
 }
-
 
 @keyframes blink {
     0% { opacity: 1; }
     50% { opacity: 0.5; }
     100% { opacity: 1; }
+}
+
+/* Estilo para os cabeçalhos com setas */
+.tabela-op th {
+    position: relative;
+    cursor: pointer;
+    padding: 10px 25px 10px 10px; /* Ajuste para texto à esquerda e seta à direita */
+}
+
+.tabela-op th::after {
+    content: '';
+    position: absolute;
+    right: 10px; /* Setas mais próximas e consistentes */
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid #001e31;
+    opacity: 0.5;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.tabela-op th[data-sort]:not([data-sort=""])::after {
+    opacity: 1;
+}
+
+.tabela-op th[data-sort="asc"]::after {
+    border-top: none;
+    border-bottom: 5px solid #fff;
+    transform: translateY(-45%);
+}
+
+.tabela-op th[data-sort="desc"]::after {
+    border-top: 5px solid #fff;
+    transform: translateY(-55%);
 }
 
 /* Estilo do Container de Edição de OP */
@@ -230,9 +601,9 @@ margin-right: 20px;
 }
 
 .botao-lancar.lancado {
-    background-color: #ccc; /* Cor cinza para indicar que está desabilitado */
+    background-color: #ccc;
     cursor: not-allowed;
-  }
+}
 
 .quantidade-lancar {
     display: flex;
@@ -316,7 +687,6 @@ margin-right: 20px;
     transform: translateY(-2px);
 }
 
-
 /* Estilo para inputs específicos */
 .input-produto-novaOP,
 .input-produto,
@@ -331,13 +701,22 @@ margin-right: 20px;
     transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-#editVarianteContainer{
+#editVarianteContainer {
     margin-top: 10px;
+    width: 100%;
+    box-sizing: border-box;
+}
 
+#editVarianteOP {
+    width: 100%;
+    box-sizing: border-box;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 #editQuantidadeOP,
-#editDataEntregaOP{
+#editDataEntregaOP {
     margin-top: -5px;
 }
 
@@ -357,17 +736,15 @@ margin-right: 20px;
     transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-.input-numero-novaOP{
+.input-numero-novaOP {
     background-color: rgb(211, 211, 211);
     color: rgb(127, 140, 141);
     cursor: not-allowed;
     opacity: 0.65;
-
 }
 
-
 .input-numero-novaOP,
-.input-quantidade-principal{
+.input-quantidade-principal {
     width: 70px;
 }
 
@@ -388,6 +765,14 @@ margin-right: 20px;
     border-radius: 8px;
     max-width: 400px;
     text-align: center;
+    background: #fff;
+    padding: 20px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1000;
 }
 
 .popup-etapas h3 {
@@ -411,25 +796,85 @@ margin-right: 20px;
     cursor: not-allowed;
 }
 
+/* Paginação */
+.pagination-container {
+    display: flex;
+    justify-content: center; /* Centralizar em todos os breakpoints */
+    align-items: center;
+    gap: 10px;
+    margin: 10px 20px 10px;
+   
+}
+
+.pagination-btn {
+    padding: 10px 20px; /* Mesmo padding do botao-incluir-op */
+    border: none;
+    border-radius: 8px;
+    background: #3498db; /* Mesmo estilo do botao-incluir-op */
+    color: white;
+    cursor: pointer;
+    font-size: 1em;
+    font-weight: 600;
+    transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.pagination-btn:hover:not(.active) {
+    background: #2980b9; /* Mesmo hover do botao-incluir-op */
+    transform: translateY(-2px);
+}
+
+.pagination-btn.active {
+    background: #2980b9; /* Destaque para página atual */
+    cursor: default;
+}
+
+.pagination-btn.prev,
+.pagination-btn.next {
+    background: #3498db; /* Estilo secundário para Anterior/Próximo */
+}
+
+.pagination-btn.prev:hover:not(.active),
+.pagination-btn.next:hover:not(.active) {
+    background: #6c7778;
+}
+
+.pagination-current {
+    padding: 10px 20px;
+    font-size: 1em;
+    font-weight: 800;
+    color: #3498db;
+    border-style: none;
+    padding: 8px 15px;
+    background: rgb(248,249,250);
+    border-radius:10px;
+
+}
+
+.pagination-ellipsis {
+    padding: 10px 15px;
+    font-size: 1em;
+    color: #666;
+}
+
 /* Breakpoint para telas menores (max-width: 414px, como iPhone XR) */
 @media (max-width: 414px) {
     .container-op {
         padding: 10px;
-
     }
 
     .filters-card {
-        padding-left: 45px; /* Ajuste para telas menores */
+        padding-left: 15px;
         padding-right: 10px;
     }
 
     .cabecalho-op h1 {
-        font-size: 0.5rem;
+        font-size: 1.5rem;
     }
 
     .busca-op {
         font-size: 0.7rem;
         padding: 8px;
+        width: 100%;
     }
 
     .status-btn {
@@ -439,27 +884,42 @@ margin-right: 20px;
 
     .tabela-op th,
     .tabela-op td {
-        font-size: 0.1rem;
-        padding: 600px;
+        font-size: 0.7rem;
+        padding: 6px;
+    }
+
+    /* Paginação */
+.pagination-container {
+    display: flex;
+    justify-content: center; /* Centralizar em todos os breakpoints */
+    align-items: center;
+    gap: 10px;
+    margin: 10px 20px 10px;
+   
+}
+    .pagination-btn,
+    .pagination-current {
+        text-align: center;
+        font-size: 0.8em;
+        padding: 8px 15px;
+    }
+
+    .pagination-ellipsis {
+        font-size: 0.8em;
+        padding: 8px 15px;
     }
 }
-
 
 /* Breakpoint para Mobile (max-width: 576px) */
 @media (max-width: 576px) {
     .container-op {
-        margin-left: 0; /* Remove a margem do menu lateral */
+        margin-left: 0;
         padding: 15px;
         width: 100%;
     }
 
-    /* Garante que o container ocupe toda a largura */
-    .container-op {
-        width: 100%;
-    }
-
     .filters-card {
-        padding-left: 50px; /* Espaço para o botão hambúrguer */
+        padding-left: 15px;
         padding-right: 15px;
         padding-top: 15px;
         padding-bottom: 15px;
@@ -471,7 +931,7 @@ margin-right: 20px;
     }
 
     .busca-op {
-        width: 100%; /* Ocupa toda a largura */
+        width: 100%;
     }
 
     .botao-incluir-op {
@@ -480,7 +940,7 @@ margin-right: 20px;
     }
 
     #statusFilter {
-        flex-wrap: wrap; /* Permite que os botões quebrem linha */
+        flex-wrap: wrap;
         gap: 5px;
     }
 
@@ -509,12 +969,11 @@ margin-right: 20px;
     .input-data,
     .input-data-novaOP,
     #observacoesOP {
-        width: 100%; /* Ajusta para ocupar toda a largura */
+        width: 100%;
         margin-top: 10px;
     }
 
     .botoes-form-op {
-        flex-direction: column;
         gap: 10px;
     }
 
@@ -538,17 +997,66 @@ margin-right: 20px;
     .quantidade-lancar {
         min-width: 100%;
     }
+
+    /* Paginação */
+.pagination-container {
+    display: flex;
+    justify-content: center; /* Centralizar em todos os breakpoints */
+    align-items: center;
+    gap: 10px;
+    margin: 10px 20px 10px;
+   
+}
+
+    .pagination-btn,
+    .pagination-current {
+        text-align: center;
+        font-size: 0.9em;
+        padding: 8px 15px;
+    }
+
+    .pagination-ellipsis {
+        font-size: 0.9em;
+        padding: 8px 15px;
+    }
+
+    .tabela-op th#sortStatus,
+.tabela-op td:first-child {
+    width: 19%; /* Sugestão de proporção */
+}
+
+.tabela-op th#sortNumero,
+.tabela-op td:nth-child(2) {
+    width: 13%; /* Sugestão de proporção */
+}
+
+.tabela-op th#sortProduto,
+.tabela-op td:nth-child(3) {
+    width: 28%; /* Sugestão de proporção */
+    word-break: break-word; /* Quebra de linha para texto longo */
+}
+
+.tabela-op th#sortVariante,
+.tabela-op td:nth-child(4) {
+    width: 25%; /* Sugestão de proporção */
+    word-break: break-word; /* Quebra de linha para texto longo */
+}
+
+.tabela-op th#sortQuantidade,
+.tabela-op td:nth-child(5) {
+    width: 18%; /* Sugestão de proporção */
+}
 }
 
 /* Breakpoint para iPad Pro (768px a 1024px) */
 @media (min-width: 768px) and (max-width: 1024px) {
     .container-op {
-        margin-left: 0; /* Remove a margem do menu lateral (será ajustado para hambúrguer) */
+        margin:20px;
         padding: 20px;
     }
 
     .filters-card {
-        padding-left: 50px; /* Espaço para o botão hambúrguer */
+        padding-left: 15px;
     }
 
     .cabecalho-editar-op {
@@ -613,6 +1121,17 @@ margin-right: 20px;
     .quantidade-lancar {
         min-width: 180px;
     }
+
+    .pagination-btn,
+    .pagination-current {
+        font-size: 0.95em;
+        padding: 8px 15px;
+    }
+
+    .pagination-ellipsis {
+        font-size: 0.95em;
+        padding: 8px 15px;
+    }
 }
 
 /* pop up de erro para usuario que quer lançar sem permissão */
@@ -620,43 +1139,43 @@ margin-right: 20px;
     font-family: Arial, sans-serif;
     font-size: 16px;
     line-height: 1.5;
-  }
-  
-  .popup-mensagem.popup-erro {
-    border: 1px solid #f5c6cb;
-  }
-  
-  .popup-mensagem.popup-sucesso {
-    border: 1px solid #c3e6cb;
-  }
-  
-  .popup-mensagem p {
-    margin: 0 0 10px 0;
-  }
-  
-  .popup-mensagem button {
-    transition: background-color 0.3s;
-  }
-  
-  .popup-mensagem button:hover {
-    background-color: #c82333; /* Para erro */
-  }
-  
-  .popup-mensagem.popup-sucesso button:hover {
-    background-color: #218838; /* Para sucesso */
-  }
+}
 
-  /*estilo spinner */
-  .spinner {
+.popup-mensagem.popup-erro {
+    border: 1px solid #f5c6cb;
+}
+
+.popup-mensagem.popup-sucesso {
+    border: 1px solid #c3e6cb;
+}
+
+.popup-mensagem p {
+    margin: 0 0 10px 0;
+}
+
+.popup-mensagem button {
+    transition: background-color 0.3s;
+}
+
+.popup-mensagem button:hover {
+    background-color: #c82333; /* Para erro */
+}
+
+.popup-mensagem.popup-sucesso button:hover {
+    background-color: #218838; /* Para sucesso */
+}
+
+/* estilo spinner */
+.spinner {
     display: flex;
     justify-content: center;
     align-items: center;
     padding: 20px;
     font-size: 16px;
     color: #666;
-  }
-  
-  .spinner::before {
+}
+
+.spinner::before {
     content: '';
     display: inline-block;
     width: 20px;
@@ -666,22 +1185,9 @@ margin-right: 20px;
     border-top: 3px solid #007bff;
     border-radius: 50%;
     animation: spin 1s linear infinite;
-  }
-  
-  @keyframes spin {
+}
+
+@keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
-  }
- 
-  #editVarianteContainer {
-    width: 100%;
-    box-sizing: border-box;
-  }
-  
-  #editVarianteOP {
-    width: 100%;
-    box-sizing: border-box;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+}
