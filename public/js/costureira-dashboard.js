@@ -4,8 +4,6 @@ import { calcularComissaoSemanal, obterMetasPorNivel } from '/js/utils/metas.js'
 import { getCicloAtual } from '/js/utils/ciclos.js';
 import { obterProdutos } from '/js/utils/storage.js';
 
-console.log('Script costureira-dashboard.js carregado');
-
 // Variáveis globais
 let usuarioLogado = null;
 let processosExibidos = 0;
@@ -16,16 +14,13 @@ let dataSelecionadaSemana = new Date();
 async function obterProducoes() {
     const token = localStorage.getItem('token');
     if (!token) throw new Error('Token não encontrado');
-    console.log('[obterProducoes] Fazendo requisição para /api/producoes com token:', token.slice(0, 10) + '...');
     const response = await fetch('/api/producoes', {
         method: 'GET',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
     });
     const responseText = await response.text();
-    console.log('[obterProducoes] Resposta bruta do servidor:', responseText);
     if (!response.ok) throw new Error(`Erro ao carregar produções: ${responseText}`);
     const producoes = JSON.parse(responseText);
-    console.log('[obterProducoes] Produções carregadas:', producoes);
     return producoes;
 }
 
@@ -39,22 +34,16 @@ function normalizarTexto(texto) {
 }
 
 async function verificarAutenticacaoCostureira() {
-    console.log('[verificarAutenticacaoCostureira] Iniciando verificação de autenticação...');
     const auth = await verificarAutenticacao('costureira-dashboard', ['acesso-costureira-dashboard']);
     if (!auth) {
         console.warn('[verificarAutenticacaoCostureira] Autenticação falhou, redirecionando para login...');
         window.location.href = '/index.html';
         return null;
     }
-    console.log('[verificarAutenticacaoCostureira] Autenticação bem-sucedida, usuário:', auth.usuario);
     return auth.usuario;
 }
 
 function verificarDadosServidor(producoes, produtos) {
-    console.log('Verificação de dados do servidor:');
-    console.log('Produções:', producoes);
-    console.log('Produtos:', produtos);
-
     const produtosNaoEncontrados = new Set();
     producoes.forEach(p => {
         const produtoNomeNormalizado = normalizarTexto(p.produto);
@@ -100,14 +89,12 @@ function carregarMetas(metaAtual) {
         `<option value="${m.processos}" ${m.processos === metaAtual ? 'selected' : ''}>${m.processos} Pontos (R$ ${m.valor.toFixed(2)})</option>`
     ).join('');
     metaSelect.disabled = true;
-    console.log('Metas em processos carregadas (exibidas como pontos):', metas);
 }
 
 async function atualizarDashboard() {
     try {
         const producoes = await obterProducoes();
         const produtos = await obterProdutos();
-        console.log('Produções carregadas do servidor:', producoes);
         verificarDadosServidor(producoes, produtos);
         atualizarSaudacao();
         document.getElementById('nivelValor').innerHTML = `<i class="fas fa-trophy"></i> ${usuarioLogado.nivel || 1}`;
@@ -137,7 +124,6 @@ function atualizarCardMeta(producoes, produtos) {
         document.getElementById('quantidadeProcessos').textContent = 0;
         return;
     }
-    console.log('Ciclo atual:', cicloAtual);
 
     const inicioSemana = cicloAtual.semana.inicio;
     const fimSemana = cicloAtual.semana.fim;
@@ -145,7 +131,6 @@ function atualizarCardMeta(producoes, produtos) {
         const dataProducao = new Date(p.data);
         return p.funcionario === usuarioLogado.nome && dataProducao >= inicioSemana && dataProducao <= fimSemana;
     });
-    console.log('Produções da semana:', producoesSemana);
 
     let totalPontosPonderados = 0;
     producoesSemana.forEach(p => {
@@ -189,7 +174,6 @@ function atualizarCardMeta(producoes, produtos) {
         comissaoGarantidaEl.style.display = 'none';
         semMetaBatidaEl.style.display = 'block';
     }
-    console.log('Card Meta atualizado - Total pontos:', totalPontos, 'Meta em processos:', metaSelecionada);
 }
 
 function atualizarGraficoProducao(producoes) {
@@ -200,7 +184,6 @@ function atualizarGraficoProducao(producoes) {
         dataProducao.setHours(0, 0, 0, 0);
         return p.funcionario === usuarioLogado.nome && dataProducao.getTime() === hoje.getTime();
     });
-    console.log('Produções de hoje:', producoesHoje);
 
     const horas = Array(24).fill(0);
     producoesHoje.forEach(p => {
@@ -226,14 +209,12 @@ function atualizarGraficoProducao(producoes) {
         ['rgba(66, 153, 225, 0.2)'],
         ['rgba(66, 153, 225, 1)']
     );
-    console.log('Gráfico de produção atualizado');
 }
 
 function verificarAssinaturaProducao(producoes) {
     const producoesNaoAssinadas = producoes.filter(p => 
         p.funcionario === usuarioLogado.nome && !p.assinada
     );
-    console.log('Produções não assinadas:', producoesNaoAssinadas);
 
     const popup = document.getElementById('assinaturaPopup');
     const dashboardContent = document.querySelector('.dashboard-content');
@@ -288,14 +269,12 @@ async function assinarProducoes() {
         const assinaturas = JSON.parse(localStorage.getItem('assinaturas')) || [];
 
         for (const producao of producoesNaoAssinadas) {
-            console.log('[assinarProducoes] Assinando produção:', producao.id);
             const requestBody = {
                 id: producao.id,
                 quantidade: producao.quantidade,
                 edicoes: producao.edicoes || 0,
                 assinada: true,
             };
-            console.log('[assinarProducoes] Enviando requisição PUT com corpo:', requestBody);
             const response = await fetch('/api/producoes', {
                 method: 'PUT',
                 headers: {
@@ -306,8 +285,6 @@ async function assinarProducoes() {
             });
 
             const responseText = await response.text();
-            console.log('[assinarProducoes] Resposta do servidor para produção', producao.id, ':', responseText);
-
             if (!response.ok) {
                 throw new Error(`Erro ao assinar produção ${producao.id}: ${responseText}`);
             }
@@ -379,7 +356,6 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
     const producoesAssinadas = producoes.filter(p => 
         p.funcionario === usuarioLogado.nome && p.assinada
     ).sort((a, b) => new Date(b.data) - new Date(a.data));
-    console.log('Produções assinadas:', producoesAssinadas);
 
     let paginaAtual = 1;
     const itensPorPagina = 8;
@@ -410,24 +386,8 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
     }
 
     function calcularTotalProcessos(producoesFiltradas) {
-        let totalPontosPonderados = 0;
-        producoesFiltradas.forEach(p => {
-            const produtoNomeNormalizado = normalizarTexto(p.produto);
-            const produto = produtos.find(prod => normalizarTexto(prod.nome) === produtoNomeNormalizado);
-            if (produto && Array.isArray(produto.etapas) && Array.isArray(produto.pontos)) {
-                const etapaIndex = produto.etapas.findIndex(e => e.processo === p.processo);
-                const dataProducao = new Date(p.data);
-                const pontosExpirados = produto.pontos_expiracao && new Date(produto.pontos_expiracao) < dataProducao;
-                const pontosPorProcesso = etapaIndex !== -1 && produto.pontos[etapaIndex] 
-                    ? (pontosExpirados ? 1 : produto.pontos[etapaIndex])
-                    : 1;
-                totalPontosPonderados += p.quantidade * pontosPorProcesso;
-            } else {
-                console.warn(`Produto ou processo não encontrado ou sem pontos: ${p.produto} - ${p.processo}`);
-                totalPontosPonderados += p.quantidade; // Default 1
-            }
-        });
-        return totalPontosPonderados;
+        // Somar apenas a quantidade de processos, sem considerar pontos
+        return producoesFiltradas.reduce((total, p) => total + p.quantidade, 0);
     }
 
     function renderizarPaginacao(producoesFiltradas) {
@@ -442,6 +402,8 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
                 paginaAtual = i;
                 renderizarProcessos();
                 atualizarBotoesPaginacao();
+                // Rolagem para o topo da lista ao mudar de página via número
+                listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
             });
             paginacaoNumeros.appendChild(btn);
         }
@@ -451,7 +413,6 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
     }
 
     function renderizarProcessos() {
-        console.log('Renderizando processos...');
         const producoesFiltradas = filtrarProducoes();
         const inicio = (paginaAtual - 1) * itensPorPagina;
         const fim = inicio + itensPorPagina;
@@ -461,23 +422,21 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
             ? processosParaExibir.map(p => {
                 const produtoNomeNormalizado = normalizarTexto(p.produto);
                 const produto = produtos.find(prod => normalizarTexto(prod.nome) === produtoNomeNormalizado);
-                const etapaIndex = produto && Array.isArray(produto.etapas) ? produto.etapas.findIndex(e => e.processo === p.processo) : -1;
-                const dataProducao = new Date(p.data);
-                const pontosExpirados = produto && produto.pontos_expiracao && new Date(produto.pontos_expiracao) < dataProducao;
-                const pontosPorProcesso = etapaIndex !== -1 && Array.isArray(produto.pontos) && produto.pontos[etapaIndex] 
-                    ? (pontosExpirados ? 1 : produto.pontos[etapaIndex])
-                    : 1;
-                const totalPontosItem = p.quantidade * pontosPorProcesso;
-                const pontoTexto = totalPontosItem === 1 ? 'ponto' : 'pontos';
                 const variacao = p.variacao || 'N/A';
-                const quemRetirou = p.lancado_por || 'Desconhecido';
 
-                return `<li>${new Date(p.data).toLocaleDateString('pt-BR')} - ${p.produto} [${variacao}] - [${p.processo}] - [Retirado por: ${quemRetirou}] - [Somados: +${totalPontosItem} ${pontoTexto}], [Hora retirada ${new Date(p.data).toLocaleTimeString('pt-BR')}]</li>`;
+                return `
+                    <div class="processo-item" style="background: #F9F9F9; border: 1px solid #EDEDED; border-radius: 8px; padding: 10px; margin-bottom: 10px;">
+                        <p><strong>Produto:</strong> ${p.produto} [${variacao}]</p>
+                        <p><strong>Processo:</strong> ${p.processo}</p>
+                        <p><strong>Quantidade:</strong> ${p.quantidade}</p>
+                        <p><strong>Hora:</strong> ${new Date(p.data).toLocaleTimeString('pt-BR')}</p>
+                    </div>
+                `;
             }).join('')
             : '<li>Nenhuma produção assinada encontrada para o período selecionado.</li>';
 
         const total = calcularTotalProcessos(producoesFiltradas);
-        totalProcessosEl.textContent = `TOTAL DE PONTOS: ${total}`;
+        totalProcessosEl.textContent = `TOTAL DE PROCESSOS: ${total}`;
         renderizarPaginacao(producoesFiltradas);
     }
 
@@ -498,6 +457,8 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
             paginaAtual--;
             renderizarProcessos();
             atualizarBotoesPaginacao();
+            // Rolagem para o topo da lista ao clicar em "Anterior"
+            listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     };
 
@@ -507,32 +468,35 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
             paginaAtual++;
             renderizarProcessos();
             atualizarBotoesPaginacao();
+            // Rolagem para o topo da lista ao clicar em "Próximo"
+            listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     };
 
     filtroDiaTexto.onclick = () => {
-        console.log('Clique em filtroDia');
         paginaAtual = 1;
         filtroAtivo = 'dia';
         filtroDiaTexto.classList.add('active');
         filtroSemanaTexto.classList.remove('active');
         renderizarProcessos();
+        // Rolagem para o topo da lista ao mudar de filtro
+        listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
     filtroSemanaTexto.onclick = () => {
-        console.log('Clique em filtroSemana');
         paginaAtual = 1;
         filtroAtivo = 'semana';
         filtroSemanaTexto.classList.add('active');
         filtroDiaTexto.classList.remove('active');
         renderizarProcessos();
+        // Rolagem para o topo da lista ao mudar de filtro
+        listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
     $("#datepickerDia").datepicker({
         dateFormat: 'dd/mm/yy',
         defaultDate: dataSelecionadaDia,
         onSelect: function(dateText) {
-            console.log('Seleção de data no datepickerDia:', dateText);
             const [dia, mes, ano] = dateText.split('/');
             dataSelecionadaDia = new Date(ano, mes - 1, dia);
             paginaAtual = 1;
@@ -540,6 +504,8 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
             filtroDiaTexto.classList.add('active');
             filtroSemanaTexto.classList.remove('active');
             renderizarProcessos();
+            // Rolagem para o topo da lista ao mudar a data
+            listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }).datepicker('setDate', dataSelecionadaDia);
 
@@ -547,7 +513,6 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
         dateFormat: 'dd/mm/yy',
         defaultDate: dataSelecionadaSemana,
         onSelect: function(dateText) {
-            console.log('Seleção de data no datepickerSemana:', dateText);
             const [dia, mes, ano] = dateText.split('/');
             dataSelecionadaSemana = new Date(ano, mes - 1, dia);
             paginaAtual = 1;
@@ -555,6 +520,8 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
             filtroSemanaTexto.classList.add('active');
             filtroDiaTexto.classList.remove('active');
             renderizarProcessos();
+            // Rolagem para o topo da lista ao mudar a semana
+            listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     });
 
@@ -564,7 +531,6 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
     fimSemanaAtual.setDate(inicioSemanaAtual.getDate() + 6);
     $("#datepickerSemana").val(`${inicioSemanaAtual.toLocaleDateString('pt-BR')} - ${fimSemanaAtual.toLocaleDateString('pt-BR')}`);
 
-    console.log('Inicializando filtros: dia como padrão');
     filtroAtivo = 'dia';
     filtroDiaTexto.classList.add('active');
     filtroSemanaTexto.classList.remove('active');
@@ -582,7 +548,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         dateFormat: 'dd/mm/yy',
         defaultDate: dataSelecionadaDia,
         onSelect: async function(dateText) {
-            console.log('Evento datepickerDia:', dateText);
             const [dia, mes, ano] = dateText.split('/');
             dataSelecionadaDia = new Date(ano, mes - 1, dia);
             filtroAtivo = 'dia';
@@ -600,7 +565,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         dateFormat: 'dd/mm/yy',
         defaultDate: dataSelecionadaSemana,
         onSelect: async function(dateText) {
-            console.log('Evento datepickerSemana:', dateText);
             const [dia, mes, ano] = dateText.split('/');
             dataSelecionadaSemana = new Date(ano, mes - 1, dia);
             filtroAtivo = 'semana';

@@ -94,9 +94,9 @@ export default async function handler(req, res) {
       res.status(200).json(result.rows);
 
     } else if (method === 'PUT') {
-      console.log('[api/produces] Processando PUT...');
+      console.log('[api/producoes] Processando PUT...');
       const { id, quantidade, edicoes, assinada } = req.body;
-      console.log('[api/produces] Dados recebidos:', req.body);
+      console.log('[api/producoes] Dados recebidos:', req.body);
 
       if (!id || (quantidade === undefined && assinada === undefined) || edicoes === undefined) {
         return res.status(400).json({ error: 'Dados incompletos' });
@@ -130,13 +130,13 @@ export default async function handler(req, res) {
       res.status(200).json(result.rows[0]);
 
     } else if (method === 'DELETE') {
-      console.log('[api/produces] Processando DELETE...');
+      console.log('[api/producoes] Processando DELETE...');
       if (!usuarioLogado.permissoes.includes('excluir-registro-producao')) {
         return res.status(403).json({ error: 'Permissão negada' });
       }
 
       const { id } = req.body;
-      console.log('[api/produces] Dados recebidos para exclusão:', { id });
+      console.log('[api/producoes] Dados recebidos para exclusão:', { id });
 
       if (!id) {
         return res.status(400).json({ error: 'ID não fornecido no corpo da requisição' });
@@ -156,7 +156,7 @@ export default async function handler(req, res) {
         [id]
       );
 
-      console.log('[api/produces] Produção excluída:', deleteResult.rows[0]);
+      console.log('[api/producoes] Produção excluída:', deleteResult.rows[0]);
       res.status(200).json(deleteResult.rows[0] || { message: 'Registro excluído com sucesso', id });
     } else {
       res.setHeader('Allow', ['GET', 'POST', 'PUT', 'DELETE']);
