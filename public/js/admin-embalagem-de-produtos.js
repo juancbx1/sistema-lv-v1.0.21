@@ -1,26 +1,52 @@
 import { verificarAutenticacao } from '/js/utils/auth.js';
-import { obterProdutos, invalidateCache, getCachedData  } from '/js/utils/storage.js';
+import { obterOrdensFinalizadas, obterProdutos, invalidateCache, getCachedData } from '/js/utils/storage.js';
+
+let filteredOPsGlobal = [];
+let currentPage = 1;
+const itemsPerPage = 10;
+let permissoes = [];
+let usuarioLogado = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        // Verifica autenticação assíncrona
         const auth = await verificarAutenticacao('embalagem-de-produtos.html', ['acesso-embalagem-de-produtos']);
         if (!auth) {
             window.location.href = 'acesso-negado.html';
-            return; // Sai da função se a autenticação falhar
+            return;
         }
 
-        const permissoes = auth.permissoes || [];
-        const usuario = auth.usuario;
+        permissoes = auth.permissoes || [];
+        usuarioLogado = auth.usuario;
         console.log('[admin-embalagem-de-produtos] Autenticação bem-sucedida, permissões:', permissoes);
 
-        // Inicializa a página com os dados do usuário e permissões
-        await inicializar(usuario, permissoes); // Adicionei await aqui
+        await inicializar(usuarioLogado, permissoes);
     } catch (error) {
         console.error('[DOMContentLoaded] Erro na autenticação:', error);
         window.location.href = 'acesso-negado.html';
     }
 });
+
+
+function setupEventListeners() {
+    const searchProduto = document.getElementById('searchProduto');
+    if (searchProduto) {
+        searchProduto.addEventListener('input', debounce(filterProdutos, 300));
+    }
+
+    const voltarBtn = document.getElementById('voltarBtn');
+    if (voltarBtn) {
+        voltarBtn.addEventListener('click', () => {
+            window.location.hash = '';
+            showMainView();
+        });
+    }
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', alternarAba);
+    });
+
+    window.addEventListener('hashchange', handleHashChange);
+}
 
 async function fetchFromAPI(endpoint, options = {}) {
     const token = localStorage.getItem('token');
@@ -274,30 +300,33 @@ async function carregarTabelaKit(kitNome, variacao, varianteAtual) {
     }
 
     const composicao = variacaoKit.composicao;
-
     const ordensFinalizadas = await obterOrdensFinalizadas();
     const produtosAgrupados = {};
-    ordensFinalizadas.forEach(op => {
+    await Promise.all(ordensFinalizadas.map(async op => {
         const chave = `${op.produto}:${op.variante || '-'}`;
-        if (!produtosAgrupados[chave]) {
-            produtosAgrupados[chave] = obterQuantidadeDisponivelAjustada(op.produto, op.variante || '-', obterQuantidadeDisponivel(op));
-        } else {
-            produtosAgrupados[chave] += obterQuantidadeDisponivelAjustada(op.produto, op.variante || '-', obterQuantidadeDisponivel(op));
+        const qtdOriginal = obterQuantidadeDisponivel(op);
+        const qtdAjustada = await obterQuantidadeDisponivelAjustada(op.produto, op.variante || '-', qtdOriginal);
+        if (qtdAjustada > 0) {
+            produtosAgrupados[chave] = (produtosAgrupados[chave] || 0) + qtdAjustada;
         }
-    });
-
-    const varianteAtualNormalizada = varianteAtual === '-' ? '' : varianteAtual.toLowerCase();
-    let menorQuantidadePossivel = Infinity;
+    }));
 
     const embalagemAtual = JSON.parse(localStorage.getItem('embalagemAtual'));
     const produtoBase = embalagemAtual ? embalagemAtual.produto : 'Scrunchie (Padrão)';
+    const varianteAtualNormalizada = varianteAtual === '-' ? '' : varianteAtual.toLowerCase();
+    let menorQuantidadePossivel = Infinity;
+    let todasDisponiveis = true;
 
-    composicao.forEach(item => {
+    for (const item of composicao) {
         const chave = `${produtoBase}:${item.variacao}`;
         let qtdDisponivel = produtosAgrupados[chave] || 0;
 
         if (item.variacao.toLowerCase() === varianteAtualNormalizada) {
             qtdDisponivel = embalagemAtual ? embalagemAtual.quantidade : qtdDisponivel;
+        }
+
+        if (qtdDisponivel === 0) {
+            todasDisponiveis = false;
         }
 
         const tr = document.createElement('tr');
@@ -311,9 +340,8 @@ async function carregarTabelaKit(kitNome, variacao, varianteAtual) {
         if (!isNaN(qtdPossivel) && qtdPossivel >= 0) {
             menorQuantidadePossivel = Math.min(menorQuantidadePossivel, qtdPossivel);
         }
-    });
+    }
 
-    // Garantir que o elemento seja criado antes de definir o texto
     const kitFooter = document.getElementById('kit-footer');
     if (!kitFooter) {
         console.error('[carregarTabelaKit] Elemento #kit-footer não encontrado no DOM');
@@ -322,7 +350,6 @@ async function carregarTabelaKit(kitNome, variacao, varianteAtual) {
 
     const qtdDisponivelElement = document.getElementById('qtd-disponivel-kits');
     if (!qtdDisponivelElement && kitFooter) {
-        console.warn('[carregarTabelaKit] Elemento #qtd-disponivel-kits não encontrado, recriando no footer');
         const div = document.createElement('div');
         div.className = 'qtd-disponivel-container';
         div.innerHTML = '<p>Qtd Disponível: <span id="qtd-disponivel-kits"></span></p>';
@@ -331,14 +358,14 @@ async function carregarTabelaKit(kitNome, variacao, varianteAtual) {
 
     const qtdDisponivelElementUpdated = document.getElementById('qtd-disponivel-kits');
     if (qtdDisponivelElementUpdated) {
-        if (isNaN(menorQuantidadePossivel) || menorQuantidadePossivel <= 0) {
+        if (!todasDisponiveis || isNaN(menorQuantidadePossivel) || menorQuantidadePossivel <= 0) {
             qtdDisponivelElementUpdated.textContent = 'Insuficiente para montar Kit';
+            kitErrorMessage.textContent = 'Faltam variações para montar o kit.';
+            kitErrorMessage.classList.remove('hidden');
         } else {
             qtdDisponivelElementUpdated.textContent = menorQuantidadePossivel;
+            kitErrorMessage.classList.add('hidden');
         }
-    } else {
-        console.error('[carregarTabelaKit] Não foi possível encontrar ou criar o elemento #qtd-disponivel-kits');
-        return;
     }
 
     kitFooter.innerHTML = `
@@ -355,36 +382,31 @@ async function carregarTabelaKit(kitNome, variacao, varianteAtual) {
 
     const qtdEnviarKits = document.getElementById('qtd-enviar-kits');
     const kitEstoqueBtn = document.getElementById('kit-estoque-btn');
-    kitEstoqueBtn.disabled = true;
+    kitEstoqueBtn.disabled = !todasDisponiveis || isNaN(menorQuantidadePossivel) || menorQuantidadePossivel <= 0;
 
     qtdEnviarKits.addEventListener('input', () => {
         let qtdInformada = parseInt(qtdEnviarKits.value) || 0;
-        if (isNaN(menorQuantidadePossivel) || menorQuantidadePossivel <= 0) {
+        if (isNaN(menorQuantidadePossivel) || menorQuantidadePossivel <= 0 || !todasDisponiveis) {
             qtdInformada = 0;
             qtdEnviarKits.value = 0;
         } else if (qtdInformada > menorQuantidadePossivel) {
             qtdEnviarKits.value = menorQuantidadePossivel;
             qtdInformada = menorQuantidadePossivel;
         }
-        if (qtdInformada <= 0) {
-            kitErrorMessage.classList.add('hidden');
-            kitEstoqueBtn.disabled = true;
-        } else {
-            kitErrorMessage.classList.add('hidden');
-            kitEstoqueBtn.disabled = false;
-        }
+        kitEstoqueBtn.disabled = qtdInformada <= 0;
     });
 
     kitEstoqueBtn.addEventListener('click', () => {
         const qtdKits = parseInt(qtdEnviarKits.value) || 0;
-        if (qtdKits > 0 && qtdKits <= (isNaN(menorQuantidadePossivel) ? 0 : menorQuantidadePossivel)) {
+        if (qtdKits > 0 && qtdKits <= (isNaN(menorQuantidadePossivel) ? 0 : menorQuantidadePossivel) && todasDisponiveis) {
             enviarKitParaEstoque(kitNome, variacao, qtdKits);
+        } else {
+            alert('Quantidade insuficiente ou variações faltando!');
         }
     });
 
     document.getElementById('kit-table-container').classList.remove('hidden');
 }
-
 
 // Função para enviar o kit ao estoque
 async function enviarKitParaEstoque(kitNome, variacao, qtdKits) {
@@ -393,29 +415,23 @@ async function enviarKitParaEstoque(kitNome, variacao, qtdKits) {
     const variacaoKit = kit.grade.find(g => g.variacao === variacao);
     const composicao = variacaoKit.composicao || [];
 
-    composicao.forEach(item => {
-        const qtdTotal = qtdKits * item.quantidade;
-        atualizarQuantidadeEmbalada(kitNome.split(' ')[1], item.variacao, qtdTotal);
-    });
+    const ordensFinalizadas = await obterOrdensFinalizadas();
+    const embalagemAtual = JSON.parse(localStorage.getItem('embalagemAtual'));
+    const produtoBase = embalagemAtual ? embalagemAtual.produto : 'Scrunchie (Padrão)';
+
+    for (const item of composicao) {
+        const chave = `${produtoBase}:${item.variacao}`;
+        const ordem = ordensFinalizadas.find(op => op.produto === produtoBase && op.variante === item.variacao);
+        if (ordem) {
+            const qtdUsada = qtdKits * item.quantidade;
+            await atualizarQuantidadeEmbalada(produtoBase, item.variacao, qtdUsada);
+        }
+    }
 
     carregarTabelaProdutos();
     alert(`Enviado ${qtdKits} kit(s) de ${kitNome} - ${variacao} para o estoque!`);
     window.location.hash = '';
     localStorage.removeItem('embalagemAtual');
-}
-
-
-// obterOrdensFinalizadas para usar cache
-async function obterOrdensFinalizadas() {
-    const fetchOrdens = async () => {
-        const ordens = await fetchFromAPI('/ordens-de-producao', { method: 'GET' });
-        console.log('[obterOrdensFinalizadas] Ordens buscadas da API:', ordens.length);
-        return ordens.filter(op => op.status === 'finalizado');
-    };
-    
-    const ordensFinalizadas = await getCachedData('ordensFinalizadas', fetchOrdens); // Defina getCachedData ou importe de storage.js
-    console.log('[obterOrdensFinalizadas] Ordens finalizadas encontradas:', ordensFinalizadas.length);
-    return ordensFinalizadas;
 }
 
 function obterQuantidadeDisponivel(op) {
@@ -428,7 +444,8 @@ function obterQuantidadeDisponivel(op) {
 async function atualizarQuantidadeEmbalada(produto, variante, quantidadeEnviada) {
     try {
         const ordens = await fetchFromAPI('/ordens-de-producao', { method: 'GET' });
-        const ordem = ordens.find(op => op.produto === produto && op.variante === variante);
+        const ordensArray = Array.isArray(ordens) ? ordens : (ordens.rows || []);
+        const ordem = ordensArray.find(op => op.produto === produto && op.variante === variante);
 
         if (!ordem) {
             console.error('[atualizarQuantidadeEmbalada] Ordem não encontrada');
@@ -471,92 +488,121 @@ async function obterQuantidadeDisponivelAjustada(produto, variante, quantidadeOr
         console.error('[obterQuantidadeDisponivelAjustada] Erro ao ajustar quantidade:', error);
         return quantidadeOriginal; // Retorna a quantidade original em caso de erro
     }
-}
+} 
 
-async function carregarTabelaProdutos() {
+async function carregarTabelaProdutos(search = '') {
     console.log('[carregarTabelaProdutos] Iniciando carregamento da tabela');
 
     try {
-        const ordensFinalizadas = await obterOrdensFinalizadas(); // Usa cache
-        const produtosCadastrados = await obterProdutos(); // Usa cache
-        const produtosAgrupados = {};
+        const ordensFinalizadas = await obterOrdensFinalizadas() || [];
+        console.log('[carregarTabelaProdutos] Ordens finalizadas recebidas:', ordensFinalizadas.length);
 
-        await Promise.all(ordensFinalizadas.map(async op => {
-            const produto = op.produto;
-            const variante = op.variante || '-';
-            const qtdOriginal = obterQuantidadeDisponivel(op);
-            const qtdAjustada = await obterQuantidadeDisponivelAjustada(produto, variante, qtdOriginal);
+        let filteredOPs = ordensFinalizadas.filter(op => op.status === 'finalizado');
 
-            if (qtdAjustada > 0) {
-                const chave = `${produto}:${variante}`;
-                if (!produtosAgrupados[chave]) {
-                    produtosAgrupados[chave] = {
-                        produto,
-                        variante,
-                        quantidade: 0,
-                        opNumeros: new Set()
-                    };
-                }
-                produtosAgrupados[chave].quantidade += qtdOriginal;
-                produtosAgrupados[chave].opNumeros.add(op.numero);
-            }
-        }));
+        filteredOPs = filteredOPs.filter(op => 
+            op.produto.toLowerCase().includes(search.toLowerCase()) || 
+            (op.variante && op.variante.toLowerCase().includes(search.toLowerCase())) ||
+            op.numero.toString().includes(search)
+        );
 
-        await atualizarTabela(produtosAgrupados, produtosCadastrados);
+        filteredOPsGlobal = filteredOPs;
+
+        const totalItems = filteredOPs.length;
+        const totalPages = Math.ceil(totalItems / itemsPerPage);
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+        const paginatedOPs = filteredOPs.slice(startIndex, endIndex);
+
+        await atualizarTabela(paginatedOPs, totalPages);
     } catch (error) {
         console.error('[carregarTabelaProdutos] Erro ao carregar tabela:', error);
+        const tbody = document.getElementById('produtosTableBody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="5">Erro ao carregar produtos. Tente novamente.</td></tr>';
+        }
     }
 }
 
-async function atualizarTabela(produtosAgrupados, produtosCadastrados) {
+async function atualizarTabela(ordens, totalPages) {
     const tbody = document.getElementById('produtosTableBody');
     if (!tbody) {
         console.error('[atualizarTabela] Elemento #produtosTableBody não encontrado');
         return;
     }
+
     tbody.innerHTML = '';
-    console.log('[atualizarTabela] Tabela limpa, populando com:', Object.values(produtosAgrupados));
+    const fragment = document.createDocumentFragment();
 
-    await Promise.all(Object.values(produtosAgrupados).map(async item => {
-        const qtdAjustada = await obterQuantidadeDisponivelAjustada(item.produto, item.variante, item.quantidade);
-        const opNumerosString = Array.from(item.opNumeros).join(', ');
-        const produtoCadastrado = produtosCadastrados.find(p => p.nome === item.produto);
-        const gradeItem = produtoCadastrado?.grade?.find(g => g.variacao === item.variante);
-        const imagem = gradeItem?.imagem || '';
-
+    ordens.forEach(op => {
         const tr = document.createElement('tr');
-        tr.dataset.produto = item.produto;
-        tr.dataset.variante = item.variante;
+        tr.dataset.produto = op.produto;
+        tr.dataset.variante = op.variante || '-';
         tr.innerHTML = `
-            <td>${item.produto}</td>
-            <td>${item.variante}</td>
-            <td><div class="thumbnail">${imagem ? `<img src="${imagem}" alt="Imagem da variação ${item.variante}">` : ''}</div></td>
-            <td>${qtdAjustada}</td>
-            <td>${opNumerosString}</td>
+            <td>${op.produto}</td>
+            <td>${op.variante || '-'}</td>
+            <td><div class="thumbnail"></div></td> <!-- Miniatura, a ser preenchida depois -->
+            <td>${op.quantidade}</td>
+            <td>${op.numero}</td>
         `;
-        tr.addEventListener('click', async () => {
-            console.log(`[atualizarTabela] Clicado em Produto: ${item.produto}, Variante: ${item.variante}, Qtd: ${qtdAjustada}`);
-            const mainView = document.getElementById('mainView');
-            const embalagemView = document.getElementById('embalarView');
-            if (mainView && embalagemView) {
-                mainView.style.display = 'none';
-                embalagemView.style.display = 'block';
-                window.location.hash = '#embalar';
-                localStorage.setItem('embalagemAtual', JSON.stringify({
-                    produto: item.produto,
-                    variante: item.variante,
-                    quantidade: qtdAjustada
-                }));
-                await carregarEmbalagem(item.produto, item.variante, qtdAjustada);
-            } else {
-                console.error('[atualizarTabela] mainView ou embalagemView não encontrados');
-            }
+        tr.addEventListener('click', () => handleProductClick(op));
+        fragment.appendChild(tr);
+    });
+
+    tbody.appendChild(fragment);
+
+    // Paginação
+    const paginationContainer = document.createElement('div');
+    paginationContainer.id = 'paginationContainer';
+    paginationContainer.className = 'pagination-container';
+
+    let paginationHTML = '';
+    if (totalPages > 1) {
+        paginationHTML += `<button class="pagination-btn prev" data-page="${Math.max(1, currentPage - 1)}" ${currentPage === 1 ? 'disabled' : ''}>Anterior</button>`;
+        paginationHTML += `<span class="pagination-current">Pág. ${currentPage} de ${totalPages}</span>`;
+        paginationHTML += `<button class="pagination-btn next" data-page="${Math.min(totalPages, currentPage + 1)}" ${currentPage === totalPages ? 'disabled' : ''}>Próximo</button>`;
+    }
+
+    paginationContainer.innerHTML = paginationHTML;
+    const existingPagination = document.getElementById('paginationContainer');
+    if (existingPagination) {
+        existingPagination.replaceWith(paginationContainer);
+    } else {
+        tbody.parentElement.parentElement.appendChild(paginationContainer);
+    }
+
+    document.querySelectorAll('.pagination-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            currentPage = parseInt(btn.dataset.page);
+            filterProdutos(document.getElementById('searchProduto').value);
         });
-        tbody.appendChild(tr);
-    }));
+    });
+
     console.log('[atualizarTabela] Tabela carregada com sucesso');
 }
 
+function filterProdutos(search) {
+    currentPage = 1; // Reseta para a primeira página ao filtrar
+    carregarTabelaProdutos(search);
+}
+
+function handleProductClick(op) {
+    console.log(`[handleProductClick] Clicado em Produto: ${op.produto}, Variante: ${op.variante || '-'}, Qtd: ${op.quantidade}`);
+    const mainView = document.getElementById('mainView');
+    const embalagemView = document.getElementById('embalarView');
+    if (mainView && embalagemView) {
+        mainView.style.display = 'none';
+        embalagemView.style.display = 'block';
+        window.location.hash = '#embalar';
+        localStorage.setItem('embalagemAtual', JSON.stringify({
+            produto: op.produto,
+            variante: op.variante || '-',
+            quantidade: op.quantidade
+        }));
+        carregarEmbalagem(op.produto, op.variante || '-', op.quantidade);
+    } else {
+        console.error('[handleProductClick] mainView ou embalagemView não encontrados');
+    }
+}
 
 // Atualizar a função carregarEmbalagem para incluir a aba Kit
 async function carregarEmbalagem(produto, variante, quantidade) {
@@ -759,3 +805,10 @@ async function inicializar(usuario, permissoes) {
     }
     console.log('[inicializar] Inicialização concluída');
 }
+
+window.limparCache = function() {
+    invalidateCache('ordensFinalizadas');
+    invalidateCache('produtosCadastrados');
+    console.log('[limparCache] Cache limpo');
+    carregarTabelaProdutos(); // Recarrega a tabela
+};

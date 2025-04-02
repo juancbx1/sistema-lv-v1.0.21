@@ -706,6 +706,66 @@ body.autenticado {
     color: white;
 }
 
+/* Paginação */
+.pagination-container {
+    display: flex;
+    justify-content: center; /* Centralizar em todos os breakpoints */
+    align-items: center;
+    gap: 10px;
+    margin: 10px 20px 10px;
+   
+}
+
+.pagination-btn {
+    padding: 8px 16px; /* Mesmo padding do botao-incluir-op */
+    border: none;
+    border-radius: 8px;
+    background: #3498db; /* Mesmo estilo do botao-incluir-op */
+    color: white;
+    cursor: pointer;
+    font-size: 1em;
+    font-weight: 600;
+    transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.pagination-btn:hover:not(.active) {
+    background: #2980b9; /* Mesmo hover do botao-incluir-op */
+    transform: translateY(-2px);
+}
+
+.pagination-btn.active {
+    background: #2980b9; /* Destaque para página atual */
+    cursor: default;
+}
+
+.pagination-btn.prev,
+.pagination-btn.next {
+    background: #3498db; /* Estilo secundário para Anterior/Próximo */
+}
+
+.pagination-btn.prev:hover:not(.active),
+.pagination-btn.next:hover:not(.active) {
+    background: #6c7778;
+}
+
+.pagination-current {
+    font-size: 0.8em;
+    text-align: center;
+    font-weight: 800;
+    color: #3498db;
+    border-style: none;
+    padding: 5px 5px;
+    background: rgb(248, 249, 250);
+    border-radius: 10px;
+
+}
+
+.pagination-ellipsis {
+    font-size: 1em;
+    color: #666;
+}
+
+
 /* Breakpoint para telas menores (max-width: 414px, como iPhone XR) */
 @media (max-width: 414px) {
     .container {

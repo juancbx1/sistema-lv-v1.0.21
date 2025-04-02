@@ -22,7 +22,8 @@ export const permissoesDisponiveis = [
     { id: 'excluir-registro-producao', label: 'Excluir Registro de Produção' }, // Para gerenciar-producao.html
     { id: 'cadastrar-produto', label: 'Cadastrar Produto' }, // Para cadastrar-produto.html
     { id: 'lancar-producao', label: 'Lançar Produção (Opera com editar OPs)' },
-    { id: 'embalar-produto', label: 'Embalagem de Produto' } // Para embalagem-de-produtos.html
+    { id: 'embalar-produto', label: 'Embalagem de Produto' }, // Para embalagem-de-produtos.html
+    { id: 'acesso-estoque', label: 'Acesso ao Estoque' } // Para estoque.html
 ];
 
 // Apenas o tipo 'admin' terá permissões padrão
@@ -58,6 +59,7 @@ export const permissoesPorTipo = {
         'excluir-registro-producao',
         'lancar-producao',
         'embalar-produto',
+        'acesso-estoque',
         
     ]
 };

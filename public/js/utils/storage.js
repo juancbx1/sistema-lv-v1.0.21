@@ -63,6 +63,25 @@ export async function salvarProdutos(produtos) {
     invalidateCache('produtosCadastrados');
 }
 
+export async function obterOrdensFinalizadas() {
+    const fetchOrdens = async () => {
+        const token = localStorage.getItem('token');
+        const response = await fetch('/api/ordens-de-producao?all=true', { // Busca todas as OPs
+            headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (!response.ok) throw new Error('Erro ao carregar ordens de produção');
+        const data = await response.json();
+        return Array.isArray(data) ? data : (data.rows || []); // Normaliza para array
+    };
+
+    return await getCachedData('ordensFinalizadas', fetchOrdens, 5); // 5 minutos de cache
+}
+
+export function limparCacheOrdensFinalizadas() {
+    invalidateCache('ordensFinalizadas');
+    console.log('[obterOrdensFinalizadas] Cache de ordens finalizadas limpo');
+}
+
 
 export function obterUsuarios() {
     return JSON.parse(localStorage.getItem('usuarios')) || [];
