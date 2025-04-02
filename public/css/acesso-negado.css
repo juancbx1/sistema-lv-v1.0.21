@@ -184,3 +184,44 @@ p {
         border-radius: 25px;
     }
 }
+
+/* Estilo para o botão de login */
+.login-btn {
+    padding: 12px 24px;
+    background: #3498db; /* Azul consistente com btn-primary */
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.3s ease, transform 0.2s ease;
+    margin-top: 20px;
+}
+
+.login-btn:hover {
+    background: #2980b9; /* Tom mais escuro ao passar o mouse */
+    transform: translateY(-2px);
+}
+
+.login-btn:active {
+    transform: translateY(0);
+}
+
+/* Ajuste no ícone para token expirado */
+.lock-icon {
+    font-size: 4rem;
+    margin-bottom: 20px;
+}
+
+/* Container ajustado para centralização */
+.containerToken {
+    width: 500px;
+    max-width: 90%;
+    margin: 50px auto;
+    text-align: center;
+    background: #ffffff;
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}

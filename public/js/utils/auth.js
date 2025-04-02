@@ -48,9 +48,17 @@ export async function verificarAutenticacao(pagina, permissoesRequeridas = [], c
     for (let i = 0; i < retries; i++) {
       try {
         const response = await fetch(url, options);
-        if (!response.ok) throw new Error(`Resposta da API falhou: ${response.status}`);
+        if (!response.ok) {
+          if (response.status === 401) {
+            throw new Error('Token expirado'); // Identifica token expirado
+          }
+          throw new Error(`Resposta da API falhou: ${response.status}`);
+        }
         return response;
       } catch (error) {
+        if (error.message === 'Token expirado') {
+          throw error; // Propaga imediatamente para redirecionar
+        }
         if (i < retries - 1) {
           console.log(`[verificarAutenticacao] Tentativa ${i + 1} falhou, retry em ${delay}ms`);
           await new Promise(resolve => setTimeout(resolve, delay));
@@ -106,7 +114,14 @@ export async function verificarAutenticacao(pagina, permissoesRequeridas = [], c
     return { usuario: usuarioLogado, permissoes: usuarioLogado.permissoes };
   } catch (error) {
     console.error('[verificarAutenticacao] Erro ao verificar autenticação:', error);
-    window.location.href = '/admin/acesso-negado.html'; // Redireciona sem logout
+    if (error.message === 'Token expirado') {
+      console.log('[verificarAutenticacao] Token expirado detectado, redirecionando para token-expirado');
+      localStorage.removeItem('token'); // Remove o token expirado
+      localStorage.removeItem('permissoes'); // Limpa permissões
+      window.location.href = '/admin/token-expirado.html';
+    } else {
+      window.location.href = '/admin/acesso-negado.html'; // Outros erros vão para acesso-negado
+    }
     return null;
   }
 }
