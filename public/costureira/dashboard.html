@@ -9,21 +9,6 @@
     <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
 </head>
 <body>
-    <!-- Popup de Assinatura -->
-    <div id="assinaturaPopup" class="popup" style="display: none;">
-        <div class="popup-content">
-            <h2>Assinatura de Produção</h2>
-            <p>Confirme os processos registrados antes de continuar:</p>
-            <ul id="processosParaAssinatura" class="processos-assinatura-lista"></ul>
-            <p class="aviso">Em caso de divergência, procure um supervisor antes de assinar. Após 17h30, a assinatura é obrigatória.</p>
-            <div class="confirmation">
-                <input type="checkbox" id="confirmacaoAssinatura" name="confirmacao">
-                <label for="confirmacaoAssinatura">"Confirmo que os registros listados estão corretos!"</label>
-            </div>
-            <button id="assinarProducaoBtn" disabled>Assinar Agora</button>
-        </div>
-    </div>
-
     <!-- Header -->
     <header class="dashboard-header">
         <div class="header-content">
@@ -95,8 +80,25 @@
                     <button id="btnProximo" class="paginacao-btn btn-primary">Próximo</button>
                 </div>
             </div>
+
+            <!-- Novo Card Assinatura de Processos -->
+            <div class="card assinatura-card">
+                <h2>Assinatura de Processos</h2>
+                <p class="assinatura-descricao">Mantenha seus registros em dia: revise e confirme os processos pendentes para garantir a precisão e o progresso do seu trabalho.</p>
+                <button id="btnConferirAssinaturas" class="action-btn btn-primary">Conferir</button>
+            </div>
         </section>
     </div>
+
+    <!-- Popup para sem assinaturas pendentes -->
+    <div id="popupSemAssinaturas" class="popup" style="display: none;">
+        <div class="popup-content">
+            <h2>Informação</h2>
+            <p>Não existem processos pendentes de assinatura.</p>
+            <button id="fecharPopupSemAssinaturas" class="action-btn btn-primary">Fechar</button>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>

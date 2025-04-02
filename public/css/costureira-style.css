@@ -431,6 +431,50 @@ body {
     transform: translateY(-2px);
 }
 
+/* Botão de fechar no card de assinaturas */
+.fechar-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 30px;
+    height: 30px;
+    background: #e74c3c; /* Vermelho consistente com btn-danger */
+    color: white;
+    border: none;
+    border-radius: 30%;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.fechar-btn:hover {
+    background: #c0392b; /* Tom mais escuro ao passar o mouse */
+    transform: scale(1.1);
+}
+
+.fechar-btn:focus {
+    outline: none;
+    box-shadow: 0 0 5px rgba(231, 76, 60, 0.5);
+}
+
+/* Ajuste no container para posicionamento relativo */
+#assinatura-content {
+    position: relative; /* Permite que o botão "X" seja posicionado em relação ao container */
+    background: #ffffff;
+    padding: 20px;
+    border-radius: 12px;
+    max-width: 90%;
+    width: 600px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    overflow-y: auto;
+    max-height: 80vh;
+}
+
 /* Breakpoints */
 @media (max-width: 414px) {
     .container {
@@ -636,4 +680,132 @@ body {
     #graficoProducaoDia {
         height: 300px;
     }
+}
+
+/* Novo Card Assinatura */
+.assinatura-card {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 100%;
+    flex: 0 0 auto;
+    overflow: hidden;
+}
+
+.assinatura-card h2 {
+    border-bottom: 2px solid #3498db;
+    font-size: 1.3rem;
+    margin-bottom: 18px;
+}
+
+.assinatura-descricao {
+    font-size: 0.95rem;
+    color: #718096;
+    margin-bottom: 15px;
+    line-height: 1.5;
+}
+
+/* Estilo para a tela de assinaturas (#assinatura) */
+#assinatura {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 2000;
+    justify-content: center;
+    align-items: center;
+}
+
+#assinatura-content {
+    background: #ffffff;
+    padding: 20px;
+    border-radius: 12hpx;
+    max-width: 90%;
+    width: 600px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    overflow-y: auto;
+    max-height: 80vh;
+}
+
+#assinatura-content h2 {
+    font-size: 1.4rem;
+    margin-bottom: 15px;
+    border-bottom: 2px solid #3498db;
+}
+
+.assinatura-lista {
+    list-style: none;
+    padding: 0;
+    margin: 10px 0;
+}
+
+.assinatura-lista li {
+    padding: 10px;
+    border-bottom: 1px solid #edf2f7;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.assinatura-lista input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+.assinatura-botao {
+    margin-top: 20px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.95em;
+    font-weight: 600;
+    background: #3498db;
+    color: white;
+}
+
+.assinatura-botao:hover {
+    background: #2980b9;
+    transform: translateY(-2px);
+}
+
+/* Popup sem assinaturas */
+#popupSemAssinaturas.popup {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+
+#popupSemAssinaturas .popup-content {
+    background: #ffffff;
+    padding: 20px;
+    border-radius: 12px;
+    max-width: 90%;
+    width: 400px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    text-align: center;
+}
+
+#popupSemAssinaturas .popup-content h2 {
+    font-size: 1.4rem;
+    margin-bottom: 15px;
+    color: #2c3e50;
+}
+
+#popupSemAssinaturas .popup-content p {
+    font-size: 0.95rem;
+    color: #718096;
+    margin-bottom: 20px;
 }

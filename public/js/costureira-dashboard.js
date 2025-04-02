@@ -100,7 +100,7 @@ async function atualizarDashboard() {
         document.getElementById('nivelValor').innerHTML = `<i class="fas fa-trophy"></i> ${usuarioLogado.nivel || 1}`;
         atualizarCardMeta(producoes, produtos);
         atualizarGraficoProducao(producoes);
-        verificarAssinaturaProducao(producoes);
+        atualizarAssinaturaCard(producoes);
         atualizarDetalhamentoProcessos(producoes, produtos);
     } catch (error) {
         console.error('[atualizarDashboard] Erro ao carregar dados:', error.message);
@@ -211,69 +211,116 @@ function atualizarGraficoProducao(producoes) {
     );
 }
 
-function verificarAssinaturaProducao(producoes) {
-    const producoesNaoAssinadas = producoes.filter(p => 
-        p.funcionario === usuarioLogado.nome && !p.assinada
-    );
+function atualizarAssinaturaCard(producoes) {
+    const producoesNaoAssinadas = producoes.filter(p => p.funcionario === usuarioLogado.nome && !p.assinada);
+    document.getElementById('btnConferirAssinaturas').onclick = () => verificarAssinaturas(producoesNaoAssinadas);
+}
 
-    const popup = document.getElementById('assinaturaPopup');
-    const dashboardContent = document.querySelector('.dashboard-content');
-
-    if (producoesNaoAssinadas.length > 0) {
+function verificarAssinaturas(producoesNaoAssinadas) {
+    if (producoesNaoAssinadas.length === 0) {
+        // Situação 1: Nenhum processo pendente
+        const popup = document.getElementById('popupSemAssinaturas');
         popup.style.display = 'flex';
-        dashboardContent.style.display = 'none';
-
-        const producoesPorData = {};
-        producoesNaoAssinadas.forEach(p => {
-            const data = new Date(p.data).toDateString();
-            if (!producoesPorData[data]) producoesPorData[data] = [];
-            producoesPorData[data].push(p);
-        });
-
-        let listaHTML = '';
-        for (const [data, registros] of Object.entries(producoesPorData)) {
-            listaHTML += `<li><strong>${new Date(data).toLocaleDateString('pt-BR')}:</strong><ul>`;
-            registros.forEach(p => {
-                listaHTML += `<li>${p.produto} - ${p.processo} (${p.quantidade} processos, ${new Date(p.data).toLocaleTimeString('pt-BR')})</li>`;
-            });
-            listaHTML += '</ul></li>';
-        }
-        document.getElementById('processosParaAssinatura').innerHTML = listaHTML;
-
-        const checkbox = document.getElementById('confirmacaoAssinatura');
-        checkbox.checked = false;
-        document.getElementById('assinarProducaoBtn').disabled = true;
     } else {
-        popup.style.display = 'none';
-        dashboardContent.style.display = 'block';
+        // Situação 2: Há processos pendentes
+        window.location.hash = '#assinatura';
+        mostrarTelaAssinaturas(producoesNaoAssinadas);
     }
 }
 
-function gerarIdUnico() {
-    return 'assinatura_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+function mostrarTelaAssinaturas(producoes) {
+    const container = document.createElement('div');
+    container.id = 'assinatura';
+    container.innerHTML = `
+        <div id="assinatura-content">
+            <h2>Assinaturas Pendentes</h2>
+            <button id="fecharAssinatura" class="fechar-btn">X</button>
+            <div class="select-all">
+                <input type="checkbox" id="selectAllCheckboxes" name="selectAll">
+                <label for="selectAllCheckboxes">Selecionar Todas</label>
+            </div>
+            <ul class="assinatura-lista" id="assinaturaLista"></ul>
+            <button id="btnAssinarSelecionados" class="assinatura-botao">Assinar</button>
+        </div>
+    `;
+    document.body.appendChild(container);
+    container.style.display = 'flex'; // Garante que o container seja visível
+
+    const lista = document.getElementById('assinaturaLista');
+    const selectAll = document.getElementById('selectAllCheckboxes');
+    const btnAssinar = document.getElementById('btnAssinarSelecionados');
+    const btnFechar = document.getElementById('fecharAssinatura');
+
+    lista.innerHTML = producoes.map(p => {
+        const variacao = p.variacao || 'N/A';
+        return `
+            <li>
+                <input type="checkbox" name="processo" value="${p.id}" class="processo-checkbox">
+                <span>${p.produto} [${variacao}], ${p.processo}, ${p.quantidade}, ${new Date(p.data).toLocaleTimeString('pt-BR')}</span>
+            </li>
+        `;
+    }).join('');
+
+    selectAll.addEventListener('change', () => {
+        const checkboxes = document.querySelectorAll('.processo-checkbox');
+        checkboxes.forEach(cb => cb.checked = selectAll.checked);
+        atualizarBotaoAssinar();
+    });
+
+    document.querySelectorAll('.processo-checkbox').forEach(cb => {
+        cb.addEventListener('change', atualizarBotaoAssinar);
+    });
+
+    function atualizarBotaoAssinar() {
+        const checkboxes = document.querySelectorAll('.processo-checkbox');
+        const todasSelecionadas = Array.from(checkboxes).every(cb => cb.checked);
+        btnAssinar.textContent = todasSelecionadas ? 'Assinar Tudo' : 'Assinar';
+    }
+
+    btnAssinar.onclick = async () => {
+        const checkboxes = document.querySelectorAll('.processo-checkbox:checked');
+        const idsParaAssinar = Array.from(checkboxes).map(cb => cb.value);
+
+        if (idsParaAssinar.length > 0) {
+            await assinarSelecionados(idsParaAssinar);
+            container.remove();
+            window.location.hash = '';
+            await atualizarDashboard();
+        }
+    };
+
+    // Evento para o botão "X" fechar o card
+    btnFechar.onclick = () => {
+        container.remove();
+        window.location.hash = '';
+    };
+
+    // Fechar a tela ao clicar fora (mantido como funcionalidade extra)
+    container.addEventListener('click', (e) => {
+        if (e.target === container) {
+            container.remove();
+            window.location.hash = '';
+        }
+    });
 }
 
-async function assinarProducoes() {
+async function assinarSelecionados(ids) {
     try {
-        const producoes = await obterProducoes();
-        const producoesNaoAssinadas = producoes.filter(p => p.funcionario === usuarioLogado.nome && !p.assinada);
-
-        if (producoesNaoAssinadas.length === 0) {
-            document.getElementById('assinaturaPopup').style.display = 'none';
-            document.querySelector('.dashboard-content').style.display = 'block';
-            return;
-        }
-
         const token = localStorage.getItem('token');
         const agora = new Date();
         const assinaturas = JSON.parse(localStorage.getItem('assinaturas')) || [];
 
-        for (const producao of producoesNaoAssinadas) {
-            const requestBody = {
-                id: producao.id,
-                quantidade: producao.quantidade,
-                edicoes: producao.edicoes || 0,
-                assinada: true,
+        // Buscar as produções atuais para obter o valor de edicoes
+        const producoes = await obterProducoes();
+
+        for (const id of ids) {
+            const producao = producoes.find(p => p.id === id);
+            const edicoesAtual = producao ? (producao.edicoes || 0) : 0; // Mantém o valor atual ou usa 0
+
+            const requestBody = { 
+                id, 
+                assinada: true, 
+                edicoes: edicoesAtual // Inclui edicoes no corpo da requisição
             };
             const response = await fetch('/api/producoes', {
                 method: 'PUT',
@@ -285,8 +332,10 @@ async function assinarProducoes() {
             });
 
             const responseText = await response.text();
+            console.log('[assinarSelecionados] Resposta do servidor:', responseText);
+
             if (!response.ok) {
-                throw new Error(`Erro ao assinar produção ${producao.id}: ${responseText}`);
+                throw new Error(`Erro ao assinar produção ${id}: ${responseText}`);
             }
         }
 
@@ -295,17 +344,13 @@ async function assinarProducoes() {
             costureira: usuarioLogado.nome,
             dataHora: agora.toISOString(),
             dispositivo: navigator.userAgent,
-            producoesAssinadas: producoesNaoAssinadas.map(p => ({
-                idProducao: p.id,
-                produto: p.produto,
-                processo: p.processo,
-                quantidade: p.quantidade,
-                dataProducao: p.data
+            producoesAssinadas: ids.map(id => ({
+                idProducao: id,
             }))
         };
 
         if (navigator.geolocation) {
-            await new Promise((resolve, reject) => {
+            await new Promise((resolve) => {
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
                         registroAssinatura.localizacao = {
@@ -314,8 +359,7 @@ async function assinarProducoes() {
                         };
                         resolve();
                     },
-                    (error) => {
-                        console.warn('Geolocalização não disponível:', error.message);
+                    () => {
                         registroAssinatura.localizacao = 'Não disponível';
                         resolve();
                     },
@@ -328,13 +372,14 @@ async function assinarProducoes() {
 
         assinaturas.push(registroAssinatura);
         localStorage.setItem('assinaturas', JSON.stringify(assinaturas));
-        document.getElementById('assinaturaPopup').style.display = 'none';
-        document.querySelector('.dashboard-content').style.display = 'block';
-        await atualizarDashboard();
     } catch (error) {
-        console.error('[assinarProducoes] Erro:', error.message);
-        alert('Erro ao assinar produções: ' + error.message);
+        console.error('[assinarSelecionados] Erro:', error.message);
+        alert('Erro ao assinar processos selecionados: ' + error.message);
     }
+}
+
+function gerarIdUnico() {
+    return 'assinatura_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
 
 function atualizarDetalhamentoProcessos(producoes, produtos) {
@@ -353,10 +398,9 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
         return;
     }
 
-    const producoesAssinadas = producoes.filter(p => 
-        p.funcionario === usuarioLogado.nome && p.assinada
-    ).sort((a, b) => new Date(b.data) - new Date(a.data));
-    console.log('Produções assinadas:', producoesAssinadas);
+    // Removido o filtro p.assinada para mostrar todos os processos do usuário
+    const producoesUsuario = producoes.filter(p => p.funcionario === usuarioLogado.nome).sort((a, b) => new Date(b.data) - new Date(a.data));
+    console.log('Produções do usuário (assinadas e não assinadas):', producoesUsuario);
 
     let paginaAtual = 1;
     const itensPorPagina = 8;
@@ -369,7 +413,7 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
     function filtrarProducoes() {
         if (filtroAtivo === 'dia') {
             const diaSelecionado = normalizarData(dataSelecionadaDia);
-            return producoesAssinadas.filter(p => {
+            return producoesUsuario.filter(p => {
                 const dataProducao = normalizarData(p.data);
                 return dataProducao.getTime() === diaSelecionado.getTime();
             });
@@ -379,7 +423,7 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
             const fimSemana = new Date(inicioSemana);
             fimSemana.setDate(inicioSemana.getDate() + 6);
             fimSemana.setHours(23, 59, 59, 999);
-            return producoesAssinadas.filter(p => {
+            return producoesUsuario.filter(p => {
                 const dataProducao = normalizarData(p.data);
                 return dataProducao >= inicioSemana && dataProducao <= fimSemana;
             });
@@ -387,7 +431,6 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
     }
 
     function calcularTotalProcessos(producoesFiltradas) {
-        // Somar apenas a quantidade de processos, sem considerar pontos
         return producoesFiltradas.reduce((total, p) => total + p.quantidade, 0);
     }
 
@@ -396,7 +439,6 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
         paginacaoNumeros.innerHTML = '';
 
         if (totalPaginas <= 3) {
-            // Se houver 3 ou menos páginas, mostra todas
             for (let i = 1; i <= totalPaginas; i++) {
                 const btn = document.createElement('button');
                 btn.textContent = i;
@@ -410,11 +452,9 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
                 paginacaoNumeros.appendChild(btn);
             }
         } else {
-            // Mostra apenas a primeira página, a última e, se necessário, pontos
             const firstPage = 1;
             const lastPage = totalPaginas;
 
-            // Adiciona botão para a primeira página
             let btn = document.createElement('button');
             btn.textContent = firstPage;
             btn.classList.add(firstPage === paginaAtual ? 'active' : 'inactive');
@@ -426,7 +466,6 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
             });
             paginacaoNumeros.appendChild(btn);
 
-            // Se a página atual não for a primeira ou a última, adiciona "..." 
             if (paginaAtual > 2 && paginaAtual < totalPaginas - 1) {
                 const dots = document.createElement('span');
                 dots.textContent = '...';
@@ -434,7 +473,6 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
                 dots.style.color = '#4a5568';
                 paginacaoNumeros.appendChild(dots);
 
-                // Adiciona a página atual
                 btn = document.createElement('button');
                 btn.textContent = paginaAtual;
                 btn.classList.add('active');
@@ -451,7 +489,6 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
                 dots2.style.color = '#4a5568';
                 paginacaoNumeros.appendChild(dots2);
             } else {
-                // Se estiver perto do início ou fim, adiciona apenas "..."
                 const dots = document.createElement('span');
                 dots.textContent = '...';
                 dots.style.margin = '0 5px';
@@ -459,7 +496,6 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
                 paginacaoNumeros.appendChild(dots);
             }
 
-            // Adiciona botão para a última página
             btn = document.createElement('button');
             btn.textContent = lastPage;
             btn.classList.add(lastPage === paginaAtual ? 'active' : 'inactive');
@@ -477,7 +513,6 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
     }
 
     function renderizarProcessos() {
-        console.log('Renderizando processos...');
         const producoesFiltradas = filtrarProducoes();
         const inicio = (paginaAtual - 1) * itensPorPagina;
         const fim = inicio + itensPorPagina;
@@ -488,6 +523,7 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
                 const produtoNomeNormalizado = normalizarTexto(p.produto);
                 const produto = produtos.find(prod => normalizarTexto(prod.nome) === produtoNomeNormalizado);
                 const variacao = p.variacao || 'N/A';
+                const statusAssinatura = p.assinada ? 'Assinado' : 'Pendente'; // Adiciona indicação de status
 
                 return `
                     <div class="processo-item" style="background: #F9F9F9; border: 1px solid #EDEDED; border-radius: 8px; padding: 10px; margin-bottom: 10px;">
@@ -495,10 +531,11 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
                         <p><strong>Processo:</strong> ${p.processo}</p>
                         <p><strong>Quantidade:</strong> ${p.quantidade}</p>
                         <p><strong>Hora:</strong> ${new Date(p.data).toLocaleTimeString('pt-BR')}</p>
+                        <p><strong>Status:</strong> ${statusAssinatura}</p>
                     </div>
                 `;
             }).join('')
-            : '<li>Nenhuma produção assinada encontrada para o período selecionado.</li>';
+            : '<li>Nenhuma produção encontrada para o período selecionado.</li>';
 
         const total = calcularTotalProcessos(producoesFiltradas);
         totalProcessosEl.textContent = `TOTAL DE PROCESSOS: ${total}`;
@@ -659,7 +696,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         editarMetaBtn.textContent = 'Editar Meta';
         const producoes = await obterProducoes();
         const produtos = await obterProdutos();
-        atualizarCardMeta(produces, produtos);
+        atualizarCardMeta(producoes, produtos);
     });
 
     document.getElementById('editarMetaBtn').addEventListener('click', async () => {
@@ -678,12 +715,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    document.getElementById('confirmacaoAssinatura').addEventListener('change', () => {
-        const checkbox = document.getElementById('confirmacaoAssinatura');
-        document.getElementById('assinarProducaoBtn').disabled = !checkbox.checked;
+    document.getElementById('fecharPopupSemAssinaturas').addEventListener('click', () => {
+        document.getElementById('popupSemAssinaturas').style.display = 'none';
     });
-
-    document.getElementById('assinarProducaoBtn').addEventListener('click', assinarProducoes);
 
     document.getElementById('logoutBtn').addEventListener('click', () => {
         logout();
