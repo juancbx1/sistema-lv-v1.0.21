@@ -356,6 +356,7 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
     const producoesAssinadas = producoes.filter(p => 
         p.funcionario === usuarioLogado.nome && p.assinada
     ).sort((a, b) => new Date(b.data) - new Date(a.data));
+    console.log('Produções assinadas:', producoesAssinadas);
 
     let paginaAtual = 1;
     const itensPorPagina = 8;
@@ -394,15 +395,78 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
         const totalPaginas = Math.ceil(producoesFiltradas.length / itensPorPagina);
         paginacaoNumeros.innerHTML = '';
 
-        for (let i = 1; i <= totalPaginas; i++) {
-            const btn = document.createElement('button');
-            btn.textContent = i;
-            btn.classList.add(i === paginaAtual ? 'active' : 'inactive');
+        if (totalPaginas <= 3) {
+            // Se houver 3 ou menos páginas, mostra todas
+            for (let i = 1; i <= totalPaginas; i++) {
+                const btn = document.createElement('button');
+                btn.textContent = i;
+                btn.classList.add(i === paginaAtual ? 'active' : 'inactive');
+                btn.addEventListener('click', () => {
+                    paginaAtual = i;
+                    renderizarProcessos();
+                    atualizarBotoesPaginacao();
+                    listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
+                paginacaoNumeros.appendChild(btn);
+            }
+        } else {
+            // Mostra apenas a primeira página, a última e, se necessário, pontos
+            const firstPage = 1;
+            const lastPage = totalPaginas;
+
+            // Adiciona botão para a primeira página
+            let btn = document.createElement('button');
+            btn.textContent = firstPage;
+            btn.classList.add(firstPage === paginaAtual ? 'active' : 'inactive');
             btn.addEventListener('click', () => {
-                paginaAtual = i;
+                paginaAtual = firstPage;
                 renderizarProcessos();
                 atualizarBotoesPaginacao();
-                // Rolagem para o topo da lista ao mudar de página via número
+                listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+            paginacaoNumeros.appendChild(btn);
+
+            // Se a página atual não for a primeira ou a última, adiciona "..." 
+            if (paginaAtual > 2 && paginaAtual < totalPaginas - 1) {
+                const dots = document.createElement('span');
+                dots.textContent = '...';
+                dots.style.margin = '0 5px';
+                dots.style.color = '#4a5568';
+                paginacaoNumeros.appendChild(dots);
+
+                // Adiciona a página atual
+                btn = document.createElement('button');
+                btn.textContent = paginaAtual;
+                btn.classList.add('active');
+                btn.addEventListener('click', () => {
+                    renderizarProcessos();
+                    atualizarBotoesPaginacao();
+                    listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
+                paginacaoNumeros.appendChild(btn);
+
+                const dots2 = document.createElement('span');
+                dots2.textContent = '...';
+                dots2.style.margin = '0 5px';
+                dots2.style.color = '#4a5568';
+                paginacaoNumeros.appendChild(dots2);
+            } else {
+                // Se estiver perto do início ou fim, adiciona apenas "..."
+                const dots = document.createElement('span');
+                dots.textContent = '...';
+                dots.style.margin = '0 5px';
+                dots.style.color = '#4a5568';
+                paginacaoNumeros.appendChild(dots);
+            }
+
+            // Adiciona botão para a última página
+            btn = document.createElement('button');
+            btn.textContent = lastPage;
+            btn.classList.add(lastPage === paginaAtual ? 'active' : 'inactive');
+            btn.addEventListener('click', () => {
+                paginaAtual = lastPage;
+                renderizarProcessos();
+                atualizarBotoesPaginacao();
                 listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
             });
             paginacaoNumeros.appendChild(btn);
@@ -413,6 +477,7 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
     }
 
     function renderizarProcessos() {
+        console.log('Renderizando processos...');
         const producoesFiltradas = filtrarProducoes();
         const inicio = (paginaAtual - 1) * itensPorPagina;
         const fim = inicio + itensPorPagina;
@@ -457,7 +522,6 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
             paginaAtual--;
             renderizarProcessos();
             atualizarBotoesPaginacao();
-            // Rolagem para o topo da lista ao clicar em "Anterior"
             listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     };
@@ -468,28 +532,27 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
             paginaAtual++;
             renderizarProcessos();
             atualizarBotoesPaginacao();
-            // Rolagem para o topo da lista ao clicar em "Próximo"
             listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     };
 
     filtroDiaTexto.onclick = () => {
+        console.log('Clique em filtroDia');
         paginaAtual = 1;
         filtroAtivo = 'dia';
         filtroDiaTexto.classList.add('active');
         filtroSemanaTexto.classList.remove('active');
         renderizarProcessos();
-        // Rolagem para o topo da lista ao mudar de filtro
         listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
     filtroSemanaTexto.onclick = () => {
+        console.log('Clique em filtroSemana');
         paginaAtual = 1;
         filtroAtivo = 'semana';
         filtroSemanaTexto.classList.add('active');
         filtroDiaTexto.classList.remove('active');
         renderizarProcessos();
-        // Rolagem para o topo da lista ao mudar de filtro
         listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
@@ -497,6 +560,7 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
         dateFormat: 'dd/mm/yy',
         defaultDate: dataSelecionadaDia,
         onSelect: function(dateText) {
+            console.log('Seleção de data no datepickerDia:', dateText);
             const [dia, mes, ano] = dateText.split('/');
             dataSelecionadaDia = new Date(ano, mes - 1, dia);
             paginaAtual = 1;
@@ -504,7 +568,6 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
             filtroDiaTexto.classList.add('active');
             filtroSemanaTexto.classList.remove('active');
             renderizarProcessos();
-            // Rolagem para o topo da lista ao mudar a data
             listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }).datepicker('setDate', dataSelecionadaDia);
@@ -513,6 +576,7 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
         dateFormat: 'dd/mm/yy',
         defaultDate: dataSelecionadaSemana,
         onSelect: function(dateText) {
+            console.log('Seleção de data no datepickerSemana:', dateText);
             const [dia, mes, ano] = dateText.split('/');
             dataSelecionadaSemana = new Date(ano, mes - 1, dia);
             paginaAtual = 1;
@@ -520,7 +584,6 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
             filtroSemanaTexto.classList.add('active');
             filtroDiaTexto.classList.remove('active');
             renderizarProcessos();
-            // Rolagem para o topo da lista ao mudar a semana
             listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     });
@@ -531,6 +594,7 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
     fimSemanaAtual.setDate(inicioSemanaAtual.getDate() + 6);
     $("#datepickerSemana").val(`${inicioSemanaAtual.toLocaleDateString('pt-BR')} - ${fimSemanaAtual.toLocaleDateString('pt-BR')}`);
 
+    console.log('Inicializando filtros: dia como padrão');
     filtroAtivo = 'dia';
     filtroDiaTexto.classList.add('active');
     filtroSemanaTexto.classList.remove('active');
