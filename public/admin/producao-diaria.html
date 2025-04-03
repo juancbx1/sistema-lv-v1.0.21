@@ -5,7 +5,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Produção Diária</title>
-    <link rel="stylesheet" href="/css/base-style.css">
     <link rel="stylesheet" href="/css/menu-lateral.css">
     <link rel="stylesheet" href="/css/producao-diaria.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -22,36 +21,59 @@
             <div class="grafico-card filters-card">
                 <h2 id="tituloGrafico">Produção do Dia</h2>
                 <canvas id="graficoDiario"></canvas>
+                <button id="atualizarGrafico" class="btn btn-primary">Atualizar</button>
             </div>
 
             <div class="individual-card filters-card">
                 <h2>Produção Individual</h2>
+                <p>Visualize a produção do dia da costureira:</p>
                 <div class="costureiras-buttons" id="costureirasButtons"></div>
-            </div>
-
-            <div class="detalhes-card filters-card" id="detalhesContainer" style="display: none;">
-                <h2>Detalhes da Produção</h2>
-                <div class="tabela-container">
+                <div class="total-processos">
+                    <span>Total de Processos do dia:</span>
+                    <span id="totalProcessos">0</span>
+                </div>
+                <div class="tabela-container" id="detalhesContainer" style="display: none;">
                     <table id="tabelaIndividual">
                         <thead>
                             <tr>
                                 <th>ID</th>
                                 <th>Produto</th>
-                                <th>Variação</th>
                                 <th>Proc./Máq.</th>
                                 <th>Qtd.</th>
-                                <th>Retirado Por</th>
-                                <th>Horário</th>
                             </tr>
                         </thead>
                         <tbody id="corpoTabelaIndividual"></tbody>
                     </table>
                 </div>
-                <div class="total-card filters-card">
-                    <h2>Total de Processos</h2>
-                    <p id="totalProcessos">0</p>
+            </div>
+
+            <div class="comparativo-geral-card filters-card">
+                <h2>Comparativo Geral</h2>
+                <canvas id="graficoComparativoGeral"></canvas>
+            </div>
+
+            <div class="comparativo-card filters-card">
+                <h2>Comparativo por Produto</h2>
+                <div class="filtro-comparativo">
+                    <div class="filtro-group">
+                        <label>Produto:</label>
+                        <select id="produtoSelect"></select>
+                    </div>
+                    <div class="filtro-periodo">
+                        <label>Período:</label>
+                        <div class="data-buttons">
+                            <button id="filtroHoje" class="btn btn-primary active">Hoje</button>
+                            <button id="filtroSemana" class="btn btn-primary">Semana</button>
+                            <button id="filtroMes" class="btn btn-primary">Mês</button>
+                        </div>
+                    </div>
+                </div>
+                <canvas id="graficoComparativo" style="display: none;"></canvas>
+                <div id="semDadosComparativo" class="no-data-message" style="display: none;">
+                    <p>Nenhuma produção encontrada para o filtro selecionado.</p>
                 </div>
             </div>
+
         </section>
     </div>
 

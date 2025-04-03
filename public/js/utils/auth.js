@@ -30,7 +30,6 @@ export async function sincronizarPermissoesUsuario(usuario) {
 export async function verificarAutenticacao(pagina, permissoesRequeridas = [], customValidation = null) {
   const token = localStorage.getItem('token');
   if (!token) {
-    console.log('[verificarAutenticacao] Nenhum token encontrado, redirecionando para /index.html');
     window.location.href = '/index.html';
     return null;
   }
@@ -39,7 +38,6 @@ export async function verificarAutenticacao(pagina, permissoesRequeridas = [], c
   const permissoesCache = JSON.parse(localStorage.getItem('permissoes') || '[]');
   const permissaoAcesso = `acesso-${pagina.replace('.html', '')}`;
   if (permissoesCache.length > 0 && !permissoesCache.includes(permissaoAcesso)) {
-    console.log(`[verificarAutenticacao] Cache: Usuário não tem ${permissaoAcesso}, redirecionando para acesso-negado`);
     window.location.href = '/admin/acesso-negado.html';
     return null;
   }
@@ -60,7 +58,6 @@ export async function verificarAutenticacao(pagina, permissoesRequeridas = [], c
           throw error; // Propaga imediatamente para redirecionar
         }
         if (i < retries - 1) {
-          console.log(`[verificarAutenticacao] Tentativa ${i + 1} falhou, retry em ${delay}ms`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
@@ -85,25 +82,21 @@ export async function verificarAutenticacao(pagina, permissoesRequeridas = [], c
     if (isCostureira) {
       const allowedPaths = ['/costureira/dashboard.html', '/index.html', '/costureira/acesso-restrito-costureira.html'];
       if (!allowedPaths.includes(window.location.pathname)) {
-        console.log('[verificarAutenticacao] Costureira em página não permitida, redirecionando');
         window.location.href = '/costureira/acesso-restrito-costureira.html';
         return null;
       }
     } else {
       if (!permissoesUsuario.includes(permissaoAcesso)) {
-        console.log(`[verificarAutenticacao] Usuário não tem ${permissaoAcesso}, redirecionando para acesso-negado`);
         window.location.href = '/admin/acesso-negado.html';
         return null;
       }
 
       if (permissoesRequeridas.length > 0 && !permissoesRequeridas.every(p => permissoesUsuario.includes(p))) {
-        console.log('[verificarAutenticacao] Permissões requeridas não atendidas:', permissoesRequeridas);
         window.location.href = '/admin/acesso-negado.html';
         return null;
       }
 
       if (customValidation && !customValidation(permissoesUsuario)) {
-        console.log('[verificarAutenticacao] Validação personalizada falhou');
         window.location.href = '/admin/acesso-negado.html';
         return null;
       }
