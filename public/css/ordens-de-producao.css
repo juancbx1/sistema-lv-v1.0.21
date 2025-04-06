@@ -18,14 +18,36 @@ body.autenticado {
     visibility: visible; /* Mostra o corpo após autenticação */
 }
 
+.lista-op{
+    width: 100%; /* Garante que ocupem o espaço completo */
+    position: relative; /* Evita sobreposição por posicionamento absoluto */
+}
+
+.formulario-op,
+.editar-op,
+.corte-op,
+.acessocortes-op {
+    position: relative;
+    padding-top: 40px; /* Espaço para o botão "X" não sobrepor o conteúdo */
+}
+
+
+.lista-op#opListView:target,
+.formulario-op#opFormView:target,
+.editar-op#opEditView:target,
+.corte-op#corteView:target,
+.acessocortes-op#acessocortesView:target {
+    display: block; /* Mostra apenas a seção correspondente à hash ativa */
+}
+
 /* Container principal */
 .container-op {
     margin-left: 270px;
     padding: 30px;
     max-width: 1200px;
-    display: flex;
-    flex-direction: column;
-    gap: 30px;
+    display: block; /* Garante que o container seja um bloco */
+    position: relative; /* Contexto para posicionamento relativo */
+    min-height: 100vh; /* Garante altura mínima para evitar colapsos */
 }
 
 /* Estilo dos Cards (genérico para filtros, registros, formulários, etc.) */
@@ -33,6 +55,8 @@ body.autenticado {
 .registros-card,
 .formulario-op,
 .editar-op,
+.corte-op,
+.acessocortes-op,
 .embalagem-section,
 .products-section {
     background: #ffffff;
@@ -47,6 +71,8 @@ body.autenticado {
 .registros-card:hover,
 .formulario-op:hover,
 .editar-op:hover,
+.corte-op:hover,
+.acessocortes-op:hover,
 .embalagem-section:hover,
 .products-section:hover {
     transform: translateY(-5px);
@@ -60,6 +86,8 @@ body.autenticado {
 .formulario-op h2,
 .editar-op h1,
 .editar-op h2,
+.corte-op h2,
+.acessocortes-op h2,
 .embalagem-section h1,
 .embalagem-section h2,
 .products-section h1,
@@ -69,6 +97,105 @@ body.autenticado {
     margin-bottom: 20px;
     border-bottom: 2px solid #3498db;
     padding-bottom: 10px;
+}
+
+/* Segunda linha: filtros e busca */
+.filters-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.corte-op .botao-cortar,
+.acessocortes-op .botao-cortar,
+.acessocortes-op .botao-excluir {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1em;
+    font-weight: 600;
+    transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.grupo-form-op {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 15px; /* Espaçamento consistente */
+}
+
+.grupo-form-op[style*="display: none"] {
+    display: none !important; /* Garante que campos ocultos fiquem fora do layout */
+}
+
+
+/* Ajuste para o conteúdo interno das seções */
+.corte-op .grupo-form-op,
+.acessocortes-op .conteudo-aba {
+    margin-bottom: 15px; /* Espaçamento uniforme entre grupos */
+}
+
+.corte-op .botoes-form-op,
+.acessocortes-op .botoes-tabela {
+    display: flex;
+    justify-content: flex-start;
+    gap: 1rem;
+    margin-top: 20px;
+}
+
+.corte-op .botao-cortar:hover:not(:disabled) {
+    background: #2980b9;
+    transform: translateY(-2px);
+}
+
+.acessocortes-op .botao-cortar {
+    background: #4CAF50;
+    color: white;
+}
+
+.acessocortes-op .botao-cortar:hover:not(:disabled) {
+    background: #45a049;
+    transform: translateY(-2px);
+}
+
+.acessocortes-op .botao-excluir {
+    background: #e74c3c;
+    color: white;
+}
+
+.acessocortes-op .botao-excluir:hover:not(:disabled) {
+    background: #c0392b;
+    transform: translateY(-2px);
+}
+
+/* Ajuste para as abas */
+.abas-cortes {
+    margin: 20px 0;
+    display: flex;
+    gap: 5px;
+}
+
+.aba-btn {
+    padding: 10px 20px;
+    background-color: #e0e0e0;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.aba-btn:hover {
+    transform: translateY(-2px);
+}
+
+.aba-btn.active {
+    background-color: #4CAF50;
+    color: white;
 }
 
 /* Estilo dos Formulários e Filtros */
@@ -140,7 +267,8 @@ body.autenticado {
 .btn,
 #limparFiltros,
 .botao-incluir-op,
-.botao-voltar-op,
+.botao-acessar-cortes,
+.botao-adicionar-corte,
 .botao-salvar-op,
 .botao-cancelar-op,
 .botao-finalizar-op,
@@ -158,19 +286,21 @@ body.autenticado {
 .btn:hover:not(:disabled),
 #limparFiltros:hover:not(:disabled),
 .botao-incluir-op:hover:not(:disabled),
-.botao-voltar-op:hover:not(:disabled),
 .botao-salvar-op:hover:not(:disabled),
 .botao-cancelar-op:hover:not(:disabled),
 .botao-finalizar-op:hover:not(:disabled),
 .btn-voltar:hover:not(:disabled),
-.btn-estoque:hover:not(:disabled) {
+.btn-estoque:hover:not(:disabled),
+.botao-acessar-cortes:hover:not(:disabled),
+.botao-adicionar-corte:hover:not(:disabled) {
     transform: translateY(-2px);
 }
 
 .btn:disabled,
 #limparFiltros:disabled,
 .botao-incluir-op:disabled,
-.botao-voltar-op:disabled,
+.botao-acessar-cortes:disabled,
+.botao-adicionar-corte:disabled,
 .botao-salvar-op:disabled,
 .botao-cancelar-op:disabled,
 .botao-finalizar-op:disabled,
@@ -184,7 +314,9 @@ body.autenticado {
 .btn-primary,
 .botao-incluir-op,
 .botao-salvar-op,
-.botao-finalizar-op {
+.botao-finalizar-op,
+.botao-acessar-cortes,
+.botao-adicionar-corte {
     background: #3498db;
     color: white;
 }
@@ -192,22 +324,20 @@ body.autenticado {
 .btn-primary:hover:not(:disabled),
 .botao-incluir-op:hover:not(:disabled),
 .botao-salvar-op:hover:not(:disabled),
+.botao-adicionar-corte:hover:not(:disabled),
+.botao-acessar-cortes:hover:not(:disabled),
 .botao-finalizar-op:hover:not(:disabled) {
     background: #2980b9;
 }
 
 /* Botão Secundário (ex.: Voltar) */
-.btn-secondary,
-.botao-voltar-op,
-.btn-voltar {
+.btn-secondary{
     background: #7f8c8d;
     color: white;
     margin-bottom: 10px;
 }
 
-.btn-secondary:hover:not(:disabled),
-.botao-voltar-op:hover:not(:disabled),
-.btn-voltar:hover:not(:disabled) {
+.btn-secondary:hover:not(:disabled){
     background: #6c7778;
 }
 
@@ -226,45 +356,49 @@ body.autenticado {
 }
 
 /* Estilo da Tabela Genérica */
-#tabelaProducoes,
-.tabela-op,
-#produtosTable {
+.tabela-op {
     width: 100%;
-    border-collapse: separate; /* Restaurado para comportamento original */
-    border-spacing: 5px;
+    border-collapse: separate;
     background: #ffffff;
     border-radius: 10px;
-    overflow-x: auto; /* Permite rolagem horizontal se necessário */
-    display: block; /* Garante que a tabela seja tratada como bloco */
+    overflow-x: auto;
+    display: block;
+    margin-top: 20px;
 }
 
-#tabelaProducoes thead,
-.tabela-op thead,
-#produtosTable thead {
+.tabela-op thead {
     background: #3498db;
     color: white;
 }
 
-/* Ajuste das colunas para responsividade */
+.tabela-op tbody {
+    display: block;
+    width: 100%;
+}
+
 .tabela-op th,
 .tabela-op td {
     padding: 10px;
     font-size: 0.9em;
     font-weight: 600;
     text-align: left;
-    max-width: 0; /* Permite que o conteúdo seja quebrado */
-    overflow: hidden;
-    text-overflow: ellipsis; /* Adiciona "..." se o texto for muito longo */
+    border-bottom: 1px solid #dfe6e9;
+    word-break: break-word; /* Quebra de linha para texto longo */
 }
 
-.tabela-op th#sortStatus,
-.tabela-op td:first-child {
-    width: 20%; /* Sugestão de proporção */
+.tabela-op tr {
+    display: table;
+    width: 100%;
+    table-layout: fixed; /* Garante que as colunas respeitem as larguras definidas */
+}
+
+.tabela-op tbody tr:nth-child(even) {
+    background: #f8f9fa;
 }
 
 .tabela-op th#sortNumero,
 .tabela-op td:nth-child(2) {
-    width: 20%; /* Sugestão de proporção */
+    width: 15%; /* Sugestão de proporção */
 }
 
 .tabela-op th#sortProduto,
@@ -284,39 +418,17 @@ body.autenticado {
     width: 15%; /* Sugestão de proporção */
 }
 
-/* Estilo para garantir responsividade em mobile */
-.tabela-op tbody {
-    display: block;
-    width: 100%;
-}
 
-.tabela-op tr {
-    display: table;
-    width: 100%;
-    table-layout: fixed; /* Garante que as colunas respeitem as larguras definidas */
-}
-
-#tabelaProducoes tbody tr,
-.tabela-op tbody tr,
-#produtosTable tbody tr {
+.tabela-op tbody tr{
     transition: background 0.3s ease;
 }
 
-#tabelaProducoes tbody tr:nth-child(even),
-.tabela-op tbody tr:nth-child(even),
-#produtosTable tbody tr:nth-child(even) {
-    background: #f8f9fa;
-}
 
-#tabelaProducoes tbody tr:hover,
-.tabela-op tbody tr:hover,
-#produtosTable tbody tr:hover {
+.tabela-op tbody tr:hover{
     background: #ecf0f1;
 }
 
-#tabelaProducoes td,
-.tabela-op td,
-#produtosTable td {
+.tabela-op td {
     padding: 10px;
     font-size: 0.85em;
     color: #2c3e50;
@@ -347,10 +459,7 @@ body.autenticado {
 
 /* Estilo do Cabeçalho */
 .cabecalho-op {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    margin-top: 20px;
+    display: block;
     margin-bottom: 20px;
 }
 
@@ -368,9 +477,6 @@ body.autenticado {
     color: #2c3e50;
 }
 
-.botao-incluir-op {
-    margin-right: 20px;
-}
 
 .busca-op {
     padding: 10px;
@@ -378,7 +484,7 @@ body.autenticado {
     border-radius: 8px;
     font-size: 1em;
     background: #f9f9f9;
-    width: 300px;
+    width: 250px;
     transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
@@ -390,9 +496,9 @@ body.autenticado {
 
 /* Filtros de Status */
 #statusFilter {
-    margin-bottom: 20px;
     display: flex;
     gap: 10px;
+    flex-wrap: wrap;
 }
 
 .status-btn {
@@ -457,6 +563,23 @@ body.autenticado {
     50% { opacity: 0.5; }
     100% { opacity: 1; }
 }
+
+/* Terceira linha: ações */
+.actions-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.actions-row span {
+    font-size: 1em;
+    color: #34495e;
+    font-weight: 600;
+}
+
+
 
 /* Estilo para os cabeçalhos com setas */
 .tabela-op th {
@@ -689,6 +812,7 @@ body.autenticado {
 
 /* Estilo para inputs específicos */
 .input-produto-novaOP,
+.variantes-selects-corte,
 .input-produto,
 .variantes-selects select {
     width: 250px;
@@ -856,6 +980,105 @@ body.autenticado {
     color: #666;
 }
 
+.botao-corte {
+    padding: 8px 16px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: 10px;
+}
+
+.botao-corte:hover {
+    background-color: #45a049;
+}
+
+.corte-op {
+    padding: 20px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.input-cortador {
+    background-color: #d3d3d3;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    width: 200px;
+}
+
+.acessocortes-op {
+    padding: 20px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.cabecalho-op h2 {
+    display: inline-block;
+    margin: 0;
+}
+
+.botao-fechar {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: #f44336;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 30px;
+    text-align: center;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.botao-fechar:hover {
+    background-color: #da190b;
+    transform: translateY(-2px);
+}
+
+.abas-cortes {
+    margin: 20px 0;
+}
+
+.aba-btn {
+    padding: 10px 20px;
+    background-color: #ddd;
+    border: none;
+    cursor: pointer;
+    margin-right: 5px;
+}
+
+.aba-btn.active {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.conteudo-aba {
+    padding: 5px;
+    background-color: #f9f9f9;
+    border-radius: 5px;
+}
+
+
+.refresh-animation {
+  animation: refresh 0.5s ease-in-out;
+}
+
+@keyframes refresh {
+  0% { opacity: 0.5; transform: scale(0.98); }
+  50% { opacity: 1; transform: scale(1.02); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+
+
+
+
 /* Breakpoint para telas menores (max-width: 414px, como iPhone XR) */
 @media (max-width: 414px) {
     .container-op {
@@ -917,6 +1140,22 @@ body.autenticado {
         padding: 15px;
         width: 100%;
     }
+    .filters-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .actions-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .botao-incluir-op,
+    .botao-adicionar-corte,
+    .botao-acessar-cortes {
+        width: 100%;
+    }
+
 
     .filters-card {
         padding-left: 15px;
@@ -961,6 +1200,7 @@ body.autenticado {
     }
 
     .input-produto-novaOP,
+    .variantes-selects-corte,
     .input-produto,
     .variantes-selects select,
     .input-quantidade-principal,
@@ -969,7 +1209,7 @@ body.autenticado {
     .input-data,
     .input-data-novaOP,
     #observacoesOP {
-        width: 100%;
+        width: 80%;
         margin-top: 10px;
     }
 
@@ -1021,8 +1261,8 @@ body.autenticado {
     }
 
     .tabela-op th#sortStatus,
-.tabela-op td:first-child {
-    width: 19%; /* Sugestão de proporção */
+    .tabela-op td:first-child {
+    width: 9%; /* Sugestão de proporção */
 }
 
 .tabela-op th#sortNumero,
@@ -1030,11 +1270,6 @@ body.autenticado {
     width: 13%; /* Sugestão de proporção */
 }
 
-.tabela-op th#sortProduto,
-.tabela-op td:nth-child(3) {
-    width: 28%; /* Sugestão de proporção */
-    word-break: break-word; /* Quebra de linha para texto longo */
-}
 
 .tabela-op th#sortVariante,
 .tabela-op td:nth-child(4) {
@@ -1093,7 +1328,6 @@ body.autenticado {
         padding: 20px;
     }
 
-    .input-produto-novaOP,
     .input-produto,
     .variantes-selects select,
     .input-quantidade-principal,
