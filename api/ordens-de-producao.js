@@ -23,32 +23,57 @@ export default async function handler(req, res) {
     const usuarioLogado = verificarToken(req);
 
     if (method === 'GET') {
-      const fetchAll = query.all === 'true'; // Verifica se o parâmetro all=true foi passado
+      const fetchAll = query.all === 'true';
+      const page = parseInt(query.page) || 1;
+      const limit = parseInt(query.limit) || 10;
+      const offset = (page - 1) * limit;
+      const statusFilter = query.status;
+
+      let queryText = '';
+      let totalQuery = 'SELECT COUNT(*) FROM ordens_de_producao';
+      let queryParams = [];
+      let totalParams = [];
+
       if (fetchAll) {
-        // Retorna todas as OPs sem paginação
-        const result = await pool.query('SELECT * FROM ordens_de_producao ORDER BY numero DESC');
-        res.status(200).json(result.rows);
+        queryText = 'SELECT * FROM ordens_de_producao ORDER BY numero DESC';
+      } else if (statusFilter) {
+        queryText = `
+          SELECT * FROM ordens_de_producao 
+          WHERE status = $1 
+          ORDER BY numero DESC 
+          LIMIT $2 OFFSET $3
+        `;
+        queryParams = [statusFilter, limit, offset];
+        totalQuery += ' WHERE status = $1';
+        totalParams = [statusFilter];
       } else {
-        // Retorna OPs paginadas
-        const page = parseInt(query.page) || 1;
-        const limit = parseInt(query.limit) || 10;
-        const offset = (page - 1) * limit;
-
-        const result = await pool.query(
-          'SELECT * FROM ordens_de_producao ORDER BY numero DESC LIMIT $1 OFFSET $2',
-          [limit, offset]
-        );
-
-        const totalResult = await pool.query('SELECT COUNT(*) FROM ordens_de_producao');
-        const total = parseInt(totalResult.rows[0].count);
-
-        res.status(200).json({
-          rows: result.rows,
-          total: total,
-          page: page,
-          pages: Math.ceil(total / limit),
-        });
+        queryText = `
+          SELECT * FROM ordens_de_producao 
+          ORDER BY 
+            CASE 
+              WHEN status IN ('em-aberto', 'produzindo') THEN 0 
+              ELSE 1 
+            END, 
+            numero DESC 
+          LIMIT $1 OFFSET $2
+        `;
+        queryParams = [limit, offset];
       }
+
+      const result = await pool.query(queryText, queryParams);
+      const totalResult = await pool.query(totalQuery, totalParams);
+      const total = parseInt(totalResult.rows[0].count);
+
+      res.status(200).json(
+        fetchAll
+          ? result.rows
+          : {
+              rows: result.rows,
+              total: total,
+              page: page,
+              pages: Math.ceil(total / limit),
+            }
+      );
     } else if (method === 'POST') {
       if (!usuarioLogado.permissoes.includes('criar-op')) {
         return res.status(403).json({ error: 'Permissão negada' });

@@ -250,27 +250,27 @@ function ordenarOPs(ops, criterio, ordem = 'asc') {
   });
 }
 
-async function obterOrdensDeProducao(page = 1, fetchAll = false) {
-  const cacheKey = `ordensCacheData_${fetchAll ? 'all' : `page_${page}`}`;
+async function obterOrdensDeProducao(page = 1, fetchAll = false, forceUpdate = false, statusFilter = null) {
+  const cacheKey = `ordensCacheData_${fetchAll ? 'all' : `page_${page}${statusFilter ? `_${statusFilter}` : ''}`}`;
   const cachedData = localStorage.getItem(cacheKey);
 
-  if (!fetchAll && cachedData) {
+  if (!forceUpdate && !fetchAll && cachedData) {
     try {
       const { ordens, timestamp, total, pages } = JSON.parse(cachedData);
       const now = Date.now();
       const cacheDuration = 15 * 60 * 1000;
       if (now - timestamp < cacheDuration) {
         ordensCache = { rows: ordens, total, pages };
-        console.log(`[obterOrdensDeProducao] Retornando ordens do localStorage para ${fetchAll ? 'todas' : `página ${page}`}`);
+        console.log(`[obterOrdensDeProducao] Retornando ordens do localStorage para ${fetchAll ? 'todas' : `página ${page}${statusFilter ? `_${statusFilter}` : ''}`}`);
         return ordensCache;
       }
     } catch (error) {
       console.error('[obterOrdensDeProducao] Cache corrompido, limpando:', error);
-      localStorage.removeItem(cacheKey); // Limpa cache corrompido
+      localStorage.removeItem(cacheKey);
     }
   }
 
-  if (!fetchAll && ordensCache) {
+  if (!forceUpdate && !fetchAll && ordensCache && !statusFilter) {
     console.log(`[obterOrdensDeProducao] Retornando ordens do cache para página ${page}`);
     return ordensCache;
   }
@@ -284,7 +284,7 @@ async function obterOrdensDeProducao(page = 1, fetchAll = false) {
       const token = localStorage.getItem('token');
       const url = fetchAll
         ? '/api/ordens-de-producao?all=true'
-        : `/api/ordens-de-producao?page=${page}&limit=${itemsPerPage}`;
+        : `/api/ordens-de-producao?page=${page}&limit=${itemsPerPage}${statusFilter ? `&status=${statusFilter}` : ''}`;
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
@@ -304,7 +304,7 @@ async function obterOrdensDeProducao(page = 1, fetchAll = false) {
         };
         localStorage.setItem(cacheKey, JSON.stringify(cacheData));
       }
-      console.log(`[obterOrdensDeProducao] Ordens buscadas e armazenadas: ${fetchAll ? 'todas' : `página ${page}`}`);
+      console.log(`[obterOrdensDeProducao] Ordens buscadas e armazenadas: ${fetchAll ? 'todas' : `página ${page}${statusFilter ? `_${statusFilter}` : ''}`}`);
       return ordensCache;
     })();
 
@@ -493,7 +493,7 @@ function setCurrentDate() {
   }
 }
 
-async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = 'status', sortOrdem = 'desc', page = 1) {
+async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = 'status', sortOrdem = 'desc', page = 1, forceUpdate = false, statusFilter = null) {
   const opTableBody = document.getElementById('opTableBody');
   if (!opTableBody) {
     console.error('[loadOPTable] opTableBody não encontrado no DOM');
@@ -510,20 +510,21 @@ async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = '
   }
   opTableBody.dataset.isLoading = 'true';
 
-  // Só mostra o spinner se a tabela ainda não foi renderizada
   if (!opTableBody.dataset.rendered) {
     opTableBody.innerHTML = '<tr><td colspan="5"><div class="spinner">Carregando ordens...</div></td></tr>';
   }
 
   try {
     console.log('[loadOPTable] Iniciando carregamento da tabela');
-    const data = await obterOrdensDeProducao(page, false);
+    const data = await obterOrdensDeProducao(page, false, forceUpdate, statusFilter);
     if (!data || !data.rows) {
       throw new Error('Dados inválidos retornados por obterOrdensDeProducao');
     }
     let ordensDeProducao = data.rows;
+    let totalItems = data.total; // Total do backend por padrão
+    let totalPages = data.pages; // Páginas do backend por padrão
 
-    console.log('[loadOPTable] Ordens recebidas:', ordensDeProducao.length);
+    console.log('[loadOPTable] Ordens recebidas:', ordensDeProducao.length, 'Dados brutos:', ordensDeProducao, 'Total:', totalItems, 'Páginas:', totalPages);
 
     const ordensUnicas = [];
     const numerosVistos = new Set();
@@ -533,58 +534,79 @@ async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = '
         ordensUnicas.push(op);
       }
     });
+    console.log('[loadOPTable] Ordens únicas após deduplicação:', ordensUnicas.length);
 
-    let filteredOPs = ordensUnicas;
+    let filteredOPs = [...ordensUnicas];
     if (filterStatus === 'todas') {
-      filteredOPs = ordensUnicas.filter(op => op.status !== 'cancelada' && op.status !== 'finalizado');
+      filteredOPs = filteredOPs.filter(op => op.status === 'em-aberto' || op.status === 'produzindo');
+      totalItems = filteredOPs.length; // Calcula totalItems localmente para 'todas'
+      totalPages = Math.ceil(totalItems / itemsPerPage); // Calcula totalPages localmente para 'todas'
     } else {
-      filteredOPs = ordensUnicas.filter(op => op.status === filterStatus);
+      filteredOPs = filteredOPs.filter(op => op.status === filterStatus);
     }
+    console.log('[loadOPTable] Após filtro de status:', filteredOPs.length, 'Filtro aplicado:', filterStatus);
 
-    filteredOPs = filteredOPs.filter(op => 
-      (op.produto?.toLowerCase().includes(search.toLowerCase()) || false) || 
-      op.numero.toString().includes(search) ||
-      (op.variante && op.variante.toLowerCase().includes(search.toLowerCase()))
-    );
+    filteredOPs = filteredOPs.filter(op => {
+      const matchesProduto = op.produto?.toLowerCase().includes(search.toLowerCase()) || false;
+      const matchesNumero = op.numero.toString().includes(search);
+      const matchesVariante = op.variante?.toLowerCase().includes(search.toLowerCase()) || false;
+      return matchesProduto || matchesNumero || matchesVariante;
+    });
+    console.log('[loadOPTable] Após filtro de busca:', filteredOPs.length, 'Busca:', search);
 
     filteredOPs = ordenarOPs(filteredOPs, sortCriterio, sortOrdem);
+    console.log('[loadOPTable] Após ordenação:', filteredOPs.length);
 
-    const totalItems = filteredOPs.length;
-    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    // Para 'todas', ajusta totalItems e totalPages novamente após filtro de busca
+    if (filterStatus === 'todas') {
+      totalItems = filteredOPs.length;
+      totalPages = Math.ceil(totalItems / itemsPerPage);
+    }
+
     const startIndex = (page - 1) * itemsPerPage;
     const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
-    const paginatedOPs = filteredOPs.slice(startIndex, endIndex);
+    const paginatedOPs = filteredOPs;
 
     filteredOPsGlobal = filteredOPs;
 
-    console.log('[loadOPTable] Itens paginados:', paginatedOPs.length);
+    console.log('[loadOPTable] Itens paginados:', paginatedOPs.length, 'Página:', page, 'Total de páginas:', totalPages);
+
+    if (paginatedOPs.length === 0 && totalItems > 0 && page > totalPages) {
+      console.log('[loadOPTable] Página fora do intervalo, ajustando para a primeira página');
+      return loadOPTable(filterStatus, search, sortCriterio, sortOrdem, 1, forceUpdate, statusFilter);
+    }
 
     const fragment = document.createDocumentFragment();
-    paginatedOPs.forEach((op, index) => {
-      if (!op.edit_id) {
-        op.edit_id = generateUniqueId();
-        usedIds.add(op.edit_id);
-      }
+    if (paginatedOPs.length === 0) {
       const tr = document.createElement('tr');
-      tr.dataset.index = startIndex + index;
-      tr.dataset.numero = op.numero;
-      tr.style.cursor = permissoes.includes('editar-op') ? 'pointer' : 'default';
-      tr.innerHTML = `
-        <td><span class="status-bolinha status-${op.status} ${op.status === 'produzindo' ? 'blink' : ''}"></span></td>
-        <td>${op.numero}</td>
-        <td>${op.produto || 'N/A'}</td>
-        <td>${op.variante || '-'}</td>
-        <td>${op.quantidade || 0}</td>
-      `;
+      tr.innerHTML = '<td colspan="5" style="text-align: center; padding: 20px;">Nenhuma ordem encontrada com os filtros atuais.</td>';
       fragment.appendChild(tr);
-    });
+    } else {
+      paginatedOPs.forEach((op, index) => {
+        if (!op.edit_id) {
+          op.edit_id = generateUniqueId();
+          usedIds.add(op.edit_id);
+        }
+        const tr = document.createElement('tr');
+        tr.dataset.index = startIndex + index;
+        tr.dataset.numero = op.numero;
+        tr.style.cursor = permissoes.includes('editar-op') ? 'pointer' : 'default';
+        tr.innerHTML = `
+          <td><span class="status-bolinha status-${op.status} ${op.status === 'produzindo' ? 'blink' : ''}"></span></td>
+          <td>${op.numero}</td>
+          <td>${op.produto || 'N/A'}</td>
+          <td>${op.variante || '-'}</td>
+          <td>${op.quantidade || 0}</td>
+        `;
+        fragment.appendChild(tr);
+      });
+    }
 
-    // Atualiza o DOM de forma eficiente
     while (opTableBody.firstChild) {
-      opTableBody.removeChild(opTableBody.firstChild); // Remove filhos um a um
+      opTableBody.removeChild(opTableBody.firstChild);
     }
     opTableBody.appendChild(fragment);
-    opTableBody.dataset.rendered = 'true'; // Marca como renderizada
+    opTableBody.dataset.rendered = 'true';
     console.log('[loadOPTable] Tabela atualizada com sucesso');
 
     opTableBody.removeEventListener('click', handleOPTableClick);
@@ -610,19 +632,20 @@ async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = '
     document.querySelectorAll('.pagination-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const newPage = parseInt(btn.dataset.page);
-        loadOPTable(filterStatus, search, sortCriterio, sortOrdem, newPage);
+        loadOPTable(filterStatus, search, sortCriterio, sortOrdem, newPage, forceUpdate, statusFilter);
       });
     });
 
   } catch (error) {
     console.error('[loadOPTable] Erro ao carregar ordens de produção:', error);
     opTableBody.innerHTML = '<tr><td colspan="5">Erro ao carregar ordens de produção. Tente novamente.</td></tr>';
-    opTableBody.dataset.rendered = 'true'; // Ainda marca como renderizada para evitar loop
+    opTableBody.dataset.rendered = 'true';
   } finally {
     delete opTableBody.dataset.isLoading;
     console.log('[loadOPTable] Carregamento concluído');
   }
 }
+
 
 function handleOPTableClick(e) {
   const tr = e.target.closest('tr');
@@ -643,7 +666,10 @@ function filterOPs(page = 1) {
   const activeStatus = statusFilter.querySelector('.status-btn.active')?.dataset.status || 'todas';
   const sortCriterio = document.querySelector('.tabela-op th[data-sort]')?.id.replace('sort', '') || 'status';
   const sortOrdem = document.querySelector('.tabela-op th[data-sort]')?.dataset.sort || 'desc';
-  loadOPTable(activeStatus, searchOP.value, sortCriterio, sortOrdem, page);
+  
+  // Passa o status como parâmetro para o backend, exceto para 'todas'
+  const statusToFetch = activeStatus === 'todas' ? null : activeStatus;
+  loadOPTable(activeStatus, searchOP.value, sortCriterio, sortOrdem, page, true, statusToFetch);
 }
 
 async function updateFinalizarButtonState(op, produtos) {
@@ -1612,7 +1638,8 @@ async function toggleView() {
       statusFilter.querySelectorAll('.status-btn').forEach(btn => btn.classList.remove('active'));
       todasBtn.classList.add('active');
     }
-    console.log('[toggleView] Tabela já carregada na inicialização');
+    console.log('[toggleView] Carregando tabela inicial com força');
+    await loadOPTable('todas', '', 'status', 'desc', 1, true, null); // 'todas' sem filtro específico no backend
   }
 }
 
@@ -2109,13 +2136,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   console.log('[DOMContentLoaded] Iniciando carregamento inicial da tabela');
-  await loadOPTable('todas', '', 'status', 'desc', 1); // Carrega a tabela uma vez
+  await loadOPTable('todas', '', 'status', 'desc', 1, true, null); // 'todas' sem filtro específico no backend
   document.body.dataset.initialLoadComplete = 'true';
 
   window.removeEventListener('hashchange', toggleView);
   window.addEventListener('hashchange', toggleView);
 
-  await toggleView(); // Chama toggleView, mas sem recarregar a tabela
+  await toggleView();
   await loadProdutosSelect();
 
   // Resto do código de inicialização (eventos, botões, etc.)
@@ -2281,7 +2308,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const foiCortadoInput = foiCortadoDiv?.querySelector('input');
   
       try {
-        await salvarOrdemDeProducao(novaOP);
+        const savedOP = await salvarOrdemDeProducao(novaOP);
+        console.log('[opForm.submit] Ordem salva:', savedOP);
   
         if (foiCortadoInput && foiCortadoInput.value === 'Sim' && foiCortadoDiv.dataset.corteId) {
           const corteId = foiCortadoDiv.dataset.corteId;
@@ -2312,10 +2340,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
   
         mostrarPopupMensagem(`Ordem de Produção #${novaOP.numero} salva com sucesso!`, 'sucesso');
-        window.location.hash = ''; // Limpa o hash
-        limparCacheOrdens(); // Limpa o cache de ordens
-        await loadOPTable('todas', '', 'status', 'desc', 1); // Força recarregar a tabela
-        window.dispatchEvent(new HashChangeEvent('hashchange')); // Dispara o evento hashchange para atualizar a UI
+        limparCacheOrdens(); // Limpa o cache
+        window.location.hash = ''; // Volta para a tela inicial
+        await loadOPTable('todas', '', 'status', 'desc', 1, true); // Força recarregar com dados frescos
+        window.dispatchEvent(new HashChangeEvent('hashchange')); // Atualiza a UI
       } catch (error) {
         console.error('[opForm.submit] Erro:', error);
         mostrarPopupMensagem('Erro ao salvar ordem. Tente novamente.', 'erro');
