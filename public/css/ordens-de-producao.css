@@ -315,9 +315,13 @@ body.autenticado {
 .botao-incluir-op,
 .botao-salvar-op,
 .botao-finalizar-op,
-.botao-acessar-cortes,
-.botao-adicionar-corte {
+.botao-acessar-cortes{
     background: #3498db;
+    color: white;
+}
+
+.botao-adicionar-corte {
+    background: #073f64;
     color: white;
 }
 
@@ -1262,7 +1266,7 @@ body.autenticado {
 
     .tabela-op th#sortStatus,
     .tabela-op td:first-child {
-    width: 9%; /* Sugestão de proporção */
+    width: 17%; /* Sugestão de proporção */
 }
 
 .tabela-op th#sortNumero,
