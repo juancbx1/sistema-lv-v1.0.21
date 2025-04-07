@@ -11,6 +11,8 @@ const itemsPerPage = 10;
 let permissoes = [];
 let usuarioLogado = null;
 const usedIds = new Set();
+let isLoadingAbaContent = false; 
+
 
 function mostrarPopupMensagem(mensagem, tipo = 'erro') {
   const popup = document.createElement('div');
@@ -1608,7 +1610,7 @@ async function toggleView() {
     opEditView.style.display = 'none';
     corteView.style.display = 'block';
 
-    limparFormularioCorte(); // Define cortadorCorte aqui
+    limparFormularioCorte();
     await loadProdutosCorte();
     setCurrentDateForCorte();
 
@@ -1627,7 +1629,7 @@ async function toggleView() {
     opFormView.style.display = 'none';
     opEditView.style.display = 'none';
     acessocortesView.style.display = 'block';
-    await loadAcessocortes();
+    await loadAcessocortes(); // Chama apenas uma vez
   } else {
     opListView.style.display = 'block';
     opFormView.style.display = 'none';
@@ -1638,8 +1640,8 @@ async function toggleView() {
       statusFilter.querySelectorAll('.status-btn').forEach(btn => btn.classList.remove('active'));
       todasBtn.classList.add('active');
     }
-    console.log('[toggleView] Carregando tabela inicial com força');
-    await loadOPTable('todas', '', 'status', 'desc', 1, true, null); // 'todas' sem filtro específico no backend
+    // Remove a chamada redundante de loadOPTable aqui
+    console.log('[toggleView] Tela inicial carregada');
   }
 }
 
@@ -1799,11 +1801,10 @@ async function loadAcessocortes() {
   const conteudoAba = document.getElementById('conteudoAba');
   let activeTab = 'pendente'; // Padrão inicial
 
-  // Verifica se veio de #corte (após salvar um corte)
   if (window.location.hash === '#acessocortes' && document.referrer.includes('#corte')) {
-      activeTab = 'cortados'; // Define como "Cortados" após salvar
+      activeTab = 'cortados';
   } else if (window.location.hash === '#acessocortes') {
-      activeTab = 'cortados'; // Padrão para acesso direto
+      activeTab = 'cortados';
   }
 
   abas.forEach(aba => {
@@ -1811,22 +1812,34 @@ async function loadAcessocortes() {
       if (aba.dataset.aba === activeTab) {
           aba.classList.add('active');
       }
-      aba.addEventListener('click', () => {
+      aba.addEventListener('click', async (e) => {
+          e.preventDefault();
+          if (aba.classList.contains('active')) return; // Evita recarregar se já ativo
           abas.forEach(a => a.classList.remove('active'));
           aba.classList.add('active');
-          loadAbaContent(aba.dataset.aba);
+          await loadAbaContent(aba.dataset.aba, true);
       });
   });
 
-  await loadAbaContent(activeTab);
+  // Carrega apenas se não estiver carregando
+  if (!isLoadingAbaContent) {
+      await loadAbaContent(activeTab, true);
+  }
 }
 
-async function loadAbaContent(aba, forceRefresh = false) {
+async function loadAbaContent(aba, forceRefresh = true) {
   const conteudoAba = document.getElementById('conteudoAba');
+  
+  // Verifica se já está carregando
+  if (isLoadingAbaContent) {
+    console.log(`[loadAbaContent] Já está carregando a aba ${aba}, ignorando nova chamada`);
+    return;
+  }
+
+  isLoadingAbaContent = true; // Marca como carregando
   conteudoAba.innerHTML = '<div class="spinner">Carregando...</div>';
 
   try {
-    // Passa forceRefresh para obterCortes
     const cortes = await obterCortes(aba === 'pendente' ? 'pendente' : 'cortados', forceRefresh);
     let html = '';
 
@@ -1873,7 +1886,6 @@ async function loadAbaContent(aba, forceRefresh = false) {
 
     conteudoAba.innerHTML = html;
 
-    // Adiciona animação de refresh
     conteudoAba.classList.add('refresh-animation');
     setTimeout(() => conteudoAba.classList.remove('refresh-animation'), 500);
 
@@ -1889,6 +1901,8 @@ async function loadAbaContent(aba, forceRefresh = false) {
   } catch (error) {
     console.error('[loadAbaContent] Erro:', error);
     conteudoAba.innerHTML = '<p>Erro ao carregar cortes. Tente novamente.</p>';
+  } finally {
+    isLoadingAbaContent = false; // Marca como não carregando ao terminar
   }
 }
 
@@ -1898,6 +1912,7 @@ async function obterCortes(status, forceRefresh = false) {
   const cacheKey = `cortesCache_${status}`;
   const cachedData = localStorage.getItem(cacheKey);
 
+  // Se forceRefresh for true, ignora o cache e busca no servidor
   if (!forceRefresh && cachedData) {
     const { cortes, timestamp } = JSON.parse(cachedData);
     const now = Date.now();
@@ -2422,4 +2437,4 @@ document.addEventListener('DOMContentLoaded', async () => {
       el.style.cursor = 'not-allowed';
     });
   }
-});
+}); 

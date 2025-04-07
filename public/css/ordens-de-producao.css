@@ -1267,7 +1267,7 @@ body.autenticado {
 
 .tabela-op th#sortNumero,
 .tabela-op td:nth-child(2) {
-    width: 13%; /* Sugestão de proporção */
+    width: 20%; /* Sugestão de proporção */
 }
 
 
