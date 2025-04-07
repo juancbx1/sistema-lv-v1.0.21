@@ -105,123 +105,6 @@ async function obterProdutos() {
   }
 }
 
-// Função auxiliar (já definida, mas confirmada)
-function generateUniquePN() {
-  let pn;
-  const usedPNs = new Set(); // Garante que os PNs sejam únicos
-  do {
-      pn = Math.floor(1000 + Math.random() * 9000).toString();
-  } while (usedPNs.has(pn));
-  usedPNs.add(pn);
-  return pn;
-}
-
-// Função para atualizar o status de um corte
-async function atualizarStatusCorte(id, novoStatus) {
-  const token = localStorage.getItem('token');
-  const response = await fetch('/api/cortes', {
-    method: 'PUT',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ id, status: novoStatus }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(`Erro ao atualizar status do corte: ${error.error}`);
-  }
-  return await response.json();
-}
-
- // Função para verificar se o produto/variação está em "Cortados"
- async function verificarCorte() {
-  const produto = document.getElementById('produtoOP').value;
-  const varianteSelect = document.querySelector('.variantes-selects select');
-  const variante = varianteSelect ? varianteSelect.value : '';
-
-  if (!produto || !variante) {
-    mostrarPopupMensagem('Por favor, selecione um produto e uma variação.', 'erro');
-    return;
-  }
-
-  const opForm = document.getElementById('opForm');
-  const camposDinamicos = [
-    document.getElementById('quantidadeOP'),
-    document.getElementById('numeroOP'),
-    document.getElementById('dataEntregaOP'),
-    document.getElementById('observacoesOP')
-  ];
-
-  camposDinamicos.forEach(campo => {
-    campo.parentElement.style.display = 'none';
-  });
-
-  const spinner = document.createElement('div');
-  spinner.className = 'spinner';
-  spinner.textContent = 'Buscando...';
-  opForm.appendChild(spinner);
-
-  try {
-    const cortes = await obterCortes('cortados');
-    const corteEncontrado = cortes.find(c => c.produto === produto && c.variante === variante);
-
-    spinner.remove();
-
-    const existingFoiCortado = opForm.querySelector('.grupo-form-op.foi-cortado');
-    if (existingFoiCortado) existingFoiCortado.remove();
-
-    if (corteEncontrado) {
-      mostrarPopupMensagem(`Produto ${produto} (variação: ${variante}) já está cortado. Prosseguindo...`, 'sucesso');
-
-      const foiCortadoDiv = document.createElement('div');
-      foiCortadoDiv.className = 'grupo-form-op foi-cortado';
-      foiCortadoDiv.innerHTML = '<label class="label-small">Foi cortado?</label><input type="text" value="Sim" readonly style="background-color: #d3d3d3;">';
-      foiCortadoDiv.dataset.corteId = corteEncontrado.id; // Armazenar o ID do corte
-      opForm.insertBefore(foiCortadoDiv, camposDinamicos[0].parentElement);
-
-      camposDinamicos[0].parentElement.style.display = 'block';
-      camposDinamicos[0].value = corteEncontrado.quantidade;
-      camposDinamicos[0].disabled = true;
-      camposDinamicos[0].style.backgroundColor = '#d3d3d3';
-
-      camposDinamicos[1].parentElement.style.display = 'block';
-      camposDinamicos[1].value = await getNextOPNumber();
-
-      camposDinamicos[2].parentElement.style.display = 'block';
-      setCurrentDate();
-
-      camposDinamicos[3].parentElement.style.display = 'block';
-      camposDinamicos[3].value = '';
-    } else {
-      const pn = generateUniquePN();
-      const foiCortadoDiv = document.createElement('div');
-      foiCortadoDiv.className = 'grupo-form-op foi-cortado';
-      foiCortadoDiv.innerHTML = `<label class="label-small">Foi cortado?</label><input type="text" value="Pedido de corte: ${pn}" readonly class="input-numero-novaOP">`;
-      opForm.insertBefore(foiCortadoDiv, camposDinamicos[0].parentElement);
-
-      camposDinamicos[0].parentElement.style.display = 'block';
-      camposDinamicos[0].value = '';
-      camposDinamicos[0].disabled = false;
-      camposDinamicos[0].style.backgroundColor = '';
-
-      camposDinamicos[1].parentElement.style.display = 'block';
-      camposDinamicos[1].value = await getNextOPNumber();
-
-      camposDinamicos[2].parentElement.style.display = 'block';
-      setCurrentDate();
-
-      camposDinamicos[3].parentElement.style.display = 'block';
-      camposDinamicos[3].value = '';
-    }
-  } catch (error) {
-    console.error('[verificarCorte] Erro:', error);
-    mostrarPopupMensagem('Erro ao verificar corte. Tente novamente.', 'erro');
-    spinner.remove();
-  }
-}
-
 export function limparCacheProdutos() {
   produtosCache = null;
   localStorage.removeItem('produtosCacheData');
@@ -250,28 +133,21 @@ function ordenarOPs(ops, criterio, ordem = 'asc') {
   });
 }
 
-async function obterOrdensDeProducao(page = 1, fetchAll = false, forceUpdate = false, statusFilter = null) {
-  const cacheKey = `ordensCacheData_${fetchAll ? 'all' : `page_${page}${statusFilter ? `_${statusFilter}` : ''}`}`;
-  const cachedData = localStorage.getItem(cacheKey);
-
-  if (!forceUpdate && !fetchAll && cachedData) {
-    try {
-      const { ordens, timestamp, total, pages } = JSON.parse(cachedData);
-      const now = Date.now();
-      const cacheDuration = 15 * 60 * 1000;
-      if (now - timestamp < cacheDuration) {
-        ordensCache = { rows: ordens, total, pages };
-        console.log(`[obterOrdensDeProducao] Retornando ordens do localStorage para ${fetchAll ? 'todas' : `página ${page}${statusFilter ? `_${statusFilter}` : ''}`}`);
-        return ordensCache;
-      }
-    } catch (error) {
-      console.error('[obterOrdensDeProducao] Cache corrompido, limpando:', error);
-      localStorage.removeItem(cacheKey);
+async function obterOrdensDeProducao(page = 1, fetchAll = false) {
+  const cachedData = localStorage.getItem('ordensCacheData');
+  if (!fetchAll && cachedData) { // Só usa cache se não for fetchAll
+    const { ordens, timestamp, total, pages } = JSON.parse(cachedData);
+    const now = Date.now();
+    const cacheDuration = 5 * 60 * 1000; // 5 minutos
+    if (now - timestamp < cacheDuration) {
+      ordensCache = { rows: ordens, total, pages };
+      console.log('[obterOrdensDeProducao] Retornando ordens do localStorage');
+      return ordensCache;
     }
   }
 
-  if (!forceUpdate && !fetchAll && ordensCache && !statusFilter) {
-    console.log(`[obterOrdensDeProducao] Retornando ordens do cache para página ${page}`);
+  if (!fetchAll && ordensCache) { // Só usa cache se não for fetchAll
+    console.log('[obterOrdensDeProducao] Retornando ordens do cache');
     return ordensCache;
   }
 
@@ -284,49 +160,42 @@ async function obterOrdensDeProducao(page = 1, fetchAll = false, forceUpdate = f
       const token = localStorage.getItem('token');
       const url = fetchAll
         ? '/api/ordens-de-producao?all=true'
-        : `/api/ordens-de-producao?page=${page}&limit=${itemsPerPage}${statusFilter ? `&status=${statusFilter}` : ''}`;
+        : `/api/ordens-de-producao?page=${page}&limit=${itemsPerPage}`;
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
       if (!response.ok) throw new Error('Erro ao carregar ordens de produção');
       const data = await response.json();
 
+      // Normaliza o retorno para sempre ser um objeto paginado
       ordensCache = fetchAll
         ? { rows: data, total: data.length, pages: 1 }
         : data;
 
-      if (!fetchAll) {
+      if (!fetchAll) { // Cache só para chamadas paginadas
         const cacheData = {
           ordens: ordensCache.rows,
           timestamp: Date.now(),
           total: ordensCache.total,
           pages: ordensCache.pages,
         };
-        localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+        localStorage.setItem('ordensCacheData', JSON.stringify(cacheData));
       }
-      console.log(`[obterOrdensDeProducao] Ordens buscadas e armazenadas: ${fetchAll ? 'todas' : `página ${page}${statusFilter ? `_${statusFilter}` : ''}`}`);
+      console.log('[obterOrdensDeProducao] Ordens buscadas e armazenadas:', fetchAll ? 'todas' : 'paginadas');
       return ordensCache;
     })();
 
     return await ordensPromise;
-  } catch (error) {
-    console.error('[obterOrdensDeProducao] Erro ao buscar ordens:', error);
-    throw error;
   } finally {
     ordensPromise = null;
   }
 }
 
+
 export function limparCacheOrdens() {
   ordensCache = null;
   localStorage.removeItem('ordensCacheData');
   console.log('[obterOrdensDeProducao] Cache de ordens limpo');
-}
-
-// Adicione isso após a função limparCacheOrdens
-export function limparCacheCortes() {
-  localStorage.removeItem('cortesCacheData');
-  console.log('[limparCacheCortes] Cache de cortes limpo');
 }
 
 // Expondo a função globalmente para o console
@@ -348,8 +217,6 @@ async function salvarOrdemDeProducao(ordem) {
   }
   return await response.json();
 }
-
-
 
 async function atualizarOrdemDeProducao(ordem) {
   const token = localStorage.getItem('token');
@@ -390,10 +257,7 @@ async function loadProdutosSelect() {
   const produtoSelect = document.getElementById('produtoOP');
   if (!produtoSelect) return;
 
-  // Desabilita o select enquanto carrega
-  produtoSelect.disabled = true;
   produtoSelect.innerHTML = '<option value="">Carregando produtos...</option>';
-
   try {
     const produtos = await obterProdutos();
     produtoSelect.innerHTML = '<option value="">Selecione um produto</option>';
@@ -406,27 +270,11 @@ async function loadProdutosSelect() {
       option.textContent = produto.nome;
       produtoSelect.appendChild(option);
     });
-
-    // Habilita o select após carregar
-    produtoSelect.disabled = false;
-
-    // Adiciona o evento de mudança apenas uma vez
-    produtoSelect.removeEventListener('change', handleProdutoChange);
-    produtoSelect.addEventListener('change', handleProdutoChange);
   } catch (error) {
     console.error('[loadProdutosSelect] Erro ao carregar produtos:', error);
     produtoSelect.innerHTML = '<option value="">Erro ao carregar produtos</option>';
-    produtoSelect.disabled = false;
   }
 }
-
-async function handleProdutoChange(e) {
-  const produtoNome = e.target.value;
-  await loadVariantesSelects(produtoNome);
-  await verificarCorte(); // Garante que o corte seja verificado após selecionar o produto
-}
-
-
 
 async function loadVariantesSelects(produtoNome, produtos = null) {
   const variantesContainer = document.getElementById('variantesContainer');
@@ -460,11 +308,6 @@ async function loadVariantesSelects(produtoNome, produtos = null) {
     });
     variantesSelects.appendChild(select);
     variantesContainer.style.display = 'block';
-
-    // Adicionar evento ao select de variantes
-    select.addEventListener('change', async () => {
-      await verificarCorte();
-    });
   } else {
     variantesContainer.style.display = 'none';
   }
@@ -493,38 +336,18 @@ function setCurrentDate() {
   }
 }
 
-async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = 'status', sortOrdem = 'desc', page = 1, forceUpdate = false, statusFilter = null) {
+async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = 'status', sortOrdem = 'desc', page = 1) {
   const opTableBody = document.getElementById('opTableBody');
-  if (!opTableBody) {
-    console.error('[loadOPTable] opTableBody não encontrado no DOM');
-    return;
-  }
-
   const paginationContainer = document.createElement('div');
   paginationContainer.id = 'paginationContainer';
   paginationContainer.className = 'pagination-container';
 
-  if (opTableBody.dataset.isLoading) {
-    console.log('[loadOPTable] Já está carregando, ignorando chamada');
-    return;
-  }
-  opTableBody.dataset.isLoading = 'true';
-
-  if (!opTableBody.dataset.rendered) {
-    opTableBody.innerHTML = '<tr><td colspan="5"><div class="spinner">Carregando ordens...</div></td></tr>';
-  }
+  opTableBody.innerHTML = '<tr><td colspan="5"><div class="spinner">Carregando ordens...</div></td></tr>';
 
   try {
-    console.log('[loadOPTable] Iniciando carregamento da tabela');
-    const data = await obterOrdensDeProducao(page, false, forceUpdate, statusFilter);
-    if (!data || !data.rows) {
-      throw new Error('Dados inválidos retornados por obterOrdensDeProducao');
-    }
+    // Usa fetchAll=true para carregar todas as OPs
+    const data = await obterOrdensDeProducao(1, true);
     let ordensDeProducao = data.rows;
-    let totalItems = data.total; // Total do backend por padrão
-    let totalPages = data.pages; // Páginas do backend por padrão
-
-    console.log('[loadOPTable] Ordens recebidas:', ordensDeProducao.length, 'Dados brutos:', ordensDeProducao, 'Total:', totalItems, 'Páginas:', totalPages);
 
     const ordensUnicas = [];
     const numerosVistos = new Set();
@@ -534,86 +357,60 @@ async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = '
         ordensUnicas.push(op);
       }
     });
-    console.log('[loadOPTable] Ordens únicas após deduplicação:', ordensUnicas.length);
 
-    let filteredOPs = [...ordensUnicas];
+    let filteredOPs = ordensUnicas;
     if (filterStatus === 'todas') {
-      filteredOPs = filteredOPs.filter(op => op.status === 'em-aberto' || op.status === 'produzindo');
-      totalItems = filteredOPs.length; // Calcula totalItems localmente para 'todas'
-      totalPages = Math.ceil(totalItems / itemsPerPage); // Calcula totalPages localmente para 'todas'
+      filteredOPs = ordensUnicas.filter(op => op.status !== 'cancelada' && op.status !== 'finalizado');
     } else {
-      filteredOPs = filteredOPs.filter(op => op.status === filterStatus);
+      filteredOPs = ordensUnicas.filter(op => op.status === filterStatus);
     }
-    console.log('[loadOPTable] Após filtro de status:', filteredOPs.length, 'Filtro aplicado:', filterStatus);
 
-    filteredOPs = filteredOPs.filter(op => {
-      const matchesProduto = op.produto?.toLowerCase().includes(search.toLowerCase()) || false;
-      const matchesNumero = op.numero.toString().includes(search);
-      const matchesVariante = op.variante?.toLowerCase().includes(search.toLowerCase()) || false;
-      return matchesProduto || matchesNumero || matchesVariante;
-    });
-    console.log('[loadOPTable] Após filtro de busca:', filteredOPs.length, 'Busca:', search);
+    filteredOPs = filteredOPs.filter(op => 
+      op.produto.toLowerCase().includes(search.toLowerCase()) || 
+      op.numero.toString().includes(search) ||
+      (op.variante && op.variante.toLowerCase().includes(search.toLowerCase()))
+    );
 
     filteredOPs = ordenarOPs(filteredOPs, sortCriterio, sortOrdem);
-    console.log('[loadOPTable] Após ordenação:', filteredOPs.length);
 
-    // Para 'todas', ajusta totalItems e totalPages novamente após filtro de busca
-    if (filterStatus === 'todas') {
-      totalItems = filteredOPs.length;
-      totalPages = Math.ceil(totalItems / itemsPerPage);
-    }
-
+    // Paginação no frontend com base no total real de OPs
+    const totalItems = filteredOPs.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
     const startIndex = (page - 1) * itemsPerPage;
     const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
-    const paginatedOPs = filteredOPs;
+    const paginatedOPs = filteredOPs.slice(startIndex, endIndex);
 
     filteredOPsGlobal = filteredOPs;
 
-    console.log('[loadOPTable] Itens paginados:', paginatedOPs.length, 'Página:', page, 'Total de páginas:', totalPages);
-
-    if (paginatedOPs.length === 0 && totalItems > 0 && page > totalPages) {
-      console.log('[loadOPTable] Página fora do intervalo, ajustando para a primeira página');
-      return loadOPTable(filterStatus, search, sortCriterio, sortOrdem, 1, forceUpdate, statusFilter);
-    }
-
     const fragment = document.createDocumentFragment();
-    if (paginatedOPs.length === 0) {
+    paginatedOPs.forEach((op, index) => {
+      if (!op.edit_id) {
+        op.edit_id = generateUniqueId();
+        usedIds.add(op.edit_id);
+      }
       const tr = document.createElement('tr');
-      tr.innerHTML = '<td colspan="5" style="text-align: center; padding: 20px;">Nenhuma ordem encontrada com os filtros atuais.</td>';
+      tr.dataset.index = startIndex + index;
+      tr.dataset.numero = op.numero;
+      tr.style.cursor = permissoes.includes('editar-op') ? 'pointer' : 'default';
+      tr.innerHTML = `
+        <td><span class="status-bolinha status-${op.status} ${op.status === 'produzindo' ? 'blink' : ''}"></span></td>
+        <td>${op.numero}</td>
+        <td>${op.produto}</td>
+        <td>${op.variante || '-'}</td>
+        <td>${op.quantidade}</td>
+      `;
       fragment.appendChild(tr);
-    } else {
-      paginatedOPs.forEach((op, index) => {
-        if (!op.edit_id) {
-          op.edit_id = generateUniqueId();
-          usedIds.add(op.edit_id);
-        }
-        const tr = document.createElement('tr');
-        tr.dataset.index = startIndex + index;
-        tr.dataset.numero = op.numero;
-        tr.style.cursor = permissoes.includes('editar-op') ? 'pointer' : 'default';
-        tr.innerHTML = `
-          <td><span class="status-bolinha status-${op.status} ${op.status === 'produzindo' ? 'blink' : ''}"></span></td>
-          <td>${op.numero}</td>
-          <td>${op.produto || 'N/A'}</td>
-          <td>${op.variante || '-'}</td>
-          <td>${op.quantidade || 0}</td>
-        `;
-        fragment.appendChild(tr);
-      });
-    }
+    });
 
-    while (opTableBody.firstChild) {
-      opTableBody.removeChild(opTableBody.firstChild);
-    }
+    opTableBody.innerHTML = '';
     opTableBody.appendChild(fragment);
-    opTableBody.dataset.rendered = 'true';
-    console.log('[loadOPTable] Tabela atualizada com sucesso');
 
     opTableBody.removeEventListener('click', handleOPTableClick);
     if (permissoes.includes('editar-op')) {
       opTableBody.addEventListener('click', handleOPTableClick);
     }
 
+    // Renderiza a paginação
     let paginationHTML = '';
     if (totalPages > 1) {
       paginationHTML += `<button class="pagination-btn prev" data-page="${Math.max(1, page - 1)}" ${page === 1 ? 'disabled' : ''}>Anterior</button>`;
@@ -626,25 +423,22 @@ async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = '
     if (existingPagination) {
       existingPagination.replaceWith(paginationContainer);
     } else {
-      opTableBody.parentElement.parentElement.appendChild(paginationContainer);
+      opTableBody.parentElement.parentElement.appendChild(paginationContainer); // Adiciona após a tabela
     }
 
     document.querySelectorAll('.pagination-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const newPage = parseInt(btn.dataset.page);
-        loadOPTable(filterStatus, search, sortCriterio, sortOrdem, newPage, forceUpdate, statusFilter);
+        loadOPTable(filterStatus, search, sortCriterio, sortOrdem, newPage);
       });
     });
 
   } catch (error) {
     console.error('[loadOPTable] Erro ao carregar ordens de produção:', error);
     opTableBody.innerHTML = '<tr><td colspan="5">Erro ao carregar ordens de produção. Tente novamente.</td></tr>';
-    opTableBody.dataset.rendered = 'true';
-  } finally {
-    delete opTableBody.dataset.isLoading;
-    console.log('[loadOPTable] Carregamento concluído');
   }
 }
+
 
 
 function handleOPTableClick(e) {
@@ -666,10 +460,7 @@ function filterOPs(page = 1) {
   const activeStatus = statusFilter.querySelector('.status-btn.active')?.dataset.status || 'todas';
   const sortCriterio = document.querySelector('.tabela-op th[data-sort]')?.id.replace('sort', '') || 'status';
   const sortOrdem = document.querySelector('.tabela-op th[data-sort]')?.dataset.sort || 'desc';
-  
-  // Passa o status como parâmetro para o backend, exceto para 'todas'
-  const statusToFetch = activeStatus === 'todas' ? null : activeStatus;
-  loadOPTable(activeStatus, searchOP.value, sortCriterio, sortOrdem, page, true, statusToFetch);
+  loadOPTable(activeStatus, searchOP.value, sortCriterio, sortOrdem, page);
 }
 
 async function updateFinalizarButtonState(op, produtos) {
@@ -729,6 +520,7 @@ async function saveOPChanges(op) {
 
 window.saveOPChanges = saveOPChanges; // Torna a função global
 
+
 async function loadEtapasEdit(op, skipReload = false) {
   console.log(`[loadEtapasEdit] Iniciando carregamento das etapas para OP: ${op ? op.numero : 'undefined'}`);
   const etapasContainer = document.getElementById('etapasContainer');
@@ -744,25 +536,30 @@ async function loadEtapasEdit(op, skipReload = false) {
     return;
   }
 
+  // Mostra o spinner apenas se não for um reload parcial
   if (!skipReload) {
     etapasContainer.innerHTML = '<div class="spinner">Carregando etapas...</div>';
   }
 
+  // Carrega produtos e usuários uma vez antes do loop
   const produtos = await obterProdutos();
   const responseUsuarios = await fetch('/api/usuarios', {
     headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
   });
   const usuarios = await responseUsuarios.json();
 
+  // Verifica etapas e status uma vez
   const todasEtapasCompletas = await verificarEtapasEStatus(op, produtos);
   if (op.status === 'finalizado' && !todasEtapasCompletas) {
     op.status = 'produzindo';
-    await saveOPChanges(op);
+    await saveOPChanges(op); // Chama a função restaurada
   }
 
+  // Calcula o índice da etapa atual uma vez
   const etapaAtualIndex = await determinarEtapaAtual(op, produtos);
   console.log(`[loadEtapasEdit] Etapa atual index calculada: ${etapaAtualIndex}`);
 
+  // Pré-calcula os tipos de usuário para evitar chamadas repetidas no loop
   const tiposUsuarios = await Promise.all(
     op.etapas.map(async (etapa) => ({
       processo: etapa.processo,
@@ -770,173 +567,115 @@ async function loadEtapasEdit(op, skipReload = false) {
     }))
   );
 
+  // Limpa o container apenas se necessário
   if (!skipReload) {
-    etapasContainer.innerHTML = '';
+    etapasContainer.innerHTML = ''; // Limpa apenas uma vez antes de construir
   }
 
-  const fragment = document.createDocumentFragment();
-
+  const fragment = document.createDocumentFragment(); // Usa fragment para evitar reflows múltiplos
   for (let index = 0; index < op.etapas.length; index++) {
     const etapa = op.etapas[index];
+    console.log(`[loadEtapasEdit] Processando etapa ${index + 1}: ${etapa.processo}, lancado: ${etapa.lancado}, usuario: ${etapa.usuario || ''}`);
 
     let row = skipReload ? etapasContainer.children[index] : null;
     if (!row) {
       row = document.createElement('div');
       row.className = 'etapa-row';
       row.dataset.index = index;
-
-      // Criar elementos iniciais apenas se a linha é nova
-      const numero = document.createElement('span');
-      numero.className = 'etapa-numero';
-      numero.textContent = index + 1;
-      row.appendChild(numero);
-
-      const processo = document.createElement('input');
-      processo.type = 'text';
-      processo.className = 'etapa-processo';
-      processo.value = etapa.processo;
-      processo.readOnly = true;
-      row.appendChild(processo);
     } else {
-      // Não limpar o conteúdo da row, apenas atualizar elementos existentes
-      const numero = row.querySelector('.etapa-numero');
-      if (numero) numero.textContent = index + 1;
-
-      const processo = row.querySelector('.etapa-processo');
-      if (processo) processo.value = etapa.processo;
+      row.innerHTML = ''; // Limpa apenas o conteúdo interno se já existe
     }
 
-    // Lógica específica para a etapa "Corte"
-    if (etapa.processo === 'Corte') {
-      let usuarioStatusInput = row.querySelector('.etapa-usuario-status');
-      if (!usuarioStatusInput) {
-        usuarioStatusInput = document.createElement('input');
-        usuarioStatusInput.type = 'text';
-        usuarioStatusInput.className = 'etapa-usuario-status';
-        usuarioStatusInput.readOnly = true;
-        usuarioStatusInput.style.backgroundColor = '#d3d3d3';
-        usuarioStatusInput.style.marginRight = '5px';
-        row.appendChild(usuarioStatusInput);
-      }
+    const numero = document.createElement('span');
+    numero.className = 'etapa-numero';
+    numero.textContent = index + 1;
+    row.appendChild(numero);
 
-      let usuarioNomeInput = row.querySelector('.etapa-usuario-nome');
-      if (!usuarioNomeInput) {
-        usuarioNomeInput = document.createElement('input');
-        usuarioNomeInput.type = 'text';
-        usuarioNomeInput.className = 'etapa-usuario-nome';
-        usuarioNomeInput.readOnly = true;
-        usuarioNomeInput.style.backgroundColor = '#d3d3d3';
-        row.appendChild(usuarioNomeInput);
-      }
+    const processo = document.createElement('input');
+    processo.type = 'text';
+    processo.className = 'etapa-processo';
+    processo.value = etapa.processo;
+    processo.readOnly = true;
+    row.appendChild(processo);
 
-      if (op.status !== 'finalizado' && op.status !== 'cancelada' && index === etapaAtualIndex && !etapa.usuario) {
-        const cortes = await obterCortes('cortados');
-        const corteEncontrado = cortes.find(c => c.op === op.numero && c.processo === 'Corte');
-        if (corteEncontrado) {
-          etapa.usuario = corteEncontrado.cortador;
-          etapa.lancado = true;
-          await saveOPChanges(op);
-        } else {
-          const cortesPendentes = await obterCortes('pendente');
-          const cortePendente = cortesPendentes.find(c => c.op === op.numero && c.processo === 'Corte');
-          if (cortePendente) {
-            etapa.usuario = cortePendente.cortador;
-            await saveOPChanges(op);
-          } else {
-            const cortesVerificados = await obterCortes('verificado');
-            const corteVerificado = cortesVerificados.find(c => c.op === op.numero && c.processo === 'Corte');
-            if (corteVerificado) {
-              etapa.usuario = corteVerificado.cortador;
-              etapa.lancado = true;
-              await saveOPChanges(op);
-            }
-          }
+    const usuarioSelect = document.createElement('select');
+    usuarioSelect.className = 'select-usuario';
+    usuarioSelect.disabled = op.status === 'finalizado' || op.status === 'cancelada' || index > etapaAtualIndex;
+
+    const tipoUsuario = tiposUsuarios[index].tipoUsuario;
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = getUsuarioPlaceholder(tipoUsuario);
+    usuarioSelect.appendChild(defaultOption);
+
+    const usuariosFiltrados = usuarios.filter(u => {
+      const tipos = Array.isArray(u.tipos) ? u.tipos : [u.tipos];
+      return tipos.includes(tipoUsuario);
+    });
+
+    usuariosFiltrados.forEach(u => {
+      const option = document.createElement('option');
+      option.value = u.nome;
+      option.textContent = u.nome;
+      if (etapa.usuario === u.nome) option.selected = true;
+      usuarioSelect.appendChild(option);
+    });
+
+    row.appendChild(usuarioSelect);
+
+    const exigeQuantidade = tipoUsuario === 'costureira' || tipoUsuario === 'tiktik';
+    let quantidadeDiv = null;
+
+    if (exigeQuantidade && (etapa.usuario || usuarioSelect.value)) {
+      quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, index === etapaAtualIndex, row, produtos);
+      row.appendChild(quantidadeDiv);
+    }
+
+    if (etapa.processo === 'Corte' && !etapa.usuario && index === etapaAtualIndex) {
+      const definirBtn = document.createElement('button');
+      definirBtn.className = 'botao-definir';
+      definirBtn.textContent = 'Definir';
+      definirBtn.disabled = !usuarioSelect.value;
+      row.appendChild(definirBtn);
+
+      usuarioSelect.addEventListener('change', () => {
+        definirBtn.disabled = !usuarioSelect.value;
+      });
+
+      definirBtn.addEventListener('click', async () => {
+        if (!usuarioSelect.value) {
+          mostrarPopupMensagem('Por favor, selecione um cortador antes de definir.', 'erro');
+          return;
         }
-        usuarioStatusInput.value = etapa.lancado ? 'Corte Realizado' : 'Aguardando corte';
-        usuarioNomeInput.value = etapa.usuario || '';
-      } else if (etapa.lancado) {
-        usuarioStatusInput.value = 'Corte Realizado';
-        usuarioNomeInput.value = etapa.usuario || '';
-      }
+        etapa.usuario = usuarioSelect.value;
+        await saveOPChanges(op); // Chama a função restaurada
+        await loadEtapasEdit(op, true); // Reload parcial
+        await atualizarVisualEtapas(op, produtos);
+        await updateFinalizarButtonState(op, produtos);
+      });
     } else {
-      // Para todas as outras etapas (não "Corte")
-      let usuarioSelect = row.querySelector('.select-usuario');
-      if (!usuarioSelect) {
-        usuarioSelect = document.createElement('select');
-        usuarioSelect.className = 'select-usuario';
-        row.appendChild(usuarioSelect);
-      }
-      usuarioSelect.disabled = op.status === 'finalizado' || op.status === 'cancelada' || index > etapaAtualIndex;
-
-      const tipoUsuario = tiposUsuarios[index].tipoUsuario;
-      usuarioSelect.innerHTML = ''; // Limpa opções existentes
-      const defaultOption = document.createElement('option');
-      defaultOption.value = '';
-      defaultOption.textContent = getUsuarioPlaceholder(tipoUsuario);
-      usuarioSelect.appendChild(defaultOption);
-
-      const usuariosFiltrados = usuarios.filter(u => {
-        const tipos = Array.isArray(u.tipos) ? u.tipos : [u.tipos];
-        return tipos.includes(tipoUsuario);
-      });
-
-      usuariosFiltrados.forEach(u => {
-        const option = document.createElement('option');
-        option.value = u.nome;
-        option.textContent = u.nome;
-        if (etapa.usuario === u.nome) option.selected = true;
-        usuarioSelect.appendChild(option);
-      });
-
-      const exigeQuantidade = tipoUsuario === 'costureira' || tipoUsuario === 'tiktik';
-
-      // Garantir que quantidadeDiv seja preservado ou criado
-      let quantidadeDiv = row.querySelector('.quantidade-lancar');
-      if (exigeQuantidade && etapa.usuario && !quantidadeDiv) {
-        quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, index === etapaAtualIndex, row, produtos);
-        row.appendChild(quantidadeDiv);
-      } else if (quantidadeDiv) {
-        // Atualizar o estado do quantidadeDiv existente
-        const quantidadeInput = quantidadeDiv.querySelector('.quantidade-input');
-        const lancarBtn = quantidadeDiv.querySelector('.botao-lancar');
-        if (quantidadeInput) {
-          quantidadeInput.value = etapa.quantidade || '';
-          quantidadeInput.disabled = !index === etapaAtualIndex || etapa.lancado || !usuarioSelect.value;
-        }
-        if (lancarBtn) {
-          lancarBtn.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
-          lancarBtn.disabled = !permissoes.includes('lancar-producao') || !usuarioSelect.value || !quantidadeInput.value || parseInt(quantidadeInput.value) <= 0 || etapa.lancado;
-          if (etapa.lancado) lancarBtn.classList.add('lancado');
-        }
-      }
-
-      usuarioSelect.removeEventListener('change', usuarioSelect.changeHandler); // Remove handler antigo
-      usuarioSelect.changeHandler = debounce(async () => {
+      usuarioSelect.addEventListener('change', debounce(async () => {
         if (op.status === 'finalizado' || op.status === 'cancelada') return;
         const novoUsuario = usuarioSelect.value;
         if (etapa.usuario === novoUsuario) return;
-
         etapa.usuario = novoUsuario;
-        await saveOPChanges(op);
-
-        if (exigeQuantidade && !row.querySelector('.quantidade-lancar')) {
-          const quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, index === etapaAtualIndex, row, produtos);
+        await saveOPChanges(op); // Chama a função restaurada
+        if (exigeQuantidade && etapa.usuario && !row.querySelector('.quantidade-lancar')) {
+          quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, index === etapaAtualIndex, row, produtos);
           row.appendChild(quantidadeDiv);
         }
-
         await atualizarVisualEtapas(op, produtos);
         await updateFinalizarButtonState(op, produtos);
-      }, 300);
-      usuarioSelect.addEventListener('change', usuarioSelect.changeHandler);
+      }, 300)); // Debounce para evitar chamadas repetidas
     }
 
     if (!skipReload) {
-      fragment.appendChild(row);
+      fragment.appendChild(row); // Adiciona ao fragment apenas na primeira carga
     }
   }
 
   if (!skipReload) {
-    etapasContainer.appendChild(fragment);
+    etapasContainer.appendChild(fragment); // Adiciona tudo de uma vez ao DOM
   }
 
   await atualizarVisualEtapas(op, produtos);
@@ -1031,25 +770,6 @@ async function lancarEtapa(op, etapaIndex, quantidade, produtos) {
     etapa.lancado = true;
     await saveOPChanges(op);
     await updateFinalizarButtonState(op, produtos);
-
-    // Atualiza visualmente a etapa atual sem remover os campos
-    const row = document.querySelector(`.etapa-row[data-index="${etapaIndex}"]`);
-    if (row) {
-      const quantidadeDiv = row.querySelector('.quantidade-lancar');
-      if (quantidadeDiv) {
-        const quantidadeInput = quantidadeDiv.querySelector('.quantidade-input');
-        const lancarBtn = quantidadeDiv.querySelector('.botao-lancar');
-
-        if (quantidadeInput && lancarBtn) {
-          quantidadeInput.disabled = true; // Desabilita o input de quantidade
-          quantidadeInput.style.backgroundColor = '#d3d3d3'; // Deixa cinza para indicar que está concluído
-          lancarBtn.textContent = 'Lançado'; // Muda o texto para "Lançado"
-          lancarBtn.disabled = true; // Desabilita o botão
-          lancarBtn.classList.add('lancado'); // Adiciona classe para estilização
-        }
-      }
-    }
-
     return true;
   }
   return false;
@@ -1072,7 +792,7 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row, produtos)
     quantidadeDiv.style.alignItems = 'center';
     row.appendChild(quantidadeDiv);
   } else {
-    quantidadeDiv.innerHTML = ''; // Limpa apenas o conteúdo interno, mas mantém o elemento
+    quantidadeDiv.innerHTML = '';
   }
 
   const quantidadeInput = document.createElement('input');
@@ -1083,7 +803,7 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row, produtos)
   quantidadeInput.className = 'quantidade-input';
   quantidadeInput.disabled = !isEditable || etapa.lancado || !usuarioSelect.value;
 
-  let lancarBtn = quantidadeDiv.querySelector('.botao-lancar') || document.createElement('button');
+  let lancarBtn = document.createElement('button');
   lancarBtn.className = 'botao-lancar';
   lancarBtn.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
   const podeLancar = permissoes.includes('lancar-producao');
@@ -1098,6 +818,11 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row, produtos)
   quantidadeDiv.appendChild(lancarBtn);
 
   const updateLancarBtn = () => {
+    const oldBtn = quantidadeDiv.querySelector('.botao-lancar');
+    if (oldBtn) oldBtn.remove();
+
+    lancarBtn = document.createElement('button');
+    lancarBtn.className = 'botao-lancar';
     lancarBtn.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
     lancarBtn.disabled = !podeLancar || !usuarioSelect.value || !quantidadeInput.value || parseInt(quantidadeInput.value) <= 0 || !isEditable || etapa.lancado;
     lancarBtn.dataset.etapaIndex = op.etapas.indexOf(etapa);
@@ -1107,69 +832,71 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row, produtos)
       lancarBtn.style.cursor = 'not-allowed';
     }
 
-    lancarBtn.removeEventListener('click', lancarBtnClickHandler); // Remove handlers antigos
-    lancarBtn.addEventListener('click', lancarBtnClickHandler);
-  };
+    lancarBtn.addEventListener('click', async () => {
+      if (lancarBtn.disabled || lancamentosEmAndamento.has(op.edit_id + '-' + etapa.processo)) return;
 
-  const lancarBtnClickHandler = async () => {
-    if (lancarBtn.disabled || lancamentosEmAndamento.has(op.edit_id + '-' + etapa.processo)) return;
-  
-    lancamentosEmAndamento.add(op.edit_id + '-' + etapa.processo);
-    lancarBtn.disabled = true;
-    lancarBtn.textContent = 'Processando...';
-  
-    const etapaIndex = parseInt(lancarBtn.dataset.etapaIndex);
-    const editId = window.location.hash.split('/')[1];
-    const ordensData = await obterOrdensDeProducao(1, true);
-    const ordensDeProducao = ordensData.rows;
-    const opLocal = ordensDeProducao.find(o => o.edit_id === editId);
-  
-    if (!opLocal || !opLocal.etapas || !opLocal.etapas[etapaIndex]) {
-      mostrarPopupMensagem('Erro: Ordem de Produção ou etapa não encontrada.', 'erro');
-      lancamentosEmAndamento.delete(op.edit_id + '-' + etapa.processo);
-      lancarBtn.disabled = false;
-      lancarBtn.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
-      return;
-    }
-  
-    const etapasFuturas = await getEtapasFuturasValidas(opLocal, etapaIndex, produtos);
-    try {
-      let sucesso = false;
-      if (etapasFuturas.length > 0) {
-        await mostrarPopupEtapasFuturas(opLocal, etapaIndex, etapasFuturas, quantidadeInput.value, produtos);
-        sucesso = true;
-      } else {
-        sucesso = await lancarEtapa(opLocal, etapaIndex, quantidadeInput.value, produtos);
+      lancamentosEmAndamento.add(op.edit_id + '-' + etapa.processo);
+      lancarBtn.disabled = true;
+      lancarBtn.textContent = 'Processando...';
+
+      const etapaIndex = parseInt(lancarBtn.dataset.etapaIndex);
+      const editId = window.location.hash.split('/')[1];
+      const ordensData = await obterOrdensDeProducao(1, true); // Busca todas as OPs
+      const ordensDeProducao = ordensData.rows; // Acessa .rows
+      const opLocal = ordensDeProducao.find(o => o.edit_id === editId);
+
+      if (!opLocal || !opLocal.etapas || !opLocal.etapas[etapaIndex]) {
+        mostrarPopupMensagem('Erro: Ordem de Produção ou etapa não encontrada.', 'erro');
+        lancamentosEmAndamento.delete(op.edit_id + '-' + etapa.processo);
+        lancarBtn.disabled = false;
+        lancarBtn.textContent = 'Lançar';
+        return;
       }
-  
-      if (sucesso) {
-        const updatedOrdensData = await obterOrdensDeProducao(1, true);
-        const updatedOrdens = updatedOrdensData.rows;
-        const updatedOp = updatedOrdens.find(o => o.edit_id === editId);
-        if (updatedOp) {
-          Object.assign(opLocal, updatedOp);
-          etapa.lancado = true;
-          quantidadeInput.disabled = true;
-          quantidadeInput.style.backgroundColor = '#d3d3d3';
-          lancarBtn.textContent = 'Lançado';
-          lancarBtn.disabled = true;
-          lancarBtn.classList.add('lancado');
-          // Não chamar loadEtapasEdit aqui, apenas atualizar visualmente
-          await atualizarVisualEtapas(opLocal, produtos);
-          await updateFinalizarButtonState(opLocal, produtos);
-          mostrarPopupMensagem('Produção lançada com sucesso!', 'sucesso');
+
+      const etapasFuturas = await getEtapasFuturasValidas(opLocal, etapaIndex, produtos);
+      try {
+        let sucesso = false;
+        if (etapasFuturas.length > 0) {
+          await mostrarPopupEtapasFuturas(opLocal, etapaIndex, etapasFuturas, quantidadeInput.value, produtos);
+          sucesso = true;
         } else {
-          throw new Error('Ordem de Produção não encontrada após lançamento.');
+          const novoId = await lancarEtapa(opLocal, etapaIndex, quantidadeInput.value, produtos);
+          if (novoId) sucesso = true;
+        }
+
+        if (sucesso) {
+          const updatedOrdensData = await obterOrdensDeProducao(1, true);
+          const updatedOrdens = updatedOrdensData.rows; // Acessa .rows
+          const updatedOp = updatedOrdens.find(o => o.edit_id === editId);
+          if (updatedOp) {
+            Object.assign(opLocal, updatedOp);
+            etapa.lancado = true;
+            etapa.quantidade = parseInt(quantidadeInput.value);
+            quantidadeInput.disabled = true;
+            lancarBtn.textContent = 'Lançado';
+            lancarBtn.disabled = true;
+            lancarBtn.classList.add('lancado');
+            await loadEtapasEdit(opLocal, true);
+            await atualizarVisualEtapas(opLocal, produtos);
+            await updateFinalizarButtonState(opLocal, produtos);
+            mostrarPopupMensagem('Produção lançada com sucesso!', 'sucesso');
+          } else {
+            throw new Error('Ordem de Produção não encontrada após lançamento.');
+          }
+        }
+      } catch (error) {
+        console.error('[criarQuantidadeDiv] Erro ao lançar etapa:', error);
+        mostrarPopupMensagem('Erro ao lançar produção. Tente novamente.', 'erro');
+        lancarBtn.textContent = 'Lançar';
+        lancarBtn.disabled = false;
+      } finally {
+        if (!etapa.lancado) {
+          lancamentosEmAndamento.delete(op.edit_id + '-' + etapa.processo);
         }
       }
-    } catch (error) {
-      console.error('[criarQuantidadeDiv] Erro ao lançar etapa:', error);
-      mostrarPopupMensagem('Erro ao lançar produção. Tente novamente.', 'erro');
-      lancarBtn.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
-      lancarBtn.disabled = false;
-    } finally {
-      lancamentosEmAndamento.delete(op.edit_id + '-' + etapa.processo);
-    }
+    });
+
+    quantidadeDiv.appendChild(lancarBtn);
   };
 
   usuarioSelect.addEventListener('change', async () => {
@@ -1418,7 +1145,7 @@ async function atualizarVisualEtapas(op, produtos) {
     const row = etapasRows[index];
     const numero = row.querySelector('.etapa-numero');
     const usuarioSelect = row.querySelector('.select-usuario');
-    const quantidadeDiv = row.querySelector('.quantidade-lancar');
+    let quantidadeDiv = row.querySelector('.quantidade-lancar');
     const etapa = op.etapas[index];
 
     if (!etapa) {
@@ -1440,143 +1167,83 @@ async function atualizarVisualEtapas(op, produtos) {
     }
 
     if (concluida || op.status === 'finalizado' || op.status === 'cancelada') {
-      if (usuarioSelect) usuarioSelect.disabled = true;
+      usuarioSelect.disabled = true;
       if (quantidadeDiv) {
         const quantidadeInput = quantidadeDiv.querySelector('.quantidade-input');
         const botaoLancar = quantidadeDiv.querySelector('.botao-lancar');
-        if (quantidadeInput) {
-          quantidadeInput.disabled = true;
-          quantidadeInput.style.backgroundColor = '#d3d3d3';
-        }
-        if (botaoLancar) {
-          botaoLancar.disabled = true;
-          botaoLancar.textContent = 'Lançado';
-          botaoLancar.classList.add('lancado');
-        }
+        quantidadeInput.disabled = true;
+        botaoLancar.disabled = true;
+        botaoLancar.textContent = 'Lançado';
+        botaoLancar.classList.add('lancado');
       }
     } else if (index === etapaAtualIndex && op.status !== 'finalizado' && op.status !== 'cancelada') {
-      if (usuarioSelect) usuarioSelect.disabled = false;
+      usuarioSelect.disabled = false;
       if (quantidadeDiv) {
         const quantidadeInput = quantidadeDiv.querySelector('.quantidade-input');
         const botaoLancar = quantidadeDiv.querySelector('.botao-lancar');
-        if (quantidadeInput) {
-          quantidadeInput.disabled = !usuarioSelect || !usuarioSelect.value || etapa.lancado;
-        }
-        if (botaoLancar) {
-          botaoLancar.disabled = !permissoes.includes('lancar-producao') || !usuarioSelect.value || !quantidadeInput.value || parseInt(quantidadeInput.value) <= 0 || etapa.lancado;
-          botaoLancar.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
-          if (etapa.lancado) botaoLancar.classList.add('lancado');
-        }
-      } else if (exigeQuantidade && etapa.usuario && usuarioSelect) {
+        quantidadeInput.disabled = !usuarioSelect.value || etapa.lancado;
+        botaoLancar.disabled = !usuarioSelect.value || !quantidadeInput.value || parseInt(quantidadeInput.value) <= 0 || etapa.lancado;
+        botaoLancar.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
+        if (etapa.lancado) botaoLancar.classList.add('lancado');
+      } else if (exigeQuantidade && etapa.usuario) {
         quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, true, row, produtos);
         row.appendChild(quantidadeDiv);
       }
     } else {
-      if (usuarioSelect) usuarioSelect.disabled = true;
+      usuarioSelect.disabled = true;
       if (quantidadeDiv) {
         const quantidadeInput = quantidadeDiv.querySelector('.quantidade-input');
         const botaoLancar = quantidadeDiv.querySelector('.botao-lancar');
-        if (quantidadeInput) {
-          quantidadeInput.disabled = true;
-        }
-        if (botaoLancar) {
-          botaoLancar.disabled = true;
-          botaoLancar.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
-          if (etapa.lancado) botaoLancar.classList.add('lancado');
-        }
+        quantidadeInput.disabled = true;
+        botaoLancar.disabled = true;
+        botaoLancar.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
+        if (etapa.lancado) botaoLancar.classList.add('lancado');
       }
     }
   }
 
   if (op.status !== 'finalizado' && op.status !== 'cancelada') {
     op.status = op.etapas.some(e => e.usuario || e.quantidade) ? 'produzindo' : 'em-aberto';
-    await saveOPChanges(op);
+    await saveOPChanges(op); // Chama a função restaurada
   }
 }
 
-// Função para limpar o formulário de OP
-function limparFormularioOP() {
-  const opForm = document.getElementById('opForm');
-  if (!opForm) return;
 
-  // Limpar campos de entrada
-  document.getElementById('produtoOP').value = '';
-  document.getElementById('quantidadeOP').value = '';
-  document.getElementById('numeroOP').value = '';
-  document.getElementById('dataEntregaOP').value = '';
-  document.getElementById('observacoesOP').value = '';
-
-  // Remover campo "Foi cortado?" se existir
-  const foiCortadoDiv = opForm.querySelector('.foi-cortado');
-  if (foiCortadoDiv) foiCortadoDiv.remove();
-
-  // Limpar e esconder variantes
-  const variantesContainer = document.getElementById('variantesContainer');
-  const variantesSelects = document.querySelector('.variantes-selects');
-  if (variantesContainer && variantesSelects) {
-    variantesSelects.innerHTML = '';
-    variantesContainer.style.display = 'none';
-  }
-
-  // Restaurar estado inicial dos campos dinâmicos
-  const camposDinamicos = [
-    document.getElementById('quantidadeOP'),
-    document.getElementById('numeroOP'),
-    document.getElementById('dataEntregaOP'),
-    document.getElementById('observacoesOP')
-  ];
-  camposDinamicos.forEach(campo => {
-    campo.parentElement.style.display = 'none';
-    if (campo.id === 'quantidadeOP') {
-      campo.disabled = false;
-      campo.style.backgroundColor = '';
-    }
-  });
-}
-
-// Função movida para o escopo global
-function setCurrentDateForCorte() {
-  const dataCorte = document.getElementById('dataCorte');
-  if (dataCorte) {
-    const agora = new Date();
-    const hoje = agora.toISOString().split('T')[0];
-    dataCorte.value = hoje;
-  }
-}
 
 async function toggleView() {
+  const hash = window.location.hash;
   const opListView = document.getElementById('opListView');
   const opFormView = document.getElementById('opFormView');
   const opEditView = document.getElementById('opEditView');
-  const corteView = document.getElementById('corteView');
-  const acessocortesView = document.getElementById('acessocortesView');
 
-  [opListView, opFormView, opEditView, corteView, acessocortesView].forEach(section => {
-    section.style.display = 'none';
-  });
+  if (!opListView || !opFormView || !opEditView) return;
 
-  const hash = window.location.hash;
+  const ordensData = await obterOrdensDeProducao(1, true); // Sempre busca todas as OPs
+  const ordensDeProducao = ordensData.rows; // Sempre acessa .rows
 
   if (hash.startsWith('#editar/') && permissoes.includes('editar-op')) {
-    const ordensData = await obterOrdensDeProducao(1, true);
-    const ordensDeProducao = ordensData.rows;
     const editId = hash.split('/')[1];
     const op = ordensDeProducao.find(o => o.edit_id === editId);
+
     if (!op) {
+      console.error(`[toggleView] Ordem de Produção não encontrada para editId: ${editId}`);
       mostrarPopupMensagem('Ordem de Produção não encontrada.', 'erro');
       window.location.hash = '';
       return;
     }
+
     document.getElementById('editProdutoOP').value = op.produto || '';
     const editQuantidadeInput = document.getElementById('editQuantidadeOP');
     editQuantidadeInput.value = op.quantidade || '';
     editQuantidadeInput.disabled = true;
     editQuantidadeInput.style.backgroundColor = '#d3d3d3';
+
     const editDataEntregaInput = document.getElementById('editDataEntregaOP');
     const dataEntrega = op.data_entrega ? new Date(op.data_entrega).toISOString().split('T')[0] : '';
     editDataEntregaInput.value = dataEntrega;
     editDataEntregaInput.readOnly = true;
     editDataEntregaInput.style.backgroundColor = '#d3d3d3';
+
     const editVarianteContainer = document.getElementById('editVarianteContainer');
     const editVarianteInput = document.getElementById('editVarianteOP');
     if (op.variante) {
@@ -1588,47 +1255,39 @@ async function toggleView() {
     } else {
       editVarianteContainer.style.display = 'none';
     }
+
     opListView.style.display = 'none';
     opFormView.style.display = 'none';
     opEditView.style.display = 'block';
     document.getElementById('opNumero').textContent = `OP n°: ${op.numero}`;
-    await loadEtapasEdit(op, true);
+
+    await loadEtapasEdit(op);
   } else if (hash === '#adicionar' && permissoes.includes('criar-op')) {
     opListView.style.display = 'none';
     opFormView.style.display = 'block';
     opEditView.style.display = 'none';
-    limparFormularioOP();
     await loadProdutosSelect();
     setCurrentDate();
-    document.getElementById('numeroOP').value = await getNextOPNumber();
     await loadVariantesSelects('');
-  } else if (hash === '#corte' && permissoes.includes('criar-op')) {
-    opListView.style.display = 'none';
-    opFormView.style.display = 'none';
-    opEditView.style.display = 'none';
-    corteView.style.display = 'block';
-
-    limparFormularioCorte(); // Define cortadorCorte aqui
-    await loadProdutosCorte();
-    setCurrentDateForCorte();
-
-    const produtoCorte = document.getElementById('produtoCorte');
-    if (produtoCorte) {
-      produtoCorte.removeEventListener('change', loadVariantesCorteHandler);
-      loadVariantesCorteHandler = async (e) => {
-        const produtoNome = e.target.value;
-        if (produtoNome) await loadVariantesCorte(produtoNome);
-      };
-      produtoCorte.addEventListener('change', loadVariantesCorteHandler);
-      await loadVariantesCorte('');
+    document.getElementById('numeroOP').value = await getNextOPNumber();
+    document.getElementById('quantidadeOP').value = '';
+    const quantidadeInput = document.getElementById('quantidadeOP');
+    if (quantidadeInput) {
+      quantidadeInput.disabled = false;
+      quantidadeInput.style.backgroundColor = '';
     }
-  } else if (hash === '#acessocortes' && permissoes.includes('acesso-ordens-de-producao')) {
-    opListView.style.display = 'none';
-    opFormView.style.display = 'none';
-    opEditView.style.display = 'none';
-    acessocortesView.style.display = 'block';
-    await loadAcessocortes();
+    document.getElementById('observacoesOP').value = '';
+    const produtoSelect = document.getElementById('produtoOP');
+    if (produtoSelect) {
+      produtoSelect.value = '';
+      await loadVariantesSelects('');
+    }
   } else {
+    // Só atualiza se necessário, evitando duplicação na inicialização
+    if (window.location.hash !== '') { // Evita refresh ao carregar a página inicial
+      limparCacheOrdens(); // Limpa o cache ao voltar para a página principal
+      await loadOPTable('todas', '', 'status', 'desc', 1); // Mini-refresh com todas as OPs
+    }
     opListView.style.display = 'block';
     opFormView.style.display = 'none';
     opEditView.style.display = 'none';
@@ -1638,485 +1297,8 @@ async function toggleView() {
       statusFilter.querySelectorAll('.status-btn').forEach(btn => btn.classList.remove('active'));
       todasBtn.classList.add('active');
     }
-    console.log('[toggleView] Carregando tabela inicial com força');
-    await loadOPTable('todas', '', 'status', 'desc', 1, true, null); // 'todas' sem filtro específico no backend
   }
 }
-
-// Handler global para variantes
-let loadVariantesCorteHandler = null;
-
-async function loadProdutosCorte() {
-  const produtoSelect = document.getElementById('produtoCorte');
-  if (!produtoSelect) return;
-
-  produtoSelect.innerHTML = '<option value="">Carregando produtos...</option>';
-  try {
-      const produtos = await obterProdutos();
-      produtoSelect.innerHTML = '<option value="">Selecione um produto</option>';
-      const produtosFiltrados = produtos.filter(produto => 
-          PRODUTOS.includes(produto.nome) && !PRODUTOSKITS.includes(produto.nome)
-      );
-      produtosFiltrados.forEach(produto => {
-          const option = document.createElement('option');
-          option.value = produto.nome;
-          option.textContent = produto.nome;
-          produtoSelect.appendChild(option);
-      });
-  } catch (error) {
-      console.error('[loadProdutosCorte] Erro ao carregar produtos:', error);
-      produtoSelect.innerHTML = '<option value="">Erro ao carregar produtos</option>';
-  }
-}
-
-async function loadVariantesCorte(produtoNome) {
-  const variantesContainer = document.getElementById('variantesCorteContainer');
-  const variantesSelects = document.querySelector('.variantes-selects-corte');
-  if (!variantesContainer || !variantesSelects) {
-    console.warn('[loadVariantesCorte] variantesContainer ou variantesSelects não encontrado');
-    return;
-  }
-
-  variantesSelects.innerHTML = ''; // Sempre limpa o select
-  variantesContainer.style.display = 'none'; // Sempre esconde inicialmente
-
-  if (!produtoNome) {
-    console.log('[loadVariantesCorte] Nenhum produto selecionado, variações limpas');
-    return;
-  }
-
-  const produtos = await obterProdutos();
-  const produto = produtos.find(p => p.nome === produtoNome);
-
-  let variantesDisponiveis = [];
-  if (produto?.variantes && produto.variantes.length > 0) {
-    variantesDisponiveis = produto.variantes.map(v => v.valores.split(',')).flat().map(v => v.trim());
-  } else if (produto?.grade && produto.grade.length > 0) {
-    variantesDisponiveis = [...new Set(produto.grade.map(g => g.variacao))];
-  }
-
-  if (variantesDisponiveis.length > 0) {
-    const select = document.createElement('select');
-    select.innerHTML = '<option value="">Selecione uma variação</option>';
-    variantesDisponiveis.forEach(variante => {
-      const option = document.createElement('option');
-      option.value = variante;
-      option.textContent = variante;
-      select.appendChild(option);
-    });
-    variantesSelects.appendChild(select);
-    variantesContainer.style.display = 'block';
-    console.log('[loadVariantesCorte] Variações carregadas para', produtoNome);
-  } else {
-    console.log('[loadVariantesCorte] Nenhuma variação disponível para', produtoNome);
-  }
-}
-
-function limparFormularioCorte() {
-  const produtoCorte = document.getElementById('produtoCorte');
-  const quantidadeCorte = document.getElementById('quantidadeCorte');
-  const dataCorte = document.getElementById('dataCorte');
-  const cortadorCorte = document.getElementById('cortadorCorte');
-  const variantesContainer = document.getElementById('variantesCorteContainer');
-  const variantesSelects = document.querySelector('.variantes-selects-corte');
-
-  if (produtoCorte) produtoCorte.value = '';
-  else console.warn('[limparFormularioCorte] produtoCorte não encontrado');
-  
-  if (quantidadeCorte) quantidadeCorte.value = '';
-  else console.warn('[limparFormularioCorte] quantidadeCorte não encontrado');
-  
-  if (dataCorte) dataCorte.value = '';
-  else console.warn('[limparFormularioCorte] dataCorte não encontrado');
-  
-  if (cortadorCorte) {
-    cortadorCorte.value = usuarioLogado?.nome || 'Usuário não identificado';
-    console.log('[limparFormularioCorte] cortadorCorte inicializado com:', cortadorCorte.value);
-  } else {
-    console.warn('[limparFormularioCorte] cortadorCorte não encontrado');
-  }
-  
-  if (variantesContainer && variantesSelects) {
-    variantesSelects.innerHTML = '';
-    variantesContainer.style.display = 'none';
-  } else {
-    console.warn('[limparFormularioCorte] variantesContainer ou variantesSelects não encontrado');
-  }
-
-  console.log('[limparFormularioCorte] Formulário de corte limpo');
-}
-
-async function salvarCorte() {
-  const produto = document.getElementById('produtoCorte').value;
-  const variante = document.querySelector('.variantes-selects-corte select')?.value || '';
-  const quantidade = parseInt(document.getElementById('quantidadeCorte').value) || 0;
-  const dataCorte = document.getElementById('dataCorte').value;
-  const cortador = document.getElementById('cortadorCorte').value;
-
-  if (!produto || !variante || !quantidade || !dataCorte || !cortador) {
-    mostrarPopupMensagem('Por favor, preencha todos os campos.', 'erro');
-    return;
-  }
-
-  const corteData = {
-    produto,
-    variante,
-    quantidade,
-    data: dataCorte,
-    cortador,
-    status: 'cortados'
-  };
-
-  try {
-    const token = localStorage.getItem('token');
-    const response = await fetch('/api/cortes', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(corteData),
-    });
-
-    if (!response.ok) throw new Error('Erro ao salvar corte');
-
-    const savedCorte = await response.json();
-    console.log('[salvarCorte] Corte salvo:', savedCorte);
-
-    mostrarPopupMensagem('Corte salvo com sucesso!', 'sucesso');
-    limparCacheCortes(); // Limpa o cache antes de mudar de tela
-    limparFormularioCorte(); // Limpa o formulário após salvar
-    window.location.hash = '#acessocortes';
-    await loadAbaContent('cortados', true); // Força a atualização da aba "Cortados" com dados frescos
-  } catch (error) {
-    console.error('[salvarCorte] Erro:', error);
-    mostrarPopupMensagem('Erro ao salvar corte. Tente novamente.', 'erro');
-  }
-}
-
-async function loadAcessocortes() {
-  const abas = document.querySelectorAll('.aba-btn');
-  const conteudoAba = document.getElementById('conteudoAba');
-  let activeTab = 'pendente'; // Padrão inicial
-
-  // Verifica se veio de #corte (após salvar um corte)
-  if (window.location.hash === '#acessocortes' && document.referrer.includes('#corte')) {
-      activeTab = 'cortados'; // Define como "Cortados" após salvar
-  } else if (window.location.hash === '#acessocortes') {
-      activeTab = 'cortados'; // Padrão para acesso direto
-  }
-
-  abas.forEach(aba => {
-      aba.classList.remove('active');
-      if (aba.dataset.aba === activeTab) {
-          aba.classList.add('active');
-      }
-      aba.addEventListener('click', () => {
-          abas.forEach(a => a.classList.remove('active'));
-          aba.classList.add('active');
-          loadAbaContent(aba.dataset.aba);
-      });
-  });
-
-  await loadAbaContent(activeTab);
-}
-
-async function loadAbaContent(aba, forceRefresh = false) {
-  const conteudoAba = document.getElementById('conteudoAba');
-  conteudoAba.innerHTML = '<div class="spinner">Carregando...</div>';
-
-  try {
-    // Passa forceRefresh para obterCortes
-    const cortes = await obterCortes(aba === 'pendente' ? 'pendente' : 'cortados', forceRefresh);
-    let html = '';
-
-    if (aba === 'pendente') {
-      html += '<h3>Produtos pendentes de corte</h3>';
-      html += `
-        <table class="tabela-op">
-          <thead>
-            <tr>
-              <th></th>
-              <th>PN</th>
-              <th>Produto</th>
-              <th>Variação</th>
-              <th>Qtde</th>
-              <th>OP</th>
-            </tr>
-          </thead>
-          <tbody id="tabelaPendenteBody"></tbody>
-        </table>
-        <div class="botoes-tabela">
-          <button id="cortarSelecionados" class="botao-cortar">Cortar</button>
-          <button id="excluirSelecionados" class="botao-excluir">Excluir</button>
-        </div>
-      `;
-    } else {
-      html += '<h3>Produtos cortados</h3>';
-      html += `
-        <table class="tabela-op">
-          <thead>
-            <tr>
-              <th></th>
-              <th>Produto</th>
-              <th>Variação</th>
-              <th>Qtde</th>
-            </tr>
-          </thead>
-          <tbody id="tabelaCortadosBody"></tbody>
-        </table>
-        <div class="botoes-tabela">
-          <button id="excluirCortados" class="botao-excluir">Excluir</button>
-        </div>
-      `;
-    }
-
-    conteudoAba.innerHTML = html;
-
-    // Adiciona animação de refresh
-    conteudoAba.classList.add('refresh-animation');
-    setTimeout(() => conteudoAba.classList.remove('refresh-animation'), 500);
-
-    if (aba === 'pendente') {
-      await carregarTabelaPendente(cortes);
-      adicionarEventosTabelaPendente();
-    } else {
-      await carregarTabelaCortados(cortes);
-      adicionarEventosTabelaCortados();
-    }
-
-    console.log(`[loadAbaContent] Carregou aba ${aba} com sucesso`);
-  } catch (error) {
-    console.error('[loadAbaContent] Erro:', error);
-    conteudoAba.innerHTML = '<p>Erro ao carregar cortes. Tente novamente.</p>';
-  }
-}
-
-let cortesCache = {}; // Cache específico para cortes
-
-async function obterCortes(status, forceRefresh = false) {
-  const cacheKey = `cortesCache_${status}`;
-  const cachedData = localStorage.getItem(cacheKey);
-
-  if (!forceRefresh && cachedData) {
-    const { cortes, timestamp } = JSON.parse(cachedData);
-    const now = Date.now();
-    const cacheDuration = 15 * 60 * 1000; // 15 minutos
-    if (now - timestamp < cacheDuration) {
-      console.log(`[obterCortes] Retornando cortes do cache para status ${status}`);
-      return cortes;
-    }
-  }
-
-  const token = localStorage.getItem('token');
-  const response = await fetch(`/api/cortes?status=${status}`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-  if (!response.ok) throw new Error('Erro ao carregar cortes');
-
-  const cortes = await response.json();
-  const cacheData = {
-    cortes,
-    timestamp: Date.now(),
-  };
-  localStorage.setItem(cacheKey, JSON.stringify(cacheData));
-  console.log(`[obterCortes] Cortes buscados e armazenados no cache para status ${status}`);
-  return cortes;
-}
-
-
-// Ajuste nas funções carregarTabela para evitar duplicatas
-async function carregarTabelaPendente(cortes) {
-  const tbody = document.getElementById('tabelaPendenteBody');
-  tbody.innerHTML = ''; // Limpa antes de adicionar
-  const cortesUnicos = [...new Set(cortes.map(JSON.stringify))].map(JSON.parse); // Remove duplicatas
-
-  if (cortesUnicos.length === 0) {
-    // Exibe mensagem quando não há cortes pendentes
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;">Muito bem! Sem cortes pendentes no momento!</td></tr>';
-  } else {
-    cortesUnicos.forEach(corte => {
-      console.log('[carregarTabelaPendente] Dados do corte:', corte);
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><input type="checkbox" class="checkbox-corte" data-id="${corte.id}"></td>
-        <td>${corte.pn || 'N/A'}</td>
-        <td>${corte.produto || 'Sem produto'}</td>
-        <td>${corte.variante || 'Sem variação'}</td>
-        <td>${corte.quantidade || 0}</td>
-        <td>${corte.op || 'Sem OP'}</td>
-      `;
-      tbody.appendChild(tr);
-    });
-  }
-}
-
-async function carregarTabelaCortados(cortes) {
-  const tbody = document.getElementById('tabelaCortadosBody');
-  tbody.innerHTML = ''; // Limpa antes de adicionar
-  const cortesUnicos = [...new Set(cortes.map(JSON.stringify))].map(JSON.parse); // Remove duplicatas
-
-  if (cortesUnicos.length === 0) {
-    // Exibe mensagem quando não há cortes cortados
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">Não existe nenhum produto cortado.</td></tr>';
-  } else {
-    cortesUnicos.forEach(corte => {
-      console.log('[carregarTabelaCortados] Dados do corte:', corte);
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><input type="checkbox" class="checkbox-corte" data-id="${corte.id}"></td>
-        <td>${corte.produto || 'Sem produto'}</td>
-        <td>${corte.variante || 'Sem variação'}</td>
-        <td>${corte.quantidade || 0}</td>
-      `;
-      tbody.appendChild(tr);
-    });
-  }
-}
-
-function adicionarEventosTabelaPendente() {
-  document.getElementById('cortarSelecionados').addEventListener('click', async () => {
-    const checkboxes = document.querySelectorAll('#tabelaPendenteBody .checkbox-corte:checked');
-    if (checkboxes.length === 0) {
-      mostrarPopupMensagem('Selecione pelo menos um item para cortar.', 'erro');
-      return;
-    }
-
-    try {
-      for (const cb of checkboxes) {
-        const id = cb.dataset.id;
-        await atualizarCorte(id, 'cortados', usuarioLogado?.nome || 'Sistema');
-        await atualizarCorte(id, 'verificado', usuarioLogado?.nome || 'Sistema');
-      }
-      mostrarPopupMensagem('Itens cortados e verificados com sucesso!', 'sucesso');
-      await loadAbaContent('pendente', true); // Força atualização do backend
-      limparCacheCortes();
-    } catch (error) {
-      console.error('[adicionarEventosTabelaPendente] Erro ao cortar:', error);
-      mostrarPopupMensagem(`Erro ao cortar: ${error.message}`, 'erro');
-    }
-  });
-
-  document.getElementById('excluirSelecionados').addEventListener('click', async () => {
-    const checkboxes = document.querySelectorAll('#tabelaPendenteBody .checkbox-corte:checked');
-    if (checkboxes.length === 0) {
-      mostrarPopupMensagem('Selecione pelo menos um item para excluir.', 'erro');
-      return;
-    }
-
-    if (confirm('Tem certeza que deseja excluir os itens selecionados?')) {
-      try {
-        for (const cb of checkboxes) {
-          await excluirCorte(cb.dataset.id);
-        }
-        mostrarPopupMensagem('Itens excluídos com sucesso!', 'sucesso');
-        await loadAbaContent('pendente', true); // Força atualização do backend
-      } catch (error) {
-        console.error('[adicionarEventosTabelaPendente] Erro ao excluir:', error);
-        mostrarPopupMensagem(`Erro ao excluir: ${error.message}`, 'erro');
-      }
-    }
-  });
-}
-
-function adicionarEventosTabelaCortados() {
-  document.getElementById('excluirCortados').addEventListener('click', async () => {
-    const checkboxes = document.querySelectorAll('#tabelaCortadosBody .checkbox-corte:checked');
-    if (checkboxes.length === 0) {
-      mostrarPopupMensagem('Selecione pelo menos um item para excluir.', 'erro');
-      return;
-    }
-
-    if (confirm('Tem certeza que deseja excluir os itens selecionados?')) {
-      try {
-        for (const cb of checkboxes) {
-          await excluirCorte(cb.dataset.id);
-        }
-        mostrarPopupMensagem('Itens excluídos com sucesso!', 'sucesso');
-        // Recarrega a aba "Cortados" forçando a busca no backend
-        await loadAbaContent('cortados', true);
-      } catch (error) {
-        console.error('[adicionarEventosTabelaCortados] Erro ao excluir:', error);
-        mostrarPopupMensagem(`Erro ao excluir: ${error.message}`, 'erro');
-      }
-    }
-  });
-}
-
-async function atualizarCorte(id, status, cortador) {
-  const token = localStorage.getItem('token');
-  try {
-    const response = await fetch(`/api/cortes`, { // Remova o ${id} da URL
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ id, status, cortador }), // Inclua o id no body
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      console.log('[atualizarCorte] Resposta bruta do servidor:', text);
-      throw new Error(`Erro ao atualizar corte: Status ${response.status}`);
-    }
-
-    const updatedCorte = await response.json();
-
-    if (updatedCorte.op && updatedCorte.status === 'verificado') {
-      const ordensData = await obterOrdensDeProducao(1, true);
-      const op = ordensData.rows.find(o => o.numero === updatedCorte.op);
-      if (op) {
-        const corteEtapa = op.etapas.find(e => e.processo === 'Corte');
-        if (corteEtapa) {
-          corteEtapa.usuario = cortador;
-          corteEtapa.lancado = true;
-          await saveOPChanges(op);
-          console.log(`[atualizarCorte] Etapa Corte atualizada na OP #${op.numero} para "Corte Realizado"`);
-        }
-      }
-    }
-
-    return updatedCorte;
-  } catch (error) {
-    console.error('[atualizarCorte] Erro:', error);
-    mostrarPopupMensagem(`Erro ao atualizar corte: ${error.message}`, 'erro');
-    throw error;
-  }
-}
-
-async function excluirCorte(id) {
-  console.log('[excluirCorte] Tentando excluir corte com ID:', id);
-  const token = localStorage.getItem('token');
-  const response = await fetch('/api/cortes', {
-    method: 'DELETE',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ id })
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    console.error('[excluirCorte] Resposta do servidor:', text);
-    throw new Error(`Erro ao excluir corte: Status ${response.status}`);
-  }
-
-  // Limpa o cache após exclusão
-  limparCacheCortes();
-  console.log('[excluirCorte] Corte excluído com sucesso');
-  return await response.json();
-}
-
-// Adicione o evento ao botão "Cortar"
-document.getElementById('btnCorte').addEventListener('click', () => {
-  if (permissoes.includes('criar-op')) {
-      window.location.hash = '#corte';
-  }
-});
-
-document.getElementById('btnCortar').addEventListener('click', salvarCorte);
 
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -2129,23 +1311,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   usuarioLogado = auth.usuario;
   permissoes = auth.permissoes || [];
 
-  const ordensData = await obterOrdensDeProducao(1, true);
-  const ordensDeProducao = ordensData.rows;
+  const ordensData = await obterOrdensDeProducao(1, true); // Busca todas as OPs inicialmente
+  const ordensDeProducao = ordensData.rows; // Sempre acessa .rows
   ordensDeProducao.forEach(op => {
     if (op.edit_id) usedIds.add(op.edit_id);
   });
 
-  console.log('[DOMContentLoaded] Iniciando carregamento inicial da tabela');
-  await loadOPTable('todas', '', 'status', 'desc', 1, true, null); // 'todas' sem filtro específico no backend
-  document.body.dataset.initialLoadComplete = 'true';
-
-  window.removeEventListener('hashchange', toggleView);
-  window.addEventListener('hashchange', toggleView);
-
-  await toggleView();
-  await loadProdutosSelect();
-
-  // Resto do código de inicialização (eventos, botões, etc.)
+  // Elementos DOM
   const opListView = document.getElementById('opListView');
   const opFormView = document.getElementById('opFormView');
   const opEditView = document.getElementById('opEditView');
@@ -2170,25 +1342,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const finalizarOP = document.getElementById('finalizarOP');
   const cancelarOP = document.getElementById('cancelarOP');
   const voltarOP = document.getElementById('voltarOP');
-  const btnIncluirOP = document.getElementById('btnIncluirOP');
-  const btnCorte = document.getElementById('btnCorte');
-  const btnAcessarCortes = document.getElementById('btnAcessarCortes');
 
-  // Verificação dos elementos essenciais (mantida)
   if ([opListView, opFormView, opEditView, opTableBody, searchOP, statusFilter, opForm,
-    produtoOP, quantidadeOP, numeroOP, variantesContainer, variantesSelects, dataEntregaOP,
-    observacoesOP, editProdutoOP, editVarianteOP, editVarianteContainer, editQuantidadeOP,
-    editDataEntregaOP, etapasContainer, opNumero, finalizarOP, cancelarOP, voltarOP].some(el => !el)) {
-    console.error('Elementos DOM faltantes:', [
-      'opListView', 'opFormView', 'opEditView', 'opTableBody', 'searchOP', 'statusFilter', 'opForm',
-      'produtoOP', 'quantidadeOP', 'numeroOP', 'variantesContainer', 'variantesSelects', 'dataEntregaOP',
-      'observacoesOP', 'editProdutoOP', 'editVarianteOP', 'editVarianteContainer', 'editQuantidadeOP',
-      'editDataEntregaOP', 'etapasContainer', 'opNumero', 'finalizarOP', 'cancelarOP', 'voltarOP'
-    ].filter(id => !document.getElementById(id)));
+      produtoOP, quantidadeOP, numeroOP, variantesContainer, variantesSelects, dataEntregaOP,
+      observacoesOP, editProdutoOP, editVarianteOP, editVarianteContainer, editQuantidadeOP,
+      editDataEntregaOP, etapasContainer, opNumero, finalizarOP, cancelarOP, voltarOP].some(el => !el)) {
     throw new Error('Elementos DOM necessários não encontrados');
   }
 
-  // Configura eventos após o carregamento inicial
   const sortHeaders = {
     'sortStatus': 'status',
     'sortNumero': 'numero',
@@ -2216,13 +1377,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         const activeStatus = statusFilter.querySelector('.status-btn.active')?.dataset.status || 'todas';
-        loadOPTable(activeStatus, searchOP.value, criterio, newOrder, 1);
+        loadOPTable(activeStatus, searchOP.value, criterio, newOrder);
       });
     }
   });
 
   const statusHeader = document.getElementById('sortStatus');
   if (statusHeader) statusHeader.dataset.sort = 'desc';
+
+  // Carrega a tabela uma vez na inicialização
+  await loadOPTable('todas', '', 'status', 'desc', 1);
 
   if (statusFilter) {
     statusFilter.querySelectorAll('.status-btn').forEach(btn => {
@@ -2239,31 +1403,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     searchOP.addEventListener('input', () => debouncedFilterOPs(1));
   }
 
-  if (btnIncluirOP) {
-    btnIncluirOP.disabled = !permissoes.includes('criar-op');
+  window.addEventListener('hashchange', toggleView);
+
+  const incluirOPBtn = document.getElementById('incluirOP');
+  if (incluirOPBtn) {
+    incluirOPBtn.disabled = !permissoes.includes('criar-op');
     if (!permissoes.includes('criar-op')) {
-      btnIncluirOP.style.opacity = '0.5';
-      btnIncluirOP.style.cursor = 'not-allowed';
+      incluirOPBtn.style.opacity = '0.5';
+      incluirOPBtn.style.cursor = 'not-allowed';
     } else {
-      btnIncluirOP.addEventListener('click', async () => {
+      incluirOPBtn.addEventListener('click', () => {
         window.location.hash = '#adicionar';
-        await toggleView();
       });
     }
-  }
-
-  if (btnCorte) {
-    btnCorte.addEventListener('click', async () => {
-      window.location.hash = '#corte';
-      await toggleView();
-    });
-  }
-
-  if (btnAcessarCortes) {
-    btnAcessarCortes.addEventListener('click', async () => {
-      window.location.hash = '#acessocortes';
-      await toggleView();
-    });
   }
 
   if (opForm) {
@@ -2271,18 +1423,42 @@ document.addEventListener('DOMContentLoaded', async () => {
       e.preventDefault();
       const numero = numeroOP.value.trim();
       const produto = produtoOP.value;
-      const varianteSelect = document.querySelector('.variantes-selects select');
-      const variante = varianteSelect ? varianteSelect.value : '';
       const quantidade = parseInt(quantidadeOP.value) || 0;
       const dataEntrega = dataEntregaOP.value;
       const observacoes = observacoesOP.value.trim();
-  
-      if (!produto || !variante || !quantidade) {
-        mostrarPopupMensagem('Por favor, preencha todos os campos obrigatórios.', 'erro');
+      const variantesSelects = document.querySelectorAll('.variantes-selects select');
+      const varianteValues = Array.from(variantesSelects).map(select => select.value);
+      const variante = varianteValues.length > 0 ? varianteValues.join(' | ') : '';
+
+      if (!produto) {
+        mostrarPopupMensagem('Por favor, selecione um produto.', 'erro');
         return;
       }
-  
-      let novaOP = {
+      if (!quantidade || quantidade <= 0) {
+        mostrarPopupMensagem('Por favor, insira uma quantidade válida.', 'erro');
+        return;
+      }
+      if (!dataEntrega) {
+        mostrarPopupMensagem('Por favor, selecione a data de entrega.', 'erro');
+        return;
+      }
+      if (variantesSelects.length > 0 && varianteValues.some(v => !v)) {
+        mostrarPopupMensagem('Por favor, preencha todas as variações.', 'erro');
+        return;
+      }
+
+      const ordensData = await obterOrdensDeProducao(1, true);
+      const ordensDeProducao = ordensData.rows;
+      if (ordensDeProducao.some(op => op.numero === numero)) {
+        mostrarPopupMensagem(`Erro: Já existe uma Ordem de Produção com o número ${numero}!`, 'erro');
+        return;
+      }
+
+      const produtos = await obterProdutos();
+      const produtoObj = produtos.find(p => p.nome === produto);
+      const etapas = produtoObj?.etapas || [];
+
+      const novaOP = {
         numero,
         produto,
         variante: variante || null,
@@ -2291,62 +1467,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         observacoes,
         status: 'em-aberto',
         edit_id: generateUniqueId(),
-        etapas: []
+        etapas: etapas.map(etapa => ({
+          processo: etapa.processo,
+          usuario: '',
+          quantidade: '',
+          lancado: false,
+          ultimoLancamentoId: null
+        }))
       };
-  
-      const produtos = await obterProdutos();
-      const produtoObj = produtos.find(p => p.nome === produto);
-      novaOP.etapas = produtoObj?.etapas.map(etapa => ({
-        processo: etapa.processo,
-        usuario: etapa.processo === 'Corte' && quantidadeOP.disabled ? usuarioLogado?.nome || 'Sistema' : '',
-        quantidade: etapa.processo === 'Corte' && quantidadeOP.disabled ? quantidade : '',
-        lancado: etapa.processo === 'Corte' && quantidadeOP.disabled,
-        ultimoLancamentoId: null
-      })) || [];
-  
-      const foiCortadoDiv = opForm.querySelector('.foi-cortado');
-      const foiCortadoInput = foiCortadoDiv?.querySelector('input');
-  
+
       try {
-        const savedOP = await salvarOrdemDeProducao(novaOP);
-        console.log('[opForm.submit] Ordem salva:', savedOP);
-  
-        if (foiCortadoInput && foiCortadoInput.value === 'Sim' && foiCortadoDiv.dataset.corteId) {
-          const corteId = foiCortadoDiv.dataset.corteId;
-          await atualizarStatusCorte(corteId, 'usado');
-          limparCacheCortes();
-        }
-  
-        if (foiCortadoInput && foiCortadoInput.value.startsWith('Pedido de corte:')) {
-          const pn = foiCortadoInput.value.replace('Pedido de corte: ', '');
-          const corteData = {
-            pn,
-            produto,
-            variante,
-            quantidade,
-            data: new Date().toISOString().split('T')[0],
-            cortador: usuarioLogado?.nome || 'Sistema',
-            status: 'pendente',
-            op: numero
-          };
-          await fetch('/api/cortes', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(corteData),
-          });
-        }
-  
+        await salvarOrdemDeProducao(novaOP);
         mostrarPopupMensagem(`Ordem de Produção #${novaOP.numero} salva com sucesso!`, 'sucesso');
-        limparCacheOrdens(); // Limpa o cache
-        window.location.hash = ''; // Volta para a tela inicial
-        await loadOPTable('todas', '', 'status', 'desc', 1, true); // Força recarregar com dados frescos
-        window.dispatchEvent(new HashChangeEvent('hashchange')); // Atualiza a UI
+        window.location.hash = '';
+        limparCacheOrdens(); // Limpa o cache para garantir dados atualizados
+        await loadOPTable('todas', '', 'status', 'desc', 1); // Mini-refresh com todas as OPs
       } catch (error) {
-        console.error('[opForm.submit] Erro:', error);
-        mostrarPopupMensagem('Erro ao salvar ordem. Tente novamente.', 'erro');
+        console.error('[opForm.submit] Erro ao salvar ordem de produção:', error);
+        mostrarPopupMensagem('Erro ao salvar ordem de produção. Tente novamente.', 'erro');
       }
     });
   }
@@ -2362,7 +1500,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     finalizarOP.addEventListener('click', async () => {
       const editId = window.location.hash.split('/')[1];
       const ordensData = await obterOrdensDeProducao(1, true);
-      const ordensDeProducao = ordensData.rows;
+      const ordensDeProducao = ordensData.rows; // Acessa .rows
       const op = ordensDeProducao.find(o => o.edit_id === editId);
 
       if (op && !finalizarOP.disabled) {
@@ -2384,7 +1522,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     cancelarOP.addEventListener('click', async () => {
       const editId = window.location.hash.split('/')[1];
       const ordensData = await obterOrdensDeProducao(1, true);
-      const ordensDeProducao = ordensData.rows;
+      const ordensDeProducao = ordensData.rows; // Acessa .rows
       const op = ordensDeProducao.find(o => o.edit_id === editId);
       if (op) {
         if (op.status === 'cancelada') {
@@ -2402,7 +1540,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  window.addEventListener('hashchange', toggleView);
+  if (voltarOP) {
+    voltarOP.addEventListener('click', async () => {
+      window.location.hash = '';
+      if (window.location.hash === '') await toggleView();
+    });
+  }
 
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) {
