@@ -400,6 +400,28 @@ body.autenticado {
     background: #f8f9fa;
 }
 
+/* Definir larguras específicas para cada coluna */
+.tabela-cortados th:first-child,
+.tabela-cortados td:first-child {
+    width: 10%; /* Primeira coluna (checkbox) */
+}
+
+.tabela-cortados th:nth-child(2),
+.tabela-cortados td:nth-child(2) {
+    width: 35%; /* Segunda coluna (Produto) */
+    word-break: break-word;
+}
+
+.tabela-cortados th:nth-child(3),
+.tabela-cortados td:nth-child(3) {
+    width: 35%; /* Terceira coluna (Variação) */
+    word-break: break-word;
+}
+
+.tabela-cortados th:nth-child(4),
+.tabela-cortados td:nth-child(4) {
+    width: 20%; /* Quarta coluna (Qtd) */
+}
 
 /* tabela da lista de cortes / aba 'corte pendente' */
 .tabela-corte-pendente {
@@ -442,29 +464,29 @@ body.autenticado {
 }
 
 /* Definir larguras específicas para cada coluna */
-.tabela-corte-pendente th#sortStatus,
+.tabela-corte-pendente th:first-child,
 .tabela-corte-pendente td:first-child {
     width: 10%; /* Ajuste para o status */
 }
 
-.tabela-corte-pendente th#sortNumero,
+.tabela-corte-pendente th:nth-child(2),
 .tabela-corte-pendente td:nth-child(2) {
     width: 12%; /* Ajuste para o número da OP */
 }
 
-.tabela-corte-pendente th#sortProduto,
+.tabela-corte-pendente th:nth-child(3),
 .tabela-corte-pendente td:nth-child(3) {
     width: 32%; /* Ajuste para o produto */
     word-break: break-word; /* Quebra de linha para texto longo */
 }
 
-.tabela-corte-pendente th#sortVariante,
+.tabela-corte-pendente th:nth-child(4),
 .tabela-corte-pendente td:nth-child(4) {
     width: 26%; /* Ajuste para a variação */
     word-break: break-word; /* Quebra de linha para texto longo */
 }
 
-.tabela-corte-pendente th#sortQuantidade,
+.tabela-corte-pendente th:nth-child(5),
 .tabela-corte-pendente td:nth-child(5) {
     width: 10%; /* Ajuste para a quantidade */
 }
@@ -1199,18 +1221,22 @@ body.autenticado {
 
 
 
-
-
-/* Breakpoint para telas menores (max-width: 414px, como iPhone XR) */
-@media (max-width: 414px) {
+/* Breakpoint para iPad Pro (768px a 1024px) */
+@media (min-width: 768px) and (max-width: 1024px) {
     .container-op {
-        padding: 10px;
+        margin:20px;
+        padding: 20px;
     }
 
+    .filters-card {
+        padding-left: 15px;
+    }
+
+/* tabela da lista de cortes / aba 'corte pendente' para ipad*/
 .tabela-corte-pendente th,
 .tabela-corte-pendente td {
-    padding: 4px;
-    font-size: 0.65em;
+    padding: 10px;
+    font-size: 1em;
     font-weight: 600;
     text-align: left;
     border-bottom: 1px solid #dfe6e9;
@@ -1220,17 +1246,17 @@ body.autenticado {
 /* Definir larguras específicas para cada coluna */
 .tabela-corte-pendente th#sortStatus,
 .tabela-corte-pendente td:first-child {
-    width: 10%; /* Ajuste para o status */
+    width: 8%; /* Ajuste para o status */
 }
 
 .tabela-corte-pendente th#sortNumero,
 .tabela-corte-pendente td:nth-child(2) {
-    width: 14%; /* Ajuste para o número da OP */
+    width: 10%; /* Ajuste para o número da OP */
 }
 
 .tabela-corte-pendente th#sortProduto,
 .tabela-corte-pendente td:nth-child(3) {
-    width: 31%; /* Ajuste para o produto */
+    width: 35%; /* Ajuste para o produto */
     word-break: break-word; /* Quebra de linha para texto longo */
 }
 
@@ -1242,53 +1268,80 @@ body.autenticado {
 
 .tabela-corte-pendente th#sortQuantidade,
 .tabela-corte-pendente td:nth-child(5) {
-    width: 12%; /* Ajuste para a quantidade */
+    width: 10%; /* Ajuste para a quantidade */
 }
 
-    .filters-card {
-        padding-left: 15px;
-        padding-right: 10px;
-    }
 
-    .cabecalho-op h1 {
-        font-size: 1.5rem;
+    .cabecalho-editar-op {
+        flex-direction: row;
+        gap: 15px;
     }
 
     .busca-op {
-        font-size: 0.7rem;
-        padding: 8px;
-        width: 100%;
+        width: 250px;
+    }
+
+    .botao-incluir-op {
+        width: auto;
+        margin-right: 0;
+    }
+
+    #statusFilter {
+        gap: 8px;
     }
 
     .status-btn {
-        font-size: 10px;
-        padding: 5px 8px;
+        font-size: 13px;
+        padding: 7px 11px;
     }
 
     .tabela-op th,
     .tabela-op td {
-        font-size: 0.7rem;
-        padding: 6px;
+        font-size: 0.85rem;
+        padding: 9px;
     }
 
-    /* Paginação */
-.pagination-container {
-    display: flex;
-    justify-content: center; /* Centralizar em todos os breakpoints */
-    align-items: center;
-    gap: 10px;
-    margin: 10px 20px 10px;
-   
-}
+    .formulario-op,
+    .editar-op {
+        padding: 20px;
+    }
+
+    .input-produto,
+    .variantes-selects select,
+    .input-quantidade-principal,
+    .input-quantidade-novaOP,
+    .input-numero-novaOP,
+    .input-data,
+    .input-data-novaOP,
+    #observacoesOP {
+        width: 200px;
+    }
+
+    .botoes-form-op {
+        gap: 15px;
+    }
+
+    .etapa-row {
+        gap: 8px;
+    }
+
+    .input-processo,
+    .select-usuario {
+        width: 180px;
+    }
+
+    .quantidade-lancar {
+        min-width: 180px;
+    }
+
     .pagination-btn,
     .pagination-current {
-        text-align: center;
-        font-size: 0.8em;
+        font-size: 0.95em;
         padding: 8px 15px;
     }
 
     .pagination-ellipsis {
-        font-size: 0.8em;
+        font-size: 0.95em;
         padding: 8px 15px;
     }
 }
@@ -1328,31 +1381,35 @@ body.autenticado {
 }
 
 /* Definir larguras específicas para cada coluna */
-.tabela-corte-pendente th#sortStatus,
+.tabela-corte-pendente th:first-child,
 .tabela-corte-pendente td:first-child {
     width: 8%; /* Ajuste para o status */
 }
 
-.tabela-corte-pendente th#sortNumero,
+.tabela-corte-pendente th:nth-child(2),
 .tabela-corte-pendente td:nth-child(2) {
     width: 14%; /* Ajuste para o número da OP */
 }
 
-.tabela-corte-pendente th#sortProduto,
+.tabela-corte-pendente th:nth-child(3),
 .tabela-corte-pendente td:nth-child(3) {
-    width: 31%; /* Ajuste para o produto */
+    width: 28%; /* Ajuste para o produto */
     word-break: break-word; /* Quebra de linha para texto longo */
 }
 
-.tabela-corte-pendente th#sortVariante,
+.tabela-corte-pendente th:nth-child(4),
 .tabela-corte-pendente td:nth-child(4) {
     width: 25%; /* Ajuste para a variação */
     word-break: break-word; /* Quebra de linha para texto longo */
 }
 
-.tabela-corte-pendente th#sortQuantidade,
+.tabela-corte-pendente th:nth-child(5),
 .tabela-corte-pendente td:nth-child(5) {
     width: 12%; /* Ajuste para a quantidade */
+}
+.tabela-corte-pendente th:nth-child(6),
+.tabela-corte-pendente td:nth-child(6) {
+    width: 12%; /* Ajuste para a OP */
 }
 
 
@@ -1482,22 +1539,16 @@ body.autenticado {
 }
 }
 
-/* Breakpoint para iPad Pro (768px a 1024px) */
-@media (min-width: 768px) and (max-width: 1024px) {
+/* Breakpoint para telas menores (max-width: 414px, como iPhone XR) */
+@media (max-width: 414px) {
     .container-op {
-        margin:20px;
-        padding: 20px;
+        padding: 10px;
     }
 
-    .filters-card {
-        padding-left: 15px;
-    }
-
-/* tabela da lista de cortes / aba 'corte pendente' para ipad*/
 .tabela-corte-pendente th,
 .tabela-corte-pendente td {
-    padding: 10px;
-    font-size: 1em;
+    padding: 4px;
+    font-size: 0.65em;
     font-weight: 600;
     text-align: left;
     border-bottom: 1px solid #dfe6e9;
@@ -1505,107 +1556,82 @@ body.autenticado {
 }
 
 /* Definir larguras específicas para cada coluna */
-.tabela-corte-pendente th#sortStatus,
+.tabela-corte-pendente th:first-child,
 .tabela-corte-pendente td:first-child {
-    width: 8%; /* Ajuste para o status */
+    width: 10%; /* Ajuste para o status */
 }
 
-.tabela-corte-pendente th#sortNumero,
+.tabela-corte-pendente th:nth-child(2),
 .tabela-corte-pendente td:nth-child(2) {
-    width: 10%; /* Ajuste para o número da OP */
+    width: 14%; /* Ajuste para o número da PN*/
 }
 
-.tabela-corte-pendente th#sortProduto,
+.tabela-corte-pendente th:nth-child(3),
 .tabela-corte-pendente td:nth-child(3) {
-    width: 35%; /* Ajuste para o produto */
+    width: 28%; /* Ajuste para o produto */
     word-break: break-word; /* Quebra de linha para texto longo */
 }
 
-.tabela-corte-pendente th#sortVariante,
+.tabela-corte-pendente th:nth-child(4),
 .tabela-corte-pendente td:nth-child(4) {
     width: 25%; /* Ajuste para a variação */
     word-break: break-word; /* Quebra de linha para texto longo */
 }
 
-.tabela-corte-pendente th#sortQuantidade,
+.tabela-corte-pendente th:nth-child(5),
 .tabela-corte-pendente td:nth-child(5) {
-    width: 10%; /* Ajuste para a quantidade */
+    width: 12%; /* Ajuste para a quantidade */
 }
 
+    .filters-card {
+        padding-left: 15px;
+        padding-right: 10px;
+    }
 
-    .cabecalho-editar-op {
-        flex-direction: row;
-        gap: 15px;
+    .cabecalho-op h1 {
+        font-size: 1.5rem;
     }
 
     .busca-op {
-        width: 250px;
-    }
-
-    .botao-incluir-op {
-        width: auto;
-        margin-right: 0;
-    }
-
-    #statusFilter {
-        gap: 8px;
+        font-size: 0.7rem;
+        padding: 8px;
+        width: 100%;
     }
 
     .status-btn {
-        font-size: 13px;
-        padding: 7px 11px;
+        font-size: 10px;
+        padding: 5px 8px;
     }
 
     .tabela-op th,
     .tabela-op td {
-        font-size: 0.85rem;
-        padding: 9px;
+        font-size: 0.7rem;
+        padding: 6px;
     }
 
-    .formulario-op,
-    .editar-op {
-        padding: 20px;
-    }
-
-    .input-produto,
-    .variantes-selects select,
-    .input-quantidade-principal,
-    .input-quantidade-novaOP,
-    .input-numero-novaOP,
-    .input-data,
-    .input-data-novaOP,
-    #observacoesOP {
-        width: 200px;
-    }
-
-    .botoes-form-op {
-        gap: 15px;
-    }
-
-    .etapa-row {
-        gap: 8px;
-    }
-
-    .input-processo,
-    .select-usuario {
-        width: 180px;
-    }
-
-    .quantidade-lancar {
-        min-width: 180px;
-    }
-
+    /* Paginação */
+.pagination-container {
+    display: flex;
+    justify-content: center; /* Centralizar em todos os breakpoints */
+    align-items: center;
+    gap: 10px;
+    margin: 10px 20px 10px;
+   
+}
     .pagination-btn,
     .pagination-current {
-        font-size: 0.95em;
+        text-align: center;
+        font-size: 0.8em;
         padding: 8px 15px;
     }
 
     .pagination-ellipsis {
-        font-size: 0.95em;
+        font-size: 0.8em;
         padding: 8px 15px;
     }
 }
+
+
 
 /* pop up de erro para usuario que quer lançar sem permissão */
 .popup-mensagem {
