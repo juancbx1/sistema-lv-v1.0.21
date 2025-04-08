@@ -35,7 +35,13 @@ export default async function handler(req, res) {
       let totalParams = [];
 
       if (fetchAll) {
-        queryText = 'SELECT * FROM ordens_de_producao ORDER BY numero DESC';
+        // Para "todas", filtra apenas "em-aberto" e "produzindo"
+        queryText = `
+          SELECT * FROM ordens_de_producao 
+          WHERE status IN ('em-aberto', 'produzindo') 
+          ORDER BY numero DESC
+        `;
+        totalQuery += " WHERE status IN ('em-aberto', 'produzindo')";
       } else if (statusFilter) {
         queryText = `
           SELECT * FROM ordens_de_producao 
@@ -49,12 +55,7 @@ export default async function handler(req, res) {
       } else {
         queryText = `
           SELECT * FROM ordens_de_producao 
-          ORDER BY 
-            CASE 
-              WHEN status IN ('em-aberto', 'produzindo') THEN 0 
-              ELSE 1 
-            END, 
-            numero DESC 
+          ORDER BY numero DESC 
           LIMIT $1 OFFSET $2
         `;
         queryParams = [limit, offset];
@@ -64,16 +65,12 @@ export default async function handler(req, res) {
       const totalResult = await pool.query(totalQuery, totalParams);
       const total = parseInt(totalResult.rows[0].count);
 
-      res.status(200).json(
-        fetchAll
-          ? result.rows
-          : {
-              rows: result.rows,
-              total: total,
-              page: page,
-              pages: Math.ceil(total / limit),
-            }
-      );
+      res.status(200).json({
+        rows: result.rows,
+        total: total,
+        page: fetchAll ? 1 : page,
+        pages: Math.ceil(total / limit),
+      });
     } else if (method === 'POST') {
       if (!usuarioLogado.permissoes.includes('criar-op')) {
         return res.status(403).json({ error: 'Permissão negada' });

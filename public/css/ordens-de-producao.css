@@ -359,6 +359,124 @@ body.autenticado {
     background: #c0392b;
 }
 
+
+.tabela-cortados {
+    width: 100%;
+    border-collapse: collapse; /* Mudança: Usar collapse para evitar espaçamentos extras */
+    background: #ffffff;
+    border-radius: 10px;
+    overflow-x: auto;
+    display: table; /* Mudança: Forçar o comportamento de tabela padrão */
+    margin-top: 20px;
+
+}
+
+.tabela-cortados thead {
+    background: #3498db;
+    color: white;
+}
+
+.tabela-cortados tbody {
+    display: table-row-group; /* Mudança: Garantir que o tbody se comporte como grupo de linhas */
+    width: 100%;
+}
+
+.tabela-cortados th,
+.tabela-cortados td {
+    padding: 10px;
+    font-size: 0.9em;
+    font-weight: 600;
+    text-align: left;
+    border-bottom: 1px solid #dfe6e9;
+    word-break: break-word; /* Quebra de linha para texto longo */
+}
+
+.tabela-cortados tr {
+    display: table-row; /* Mudança: Forçar o comportamento de linha de tabela */
+    width: 100%;
+}
+
+.tabela-cortados tbody tr:nth-child(even) {
+    background: #f8f9fa;
+}
+
+
+/* tabela da lista de cortes / aba 'corte pendente' */
+.tabela-corte-pendente {
+    width: 100%;
+    border-collapse: collapse; /* Mudança: Usar collapse para evitar espaçamentos extras */
+    background: #ffffff;
+    border-radius: 10px;
+    overflow-x: auto;
+    display: table; /* Mudança: Forçar o comportamento de tabela padrão */
+    margin-top: 20px;
+}
+
+.tabela-corte-pendente thead {
+    background: #3498db;
+    color: white;
+}
+
+.tabela-corte-pendente tbody {
+    display: table-row-group; /* Mudança: Garantir que o tbody se comporte como grupo de linhas */
+    width: 100%;
+}
+
+.tabela-corte-pendente th,
+.tabela-corte-pendente td {
+    padding: 10px;
+    font-size: 0.9em;
+    font-weight: 600;
+    text-align: left;
+    border-bottom: 1px solid #dfe6e9;
+    word-break: break-word; /* Quebra de linha para texto longo */
+}
+
+.tabela-corte-pendente tr {
+    display: table-row; /* Mudança: Forçar o comportamento de linha de tabela */
+    width: 100%;
+}
+
+.tabela-corte-pendente tbody tr:nth-child(even) {
+    background: #f8f9fa;
+}
+
+/* Definir larguras específicas para cada coluna */
+.tabela-corte-pendente th#sortStatus,
+.tabela-corte-pendente td:first-child {
+    width: 10%; /* Ajuste para o status */
+}
+
+.tabela-corte-pendente th#sortNumero,
+.tabela-corte-pendente td:nth-child(2) {
+    width: 12%; /* Ajuste para o número da OP */
+}
+
+.tabela-corte-pendente th#sortProduto,
+.tabela-corte-pendente td:nth-child(3) {
+    width: 32%; /* Ajuste para o produto */
+    word-break: break-word; /* Quebra de linha para texto longo */
+}
+
+.tabela-corte-pendente th#sortVariante,
+.tabela-corte-pendente td:nth-child(4) {
+    width: 26%; /* Ajuste para a variação */
+    word-break: break-word; /* Quebra de linha para texto longo */
+}
+
+.tabela-corte-pendente th#sortQuantidade,
+.tabela-corte-pendente td:nth-child(5) {
+    width: 10%; /* Ajuste para a quantidade */
+}
+
+.tabela-corte-pendente tbody tr {
+    transition: background 0.3s ease;
+}
+
+.tabela-corte-pendente tbody tr:hover {
+    background: #ecf0f1;
+}
+
 /* Estilo da Tabela Genérica */
 .tabela-op {
     width: 100%;
@@ -1089,6 +1207,44 @@ body.autenticado {
         padding: 10px;
     }
 
+.tabela-corte-pendente th,
+.tabela-corte-pendente td {
+    padding: 4px;
+    font-size: 0.65em;
+    font-weight: 600;
+    text-align: left;
+    border-bottom: 1px solid #dfe6e9;
+    word-break: break-word; /* Quebra de linha para texto longo */
+}
+
+/* Definir larguras específicas para cada coluna */
+.tabela-corte-pendente th#sortStatus,
+.tabela-corte-pendente td:first-child {
+    width: 10%; /* Ajuste para o status */
+}
+
+.tabela-corte-pendente th#sortNumero,
+.tabela-corte-pendente td:nth-child(2) {
+    width: 14%; /* Ajuste para o número da OP */
+}
+
+.tabela-corte-pendente th#sortProduto,
+.tabela-corte-pendente td:nth-child(3) {
+    width: 31%; /* Ajuste para o produto */
+    word-break: break-word; /* Quebra de linha para texto longo */
+}
+
+.tabela-corte-pendente th#sortVariante,
+.tabela-corte-pendente td:nth-child(4) {
+    width: 25%; /* Ajuste para a variação */
+    word-break: break-word; /* Quebra de linha para texto longo */
+}
+
+.tabela-corte-pendente th#sortQuantidade,
+.tabela-corte-pendente td:nth-child(5) {
+    width: 12%; /* Ajuste para a quantidade */
+}
+
     .filters-card {
         padding-left: 15px;
         padding-right: 10px;
@@ -1159,6 +1315,45 @@ body.autenticado {
     .botao-acessar-cortes {
         width: 100%;
     }
+
+    /* tabela da lista de cortes / aba 'corte pendente' Mobile (max-width: 576px)*/
+.tabela-corte-pendente th,
+.tabela-corte-pendente td {
+    padding: 8px;
+    font-size: 0.7em;
+    font-weight: 600;
+    text-align: left;
+    border-bottom: 1px solid #dfe6e9;
+    word-break: break-word; /* Quebra de linha para texto longo */
+}
+
+/* Definir larguras específicas para cada coluna */
+.tabela-corte-pendente th#sortStatus,
+.tabela-corte-pendente td:first-child {
+    width: 8%; /* Ajuste para o status */
+}
+
+.tabela-corte-pendente th#sortNumero,
+.tabela-corte-pendente td:nth-child(2) {
+    width: 14%; /* Ajuste para o número da OP */
+}
+
+.tabela-corte-pendente th#sortProduto,
+.tabela-corte-pendente td:nth-child(3) {
+    width: 31%; /* Ajuste para o produto */
+    word-break: break-word; /* Quebra de linha para texto longo */
+}
+
+.tabela-corte-pendente th#sortVariante,
+.tabela-corte-pendente td:nth-child(4) {
+    width: 25%; /* Ajuste para a variação */
+    word-break: break-word; /* Quebra de linha para texto longo */
+}
+
+.tabela-corte-pendente th#sortQuantidade,
+.tabela-corte-pendente td:nth-child(5) {
+    width: 12%; /* Ajuste para a quantidade */
+}
 
 
     .filters-card {
@@ -1297,6 +1492,46 @@ body.autenticado {
     .filters-card {
         padding-left: 15px;
     }
+
+/* tabela da lista de cortes / aba 'corte pendente' para ipad*/
+.tabela-corte-pendente th,
+.tabela-corte-pendente td {
+    padding: 10px;
+    font-size: 1em;
+    font-weight: 600;
+    text-align: left;
+    border-bottom: 1px solid #dfe6e9;
+    word-break: break-word; /* Quebra de linha para texto longo */
+}
+
+/* Definir larguras específicas para cada coluna */
+.tabela-corte-pendente th#sortStatus,
+.tabela-corte-pendente td:first-child {
+    width: 8%; /* Ajuste para o status */
+}
+
+.tabela-corte-pendente th#sortNumero,
+.tabela-corte-pendente td:nth-child(2) {
+    width: 10%; /* Ajuste para o número da OP */
+}
+
+.tabela-corte-pendente th#sortProduto,
+.tabela-corte-pendente td:nth-child(3) {
+    width: 35%; /* Ajuste para o produto */
+    word-break: break-word; /* Quebra de linha para texto longo */
+}
+
+.tabela-corte-pendente th#sortVariante,
+.tabela-corte-pendente td:nth-child(4) {
+    width: 25%; /* Ajuste para a variação */
+    word-break: break-word; /* Quebra de linha para texto longo */
+}
+
+.tabela-corte-pendente th#sortQuantidade,
+.tabela-corte-pendente td:nth-child(5) {
+    width: 10%; /* Ajuste para a quantidade */
+}
+
 
     .cabecalho-editar-op {
         flex-direction: row;

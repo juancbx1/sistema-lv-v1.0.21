@@ -137,17 +137,19 @@ async function atualizarStatusCorte(id, novoStatus) {
   return await response.json();
 }
 
- // Função para verificar se o produto/variação está em "Cortados"
- async function verificarCorte() {
+// Função ajustada para mudança no produto
+async function handleProdutoChange(e) {
+  const produtoNome = e.target.value;
+  await loadVariantesSelects(produtoNome); // Apenas carrega as variantes, sem verificar corte
+}
+
+// Função verificarCorte ajustada (sem popup imediato)
+async function verificarCorte() {
   const produto = document.getElementById('produtoOP').value;
   const varianteSelect = document.querySelector('.variantes-selects select');
   const variante = varianteSelect ? varianteSelect.value : '';
 
-  if (!produto || !variante) {
-    mostrarPopupMensagem('Por favor, selecione um produto e uma variação.', 'erro');
-    return;
-  }
-
+  // Remove a validação com popup aqui; será feita no submit
   const opForm = document.getElementById('opForm');
   const camposDinamicos = [
     document.getElementById('quantidadeOP'),
@@ -175,12 +177,10 @@ async function atualizarStatusCorte(id, novoStatus) {
     if (existingFoiCortado) existingFoiCortado.remove();
 
     if (corteEncontrado) {
-      mostrarPopupMensagem(`Produto ${produto} (variação: ${variante}) já está cortado. Prosseguindo...`, 'sucesso');
-
       const foiCortadoDiv = document.createElement('div');
       foiCortadoDiv.className = 'grupo-form-op foi-cortado';
-      foiCortadoDiv.innerHTML = '<label class="label-small">Foi cortado?</label><input type="text" value="Sim" readonly style="background-color: #d3d3d3;">';
-      foiCortadoDiv.dataset.corteId = corteEncontrado.id; // Armazenar o ID do corte
+      foiCortadoDiv.innerHTML = '<label class="label-small">Foi cortado?</label><input type="text" value="Sim" readonly class="input-numero-novaOP">';
+      foiCortadoDiv.dataset.corteId = corteEncontrado.id;
       opForm.insertBefore(foiCortadoDiv, camposDinamicos[0].parentElement);
 
       camposDinamicos[0].parentElement.style.display = 'block';
@@ -219,7 +219,6 @@ async function atualizarStatusCorte(id, novoStatus) {
     }
   } catch (error) {
     console.error('[verificarCorte] Erro:', error);
-    mostrarPopupMensagem('Erro ao verificar corte. Tente novamente.', 'erro');
     spinner.remove();
   }
 }
@@ -293,9 +292,12 @@ async function obterOrdensDeProducao(page = 1, fetchAll = false, forceUpdate = f
       if (!response.ok) throw new Error('Erro ao carregar ordens de produção');
       const data = await response.json();
 
-      ordensCache = fetchAll
-        ? { rows: data, total: data.length, pages: 1 }
-        : data;
+      // Garantir que o retorno seja sempre um objeto com rows, total, pages
+      ordensCache = {
+        rows: Array.isArray(data) ? data : data.rows || [],
+        total: data.total || (Array.isArray(data) ? data.length : data.rows.length),
+        pages: data.pages || (fetchAll ? Math.ceil((data.total || data.rows.length) / itemsPerPage) : 1),
+      };
 
       if (!fetchAll) {
         const cacheData = {
@@ -388,11 +390,11 @@ function getUsuarioPlaceholder(tipoUsuario) {
   }
 }
 
+// Função para carregar produtos no select
 async function loadProdutosSelect() {
   const produtoSelect = document.getElementById('produtoOP');
   if (!produtoSelect) return;
 
-  // Desabilita o select enquanto carrega
   produtoSelect.disabled = true;
   produtoSelect.innerHTML = '<option value="">Carregando produtos...</option>';
 
@@ -409,10 +411,8 @@ async function loadProdutosSelect() {
       produtoSelect.appendChild(option);
     });
 
-    // Habilita o select após carregar
     produtoSelect.disabled = false;
 
-    // Adiciona o evento de mudança apenas uma vez
     produtoSelect.removeEventListener('change', handleProdutoChange);
     produtoSelect.addEventListener('change', handleProdutoChange);
   } catch (error) {
@@ -422,14 +422,8 @@ async function loadProdutosSelect() {
   }
 }
 
-async function handleProdutoChange(e) {
-  const produtoNome = e.target.value;
-  await loadVariantesSelects(produtoNome);
-  await verificarCorte(); // Garante que o corte seja verificado após selecionar o produto
-}
 
-
-
+// Função para carregar variantes
 async function loadVariantesSelects(produtoNome, produtos = null) {
   const variantesContainer = document.getElementById('variantesContainer');
   const variantesSelects = document.querySelector('.variantes-selects');
@@ -463,9 +457,9 @@ async function loadVariantesSelects(produtoNome, produtos = null) {
     variantesSelects.appendChild(select);
     variantesContainer.style.display = 'block';
 
-    // Adicionar evento ao select de variantes
+    // Adiciona evento para verificar corte ao selecionar variação
     select.addEventListener('change', async () => {
-      await verificarCorte();
+      await verificarCorte(); // Chama verificarCorte, mas sem popup imediato
     });
   } else {
     variantesContainer.style.display = 'none';
@@ -518,13 +512,14 @@ async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = '
 
   try {
     console.log('[loadOPTable] Iniciando carregamento da tabela');
-    const data = await obterOrdensDeProducao(page, false, forceUpdate, statusFilter);
+    const data = await obterOrdensDeProducao(page, filterStatus === 'todas', forceUpdate, statusFilter);
     if (!data || !data.rows) {
       throw new Error('Dados inválidos retornados por obterOrdensDeProducao');
     }
+
     let ordensDeProducao = data.rows;
-    let totalItems = data.total; // Total do backend por padrão
-    let totalPages = data.pages; // Páginas do backend por padrão
+    let totalItems = data.total || ordensDeProducao.length;
+    let totalPages = data.pages || Math.ceil(totalItems / itemsPerPage);
 
     console.log('[loadOPTable] Ordens recebidas:', ordensDeProducao.length, 'Dados brutos:', ordensDeProducao, 'Total:', totalItems, 'Páginas:', totalPages);
 
@@ -539,15 +534,16 @@ async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = '
     console.log('[loadOPTable] Ordens únicas após deduplicação:', ordensUnicas.length);
 
     let filteredOPs = [...ordensUnicas];
-    if (filterStatus === 'todas') {
-      filteredOPs = filteredOPs.filter(op => op.status === 'em-aberto' || op.status === 'produzindo');
-      totalItems = filteredOPs.length; // Calcula totalItems localmente para 'todas'
-      totalPages = Math.ceil(totalItems / itemsPerPage); // Calcula totalPages localmente para 'todas'
-    } else {
-      filteredOPs = filteredOPs.filter(op => op.status === filterStatus);
+
+    // Para filtros específicos (não "todas"), confie nos dados paginados do backend
+    if (filterStatus !== 'todas') {
+      filteredOPs = filteredOPs.filter(op => op.status === filterStatus); // Filtro de segurança
+      // Não recalcula totalItems e totalPages aqui; usa os valores do backend
     }
+
     console.log('[loadOPTable] Após filtro de status:', filteredOPs.length, 'Filtro aplicado:', filterStatus);
 
+    // Aplica filtro de busca
     filteredOPs = filteredOPs.filter(op => {
       const matchesProduto = op.produto?.toLowerCase().includes(search.toLowerCase()) || false;
       const matchesNumero = op.numero.toString().includes(search);
@@ -556,18 +552,24 @@ async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = '
     });
     console.log('[loadOPTable] Após filtro de busca:', filteredOPs.length, 'Busca:', search);
 
+    // Ordena os itens
     filteredOPs = ordenarOPs(filteredOPs, sortCriterio, sortOrdem);
     console.log('[loadOPTable] Após ordenação:', filteredOPs.length);
 
-    // Para 'todas', ajusta totalItems e totalPages novamente após filtro de busca
+    // Define os itens paginados
+    let paginatedOPs;
     if (filterStatus === 'todas') {
+      // Para "todas", pagina localmente após filtros
       totalItems = filteredOPs.length;
       totalPages = Math.ceil(totalItems / itemsPerPage);
+      const startIndex = (page - 1) * itemsPerPage;
+      const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+      paginatedOPs = filteredOPs.slice(startIndex, endIndex);
+    } else {
+      // Para outros filtros, usa os dados paginados do backend diretamente
+      paginatedOPs = filteredOPs;
+      // totalItems e totalPages já vêm do backend
     }
-
-    const startIndex = (page - 1) * itemsPerPage;
-    const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
-    const paginatedOPs = filteredOPs;
 
     filteredOPsGlobal = filteredOPs;
 
@@ -590,7 +592,7 @@ async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = '
           usedIds.add(op.edit_id);
         }
         const tr = document.createElement('tr');
-        tr.dataset.index = startIndex + index;
+        tr.dataset.index = index; // Usa index relativo à página atual
         tr.dataset.numero = op.numero;
         tr.style.cursor = permissoes.includes('editar-op') ? 'pointer' : 'default';
         tr.innerHTML = `
@@ -621,6 +623,8 @@ async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = '
       paginationHTML += `<button class="pagination-btn prev" data-page="${Math.max(1, page - 1)}" ${page === 1 ? 'disabled' : ''}>Anterior</button>`;
       paginationHTML += `<span class="pagination-current">Pág. ${page} de ${totalPages}</span>`;
       paginationHTML += `<button class="pagination-btn next" data-page="${Math.min(totalPages, page + 1)}" ${page === totalPages ? 'disabled' : ''}>Próximo</button>`;
+    } else {
+      console.log('[loadOPTable] Total de páginas <= 1, não exibindo paginação');
     }
 
     paginationContainer.innerHTML = paginationHTML;
@@ -1846,14 +1850,14 @@ async function loadAbaContent(aba, forceRefresh = true) {
     if (aba === 'pendente') {
       html += '<h3>Produtos pendentes de corte</h3>';
       html += `
-        <table class="tabela-op">
+        <table class="tabela-corte-pendente">
           <thead>
             <tr>
               <th></th>
               <th>PN</th>
               <th>Produto</th>
               <th>Variação</th>
-              <th>Qtde</th>
+              <th>Qtd</th>
               <th>OP</th>
             </tr>
           </thead>
@@ -1867,13 +1871,13 @@ async function loadAbaContent(aba, forceRefresh = true) {
     } else {
       html += '<h3>Produtos cortados</h3>';
       html += `
-        <table class="tabela-op">
+        <table class="tabela-cortados">
           <thead>
             <tr>
               <th></th>
               <th>Produto</th>
               <th>Variação</th>
-              <th>Qtde</th>
+              <th>Qtd</th>
             </tr>
           </thead>
           <tbody id="tabelaCortadosBody"></tbody>
@@ -2144,15 +2148,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   usuarioLogado = auth.usuario;
   permissoes = auth.permissoes || [];
 
-  const ordensData = await obterOrdensDeProducao(1, true);
+  limparCacheOrdens(); // Limpa o cache para garantir dados atualizados
+
+  const ordensData = await obterOrdensDeProducao(1, true); // Busca todas as ordens (filtradas por "em-aberto" e "produzindo")
   const ordensDeProducao = ordensData.rows;
-  ordensDeProducao.forEach(op => {
-    if (op.edit_id) usedIds.add(op.edit_id);
-  });
+  if (Array.isArray(ordensDeProducao)) {
+    ordensDeProducao.forEach(op => {
+      if (op.edit_id) usedIds.add(op.edit_id);
+    });
+  } else {
+    console.error('[DOMContentLoaded] ordensDeProducao não é um array:', ordensDeProducao);
+  }
 
   console.log('[DOMContentLoaded] Iniciando carregamento inicial da tabela');
-  await loadOPTable('todas', '', 'status', 'desc', 1, true, null); // 'todas' sem filtro específico no backend
+  await loadOPTable('todas', '', 'status', 'desc', 1, true, null);
   document.body.dataset.initialLoadComplete = 'true';
+
 
   window.removeEventListener('hashchange', toggleView);
   window.addEventListener('hashchange', toggleView);
@@ -2231,7 +2242,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         const activeStatus = statusFilter.querySelector('.status-btn.active')?.dataset.status || 'todas';
-        loadOPTable(activeStatus, searchOP.value, criterio, newOrder, 1);
+        const searchValue = searchOP.value || '';
+        // Reinicia para a primeira página ao ordenar
+        loadOPTable(activeStatus, searchValue, criterio, newOrder, 1, true, activeStatus === 'todas' ? null : activeStatus);
       });
     }
   });
@@ -2284,16 +2297,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (opForm) {
     opForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const numero = numeroOP.value.trim();
-      const produto = produtoOP.value;
+      const numero = document.getElementById('numeroOP').value.trim();
+      const produto = document.getElementById('produtoOP').value;
       const varianteSelect = document.querySelector('.variantes-selects select');
       const variante = varianteSelect ? varianteSelect.value : '';
-      const quantidade = parseInt(quantidadeOP.value) || 0;
-      const dataEntrega = dataEntregaOP.value;
-      const observacoes = observacoesOP.value.trim();
+      const quantidade = parseInt(document.getElementById('quantidadeOP').value) || 0;
+      const dataEntrega = document.getElementById('dataEntregaOP').value;
+      const observacoes = document.getElementById('observacoesOP').value.trim();
   
-      if (!produto || !variante || !quantidade) {
-        mostrarPopupMensagem('Por favor, preencha todos os campos obrigatórios.', 'erro');
+      // Validação dos campos obrigatórios
+      let erros = [];
+      if (!produto) erros.push('produto');
+      if (!variante) erros.push('variação');
+      if (!quantidade) erros.push('quantidade');
+      if (!dataEntrega) erros.push('data de entrega');
+  
+      if (erros.length > 0) {
+        mostrarPopupMensagem(`Por favor, preencha os seguintes campos obrigatórios: ${erros.join(', ')}.`, 'erro');
         return;
       }
   
@@ -2313,9 +2333,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       const produtoObj = produtos.find(p => p.nome === produto);
       novaOP.etapas = produtoObj?.etapas.map(etapa => ({
         processo: etapa.processo,
-        usuario: etapa.processo === 'Corte' && quantidadeOP.disabled ? usuarioLogado?.nome || 'Sistema' : '',
-        quantidade: etapa.processo === 'Corte' && quantidadeOP.disabled ? quantidade : '',
-        lancado: etapa.processo === 'Corte' && quantidadeOP.disabled,
+        usuario: etapa.processo === 'Corte' && document.getElementById('quantidadeOP').disabled ? usuarioLogado?.nome || 'Sistema' : '',
+        quantidade: etapa.processo === 'Corte' && document.getElementById('quantidadeOP').disabled ? quantidade : '',
+        lancado: etapa.processo === 'Corte' && document.getElementById('quantidadeOP').disabled,
         ultimoLancamentoId: null
       })) || [];
   
@@ -2355,10 +2375,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
   
         mostrarPopupMensagem(`Ordem de Produção #${novaOP.numero} salva com sucesso!`, 'sucesso');
-        limparCacheOrdens(); // Limpa o cache
-        window.location.hash = ''; // Volta para a tela inicial
-        await loadOPTable('todas', '', 'status', 'desc', 1, true); // Força recarregar com dados frescos
-        window.dispatchEvent(new HashChangeEvent('hashchange')); // Atualiza a UI
+        limparCacheOrdens();
+        window.location.hash = '';
+        await loadOPTable('todas', '', 'status', 'desc', 1, true);
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
       } catch (error) {
         console.error('[opForm.submit] Erro:', error);
         mostrarPopupMensagem('Erro ao salvar ordem. Tente novamente.', 'erro');
