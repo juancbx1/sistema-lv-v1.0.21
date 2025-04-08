@@ -540,27 +540,34 @@ body.autenticado {
     background: #f8f9fa;
 }
 
+.tabela-op th#sortStatus,
+.tabela-op td:first-child {
+    width: 14%; 
+}
 .tabela-op th#sortNumero,
 .tabela-op td:nth-child(2) {
-    width: 15%; /* Sugestão de proporção */
+    width: 12%;
 }
 
 .tabela-op th#sortProduto,
 .tabela-op td:nth-child(3) {
-    width: 35%; /* Sugestão de proporção */
-    word-break: break-word; /* Quebra de linha para texto longo */
+    width: 32%; 
+    word-break: break-word; 
 }
 
 .tabela-op th#sortVariante,
 .tabela-op td:nth-child(4) {
-    width: 25%; /* Sugestão de proporção */
-    word-break: break-word; /* Quebra de linha para texto longo */
+    width: 30%;
+    word-break: break-word;
 }
 
 .tabela-op th#sortQuantidade,
 .tabela-op td:nth-child(5) {
-    width: 15%; /* Sugestão de proporção */
+    width: 12%; 
 }
+
+
+
 
 
 .tabela-op tbody tr{
@@ -1244,29 +1251,29 @@ body.autenticado {
 }
 
 /* Definir larguras específicas para cada coluna */
-.tabela-corte-pendente th#sortStatus,
+.tabela-corte-pendente th:first-child,
 .tabela-corte-pendente td:first-child {
     width: 8%; /* Ajuste para o status */
 }
 
-.tabela-corte-pendente th#sortNumero,
+.tabela-corte-pendente th:nth-child(2),
 .tabela-corte-pendente td:nth-child(2) {
     width: 10%; /* Ajuste para o número da OP */
 }
 
-.tabela-corte-pendente th#sortProduto,
+.tabela-corte-pendente th:nth-child(3),
 .tabela-corte-pendente td:nth-child(3) {
     width: 35%; /* Ajuste para o produto */
     word-break: break-word; /* Quebra de linha para texto longo */
 }
 
-.tabela-corte-pendente th#sortVariante,
+.tabela-corte-pendente th:nth-child(4),
 .tabela-corte-pendente td:nth-child(4) {
     width: 25%; /* Ajuste para a variação */
     word-break: break-word; /* Quebra de linha para texto longo */
 }
 
-.tabela-corte-pendente th#sortQuantidade,
+.tabela-corte-pendente th:nth-child(5),
 .tabela-corte-pendente td:nth-child(5) {
     width: 10%; /* Ajuste para a quantidade */
 }
@@ -1412,7 +1419,6 @@ body.autenticado {
     width: 12%; /* Ajuste para a OP */
 }
 
-
     .filters-card {
         padding-left: 15px;
         padding-right: 15px;
@@ -1503,7 +1509,6 @@ body.autenticado {
     margin: 10px 20px 10px;
    
 }
-
     .pagination-btn,
     .pagination-current {
         text-align: center;
@@ -1518,26 +1523,33 @@ body.autenticado {
 
     .tabela-op th#sortStatus,
     .tabela-op td:first-child {
-    width: 17%; /* Sugestão de proporção */
+        width: 16%; 
+    }
+    .tabela-op th#sortNumero,
+    .tabela-op td:nth-child(2) {
+        width: 12%;
+    }
+    
+    .tabela-op th#sortProduto,
+    .tabela-op td:nth-child(3) {
+        width: 30%; 
+        word-break: break-word; 
+    }
+    
+    .tabela-op th#sortVariante,
+    .tabela-op td:nth-child(4) {
+        width: 30%;
+        word-break: break-word;
+    }
+    
+    .tabela-op th#sortQuantidade,
+    .tabela-op td:nth-child(5) {
+        width: 12%; 
+    }
+
+
 }
 
-.tabela-op th#sortNumero,
-.tabela-op td:nth-child(2) {
-    width: 20%; /* Sugestão de proporção */
-}
-
-
-.tabela-op th#sortVariante,
-.tabela-op td:nth-child(4) {
-    width: 25%; /* Sugestão de proporção */
-    word-break: break-word; /* Quebra de linha para texto longo */
-}
-
-.tabela-op th#sortQuantidade,
-.tabela-op td:nth-child(5) {
-    width: 18%; /* Sugestão de proporção */
-}
-}
 
 /* Breakpoint para telas menores (max-width: 414px, como iPhone XR) */
 @media (max-width: 414px) {
