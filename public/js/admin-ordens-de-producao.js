@@ -338,6 +338,12 @@ window.limparCacheOrdens = limparCacheOrdens;
 
 async function salvarOrdemDeProducao(ordem) {
   const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('Token de autenticação não encontrado. Faça login novamente.');
+  }
+
+  console.log('[salvarOrdemDeProducao] Dados enviados:', ordem);
+
   const response = await fetch('/api/ordens-de-producao', {
     method: 'POST',
     headers: {
@@ -346,13 +352,16 @@ async function salvarOrdemDeProducao(ordem) {
     },
     body: JSON.stringify(ordem),
   });
+
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(`Erro ao salvar ordem de produção: ${error.error}`);
+    const errorText = await response.text();
+    console.error('[salvarOrdemDeProducao] Resposta do servidor:', errorText);
+    const error = await response.json().catch(() => ({ error: 'Erro desconhecido do servidor' }));
+    throw new Error(`Erro ao salvar ordem de produção: ${error.error || 'Erro interno no servidor'}`);
   }
+
   return await response.json();
 }
-
 
 
 async function atualizarOrdemDeProducao(ordem) {
@@ -468,18 +477,29 @@ async function loadVariantesSelects(produtoNome, produtos = null) {
 
 async function getNextOPNumber() {
   try {
-    const ordensData = await obterOrdensDeProducao(1, true); // Busca todas as OPs
-    const ordens = ordensData.rows; // Acessa .rows
-    const numeros = ordens.map(op => parseInt(op.numero)).filter(n => !isNaN(n));
-    const maxNumero = numeros.length > 0 ? Math.max(...numeros) : 0;
+    const token = localStorage.getItem('token');
+    // Usa o novo parâmetro getNextNumber para buscar todos os números
+    const timestamp = Date.now();
+    const response = await fetch(`/api/ordens-de-producao?getNextNumber=true&_=${timestamp}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+      cache: 'no-store',
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Erro ao carregar números de OPs: ${errorText}`);
+    }
+
+    const numeros = await response.json(); // Recebe apenas os números
+    const parsedNumeros = numeros.map(n => parseInt(n)).filter(n => !isNaN(n));
+    const maxNumero = parsedNumeros.length > 0 ? Math.max(...parsedNumeros) : 0;
     const nextNumero = (maxNumero + 1).toString();
+    console.log('[getNextOPNumber] Próximo número de OP gerado:', nextNumero);
     return nextNumero;
   } catch (error) {
     console.error('[getNextOPNumber] Erro ao calcular próximo número de OP:', error);
     throw error;
   }
 }
-
 function setCurrentDate() {
   const dataEntrega = document.getElementById('dataEntregaOP');
   if (dataEntrega) {
@@ -2297,7 +2317,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (opForm) {
     opForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const numero = document.getElementById('numeroOP').value.trim();
+      let numero = document.getElementById('numeroOP').value.trim();
       const produto = document.getElementById('produtoOP').value;
       const varianteSelect = document.querySelector('.variantes-selects select');
       const variante = varianteSelect ? varianteSelect.value : '';
@@ -2308,8 +2328,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Validação dos campos obrigatórios
       let erros = [];
       if (!produto) erros.push('produto');
-      if (!variante) erros.push('variação');
-      if (!quantidade) erros.push('quantidade');
+      if (!variante && document.querySelector('.variantes-selects select')) erros.push('variação');
+      if (!quantidade || quantidade <= 0) erros.push('quantidade');
       if (!dataEntrega) erros.push('data de entrega');
   
       if (erros.length > 0) {
@@ -2323,7 +2343,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         variante: variante || null,
         quantidade,
         data_entrega: dataEntrega,
-        observacoes,
+        observacoes: observacoes || '',
         status: 'em-aberto',
         edit_id: generateUniqueId(),
         etapas: []
@@ -2331,13 +2351,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   
       const produtos = await obterProdutos();
       const produtoObj = produtos.find(p => p.nome === produto);
-      novaOP.etapas = produtoObj?.etapas.map(etapa => ({
+      if (!produtoObj) {
+        mostrarPopupMensagem('Produto não encontrado. Verifique a lista de produtos.', 'erro');
+        return;
+      }
+  
+      novaOP.etapas = produtoObj.etapas?.map(etapa => ({
         processo: etapa.processo,
-        usuario: etapa.processo === 'Corte' && document.getElementById('quantidadeOP').disabled ? usuarioLogado?.nome || 'Sistema' : '',
-        quantidade: etapa.processo === 'Corte' && document.getElementById('quantidadeOP').disabled ? quantidade : '',
+        usuario: etapa.processo === 'Corte' && document.getElementById('quantidadeOP').disabled ? (usuarioLogado?.nome || 'Sistema') : '',
+        quantidade: etapa.processo === 'Corte' && document.getElementById('quantidadeOP').disabled ? quantidade : 0,
         lancado: etapa.processo === 'Corte' && document.getElementById('quantidadeOP').disabled,
         ultimoLancamentoId: null
       })) || [];
+  
+      console.log('[opForm.submit] Nova OP a ser salva:', novaOP);
   
       const foiCortadoDiv = opForm.querySelector('.foi-cortado');
       const foiCortadoInput = foiCortadoDiv?.querySelector('input');
@@ -2380,11 +2407,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         await loadOPTable('todas', '', 'status', 'desc', 1, true);
         window.dispatchEvent(new HashChangeEvent('hashchange'));
       } catch (error) {
-        console.error('[opForm.submit] Erro:', error);
-        mostrarPopupMensagem('Erro ao salvar ordem. Tente novamente.', 'erro');
+        console.error('[opForm.submit] Erro detalhado:', error.message);
+        if (error.message.includes('Número da OP já existe')) {
+          mostrarPopupMensagem('O número da Ordem de Produção já existe. Gere um novo número e tente novamente.', 'erro');
+          const novoNumero = await getNextOPNumber();
+          document.getElementById('numeroOP').value = novoNumero;
+          novaOP.numero = novoNumero;
+          console.log('[opForm.submit] Novo número gerado após erro:', novoNumero);
+        } else {
+          mostrarPopupMensagem(`Erro ao salvar ordem de produção: ${error.message}. Verifique o console para mais detalhes.`, 'erro');
+        }
       }
     });
   }
+
 
   if (produtoOP) {
     const produtos = await obterProdutos();
