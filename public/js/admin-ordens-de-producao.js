@@ -12,6 +12,8 @@ let permissoes = [];
 let usuarioLogado = null;
 const usedIds = new Set();
 let isLoadingAbaContent = false; 
+let isEditingQuantidade = false;
+
 
 
 function mostrarPopupMensagem(mensagem, tipo = 'erro') {
@@ -228,6 +230,9 @@ export function limparCacheProdutos() {
   localStorage.removeItem('produtosCacheData');
   console.log('[obterProdutos] Cache de produtos limpo');
 }
+
+window.limparCacheProdutos = limparCacheProdutos;
+
 
 function ordenarOPs(ops, criterio, ordem = 'asc') {
   return ops.sort((a, b) => {
@@ -612,12 +617,12 @@ async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = '
           usedIds.add(op.edit_id);
         }
         const tr = document.createElement('tr');
-        tr.dataset.index = index; // Usa index relativo à página atual
-        tr.dataset.numero = op.numero;
+        tr.dataset.index = index; // Mantém o index para referência local
+        tr.dataset.numero = op.numero || `OP-${op.id}`; // Fallback caso numero esteja ausente
         tr.style.cursor = permissoes.includes('editar-op') ? 'pointer' : 'default';
         tr.innerHTML = `
           <td><span class="status-bolinha status-${op.status} ${op.status === 'produzindo' ? 'blink' : ''}"></span></td>
-          <td>${op.numero}</td>
+          <td>${op.numero || 'N/A'}</td>
           <td>${op.produto || 'N/A'}</td>
           <td>${op.variante || '-'}</td>
           <td>${op.quantidade || 0}</td>
@@ -676,12 +681,24 @@ async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = '
 function handleOPTableClick(e) {
   const tr = e.target.closest('tr');
   if (tr) {
-    const index = parseInt(tr.dataset.index);
-    const op = filteredOPsGlobal[index];
-    if (op) {
-      window.location.hash = `#editar/${op.edit_id}`;
+    const numero = tr.dataset.numero; // Usa o número da OP diretamente da linha
+    if (numero) {
+      // Busca a OP correta em todas as ordens, independentemente da página
+      obterOrdensDeProducao(1, true).then(data => {
+        const ordensDeProducao = data.rows;
+        const op = ordensDeProducao.find(o => o.numero === numero);
+        if (op) {
+          window.location.hash = `#editar/${op.edit_id}`;
+        } else {
+          console.error('[handleOPTableClick] Ordem não encontrada para o número:', numero);
+          mostrarPopupMensagem('Ordem de Produção não encontrada.', 'erro');
+        }
+      }).catch(error => {
+        console.error('[handleOPTableClick] Erro ao buscar ordens:', error);
+        mostrarPopupMensagem('Erro ao carregar ordem. Tente novamente.', 'erro');
+      });
     } else {
-      console.error('[handleOPTableClick] Ordem não encontrada para o índice:', index);
+      console.error('[handleOPTableClick] Número da OP não encontrado na linha.');
     }
   }
 }
@@ -713,8 +730,22 @@ async function updateFinalizarButtonState(op, produtos) {
   if (op.etapas && Array.isArray(op.etapas) && op.etapas.length > 0) {
     for (const etapa of op.etapas) {
       const tipoUsuario = await getTipoUsuarioPorProcesso(etapa.processo, op.produto, produtos);
+      // Exceção para a etapa "Corte": não exige quantidade
       const exigeQuantidade = tipoUsuario === 'costureira' || tipoUsuario === 'tiktik';
-      const etapaCompleta = etapa.usuario && (!exigeQuantidade || (etapa.lancado && etapa.quantidade > 0));
+      const isCorte = etapa.processo === 'Corte';
+      const etapaCompleta = etapa.usuario && (isCorte ? etapa.lancado : (!exigeQuantidade || (etapa.lancado && etapa.quantidade > 0)));
+      
+      // Log para depuração
+      console.log('[updateFinalizarButtonState] Etapa:', etapa.processo, {
+        usuario: etapa.usuario,
+        lancado: etapa.lancado,
+        quantidade: etapa.quantidade,
+        tipoUsuario,
+        exigeQuantidade,
+        isCorte,
+        etapaCompleta
+      });
+
       if (!etapaCompleta) {
         todasEtapasCompletas = false;
         break;
@@ -725,6 +756,7 @@ async function updateFinalizarButtonState(op, produtos) {
   }
 
   const podeFinalizar = camposPrincipaisPreenchidos && todasEtapasCompletas && op.status !== 'finalizado' && op.status !== 'cancelada';
+  console.log('[updateFinalizarButtonState] Pode finalizar:', podeFinalizar);
   finalizarBtn.disabled = !podeFinalizar;
   finalizarBtn.style.backgroundColor = podeFinalizar ? '#4CAF50' : '#ccc';
 }
@@ -769,6 +801,8 @@ async function loadEtapasEdit(op, skipReload = false) {
     console.error('[loadEtapasEdit] Etapas não encontradas ou inválidas na OP:', op);
     return;
   }
+
+  console.log('[loadEtapasEdit] Etapas carregadas da OP:', op.etapas);
 
   if (!skipReload) {
     etapasContainer.innerHTML = '<div class="spinner">Carregando etapas...</div>';
@@ -1098,7 +1132,7 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row, produtos)
     quantidadeDiv.style.alignItems = 'center';
     row.appendChild(quantidadeDiv);
   } else {
-    quantidadeDiv.innerHTML = ''; // Limpa apenas o conteúdo interno, mas mantém o elemento
+    quantidadeDiv.innerHTML = '';
   }
 
   const quantidadeInput = document.createElement('input');
@@ -1107,25 +1141,21 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row, produtos)
   quantidadeInput.value = etapa.quantidade || '';
   quantidadeInput.placeholder = 'Qtde';
   quantidadeInput.className = 'quantidade-input';
-  quantidadeInput.disabled = !isEditable || etapa.lancado || !usuarioSelect.value;
 
   let lancarBtn = quantidadeDiv.querySelector('.botao-lancar') || document.createElement('button');
   lancarBtn.className = 'botao-lancar';
   lancarBtn.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
   const podeLancar = permissoes.includes('lancar-producao');
-  lancarBtn.disabled = !podeLancar || !usuarioSelect.value || !quantidadeInput.value || parseInt(quantidadeInput.value) <= 0 || !isEditable || etapa.lancado;
-
-  if (!podeLancar) {
-    lancarBtn.style.opacity = '0.5';
-    lancarBtn.style.cursor = 'not-allowed';
-  }
 
   quantidadeDiv.appendChild(quantidadeInput);
   quantidadeDiv.appendChild(lancarBtn);
 
-  const updateLancarBtn = () => {
+  const updateLancarBtn = async () => {
+    const etapaAtualIndex = await determinarEtapaAtual(op, produtos);
+    const isCurrentEtapa = op.etapas.indexOf(etapa) === etapaAtualIndex;
+    quantidadeInput.disabled = !isCurrentEtapa || etapa.lancado || !usuarioSelect.value;
+    lancarBtn.disabled = !podeLancar || !usuarioSelect.value || !quantidadeInput.value || parseInt(quantidadeInput.value) <= 0 || !isCurrentEtapa || etapa.lancado;
     lancarBtn.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
-    lancarBtn.disabled = !podeLancar || !usuarioSelect.value || !quantidadeInput.value || parseInt(quantidadeInput.value) <= 0 || !isEditable || etapa.lancado;
     lancarBtn.dataset.etapaIndex = op.etapas.indexOf(etapa);
 
     if (!podeLancar) {
@@ -1133,7 +1163,7 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row, produtos)
       lancarBtn.style.cursor = 'not-allowed';
     }
 
-    lancarBtn.removeEventListener('click', lancarBtnClickHandler); // Remove handlers antigos
+    lancarBtn.removeEventListener('click', lancarBtnClickHandler);
     lancarBtn.addEventListener('click', lancarBtnClickHandler);
   };
 
@@ -1180,7 +1210,6 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row, produtos)
           lancarBtn.textContent = 'Lançado';
           lancarBtn.disabled = true;
           lancarBtn.classList.add('lancado');
-          // Não chamar loadEtapasEdit aqui, apenas atualizar visualmente
           await atualizarVisualEtapas(opLocal, produtos);
           await updateFinalizarButtonState(opLocal, produtos);
           mostrarPopupMensagem('Produção lançada com sucesso!', 'sucesso');
@@ -1204,31 +1233,39 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row, produtos)
     if (etapa.usuario === novoUsuario) return;
     etapa.usuario = novoUsuario;
     await saveOPChanges(op);
-    quantidadeInput.disabled = !usuarioSelect.value || !isEditable || etapa.lancado;
+    await updateLancarBtn(); // Atualiza o estado do input após mudar o usuário
     if (!quantidadeInput.disabled) quantidadeInput.focus();
-    else quantidadeInput.value = etapa.quantidade || '';
-    updateLancarBtn();
     await atualizarVisualEtapas(op, produtos);
     await updateFinalizarButtonState(op, produtos);
   });
 
   const handleInputChange = async () => {
-    if (etapa.lancado || !isEditable || !usuarioSelect.value) {
+    console.log('[handleInputChange] Início - Etapa:', etapa.processo, 'Valor atual do input:', quantidadeInput.value, 'Estado da etapa:', etapa);
+    const etapaAtualIndex = await determinarEtapaAtual(op, produtos);
+    const isCurrentEtapa = op.etapas.indexOf(etapa) === etapaAtualIndex;
+    if (etapa.lancado || !isCurrentEtapa) {
+      console.log('[handleInputChange] Etapa lançada ou não é a atual - Mantendo valor:', etapa.quantidade || '');
       quantidadeInput.value = etapa.quantidade || '';
       return;
     }
     const novaQuantidade = parseInt(quantidadeInput.value) || 0;
-    etapa.quantidade = novaQuantidade;
-    quantidadeInput.value = novaQuantidade > 0 ? novaQuantidade : '';
-    await saveOPChanges(op);
-    updateLancarBtn();
-    await atualizarVisualEtapas(op, produtos);
+    console.log('[handleInputChange] Nova quantidade digitada:', novaQuantidade);
+    if (novaQuantidade !== etapa.quantidade) {
+      etapa.quantidade = novaQuantidade;
+      await saveOPChanges(op);
+      console.log('[handleInputChange] Após salvar - Etapa atualizada:', etapa);
+      await updateLancarBtn();
+      await atualizarVisualEtapas(op, produtos);
+    }
   };
 
-  const debouncedHandleInputChange = debounce(handleInputChange, 500);
-  quantidadeInput.addEventListener('input', debouncedHandleInputChange);
-  handleInputChange();
-  updateLancarBtn();
+  const debouncedHandleInputChange = debounce(handleInputChange, 200);
+  quantidadeInput.addEventListener('input', (e) => {
+    console.log('[quantidadeInput:input] Evento disparado - Valor digitado:', e.target.value, 'Timestamp:', Date.now());
+    debouncedHandleInputChange();
+  });
+
+  updateLancarBtn(); // Inicializa o estado do botão e input
 
   return quantidadeDiv;
 }
@@ -1424,8 +1461,8 @@ async function determinarEtapaAtual(op, produtos) {
 }
 
 async function atualizarVisualEtapas(op, produtos) {
-  if (!op || !op.etapas) {
-    console.error('[atualizarVisualEtapas] OP ou etapas não definidas:', op);
+  if (isEditingQuantidade) {
+    console.log('[atualizarVisualEtapas] Ignorando atualização durante edição de quantidade');
     return;
   }
 
@@ -1584,41 +1621,69 @@ async function toggleView() {
   const hash = window.location.hash;
 
   if (hash.startsWith('#editar/') && permissoes.includes('editar-op')) {
-    const ordensData = await obterOrdensDeProducao(1, true);
-    const ordensDeProducao = ordensData.rows;
-    const editId = hash.split('/')[1];
-    const op = ordensDeProducao.find(o => o.edit_id === editId);
-    if (!op) {
-      mostrarPopupMensagem('Ordem de Produção não encontrada.', 'erro');
+    try {
+      const editId = hash.split('/')[1];
+      if (!editId) {
+        mostrarPopupMensagem('ID da Ordem de Produção não encontrado na URL.', 'erro');
+        window.location.hash = '';
+        return;
+      }
+
+      limparCacheProdutos();
+      const ordensData = await obterOrdensDeProducao(1, true);
+      const ordensDeProducao = ordensData.rows || [];
+      if (!Array.isArray(ordensDeProducao)) {
+        throw new Error('Dados de ordens inválidos retornados pela API.');
+      }
+
+      const op = ordensDeProducao.find(o => o.edit_id === editId) || ordensDeProducao.find(o => o.numero === editId);
+      if (!op) {
+        mostrarPopupMensagem('Ordem de Produção não encontrada.', 'erro');
+        window.location.hash = '';
+        return;
+      }
+
+      const editProdutoOP = document.getElementById('editProdutoOP');
+      const editQuantidadeInput = document.getElementById('editQuantidadeOP');
+      const editDataEntregaInput = document.getElementById('editDataEntregaOP');
+      const editVarianteContainer = document.getElementById('editVarianteContainer');
+      const editVarianteInput = document.getElementById('editVarianteOP');
+      const opNumeroElement = document.getElementById('opNumero');
+
+      if (!editProdutoOP || !editQuantidadeInput || !editDataEntregaInput || !editVarianteContainer || !editVarianteInput || !opNumeroElement) {
+        throw new Error('Elementos da tela de edição não encontrados no DOM.');
+      }
+
+      editProdutoOP.value = op.produto || '';
+      editQuantidadeInput.value = op.quantidade || '';
+      editQuantidadeInput.disabled = true;
+      editQuantidadeInput.style.backgroundColor = '#d3d3d3';
+      const dataEntrega = op.data_entrega ? new Date(op.data_entrega).toISOString().split('T')[0] : '';
+      editDataEntregaInput.value = dataEntrega;
+      editDataEntregaInput.readOnly = true;
+      editDataEntregaInput.style.backgroundColor = '#d3d3d3';
+
+      if (op.variante) {
+        const variantes = op.variante.split(' | ').join(', ');
+        editVarianteInput.value = variantes;
+        editVarianteContainer.style.display = 'block';
+        editVarianteInput.style.width = '100%';
+        editVarianteInput.style.boxSizing = 'border-box';
+      } else {
+        editVarianteContainer.style.display = 'none';
+      }
+
+      opListView.style.display = 'none';
+      opFormView.style.display = 'none';
+      opEditView.style.display = 'block';
+      opNumeroElement.textContent = `OP n°: ${op.numero}`;
+
+      await loadEtapasEdit(op, true);
+    } catch (error) {
+      console.error('[toggleView] Erro ao carregar tela de edição:', error);
+      mostrarPopupMensagem(`Erro ao carregar detalhes da OP: ${error.message}. Tente novamente.`, 'erro');
       window.location.hash = '';
-      return;
     }
-    document.getElementById('editProdutoOP').value = op.produto || '';
-    const editQuantidadeInput = document.getElementById('editQuantidadeOP');
-    editQuantidadeInput.value = op.quantidade || '';
-    editQuantidadeInput.disabled = true;
-    editQuantidadeInput.style.backgroundColor = '#d3d3d3';
-    const editDataEntregaInput = document.getElementById('editDataEntregaOP');
-    const dataEntrega = op.data_entrega ? new Date(op.data_entrega).toISOString().split('T')[0] : '';
-    editDataEntregaInput.value = dataEntrega;
-    editDataEntregaInput.readOnly = true;
-    editDataEntregaInput.style.backgroundColor = '#d3d3d3';
-    const editVarianteContainer = document.getElementById('editVarianteContainer');
-    const editVarianteInput = document.getElementById('editVarianteOP');
-    if (op.variante) {
-      const variantes = op.variante.split(' | ').join(', ');
-      editVarianteInput.value = variantes;
-      editVarianteContainer.style.display = 'block';
-      editVarianteInput.style.width = '100%';
-      editVarianteInput.style.boxSizing = 'border-box';
-    } else {
-      editVarianteContainer.style.display = 'none';
-    }
-    opListView.style.display = 'none';
-    opFormView.style.display = 'none';
-    opEditView.style.display = 'block';
-    document.getElementById('opNumero').textContent = `OP n°: ${op.numero}`;
-    await loadEtapasEdit(op, true);
   } else if (hash === '#adicionar' && permissoes.includes('criar-op')) {
     opListView.style.display = 'none';
     opFormView.style.display = 'block';
@@ -1653,7 +1718,7 @@ async function toggleView() {
     opFormView.style.display = 'none';
     opEditView.style.display = 'none';
     acessocortesView.style.display = 'block';
-    await loadAcessocortes(); // Chama apenas uma vez
+    await loadAcessocortes();
   } else {
     opListView.style.display = 'block';
     opFormView.style.display = 'none';
@@ -1664,8 +1729,9 @@ async function toggleView() {
       statusFilter.querySelectorAll('.status-btn').forEach(btn => btn.classList.remove('active'));
       todasBtn.classList.add('active');
     }
-    // Remove a chamada redundante de loadOPTable aqui
-    console.log('[toggleView] Tela inicial carregada');
+    // Força o recarregamento da tabela ao voltar para a página principal
+    await loadOPTable('todas', '', 'status', 'desc', 1, true, null);
+    console.log('[toggleView] Tela inicial carregada com tabela atualizada');
   }
 }
 
@@ -2435,18 +2501,23 @@ document.addEventListener('DOMContentLoaded', async () => {
       const ordensData = await obterOrdensDeProducao(1, true);
       const ordensDeProducao = ordensData.rows;
       const op = ordensDeProducao.find(o => o.edit_id === editId);
-
+  
       if (op && !finalizarOP.disabled) {
         op.status = 'finalizado';
         const agora = new Date();
         agora.setHours(agora.getHours() - 3);
         const dataFinalFormatada = agora.toISOString().replace('T', ' ').substring(0, 19);
         op.data_final = dataFinalFormatada;
-
+  
         await saveOPChanges(op);
         mostrarPopupMensagem(`Ordem de Produção #${op.numero} finalizada com sucesso!`, 'sucesso');
+  
+        // Limpa o cache de ordens para garantir dados atualizados
+        limparCacheOrdens();
+  
+        // Redireciona para a página principal e força o recarregamento da tabela
         window.location.hash = '';
-        await toggleView();
+        await loadOPTable('todas', '', 'status', 'desc', 1, true, null); // Força atualização com filtro "todas"
       }
     });
   }
@@ -2494,3 +2565,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 }); 
+
+//alguns bugs como o input qtde que fica limpando o dado inserido, de resto funciona bem
