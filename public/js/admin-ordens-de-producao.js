@@ -720,14 +720,39 @@ async function verificarEtapasEStatus(op, produtos) {
 }
 
 async function saveOPChanges(op) {
-  await atualizarOrdemDeProducao(op);
+  const token = localStorage.getItem('token');
+  const response = await fetch('/api/ordens-de-producao', {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      edit_id: op.edit_id,
+      numero: op.numero,
+      produto: op.produto,
+      variante: op.variante,
+      quantidade: op.quantidade,
+      data_entrega: op.data_entrega,
+      observacoes: op.observacoes,
+      status: op.status,
+      etapas: op.etapas,
+      data_final: op.data_final
+    }),
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`Erro ao atualizar ordem de produção: ${error.error}`);
+  }
   console.log(`[saveOPChanges] Ordem de Produção #${op.numero} atualizada no banco de dados`);
+  return await response.json();
 }
 
 window.saveOPChanges = saveOPChanges; // Torna a função global
 
 async function loadEtapasEdit(op, skipReload = false) {
-  console.log(`[loadEtapasEdit] Iniciando carregamento das etapas para OP: ${op ? op.numero : 'undefined'}`);
+  console.log(`[loadEtapasEdit] Iniciando carregamento das etapas para OP: ${op ? op.numero : 'undefined'} com skipReload: ${skipReload}`);
+
   const etapasContainer = document.getElementById('etapasContainer');
   const finalizarBtn = document.getElementById('finalizarOP');
 
@@ -741,15 +766,49 @@ async function loadEtapasEdit(op, skipReload = false) {
     return;
   }
 
+  // Limpar cache antes de buscar dados
+  limparCacheOrdens();
+  limparCacheProdutos();
+  limparCacheCortes();
+
   etapasContainer.innerHTML = '<div class="spinner">Carregando etapas...</div>';
 
   const produtos = await obterProdutos();
   const responseUsuarios = await fetch('/api/usuarios', {
     headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+    cache: 'no-store'
   });
   const usuarios = await responseUsuarios.json();
 
-  console.log('[loadEtapasEdit] Etapas carregadas da OP:', op.etapas);
+  // Buscar lançamentos diretamente do banco com timestamp para evitar cache
+  const token = localStorage.getItem('token');
+  const timestamp = Date.now();
+  const responseLancamentos = await fetch(`/api/producoes?op_numero=${op.numero}&_=${timestamp}`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+    cache: 'no-store'
+  });
+
+  let lancamentos = [];
+  if (responseLancamentos.ok) {
+    lancamentos = await responseLancamentos.json();
+    console.log('[loadEtapasEdit] Lançamentos buscados do servidor:', lancamentos);
+  } else {
+    console.warn('[loadEtapasEdit] Falha ao buscar lançamentos, usando etapas originais:', op.etapas);
+  }
+
+  // Sincronizar etapas com os lançamentos mais recentes
+  op.etapas = op.etapas.map(etapa => {
+    const lancamento = lancamentos.find(l => l.etapa_index === op.etapas.indexOf(etapa) && l.processo === etapa.processo);
+    return {
+      ...etapa,
+      usuario: lancamento ? lancamento.funcionario : etapa.usuario,
+      quantidade: lancamento ? lancamento.quantidade : etapa.quantidade || 0,
+      lancado: lancamento ? true : etapa.lancado || false,
+      ultimoLancamentoId: lancamento ? lancamento.id : etapa.ultimoLancamentoId
+    };
+  });
+
+  console.log('[loadEtapasEdit] Etapas sincronizadas da OP após atualização:', op.etapas);
 
   const todasEtapasCompletas = await verificarEtapasEStatus(op, produtos);
   if (op.status === 'finalizado' && !todasEtapasCompletas) {
@@ -760,6 +819,7 @@ async function loadEtapasEdit(op, skipReload = false) {
   const etapaAtualIndex = await determinarEtapaAtual(op, produtos);
   console.log(`[loadEtapasEdit] Etapa atual index calculada: ${etapaAtualIndex}`);
 
+  // Resto do código permanece igual...
   const tiposUsuarios = await Promise.all(
     op.etapas.map(async (etapa) => ({
       processo: etapa.processo,
@@ -871,21 +931,21 @@ async function loadEtapasEdit(op, skipReload = false) {
           row.appendChild(quantidadeDiv);
         }
 
-    await atualizarVisualEtapas(op, produtos);
-    await updateFinalizarButtonState(op, produtos);
-  }, 300);
-  usuarioSelect.addEventListener('change', usuarioSelect.changeHandler);
-  row.appendChild(usuarioSelect);
+        await atualizarVisualEtapas(op, produtos);
+        await updateFinalizarButtonState(op, produtos);
+      }, 300);
+      usuarioSelect.addEventListener('change', usuarioSelect.changeHandler);
+      row.appendChild(usuarioSelect);
 
-  if (exigeQuantidade && etapa.usuario) {
-    const quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, index === etapaAtualIndex, row, produtos);
-    row.appendChild(quantidadeDiv);
+      if (exigeQuantidade && etapa.usuario) {
+        const quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, index === etapaAtualIndex, row, produtos);
+        row.appendChild(quantidadeDiv);
+      }
+    }
+
+    fragment.appendChild(row);
   }
-}
 
-fragment.appendChild(row);
-
-  }
   etapasContainer.appendChild(fragment);
   await atualizarVisualEtapas(op, produtos);
   await updateFinalizarButtonState(op, produtos);
@@ -945,6 +1005,7 @@ async function salvarProducao(op, etapa, etapaIndex, produtos) {
 
     if (!responseProducoes.ok) {
       const error = await responseProducoes.json();
+
       if (error.details === 'jwt expired') {
         mostrarPopupMensagem('Sua sessão expirou. Por favor, faça login novamente.', 'erro');
         localStorage.removeItem('token');
@@ -963,6 +1024,15 @@ async function salvarProducao(op, etapa, etapaIndex, produtos) {
     }
 
     const producao = await responseProducoes.json();
+    // Atualizar etapa no op.etapas
+    op.etapas[etapaIndex] = {
+      ...etapa,
+      usuario: dados.funcionario,
+      quantidade: dados.quantidade,
+      lancado: true,
+      ultimoLancamentoId: producao.id
+    };
+    await saveOPChanges(op); // Sincronizar com o banco
     return producao.id;
   } catch (error) {
     console.error('[salvarProducao] Erro:', error);
@@ -977,10 +1047,9 @@ async function lancarEtapa(op, etapaIndex, quantidade, produtos) {
   if (novoId) {
     etapa.ultimoLancamentoId = novoId;
     etapa.lancado = true;
-    await saveOPChanges(op);
+    // Não precisamos de saveOPChanges aqui, pois já foi chamado em salvarProducao
     await updateFinalizarButtonState(op, produtos);
 
-    // Atualiza visualmente a etapa atual sem remover os campos
     const row = document.querySelector(`.etapa-row[data-index="${etapaIndex}"]`);
     if (row) {
       const quantidadeDiv = row.querySelector('.quantidade-lancar');
@@ -989,11 +1058,11 @@ async function lancarEtapa(op, etapaIndex, quantidade, produtos) {
         const lancarBtn = quantidadeDiv.querySelector('.botao-lancar');
 
         if (quantidadeInput && lancarBtn) {
-          quantidadeInput.disabled = true; // Desabilita o input de quantidade
-          quantidadeInput.style.backgroundColor = '#d3d3d3'; // Deixa cinza para indicar que está concluído
-          lancarBtn.textContent = 'Lançado'; // Muda o texto para "Lançado"
-          lancarBtn.disabled = true; // Desabilita o botão
-          lancarBtn.classList.add('lancado'); // Adiciona classe para estilização
+          quantidadeInput.disabled = true;
+          quantidadeInput.style.backgroundColor = '#d3d3d3';
+          lancarBtn.textContent = 'Lançado';
+          lancarBtn.disabled = true;
+          lancarBtn.classList.add('lancado');
         }
       }
     }
@@ -2426,8 +2495,3 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 }); 
-
-//bug campo qtde limpando sozinho resolvido
-// bug segunda pagina resolvido parcialmente
-// sempre que entro em uma OP ele busca dados de outra op
-// ele esta permitindo lancar 2x algumas OPs

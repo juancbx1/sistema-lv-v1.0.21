@@ -56,42 +56,79 @@ export default async function handler(req, res) {
       }
     
       console.log('[api/producoes] Data recebida (antes da conversão):', data);
-      const parsedDate = data;
-
+    
+      // Garantir que a data inclua o fuso horário -03:00 (São Paulo)
+      let parsedDate;
+      try {
+        // Verifica se a data já tem o fuso horário correto
+        if (!data.includes('-03')) {
+          // Se não tiver fuso, assume que é horário local e adiciona -03:00
+          parsedDate = `${data}-03:00`;
+        } else {
+          parsedDate = data; // Mantém como está se já tiver -03
+        }
+        console.log('[api/producoes] Data ajustada para o banco:', parsedDate);
+    
+        // Validação simples para garantir formato correto
+        const dateTest = new Date(parsedDate);
+        if (isNaN(dateTest.getTime())) {
+          throw new Error('Formato de data inválido');
+        }
+      } catch (error) {
+        console.error('[api/producoes] Erro ao processar data:', error.message);
+        return res.status(400).json({ error: 'Formato de data inválido' });
+      }
+    
+      // Verificar duplicatas usando a data completa com fuso horário
       const checkDuplicate = await pool.query(
         `SELECT * FROM producoes 
          WHERE op_numero = $1 
          AND etapa_index = $2 
          AND funcionario = $3 
          AND processo = $4 
-         AND DATE_TRUNC('day', data) = $5::date`,
-        [opNumero, etapaIndex, funcionario, processo, parsedDate.split('T')[0]]
+         AND data = $5`,
+        [opNumero, etapaIndex, funcionario, processo, parsedDate]
       );
-
+    
       if (checkDuplicate.rows.length > 0) {
         return res.status(409).json({ error: 'Já existe um lançamento para esta OP, etapa, funcionário e data.' });
       }
-
+    
       const result = await pool.query(
         `INSERT INTO producoes (id, op_numero, etapa_index, processo, produto, variacao, maquina, quantidade, funcionario, data, lancado_por)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
         [id, opNumero, etapaIndex, processo, produto, variacao, maquina, quantidade, funcionario, parsedDate, lancadoPor]
       );
     
+      console.log('[api/producoes] Lançamento salvo:', result.rows[0]);
       res.status(201).json({ ...result.rows[0], id });
 
     } else if (method === 'GET') {
-      console.log('[api/producoes] Processando GET...');
-      if (!usuarioLogado.permissoes.includes('acesso-gerenciar-producao') && !usuarioLogado.tipos.includes('costureira')) {
-        return res.status(403).json({ error: 'Permissão negada' });
-      }
+  console.log('[api/producoes] Processando GET...', req.query);
+  if (!usuarioLogado.permissoes.includes('acesso-gerenciar-producao') && !usuarioLogado.tipos.includes('costureira')) {
+    return res.status(403).json({ error: 'Permissão negada' });
+  }
 
-      const query = usuarioLogado.tipos.includes('costureira') && !usuarioLogado.permissoes.includes('acesso-gerenciar-producao')
-        ? 'SELECT * FROM producoes WHERE funcionario = $1 ORDER BY data DESC'
-        : 'SELECT * FROM producoes ORDER BY data DESC';
-      const result = await pool.query(query, usuarioLogado.tipos.includes('costureira') && !usuarioLogado.permissoes.includes('acesso-gerenciar-producao') ? [usuarioLogado.nome] : []);
-      console.log('[api/producoes] Resultado da query:', result.rows);
-      res.status(200).json(result.rows);
+  let query;
+  let params = [];
+
+  const opNumero = req.query.op_numero;
+  console.log('[api/producoes] op_numero recebido:', opNumero);
+
+  if (opNumero) {
+    query = 'SELECT * FROM producoes WHERE op_numero = $1 ORDER BY data DESC';
+    params = [opNumero];
+  } else if (usuarioLogado.tipos.includes('costureira') && !usuarioLogado.permissoes.includes('acesso-gerenciar-producao')) {
+    query = 'SELECT * FROM producoes WHERE funcionario = $1 ORDER BY data DESC';
+    params = [usuarioLogado.nome];
+  } else {
+    query = 'SELECT * FROM producoes ORDER BY data DESC';
+    params = [];
+  }
+
+  const result = await pool.query(query, params);
+  console.log('[api/producoes] Resultado da query para op_numero', opNumero || 'todos', ':', result.rows);
+  res.status(200).json(result.rows);
 
     } else if (method === 'PUT') {
       console.log('[api/producoes] Processando PUT...');
