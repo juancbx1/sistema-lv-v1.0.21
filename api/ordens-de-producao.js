@@ -24,7 +24,8 @@ export default async function handler(req, res) {
 
     if (method === 'GET') {
       const fetchAll = query.all === 'true';
-      const getNextNumber = query.getNextNumber === 'true'; // Novo parâmetro para getNextOPNumber
+      const getNextNumber = query.getNextNumber === 'true';
+      const noStatusFilter = query.noStatusFilter === 'true';
       const page = parseInt(query.page) || 1;
       const limit = parseInt(query.limit) || 10;
       const offset = (page - 1) * limit;
@@ -36,26 +37,31 @@ export default async function handler(req, res) {
       let totalParams = [];
 
       if (getNextNumber) {
-        // Retorna apenas os números de todas as OPs para getNextOPNumber
         queryText = `
           SELECT numero FROM ordens_de_producao 
           ORDER BY numero DESC
         `;
         const result = await pool.query(queryText);
         res.status(200).json(result.rows.map(row => row.numero));
+      } else if (fetchAll && noStatusFilter) {
+        // Buscar todas as OPs sem filtro de status
+        queryText = `
+          SELECT * FROM ordens_de_producao 
+          ORDER BY CAST(numero AS INTEGER) DESC
+        `;
       } else if (fetchAll) {
-        // Restaura o filtro original para 'todas'
+        // Filtro para "em-aberto" e "produzindo"
         queryText = `
           SELECT * FROM ordens_de_producao 
           WHERE status IN ('em-aberto', 'produzindo') 
-          ORDER BY numero DESC
+          ORDER BY CAST(numero AS INTEGER) DESC
         `;
         totalQuery += " WHERE status IN ('em-aberto', 'produzindo')";
       } else if (statusFilter) {
         queryText = `
           SELECT * FROM ordens_de_producao 
           WHERE status = $1 
-          ORDER BY numero DESC 
+          ORDER BY CAST(numero AS INTEGER) DESC 
           LIMIT $2 OFFSET $3
         `;
         queryParams = [statusFilter, limit, offset];
@@ -64,7 +70,7 @@ export default async function handler(req, res) {
       } else {
         queryText = `
           SELECT * FROM ordens_de_producao 
-          ORDER BY numero DESC 
+          ORDER BY CAST(numero AS INTEGER) DESC 
           LIMIT $1 OFFSET $2
         `;
         queryParams = [limit, offset];
@@ -142,7 +148,7 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error('[ordens-de-producao] Erro:', error);
     if (error.code === '23505') {
-      return res.status(409).json({ error: 'Número da OP já existe. Escolha outro número.' });
+      return res.status(409).json({ error: 'Número da OP já existe.' });
     }
     res.status(500).json({ error: 'Erro interno no servidor', details: error.message });
   }

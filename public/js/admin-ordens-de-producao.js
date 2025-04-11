@@ -65,23 +65,6 @@ let produtosCache = null;
 let produtosPromise = null;
 
 async function obterProdutos() {
-  const cachedData = localStorage.getItem('produtosCacheData');
-  if (cachedData) {
-    const { produtos, timestamp } = JSON.parse(cachedData);
-    const now = Date.now();
-    const cacheDuration = 5 * 60 * 1000;
-    if (now - timestamp < cacheDuration) {
-      produtosCache = produtos;
-      console.log('[obterProdutos] Retornando produtos do localStorage');
-      return produtosCache;
-    }
-  }
-
-  if (produtosCache) {
-    console.log('[obterProdutos] Retornando produtos do cache');
-    return produtosCache;
-  }
-
   if (produtosPromise) {
     return await produtosPromise;
   }
@@ -91,16 +74,12 @@ async function obterProdutos() {
       const token = localStorage.getItem('token');
       const response = await fetch('/api/produtos', {
         headers: { 'Authorization': `Bearer ${token}` },
+        cache: 'no-store' // Garante que não use cache do navegador
       });
       if (!response.ok) throw new Error('Erro ao carregar produtos');
-      produtosCache = await response.json();
-      const cacheData = {
-        produtos: produtosCache,
-        timestamp: Date.now(),
-      };
-      localStorage.setItem('produtosCacheData', JSON.stringify(cacheData));
-      console.log('[obterProdutos] Produtos buscados e armazenados no cache e localStorage:', produtosCache);
-      return produtosCache;
+      const produtos = await response.json();
+      console.log('[obterProdutos] Produtos buscados diretamente do servidor:', produtos);
+      return produtos;
     })();
 
     return await produtosPromise;
@@ -238,8 +217,11 @@ function ordenarOPs(ops, criterio, ordem = 'asc') {
   return ops.sort((a, b) => {
     switch (criterio) {
       case 'status':
-        // Usar numero como fallback
-        return ordem === 'asc' ? parseInt(a.numero) - parseInt(b.numero) : parseInt(b.numero) - parseInt(a.numero);
+        const statusOrder = a.status.localeCompare(b.status);
+        if (statusOrder === 0) {
+          return ordem === 'asc' ? parseInt(a.numero) - parseInt(b.numero) : parseInt(b.numero) - parseInt(a.numero);
+        }
+        return ordem === 'asc' ? statusOrder : -statusOrder;
       case 'numero':
         return ordem === 'asc' ? parseInt(a.numero) - parseInt(b.numero) : parseInt(b.numero) - parseInt(a.numero);
       case 'produto':
@@ -251,79 +233,36 @@ function ordenarOPs(ops, criterio, ordem = 'asc') {
       case 'quantidade':
         return ordem === 'asc' ? parseInt(a.quantidade) - parseInt(b.quantidade) : parseInt(b.quantidade) - parseInt(a.quantidade);
       default:
-        return 0;
+        return ordem === 'asc' ? parseInt(a.numero) - parseInt(b.numero) : parseInt(b.numero) - parseInt(a.numero);
     }
   });
 }
 
-async function obterOrdensDeProducao(page = 1, fetchAll = false, forceUpdate = false, statusFilter = null) {
-  const cacheKey = `ordensCacheData_${fetchAll ? 'all' : `page_${page}${statusFilter ? `_${statusFilter}` : ''}`}`;
-  const cachedData = localStorage.getItem(cacheKey);
-
-  if (!forceUpdate && !fetchAll && cachedData) {
-    try {
-      const { ordens, timestamp, total, pages } = JSON.parse(cachedData);
-      const now = Date.now();
-      const cacheDuration = 15 * 60 * 1000;
-      if (now - timestamp < cacheDuration) {
-        ordensCache = { rows: ordens, total, pages };
-        console.log(`[obterOrdensDeProducao] Retornando ordens do localStorage para ${fetchAll ? 'todas' : `página ${page}${statusFilter ? `_${statusFilter}` : ''}`}`);
-        return ordensCache;
-      }
-    } catch (error) {
-      console.error('[obterOrdensDeProducao] Cache corrompido, limpando:', error);
-      localStorage.removeItem(cacheKey);
-    }
+async function obterOrdensDeProducao(page = 1, fetchAll = false, forceUpdate = false, statusFilter = null, noStatusFilter = false) {
+  const token = localStorage.getItem('token');
+  let url;
+  if (noStatusFilter) {
+    url = '/api/ordens-de-producao?all=true&noStatusFilter=true';
+  } else {
+    url = fetchAll
+      ? '/api/ordens-de-producao?all=true'
+      : `/api/ordens-de-producao?page=${page}&limit=${itemsPerPage}${statusFilter ? `&status=${statusFilter}` : ''}`;
   }
+  const response = await fetch(url, {
+    headers: { 'Authorization': `Bearer ${token}` },
+    cache: 'no-store'
+  });
+  if (!response.ok) throw new Error('Erro ao carregar ordens de produção');
+  const data = await response.json();
 
-  if (!forceUpdate && !fetchAll && ordensCache && !statusFilter) {
-    console.log(`[obterOrdensDeProducao] Retornando ordens do cache para página ${page}`);
-    return ordensCache;
-  }
+  const ordensCache = {
+    rows: Array.isArray(data) ? data : data.rows || [],
+    total: data.total || (Array.isArray(data) ? data.length : data.rows.length),
+    pages: data.pages || (fetchAll || noStatusFilter ? Math.ceil((data.total || data.rows.length) / itemsPerPage) : 1),
+  };
 
-  if (ordensPromise) {
-    return await ordensPromise;
-  }
-
-  try {
-    ordensPromise = (async () => {
-      const token = localStorage.getItem('token');
-      const url = fetchAll
-        ? '/api/ordens-de-producao?all=true'
-        : `/api/ordens-de-producao?page=${page}&limit=${itemsPerPage}${statusFilter ? `&status=${statusFilter}` : ''}`;
-      const response = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (!response.ok) throw new Error('Erro ao carregar ordens de produção');
-      const data = await response.json();
-
-      // Garantir que o retorno seja sempre um objeto com rows, total, pages
-      ordensCache = {
-        rows: Array.isArray(data) ? data : data.rows || [],
-        total: data.total || (Array.isArray(data) ? data.length : data.rows.length),
-        pages: data.pages || (fetchAll ? Math.ceil((data.total || data.rows.length) / itemsPerPage) : 1),
-      };
-
-      if (!fetchAll) {
-        const cacheData = {
-          ordens: ordensCache.rows,
-          timestamp: Date.now(),
-          total: ordensCache.total,
-          pages: ordensCache.pages,
-        };
-        localStorage.setItem(cacheKey, JSON.stringify(cacheData));
-      }
-      console.log(`[obterOrdensDeProducao] Ordens buscadas e armazenadas: ${fetchAll ? 'todas' : `página ${page}${statusFilter ? `_${statusFilter}` : ''}`}`);
-      return ordensCache;
-    })();
-
-    return await ordensPromise;
-  } catch (error) {
-    console.error('[obterOrdensDeProducao] Erro ao buscar ordens:', error);
-    throw error;
-  } finally {
-    ordensPromise = null;
-  }
+  console.log(`[obterOrdensDeProducao] Ordens buscadas diretamente do servidor: ${noStatusFilter ? 'todas sem filtro' : fetchAll ? 'todas' : `página ${page}${statusFilter ? `_${statusFilter}` : ''}`}`);
+  return ordensCache;
 }
 
 export function limparCacheOrdens() {
@@ -514,7 +453,7 @@ function setCurrentDate() {
   }
 }
 
-async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = 'status', sortOrdem = 'desc', page = 1, forceUpdate = false, statusFilter = null) {
+async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = 'numero', sortOrdem = 'desc', page = 1, forceUpdate = false, statusFilter = null) {
   const opTableBody = document.getElementById('opTableBody');
   if (!opTableBody) {
     console.error('[loadOPTable] opTableBody não encontrado no DOM');
@@ -543,11 +482,12 @@ async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = '
     }
 
     let ordensDeProducao = data.rows;
-    let totalItems = data.total || ordensDeProducao.length;
-    let totalPages = data.pages || Math.ceil(totalItems / itemsPerPage);
+    let totalItems = data.total;
+    let totalPages = data.pages;
 
     console.log('[loadOPTable] Ordens recebidas:', ordensDeProducao.length, 'Dados brutos:', ordensDeProducao, 'Total:', totalItems, 'Páginas:', totalPages);
 
+    // Deduplicação
     const ordensUnicas = [];
     const numerosVistos = new Set();
     ordensDeProducao.forEach(op => {
@@ -560,40 +500,39 @@ async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = '
 
     let filteredOPs = [...ordensUnicas];
 
-    // Para filtros específicos (não "todas"), confie nos dados paginados do backend
-    if (filterStatus !== 'todas') {
-      filteredOPs = filteredOPs.filter(op => op.status === filterStatus); // Filtro de segurança
-      // Não recalcula totalItems e totalPages aqui; usa os valores do backend
-    }
+    // Filtro de busca (aplicado apenas localmente)
+    if (search) {
+      filteredOPs = filteredOPs.filter(op => {
+        const matchesProduto = op.produto?.toLowerCase().includes(search.toLowerCase()) || false;
+        const matchesNumero = op.numero.toString().includes(search);
+        const matchesVariante = op.variante?.toLowerCase().includes(search.toLowerCase()) || false;
+        return matchesProduto || matchesNumero || matchesVariante;
+      });
+      console.log('[loadOPTable] Após filtro de busca:', filteredOPs.length, 'Busca:', search);
 
-    console.log('[loadOPTable] Após filtro de status:', filteredOPs.length, 'Filtro aplicado:', filterStatus);
-
-    // Aplica filtro de busca
-    filteredOPs = filteredOPs.filter(op => {
-      const matchesProduto = op.produto?.toLowerCase().includes(search.toLowerCase()) || false;
-      const matchesNumero = op.numero.toString().includes(search);
-      const matchesVariante = op.variante?.toLowerCase().includes(search.toLowerCase()) || false;
-      return matchesProduto || matchesNumero || matchesVariante;
-    });
-    console.log('[loadOPTable] Após filtro de busca:', filteredOPs.length, 'Busca:', search);
-
-    // Ordena os itens
-    filteredOPs = ordenarOPs(filteredOPs, sortCriterio, sortOrdem);
-    console.log('[loadOPTable] Após ordenação:', filteredOPs.length);
-
-    // Define os itens paginados
-    let paginatedOPs;
-    if (filterStatus === 'todas') {
-      // Para "todas", pagina localmente após filtros
+      // Recalcular paginação apenas se houver busca
       totalItems = filteredOPs.length;
       totalPages = Math.ceil(totalItems / itemsPerPage);
+    } else {
+      console.log('[loadOPTable] Nenhum filtro de busca aplicado');
+    }
+
+    // Confiar na ordenação da API (numero DESC) e aplicar ordenação local apenas se o critério for diferente
+    if (sortCriterio !== 'numero' || sortOrdem !== 'desc') {
+      filteredOPs = ordenarOPs(filteredOPs, sortCriterio, sortOrdem);
+      console.log('[loadOPTable] Após ordenação local:', filteredOPs.length);
+    } else {
+      console.log('[loadOPTable] Usando ordenação da API (numero DESC)');
+    }
+
+    // Paginação
+    let paginatedOPs;
+    if (filterStatus === 'todas' && search) {
       const startIndex = (page - 1) * itemsPerPage;
       const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
       paginatedOPs = filteredOPs.slice(startIndex, endIndex);
     } else {
-      // Para outros filtros, usa os dados paginados do backend diretamente
-      paginatedOPs = filteredOPs;
-      // totalItems e totalPages já vêm do backend
+      paginatedOPs = filteredOPs; // API já paginou
     }
 
     filteredOPsGlobal = filteredOPs;
@@ -617,8 +556,8 @@ async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = '
           usedIds.add(op.edit_id);
         }
         const tr = document.createElement('tr');
-        tr.dataset.index = index; // Mantém o index para referência local
-        tr.dataset.numero = op.numero || `OP-${op.id}`; // Fallback caso numero esteja ausente
+        tr.dataset.index = index;
+        tr.dataset.numero = op.numero || `OP-${op.id}`;
         tr.style.cursor = permissoes.includes('editar-op') ? 'pointer' : 'default';
         tr.innerHTML = `
           <td><span class="status-bolinha status-${op.status} ${op.status === 'produzindo' ? 'blink' : ''}"></span></td>
@@ -677,18 +616,18 @@ async function loadOPTable(filterStatus = 'todas', search = '', sortCriterio = '
   }
 }
 
-
 function handleOPTableClick(e) {
   const tr = e.target.closest('tr');
   if (tr) {
-    const numero = tr.dataset.numero; // Usa o número da OP diretamente da linha
+    const numero = tr.dataset.numero;
     if (numero) {
-      // Busca a OP correta em todas as ordens, independentemente da página
-      obterOrdensDeProducao(1, true).then(data => {
+      obterOrdensDeProducao(1, true, false, null, true).then(data => {
         const ordensDeProducao = data.rows;
         const op = ordensDeProducao.find(o => o.numero === numero);
         if (op) {
           window.location.hash = `#editar/${op.edit_id}`;
+          // Aguardar o hashchange para evitar corrida
+          setTimeout(() => window.dispatchEvent(new HashChangeEvent('hashchange')), 0);
         } else {
           console.error('[handleOPTableClick] Ordem não encontrada para o número:', numero);
           mostrarPopupMensagem('Ordem de Produção não encontrada.', 'erro');
@@ -802,17 +741,15 @@ async function loadEtapasEdit(op, skipReload = false) {
     return;
   }
 
-  console.log('[loadEtapasEdit] Etapas carregadas da OP:', op.etapas);
-
-  if (!skipReload) {
-    etapasContainer.innerHTML = '<div class="spinner">Carregando etapas...</div>';
-  }
+  etapasContainer.innerHTML = '<div class="spinner">Carregando etapas...</div>';
 
   const produtos = await obterProdutos();
   const responseUsuarios = await fetch('/api/usuarios', {
     headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
   });
   const usuarios = await responseUsuarios.json();
+
+  console.log('[loadEtapasEdit] Etapas carregadas da OP:', op.etapas);
 
   const todasEtapasCompletas = await verificarEtapasEStatus(op, produtos);
   if (op.status === 'finalizado' && !todasEtapasCompletas) {
@@ -830,64 +767,40 @@ async function loadEtapasEdit(op, skipReload = false) {
     }))
   );
 
-  if (!skipReload) {
-    etapasContainer.innerHTML = '';
-  }
-
+  etapasContainer.innerHTML = '';
   const fragment = document.createDocumentFragment();
 
   for (let index = 0; index < op.etapas.length; index++) {
     const etapa = op.etapas[index];
+    const row = document.createElement('div');
+    row.className = 'etapa-row';
+    row.dataset.index = index;
 
-    let row = skipReload ? etapasContainer.children[index] : null;
-    if (!row) {
-      row = document.createElement('div');
-      row.className = 'etapa-row';
-      row.dataset.index = index;
+    const numero = document.createElement('span');
+    numero.className = 'etapa-numero';
+    numero.textContent = index + 1;
+    row.appendChild(numero);
 
-      // Criar elementos iniciais apenas se a linha é nova
-      const numero = document.createElement('span');
-      numero.className = 'etapa-numero';
-      numero.textContent = index + 1;
-      row.appendChild(numero);
+    const processo = document.createElement('input');
+    processo.type = 'text';
+    processo.className = 'etapa-processo';
+    processo.value = etapa.processo;
+    processo.readOnly = true;
+    row.appendChild(processo);
 
-      const processo = document.createElement('input');
-      processo.type = 'text';
-      processo.className = 'etapa-processo';
-      processo.value = etapa.processo;
-      processo.readOnly = true;
-      row.appendChild(processo);
-    } else {
-      // Não limpar o conteúdo da row, apenas atualizar elementos existentes
-      const numero = row.querySelector('.etapa-numero');
-      if (numero) numero.textContent = index + 1;
-
-      const processo = row.querySelector('.etapa-processo');
-      if (processo) processo.value = etapa.processo;
-    }
-
-    // Lógica específica para a etapa "Corte"
     if (etapa.processo === 'Corte') {
-      let usuarioStatusInput = row.querySelector('.etapa-usuario-status');
-      if (!usuarioStatusInput) {
-        usuarioStatusInput = document.createElement('input');
-        usuarioStatusInput.type = 'text';
-        usuarioStatusInput.className = 'etapa-usuario-status';
-        usuarioStatusInput.readOnly = true;
-        usuarioStatusInput.style.backgroundColor = '#d3d3d3';
-        usuarioStatusInput.style.marginRight = '5px';
-        row.appendChild(usuarioStatusInput);
-      }
+      const usuarioStatusInput = document.createElement('input');
+      usuarioStatusInput.type = 'text';
+      usuarioStatusInput.className = 'etapa-usuario-status';
+      usuarioStatusInput.readOnly = true;
+      usuarioStatusInput.style.backgroundColor = '#d3d3d3';
+      usuarioStatusInput.style.marginRight = '5px';
 
-      let usuarioNomeInput = row.querySelector('.etapa-usuario-nome');
-      if (!usuarioNomeInput) {
-        usuarioNomeInput = document.createElement('input');
-        usuarioNomeInput.type = 'text';
-        usuarioNomeInput.className = 'etapa-usuario-nome';
-        usuarioNomeInput.readOnly = true;
-        usuarioNomeInput.style.backgroundColor = '#d3d3d3';
-        row.appendChild(usuarioNomeInput);
-      }
+      const usuarioNomeInput = document.createElement('input');
+      usuarioNomeInput.type = 'text';
+      usuarioNomeInput.className = 'etapa-usuario-nome';
+      usuarioNomeInput.readOnly = true;
+      usuarioNomeInput.style.backgroundColor = '#d3d3d3';
 
       if (op.status !== 'finalizado' && op.status !== 'cancelada' && index === etapaAtualIndex && !etapa.usuario) {
         const cortes = await obterCortes('cortados');
@@ -918,26 +831,23 @@ async function loadEtapasEdit(op, skipReload = false) {
         usuarioStatusInput.value = 'Corte Realizado';
         usuarioNomeInput.value = etapa.usuario || '';
       }
-    } else {
-      // Para todas as outras etapas (não "Corte")
-      let usuarioSelect = row.querySelector('.select-usuario');
-      if (!usuarioSelect) {
-        usuarioSelect = document.createElement('select');
-        usuarioSelect.className = 'select-usuario';
-        row.appendChild(usuarioSelect);
-      }
-      usuarioSelect.disabled = op.status === 'finalizado' || op.status === 'cancelada' || index > etapaAtualIndex;
 
-      const tipoUsuario = tiposUsuarios[index].tipoUsuario;
-      usuarioSelect.innerHTML = ''; // Limpa opções existentes
+      row.appendChild(usuarioStatusInput);
+      row.appendChild(usuarioNomeInput);
+    } else {
+      const exigeQuantidade = tiposUsuarios[index].tipoUsuario === 'costureira' || tiposUsuarios[index].tipoUsuario === 'tiktik';
+      const usuarioSelect = document.createElement('select');
+      usuarioSelect.className = 'select-usuario';
+      usuarioSelect.disabled = op.status === 'finalizado' || op.status === 'cancelada' || index > etapaAtualIndex;
+      usuarioSelect.innerHTML = '';
       const defaultOption = document.createElement('option');
       defaultOption.value = '';
-      defaultOption.textContent = getUsuarioPlaceholder(tipoUsuario);
+      defaultOption.textContent = getUsuarioPlaceholder(tiposUsuarios[index].tipoUsuario);
       usuarioSelect.appendChild(defaultOption);
 
       const usuariosFiltrados = usuarios.filter(u => {
         const tipos = Array.isArray(u.tipos) ? u.tipos : [u.tipos];
-        return tipos.includes(tipoUsuario);
+        return tipos.includes(tiposUsuarios[index].tipoUsuario);
       });
 
       usuariosFiltrados.forEach(u => {
@@ -948,29 +858,6 @@ async function loadEtapasEdit(op, skipReload = false) {
         usuarioSelect.appendChild(option);
       });
 
-      const exigeQuantidade = tipoUsuario === 'costureira' || tipoUsuario === 'tiktik';
-
-      // Garantir que quantidadeDiv seja preservado ou criado
-      let quantidadeDiv = row.querySelector('.quantidade-lancar');
-      if (exigeQuantidade && etapa.usuario && !quantidadeDiv) {
-        quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, index === etapaAtualIndex, row, produtos);
-        row.appendChild(quantidadeDiv);
-      } else if (quantidadeDiv) {
-        // Atualizar o estado do quantidadeDiv existente
-        const quantidadeInput = quantidadeDiv.querySelector('.quantidade-input');
-        const lancarBtn = quantidadeDiv.querySelector('.botao-lancar');
-        if (quantidadeInput) {
-          quantidadeInput.value = etapa.quantidade || '';
-          quantidadeInput.disabled = !index === etapaAtualIndex || etapa.lancado || !usuarioSelect.value;
-        }
-        if (lancarBtn) {
-          lancarBtn.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
-          lancarBtn.disabled = !permissoes.includes('lancar-producao') || !usuarioSelect.value || !quantidadeInput.value || parseInt(quantidadeInput.value) <= 0 || etapa.lancado;
-          if (etapa.lancado) lancarBtn.classList.add('lancado');
-        }
-      }
-
-      usuarioSelect.removeEventListener('change', usuarioSelect.changeHandler); // Remove handler antigo
       usuarioSelect.changeHandler = debounce(async () => {
         if (op.status === 'finalizado' || op.status === 'cancelada') return;
         const novoUsuario = usuarioSelect.value;
@@ -984,21 +871,22 @@ async function loadEtapasEdit(op, skipReload = false) {
           row.appendChild(quantidadeDiv);
         }
 
-        await atualizarVisualEtapas(op, produtos);
-        await updateFinalizarButtonState(op, produtos);
-      }, 300);
-      usuarioSelect.addEventListener('change', usuarioSelect.changeHandler);
-    }
+    await atualizarVisualEtapas(op, produtos);
+    await updateFinalizarButtonState(op, produtos);
+  }, 300);
+  usuarioSelect.addEventListener('change', usuarioSelect.changeHandler);
+  row.appendChild(usuarioSelect);
 
-    if (!skipReload) {
-      fragment.appendChild(row);
-    }
+  if (exigeQuantidade && etapa.usuario) {
+    const quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, index === etapaAtualIndex, row, produtos);
+    row.appendChild(quantidadeDiv);
   }
+}
 
-  if (!skipReload) {
-    etapasContainer.appendChild(fragment);
+fragment.appendChild(row);
+
   }
-
+  etapasContainer.appendChild(fragment);
   await atualizarVisualEtapas(op, produtos);
   await updateFinalizarButtonState(op, produtos);
 }
@@ -1134,22 +1022,19 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row, produtos)
   } else {
     quantidadeDiv.innerHTML = '';
   }
-
   const quantidadeInput = document.createElement('input');
   quantidadeInput.type = 'number';
   quantidadeInput.min = '1';
   quantidadeInput.value = etapa.quantidade || '';
   quantidadeInput.placeholder = 'Qtde';
   quantidadeInput.className = 'quantidade-input';
-
   let lancarBtn = quantidadeDiv.querySelector('.botao-lancar') || document.createElement('button');
   lancarBtn.className = 'botao-lancar';
   lancarBtn.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
   const podeLancar = permissoes.includes('lancar-producao');
-
+  // Adicionar apenas quantidadeInput e lancarBtn
   quantidadeDiv.appendChild(quantidadeInput);
   quantidadeDiv.appendChild(lancarBtn);
-
   const updateLancarBtn = async () => {
     const etapaAtualIndex = await determinarEtapaAtual(op, produtos);
     const isCurrentEtapa = op.etapas.indexOf(etapa) === etapaAtualIndex;
@@ -1158,117 +1043,106 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEditable, row, produtos)
     lancarBtn.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
     lancarBtn.dataset.etapaIndex = op.etapas.indexOf(etapa);
 
-    if (!podeLancar) {
-      lancarBtn.style.opacity = '0.5';
-      lancarBtn.style.cursor = 'not-allowed';
-    }
+if (!podeLancar) {
+  lancarBtn.style.opacity = '0.5';
+  lancarBtn.style.cursor = 'not-allowed';
+}
 
-    lancarBtn.removeEventListener('click', lancarBtnClickHandler);
-    lancarBtn.addEventListener('click', lancarBtnClickHandler);
+lancarBtn.removeEventListener('click', lancarBtnClickHandler);
+lancarBtn.addEventListener('click', lancarBtnClickHandler);
+
   };
-
   const lancarBtnClickHandler = async () => {
     if (lancarBtn.disabled || lancamentosEmAndamento.has(op.edit_id + '-' + etapa.processo)) return;
-  
-    lancamentosEmAndamento.add(op.edit_id + '-' + etapa.processo);
-    lancarBtn.disabled = true;
-    lancarBtn.textContent = 'Processando...';
-  
-    const etapaIndex = parseInt(lancarBtn.dataset.etapaIndex);
-    const editId = window.location.hash.split('/')[1];
-    const ordensData = await obterOrdensDeProducao(1, true);
-    const ordensDeProducao = ordensData.rows;
-    const opLocal = ordensDeProducao.find(o => o.edit_id === editId);
-  
-    if (!opLocal || !opLocal.etapas || !opLocal.etapas[etapaIndex]) {
-      mostrarPopupMensagem('Erro: Ordem de Produção ou etapa não encontrada.', 'erro');
-      lancamentosEmAndamento.delete(op.edit_id + '-' + etapa.processo);
-      lancarBtn.disabled = false;
-      lancarBtn.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
-      return;
-    }
-  
-    const etapasFuturas = await getEtapasFuturasValidas(opLocal, etapaIndex, produtos);
-    try {
-      let sucesso = false;
-      if (etapasFuturas.length > 0) {
-        await mostrarPopupEtapasFuturas(opLocal, etapaIndex, etapasFuturas, quantidadeInput.value, produtos);
-        sucesso = true;
-      } else {
-        sucesso = await lancarEtapa(opLocal, etapaIndex, quantidadeInput.value, produtos);
-      }
-  
-      if (sucesso) {
-        const updatedOrdensData = await obterOrdensDeProducao(1, true);
-        const updatedOrdens = updatedOrdensData.rows;
-        const updatedOp = updatedOrdens.find(o => o.edit_id === editId);
-        if (updatedOp) {
-          Object.assign(opLocal, updatedOp);
-          etapa.lancado = true;
-          quantidadeInput.disabled = true;
-          quantidadeInput.style.backgroundColor = '#d3d3d3';
-          lancarBtn.textContent = 'Lançado';
-          lancarBtn.disabled = true;
-          lancarBtn.classList.add('lancado');
-          await atualizarVisualEtapas(opLocal, produtos);
-          await updateFinalizarButtonState(opLocal, produtos);
-          mostrarPopupMensagem('Produção lançada com sucesso!', 'sucesso');
-        } else {
-          throw new Error('Ordem de Produção não encontrada após lançamento.');
-        }
-      }
-    } catch (error) {
-      console.error('[criarQuantidadeDiv] Erro ao lançar etapa:', error);
-      mostrarPopupMensagem('Erro ao lançar produção. Tente novamente.', 'erro');
-      lancarBtn.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
-      lancarBtn.disabled = false;
-    } finally {
-      lancamentosEmAndamento.delete(op.edit_id + '-' + etapa.processo);
-    }
-  };
 
+lancamentosEmAndamento.add(op.edit_id + '-' + etapa.processo);
+lancarBtn.disabled = true;
+lancarBtn.textContent = 'Processando...';
+
+const etapaIndex = parseInt(lancarBtn.dataset.etapaIndex);
+const editId = window.location.hash.split('/')[1];
+const ordensData = await obterOrdensDeProducao(1, true, false, null, true);
+const ordensDeProducao = ordensData.rows;
+const opLocal = ordensDeProducao.find(o => o.edit_id === editId);
+
+if (!opLocal || !opLocal.etapas || !opLocal.etapas[etapaIndex]) {
+  mostrarPopupMensagem('Erro: Ordem de Produção ou etapa não encontrada.', 'erro');
+  lancamentosEmAndamento.delete(op.edit_id + '-' + etapa.processo);
+  lancarBtn.disabled = false;
+  lancarBtn.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
+  return;
+}
+
+const etapasFuturas = await getEtapasFuturasValidas(opLocal, etapaIndex, produtos);
+try {
+  let sucesso = false;
+  if (etapasFuturas.length > 0) {
+    await mostrarPopupEtapasFuturas(opLocal, etapaIndex, etapasFuturas, quantidadeInput.value, produtos);
+    sucesso = true;
+  } else {
+    sucesso = await lancarEtapa(opLocal, etapaIndex, quantidadeInput.value, produtos);
+  }
+
+  if (sucesso) {
+    const updatedOrdensData = await obterOrdensDeProducao(1, true, false, null, true);
+    const updatedOrdens = updatedOrdensData.rows;
+    const updatedOp = updatedOrdens.find(o => o.edit_id === editId);
+    if (updatedOp) {
+      Object.assign(opLocal, updatedOp);
+      etapa.lancado = true;
+      quantidadeInput.disabled = true;
+      quantidadeInput.style.backgroundColor = '#d3d3d3';
+      lancarBtn.textContent = 'Lançado';
+      lancarBtn.disabled = true;
+      lancarBtn.classList.add('lancado');
+      await atualizarVisualEtapas(opLocal, produtos);
+      await updateFinalizarButtonState(opLocal, produtos);
+      mostrarPopupMensagem('Produção lançada com sucesso!', 'sucesso');
+    } else {
+      throw new Error('Ordem de Produção não encontrada após lançamento.');
+    }
+  }
+} catch (error) {
+  console.error('[criarQuantidadeDiv] Erro ao lançar etapa:', error);
+  mostrarPopupMensagem('Erro ao lançar produção. Tente novamente.', 'erro');
+  lancarBtn.textContent = etapa.lancado ? 'Lançado' : 'Lançar';
+  lancarBtn.disabled = false;
+} finally {
+  lancamentosEmAndamento.delete(op.edit_id + '-' + etapa.processo);
+}
+
+  };
   usuarioSelect.addEventListener('change', async () => {
     if (op.status === 'finalizado' || op.status === 'cancelada') return;
     const novoUsuario = usuarioSelect.value;
     if (etapa.usuario === novoUsuario) return;
     etapa.usuario = novoUsuario;
     await saveOPChanges(op);
-    await updateLancarBtn(); // Atualiza o estado do input após mudar o usuário
+    await updateLancarBtn();
     if (!quantidadeInput.disabled) quantidadeInput.focus();
     await atualizarVisualEtapas(op, produtos);
     await updateFinalizarButtonState(op, produtos);
   });
-
   const handleInputChange = async () => {
-    console.log('[handleInputChange] Início - Etapa:', etapa.processo, 'Valor atual do input:', quantidadeInput.value, 'Estado da etapa:', etapa);
     const etapaAtualIndex = await determinarEtapaAtual(op, produtos);
     const isCurrentEtapa = op.etapas.indexOf(etapa) === etapaAtualIndex;
     if (etapa.lancado || !isCurrentEtapa) {
-      console.log('[handleInputChange] Etapa lançada ou não é a atual - Mantendo valor:', etapa.quantidade || '');
       quantidadeInput.value = etapa.quantidade || '';
       return;
     }
     const novaQuantidade = parseInt(quantidadeInput.value) || 0;
-    console.log('[handleInputChange] Nova quantidade digitada:', novaQuantidade);
     if (novaQuantidade !== etapa.quantidade) {
       etapa.quantidade = novaQuantidade;
       await saveOPChanges(op);
-      console.log('[handleInputChange] Após salvar - Etapa atualizada:', etapa);
       await updateLancarBtn();
       await atualizarVisualEtapas(op, produtos);
     }
   };
-
   const debouncedHandleInputChange = debounce(handleInputChange, 200);
-  quantidadeInput.addEventListener('input', (e) => {
-    console.log('[quantidadeInput:input] Evento disparado - Valor digitado:', e.target.value, 'Timestamp:', Date.now());
-    debouncedHandleInputChange();
-  });
-
-  updateLancarBtn(); // Inicializa o estado do botão e input
-
+  quantidadeInput.addEventListener('input', debouncedHandleInputChange);
+  updateLancarBtn();
   return quantidadeDiv;
-}
+}  
 
 async function getEtapasFuturasValidas(op, etapaIndex, produtos) {
   const produto = produtos.find(p => p.nome === op.produto);
@@ -1629,8 +1503,31 @@ async function toggleView() {
         return;
       }
 
-      limparCacheProdutos();
-      const ordensData = await obterOrdensDeProducao(1, true);
+      const editProdutoOP = document.getElementById('editProdutoOP');
+      const editQuantidadeInput = document.getElementById('editQuantidadeOP');
+      const editDataEntregaInput = document.getElementById('editDataEntregaOP');
+      const editVarianteContainer = document.getElementById('editVarianteContainer');
+      const editVarianteInput = document.getElementById('editVarianteOP');
+      const opNumeroElement = document.getElementById('opNumero');
+      const etapasContainer = document.getElementById('etapasContainer');
+
+      if (!editProdutoOP || !editQuantidadeInput || !editDataEntregaInput || !editVarianteContainer || !editVarianteInput || !opNumeroElement || !etapasContainer) {
+        throw new Error('Elementos da tela de edição não encontrados no DOM.');
+      }
+
+      editProdutoOP.value = '';
+      editQuantidadeInput.value = '';
+      editQuantidadeInput.disabled = true;
+      editQuantidadeInput.style.backgroundColor = '#d3d3d3';
+      editDataEntregaInput.value = '';
+      editDataEntregaInput.readOnly = true;
+      editDataEntregaInput.style.backgroundColor = '#d3d3d3';
+      editVarianteInput.value = '';
+      editVarianteContainer.style.display = 'none';
+      opNumeroElement.textContent = 'Carregando...';
+      etapasContainer.innerHTML = '<div class="spinner">Carregando etapas...</div>';
+
+      const ordensData = await obterOrdensDeProducao(1, true, false, null, true); // Busca todas sem filtro
       const ordensDeProducao = ordensData.rows || [];
       if (!Array.isArray(ordensDeProducao)) {
         throw new Error('Dados de ordens inválidos retornados pela API.');
@@ -1643,26 +1540,10 @@ async function toggleView() {
         return;
       }
 
-      const editProdutoOP = document.getElementById('editProdutoOP');
-      const editQuantidadeInput = document.getElementById('editQuantidadeOP');
-      const editDataEntregaInput = document.getElementById('editDataEntregaOP');
-      const editVarianteContainer = document.getElementById('editVarianteContainer');
-      const editVarianteInput = document.getElementById('editVarianteOP');
-      const opNumeroElement = document.getElementById('opNumero');
-
-      if (!editProdutoOP || !editQuantidadeInput || !editDataEntregaInput || !editVarianteContainer || !editVarianteInput || !opNumeroElement) {
-        throw new Error('Elementos da tela de edição não encontrados no DOM.');
-      }
-
       editProdutoOP.value = op.produto || '';
       editQuantidadeInput.value = op.quantidade || '';
-      editQuantidadeInput.disabled = true;
-      editQuantidadeInput.style.backgroundColor = '#d3d3d3';
       const dataEntrega = op.data_entrega ? new Date(op.data_entrega).toISOString().split('T')[0] : '';
       editDataEntregaInput.value = dataEntrega;
-      editDataEntregaInput.readOnly = true;
-      editDataEntregaInput.style.backgroundColor = '#d3d3d3';
-
       if (op.variante) {
         const variantes = op.variante.split(' | ').join(', ');
         editVarianteInput.value = variantes;
@@ -1672,13 +1553,13 @@ async function toggleView() {
       } else {
         editVarianteContainer.style.display = 'none';
       }
+      opNumeroElement.textContent = `OP n°: ${op.numero}`;
 
       opListView.style.display = 'none';
       opFormView.style.display = 'none';
       opEditView.style.display = 'block';
-      opNumeroElement.textContent = `OP n°: ${op.numero}`;
+      await loadEtapasEdit(op, false);
 
-      await loadEtapasEdit(op, true);
     } catch (error) {
       console.error('[toggleView] Erro ao carregar tela de edição:', error);
       mostrarPopupMensagem(`Erro ao carregar detalhes da OP: ${error.message}. Tente novamente.`, 'erro');
@@ -1729,8 +1610,7 @@ async function toggleView() {
       statusFilter.querySelectorAll('.status-btn').forEach(btn => btn.classList.remove('active'));
       todasBtn.classList.add('active');
     }
-    // Força o recarregamento da tabela ao voltar para a página principal
-    await loadOPTable('todas', '', 'status', 'desc', 1, true, null);
+    await loadOPTable('todas', '', 'numero', 'desc', 1, true, null);
     console.log('[toggleView] Tela inicial carregada com tabela atualizada');
   }
 }
@@ -1999,36 +1879,17 @@ async function loadAbaContent(aba, forceRefresh = true) {
 let cortesCache = {}; // Cache específico para cortes
 
 async function obterCortes(status, forceRefresh = false) {
-  const cacheKey = `cortesCache_${status}`;
-  const cachedData = localStorage.getItem(cacheKey);
-
-  // Se forceRefresh for true, ignora o cache e busca no servidor
-  if (!forceRefresh && cachedData) {
-    const { cortes, timestamp } = JSON.parse(cachedData);
-    const now = Date.now();
-    const cacheDuration = 15 * 60 * 1000; // 15 minutos
-    if (now - timestamp < cacheDuration) {
-      console.log(`[obterCortes] Retornando cortes do cache para status ${status}`);
-      return cortes;
-    }
-  }
-
   const token = localStorage.getItem('token');
   const response = await fetch(`/api/cortes?status=${status}`, {
     headers: { 'Authorization': `Bearer ${token}` },
+    cache: 'no-store' // Garante que não use cache do navegador
   });
   if (!response.ok) throw new Error('Erro ao carregar cortes');
 
   const cortes = await response.json();
-  const cacheData = {
-    cortes,
-    timestamp: Date.now(),
-  };
-  localStorage.setItem(cacheKey, JSON.stringify(cacheData));
-  console.log(`[obterCortes] Cortes buscados e armazenados no cache para status ${status}`);
+  console.log(`[obterCortes] Cortes buscados diretamente do servidor para status ${status}`);
   return cortes;
 }
-
 
 // Ajuste nas funções carregarTabela para evitar duplicatas
 async function carregarTabelaPendente(cortes) {
@@ -2247,7 +2108,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   console.log('[DOMContentLoaded] Iniciando carregamento inicial da tabela');
-  await loadOPTable('todas', '', 'status', 'desc', 1, true, null);
+  await loadOPTable('todas', '', 'numero', 'desc', 1, true, null); // Alterado de 'status' para 'numero'
   document.body.dataset.initialLoadComplete = 'true';
 
 
@@ -2566,4 +2427,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 }); 
 
-//alguns bugs como o input qtde que fica limpando o dado inserido, de resto funciona bem
+//bug campo qtde limpando sozinho resolvido
+// bug segunda pagina resolvido parcialmente
+// sempre que entro em uma OP ele busca dados de outra op
+// ele esta permitindo lancar 2x algumas OPs
