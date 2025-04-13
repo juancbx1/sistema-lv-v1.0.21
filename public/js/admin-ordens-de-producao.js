@@ -14,8 +14,6 @@ const usedIds = new Set();
 let isLoadingAbaContent = false; 
 let isEditingQuantidade = false;
 
-
-
 function mostrarPopupMensagem(mensagem, tipo = 'erro') {
   const popup = document.createElement('div');
   popup.className = `popup-mensagem popup-${tipo}`;
@@ -23,8 +21,14 @@ function mostrarPopupMensagem(mensagem, tipo = 'erro') {
   popup.style.top = '50%';
   popup.style.left = '50%';
   popup.style.transform = 'translate(-50%, -50%)';
-  popup.style.backgroundColor = tipo === 'erro' ? '#f8d7da' : '#d4edda';
-  popup.style.color = tipo === 'erro' ? '#721c24' : '#155724';
+  popup.style.backgroundColor =
+    tipo === 'erro' ? '#f8d7da' :
+    tipo === 'sucesso' ? '#d4edda' :
+    tipo === 'aviso' ? '#fff3cd' : '#d4edda'; // Amarelo claro para aviso
+  popup.style.color =
+    tipo === 'erro' ? '#721c24' :
+    tipo === 'sucesso' ? '#155724' :
+    tipo === 'aviso' ? '#856404' : '#155724'; // Texto amarelo escuro para aviso
   popup.style.padding = '20px';
   popup.style.borderRadius = '5px';
   popup.style.boxShadow = '0 0 10px rgba(0,0,0,0.3)';
@@ -40,7 +44,10 @@ function mostrarPopupMensagem(mensagem, tipo = 'erro') {
   fecharBtn.textContent = 'Fechar';
   fecharBtn.style.marginTop = '10px';
   fecharBtn.style.padding = '5px 10px';
-  fecharBtn.style.backgroundColor = tipo === 'erro' ? '#dc3545' : '#28a745';
+  fecharBtn.style.backgroundColor =
+    tipo === 'erro' ? '#dc3545' :
+    tipo === 'sucesso' ? '#28a745' :
+    tipo === 'aviso' ? '#ffc107' : '#28a745'; // Botão amarelo para aviso
   fecharBtn.style.color = '#fff';
   fecharBtn.style.border = 'none';
   fecharBtn.style.borderRadius = '3px';
@@ -656,7 +663,10 @@ function filterOPs(page = 1) {
 
 async function updateFinalizarButtonState(op, produtos) {
   const finalizarBtn = document.getElementById('finalizarOP');
-  if (!finalizarBtn || !op) return;
+  if (!finalizarBtn || !op) {
+    console.error('[updateFinalizarButtonState] FinalizarBtn ou OP não encontrados');
+    return;
+  }
 
   const editProduto = document.getElementById('editProdutoOP')?.value || op.produto;
   const editQuantidade = parseInt(document.getElementById('editQuantidadeOP')?.value) || op.quantidade || 0;
@@ -664,17 +674,21 @@ async function updateFinalizarButtonState(op, produtos) {
   const editVariante = document.getElementById('editVarianteOP')?.value || op.variante;
 
   const camposPrincipaisPreenchidos = editProduto && editQuantidade > 0 && editDataEntrega && (op.variante ? editVariante : true);
+  console.log('[updateFinalizarButtonState] Campos principais preenchidos:', camposPrincipaisPreenchidos, {
+    produto: editProduto,
+    quantidade: editQuantidade,
+    dataEntrega: editDataEntrega,
+    variante: editVariante
+  });
 
   let todasEtapasCompletas = true;
   if (op.etapas && Array.isArray(op.etapas) && op.etapas.length > 0) {
     for (const etapa of op.etapas) {
       const tipoUsuario = await getTipoUsuarioPorProcesso(etapa.processo, op.produto, produtos);
-      // Exceção para a etapa "Corte": não exige quantidade
       const exigeQuantidade = tipoUsuario === 'costureira' || tipoUsuario === 'tiktik';
       const isCorte = etapa.processo === 'Corte';
-      const etapaCompleta = etapa.usuario && (isCorte ? etapa.lancado : (!exigeQuantidade || (etapa.lancado && etapa.quantidade > 0)));
-      
-      // Log para depuração
+      const etapaCompleta = etapa.usuario && etapa.lancado && (!exigeQuantidade || etapa.quantidade > 0);
+
       console.log('[updateFinalizarButtonState] Etapa:', etapa.processo, {
         usuario: etapa.usuario,
         lancado: etapa.lancado,
@@ -695,24 +709,42 @@ async function updateFinalizarButtonState(op, produtos) {
   }
 
   const podeFinalizar = camposPrincipaisPreenchidos && todasEtapasCompletas && op.status !== 'finalizado' && op.status !== 'cancelada';
-  console.log('[updateFinalizarButtonState] Pode finalizar:', podeFinalizar);
+  console.log('[updateFinalizarButtonState] Pode finalizar:', podeFinalizar, {
+    camposPrincipaisPreenchidos,
+    todasEtapasCompletas,
+    status: op.status
+  });
   finalizarBtn.disabled = !podeFinalizar;
   finalizarBtn.style.backgroundColor = podeFinalizar ? '#4CAF50' : '#ccc';
 }
 
 async function verificarEtapasEStatus(op, produtos) {
-  if (!op.etapas || !Array.isArray(op.etapas)) return false;
+  if (!op.etapas || !Array.isArray(op.etapas)) {
+    op.status = 'em-aberto';
+    await saveOPChanges(op);
+    return false;
+  }
 
   const todasEtapasCompletas = await Promise.all(op.etapas.map(async (etapa) => {
     const tipoUsuario = await getTipoUsuarioPorProcesso(etapa.processo, op.produto, produtos);
     const exigeQuantidade = tipoUsuario === 'costureira' || tipoUsuario === 'tiktik';
-    return etapa.usuario && (!exigeQuantidade || (etapa.lancado && etapa.quantidade > 0));
+    const isCorte = etapa.processo === 'Corte';
+    return etapa.usuario && (isCorte ? etapa.lancado : (!exigeQuantidade || (etapa.lancado && etapa.quantidade > 0)));
   }));
 
   const resultado = todasEtapasCompletas.every(completa => completa);
 
   if (op.status === 'finalizado' && !resultado) {
     op.status = 'produzindo';
+    await saveOPChanges(op);
+    console.log(`[verificarEtapasEStatus] OP #${op.numero} voltou para 'produzindo' devido a etapa incompleta`);
+    // Exibe notificação ao usuário
+    mostrarPopupMensagem(
+      `A Ordem de Produção #${op.numero} voltou para o status 'Produzindo' porque uma etapa está incompleta.`,
+      'aviso'
+    );
+  } else if (op.status !== 'finalizado' && op.status !== 'cancelada') {
+    op.status = resultado ? 'produzindo' : 'em-aberto';
     await saveOPChanges(op);
   }
 
@@ -750,205 +782,268 @@ async function saveOPChanges(op) {
 
 window.saveOPChanges = saveOPChanges; // Torna a função global
 
+let isLoadingEtapas = false; // Nova flag para evitar carregamentos múltiplos
+
 async function loadEtapasEdit(op, skipReload = false) {
   console.log(`[loadEtapasEdit] Iniciando carregamento das etapas para OP: ${op ? op.numero : 'undefined'} com skipReload: ${skipReload}`);
+
+  if (isLoadingEtapas && !skipReload) {
+    console.log(`[loadEtapasEdit] Já está carregando etapas para OP ${op?.numero}, ignorando nova chamada`);
+    return;
+  }
+
+  isLoadingEtapas = true;
 
   const etapasContainer = document.getElementById('etapasContainer');
   const finalizarBtn = document.getElementById('finalizarOP');
 
   if (!op || !etapasContainer || !finalizarBtn) {
     console.error('[loadEtapasEdit] OP, etapasContainer ou finalizarBtn não encontrados:', { op, etapasContainer, finalizarBtn });
+    isLoadingEtapas = false;
     return;
   }
 
-  if (!op.etapas || !Array.isArray(op.etapas)) {
-    console.error('[loadEtapasEdit] Etapas não encontradas ou inválidas na OP:', op);
-    return;
+  if (!skipReload) {
+    limparCacheOrdens();
+    limparCacheProdutos();
+    limparCacheCortes();
   }
-
-  // Limpar cache antes de buscar dados
-  limparCacheOrdens();
-  limparCacheProdutos();
-  limparCacheCortes();
 
   etapasContainer.innerHTML = '<div class="spinner">Carregando etapas...</div>';
 
-  const produtos = await obterProdutos();
-  const responseUsuarios = await fetch('/api/usuarios', {
-    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-    cache: 'no-store'
-  });
-  const usuarios = await responseUsuarios.json();
+  try {
+    const produtos = await obterProdutos();
+    const responseUsuarios = await fetch('/api/usuarios', {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+      cache: 'no-store'
+    });
+    const usuarios = await responseUsuarios.json();
 
-  // Buscar lançamentos diretamente do banco com timestamp para evitar cache
-  const token = localStorage.getItem('token');
-  const timestamp = Date.now();
-  const responseLancamentos = await fetch(`/api/producoes?op_numero=${op.numero}&_=${timestamp}`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-    cache: 'no-store'
-  });
+    const token = localStorage.getItem('token');
+    const timestamp = Date.now();
+    const responseLancamentos = await fetch(`/api/producoes?op_numero=${op.numero}&_=${timestamp}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+      cache: 'no-store'
+    });
 
-  let lancamentos = [];
-  if (responseLancamentos.ok) {
-    lancamentos = await responseLancamentos.json();
-    console.log('[loadEtapasEdit] Lançamentos buscados do servidor:', lancamentos);
-  } else {
-    console.warn('[loadEtapasEdit] Falha ao buscar lançamentos, usando etapas originais:', op.etapas);
-  }
-
-  // Sincronizar etapas com os lançamentos mais recentes
-  op.etapas = op.etapas.map(etapa => {
-    const lancamento = lancamentos.find(l => l.etapa_index === op.etapas.indexOf(etapa) && l.processo === etapa.processo);
-    return {
-      ...etapa,
-      usuario: lancamento ? lancamento.funcionario : etapa.usuario,
-      quantidade: lancamento ? lancamento.quantidade : etapa.quantidade || 0,
-      lancado: lancamento ? true : etapa.lancado || false,
-      ultimoLancamentoId: lancamento ? lancamento.id : etapa.ultimoLancamentoId
-    };
-  });
-
-  console.log('[loadEtapasEdit] Etapas sincronizadas da OP após atualização:', op.etapas);
-
-  const todasEtapasCompletas = await verificarEtapasEStatus(op, produtos);
-  if (op.status === 'finalizado' && !todasEtapasCompletas) {
-    op.status = 'produzindo';
-    await saveOPChanges(op);
-  }
-
-  const etapaAtualIndex = await determinarEtapaAtual(op, produtos);
-  console.log(`[loadEtapasEdit] Etapa atual index calculada: ${etapaAtualIndex}`);
-
-  // Resto do código permanece igual...
-  const tiposUsuarios = await Promise.all(
-    op.etapas.map(async (etapa) => ({
-      processo: etapa.processo,
-      tipoUsuario: await getTipoUsuarioPorProcesso(etapa.processo, op.produto, produtos),
-    }))
-  );
-
-  etapasContainer.innerHTML = '';
-  const fragment = document.createDocumentFragment();
-
-  for (let index = 0; index < op.etapas.length; index++) {
-    const etapa = op.etapas[index];
-    const row = document.createElement('div');
-    row.className = 'etapa-row';
-    row.dataset.index = index;
-
-    const numero = document.createElement('span');
-    numero.className = 'etapa-numero';
-    numero.textContent = index + 1;
-    row.appendChild(numero);
-
-    const processo = document.createElement('input');
-    processo.type = 'text';
-    processo.className = 'etapa-processo';
-    processo.value = etapa.processo;
-    processo.readOnly = true;
-    row.appendChild(processo);
-
-    if (etapa.processo === 'Corte') {
-      const usuarioStatusInput = document.createElement('input');
-      usuarioStatusInput.type = 'text';
-      usuarioStatusInput.className = 'etapa-usuario-status';
-      usuarioStatusInput.readOnly = true;
-      usuarioStatusInput.style.backgroundColor = '#d3d3d3';
-      usuarioStatusInput.style.marginRight = '5px';
-
-      const usuarioNomeInput = document.createElement('input');
-      usuarioNomeInput.type = 'text';
-      usuarioNomeInput.className = 'etapa-usuario-nome';
-      usuarioNomeInput.readOnly = true;
-      usuarioNomeInput.style.backgroundColor = '#d3d3d3';
-
-      if (op.status !== 'finalizado' && op.status !== 'cancelada' && index === etapaAtualIndex && !etapa.usuario) {
-        const cortes = await obterCortes('cortados');
-        const corteEncontrado = cortes.find(c => c.op === op.numero && c.processo === 'Corte');
-        if (corteEncontrado) {
-          etapa.usuario = corteEncontrado.cortador;
-          etapa.lancado = true;
-          await saveOPChanges(op);
-        } else {
-          const cortesPendentes = await obterCortes('pendente');
-          const cortePendente = cortesPendentes.find(c => c.op === op.numero && c.processo === 'Corte');
-          if (cortePendente) {
-            etapa.usuario = cortePendente.cortador;
-            await saveOPChanges(op);
-          } else {
-            const cortesVerificados = await obterCortes('verificado');
-            const corteVerificado = cortesVerificados.find(c => c.op === op.numero && c.processo === 'Corte');
-            if (corteVerificado) {
-              etapa.usuario = corteVerificado.cortador;
-              etapa.lancado = true;
-              await saveOPChanges(op);
-            }
-          }
-        }
-        usuarioStatusInput.value = etapa.lancado ? 'Corte Realizado' : 'Aguardando corte';
-        usuarioNomeInput.value = etapa.usuario || '';
-      } else if (etapa.lancado) {
-        usuarioStatusInput.value = 'Corte Realizado';
-        usuarioNomeInput.value = etapa.usuario || '';
-      }
-
-      row.appendChild(usuarioStatusInput);
-      row.appendChild(usuarioNomeInput);
+    let lancamentos = [];
+    if (responseLancamentos.ok) {
+      lancamentos = await responseLancamentos.json();
+      console.log('[loadEtapasEdit] Lançamentos buscados do servidor:', lancamentos);
     } else {
-      const exigeQuantidade = tiposUsuarios[index].tipoUsuario === 'costureira' || tiposUsuarios[index].tipoUsuario === 'tiktik';
-      const usuarioSelect = document.createElement('select');
-      usuarioSelect.className = 'select-usuario';
-      usuarioSelect.disabled = op.status === 'finalizado' || op.status === 'cancelada' || index > etapaAtualIndex;
-      usuarioSelect.innerHTML = '';
-      const defaultOption = document.createElement('option');
-      defaultOption.value = '';
-      defaultOption.textContent = getUsuarioPlaceholder(tiposUsuarios[index].tipoUsuario);
-      usuarioSelect.appendChild(defaultOption);
+      console.warn('[loadEtapasEdit] Falha ao buscar lançamentos, usando etapas originais:', op.etapas);
+    }
 
-      const usuariosFiltrados = usuarios.filter(u => {
-        const tipos = Array.isArray(u.tipos) ? u.tipos : [u.tipos];
-        return tipos.includes(tiposUsuarios[index].tipoUsuario);
-      });
-
-      usuariosFiltrados.forEach(u => {
-        const option = document.createElement('option');
-        option.value = u.nome;
-        option.textContent = u.nome;
-        if (etapa.usuario === u.nome) option.selected = true;
-        usuarioSelect.appendChild(option);
-      });
-
-      usuarioSelect.changeHandler = debounce(async () => {
-        if (op.status === 'finalizado' || op.status === 'cancelada') return;
-        const novoUsuario = usuarioSelect.value;
-        if (etapa.usuario === novoUsuario) return;
-
-        etapa.usuario = novoUsuario;
-        await saveOPChanges(op);
-
-        if (exigeQuantidade && !row.querySelector('.quantidade-lancar')) {
-          const quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, index === etapaAtualIndex, row, produtos);
-          row.appendChild(quantidadeDiv);
+    if (op.etapas && Array.isArray(op.etapas)) {
+      op.etapas = op.etapas.map((etapa, index) => {
+        const lancamento = lancamentos.find(l => l.etapa_index === index && l.processo === etapa.processo);
+        if (lancamento) {
+          return {
+            ...etapa,
+            usuario: lancamento.funcionario || etapa.usuario || '',
+            quantidade: lancamento.quantidade || etapa.quantidade || 0,
+            lancado: true,
+            ultimoLancamentoId: lancamento.id || etapa.ultimoLancamentoId
+          };
+        } else if (etapa.processo === 'Corte') {
+          return etapa;
+        } else {
+          return {
+            ...etapa,
+            quantidade: 0,
+            lancado: false,
+            ultimoLancamentoId: null
+          };
         }
-
-        await atualizarVisualEtapas(op, produtos);
-        await updateFinalizarButtonState(op, produtos);
-      }, 300);
-      usuarioSelect.addEventListener('change', usuarioSelect.changeHandler);
-      row.appendChild(usuarioSelect);
-
-      if (exigeQuantidade && etapa.usuario) {
-        const quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, index === etapaAtualIndex, row, produtos);
-        row.appendChild(quantidadeDiv);
+      });
+    } else {
+      const produto = produtos.find(p => p.nome === op.produto);
+      if (produto && produto.etapas) {
+        op.etapas = produto.etapas.map(etapa => ({
+          processo: etapa.processo,
+          usuario: '',
+          quantidade: 0,
+          lancado: false,
+          ultimoLancamentoId: null
+        }));
+      } else {
+        op.etapas = [];
       }
     }
 
-    fragment.appendChild(row);
-  }
+    console.log('[loadEtapasEdit] Etapas sincronizadas da OP após atualização:', op.etapas);
 
-  etapasContainer.appendChild(fragment);
-  await atualizarVisualEtapas(op, produtos);
-  await updateFinalizarButtonState(op, produtos);
+    // Verifica se a etapa Corte está pendente e exibe popup
+    const corteEtapa = op.etapas.find(e => e.processo === 'Corte');
+    if (corteEtapa && !corteEtapa.lancado && op.status !== 'finalizado' && op.status !== 'cancelada') {
+      mostrarPopupMensagem(
+        `O corte para a Ordem de Produção #${op.numero} ainda está pendente. Conclua o corte antes de prosseguir com as outras etapas.`,
+        'aviso'
+      );
+    }
+
+    const todasEtapasCompletas = await verificarEtapasEStatus(op, produtos);
+    if (op.status === 'finalizado' && !todasEtapasCompletas) {
+      op.status = 'produzindo';
+      await saveOPChanges(op);
+      mostrarPopupMensagem(
+        `A Ordem de Produção #${op.numero} voltou para o status 'Produzindo' porque uma etapa está incompleta.`,
+        'aviso'
+      );
+    }
+
+    const etapaAtualIndex = await determinarEtapaAtual(op, produtos);
+    console.log(`[loadEtapasEdit] Etapa atual index calculada: ${etapaAtualIndex}`);
+
+    const tiposUsuarios = await Promise.all(
+      op.etapas.map(async (etapa) => ({
+        processo: etapa.processo,
+        tipoUsuario: await getTipoUsuarioPorProcesso(etapa.processo, op.produto, produtos),
+      }))
+    );
+
+    etapasContainer.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+
+    for (let index = 0; index < op.etapas.length; index++) {
+      const etapa = op.etapas[index];
+      const row = document.createElement('div');
+      row.className = 'etapa-row';
+      row.dataset.index = index;
+
+      const numero = document.createElement('span');
+      numero.className = 'etapa-numero';
+      numero.textContent = index + 1;
+      row.appendChild(numero);
+
+      const processo = document.createElement('input');
+      processo.type = 'text';
+      processo.className = 'etapa-processo';
+      processo.value = etapa.processo;
+      processo.readOnly = true;
+      row.appendChild(processo);
+
+      if (etapa.processo === 'Corte') {
+        const usuarioStatusInput = document.createElement('input');
+        usuarioStatusInput.type = 'text';
+        usuarioStatusInput.className = 'etapa-usuario-status';
+        usuarioStatusInput.readOnly = true;
+        usuarioStatusInput.style.backgroundColor = '#d3d3d3';
+        usuarioStatusInput.style.marginRight = '5px';
+
+        const usuarioNomeInput = document.createElement('input');
+        usuarioNomeInput.type = 'text';
+        usuarioNomeInput.className = 'etapa-usuario-nome';
+        usuarioNomeInput.readOnly = true;
+        usuarioNomeInput.style.backgroundColor = '#d3d3d3';
+
+        if (op.status !== 'finalizado' && op.status !== 'cancelada') {
+          const cortesPendentes = await obterCortes('pendente');
+          const cortesCortados = await obterCortes('cortados');
+          const cortesVerificados = await obterCortes('verificado');
+          const corteEncontrado = [
+            ...cortesPendentes,
+            ...cortesCortados,
+            ...cortesVerificados
+          ].find(c => c.op === op.numero);
+
+          if (corteEncontrado) {
+            if (corteEncontrado.status === 'cortados' || corteEncontrado.status === 'verificado') {
+              usuarioStatusInput.value = 'Corte Realizado';
+              usuarioNomeInput.value = corteEncontrado.cortador || '';
+              op.etapas[index] = {
+                ...etapa,
+                usuario: corteEncontrado.cortador || '',
+                lancado: true
+              };
+              await saveOPChanges(op);
+            } else {
+              usuarioStatusInput.value = 'Aguardando corte';
+              usuarioNomeInput.value = '';
+              op.etapas[index] = {
+                ...etapa,
+                usuario: '',
+                lancado: false
+              };
+            }
+          } else {
+            usuarioStatusInput.value = 'Aguardando corte';
+            usuarioNomeInput.value = '';
+            op.etapas[index] = {
+              ...etapa,
+              usuario: '',
+              lancado: false
+            };
+          }
+        } else {
+          usuarioStatusInput.value = etapa.lancado ? 'Corte Realizado' : 'Aguardando corte';
+          usuarioNomeInput.value = etapa.usuario || '';
+        }
+
+        row.appendChild(usuarioStatusInput);
+        row.appendChild(usuarioNomeInput);
+      } else {
+        const exigeQuantidade = tiposUsuarios[index].tipoUsuario === 'costureira' || tiposUsuarios[index].tipoUsuario === 'tiktik';
+        const usuarioSelect = document.createElement('select');
+        usuarioSelect.className = 'select-usuario';
+        usuarioSelect.disabled = op.status === 'finalizado' || op.status === 'cancelada' || index > etapaAtualIndex;
+        usuarioSelect.innerHTML = '';
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = getUsuarioPlaceholder(tiposUsuarios[index].tipoUsuario);
+        usuarioSelect.appendChild(defaultOption);
+
+        const usuariosFiltrados = usuarios.filter(u => {
+          const tipos = Array.isArray(u.tipos) ? u.tipos : [u.tipos];
+          return tipos.includes(tiposUsuarios[index].tipoUsuario);
+        });
+
+        usuariosFiltrados.forEach(u => {
+          const option = document.createElement('option');
+          option.value = u.nome;
+          option.textContent = u.nome;
+          if (etapa.usuario === u.nome) option.selected = true;
+          usuarioSelect.appendChild(option);
+        });
+
+        usuarioSelect.changeHandler = debounce(async () => {
+          if (op.status === 'finalizado' || op.status === 'cancelada') return;
+          const novoUsuario = usuarioSelect.value;
+          if (etapa.usuario === novoUsuario) return;
+
+          op.etapas[index].usuario = novoUsuario;
+          await saveOPChanges(op);
+
+          if (exigeQuantidade && !row.querySelector('.quantidade-lancar')) {
+            const quantidadeDiv = criarQuantidadeDiv(op.etapas[index], op, usuarioSelect, index === etapaAtualIndex, row, produtos);
+            row.appendChild(quantidadeDiv);
+          }
+
+          await atualizarVisualEtapas(op, produtos);
+          await updateFinalizarButtonState(op, produtos);
+        }, 300);
+        usuarioSelect.addEventListener('change', usuarioSelect.changeHandler);
+        row.appendChild(usuarioSelect);
+
+        if (exigeQuantidade && etapa.usuario) {
+          const quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, index === etapaAtualIndex, row, produtos);
+          row.appendChild(quantidadeDiv);
+        }
+      }
+
+      fragment.appendChild(row);
+    }
+
+    etapasContainer.appendChild(fragment);
+    await atualizarVisualEtapas(op, produtos, true);
+    await updateFinalizarButtonState(op, produtos);
+
+  } catch (error) {
+    console.error('[loadEtapasEdit] Erro ao carregar etapas:', error);
+    etapasContainer.innerHTML = '<p>Erro ao carregar etapas. Tente novamente.</p>';
+  } finally {
+    isLoadingEtapas = false;
+  }
 }
 
 async function salvarProducao(op, etapa, etapaIndex, produtos) {
@@ -1396,14 +1491,15 @@ async function determinarEtapaAtual(op, produtos) {
     const etapa = op.etapas[index];
     const tipoUsuario = await getTipoUsuarioPorProcesso(etapa.processo, op.produto, produtos);
     const exigeQuantidade = tipoUsuario === 'costureira' || tipoUsuario === 'tiktik';
-    if (exigeQuantidade ? !etapa.lancado : !etapa.usuario) {
+    // Exige lancado: true para todas as etapas, e quantidade > 0 para etapas que exigem
+    if (!etapa.lancado || (exigeQuantidade && etapa.quantidade <= 0)) {
       return index;
     }
   }
   return op.etapas.length;
 }
 
-async function atualizarVisualEtapas(op, produtos) {
+async function atualizarVisualEtapas(op, produtos, isFirstRender = false) {
   if (isEditingQuantidade) {
     console.log('[atualizarVisualEtapas] Ignorando atualização durante edição de quantidade');
     return;
@@ -1412,7 +1508,8 @@ async function atualizarVisualEtapas(op, produtos) {
   const etapasRows = document.querySelectorAll('.etapa-row');
   const etapaAtualIndex = await determinarEtapaAtual(op, produtos);
 
-  if (etapasRows.length !== op.etapas.length) {
+  // Só verifica inconsistência se não for a primeira renderização
+  if (!isFirstRender && etapasRows.length !== op.etapas.length) {
     console.error('[atualizarVisualEtapas] Inconsistência entre DOM e dados. Recarregando etapas...');
     const etapasContainer = document.getElementById('etapasContainer');
     etapasContainer.innerHTML = '';
@@ -1500,6 +1597,7 @@ async function atualizarVisualEtapas(op, produtos) {
   }
 }
 
+
 // Função para limpar o formulário de OP
 function limparFormularioOP() {
   const opForm = document.getElementById('opForm');
@@ -1571,7 +1669,7 @@ async function toggleView() {
         window.location.hash = '';
         return;
       }
-
+  
       const editProdutoOP = document.getElementById('editProdutoOP');
       const editQuantidadeInput = document.getElementById('editQuantidadeOP');
       const editDataEntregaInput = document.getElementById('editDataEntregaOP');
@@ -1579,11 +1677,11 @@ async function toggleView() {
       const editVarianteInput = document.getElementById('editVarianteOP');
       const opNumeroElement = document.getElementById('opNumero');
       const etapasContainer = document.getElementById('etapasContainer');
-
+  
       if (!editProdutoOP || !editQuantidadeInput || !editDataEntregaInput || !editVarianteContainer || !editVarianteInput || !opNumeroElement || !etapasContainer) {
         throw new Error('Elementos da tela de edição não encontrados no DOM.');
       }
-
+  
       editProdutoOP.value = '';
       editQuantidadeInput.value = '';
       editQuantidadeInput.disabled = true;
@@ -1595,20 +1693,24 @@ async function toggleView() {
       editVarianteContainer.style.display = 'none';
       opNumeroElement.textContent = 'Carregando...';
       etapasContainer.innerHTML = '<div class="spinner">Carregando etapas...</div>';
-
-      const ordensData = await obterOrdensDeProducao(1, true, false, null, true); // Busca todas sem filtro
+  
+      const ordensData = await obterOrdensDeProducao(1, true, false, null, true);
       const ordensDeProducao = ordensData.rows || [];
       if (!Array.isArray(ordensDeProducao)) {
         throw new Error('Dados de ordens inválidos retornados pela API.');
       }
-
+  
       const op = ordensDeProducao.find(o => o.edit_id === editId) || ordensDeProducao.find(o => o.numero === editId);
       if (!op) {
         mostrarPopupMensagem('Ordem de Produção não encontrada.', 'erro');
         window.location.hash = '';
         return;
       }
-
+  
+      // Força a verificação do status antes de carregar as etapas
+      const produtos = await obterProdutos();
+      await verificarEtapasEStatus(op, produtos);
+  
       editProdutoOP.value = op.produto || '';
       editQuantidadeInput.value = op.quantidade || '';
       const dataEntrega = op.data_entrega ? new Date(op.data_entrega).toISOString().split('T')[0] : '';
@@ -1623,17 +1725,19 @@ async function toggleView() {
         editVarianteContainer.style.display = 'none';
       }
       opNumeroElement.textContent = `OP n°: ${op.numero}`;
-
+  
       opListView.style.display = 'none';
       opFormView.style.display = 'none';
       opEditView.style.display = 'block';
       await loadEtapasEdit(op, false);
-
+  
     } catch (error) {
       console.error('[toggleView] Erro ao carregar tela de edição:', error);
       mostrarPopupMensagem(`Erro ao carregar detalhes da OP: ${error.message}. Tente novamente.`, 'erro');
       window.location.hash = '';
     }
+
+  
   } else if (hash === '#adicionar' && permissoes.includes('criar-op')) {
     opListView.style.display = 'none';
     opFormView.style.display = 'block';

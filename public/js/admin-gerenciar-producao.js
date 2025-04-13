@@ -12,71 +12,79 @@ import { verificarAutenticacao, logout } from '/js/utils/auth.js';
   let usuarioLogado = auth.usuario;
 
   let currentPage = 1;
-  const registrosPorPagina = 20;
+  const registrosPorPagina = 10;
 
   async function carregarProducoesDoBackend() {
     try {
-        const token = localStorage.getItem('token');
-
-        // Buscar as produções
-        const responseProducoes = await fetch('/api/producoes', {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-        });
-
-        if (!responseProducoes.ok) {
-            throw new Error(`Erro ao buscar produções: ${responseProducoes.statusText}`);
+      const token = localStorage.getItem('token');
+  
+      // Buscar as produções
+      const responseProducoes = await fetch('/api/producoes', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+  
+      if (!responseProducoes.ok) {
+        throw new Error(`Erro ao buscar produções: ${responseProducoes.statusText}`);
+      }
+  
+      const producoes = await responseProducoes.json();
+  
+      // Buscar as ordens de produção
+      const responseOrdens = await fetch('/api/ordens-de-producao?all=true', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+  
+      if (!responseOrdens.ok) {
+        throw new Error(`Erro ao buscar ordens de produção: ${responseOrdens.statusText}`);
+      }
+  
+      const ordensData = await responseOrdens.json();
+      const ordens = ordensData.rows && Array.isArray(ordensData.rows) ? ordensData.rows : [];
+      console.log('[carregarProducoesDoBackend] Ordens carregadas:', ordens.map(o => ({ numero: o.numero, status: o.status })));
+  
+      // Mapear as produções e adicionar a variação
+      return producoes.map(p => {
+        const opNumeroNormalizado = String(p.op_numero).trim();
+        const ordem = ordens.find(o => String(o.numero).trim() === opNumeroNormalizado);
+        let variacao;
+  
+        if (ordem) {
+          variacao = ordem.variante !== undefined && ordem.variante !== null && ordem.variante !== '' ? ordem.variante : 'Não especificado';
+        } else {
+          // Usar p.variacao como fallback, já que a OP pode estar finalizada
+          variacao = p.variacao || 'Sem variante';
         }
-
-        const producoes = await responseProducoes.json();
-
-        // Buscar as ordens de produção
-        const responseOrdens = await fetch('/api/ordens-de-producao?all=true', {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-        });
-
-        if (!responseOrdens.ok) {
-            throw new Error(`Erro ao buscar ordens de produção: ${responseOrdens.statusText}`);
-        }
-
-        const ordens = await responseOrdens.json();
-        console.log('[carregarProducoesDoBackend] Ordens carregadas:', ordens);
-
-        // Mapear as produções e adicionar a variação
-        return producoes.map(p => {
-            // Encontrar a ordem correspondente pelo número da OP
-            const ordem = ordens.find(o => o.numero === p.op_numero);
-            const variacao = ordem ? (ordem.variante || '-') : '-'; // Se não houver ordem ou variante, usa '-'
-
-            return {
-                id: p.id,
-                opNumero: p.op_numero,
-                etapaIndex: p.etapa_index,
-                processo: p.processo,
-                produto: p.produto,
-                variacao: variacao, // Nova propriedade adicionada
-                maquina: p.maquina,
-                quantidade: p.quantidade,
-                funcionario: p.funcionario,
-                data: p.data,
-                dataHoraFormatada: new Date(p.data).toLocaleString('pt-BR'),
-                assinada: p.assinada || false,
-                lancadoPor: p.lancado_por,
-                edicoes: p.edicoes || 0,
-            };
-        });
+  
+        return {
+          id: p.id,
+          opNumero: p.op_numero,
+          etapaIndex: p.etapa_index,
+          processo: p.processo,
+          produto: p.produto,
+          variacao: variacao,
+          maquina: p.maquina,
+          quantidade: p.quantidade,
+          funcionario: p.funcionario,
+          data: p.data,
+          dataHoraFormatada: new Date(p.data).toLocaleString('pt-BR'),
+          assinada: p.assinada || false,
+          lancadoPor: p.lancado_por,
+          edicoes: p.edicoes || 0,
+        };
+      });
     } catch (error) {
-        console.error('[carregarProducoesDoBackend] Erro:', error);
-        return [];
+      console.error('[carregarProducoesDoBackend] Erro:', error);
+      return [];
     }
-}
+  }
 
   async function carregarFiltroFuncionarios() {
     const selectFuncionario = document.getElementById('filtroCostureira');
@@ -721,4 +729,4 @@ import { verificarAutenticacao, logout } from '/js/utils/auth.js';
   }
 
   inicializar();
-})();
+})(); 

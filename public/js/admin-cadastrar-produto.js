@@ -1,17 +1,15 @@
-// public/js/admin-cadastrar-produto.js
 import { verificarAutenticacao } from '/js/utils/auth.js';
 import { obterProdutos, salvarProdutos } from '/js/utils/storage.js';
 import { resizeImage } from '/js/utils/image-utils.js';
 import { PRODUTOS, PRODUTOSKITS, MAQUINAS, PROCESSOS } from '/js/utils/prod-proc-maq.js';
-import { invalidateCache } from '/js/utils/storage.js'; // Importar a função de invalidação
-
+import { invalidateCache } from '/js/utils/storage.js';
 
 // Variável global para armazenar produtos
 let produtos = [];
-let variacoesAlteradas = false; // Rastreia alterações não salvas em "Variações do Produto"
-let gradeAlteradas = false; // Rastreia alterações não salvas em "Grade das Variações"
-let variacoesTemp = []; // Armazena temporariamente as variações antes de salvar
-let gradeTemp = []; // Armazena temporariamente a grade antes de salvar
+let variacoesAlteradas = false;
+let gradeAlteradas = false;
+let variacoesTemp = [];
+let gradeTemp = [];
 
 // Elementos DOM agrupados em um objeto
 const elements = {
@@ -29,8 +27,8 @@ const elements = {
     imagemProduto: document.getElementById('imagemProduto'),
     previewImagem: document.getElementById('previewImagem'),
     removeImagem: document.getElementById('removeImagem'),
-    estruturaBody: document.getElementById('estruturaBody'),
     stepsBody: document.getElementById('stepsBody'),
+    finishStepsBody: document.getElementById('finishStepsBody'),
     tabFilter: document.getElementById('tabFilter'),
     gradeHeader: document.getElementById('gradeHeader'),
     gradeBody: document.getElementById('gradeBody'),
@@ -70,14 +68,15 @@ async function inicializarPagina() {
     const usuarioLogado = auth.usuario;
     console.log('Inicializando cadastrar-produto para usuário:', usuarioLogado.nome, 'Permissões:', permissoes);
 
-    // Forçar atualização dos produtos na inicialização
-    await loadProductTable('todos', '', true); // Passar forceRefresh como true
+    await loadProductTable('todos', '', true);
     toggleView();
     document.documentElement.removeAttribute('hidden');
 }
+
+
 async function loadProductTable(filterType = 'todos', search = '', forceRefresh = false) {
     try {
-        produtos = await obterProdutos(forceRefresh); // Passar forceRefresh para obterProdutos
+        produtos = await obterProdutos(forceRefresh);
         console.log('[loadProductTable] Produtos obtidos:', produtos);
 
         const allProductNames = [...PRODUTOS, ...PRODUTOSKITS];
@@ -88,14 +87,14 @@ async function loadProductTable(filterType = 'todos', search = '', forceRefresh 
                     nome,
                     sku: '',
                     tipos: PRODUTOSKITS.includes(nome) ? ['kits'] : [],
-                    isKit: PRODUTOSKITS.includes(nome), // Garantir que novos kits tenham isKit: true
+                    isKit: PRODUTOSKITS.includes(nome),
                     gtin: '',
                     unidade: '',
                     estoque: 0,
                     imagem: '',
                     variacoes: [],
-                    estrutura: [],
                     etapas: [],
+                    finishEtapas: [],
                     grade: []
                 });
             }
@@ -104,13 +103,13 @@ async function loadProductTable(filterType = 'todos', search = '', forceRefresh 
         if (novosProdutos.length > 0) {
             console.log('[loadProductTable] Salvando novos produtos:', novosProdutos);
             await salvarProdutos(novosProdutos);
-            produtos = await obterProdutos(true); // Forçar atualização após salvar novos produtos
+            produtos = await obterProdutos(true);
             console.log('[loadProductTable] Produtos após salvar:', produtos);
         }
 
         const mappedProdutos = produtos.map(produto => ({
             ...produto,
-            isKit: produto.is_kit // Usar o valor direto do banco
+            isKit: produto.is_kit
         }));
 
         const filteredProdutos = mappedProdutos
@@ -141,24 +140,21 @@ async function loadProductTable(filterType = 'todos', search = '', forceRefresh 
     }
 }
 
-
 inicializarPagina();
 
 async function editProduct(nome) {
     const produtoOriginal = produtos.find(p => p.nome === nome);
     if (produtoOriginal) {
-        // Sempre criar um clone limpo do produto original
         editingProduct = deepClone(produtoOriginal);
         console.log(`[editProduct] Carregando produto ${nome}:`, editingProduct);
 
-        // Limpar qualquer estado temporário de duplicidade, se não for o mesmo produto
         const produtoComDuplicidade = localStorage.getItem('produtoComDuplicidade');
         if (produtoComDuplicidade) {
             const produtoTemp = JSON.parse(produtoComDuplicidade);
             if (produtoTemp.id === produtoOriginal.id) {
                 editingProduct = deepClone(produtoTemp);
             } else {
-                localStorage.removeItem('produtoComDuplicidade'); // Limpar se for outro produto
+                localStorage.removeItem('produtoComDuplicidade');
             }
         }
 
@@ -193,48 +189,37 @@ function loadEditForm(produto) {
         elements.removeImagem.style.display = 'none';
     }
 
-    elements.estruturaBody.innerHTML = '';
-    (produto.estrutura || []).forEach(item => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td><input type="text" value="${item.produto}" placeholder="Produto"></td>
-            <td><input type="text" value="${item.unidade}" placeholder="Unidade"></td>
-            <td><input type="number" value="${item.quantidade}" placeholder="Quantidade" onchange="updateStructureTotals()"></td>
-            <td><input type="number" value="${item.custo}" placeholder="Custo" onchange="updateStructureTotals()"></td>
-            <td><input type="text" value="${item.total.toFixed(2)}" readonly></td>
-            <td><button class="cp-remove-btn" onclick="this.parentElement.parentElement.remove(); updateStructureTotals()">X</button></td>
-        `;
-        elements.estruturaBody.appendChild(tr);
-    });
-    updateStructureTotals();
-
     elements.stepsBody.innerHTML = '';
     (produto.etapas || []).forEach((etapa, index) => {
         addStepRow(etapa.processo || '', etapa.maquina || '', etapa.feitoPor || '', index);
     });
     window.updateProcessosOptions();
 
+    elements.finishStepsBody.innerHTML = '';
+    (produto.finishEtapas || []).forEach((etapa, index) => {
+        addFinishStepRow(etapa.processo || '', etapa.maquina || '', etapa.feitoPor || '', index);
+    });
+    window.updateFinishProcessosOptions();
+
     console.log('[loadEditForm] Chamando loadVariacoes');
-    loadVariacoes(produto); // Garantir que isso é chamado
+    loadVariacoes(produto);
     console.log('[loadEditForm] Chamando loadGrade');
-    loadGrade(produto);     // Garantir que isso é chamado
+    loadGrade(produto);
     console.log('[loadEditForm] Chamando toggleTabs');
     toggleTabs();
-    
-     // Definir aba inicial com base no tipo do produto
-     const tipos = produto.tipos || [];
-     const abaInicial = tipos.includes('variacoes') || tipos.includes('kits') ? 'variacoes' : 'dados-gerais';
-     console.log('[loadEditForm] Ativando aba inicial:', abaInicial);
-     switchTab(abaInicial);
-     initializeDragAndDrop();
 
-    // Verificar duplicatas ao carregar
+    const tipos = produto.tipos || [];
+    const abaInicial = tipos.includes('variacoes') || tipos.includes('kits') ? 'variacoes' : 'dados-gerais';
+    console.log('[loadEditForm] Ativando aba inicial:', abaInicial);
+    switchTab(abaInicial);
+    initializeDragAndDrop();
+
     const produtoComDuplicidade = localStorage.getItem('produtoComDuplicidade');
     if (produtoComDuplicidade) {
         const produtoTemp = JSON.parse(produtoComDuplicidade);
         if (produtoTemp.id === produto.id && temDuplicatasDeSku()) {
             editingProduct = deepClone(produtoTemp);
-            loadGrade(produtoTemp); // Recarregar grade com estado temporário
+            loadGrade(produtoTemp);
             bloquearCampos('Corrija o SKU duplicado antes de continuar editando.');
             const erroInputs = elements.gradeBody.querySelectorAll('.cp-grade-sku');
             erroInputs.forEach((input, idx) => {
@@ -564,18 +549,6 @@ elements.imagemProduto.addEventListener('change', e => {
     });
 });
 
-window.addStructureRow = function() {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-        <td><input type="text" placeholder="Produto"></td>
-        <td><input type="text" placeholder="Unidade"></td>
-        <td><input type="number" placeholder="Quantidade" onchange="updateStructureTotals()"></td>
-        <td><input type="number" placeholder="Custo" onchange="updateStructureTotals()"></td>
-        <td><input type="text" readonly></td>
-        <td><button class="cp-remove-btn" onclick="this.parentElement.parentElement.remove(); updateStructureTotals()">X</button></td>
-    `;
-    elements.estruturaBody.appendChild(tr);
-};
 
 window.addStepRow = function(processo = '', maquina = '', feitoPor = '', index = null) {
     const tr = document.createElement('tr');
@@ -614,6 +587,64 @@ window.addStepRow = function(processo = '', maquina = '', feitoPor = '', index =
     window.updateProcessosOptions();
 };
 
+window.addFinishStepRow = function(processo = '', maquina = '', feitoPor = '', index = null) {
+    const tr = document.createElement('tr');
+    tr.draggable = true;
+    tr.dataset.index = index !== null ? index : elements.finishStepsBody.children.length;
+    tr.innerHTML = `
+        <td><span class="icone-arrastar">☰</span></td>
+        <td><select class="processo-select">
+            <option value="">Selecione um processo</option>
+            ${PROCESSOS.map(p => `<option value="${p}" ${p === processo ? 'selected' : ''}>${p}</option>`).join('')}
+        </select></td>
+        <td><select class="maquina-select">
+            <option value="">Selecione uma máquina</option>
+            ${MAQUINAS.map(m => `<option value="${m}" ${m === maquina ? 'selected' : ''}>${m}</option>`).join('')}
+        </select></td>
+        <td><select class="feito-por-select">
+            <option value="">Selecione um tipo</option>
+            ${['costureira', 'tiktik', 'cortador'].map(tipo => `<option value="${tipo}" ${tipo === feitoPor ? 'selected' : ''}>${tipo.charAt(0).toUpperCase() + tipo.slice(1)}</option>`).join('')}
+        </select></td>
+        <td><button class="botao-remover-produto" onclick="this.parentElement.parentElement.remove(); updateFinishProcessosOptions()">X</button></td>
+    `;
+    elements.finishStepsBody.appendChild(tr);
+
+    const processoSelect = tr.querySelector('.processo-select');
+    const maquinaSelect = tr.querySelector('.maquina-select');
+    const feitoPorSelect = tr.querySelector('.feito-por-select');
+
+    processoSelect.addEventListener('change', () => {
+        updateFinishProcessosOptions();
+    });
+    maquinaSelect.addEventListener('change', () => {
+    });
+    feitoPorSelect.addEventListener('change', () => {
+    });
+
+    window.updateFinishProcessosOptions();
+};
+
+window.updateFinishProcessosOptions = function() {
+    const selects = elements.finishStepsBody.querySelectorAll('.processo-select');
+    const processosUsados = Array.from(selects).map(select => select.value).filter(v => v);
+
+    selects.forEach(select => {
+        const currentValue = select.value;
+        select.innerHTML = `<option value="">Selecione um processo</option>`;
+        PROCESSOS.forEach(processo => {
+            const option = document.createElement('option');
+            option.value = processo;
+            option.textContent = processo;
+            if (processosUsados.includes(processo) && processo !== currentValue) {
+                option.disabled = true;
+                option.classList.add('processo-usado');
+            }
+            if (processo === currentValue) option.selected = true;
+            select.appendChild(option);
+        });
+    });
+};
+
 window.addVariacaoRow = function(chave = 'cor', valores = '', index = null) {
     const variacoesContainer = document.getElementById('variacoesContainer');
     const idx = index !== null ? index : variacoesContainer.children.length;
@@ -633,7 +664,6 @@ window.addVariacaoRow = function(chave = 'cor', valores = '', index = null) {
         <div class="grupo-form-produto">
             <label for="valoresVariacao${idx}">Valores (separados por vírgula)</label>
             <input type="text" id="valoresVariacao${idx}" class="valores-variacao-input" value="${valores}" oninput="marcarVariacoesAlteradas()">
-            <button class="botao-editar-variacao" onclick="editarValoresVariacao(${idx})">Editar</button>
         </div>
         <button class="cp-remove-btn" onclick="removerVariacaoRow(this, ${idx})">X</button>
     `;
@@ -641,14 +671,8 @@ window.addVariacaoRow = function(chave = 'cor', valores = '', index = null) {
     variacoesTemp.push({ chave, valores: valores.split(',').map(v => v.trim()).filter(v => v) });
 };
 
-window.marcarVariacoesAlteradas = function() {
-    variacoesAlteradas = true;
-};
 
-window.editarValoresVariacao = function(index) {
-    const input = document.getElementById(`valoresVariacao${index}`);
-    input.disabled = false;
-    input.focus();
+window.marcarVariacoesAlteradas = function() {
     variacoesAlteradas = true;
 };
 
@@ -807,20 +831,6 @@ function removerTagFromGrade(valorRemovido) {
     editingProduct.grade = grade.filter(item => !item.variacao.includes(valorRemovido));
 }
 
-window.updateStructureTotals = function() {
-    let totalQuantidade = 0;
-    let totalCusto = 0;
-    elements.estruturaBody.querySelectorAll('tr').forEach(tr => {
-        const quantidade = parseFloat(tr.querySelector('input:nth-child(3)').value) || 0;
-        const custo = parseFloat(tr.querySelector('input:nth-child(4)').value) || 0;
-        const total = quantidade * custo;
-        tr.querySelector('input:nth-child(5)').value = total.toFixed(2);
-        totalQuantidade += quantidade;
-        totalCusto += total;
-    });
-    document.getElementById('totalQuantidade').textContent = totalQuantidade;
-    document.getElementById('totalCusto').textContent = totalCusto.toFixed(2);
-};
 
 window.updateProcessosOptions = function() {
     const selects = elements.stepsBody.querySelectorAll('.processo-select');
@@ -844,40 +854,47 @@ window.updateProcessosOptions = function() {
 };
 
 function initializeDragAndDrop() {
-    elements.stepsBody.addEventListener('dragstart', e => {
-        const tr = e.target.closest('tr');
-        if (tr) {
-            tr.classList.add('dragging');
-            e.dataTransfer.setData('text/plain', tr.dataset.index);
-        }
-    });
-
-    elements.stepsBody.addEventListener('dragend', e => {
-        const tr = e.target.closest('tr');
-        if (tr) tr.classList.remove('dragging');
-    });
-
-    elements.stepsBody.addEventListener('dragover', e => e.preventDefault());
-
-    elements.stepsBody.addEventListener('drop', e => {
-        e.preventDefault();
-        const fromIndex = e.dataTransfer.getData('text/plain');
-        const toRow = e.target.closest('tr');
-        if (!toRow) return;
-    
-        const toIndex = toRow.dataset.index;
-        const rows = Array.from(elements.stepsBody.querySelectorAll('tr'));
-        const fromRow = rows.find(row => row.dataset.index === fromIndex);
-    
-        if (fromRow && toRow && fromRow !== toRow) {
-            if (parseInt(fromIndex) < parseInt(toIndex)) {
-                toRow.after(fromRow);
-            } else {
-                toRow.before(fromRow);
+    // Função auxiliar para configurar eventos de drag-and-drop
+    function setupDragAndDrop(container) {
+        container.addEventListener('dragstart', e => {
+            const tr = e.target.closest('tr');
+            if (tr) {
+                tr.classList.add('dragging');
+                e.dataTransfer.setData('text/plain', tr.dataset.index);
             }
-            rows.forEach((row, index) => row.dataset.index = index);
-        }
-    });
+        });
+
+        container.addEventListener('dragend', e => {
+            const tr = e.target.closest('tr');
+            if (tr) tr.classList.remove('dragging');
+        });
+
+        container.addEventListener('dragover', e => e.preventDefault());
+
+        container.addEventListener('drop', e => {
+            e.preventDefault();
+            const fromIndex = e.dataTransfer.getData('text/plain');
+            const toRow = e.target.closest('tr');
+            if (!toRow) return;
+
+            const toIndex = toRow.dataset.index;
+            const rows = Array.from(container.querySelectorAll('tr'));
+            const fromRow = rows.find(row => row.dataset.index === fromIndex);
+
+            if (fromRow && toRow && fromRow !== toRow) {
+                if (parseInt(fromIndex) < parseInt(toIndex)) {
+                    toRow.after(fromRow);
+                } else {
+                    toRow.before(fromRow);
+                }
+                rows.forEach((row, index) => row.dataset.index = index);
+            }
+        });
+    }
+
+    // Configurar drag-and-drop para stepsBody e finishStepsBody
+    setupDragAndDrop(elements.stepsBody);
+    setupDragAndDrop(elements.finishStepsBody);
 }
 
 function bloquearCampos(mensagem = '', erroNaGrade = false) {
@@ -1025,14 +1042,12 @@ async function salvarProdutoNoBackend() {
             chave: document.getElementById(`chaveVariacao${i}`)?.value || '',
             valores: document.getElementById(`valoresVariacao${i}`)?.value || ''
         })),
-        estrutura: Array.from(elements.estruturaBody.querySelectorAll('tr')).map(tr => ({
-            produto: tr.querySelector('input:nth-child(1)')?.value || '',
-            unidade: tr.querySelector('input:nth-child(2)')?.value || '',
-            quantidade: parseFloat(tr.querySelector('input:nth-child(3)')?.value) || 0,
-            custo: parseFloat(tr.querySelector('input:nth-child(4)')?.value) || 0,
-            total: parseFloat(tr.querySelector('input:nth-child(5)')?.value) || 0
-        })),
         etapas: isKit ? [] : Array.from(elements.stepsBody.querySelectorAll('tr')).map(tr => ({
+            processo: tr.querySelector('.processo-select')?.value || '',
+            maquina: tr.querySelector('.maquina-select')?.value || '',
+            feitoPor: tr.querySelector('.feito-por-select')?.value || ''
+        })),
+        finishEtapas: isKit ? [] : Array.from(elements.finishStepsBody.querySelectorAll('tr')).map(tr => ({ // Novo
             processo: tr.querySelector('.processo-select')?.value || '',
             maquina: tr.querySelector('.maquina-select')?.value || '',
             feitoPor: tr.querySelector('.feito-por-select')?.value || ''
@@ -1391,14 +1406,12 @@ window.salvarProdutoNoBackend = salvarProdutoNoBackend;
 window.editProduct = editProduct;
 window.switchTab = switchTab;
 window.toggleTabs = toggleTabs;
-window.addStructureRow = addStructureRow;
 window.addStepRow = addStepRow;
 window.addVariacaoRow = addVariacaoRow;
 window.removerVariacaoRow = removerVariacaoRow;
 window.verificarOutro = verificarOutro;
 window.confirmarNovaVariacao = confirmarNovaVariacao;
 window.fecharPopup = fecharPopup;
-window.updateStructureTotals = updateStructureTotals;
 window.updateProcessosOptions = updateProcessosOptions;
 window.validarSku = validarSku;
 window.abrirImagemPopup = abrirImagemPopup;

@@ -266,9 +266,6 @@ body.autenticado {
 /* Estilo dos Botões Genéricos */
 .btn,
 #limparFiltros,
-.botao-incluir-op,
-.botao-acessar-cortes,
-.botao-adicionar-corte,
 .botao-salvar-op,
 .botao-cancelar-op,
 .botao-finalizar-op,
@@ -281,6 +278,20 @@ body.autenticado {
     font-size: 1em;
     font-weight: 600;
     transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.botao-incluir-op,
+.botao-acessar-cortes,
+.botao-adicionar-corte {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    flex-direction: column; /* Empilha os elementos verticalmente */
+    cursor: pointer;
+    font-size: 1em;
+    font-weight: 600;
+    transition: background 0.3s ease, transform 0.2s ease;
+
 }
 
 .btn:hover:not(:disabled),
@@ -567,9 +578,6 @@ body.autenticado {
 }
 
 
-
-
-
 .tabela-op tbody tr{
     transition: background 0.3s ease;
 }
@@ -658,7 +666,8 @@ body.autenticado {
     border-radius: 8px;
     cursor: pointer;
     font-size: 14px;
-    background-color: #e0e0e0;
+    border: 1px solid #dfe6e9;
+    background-color: #f9f9f9;
     display: flex;
     align-items: center;
     transition: background-color 0.3s ease, transform 0.2s ease;
@@ -716,20 +725,14 @@ body.autenticado {
 }
 
 /* Terceira linha: ações */
-.actions-row {
+.botoes-area-acao-rapida,
+.botoes-gestao-cortes {
     display: flex;
     align-items: center;
     gap: 15px;
     margin-bottom: 20px;
     flex-wrap: wrap;
 }
-
-.actions-row span {
-    font-size: 1em;
-    color: #34495e;
-    font-weight: 600;
-}
-
 
 
 /* Estilo para os cabeçalhos com setas */
@@ -1365,15 +1368,65 @@ body.autenticado {
         align-items: flex-start;
     }
 
-    .actions-row {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
     .botao-incluir-op,
     .botao-adicionar-corte,
     .botao-acessar-cortes {
-        width: 100%;
+        width: 45%;
+        padding: 10px 10px;
+        display: flex;
+        flex-direction: column; /* Empilha os elementos verticalmente */
+
+    }
+
+    .area-filtros-tabela{
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 10px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s ease;
+        margin-top: 20px;
+        
+    }
+
+    .area-filtros-tabela{
+        transform: translateY(-5px);
+    }
+
+    .acao-rapida-tt,
+    .gestao-cortes-tt{
+        display: flex;
+        justify-content: center;
+    }
+
+    .titulo-acao-rapida,
+    .titulo-gestao-cortes{
+        font-size: 1.2em;
+        color: #2c3e50;
+        margin-bottom: 20px;
+        font-weight: 600;
+    
+    }
+
+    .textos-botoes-acao-rapida{
+        color: white;
+        font-size: 1em;
+        font-weight: 600;
+
+    }
+
+    .icons-botoes{
+        font-size: 30px;
+        margin-bottom: 5px; /* Espaço entre o ícone e o texto */
+
+    }
+
+    .botoes-area-acao-rapida,
+    .botoes-gestao-cortes {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+        justify-content: center;
     }
 
     /* tabela da lista de cortes / aba 'corte pendente' Mobile (max-width: 576px)*/
@@ -1432,12 +1485,8 @@ body.autenticado {
     }
 
     .busca-op {
-        width: 100%;
-    }
-
-    .botao-incluir-op {
-        width: 100%;
-        margin-right: 0;
+        max-width: 100%;
+        font-size: 0.9em;
     }
 
     #statusFilter {
@@ -1447,12 +1496,12 @@ body.autenticado {
 
     .status-btn {
         font-size: 12px;
-        padding: 6px 10px;
+        padding: 15px 12px;
     }
 
     .tabela-op th,
     .tabela-op td {
-        font-size: 0.75rem;
+        font-size: 0.8rem;
         padding: 8px;
     }
 

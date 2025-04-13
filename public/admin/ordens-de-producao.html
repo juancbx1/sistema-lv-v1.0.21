@@ -20,25 +20,56 @@
         <section class="lista-op" id="opListView">
             <div class="filters-card">
                 <h1>Ordens de Produção</h1>
-                <div class="actions-row">
-                    <span>O que deseja fazer?</span>
-                    <button class="botao-incluir-op" id="btnIncluirOP" onclick="window.location.hash = '#adicionar'">Incluir OP</button>
-                    <button class="botao-adicionar-corte" id="btnCorte" onclick="window.location.hash = '#corte'">Corte Estoque</button>
-                    <button class="botao-acessar-cortes" id="btnAcessarCortes" onclick="window.location.hash = '#acessocortes'">Area de Cortes</button>
+                <div class="acao-rapida-tt">
+                    <h3 class="titulo-acao-rapida">Ação Rápida:</h3>
                 </div>
-                <div class="filters-row">
-                    <div id="statusFilter">
-                        <button class="status-btn active" data-status="todas">Todas</button>
-                        <button class="status-btn" data-status="em-aberto">Em Aberto <span class="status-bolinha status-em-aberto"></span></button>
-                        <button class="status-btn" data-status="produzindo">Produzindo <span class="status-bolinha status-produzindo"></span></button>
-                        <button class="status-btn" data-status="finalizado">Finalizado <span class="status-bolinha status-finalizado"></span></button>
-                        <button class="status-btn" data-status="cancelada">Cancelada <span class="status-bolinha status-cancelada"></span></button>
+                    <div class="botoes-area-acao-rapida">
+                        <button class="botao-incluir-op" id="btnIncluirOP" onclick="window.location.hash = '#adicionar'">
+                            <i class="fa-solid fa-plus icons-botoes"></i> <!-- Aqui vai o ícone -->
+                            <span class="textos-botoes-acao-rapida">Incluir OP</span> <!-- Aqui vai o texto -->
+                        </button>                        
+                        <button class="botao-incluir-op" onclick="window.location.href='/admin/gerenciar-producao.html'">
+                        <i class="fa-solid fa-pen-to-square icons-botoes"></i>
+                        <span class="textos-botoes-acao-rapida">Gerenciar Registro</span>
+                        </button>
+                        <button class="botao-incluir-op">
+                        <i class="fa-solid fa-box icons-botoes" onclick="window.location.href='/admin/embalagem-de-produtos.html'"></i>
+                        <span class="textos-botoes-acao-rapida">Embalar Produto</span>
+                        </button>
+                        <button class="botao-incluir-op">
+                        <i class="fa-solid fa-boxes-stacked icons-botoes"></i>
+                        <span class="textos-botoes-acao-rapida">Estoque</span>
+                        </button>
                     </div>
-                    <input type="text" id="searchOP" class="busca-op" placeholder="Buscar por produto ou número...">
+                    <div class="gestao-cortes-tt">
+                        <h3 class="titulo-gestao-cortes">Gestão de Cortes:</h3>
+                    </div>
+                    <div class="botoes-gestao-cortes">
+                    <button class="botao-adicionar-corte" id="btnCorte" onclick="window.location.hash = '#corte'">
+                        <i class="fa-solid fa-scissors icons-botoes"></i>
+                        <span class="textos-botoes-acao-rapida">Corte p/ Estoque</span>              
+                    </button>
+                    <button class="botao-acessar-cortes" id="btnAcessarCortes" onclick="window.location.hash = '#acessocortes'">
+                        <i class="fa-solid fa-warehouse icons-botoes"></i>
+                        <span class="textos-botoes-acao-rapida">Área de Cortes</span> 
+                    </button>
                 </div>
-            
             </div>
-            <table class="tabela-op">
+
+        <div class="area-filtros-tabela">
+            <div class="filters-row">
+                <div id="statusFilter">
+                    <button class="status-btn active" data-status="todas">Todas</button>
+                    <button class="status-btn" data-status="em-aberto">Em Aberto <span class="status-bolinha status-em-aberto"></span></button>
+                    <button class="status-btn" data-status="produzindo">Produzindo <span class="status-bolinha status-produzindo"></span></button>
+                    <button class="status-btn" data-status="finalizado">Finalizado <span class="status-bolinha status-finalizado"></span></button>
+                    <button class="status-btn" data-status="cancelada">Cancelada <span class="status-bolinha status-cancelada"></span></button>
+                    <input type="text" id="searchOP" class="busca-op" placeholder="Buscar por produto ou número...">
+
+                </div>
+            </div>
+
+                <table class="tabela-op">
                 <thead>
                     <tr>
                         <th id="sortStatus">Status</th>
@@ -49,7 +80,8 @@
                     </tr>
                 </thead>
                 <tbody id="opTableBody"></tbody>
-            </table>
+                </table>
+            </div>
         </section>
 
         <!-- Formulário de Inclusão de OP -->
@@ -161,7 +193,7 @@
             <div class="botoes-form-op">
                 <button type="button" class="botao-cortar" id="btnCortar">Salvar Corte</button>
             </div>
-        </section>
+        </section> 
 
         <!-- Tela de Acesso aos Cortes -->
         <section class="acessocortes-op filters-card" id="acessocortesView" style="display: none;">
@@ -183,3 +215,5 @@
     <script src="/js/carregar-menu-lateral.js" type="module"></script>
 </body>
 </html>
+
+<!-- layout antigo funcional -->

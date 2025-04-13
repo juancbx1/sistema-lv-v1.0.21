@@ -310,42 +310,6 @@ font-size: 1.8em;
     display: block;
 }
 
-.grupo-form-produto {
-    margin-bottom: 1.5rem;
-}
-
-.grupo-form-produto label {
-    margin-bottom: 0.5rem;
-    color: #7f8c8d;
-    font-weight: 500;
-    display: block;
-}
-
-.grupo-form-produto input,
-.grupo-form-produto select {
-    padding: 0.5rem;
-    border: 1px solid #dcdcdc;
-    border-radius: 4px;
-    background-color: #f9f9f9;
-    color: #333;
-    font-size: 1rem;
-    width: 100%;
-    box-sizing: border-box;
-}
-
-.grupo-form-produto .tipo-checkboxes {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-}
-
-.grupo-form-produto .tipo-checkboxes label {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    color: #333;
-}
-
 /* mensagem de erro de variacoes */
 .error {
     border: 2px solid red;
@@ -554,15 +518,6 @@ font-size: 1.8em;
         font-size: 1.2rem;
     }
 
-    .grupo-form-produto {
-        margin-bottom: 1rem;
-    }
-
-    .grupo-form-produto input, .grupo-form-produto select {
-        font-size: 14px;
-        padding: 0.4rem;
-    }
-
     .botao-enviar-produto, .botao-voltar-produto, .botao-adicionar-estrutura, .botao-adicionar-etapa, .botao-adicionar-variacao, #salvarVariacoesBtn {
         width: 50%;
         margin-bottom: 0.5rem;
@@ -684,15 +639,6 @@ font-size: 1.8em;
         font-size: 1.3rem;
     }
 
-    .grupo-form-produto {
-        margin-bottom: 1.2rem;
-    }
-
-    .grupo-form-produto input, .grupo-form-produto select {
-        font-size: 0.9em;
-        padding: 0.4rem;
-    }
-
     .botao-enviar-produto, .botao-voltar-produto, .botao-adicionar-estrutura, .botao-adicionar-etapa, .botao-adicionar-variacao, #salvarVariacoesBtn {
         width: 50%;
         margin-bottom: 0.5rem;
@@ -806,10 +752,6 @@ font-size: 1.8em;
 
     .formulario-produto {
         padding: 1.5rem;
-    }
-
-    .grupo-form-produto input, .grupo-form-produto select {
-        font-size: 16px;
     }
 
     .botao-enviar-produto, .botao-voltar-produto, .botao-adicionar-estrutura, .botao-adicionar-etapa, .botao-adicionar-variacao,#salvarVariacoesBtn {

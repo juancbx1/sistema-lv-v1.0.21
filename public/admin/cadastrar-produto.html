@@ -17,16 +17,16 @@
     <div class="container-produto">
         <section class="lista-produtos" id="productListView" aria-label="Lista de produtos">
             <div class="card-header-filter">
-            <div class="cabecalho-lista-produto">
-                <h2>Produtos Cadastrados</h2>
-                <input type="text" id="searchProduct" class="busca-produto" placeholder="Buscar por nome..." aria-label="Buscar produtos">
-            </div>
-            <div class="filtro-tipo-produto" id="typeFilter" role="tablist">
-                <button class="cp-type-btn active" data-type="todos" role="tab" aria-selected="true">Todos</button>
-                <button class="cp-type-btn" data-type="simples" role="tab" aria-selected="false">Simples</button>
-                <button class="cp-type-btn" data-type="variacoes" role="tab" aria-selected="false">Variações</button>
-                <button class="cp-type-btn" data-type="kits" role="tab" aria-selected="false">Kits</button>
-            </div>
+                <div class="cabecalho-lista-produto">
+                    <h2>Produtos Cadastrados</h2>
+                    <input type="text" id="searchProduct" class="busca-produto" placeholder="Buscar por nome..." aria-label="Buscar produtos">
+                </div>
+                <div class="filtro-tipo-produto" id="typeFilter" role="tablist">
+                    <button class="cp-type-btn active" data-type="todos" role="tab" aria-selected="true">Todos</button>
+                    <button class="cp-type-btn" data-type="simples" role="tab" aria-selected="false">Simples</button>
+                    <button class="cp-type-btn" data-type="variacoes" role="tab" aria-selected="false">Variações</button>
+                    <button class="cp-type-btn" data-type="kits" role="tab" aria-selected="false">Kits</button>
+                </div>
             </div>
             <table class="tabela-lista-produtos" aria-label="Tabela de produtos">
                 <thead>
@@ -98,33 +98,6 @@
 
                 <div class="conteudo-aba-produto" id="producao" role="tabpanel">
                     <div class="grupo-form-produto">
-                        <h3>Estrutura</h3>
-                        <table class="tabela-estrutura-produto" aria-label="Estrutura do produto">
-                            <thead>
-                                <tr>
-                                    <th scope="col">Produto</th>
-                                    <th scope="col">Unidade</th>
-                                    <th scope="col">Quantidade</th>
-                                    <th scope="col">Custo</th>
-                                    <th scope="col">Total</th>
-                                    <th scope="col">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody id="estruturaBody"></tbody>
-                            <tfoot>
-                                <tr>
-                                    <th scope="row">Totais</th>
-                                    <td></td>
-                                    <td id="totalQuantidade">0</td>
-                                    <td></td>
-                                    <td id="totalCusto">0,00</td>
-                                    <td></td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                        <button class="botao-adicionar-estrutura" onclick="addStructureRow()" aria-label="Adicionar componente">Adicionar Componente</button>
-                    </div>
-                    <div class="grupo-form-produto">
                         <h3>Etapas de Produção</h3>
                         <table class="cp-table" aria-label="Etapas de produção">
                             <thead>
@@ -138,7 +111,23 @@
                             </thead>
                             <tbody id="stepsBody" draggable="true"></tbody>
                         </table>
-                        <button type="button" class="botao-adicionar-etapa" onclick="addStepRow()" aria-label="Adicionar etapa">Adicionar Etapa</button>
+                        <button type="button" class="botao-adicionar-etapa" onclick="addStepRow()" aria-label="Adicionar etapa de produção">Adicionar Etapa</button>
+                    </div>
+                    <div class="grupo-form-produto">
+                        <h3>Etapas de Arremate/Tik Tik</h3>
+                        <table class="cp-table" aria-label="Etapas de arremate/tik tik">
+                            <thead>
+                                <tr>
+                                    <th scope="col" style="width: 5%;"></th>
+                                    <th scope="col" style="width: 30%;">Processos</th>
+                                    <th scope="col" style="width: 25%;">Máquina</th>
+                                    <th scope="col" style="width: 25%;">Feito Por</th>
+                                    <th scope="col" style="width: 15%;">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="finishStepsBody" draggable="true"></tbody>
+                        </table>
+                        <button type="button" class="botao-adicionar-etapa" onclick="addFinishStepRow()" aria-label="Adicionar etapa de arremate/tik tik">Adicionar Etapa</button>
                     </div>
                 </div>
 
@@ -167,8 +156,8 @@
                         <button id="salvarGradeBtn" class="botao-salvar-grade" onclick="salvarGrade()" aria-label="Salvar grade">Salvar Grade</button>
                     </div>
                 </div>
+            </div>
 
-                    
             <!-- Popup para Nova Variação -->
             <div id="variacaoPopup" class="popup-produto" style="display: none;" role="dialog" aria-labelledby="novaVariacaoTitle">
                 <div class="conteudo-popup-produto">

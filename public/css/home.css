@@ -70,7 +70,7 @@ body {
     transition: transform 0.2s ease;
     margin-bottom: 20px;
     border-bottom: 2px solid #3498db;
-    padding-bottom: 30px;
+    padding-bottom: 15px;
 }
 
 .card-apresentacao:hover{
@@ -191,6 +191,131 @@ body {
 
 /* Breakpoints */
 
+@media (min-width: 1025px) {
+    .grafico-container { 
+        height: 350px; 
+        max-width: 800px; /* Limita em telas grandes */
+    }
+    #graficoProducaoTempoReal { 
+        height: 350px !important; 
+        max-height: 350px; 
+    }
+}
+
+/* iPad Pro (768px a 1024px) */
+@media (min-width: 768px) and (max-width: 1024px) {
+    .grafico-container { 
+        height: 280px; 
+        max-width: 100%; 
+    }
+    #graficoProducaoTempoReal { 
+        height: 280px !important; 
+        max-height: 280px; 
+    }
+    
+    .hamburger-menu {
+        display: none; /* Oculto no tablet/desktop */
+    }
+
+    .menu-lateral {
+        left: 0; /* Sempre visível */
+    }
+
+    .container {
+        max-width:100%;
+        width: 100%;
+        margin: 40px auto 30px 10px; /* Espaço para o menu lateral */
+
+    }
+
+    .linha-superior {
+        flex-direction: row;
+    }
+
+    .cards-identificacao, .card-acoes {
+        flex: 1;
+    }
+
+    .card-identificacao h2, 
+    .card-acoes h2,
+    .card-producao-diaria h2 {
+        font-size: 1.4rem;
+    }
+
+    .card-teaser h3 {
+        font-size: 1.3rem;
+    }
+
+    .acao-btn {
+        font-size: 1rem;
+    }
+
+    .btn-refresh {
+        font-size: 0.95rem;
+    }
+
+}
+
+/* Mobile (max-width: 576px) */
+@media (max-width: 576px) {
+    .hamburger-menu {
+        display: block; /* Aparece no mobile */
+    }
+
+    .grafico-container { 
+        height: 250px; 
+        max-width: 100%; 
+    }
+    #graficoProducaoTempoReal { 
+        height: 250px !important; 
+        max-height: 250px; 
+    }
+
+    .menu-lateral.active {
+        left: 0; /* Mostra quando ativado */
+    }
+
+    .container {
+        max-width: 100%;
+        width: 100%;
+        margin: 40px 5px 20px 0; /* Remove margem à esquerda no mobile */
+        padding: 0 15px;
+    }
+
+    .linha-superior {
+        flex-direction: column;
+    }
+
+    .cards-identificacao, .card-acoes {
+        width: 100%;
+    }
+
+    .card-identificacao h2, 
+    .card-acoes h2,
+    .card-producao-diaria h2 {
+        font-size: 1.4rem;
+    }
+
+    .card-teaser h3 {
+        font-size: 1.25rem;
+    }
+    .acoes-menu {
+        display: flex;
+        flex-direction: row;
+        gap: 10px;
+    }
+
+    .acao-btn {
+        font-size: 0.85rem;
+        padding: 20px;
+        text-align: center;
+    }
+
+    .btn-refresh {
+        font-size: 0.9rem;
+    }
+}
+
 /* iPhone XR (max-width: 414px) */
 @media (max-width: 414px) {
     body {
@@ -252,122 +377,4 @@ body {
         font-size: 0.9rem;
     }
 
-}
-
-/* Mobile (max-width: 576px) */
-@media (max-width: 576px) {
-    .hamburger-menu {
-        display: block; /* Aparece no mobile */
-    }
-
-    .grafico-container { 
-        height: 250px; 
-        max-width: 100%; 
-    }
-    #graficoProducaoTempoReal { 
-        height: 250px !important; 
-        max-height: 250px; 
-    }
-
-    .menu-lateral.active {
-        left: 0; /* Mostra quando ativado */
-    }
-
-    .container {
-        max-width: 100%;
-        width: 100%;
-        margin: 40px 5px 20px 0; /* Remove margem à esquerda no mobile */
-        padding: 0 15px;
-    }
-
-    .linha-superior {
-        flex-direction: column;
-    }
-
-    .cards-identificacao, .card-acoes {
-        width: 100%;
-    }
-
-    .card-identificacao h2, 
-    .card-acoes h2,
-    .card-producao-diaria h2 {
-        font-size: 1.4rem;
-    }
-
-    .card-teaser h3 {
-        font-size: 1.25rem;
-    }
-
-    .acao-btn {
-        font-size: 0.95rem;
-    }
-
-    .btn-refresh {
-        font-size: 0.9rem;
-    }
-}
-
-/* iPad Pro (768px a 1024px) */
-@media (min-width: 768px) and (max-width: 1024px) {
-    .grafico-container { 
-        height: 280px; 
-        max-width: 100%; 
-    }
-    #graficoProducaoTempoReal { 
-        height: 280px !important; 
-        max-height: 280px; 
-    }
-    
-    .hamburger-menu {
-        display: none; /* Oculto no tablet/desktop */
-    }
-
-    .menu-lateral {
-        left: 0; /* Sempre visível */
-    }
-
-    .container {
-        max-width:100%;
-        width: 100%;
-        margin: 40px auto 30px 10px; /* Espaço para o menu lateral */
-
-    }
-
-    .linha-superior {
-        flex-direction: row;
-    }
-
-    .cards-identificacao, .card-acoes {
-        flex: 1;
-    }
-
-    .card-identificacao h2, 
-    .card-acoes h2,
-    .card-producao-diaria h2 {
-        font-size: 1.4rem;
-    }
-
-    .card-teaser h3 {
-        font-size: 1.3rem;
-    }
-
-    .acao-btn {
-        font-size: 1rem;
-    }
-
-    .btn-refresh {
-        font-size: 0.95rem;
-    }
-
-}
-
-@media (min-width: 1025px) {
-    .grafico-container { 
-        height: 350px; 
-        max-width: 800px; /* Limita em telas grandes */
-    }
-    #graficoProducaoTempoReal { 
-        height: 350px !important; 
-        max-height: 350px; 
-    }
 }
