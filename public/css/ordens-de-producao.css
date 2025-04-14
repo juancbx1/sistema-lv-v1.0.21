@@ -1599,11 +1599,16 @@ body.autenticado {
 
 }
 
-
 /* Breakpoint para telas menores (max-width: 414px, como iPhone XR) */
 @media (max-width: 414px) {
     .container-op {
         padding: 10px;
+    }
+
+    .textos-botoes-acao-rapida {
+        color: white;
+        font-size: 0.9em;
+        font-weight: 600;
     }
 
 .tabela-corte-pendente th,

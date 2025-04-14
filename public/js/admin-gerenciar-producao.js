@@ -409,8 +409,8 @@ import { verificarAutenticacao, logout } from '/js/utils/auth.js';
         const producaoExcluida = await response.json();
         console.log('[excluirRegistro] Registro excluído do backend:', producaoExcluida);
 
-        // Buscar todas as ordens de produção com all=true
-        const ordensDeProducaoResponse = await fetch('/api/ordens-de-producao?all=true', {
+        // Buscar todas as ordens de produção com all=true e noStatusFilter=true
+        const ordensDeProducaoResponse = await fetch('/api/ordens-de-producao?all=true&noStatusFilter=true', {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -422,15 +422,32 @@ import { verificarAutenticacao, logout } from '/js/utils/auth.js';
             throw new Error('Erro ao buscar ordens de produção');
         }
 
-        const ordensDeProducao = await ordensDeProducaoResponse.json();
-        const op = ordensDeProducao.find(o => o.numero === producaoExcluida.op_numero);
-        if (!op) {
-            console.warn('[excluirRegistro] OP não encontrada para opNumero:', producaoExcluida.op_numero);
+        // Extrair o array de ordens da propriedade 'rows' do retorno
+        const ordensDeProducaoData = await ordensDeProducaoResponse.json();
+        const ordensDeProducao = ordensDeProducaoData.rows || []; // Garante que é um array
+
+        if (ordensDeProducao.length === 0) {
+            console.warn('[excluirRegistro] Nenhuma ordem de produção encontrada.');
             aplicarFiltros(currentPage);
-            alert('Registro excluído com sucesso!');
+            alert('Registro excluído com sucesso, mas nenhuma OP foi encontrada no backend.');
             return;
         }
 
+        // Busca mais robusta pela OP
+        const opNumeroNormalizado = String(producaoExcluida.op_numero || '').trim();
+        const op = ordensDeProducao.find(o => {
+            const numeroNormalizado = String(o.numero || '').trim();
+            return numeroNormalizado === opNumeroNormalizado;
+        });
+
+        if (!op) {
+            console.warn('[excluirRegistro] OP não encontrada para opNumero:', opNumeroNormalizado, '- Verifique se a OP ainda existe ou se os dados estão consistentes.');
+            aplicarFiltros(currentPage);
+            alert('Registro excluído com sucesso, mas a OP correspondente não foi encontrada. Verifique os dados no backend.');
+            return;
+        }
+
+        // Restante do código permanece igual...
         const etapa = op.etapas.find(e => e.ultimoLancamentoId === String(id));
         if (etapa) {
             etapa.quantidade = '';
@@ -480,109 +497,131 @@ import { verificarAutenticacao, logout } from '/js/utils/auth.js';
     }
 }
 
-  async function editarRegistro(id) {
-    if (!permissoes.includes('editar-registro-producao')) {
+async function editarRegistro(id) {
+  if (!permissoes.includes('editar-registro-producao')) {
       alert('Você não tem permissão para editar registros.');
       return;
-    }
+  }
 
-    const producoes = await carregarProducoesDoBackend();
-    const producao = producoes.find(p => p.id === id);
-    if (!producao) return;
+  const producoes = await carregarProducoesDoBackend();
+  const producao = producoes.find(p => p.id === id);
+  if (!producao) return;
 
-    const novaQuantidade = prompt('Digite a nova quantidade:', producao.quantidade);
-    if (novaQuantidade === null) return;
-    const quantidadeAtualizada = parseInt(novaQuantidade);
+  const novaQuantidade = prompt('Digite a nova quantidade:', producao.quantidade);
+  if (novaQuantidade === null) return;
+  const quantidadeAtualizada = parseInt(novaQuantidade);
 
-    if (isNaN(quantidadeAtualizada) || quantidadeAtualizada <= 0) {
+  if (isNaN(quantidadeAtualizada) || quantidadeAtualizada <= 0) {
       alert('Quantidade inválida. A edição foi cancelada.');
       return;
-    }
+  }
 
-    if (quantidadeAtualizada === producao.quantidade) {
+  if (quantidadeAtualizada === producao.quantidade) {
       alert('A quantidade informada é a mesma já registrada. Não é possível realizar a edição.');
       return;
-    }
+  }
 
-    try {
+  try {
       const token = localStorage.getItem('token');
       const response = await fetch('/api/producoes', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          id,
-          quantidade: quantidadeAtualizada,
-          edicoes: (producao.edicoes || 0) + 1,
-          editadoPorAdmin: usuarioLogado?.nome || 'Sistema',
-        }),
+          method: 'PUT',
+          headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+              id,
+              quantidade: quantidadeAtualizada,
+              edicoes: (producao.edicoes || 0) + 1,
+              editadoPorAdmin: usuarioLogado?.nome || 'Sistema',
+          }),
       });
 
       if (!response.ok) {
-        throw new Error(`Erro ao editar produção: ${response.statusText}`);
+          throw new Error(`Erro ao editar produção: ${response.statusText}`);
       }
 
       const updatedProducao = await response.json();
       console.log('[editarRegistro] Produção editada no backend:', updatedProducao);
 
-      // Atualizar a OP correspondente
-      const ordensDeProducaoResponse = await fetch('/api/ordens-de-producao', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+      // Buscar todas as ordens de produção com all=true e noStatusFilter=true
+      const ordensDeProducaoResponse = await fetch('/api/ordens-de-producao?all=true&noStatusFilter=true', {
+          method: 'GET',
+          headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+          },
       });
 
       if (!ordensDeProducaoResponse.ok) {
-        throw new Error('Erro ao buscar ordens de produção');
+          throw new Error('Erro ao buscar ordens de produção');
       }
 
-      const ordensDeProducao = await ordensDeProducaoResponse.json();
-      const op = ordensDeProducao.find(o => o.numero === producao.opNumero);
-      if (op) {
-        const etapa = op.etapas.find(e => e.ultimoLancamentoId === id);
-        if (etapa) {
+      // Extrair o array de ordens da propriedade 'rows' do retorno
+      const ordensDeProducaoData = await ordensDeProducaoResponse.json();
+      const ordensDeProducao = ordensDeProducaoData.rows || []; // Garante que é um array
+
+      if (ordensDeProducao.length === 0) {
+          console.warn('[editarRegistro] Nenhuma ordem de produção encontrada.');
+          aplicarFiltros(currentPage);
+          alert('Registro editado com sucesso, mas nenhuma OP foi encontrada no backend.');
+          return;
+      }
+
+      // Busca mais robusta pela OP
+      const opNumeroNormalizado = String(updatedProducao.op_numero || '').trim();
+      const op = ordensDeProducao.find(o => {
+          const numeroNormalizado = String(o.numero || '').trim();
+          return numeroNormalizado === opNumeroNormalizado;
+      });
+
+      if (!op) {
+          console.warn('[editarRegistro] OP não encontrada para opNumero:', opNumeroNormalizado, '- Verifique se a OP ainda existe ou se os dados estão consistentes.');
+          aplicarFiltros(currentPage);
+          alert('Registro editado com sucesso, mas a OP correspondente não foi encontrada. Verifique os dados no backend.');
+          return;
+      }
+
+      // Atualizar a OP correspondente
+      const etapa = op.etapas.find(e => e.ultimoLancamentoId === id);
+      if (etapa) {
           etapa.quantidade = quantidadeAtualizada;
           etapa.editadoPorAdmin = usuarioLogado?.nome || 'Sistema';
 
           // Recalcular o status da OP (caso necessário)
           let todasEtapasCompletas = true;
           for (const etapa of op.etapas) {
-            const tipoUsuario = await getTipoUsuarioPorProcesso(etapa.processo, op.produto);
-            const exigeQuantidade = tipoUsuario === 'costureira' || tipoUsuario === 'tiktik';
-            const etapaCompleta = etapa.usuario && (!exigeQuantidade || (etapa.lancado && etapa.quantidade > 0));
-            if (!etapaCompleta) {
-              todasEtapasCompletas = false;
-              break;
-            }
+              const tipoUsuario = await getTipoUsuarioPorProcesso(etapa.processo, op.produto);
+              const exigeQuantidade = tipoUsuario === 'costureira' || tipoUsuario === 'tiktik';
+              const etapaCompleta = etapa.usuario && (!exigeQuantidade || (etapa.lancado && etapa.quantidade > 0));
+              if (!etapaCompleta) {
+                  todasEtapasCompletas = false;
+                  break;
+              }
           }
 
           if (op.status === 'finalizado' && !todasEtapasCompletas) {
-            op.status = 'produzindo';
-            console.log(`[editarRegistro] OP ${op.numero} voltou para o status "produzindo" devido a edição de registro.`);
+              op.status = 'produzindo';
+              console.log(`[editarRegistro] OP ${op.numero} voltou para o status "produzindo" devido a edição de registro.`);
           }
 
           await fetch('/api/ordens-de-producao', {
-            method: 'PUT',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(op),
+              method: 'PUT',
+              headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(op),
           });
-        }
       }
 
       aplicarFiltros(currentPage);
       alert(`Quantidade editada com sucesso para ${quantidadeAtualizada}!`);
-    } catch (error) {
+  } catch (error) {
       console.error('[editarRegistro] Erro:', error);
       alert('Erro ao editar registro: ' + error.message);
-    }
   }
+}
 
   async function getTipoUsuarioPorProcesso(processo, produtoNome) {
     try {

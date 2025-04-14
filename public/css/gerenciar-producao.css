@@ -505,6 +505,11 @@ body.autenticado {
 
     .filter-group {
         width: 40%;
+     
+    }
+    .filter-group select,
+    .filter-group input {
+        font-size: 0.9em;
     }
 
     .filter-group, .form-group {
@@ -629,4 +634,18 @@ body.autenticado {
         padding: 8px 12px;
         font-size: 0.9em;
     }
+}
+
+/* Breakpoint para telas menores (max-width: 414px, como iPhone XR) */
+@media (max-width: 414px) {
+
+    .filter-group{
+       width:40%;
+    }
+    .filter-group select,
+    .filter-group input {
+        font-size: 0.85em;
+    }
+
+
 }
