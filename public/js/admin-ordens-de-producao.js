@@ -930,58 +930,94 @@ async function loadEtapasEdit(op, skipReload = false) {
         usuarioStatusInput.readOnly = true;
         usuarioStatusInput.style.backgroundColor = '#d3d3d3';
         usuarioStatusInput.style.marginRight = '5px';
-
+      
         const usuarioNomeInput = document.createElement('input');
         usuarioNomeInput.type = 'text';
         usuarioNomeInput.className = 'etapa-usuario-nome';
         usuarioNomeInput.readOnly = true;
         usuarioNomeInput.style.backgroundColor = '#d3d3d3';
-
+      
         if (op.status !== 'finalizado' && op.status !== 'cancelada') {
-          const cortesPendentes = await obterCortes('pendente');
-          const cortesCortados = await obterCortes('cortados');
-          const cortesVerificados = await obterCortes('verificado');
-          const corteEncontrado = [
-            ...cortesPendentes,
-            ...cortesCortados,
-            ...cortesVerificados
-          ].find(c => c.op === op.numero);
-
-          if (corteEncontrado) {
-            if (corteEncontrado.status === 'cortados' || corteEncontrado.status === 'verificado') {
-              usuarioStatusInput.value = 'Corte Realizado';
-              usuarioNomeInput.value = corteEncontrado.cortador || '';
-              op.etapas[index] = {
-                ...etapa,
-                usuario: corteEncontrado.cortador || '',
-                lancado: true
-              };
-              await saveOPChanges(op);
+          try {
+            const cortesPendentes = await obterCortes('pendente');
+            const cortesCortados = await obterCortes('cortados');
+            const cortesVerificados = await obterCortes('verificado');
+            let cortesUsados = [];
+            try {
+              cortesUsados = await obterCortes('usado'); // Tenta buscar cortes usados, mas não falha se der erro
+            } catch (error) {
+              console.warn('[loadEtapasEdit] Falha ao buscar cortes usados:', error);
+            }
+      
+            console.log('[loadEtapasEdit] Buscando corte para OP:', op.numero, 'Produto:', op.produto, 'Variante:', op.variante);
+            console.log('[loadEtapasEdit] Cortes encontrados - Pendentes:', cortesPendentes.length, 'Cortados:', cortesCortados.length, 'Verificados:', cortesVerificados.length, 'Usados:', cortesUsados.length);
+      
+            // Busca por op.numero ou por produto + variante como fallback
+            const corteEncontrado = [
+              ...cortesPendentes,
+              ...cortesCortados,
+              ...cortesVerificados,
+              ...cortesUsados
+            ].find(c => 
+              (c.op && c.op === op.numero) || 
+              (c.produto === op.produto && c.variante === op.variante)
+            );
+      
+            if (corteEncontrado) {
+              console.log('[loadEtapasEdit] Corte encontrado:', corteEncontrado);
+              if (['cortados', 'verificado', 'usado'].includes(corteEncontrado.status)) {
+                usuarioStatusInput.value = 'Corte Realizado';
+                usuarioNomeInput.value = corteEncontrado.cortador || 'Sistema';
+                op.etapas[index] = {
+                  ...etapa,
+                  usuario: corteEncontrado.cortador || 'Sistema',
+                  lancado: true,
+                  quantidade: corteEncontrado.quantidade || etapa.quantidade || 1
+                };
+                console.log('[loadEtapasEdit] Atualizando etapa Corte para OP:', op.numero, 'Status: Corte Realizado, Usuário:', corteEncontrado.cortador);
+                await saveOPChanges(op); // Garante que a OP seja atualizada no banco
+              } else {
+                usuarioStatusInput.value = 'Aguardando corte';
+                usuarioNomeInput.value = '';
+                op.etapas[index] = {
+                  ...etapa,
+                  usuario: '',
+                  lancado: false,
+                  quantidade: etapa.quantidade || 0
+                };
+                console.log('[loadEtapasEdit] Corte pendente para OP:', op.numero);
+              }
             } else {
               usuarioStatusInput.value = 'Aguardando corte';
               usuarioNomeInput.value = '';
               op.etapas[index] = {
                 ...etapa,
                 usuario: '',
-                lancado: false
+                lancado: false,
+                quantidade: etapa.quantidade || 0
               };
+              console.log('[loadEtapasEdit] Nenhum corte encontrado para OP:', op.numero);
             }
-          } else {
-            usuarioStatusInput.value = 'Aguardando corte';
+          } catch (error) {
+            console.error('[loadEtapasEdit] Erro ao buscar cortes:', error);
+            usuarioStatusInput.value = 'Erro ao verificar corte';
             usuarioNomeInput.value = '';
             op.etapas[index] = {
               ...etapa,
               usuario: '',
-              lancado: false
+              lancado: false,
+              quantidade: etapa.quantidade || 0
             };
+            mostrarPopupMensagem('Erro ao verificar status do corte. Tente novamente.', 'erro');
           }
         } else {
           usuarioStatusInput.value = etapa.lancado ? 'Corte Realizado' : 'Aguardando corte';
           usuarioNomeInput.value = etapa.usuario || '';
+          console.log('[loadEtapasEdit] OP finalizada/cancelada, mantendo status da etapa Corte:', etapa.lancado ? 'Corte Realizado' : 'Aguardando corte');
         }
-
         row.appendChild(usuarioStatusInput);
         row.appendChild(usuarioNomeInput);
+
       } else {
         const exigeQuantidade = tiposUsuarios[index].tipoUsuario === 'costureira' || tiposUsuarios[index].tipoUsuario === 'tiktik';
         const usuarioSelect = document.createElement('select');

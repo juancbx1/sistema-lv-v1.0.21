@@ -32,15 +32,15 @@ export default async function handler(req, res) {
 
     if (method === 'GET') {
       const status = query.status || 'pendente';
-      if (!['pendente', 'cortados', 'verificado'].includes(status)) {
-        return res.status(400).json({ error: 'Status inválido. Use "pendente", "cortados" ou "verificado".' });
+      if (!['pendente', 'cortados', 'verificado', 'usado'].includes(status)) {
+        return res.status(400).json({ error: 'Status inválido. Use "pendente", "cortados", "verificado" ou "usado".' });
       }
-
+    
       const result = await pool.query(
         'SELECT * FROM cortes WHERE status = $1 ORDER BY data DESC',
         [status]
       );
-
+    
       res.status(200).json(result.rows);
 
     } else if (method === 'POST') {
