@@ -2875,20 +2875,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (cancelarOP) {
     cancelarOP.addEventListener('click', async () => {
       const editId = window.location.hash.split('/')[1];
-      const ordensData = await obterOrdensDeProducao(1, true);
-      const ordensDeProducao = ordensData.rows;
-      const op = ordensDeProducao.find(o => o.edit_id === editId);
+      const ordensData = await obterOrdensDeProducao(1, true, false, null, true);
+      const ordensDeProducao = ordensData.rows; // Array de OPs retornado
+      const op = ordensDeProducao.find(o => o.edit_id === editId) || ordensDeProducao.find(o => o.numero === editId);
+      console.log('[cancelarOP handler] Tentando cancelar OP com editId:', editId);
+      console.log('[cancelarOP handler] Array de OPs buscado (ordensDeProducao):', ordensDeProducao); // Veja o conteúdo COMPLETO aqui
+      console.log('[cancelarOP handler] OP encontrada:', op); // Veja se op é null/undefined
+
       if (op) {
         if (op.status === 'cancelada') {
           mostrarPopupMensagem(`Erro: A Ordem de Produção #${op.numero} já está cancelada!`, 'erro');
           return;
         }
+
+        // Se o status da OP for 'finalizado', mostre a mensagem e retorne
+        if (op.status === 'finalizado') {
+          mostrarPopupMensagem(`Não é possível cancelar a Ordem de Produção #${op.numero} porque ela já está finalizada.`, 'aviso'); // Use aviso ou erro
+          return; // Sai da função, sem perguntar confirmação ou salvar
+      }
+
         if (confirm(`Tem certeza que deseja cancelar a Ordem de Produção #${op.numero}? Esta ação não pode ser desfeita.`)) {
           op.status = 'cancelada';
           await saveOPChanges(op);
           mostrarPopupMensagem(`Ordem de Produção #${op.numero} cancelada com sucesso!`, 'sucesso');
           window.location.hash = '';
           await toggleView();
+
+        }  else { // Se a OP NÃO foi encontrada pelo find
+          console.warn('[cancelarOP handler] OP não encontrada no array buscado para cancelar.', { editId, numero: op?.numero, arrayBuscado: ordensDeProducao }); // Adicione arrayBuscado para ver o que veio
         }
       }
     });
