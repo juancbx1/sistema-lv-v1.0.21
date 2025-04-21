@@ -23,8 +23,6 @@ export default async function handler(req, res) {
     const usuarioLogado = verificarToken(req);
 
     if (method === 'GET') {
-      console.time('[api/ordens-de-producao][GET] Tempo Total'); // Timer total do GET
-
       const fetchAll = query.all === 'true';
       const getNextNumber = query.getNextNumber === 'true';
       const noStatusFilter = query.noStatusFilter === 'true';
@@ -43,13 +41,9 @@ export default async function handler(req, res) {
           SELECT numero FROM ordens_de_producao 
           ORDER BY numero DESC
         `;
-          console.time('[api/ordens-de-producao][GET] Tempo Query getNextNumber'); // Timer da query específica
         const result = await pool.query(queryText);
-          console.timeEnd('[api/ordens-de-producao][GET] Tempo Query getNextNumber');
 
-        console.time('[api/ordens-de-producao][GET] Tempo Pos-Query getNextNumber'); // Timer pos-query
         res.status(200).json(result.rows.map(row => row.numero));
-        console.timeEnd('[api/ordens-de-producao][GET] Tempo Pos-Query getNextNumber');
 
 
       } else if (fetchAll && noStatusFilter) {
@@ -86,28 +80,20 @@ export default async function handler(req, res) {
       }
 
       if (!getNextNumber) {
-        console.time('[api/ordens-de-producao][GET] Tempo Query fetchAll noFilter'); // Timer da query específica
         const result = await pool.query(queryText, queryParams);
-        console.timeEnd('[api/ordens-de-producao][GET] Tempo Query fetchAll noFilter');
         
-        console.time('[api/ordens-de-producao][GET] Tempo Query Default Paginated Count'); // Timer Count
         const totalResult = await pool.query(totalQuery, totalParams);
-        console.timeEnd('[api/ordens-de-producao][GET] Tempo Query Default Paginated Count');
-
-       
         const total = parseInt(totalResult.rows[0].count);
 
-        console.time('[api/ordens-de-producao][GET] Tempo Pos-Query fetchAll noFilter'); // Timer pos-query
         res.status(200).json({
           rows: result.rows,
           total: total,
           page: fetchAll ? 1 : page,
           pages: Math.ceil(total / limit),
         });
-        console.timeEnd('[api/ordens-de-producao][GET] Tempo Pos-Query fetchAll noFilter');
 
       }
-      console.timeEnd('[api/ordens-de-producao][GET] Tempo Total'); // Encerra timer total
+
     } else if (method === 'POST') {
       if (!usuarioLogado.permissoes.includes('criar-op')) {
         return res.status(403).json({ error: 'Permissão negada' });

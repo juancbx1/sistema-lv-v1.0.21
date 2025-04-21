@@ -15,9 +15,13 @@ export default async function handler(req, res) {
     try {
         if (method === 'GET') {
             console.log('Tentando buscar produtos do banco...');
-            const result = await pool.query('SELECT * FROM produtos');
+            const result = await pool.query('SELECT id, nome, sku, gtin, unidade, estoque, imagem, tipos, variacoes, estrutura, etapas, "etapastiktik" AS "etapasTiktik", grade, is_kit, pontos, pontos_expiracao, pontos_criacao FROM produtos');
             console.log('Produtos buscados com sucesso:', result.rows);
+
+            console.log('[api/produtos][GET] Produtos buscados com sucesso:', result.rows.length, 'Primeiro produto:', result.rows.length > 0 ? result.rows[0] : 'Nenhum'); // Log o primeiro produto
+            console.log('[api/produtos][GET] Conteúdo de etapasTiktik no primeiro produto:', result.rows.length > 0 ? result.rows[0].etapasTiktik : 'N/A'); // Log especificamente a coluna etapasTiktik
             res.status(200).json(result.rows);
+            
         } else if (method === 'POST') {
             const produto = req.body;
             console.log('[POST] Produto recebido do cliente:', produto);
@@ -26,8 +30,8 @@ export default async function handler(req, res) {
             const isKitValue = produto.isKit === true || produto.tipos && produto.tipos.includes('kits');
         
             const query = `
-                INSERT INTO produtos (nome, sku, gtin, unidade, estoque, imagem, tipos, variacoes, estrutura, etapas, grade, is_kit, pontos, pontos_expiracao, pontos_criacao)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                INSERT INTO produtos (nome, sku, gtin, unidade, estoque, imagem, tipos, variacoes, estrutura, etapas, etapasTiktik, grade, is_kit, pontos, pontos_expiracao, pontos_criacao)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
                 ON CONFLICT (nome)
                 DO UPDATE SET
                     sku = EXCLUDED.sku,
@@ -39,6 +43,7 @@ export default async function handler(req, res) {
                     variacoes = EXCLUDED.variacoes,
                     estrutura = EXCLUDED.estrutura,
                     etapas = EXCLUDED.etapas,
+                    etapasTiktik = EXCLUDED.etapasTiktik,
                     grade = EXCLUDED.grade,
                     is_kit = EXCLUDED.is_kit,
                     pontos = EXCLUDED.pontos,
@@ -57,6 +62,7 @@ export default async function handler(req, res) {
                 JSON.stringify(produto.variacoes || []),
                 JSON.stringify(produto.estrutura || []),
                 JSON.stringify(produto.etapas || []),
+                JSON.stringify(produto.etapasTiktik || []),
                 JSON.stringify(produto.grade || []),
                 isKitValue, // Usar valor explícito
                 JSON.stringify(produto.pontos || []),

@@ -28,7 +28,7 @@ const elements = {
     previewImagem: document.getElementById('previewImagem'),
     removeImagem: document.getElementById('removeImagem'),
     stepsBody: document.getElementById('stepsBody'),
-    finishStepsBody: document.getElementById('finishStepsBody'),
+    etapasTiktikBody: document.getElementById('etapasTiktikBody'),
     tabFilter: document.getElementById('tabFilter'),
     gradeHeader: document.getElementById('gradeHeader'),
     gradeBody: document.getElementById('gradeBody'),
@@ -66,7 +66,6 @@ async function inicializarPagina() {
 
     const permissoes = auth.permissoes || [];
     const usuarioLogado = auth.usuario;
-    console.log('Inicializando cadastrar-produto para usuário:', usuarioLogado.nome, 'Permissões:', permissoes);
 
     await loadProductTable('todos', '', true);
     toggleView();
@@ -76,8 +75,10 @@ async function inicializarPagina() {
 
 async function loadProductTable(filterType = 'todos', search = '', forceRefresh = false) {
     try {
-        produtos = await obterProdutos(forceRefresh);
-        console.log('[loadProductTable] Produtos obtidos:', produtos);
+        produtos = await obterProdutos(forceRefresh); // Obtenha os produtos
+        console.log('[loadProductTable] Produtos obtidos APÓS obterProdutos:', produtos.length, 'Primeiro produto:', produtos.length > 0 ? produtos[0] : 'Nenhum'); // Log os produtos recebidos
+        const produtoSendoEditado = produtos.find(p => p.nome === localStorage.getItem('ultimoProdutoEditado')); // Encontre o produto editado (se estiver editando)
+        console.log('[loadProductTable] Produto sendo editado:', produtoSendoEditado); // Log o produto específico
 
         const allProductNames = [...PRODUTOS, ...PRODUTOSKITS];
         const novosProdutos = [];
@@ -94,7 +95,7 @@ async function loadProductTable(filterType = 'todos', search = '', forceRefresh 
                     imagem: '',
                     variacoes: [],
                     etapas: [],
-                    finishEtapas: [],
+                    etapasTiktik: [],
                     grade: []
                 });
             }
@@ -169,8 +170,9 @@ async function editProduct(nome) {
 }
 
 function loadEditForm(produto) {
-    console.log('[loadEditForm] Carregando formulário para:', produto.nome);
-    console.log('[loadEditForm] Tipos do produto:', produto.tipos);
+    console.log('[loadEditForm] Produto recebido:', produto); // Log o objeto produto COMPLETO
+    console.log('[loadEditForm] Conteúdo de etapasTiktik no produto recebido:', produto?.etapasTiktik); // Log especificamente a propriedade esperada
+
     elements.editProductName.textContent = `Editando: ${produto.nome}`;
     elements.sku.value = produto.sku || '';
     document.querySelectorAll('input[name="tipo"]').forEach(cb => {
@@ -195,11 +197,11 @@ function loadEditForm(produto) {
     });
     window.updateProcessosOptions();
 
-    elements.finishStepsBody.innerHTML = '';
-    (produto.finishEtapas || []).forEach((etapa, index) => {
-        addFinishStepRow(etapa.processo || '', etapa.maquina || '', etapa.feitoPor || '', index);
+    elements.etapasTiktikBody.innerHTML = '';
+    (produto.etapasTiktik|| []).forEach((etapa, index) => {
+        addEtapaTiktikRow(etapa.processo || '', etapa.maquina || '', etapa.feitoPor || '', index);
     });
-    window.updateFinishProcessosOptions();
+    window.updateEtapasTiktikOptions();
 
     console.log('[loadEditForm] Chamando loadVariacoes');
     loadVariacoes(produto);
@@ -289,7 +291,6 @@ function loadVariacoes(produto) {
 }
 
 function loadGrade(produto) {
-    console.log('[loadGrade] Carregando grade para produto:', produto.nome, 'Grade atual:', produto.grade);
     const variacoesContainer = document.getElementById('variacoesContainer');
     if (!variacoesContainer) {
         console.error('[loadGrade] #variacoesContainer não encontrado no DOM');
@@ -355,7 +356,6 @@ function loadGrade(produto) {
     }
 
     gradeTemp.forEach((item, idx) => {
-        console.log('[loadGrade] Renderizando item - Índice:', idx, 'Item:', item);
         const tr = document.createElement('tr');
         tr.dataset.index = idx.toString();
         const composicaoHtml = isKit
@@ -587,10 +587,11 @@ window.addStepRow = function(processo = '', maquina = '', feitoPor = '', index =
     window.updateProcessosOptions();
 };
 
-window.addFinishStepRow = function(processo = '', maquina = '', feitoPor = '', index = null) {
+window.addEtapaTiktikRow = function(processo = '', maquina = '', feitoPor = '', index = null) {
     const tr = document.createElement('tr');
     tr.draggable = true;
-    tr.dataset.index = index !== null ? index : elements.finishStepsBody.children.length;
+    const rowIndex = index !== null ? index : elements.etapasTiktikBody.children.length;
+    tr.dataset.index = rowIndex;
     tr.innerHTML = `
         <td><span class="icone-arrastar">☰</span></td>
         <td><select class="processo-select">
@@ -605,27 +606,95 @@ window.addFinishStepRow = function(processo = '', maquina = '', feitoPor = '', i
             <option value="">Selecione um tipo</option>
             ${['costureira', 'tiktik', 'cortador'].map(tipo => `<option value="${tipo}" ${tipo === feitoPor ? 'selected' : ''}>${tipo.charAt(0).toUpperCase() + tipo.slice(1)}</option>`).join('')}
         </select></td>
-        <td><button class="botao-remover-produto" onclick="this.parentElement.parentElement.remove(); updateFinishProcessosOptions()">X</button></td>
+        <td><button class="botao-remover-produto" onclick="this.parentElement.parentElement.remove(); updateEtapasTiktikOptions()">X</button></td>
     `;
-    elements.finishStepsBody.appendChild(tr);
+    elements.etapasTiktikBody.appendChild(tr);
+
+        if (!editingProduct) editingProduct = {};
+        if (!editingProduct.etapasTiktik) editingProduct.etapasTiktik = [];
+        if (!editingProduct.etapasTiktik[rowIndex]) {
+            // Criar um objeto placeholder com os valores iniciais
+            editingProduct.etapasTiktik[rowIndex] = { processo: processo, maquina: maquina, feitoPor: feitoPor };
+        } else {
+        // Atualizar o objeto existente no array com os valores iniciais do loadEditForm
+            editingProduct.etapasTiktik[rowIndex].processo = processo;
+            editingProduct.etapasTiktik[rowIndex].maquina = maquina;
+            editingProduct.etapasTiktik[rowIndex].feitoPor = feitoPor;
+        }
 
     const processoSelect = tr.querySelector('.processo-select');
     const maquinaSelect = tr.querySelector('.maquina-select');
     const feitoPorSelect = tr.querySelector('.feito-por-select');
 
     processoSelect.addEventListener('change', () => {
-        updateFinishProcessosOptions();
-    });
-    maquinaSelect.addEventListener('change', () => {
-    });
-    feitoPorSelect.addEventListener('change', () => {
-    });
+            editingProduct.etapasTiktik[rowIndex].processo = processoSelect.value; // Salva no objeto
+            window.updateEtapasTiktikOptions(); // Atualiza as opções nos selects do DOM
+             });
+            maquinaSelect.addEventListener('change', () => {
+            editingProduct.etapasTiktik[rowIndex].maquina = maquinaSelect.value; // Salva no objeto
+            });
+            feitoPorSelect.addEventListener('change', () => {
+            editingProduct.etapasTiktik[rowIndex].feitoPor = feitoPorSelect.value; // Salva no objeto
+            });
 
-    window.updateFinishProcessosOptions();
+    window.updateEtapasTiktikOptions();
 };
 
-window.updateFinishProcessosOptions = function() {
-    const selects = elements.finishStepsBody.querySelectorAll('.processo-select');
+// ** <-- INÍCIO: ADICIONAR FUNÇÃO PARA REMOVER LINHA E ATUALIZAR editingProduct.etapasTiktik --> **
+window.removerEtapaTiktikRow = function(btn, index) {
+        const row = btn.parentElement.parentElement; // Pega o <tr> pai
+        const rowIndex = parseInt(row.dataset.index); // Pega o índice salvo no data-index
+        console.log('[removerEtapaTiktikRow] Removendo linha de etapa de arremate/tiktik no índice:', rowIndex);
+    
+        // Remove o elemento <tr> do DOM
+        row.remove();
+    
+        // Remove o item correspondente do array editingProduct.etapasTiktik
+        if (editingProduct && editingProduct.etapasTiktik && Array.isArray(editingProduct.etapasTiktik)) {
+                editingProduct.etapasTiktik.splice(rowIndex, 1);
+            console.log('[removerEtapaTiktikRow] Item removido do array editingProduct.etapasTiktik:', editingProduct.etapasTiktik);
+        } else {
+            console.warn('[removerEtapaTiktikRow] editingProduct.etapasTiktik não encontrado ou não é um array.');
+        }
+    
+        // Reindexa os data-index no DOM para corresponder ao novo array
+        Array.from(elements.etapasTiktikBody.querySelectorAll('tr')).forEach((updatedRow, newIndex) => {
+            updatedRow.dataset.index = newIndex;
+            // Atualiza os onclick/onchange para usar o novo índice
+            const removeBtn = updatedRow.querySelector('.botao-remover-produto');
+            if (removeBtn) removeBtn.onclick = () => removerEtapaTiktikRow(removeBtn, newIndex);
+    
+            const processoSelect = updatedRow.querySelector('.processo-select');
+            if (processoSelect) processoSelect.removeEventListener('change', updateFinishStepListener); // Remove listener antigo
+            processoSelect.addEventListener('change', (e) => updateFinishStepListener(e, newIndex, 'processo')); // Adiciona novo com índice atualizado
+    
+            const maquinaSelect = updatedRow.querySelector('.maquina-select');
+            if (maquinaSelect) maquinaSelect.removeEventListener('change', updateFinishStepListener);
+            maquinaSelect.addEventListener('change', (e) => updateFinishStepListener(e, newIndex, 'maquina'));
+    
+            const feitoPorSelect = updatedRow.querySelector('.feito-por-select');
+            if (feitoPorSelect) feitoPorSelect.removeEventListener('change', updateFinishStepListener);
+            feitoPorSelect.addEventListener('change', (e) => updateFinishStepListener(e, newIndex, 'feitoPor'));
+        });
+    
+        // Atualiza as opções dos selects após a remoção
+        window.updateEtapasTiktikOptions();
+    
+    };
+
+    // Função auxiliar para os event listeners de select
+function updateFinishStepListener(event, index, field) {
+        const value = event.target.value;
+        if (editingProduct && editingProduct.etapasTiktik && editingProduct.etapasTiktik[index]) {
+            editingProduct.etapasTiktik[index][field] = value;
+            console.log(`[updateFinishStepListener] Atualizado etapasTiktik[${index}].${field}: ${value}`, editingProduct.etapasTiktik[index]);
+        } else {
+            console.warn('[updateFinishStepListener] editingProduct.etapasTiktik ou índice inválido:', index);
+        }
+    };
+
+window.updateEtapasTiktikOptions = function() {
+    const selects = elements.etapasTiktikBody.querySelectorAll('.processo-select');
     const processosUsados = Array.from(selects).map(select => select.value).filter(v => v);
 
     selects.forEach(select => {
@@ -853,49 +922,63 @@ window.updateProcessosOptions = function() {
     });
 };
 
+// Lógica de Drag and Drop (garante que os data-index estejam corretos após o drop)
 function initializeDragAndDrop() {
-    // Função auxiliar para configurar eventos de drag-and-drop
-    function setupDragAndDrop(container) {
-        container.addEventListener('dragstart', e => {
-            const tr = e.target.closest('tr');
-            if (tr) {
-                tr.classList.add('dragging');
-                e.dataTransfer.setData('text/plain', tr.dataset.index);
-            }
-        });
+        function setupDragAndDrop(container, updateDataFn) { // Adicionado updateDataFn
+    
+            container.addEventListener('drop', e => {
+                e.preventDefault();
+                const fromIndex = parseInt(e.dataTransfer.getData('text/plain')); // Parse para número
+                const toRow = e.target.closest('tr');
+                if (!toRow) return;
+    
+                const toIndex = parseInt(toRow.dataset.index); // Parse para número
+                const rows = Array.from(container.querySelectorAll('tr'));
+                const fromRow = rows.find(row => parseInt(row.dataset.index) === fromIndex); // Parse para número
+    
+                if (fromRow && toRow && fromRow !== toRow) {
 
-        container.addEventListener('dragend', e => {
-            const tr = e.target.closest('tr');
-            if (tr) tr.classList.remove('dragging');
-        });
+                        if (fromIndex < toIndex) {
+                        toRow.after(fromRow);
+                    } else {
+                        toRow.before(fromRow);
+                    }
+    
+                    const updatedRows = Array.from(container.querySelectorAll('tr'));
+                    updatedRows.forEach((row, index) => {
+                        row.dataset.index = index.toString(); // Garante que o data-index seja string
+    
+                        const removeBtn = row.querySelector('.botao-remover-produto');
+                        if (removeBtn) removeBtn.onclick = () => {
+                            // Passa o índice CORRETO para a função de remover
+                            if (container.id === 'stepsBody') removerStepRow(removeBtn, index); // Função de remover etapas normais
+                            else if (container.id === 'etapasTiktikBody') removerEtapaTiktikRow(removeBtn, index); // Função de remover etapasTiktik
+                        };
+    
+                        const processoSelect = row.querySelector('.processo-select');
+                        if (processoSelect) {
+                            // Remover listener antigo e adicionar novo com o novo 'index' e 'container.id'
+                            processoSelect.removeEventListener('change', handleStepSelectChange); // Assumindo um handler genérico
+                            processoSelect.addEventListener('change', (e) => handleStepSelectChange(e, index, 'processo', container.id));
+                        }
+                    });
+    
+                    const dataArray = container.id === 'stepsBody' ? editingProduct.etapas : editingProduct.etapasTiktik;
+                    const [movedItem] = dataArray.splice(fromIndex, 1); // Remove do local original
+                    dataArray.splice(toIndex, 0, movedItem); // Insere no novo local
+    
+                    // Atualizar referências no editingProduct
+                    if (container.id === 'stepsBody') editingProduct.etapas = dataArray;
+                    else if (container.id === 'etapasTiktikBody') editingProduct.etapasTiktik = dataArray;
 
-        container.addEventListener('dragover', e => e.preventDefault());
-
-        container.addEventListener('drop', e => {
-            e.preventDefault();
-            const fromIndex = e.dataTransfer.getData('text/plain');
-            const toRow = e.target.closest('tr');
-            if (!toRow) return;
-
-            const toIndex = toRow.dataset.index;
-            const rows = Array.from(container.querySelectorAll('tr'));
-            const fromRow = rows.find(row => row.dataset.index === fromIndex);
-
-            if (fromRow && toRow && fromRow !== toRow) {
-                if (parseInt(fromIndex) < parseInt(toIndex)) {
-                    toRow.after(fromRow);
-                } else {
-                    toRow.before(fromRow);
-                }
-                rows.forEach((row, index) => row.dataset.index = index);
-            }
-        });
+                    console.log(`[initializeDragAndDrop] Linha movida de ${fromIndex} para ${toIndex}. Dados reorganizados.`, dataArray);
+                }
+            });
+        }
+    
+        setupDragAndDrop(elements.stepsBody);
+        setupDragAndDrop(elements.etapasTiktikBody);
     }
-
-    // Configurar drag-and-drop para stepsBody e finishStepsBody
-    setupDragAndDrop(elements.stepsBody);
-    setupDragAndDrop(elements.finishStepsBody);
-}
 
 function bloquearCampos(mensagem = '', erroNaGrade = false) {
     const camposEditaveis = document.querySelectorAll(
@@ -1047,11 +1130,13 @@ async function salvarProdutoNoBackend() {
             maquina: tr.querySelector('.maquina-select')?.value || '',
             feitoPor: tr.querySelector('.feito-por-select')?.value || ''
         })),
-        finishEtapas: isKit ? [] : Array.from(elements.finishStepsBody.querySelectorAll('tr')).map(tr => ({ // Novo
+
+         etapasTiktik: isKit ? [] : Array.from(elements.etapasTiktikBody.querySelectorAll('tr')).map(tr => ({ // <-- USAR NOVO NOME DO ELEMENTO DOM E NOVA PROPRIEDADE
             processo: tr.querySelector('.processo-select')?.value || '',
             maquina: tr.querySelector('.maquina-select')?.value || '',
             feitoPor: tr.querySelector('.feito-por-select')?.value || ''
-        })),
+         })),
+
         grade: (editingProduct.grade || []).map(item => {
             const tr = Array.from(elements.gradeBody.querySelectorAll('tr')).find(tr => tr.cells[0].textContent === item.variacao);
             return tr ? {
@@ -1061,6 +1146,9 @@ async function salvarProdutoNoBackend() {
             } : item;
         })
     };
+
+    updatedProduct.grade = updatedProduct.grade.filter(item => item.variacao && item.variacao.trim() !== '');
+
 
     const { hasDuplicates, erroNaGrade } = temDuplicatasDeSku();
     if (hasDuplicates) {
