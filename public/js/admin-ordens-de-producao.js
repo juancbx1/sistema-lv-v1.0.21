@@ -1032,6 +1032,8 @@ async function loadEtapasEdit(op, skipReload = false) {
       ] = await Promise.all(promises); // Espera por todos os resultados em paralelo!
   
       console.log('[loadEtapasEdit] Todas as buscas de dados concluídas.');
+      console.log('[loadEtapasEdit] Array de usuários recebido (do cache ou API):', usuarios)
+
   
       // Combina todos os arrays de cortes buscados em um único array (usado na lógica da etapa Corte)
       const todosCortes = [...cortesPendentes, ...cortesCortados, ...cortesVerificados, ...cortesUsados];
@@ -1221,52 +1223,78 @@ async function loadEtapasEdit(op, skipReload = false) {
           row.appendChild(usuarioStatusInput);
           row.appendChild(usuarioNomeInput);
   
-        } else { // Se não for a etapa Corte (outras etapas com select de usuário e quantidade)
-          const exigeQuantidade = tiposUsuarios[index].tipoUsuario === 'costureira' || tiposUsuarios[index].tipoUsuario === 'tiktik';
+      } else { // Se não for a etapa Corte (Outras etapas que precisam de select de usuário e quantidade)
+
+          const exigeQuantidade = tiposUsuarios[index].tipoUsuario === 'costureira' || tiposUsuarios[index].tipoUsuario === 'tiktik'; // Determina se exige quantidade
   
-          // Cria e configura o select de usuário
-          const usuarioSelect = document.createElement('select');
-          usuarioSelect.className = 'select-usuario';
-          // Disable logic usa op.status, index > etapaAtualIndex, e se a etapa já foi lançada e exige quantidade
+          // ** <-- CRIAÇÃO E CONFIGURAÇÃO DO SELECT DE USUÁRIO --> **
+          const usuarioSelect = document.createElement('select'); // Cria o select
+          usuarioSelect.className = 'select-usuario'; // Adiciona classe
+          // Define o estado disabled do select baseado no status da OP, etapa atual, e se a etapa já foi lançada e exige quantidade
           usuarioSelect.disabled = op.status === 'finalizado' || op.status === 'cancelada' || index > etapaAtualIndex || (exigeQuantidade && etapa.lancado);
   
-          // Popula o select com opções de usuário
+          // Adiciona a opção padrão
           usuarioSelect.innerHTML = '';
           const defaultOption = document.createElement('option');
           defaultOption.value = '';
-          defaultOption.textContent = getUsuarioPlaceholder(tiposUsuarios[index].tipoUsuario);
+          defaultOption.textContent = getUsuarioPlaceholder(tiposUsuarios[index].tipoUsuario); // Define o texto da opção padrão (ex: "Selecione a(o) Costureira(o)")
           usuarioSelect.appendChild(defaultOption);
   
-          // Seleciona a opção de usuário já lançada
-          const selectedUserOption = usuarios.find(u => u.nome === etapa.usuario);
-          if (selectedUserOption) {
-            // Encontre a option correspondente no select e marque como selecionada
-            const optionToSelect = usuarioSelect.querySelector(`option[value="${etapa.usuario}"]`);
-            if (optionToSelect) {
-              optionToSelect.selected = true;
-            } else if (etapa.usuario) {
-              // Se o usuário salvo não estiver na lista (ex: inativo), adicione-o como opção selecionada desabilitada
-              const existingOption = usuarioSelect.querySelector(`option[value="${etapa.usuario}"]`);
-              if (!existingOption) {
-                const userOption = document.createElement('option');
-                userOption.value = etapa.usuario;
-                userOption.textContent = etapa.usuario;
-                userOption.selected = true;
-                userOption.disabled = true; // Não pode ser alterado
-                usuarioSelect.appendChild(userOption);
-              }
-
-            usuarioSelect.value = etapa.usuario;
+          // ** <-- INÍCIO: LÓGICA DE FILTRAGEM E POPULAÇÃO DO SELECT --> **
+  
+          // Filtra o array 'usuarios' (recebido do Promise.all) pelo tipo de usuário esperado para esta etapa
+          const usuariosFiltrados = usuarios.filter(u => { // Usa o array 'usuarios' completo
+            const tipos = Array.isArray(u.tipos) ? u.tipos : []; // Garante que u.tipos é um array
+            return tipos.includes(tiposUsuarios[index].tipoUsuario); // Filtra: usuário tem o tipo da etapa?
+          });
+  
+          // Log para depuração: Mostra quais usuários foram encontrados para este select
+          console.log(`[loadEtapasEdit] Etapa ${index} (${etapa.processo}): Filtrando usuários por tipo '${tiposUsuarios[index].tipoUsuario}'. Usuários filtrados (${usuariosFiltrados.length}):`, usuariosFiltrados);
+  
+  
+          // Popula o select com os nomes dos usuários filtrados como <option>s
+          usuariosFiltrados.forEach(user => {
+              const option = document.createElement('option');
+              option.value = user.nome; // O valor da opção é o nome do usuário
+              option.textContent = user.nome; // O texto exibido é o nome do usuário
+              usuarioSelect.appendChild(option); // Adiciona a opção ao select
+          });
+  
+          // Seleciona o usuário salvo na etapa (se houver e estiver na lista de usuários filtrados)
+          // O valor de 'etapa.usuario' deve ser o NOME do usuário salvo, não o tipo.
+          if (etapa.usuario && usuariosFiltrados.some(u => u.nome === etapa.usuario)) {
+              usuarioSelect.value = etapa.usuario; // Define o valor selecionado no select
+          } else if (etapa.usuario) {
+              // Caso raro: Usuário salvo (etapa.usuario) existe mas NÃO está na lista filtrada (talvez inativo?)
+              // Adiciona o usuário salvo como uma opção desabilitada para mostrar o valor anterior
+               const existingOption = usuarioSelect.querySelector(`option[value="${etapa.usuario}"]`);
+               if (!existingOption) { // Evita duplicar se já foi adicionado manualmente (menos comum)
+                   const userOption = document.createElement('option');
+                   userOption.value = etapa.usuario;
+                   userOption.textContent = etapa.usuario + ' (Inativo/Tipo incorreto)'; // Indica que algo está estranho
+                   userOption.selected = true;
+                   userOption.disabled = true; // Não pode ser alterado para ele
+                   usuarioSelect.appendChild(userOption);
+               }
+               usuarioSelect.value = etapa.usuario; // Tenta definir o valor mesmo que a option esteja desabilitada
+               console.warn(`[loadEtapasEdit] Usuário salvo '${etapa.usuario}' não encontrado na lista de usuários ativos para a etapa ${etapa.processo}.`);
           }
-        }
   
   
-          row.appendChild(usuarioSelect);
+          // Adiciona o select de usuário à linha (tr)
+          row.appendChild(usuarioSelect);
   
-        if (exigeQuantidade) {
-        const quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, index === etapaAtualIndex, row, produtos);
-        row.appendChild(quantidadeDiv);
-      }
+  
+          // ** <-- INÍCIO: LÓGICA DE CRIAÇÃO DA QUANTIDADE DIV --> **
+          // Cria e configura a div de quantidade (se exigir quantidade)
+          if (exigeQuantidade) {
+              // criarQuantidadeDiv cria os elementos de input e botão e os adiciona à div 'quantidade-lancar'
+              // Nota: A função criarQuantidadeDiv também configura o valor inicial do input com etapa.quantidade
+              // e adiciona os event listeners para o input e o botão "Lançar".
+              const quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, index === etapaAtualIndex, row, produtos);
+              // Adiciona a div de quantidade à linha
+              row.appendChild(quantidadeDiv);
+          }
   
        } // Fim do if/else para tipo de etapa
 

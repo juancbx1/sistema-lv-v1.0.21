@@ -23,6 +23,7 @@ export const permissoesDisponiveis = [
     { id: 'cadastrar-produto', label: 'Cadastrar Produto' }, // Para cadastrar-produto.html
     { id: 'lancar-producao', label: 'Lançar Produção (Opera com editar OPs)' },
     { id: 'embalar-produto', label: 'Embalagem de Produto' }, // Para embalagem-de-produtos.html
+    { id: 'lancar-arremate', label: 'Lançar Arremate' }, // Para embalagem-de-produtos.html
     { id: 'acesso-estoque', label: 'Acesso ao Estoque' } // Para estoque.html
 ];
 
@@ -59,6 +60,7 @@ export const permissoesPorTipo = {
         'excluir-registro-producao',
         'lancar-producao',
         'embalar-produto',
+        'lancar-arremate',
         'acesso-estoque',
         
     ]

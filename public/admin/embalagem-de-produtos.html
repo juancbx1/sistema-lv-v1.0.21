@@ -5,7 +5,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Embalagem de Produtos</title>
-    <!--<link rel="stylesheet" href="/css/base-style.css"> -->
     <link rel="stylesheet" href="/css/embalagem-de-produtos.css">
     <link rel="stylesheet" href="/css/menu-lateral.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -16,33 +15,50 @@
         <i class="fas fa-times"></i>
     </div>
     <main class="container">
-        <section id="mainView">
-            <div class="filters-card">
-                <header class="header">
-                    <h1>Embalagem de Produtos</h1>
-                    <input type="text" id="searchProduto" placeholder="Pesquisar por produto ou variante" class="search-input">
-                </header>
-            </div>
-        
-            <section class="products-section">
-                <h2>Selecione o produto para embalar</h2>
-                <table id="produtosTable">
+        <header class="header"> <h1>Embalagem de Produtos</h1>
+        </header>
+
+        <section id="arremateView" style="display: none;"> <h2>Arremate Pendente</h2>
+            <p>Produtos aguardando lançamento do arremate.</p>
+            <div class="table-container">
+                <table id="arremateTable" class="tabela-op">
                     <thead>
                         <tr>
+                            <th>OP</th>
                             <th>Produto</th>
                             <th>Variação</th>
-                            <th>Img</th> <!-- Miniatura -->
-                            <th>Qtd Disp.</th>
-                            <th>OP</th>
+                            <th>Qtd. Produzida</th>
+                            <th>Usuário Arremate (TikTik)</th>
+                            <th>Ação</th>
                         </tr>
                     </thead>
-                    <tbody id="produtosTableBody"></tbody>
+                    <tbody id="arremateTableBody">
+                        </tbody>
                 </table>
-            </section>
+            </div>
+            <div id="arrematePaginationContainer" class="pagination-container"></div>
         </section>
 
-        <section class="embalagem-section hidden" id="embalarView">
-            <button class="btn-voltar" id="voltarBtn">Voltar</button>
+        <section id="embalagemListView" style="display: none;"> <div class="filters-card"> <h2>Pronto para Embalar</h2>
+                 <input type="text" id="searchProduto" placeholder="Pesquisar por produto, variação ou OP" class="search-input">
+             </div>
+             <section class="products-section"> <table id="produtosTable" class="tabela-op">
+                     <thead>
+                         <tr>
+                             <th>Produto</th>
+                             <th>Variação</th>
+                             <th>Img</th>
+                             <th>Qtd Disp.</th>
+                             <th>OP</th>
+                         </tr>
+                     </thead>
+                     <tbody id="produtosTableBody">
+                         </tbody>
+                 </table>
+                 </section>
+            <div id="paginationContainer" class="pagination-container"></div> </section>
+
+        <section class="embalagem-section hidden" id="embalarView" style="display: none;"> <button class="btn-voltar" id="voltarBtn">Voltar</button>
             <div class="embalagem-header">
                 <div class="thumbnail" id="embalagemThumbnail"></div>
                 <h2 id="embalagemTitle"></h2>
@@ -53,39 +69,36 @@
             </div>
             <div class="tab-panel" id="unidade-tab">
                 <div class="embalagem-info">
-                    <p><strong>Produto:</strong> <span id="produtoNome"></span><span id="varianteNome"></span></p>
-                    <p><strong>Qtd Disponível:</strong> <span id="qtdDisponivel" class="qtd-disponivel"></span></p>
-                </div>
-                <label for="qtdEnviar">Quantidade a enviar:</label>
-                <input type="number" id="qtdEnviar" min="1">
-                <button id="estoqueBtn" class="btn-estoque" disabled>Estoque</button>
+                     <p><strong>Produto:</strong> <span id="produtoNome"></span><span id="varianteNome"></span></p>
+                     <p><strong>Qtd Disponível:</strong> <span id="qtdDisponivel" class="qtd-disponivel"></span></p>
+                 </div>
+                 <label for="qtdEnviar">Quantidade a enviar:</label>
+                 <input type="number" id="qtdEnviar" min="1">
+                 <button id="estoqueBtn" class="btn-estoque" disabled>Estoque</button>
             </div>
             <div class="tab-panel hidden" id="kit-tab">
                 <div id="kit-section">
-                    <h3>Kits Disponíveis</h3>
-                    <div id="kits-list" class="kits-list">
-                        <!-- Botões dos kits serão inseridos dinamicamente aqui -->
-                    </div>
-                    <label for="kit-variacoes">Variação do Kit:</label>
-                    <select id="kit-variacoes" class="kit-variations"></select>
-                    <div id="kit-table-container" class="kit-table-container hidden">
-                        <table id="kit-table">
-                            <thead>
-                                <tr>
-                                    <th>Compõe</th>
-                                    <th>Pronto p/ Embalar</th>
-                                </tr>
-                            </thead>
-                            <tbody id="kit-table-body"></tbody>
-                        </table>
-                        <p id="kit-error-message" class="error-message hidden"></p>
-                        <div id="kit-footer" class="kit-footer-content">
-                            <!-- Conteúdo será preenchido dinamicamente pelo JavaScript -->
-                        </div>
-                    </div>
-                </div>
+                     <h3>Kits Disponíveis</h3>
+                     <div id="kits-list" class="kits-list"></div>
+                     <label for="kit-variacoes">Variação do Kit:</label>
+                     <select id="kit-variacoes" class="kit-variations"></select>
+                     <div id="kit-table-container" class="kit-table-container hidden">
+                         <table id="kit-table">
+                             <thead>
+                                 <tr>
+                                     <th>Compõe</th>
+                                     <th>Pronto p/ Embalar</th>
+                                 </tr>
+                             </thead>
+                             <tbody id="kit-table-body"></tbody>
+                         </table>
+                         <p id="kit-error-message" class="error-message hidden"></p>
+                         <div id="kit-footer" class="kit-footer-content"></div>
+                     </div>
+                 </div>
             </div>
         </section>
+
     </main>
 
     <script src="/js/admin-embalagem-de-produtos.js" type="module"></script>

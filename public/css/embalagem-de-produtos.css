@@ -361,6 +361,32 @@ body.autenticado {
     cursor: pointer;
 }
 
+.botao-lancar-arremate {
+    /* Seus estilos normais para o botão */
+    padding: 5px 10px;
+    cursor: pointer;
+    background-color: #28a745; /* Verde, por exemplo */
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.9em;
+    transition: background-color 0.2s ease;
+}
+
+.botao-lancar-arremate:hover:not(:disabled) {
+     background-color: #218838; /* Verde mais escuro no hover */
+}
+
+
+/* Estilo para quando o botão está desabilitado (geral ou por permissão) */
+.botao-lancar-arremate:disabled,
+.botao-lancar-arremate.botao-sem-permissao {
+    background-color: #ccc; /* Cinza */
+    color: #666;
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
 /* Estilo da Miniatura */
 .thumbnail {
     width: 50px;

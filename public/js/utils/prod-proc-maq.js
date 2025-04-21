@@ -39,7 +39,7 @@ export const PROCESSOS = [
     'Elastizar',
     'Viés/Elástico',
     'Passar Elástico',
-    'Arrematado',
+    'Arrematar',
     'Etiquetar',
     'Corte',
     'Arrematar/Elástico'
