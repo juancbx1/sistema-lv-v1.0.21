@@ -4,8 +4,6 @@ const { Pool } = pkg;
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
-console.log('POSTGRES_URL:', process.env.POSTGRES_URL);
-
 const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
 });
@@ -33,8 +31,11 @@ export default async (req, res) => {
       }
       res.status(200).json(result.rows[0]);
     } else if (req.method === 'GET' && urlPath === '/api/usuarios') {
+
       const result = await pool.query('SELECT id, nome, nome_usuario, email, tipos, nivel, permissoes FROM usuarios');
+
       res.status(200).json(result.rows);
+
     } else if (req.method === 'POST' && urlPath === '/api/usuarios') {
       if (!usuarioLogado.permissoes.includes('acesso-cadastrar-usuarios')) {
         return res.status(403).json({ error: 'Permissão negada' });

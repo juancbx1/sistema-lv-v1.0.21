@@ -33,36 +33,77 @@ export default async function handler(req, res) {
     if (method === 'GET') {
       const status = query.status || 'pendente';
       if (!['pendente', 'cortados', 'verificado', 'usado'].includes(status)) {
+        console.log('[api/cortes][GET] Status inválido:', status);
         return res.status(400).json({ error: 'Status inválido. Use "pendente", "cortados", "verificado" ou "usado".' });
       }
     
+      console.log(`[api/cortes][GET] Buscando cortes com status: ${status}`);
+
+      const colunasCortes = 'id, pn, produto, variante, quantidade, data, cortador, status, op';
       const result = await pool.query(
-        'SELECT * FROM cortes WHERE status = $1 ORDER BY data DESC',
-        [status]
+        `SELECT ${colunasCortes} FROM cortes WHERE status = $1 ORDER BY data DESC`, // Use a lista de colunas
+                [status]
       );
-    
+
       res.status(200).json(result.rows);
 
+      console.log(`[api/cortes][GET] Retornando ${result.rows.length} cortes.`);
+
     } else if (method === 'POST') {
+      console.log('[api/cortes] Processando POST...');
       if (!usuarioLogado.permissoes.includes('criar-op')) {
         return res.status(403).json({ error: 'Permissão negada' });
       }
-
       const { produto, variante, quantidade, data, cortador, status = 'pendente', op = null } = body;
+      console.log('[api/cortes] Dados recebidos:', req.body);
 
       if (!produto || !variante || !quantidade || !data || !cortador) {
         return res.status(400).json({ error: 'Dados incompletos' });
+
       }
 
-      const pn = generateUniquePN();
+      const MAX_RETRIES = 5; // Define um número máximo de tentativas
+      let insertedCorte = null;
+      let pnGerado = null;
+      for (let i = 0; i < MAX_RETRIES; i++) {
+        pnGerado = Math.floor(1000 + Math.random() * 9000).toString(); // Gera um novo PN aleatório
+        console.log(`[api/cortes][POST] Tentativa ${i + 1}: Gerado PN ${pnGerado}`);
 
-      const result = await pool.query(
-        `INSERT INTO cortes (pn, produto, variante, quantidade, data, cortador, status, op)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-        [pn, produto, variante, quantidade, data, cortador, status, op || null]
-      );
+        try {
+          const result = await pool.query(
+            `INSERT INTO cortes (pn, produto, variante, quantidade, data, cortador, status, op)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+            [pnGerado, produto, variante, quantidade, data, cortador, status, op || null]
+          );
 
-      res.status(201).json(result.rows[0]);
+          insertedCorte = result.rows[0];
+          console.log(`[api/cortes][POST] Lançamento salvo com PN ${pnGerado} na tentativa ${i + 1}.`);
+          break; // Sai do loop se a inserção for bem-sucedida
+
+        } catch (error) {
+          if (error.code === '23505') {
+            console.warn(`[api/cortes][POST] Colisão de PN detectada para ${pnGerado}. Tentando novamente...`);
+            // Se for uma violação de unicidade, o loop continua para a próxima tentativa
+            if (i === MAX_RETRIES - 1) {
+              // Se chegou à última tentativa e ainda houve colisão, lança um erro fatal
+              console.error(`[api/cortes][POST] Falha ao gerar PN único após ${MAX_RETRIES} tentativas.`);
+              throw new Error('Não foi possível gerar um PN único.');
+            }
+
+          } else {
+            // Se for outro tipo de erro, lança o erro imediatamente
+            console.error(`[api/cortes][POST] Erro inesperado ao inserir corte:`, error);
+            throw error;
+          }
+        }
+      }
+
+      if (!insertedCorte) {
+         console.error('[api/cortes][POST] Lançamento falhou por motivo desconhecido após retentativas.');
+         throw new Error('Falha ao criar lançamento de corte.');
+      }
+
+      res.status(201).json(insertedCorte);
 
     } else if (method === 'PUT') {
       if (!usuarioLogado.permissoes.includes('editar-op')) {

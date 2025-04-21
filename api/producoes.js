@@ -104,31 +104,31 @@ export default async function handler(req, res) {
       res.status(201).json({ ...result.rows[0], id });
 
     } else if (method === 'GET') {
-  console.log('[api/producoes] Processando GET...', req.query);
   if (!usuarioLogado.permissoes.includes('acesso-gerenciar-producao') && !usuarioLogado.tipos.includes('costureira')) {
     return res.status(403).json({ error: 'Permissão negada' });
-  }
+    }
+    
+    let query;
+    let params = []; 
+    
+    const opNumeroRaw = req.query.op_numero; // Lê o valor bruto
+    const opNumero = opNumeroRaw ? String(opNumeroRaw).trim() : undefined; // Cria opNumero aplicando trim (se opNumeroRaw existir)
+    if (opNumero) { // Primeiro uso
+     query = 'SELECT * FROM producoes WHERE op_numero = $1 ORDER BY data DESC';
+     params = [opNumero]; // Segundo uso
+        
+    } else if (usuarioLogado.tipos.includes('costureira') && !usuarioLogado.permissoes.includes('acesso-gerenciar-producao')) {
+       query = 'SELECT * FROM producoes WHERE funcionario = $1 ORDER BY data DESC';
+       params = [usuarioLogado.nome];
+    } else {
+       query = 'SELECT * FROM producoes ORDER BY data DESC';
+       params = [];
+   }
 
-  let query;
-  let params = [];
-
-  const opNumero = req.query.op_numero;
-  console.log('[api/producoes] op_numero recebido:', opNumero);
-
-  if (opNumero) {
-    query = 'SELECT * FROM producoes WHERE op_numero = $1 ORDER BY data DESC';
-    params = [opNumero];
-  } else if (usuarioLogado.tipos.includes('costureira') && !usuarioLogado.permissoes.includes('acesso-gerenciar-producao')) {
-    query = 'SELECT * FROM producoes WHERE funcionario = $1 ORDER BY data DESC';
-    params = [usuarioLogado.nome];
-  } else {
-    query = 'SELECT * FROM producoes ORDER BY data DESC';
-    params = [];
-  }
 
   const result = await pool.query(query, params);
-  console.log('[api/producoes] Resultado da query para op_numero', opNumero || 'todos', ':', result.rows);
-  res.status(200).json(result.rows);
+    res.status(200).json(result.rows);
+
 
     } else if (method === 'PUT') {
       console.log('[api/producoes] Processando PUT...');
@@ -205,6 +205,7 @@ export default async function handler(req, res) {
       stack: error.stack,
       data: req.body,
     });
+
     res.status(500).json({ error: 'Erro interno no servidor', details: error.message });
   }
 }

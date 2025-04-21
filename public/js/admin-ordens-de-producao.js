@@ -6,6 +6,10 @@ let filteredOPsGlobal = [];
 let lancamentosEmAndamento = new Set();
 let ordensCache = null;
 let ordensPromise = null;
+let cachedProdutos = null;
+const ordensCacheMap = new Map();
+const CACHE_EXPIRATION_MS_ORDENS = 30 * 1000; // Exemplo: Cache de ordens expira após 30 segundos (pode ajustar)
+let lastOrdensFetchTimestamp = 0; // Para controlar a expiração do cache
 let currentPage = 1;
 const itemsPerPage = 10;
 let permissoes = [];
@@ -13,6 +17,117 @@ let usuarioLogado = null;
 const usedIds = new Set();
 let isLoadingAbaContent = false; 
 let isEditingQuantidade = false;
+
+let usuariosCache = null;
+let usuariosPromise = null;
+const CACHE_EXPIRATION_MS_USUARIOS = 5 * 60 * 1000; // Cache de usuários expira após 5 minutos (ajuste se necessário)
+let lastUsuariosFetchTimestamp = 0;
+
+let lancamentosCache = new Map(); // Cache de lançamentos por op_numero
+let lancamentosPromise = new Map(); // Promise em andamento por op_numero
+const CACHE_EXPIRATION_MS_LANCAMENTOS = 30 * 1000; // Cache de lançamentos expira após 30 segundos
+
+async function obterUsuarios(forceUpdate = false) {
+  const cacheKey = 'all_users'; // Chave simples para cache de todos os usuários
+
+  // 1. Verificar requisição em andamento
+  if (usuariosPromise) {
+      console.log('[obterUsuarios] Requisição em andamento, aguardando...');
+      return await usuariosPromise;
+  }
+
+  // 2. Verificar cache
+  if (usuariosCache && !forceUpdate && (Date.now() - lastUsuariosFetchTimestamp < CACHE_EXPIRATION_MS_USUARIOS)) {
+      console.log('[obterUsuarios] Retornando usuários do cache.');
+      return usuariosCache;
+  }
+
+  // 3. Fazer requisição
+  console.log('[obterUsuarios] Buscando usuários diretamente do servidor...');
+  usuariosPromise = (async () => {
+      try {
+          const token = localStorage.getItem('token');
+          const response = await fetch('/api/usuarios', {
+              headers: { 'Authorization': `Bearer ${token}` },
+          });
+
+          if (!response.ok) {
+               const errorText = await response.text();
+               console.error('[obterUsuarios] Erro na resposta da API:', response.status, errorText);
+              throw new Error(`Erro ao carregar usuários: ${response.status}`);
+          }
+
+          const usuarios = await response.json();
+          console.log('[obterUsuarios] Usuários recebidos do servidor:', usuarios.length);
+
+          // 4. Armazenar no cache
+          usuariosCache = usuarios;
+          lastUsuariosFetchTimestamp = Date.now();
+
+          return usuarios;
+      } finally {
+          // Limpar promise em finally
+          usuariosPromise = null;
+      }
+  })();
+
+  // 5. Aguardar e retornar
+  return await usuariosPromise;
+}
+
+
+async function obterLancamentos(opNumero, forceUpdate = false) {
+   const cacheKey = opNumero; // Cache por número da OP
+
+   // 1. Verificar requisição em andamento para esta OP
+   if (lancamentosPromise.has(cacheKey)) {
+       console.log(`[obterLancamentos] Requisição em andamento para OP ${opNumero}, aguardando...`);
+       return await lancamentosPromise.get(cacheKey);
+   }
+
+   // 2. Verificar cache para esta OP
+   const cacheEntry = lancamentosCache.get(cacheKey);
+   if (cacheEntry && !forceUpdate && (Date.now() - cacheEntry.timestamp < CACHE_EXPIRATION_MS_LANCAMENTOS)) {
+       console.log(`[obterLancamentos] Retornando lançamentos do cache para OP ${opNumero}.`);
+       return cacheEntry.data;
+   }
+
+   // 3. Fazer requisição
+   console.log(`[obterLancamentos] Buscando lançamentos para OP ${opNumero} diretamente do servidor...`);
+   const promise = (async () => { // Armazena a Promise
+       try {
+           const token = localStorage.getItem('token');
+           const timestamp = Date.now();
+           const response = await fetch(`/api/producoes?op_numero=${opNumero}&_=${timestamp}`, {
+               headers: { 'Authorization': `Bearer ${token}` },
+           });
+
+           let rawData;
+           if (!response.ok) {
+                let errorDetails = `Erro HTTP: ${response.status}`;
+                try { const errorJson = await response.json(); errorDetails += ' - ' + (errorJson.error || JSON.stringify(errorJson)); } catch (e) { /* ignore */ }
+                console.error(`[obterLancamentos] Erro na resposta da API para OP ${opNumero}:`, response.status, errorDetails);
+               throw new Error(`Erro ao carregar lançamentos para OP ${opNumero}: ${errorDetails}`);
+           }
+
+           rawData = await response.json();
+           console.log(`[obterLancamentos] Lançamentos recebidos do servidor para OP ${opNumero}:`, rawData.length);
+
+           const cacheEntry = { data: rawData, timestamp: Date.now() };
+           lancamentosCache.set(cacheKey, cacheEntry);
+           console.log(`[obterLancamentos] Dados cacheados para OP ${opNumero}.`);
+
+
+           return rawData; // Retorna o array de lançamentos
+       } finally {
+           lancamentosPromise.delete(cacheKey); // Limpa a promise para ESTA OP
+            console.log(`[obterLancamentos] Promise para OP ${opNumero} finalizada.`);
+       }
+   })();
+   lancamentosPromise.set(cacheKey, promise); // Armazena a promise no Map
+
+   return await promise;
+}
 
 function mostrarPopupMensagem(mensagem, tipo = 'erro') {
   const popup = document.createElement('div');
@@ -68,31 +183,53 @@ function mostrarPopupMensagem(mensagem, tipo = 'erro') {
 }
 
 // Cache para produtos
-let produtosCache = null;
-let produtosPromise = null;
+let produtosCache = null; // Declarada globalmente
+let produtosPromise = null; // Declarada globalmente
 
 async function obterProdutos() {
+  // 1. Verificar se já existe uma requisição em andamento
   if (produtosPromise) {
+    console.log('[obterProdutos] Requisição em andamento, aguardando...');
     return await produtosPromise;
   }
 
-  try {
-    produtosPromise = (async () => {
+  // 2. Verificar se os dados já estão no cache
+  // Você pode adicionar uma verificação de validade do cache aqui se quiser (ex: tempo), mas por enquanto, apenas verificar se existe já ajuda muito
+  if (produtosCache) {
+    console.log('[obterProdutos] Retornando produtos do cache.');
+    return produtosCache;
+  }
+
+  // 3. Se não está no cache e não há requisição em andamento, fazer a requisição
+  console.log('[obterProdutos] Buscando produtos diretamente do servidor...');
+  produtosPromise = (async () => { // Armazena a Promise da requisição em andamento
+    try {
       const token = localStorage.getItem('token');
       const response = await fetch('/api/produtos', {
         headers: { 'Authorization': `Bearer ${token}` },
-        cache: 'no-store' // Garante que não use cache do navegador
+        // Removido cache: 'no-store'
       });
-      if (!response.ok) throw new Error('Erro ao carregar produtos');
-      const produtos = await response.json();
-      console.log('[obterProdutos] Produtos buscados diretamente do servidor:', produtos);
-      return produtos;
-    })();
 
-    return await produtosPromise;
-  } finally {
-    produtosPromise = null;
-  }
+      if (!response.ok) {
+         const errorText = await response.text(); // Capture o texto do erro para debugging
+         console.error('[obterProdutos] Erro na resposta da API:', response.status, errorText);
+         throw new Error(`Erro ao carregar produtos: ${response.status}`);
+      }
+      const produtos = await response.json();
+      console.log('[obterProdutos] Produtos recebidos do servidor:', produtos);
+
+      // 4. Armazenar os dados no cache antes de retornar
+      produtosCache = produtos;
+
+      return produtos;
+    } finally {
+      // Limpar a Promise apenas depois que a requisição (sucesso ou erro) terminar
+      produtosPromise = null;
+    }
+  })();
+
+  // 5. Aguardar e retornar o resultado da Promise
+  return await produtosPromise;
 }
 
 // Função auxiliar (já definida, mas confirmada)
@@ -212,8 +349,7 @@ async function verificarCorte() {
 }
 
 export function limparCacheProdutos() {
-  produtosCache = null;
-  localStorage.removeItem('produtosCacheData');
+  produtosCache = null; // Limpa a variável em memória
   console.log('[obterProdutos] Cache de produtos limpo');
 }
 
@@ -246,7 +382,6 @@ function ordenarOPs(ops, criterio, ordem = 'asc') {
 }
 
 async function obterOrdensDeProducao(page = 1, fetchAll = false, forceUpdate = false, statusFilter = null, noStatusFilter = false) {
-  const token = localStorage.getItem('token');
   let url;
   if (noStatusFilter) {
     url = '/api/ordens-de-producao?all=true&noStatusFilter=true';
@@ -255,32 +390,101 @@ async function obterOrdensDeProducao(page = 1, fetchAll = false, forceUpdate = f
       ? '/api/ordens-de-producao?all=true'
       : `/api/ordens-de-producao?page=${page}&limit=${itemsPerPage}${statusFilter ? `&status=${statusFilter}` : ''}`;
   }
-  const response = await fetch(url, {
-    headers: { 'Authorization': `Bearer ${token}` },
-    cache: 'no-store'
-  });
-  if (!response.ok) throw new Error('Erro ao carregar ordens de produção');
-  const data = await response.json();
 
-  const ordensCache = {
-    rows: Array.isArray(data) ? data : data.rows || [],
-    total: data.total || (Array.isArray(data) ? data.length : data.rows.length),
-    pages: data.pages || (fetchAll || noStatusFilter ? Math.ceil((data.total || data.rows.length) / itemsPerPage) : 1),
-  };
+  const cacheKey = url; // A URL completa é a chave do cache
 
-  console.log(`[obterOrdensDeProducao] Ordens buscadas diretamente do servidor: ${noStatusFilter ? 'todas sem filtro' : fetchAll ? 'todas' : `página ${page}${statusFilter ? `_${statusFilter}` : ''}`}`);
-  return ordensCache;
+  const cacheEntry = ordensCacheMap.get(cacheKey);
+  if (cacheEntry && !forceUpdate && (Date.now() - cacheEntry.timestamp < CACHE_EXPIRATION_MS_ORDENS)) {
+      console.log(`[obterOrdensDeProducao] Retornando ordens do cache para ${cacheKey}.`);
+      return cacheEntry.data; // Retorna os dados cacheados
+  }
+
+  if (ordensPromise && ordensPromise.cacheKey === cacheKey) {
+    console.log(`[obterOrdensDeProducao] Requisição em andamento para ${cacheKey}, aguardando...`);
+    return await ordensPromise; // Aguarda a Promise existente
+  }
+
+  console.log(`[obterOrdensDeProducao] Buscando ordens diretamente do servidor para ${cacheKey}...`);
+  ordensPromise = (async () => { // Armazena a Promise para in-flight caching
+      try {
+          const token = localStorage.getItem('token');
+          const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+
+          let rawData; // Variável para armazenar o corpo lido (texto ou json)
+
+          if (!response.ok) {
+              let errorDetails = `Erro HTTP: ${response.status}`;
+              console.error('[obterOrdensDeProducao] Resposta da API NÃO OK:', response.status, response.statusText);
+
+              try {
+                  const errorJson = await response.json(); // <-- LÊ O CORPO AQUI NO CAMINHO DO ERRO
+                  errorDetails += ' - ' + (errorJson.error || JSON.stringify(errorJson));
+                   console.error('[obterOrdensDeProducao] Detalhes do erro (JSON):', errorJson);
+              } catch (jsonError) {
+                   console.warn('[obterOrdensDeProducao] Não foi possível ler o corpo do erro como JSON, tentando como texto.', jsonError);
+                   try {
+                      const errorText = await response.text(); // <-- OU LÊ O CORPO AQUI NO CAMINHO DO ERRO
+                      errorDetails += ' - ' + errorText;
+                       console.error('[obterOrdensDeProducao] Detalhes do erro (Texto):', errorText);
+                   } catch (textError) {
+                      console.error('[obterOrdensDeProducao] Não foi possível ler o corpo do erro como texto.', textError);
+                   }
+              }
+              throw new Error(`Erro ao carregar ordens de produção: ${errorDetails}`);
+
+          } else {
+
+              rawData = await response.json(); // <-- LÊ O CORPO AQUI NO CAMINHO DO SUCESSO
+              console.log('[obterOrdensDeProducao] Resposta OK recebida.');
+          }
+
+          console.log(`[obterOrdensDeProducao] Dados brutos recebidos:`, Array.isArray(rawData) ? rawData.length : (rawData?.rows?.length || 0));
+
+           if (!rawData) {
+                throw new Error("Dados inesperados recebidos do servidor (rawData is null/undefined)");
+           }
+
+          const formattedData = Array.isArray(rawData) ?
+             { rows: rawData, total: rawData.length, pages: Math.ceil(rawData.length / itemsPerPage) || 1 } // Se for um array direto (API fetchAll)
+            : { // Se for um objeto paginado { rows: [...], total: ..., pages: ... }
+               rows: rawData.rows || [],
+               total: rawData.total || (rawData.rows ? rawData.rows.length : 0),
+               pages: rawData.pages || (rawData.total ? Math.ceil(rawData.total / itemsPerPage) : (rawData.rows ? Math.ceil(rawData.rows.length / itemsPerPage) : 1)),
+            };
+
+
+          console.log('[obterOrdensDeProducao] Dados formatados para cache:', formattedData);
+
+           const cacheMapEntry = { data: formattedData, timestamp: Date.now() };
+           ordensCacheMap.set(cacheKey, cacheMapEntry); // Usa a url como chave no Map
+           console.log(`[obterOrdensDeProducao] Dados cacheados para ${cacheKey}.`);
+
+          return formattedData; // Retorna os dados formatados e cacheados
+
+      } catch (error) {
+        console.error('[obterOrdensDeProducao] Erro capturado na promise:', error);
+        throw error;
+
+      } finally {
+         if(ordensPromise && ordensPromise.cacheKey === cacheKey) {
+           ordensPromise = null; // Limpa a promise em andamento para esta URL/chave
+         }
+          console.log(`[obterOrdensDeProducao] Promise para ${cacheKey} finalizada.`);
+      }
+  })();
+  ordensPromise.cacheKey = cacheKey; // Associa a chave do cache à Promise (para o in-flight check)
+
+  return await ordensPromise; // Retorna a Promise (o chamador aguarda aqui)
 }
 
 export function limparCacheOrdens() {
-  ordensCache = null;
-  localStorage.removeItem('ordensCacheData');
-  console.log('[obterOrdensDeProducao] Cache de ordens limpo');
+  ordensCacheMap.clear();
 }
 
-// Adicione isso após a função limparCacheOrdens
 export function limparCacheCortes() {
-  localStorage.removeItem('cortesCacheData');
+  cortesCache = {}; // Limpa o objeto de cache por status
   console.log('[limparCacheCortes] Cache de cortes limpo');
 }
 
@@ -628,21 +832,15 @@ function handleOPTableClick(e) {
   if (tr) {
     const numero = tr.dataset.numero;
     if (numero) {
-      obterOrdensDeProducao(1, true, false, null, true).then(data => {
-        const ordensDeProducao = data.rows;
-        const op = ordensDeProducao.find(o => o.numero === numero);
-        if (op) {
-          window.location.hash = `#editar/${op.edit_id}`;
-          // Aguardar o hashchange para evitar corrida
-          setTimeout(() => window.dispatchEvent(new HashChangeEvent('hashchange')), 0);
-        } else {
-          console.error('[handleOPTableClick] Ordem não encontrada para o número:', numero);
-          mostrarPopupMensagem('Ordem de Produção não encontrada.', 'erro');
-        }
-      }).catch(error => {
-        console.error('[handleOPTableClick] Erro ao buscar ordens:', error);
-        mostrarPopupMensagem('Erro ao carregar ordem. Tente novamente.', 'erro');
-      });
+      const op = filteredOPsGlobal.find(o => o.numero === numero); // Use filteredOPsGlobal
+
+      if (op) {
+        window.location.hash = `#editar/${op.edit_id}`;
+
+      } else {
+        console.error('[handleOPTableClick] Ordem não encontrada nos dados carregados para o número:', numero);
+        mostrarPopupMensagem('Ordem de Produção não encontrada nos dados visíveis.', 'aviso'); // Use aviso talvez?
+      }
     } else {
       console.error('[handleOPTableClick] Número da OP não encontrado na linha.');
     }
@@ -780,307 +978,315 @@ async function saveOPChanges(op) {
   return await response.json();
 }
 
-window.saveOPChanges = saveOPChanges; // Torna a função global
+window.saveOPChanges = saveOPChanges;
 
 let isLoadingEtapas = false; // Nova flag para evitar carregamentos múltiplos
 
 async function loadEtapasEdit(op, skipReload = false) {
-  console.log(`[loadEtapasEdit] Iniciando carregamento das etapas para OP: ${op ? op.numero : 'undefined'} com skipReload: ${skipReload}`);
-
-  if (isLoadingEtapas && !skipReload) {
-    console.log(`[loadEtapasEdit] Já está carregando etapas para OP ${op?.numero}, ignorando nova chamada`);
-    return;
-  }
-
-  isLoadingEtapas = true;
-
-  const etapasContainer = document.getElementById('etapasContainer');
-  const finalizarBtn = document.getElementById('finalizarOP');
-
-  if (!op || !etapasContainer || !finalizarBtn) {
-    console.error('[loadEtapasEdit] OP, etapasContainer ou finalizarBtn não encontrados:', { op, etapasContainer, finalizarBtn });
-    isLoadingEtapas = false;
-    return;
-  }
-
-  if (!skipReload) {
-    limparCacheOrdens();
-    limparCacheProdutos();
-    limparCacheCortes();
-  }
-
-  etapasContainer.innerHTML = '<div class="spinner">Carregando etapas...</div>';
-
-  try {
-    const produtos = await obterProdutos();
-    const responseUsuarios = await fetch('/api/usuarios', {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-      cache: 'no-store'
-    });
-    const usuarios = await responseUsuarios.json();
-
-    const token = localStorage.getItem('token');
-    const timestamp = Date.now();
-    const responseLancamentos = await fetch(`/api/producoes?op_numero=${op.numero}&_=${timestamp}`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-      cache: 'no-store'
-    });
-
-    let lancamentos = [];
-    if (responseLancamentos.ok) {
-      lancamentos = await responseLancamentos.json();
-      console.log('[loadEtapasEdit] Lançamentos buscados do servidor:', lancamentos);
-    } else {
-      console.warn('[loadEtapasEdit] Falha ao buscar lançamentos, usando etapas originais:', op.etapas);
+    console.log(`[loadEtapasEdit] Iniciando carregamento das etapas para OP: ${op ? op.numero : 'undefined'} com skipReload: ${skipReload}`);
+  
+      if (isLoadingEtapas && !skipReload) {
+      console.log(`[loadEtapasEdit] Já está carregando etapas para OP ${op?.numero}, ignorando nova chamada`);
+      return;
     }
+      isLoadingEtapas = true; // Marca como carregando
+  
+    // Pega as referências dos elementos DOM necessários
+    const etapasContainer = document.getElementById('etapasContainer');
+    const finalizarBtn = document.getElementById('finalizarOP');
+  
+    // Verifica se elementos essenciais existem antes de continuar
+    if (!op || !etapasContainer || !finalizarBtn) {
+      console.error('[loadEtapasEdit] OP, etapasContainer ou finalizarBtn não encontrados:', { op, etapasContainer, finalizarBtn });
+      isLoadingEtapas = false; // Reseta a flag
+      return;
+    }
+  
+    // Limpa o conteúdo atual e mostra spinner
+    etapasContainer.innerHTML = '<div class="spinner">Carregando etapas...</div>';
+  
+    try {
+      // ** <-- INÍCIO: GRUPAR TODAS AS BUSCAS DE DADOS EM PARALELO COM Promise.all --> **
+      console.log('[loadEtapasEdit] Iniciando buscas de dados em paralelo...');
+  
+      // Cria um array de Promises. Chame as funções SEM 'await' aqui.
+      const promises = [
+        obterProdutos(), // Retorna uma Promise
+        obterUsuarios(), // Retorna uma Promise (função helper que criamos)
+        obterLancamentos(op.numero), // Retorna uma Promise (função helper que criamos, precisa de op.numero)
+        obterCortes('pendente'), // Retorna uma Promise
+        obterCortes('cortados'), // Retorna uma Promise
+        obterCortes('verificado'), // Retorna uma Promise
+        obterCortes('usado'), // Retorna uma Promise
+      ];
+  
 
-    if (op.etapas && Array.isArray(op.etapas)) {
-      op.etapas = op.etapas.map((etapa, index) => {
-        const lancamento = lancamentos.find(l => l.etapa_index === index && l.processo === etapa.processo);
-        if (lancamento) {
-          return {
-            ...etapa,
-            usuario: lancamento.funcionario || etapa.usuario || '',
-            quantidade: lancamento.quantidade || etapa.quantidade || 0,
-            lancado: true,
-            ultimoLancamentoId: lancamento.id || etapa.ultimoLancamentoId
-          };
-        } else if (etapa.processo === 'Corte') {
-          return etapa;
-        } else {
-          return {
-            ...etapa,
-            quantidade: 0,
-            lancado: false,
-            ultimoLancamentoId: null
-          };
-        }
-      });
-    } else {
-      const produto = produtos.find(p => p.nome === op.produto);
-      if (produto && produto.etapas) {
-        op.etapas = produto.etapas.map(etapa => ({
-          processo: etapa.processo,
-          usuario: '',
-          quantidade: 0,
-          lancado: false,
-          ultimoLancamentoId: null
-        }));
-      } else {
-        op.etapas = [];
-      }
-    }
+      const [
+        produtos, // Resultado da Promise 0 (obterProdutos)
+        usuarios, // Resultado da Promise 1 (obterUsuarios)
+        lancamentos, // Resultado da Promise 2 (obterLancamentos)
+        cortesPendentes, // Resultado da Promise 3 (obterCortes 'pendente')
+        cortesCortados, // Resultado da Promise 4
+        cortesVerificados, // Resultado da Promise 5
+        cortesUsados // Resultado da Promise 6
+      ] = await Promise.all(promises); // Espera por todos os resultados em paralelo!
+  
+      console.log('[loadEtapasEdit] Todas as buscas de dados concluídas.');
+  
+      // Combina todos os arrays de cortes buscados em um único array (usado na lógica da etapa Corte)
+      const todosCortes = [...cortesPendentes, ...cortesCortados, ...cortesVerificados, ...cortesUsados];
+      console.log('[loadEtapasEdit] Total de cortes relevantes buscados:', todosCortes.length);
+  
+      // ** <-- FIM: GRUPAR TODAS AS BUSCAS DE DADOS EM PARALELO --> **
+  
+  
+      // ** 3. Lógica de sincronização de etapas DA OP com lançamentos (usa 'lancamentos' e 'op.etapas' originais) **
+      // Esta lógica AGORA usa o array 'lancamentos' populado por Promise.all (vindo da busca paralela)
+  
+      if (op.etapas && Array.isArray(op.etapas)) {
+        op.etapas = op.etapas.map((etapa, index) => {
+          const lancamento = lancamentos.find(l => l.etapa_index === index && l.processo === etapa.processo);
+          if (lancamento) { // Se um lançamento correspondente for encontrado
+            return {
+              ...etapa, // Começa com as propriedades existentes da etapa
+              usuario: lancamento.funcionario || etapa.usuario || '', // Usa usuário do lançamento
+              quantidade: lancamento.quantidade || etapa.quantidade || 0, // Usa quantidade do lançamento
+              lancado: true, // Marca como lançado
+              ultimoLancamentoId: lancamento.id || etapa.ultimoLancamentoId // Usa ID do lançamento
+            };
+          } else if (etapa.processo === 'Corte') {
+            // Se não houver lançamento para a etapa Corte, mantém o objeto da etapa como está
+            return etapa; // Seu estado 'lancado', 'usuario' etc. será atualizado no bloco Corte update abaixo
+          } else {
+            // Se não houver lançamento para outras etapas, reseta quantidade e marca como não lançado
+            return {
+              ...etapa, // Começa com as propriedades existentes
+              quantidade: 0,
+              lancado: false,
+              ultimoLancamentoId: null
+            };
+          }
+        });
+      } else {
+        // Lógica para criar etapas iniciais se a OP não tiver nenhuma (baseado no produto)
+        const produto = produtos.find(p => p.nome === op.produto); // Usa 'produtos' populado por Promise.all
+        if (produto && produto.etapas) {
+          op.etapas = produto.etapas.map(etapa => ({
+            processo: etapa.processo,
+            usuario: '',
+            quantidade: 0,
+            lancado: false,
+            ultimoLancamentoId: null
+          }));
+        } else {
+          op.etapas = [];
+        }
+      }
+      console.log('[loadEtapasEdit] Etapas sincronizadas da OP após atualização:', op.etapas);
+  
+  
+      // ** <-- 4. SEÇÃO DE ATUALIZAÇÃO DA ETAPA "CORTE" BASEADA EM CORTES ENCONTRADOS --> **
+      // Este bloco usa 'op.etapas' (sincronizado acima) e 'todosCortes' (buscado antes em paralelo).
+      // Ele atualiza o estado da etapa Corte no objeto OP ANTES da renderização.
+  
+      // 4a. Encontra a etapa Corte no array op.etapas (AGORA SINCRONIZADO)
+      const corteEtapaIndex = op.etapas.findIndex(e => e.processo === 'Corte'); // Encontra o índice da etapa Corte
+      const corteEtapa = corteEtapaIndex !== -1 ? op.etapas[corteEtapaIndex] : null; // Pega a referência do objeto da etapa
+  
+      // 4b. Se existir uma etapa Corte na OP e a OP não estiver finalizada/cancelada
+      if (corteEtapa && op.status !== 'finalizado' && op.status !== 'cancelada') {
+        // Use todosCortes (buscado antes) para encontrar o corte relevante para esta OP
+        const corteEncontrado = todosCortes.find(c =>
+          (c.op && c.op === op.numero) || // Procura pelo número da OP no corte
+          (c.produto === op.produto && c.variante === op.variante) // Ou por produto/variante
+        );
+  
+        // 4c. Atualize o objeto da etapa Corte DIRETAMENTE no array op.etapas (se um corte foi encontrado)
+        if (corteEncontrado) {
+          console.log('[loadEtapasEdit] Corte encontrado para OP:', op.numero, corteEncontrado);
+          // Certifica que o índice da etapa Corte ainda é válido antes de tentar atualizar (segurança)
+          if (corteEtapaIndex !== -1) {
+            if (['cortados', 'verificado', 'usado'].includes(corteEncontrado.status)) {
+              // Atualiza o objeto no ARRAY op.etapas no índice correto
+              op.etapas[corteEtapaIndex] = {
+                ...op.etapas[corteEtapaIndex], // Começa com os dados atuais da etapa no array
+                usuario: corteEncontrado.cortador || 'Sistema',
+                lancado: true, // Marca como lançado
+                quantidade: corteEncontrado.quantidade || op.etapas[corteEtapaIndex].quantidade || 1 // Usa quantidade do corte
+              };
+              console.log('[loadEtapasEdit] Atualizando etapa Corte na memória para "Corte Realizado".');
+              // NÃO CHAME saveOPChanges(op) AQUI!
+            } else { // Status 'pendente' ou outro
+              // Se o corte existe mas está pendente, marca a etapa como pendente
+              op.etapas[corteEtapaIndex] = {
+                ...op.etapas[corteEtapaIndex],
+                usuario: '', lancado: false, quantidade: op.etapas[corteEtapaIndex].quantidade || 0
+              };
+              console.log('[loadEtapasEdit] Corte pendente para OP:', op.numero);
+            }
+          }
+        } else { // Nenhum corte encontrado em 'todosCortes' para esta OP/produto/variante
+          // Se não encontrou nenhum corte, marca a etapa Corte como pendente
+          if (corteEtapaIndex !== -1) {
+            op.etapas[corteEtapaIndex] = {
+              ...op.etapas[corteEtapaIndex],
+              usuario: '', lancado: false, quantidade: op.etapas[corteEtapaIndex].quantidade || 0
+            };
+            console.log('[loadEtapasEdit] Nenhum corte encontrado para OP:', op.numero);
+          }
+        }
+  
+        // 4d. Lógica para exibir o popup de corte pendente (verifica o objeto NO ARRAY op.etapas após a atualização)
+        if (corteEtapaIndex !== -1 && !op.etapas[corteEtapaIndex].lancado) {
+          mostrarPopupMensagem(
+            `O corte para a Ordem de Produção #${op.numero} ainda está pendente. Conclua o corte antes de prosseguir com as outras etapas.`,
+            'aviso'
+          );
+        }
+      }
+      // ** <-- FIM DA SEÇÃO DE ATUALIZAÇÃO DA ETAPA "CORTE" --> **
+  
+  
+      // ** 5. Lógica para verificar status geral da OP e etapa atual (usa 'op.etapas' já atualizado) **
+      const todasEtapasCompletas = await verificarEtapasEStatus(op, produtos); // Usa 'op.etapas' e 'produtos'
+      // verificarEtapasEStatus chama saveOPChanges se o status 'em-aberto'/'produzindo' mudar (se necessário)
+      const etapaAtualIndex = await determinarEtapaAtual(op, produtos); // Usa 'op.etapas' e 'produtos'
+      console.log(`[loadEtapasEdit] Etapa atual index calculada: ${etapaAtualIndex}`);
+  
+  
+      // ** 6. Obter tipos de usuários para selects (baseado em op.etapas e produtos) **
+      const tiposUsuarios = await Promise.all(
+        op.etapas.map(async (etapa) => ({
+          processo: etapa.processo,
+          tipoUsuario: await getTipoUsuarioPorProcesso(etapa.processo, op.produto, produtos), // Usa 'produtos'
+        }))
+      );
+  
+  
+      // Limpa o container DOM antes de adicionar os novos elementos
+      etapasContainer.innerHTML = '';
+      // Cria um fragmento temporário para construir os elementos DOM eficientemente
+      const fragment = document.createDocumentFragment();
+  
+      // ** 7. LOOP for - RENDERIZAÇÃO DAS ETAPAS **
+      // Itera sobre o array 'op.etapas' (que já está preparado com o estado correto)
+      for (let index = 0; index < op.etapas.length; index++) {
+        const etapa = op.etapas[index]; // Obtém o objeto etapa para a iteração atual
+  
+        // ** <-- CRIAÇÃO E CONFIGURAÇÃO DA DIV DA LINHA (row) --> **
+        // Esta linha deve estar AQUI, no início do corpo do loop
+        const row = document.createElement('div');
+        row.className = 'etapa-row'; // Adiciona a classe CSS
+        row.dataset.index = index; // Adiciona um data attribute com o índice
+        // ** <-----------------------------------------------------> **
+  
+        // Cria e configura o número da etapa
+        const numero = document.createElement('span');
+        numero.className = 'etapa-numero';
+        numero.textContent = index + 1;
+        row.appendChild(numero); // Adiciona numero a row
+  
+        // Cria e configura o input do processo
+        const processo = document.createElement('input');
+        processo.type = 'text';
+        processo.className = 'etapa-processo';
+        processo.value = etapa.processo;
+        processo.readOnly = true;
+        row.appendChild(processo); // Adiciona processo a row
+  
+  
+        // ** Lógica para criar elementos específicos da etapa (Corte ou outras) **
+        if (etapa.processo === 'Corte') {
+          // Cria e configura os inputs de status e nome para a etapa Corte
+          const usuarioStatusInput = document.createElement('input');
+          usuarioStatusInput.type = 'text';
+          usuarioStatusInput.className = 'etapa-usuario-status';
+          usuarioStatusInput.readOnly = true;
+          usuarioStatusInput.style.backgroundColor = '#d3d3d3';
+          usuarioStatusInput.style.marginRight = '5px';
+  
+          const usuarioNomeInput = document.createElement('input');
+          usuarioNomeInput.type = 'text';
+          usuarioNomeInput.className = 'etapa-usuario-nome';
+          usuarioNomeInput.readOnly = true;
+          usuarioNomeInput.style.backgroundColor = '#d3d3d3';
+  
+          // Preenche os inputs usando os dados JÁ ATUALIZADOS no objeto 'etapa'
+          usuarioStatusInput.value = etapa.lancado ? 'Corte Realizado' : 'Aguardando corte';
+          usuarioNomeInput.value = etapa.usuario || ''; // Usa etapa.usuario diretamente
+  
+          console.log('[loadEtapasEdit] Renderizando etapa Corte. Status da etapa OP (na memória):', usuarioStatusInput.value, 'Usuário:', usuarioNomeInput.value);
+  
+          // Adiciona os inputs na linha
+          row.appendChild(usuarioStatusInput);
+          row.appendChild(usuarioNomeInput);
+  
+        } else { // Se não for a etapa Corte (outras etapas com select de usuário e quantidade)
+          const exigeQuantidade = tiposUsuarios[index].tipoUsuario === 'costureira' || tiposUsuarios[index].tipoUsuario === 'tiktik';
+  
+          // Cria e configura o select de usuário
+          const usuarioSelect = document.createElement('select');
+          usuarioSelect.className = 'select-usuario';
+          // Disable logic usa op.status, index > etapaAtualIndex, e se a etapa já foi lançada e exige quantidade
+          usuarioSelect.disabled = op.status === 'finalizado' || op.status === 'cancelada' || index > etapaAtualIndex || (exigeQuantidade && etapa.lancado);
+  
+          // Popula o select com opções de usuário
+          usuarioSelect.innerHTML = '';
+          const defaultOption = document.createElement('option');
+          defaultOption.value = '';
+          defaultOption.textContent = getUsuarioPlaceholder(tiposUsuarios[index].tipoUsuario);
+          usuarioSelect.appendChild(defaultOption);
+  
+          // Seleciona a opção de usuário já lançada
+          const selectedUserOption = usuarios.find(u => u.nome === etapa.usuario);
+          if (selectedUserOption) {
+            // Encontre a option correspondente no select e marque como selecionada
+            const optionToSelect = usuarioSelect.querySelector(`option[value="${etapa.usuario}"]`);
+            if (optionToSelect) {
+              optionToSelect.selected = true;
+            } else if (etapa.usuario) {
+              // Se o usuário salvo não estiver na lista (ex: inativo), adicione-o como opção selecionada desabilitada
+              const existingOption = usuarioSelect.querySelector(`option[value="${etapa.usuario}"]`);
+              if (!existingOption) {
+                const userOption = document.createElement('option');
+                userOption.value = etapa.usuario;
+                userOption.textContent = etapa.usuario;
+                userOption.selected = true;
+                userOption.disabled = true; // Não pode ser alterado
+                usuarioSelect.appendChild(userOption);
+              }
 
-    console.log('[loadEtapasEdit] Etapas sincronizadas da OP após atualização:', op.etapas);
-
-    // Verifica se a etapa Corte está pendente e exibe popup
-    const corteEtapa = op.etapas.find(e => e.processo === 'Corte');
-    if (corteEtapa && !corteEtapa.lancado && op.status !== 'finalizado' && op.status !== 'cancelada') {
-      mostrarPopupMensagem(
-        `O corte para a Ordem de Produção #${op.numero} ainda está pendente. Conclua o corte antes de prosseguir com as outras etapas.`,
-        'aviso'
-      );
-    }
-
-    const todasEtapasCompletas = await verificarEtapasEStatus(op, produtos);
-    if (op.status === 'finalizado' && !todasEtapasCompletas) {
-      op.status = 'produzindo';
-      await saveOPChanges(op);
-      mostrarPopupMensagem(
-        `A Ordem de Produção #${op.numero} voltou para o status 'Produzindo' porque uma etapa está incompleta.`,
-        'aviso'
-      );
-    }
-
-    const etapaAtualIndex = await determinarEtapaAtual(op, produtos);
-    console.log(`[loadEtapasEdit] Etapa atual index calculada: ${etapaAtualIndex}`);
-
-    const tiposUsuarios = await Promise.all(
-      op.etapas.map(async (etapa) => ({
-        processo: etapa.processo,
-        tipoUsuario: await getTipoUsuarioPorProcesso(etapa.processo, op.produto, produtos),
-      }))
-    );
-
-    etapasContainer.innerHTML = '';
-    const fragment = document.createDocumentFragment();
-
-    for (let index = 0; index < op.etapas.length; index++) {
-      const etapa = op.etapas[index];
-      const row = document.createElement('div');
-      row.className = 'etapa-row';
-      row.dataset.index = index;
-
-      const numero = document.createElement('span');
-      numero.className = 'etapa-numero';
-      numero.textContent = index + 1;
-      row.appendChild(numero);
-
-      const processo = document.createElement('input');
-      processo.type = 'text';
-      processo.className = 'etapa-processo';
-      processo.value = etapa.processo;
-      processo.readOnly = true;
-      row.appendChild(processo);
-
-      if (etapa.processo === 'Corte') {
-        const usuarioStatusInput = document.createElement('input');
-        usuarioStatusInput.type = 'text';
-        usuarioStatusInput.className = 'etapa-usuario-status';
-        usuarioStatusInput.readOnly = true;
-        usuarioStatusInput.style.backgroundColor = '#d3d3d3';
-        usuarioStatusInput.style.marginRight = '5px';
-      
-        const usuarioNomeInput = document.createElement('input');
-        usuarioNomeInput.type = 'text';
-        usuarioNomeInput.className = 'etapa-usuario-nome';
-        usuarioNomeInput.readOnly = true;
-        usuarioNomeInput.style.backgroundColor = '#d3d3d3';
-      
-        if (op.status !== 'finalizado' && op.status !== 'cancelada') {
-          try {
-            const cortesPendentes = await obterCortes('pendente');
-            const cortesCortados = await obterCortes('cortados');
-            const cortesVerificados = await obterCortes('verificado');
-            let cortesUsados = [];
-            try {
-              cortesUsados = await obterCortes('usado'); // Tenta buscar cortes usados, mas não falha se der erro
-            } catch (error) {
-              console.warn('[loadEtapasEdit] Falha ao buscar cortes usados:', error);
-            }
-      
-            console.log('[loadEtapasEdit] Buscando corte para OP:', op.numero, 'Produto:', op.produto, 'Variante:', op.variante);
-            console.log('[loadEtapasEdit] Cortes encontrados - Pendentes:', cortesPendentes.length, 'Cortados:', cortesCortados.length, 'Verificados:', cortesVerificados.length, 'Usados:', cortesUsados.length);
-      
-            // Busca por op.numero ou por produto + variante como fallback
-            const corteEncontrado = [
-              ...cortesPendentes,
-              ...cortesCortados,
-              ...cortesVerificados,
-              ...cortesUsados
-            ].find(c => 
-              (c.op && c.op === op.numero) || 
-              (c.produto === op.produto && c.variante === op.variante)
-            );
-      
-            if (corteEncontrado) {
-              console.log('[loadEtapasEdit] Corte encontrado:', corteEncontrado);
-              if (['cortados', 'verificado', 'usado'].includes(corteEncontrado.status)) {
-                usuarioStatusInput.value = 'Corte Realizado';
-                usuarioNomeInput.value = corteEncontrado.cortador || 'Sistema';
-                op.etapas[index] = {
-                  ...etapa,
-                  usuario: corteEncontrado.cortador || 'Sistema',
-                  lancado: true,
-                  quantidade: corteEncontrado.quantidade || etapa.quantidade || 1
-                };
-                console.log('[loadEtapasEdit] Atualizando etapa Corte para OP:', op.numero, 'Status: Corte Realizado, Usuário:', corteEncontrado.cortador);
-                await saveOPChanges(op); // Garante que a OP seja atualizada no banco
-              } else {
-                usuarioStatusInput.value = 'Aguardando corte';
-                usuarioNomeInput.value = '';
-                op.etapas[index] = {
-                  ...etapa,
-                  usuario: '',
-                  lancado: false,
-                  quantidade: etapa.quantidade || 0
-                };
-                console.log('[loadEtapasEdit] Corte pendente para OP:', op.numero);
-              }
-            } else {
-              usuarioStatusInput.value = 'Aguardando corte';
-              usuarioNomeInput.value = '';
-              op.etapas[index] = {
-                ...etapa,
-                usuario: '',
-                lancado: false,
-                quantidade: etapa.quantidade || 0
-              };
-              console.log('[loadEtapasEdit] Nenhum corte encontrado para OP:', op.numero);
-            }
-          } catch (error) {
-            console.error('[loadEtapasEdit] Erro ao buscar cortes:', error);
-            usuarioStatusInput.value = 'Erro ao verificar corte';
-            usuarioNomeInput.value = '';
-            op.etapas[index] = {
-              ...etapa,
-              usuario: '',
-              lancado: false,
-              quantidade: etapa.quantidade || 0
-            };
-            mostrarPopupMensagem('Erro ao verificar status do corte. Tente novamente.', 'erro');
+            usuarioSelect.value = etapa.usuario;
           }
-        } else {
-          usuarioStatusInput.value = etapa.lancado ? 'Corte Realizado' : 'Aguardando corte';
-          usuarioNomeInput.value = etapa.usuario || '';
-          console.log('[loadEtapasEdit] OP finalizada/cancelada, mantendo status da etapa Corte:', etapa.lancado ? 'Corte Realizado' : 'Aguardando corte');
         }
-        row.appendChild(usuarioStatusInput);
-        row.appendChild(usuarioNomeInput);
-
-      } else {
-        const exigeQuantidade = tiposUsuarios[index].tipoUsuario === 'costureira' || tiposUsuarios[index].tipoUsuario === 'tiktik';
-        const usuarioSelect = document.createElement('select');
-        usuarioSelect.className = 'select-usuario';
-        usuarioSelect.disabled = op.status === 'finalizado' || op.status === 'cancelada' || index > etapaAtualIndex;
-        usuarioSelect.innerHTML = '';
-        const defaultOption = document.createElement('option');
-        defaultOption.value = '';
-        defaultOption.textContent = getUsuarioPlaceholder(tiposUsuarios[index].tipoUsuario);
-        usuarioSelect.appendChild(defaultOption);
-
-        const usuariosFiltrados = usuarios.filter(u => {
-          const tipos = Array.isArray(u.tipos) ? u.tipos : [u.tipos];
-          return tipos.includes(tiposUsuarios[index].tipoUsuario);
-        });
-
-        usuariosFiltrados.forEach(u => {
-          const option = document.createElement('option');
-          option.value = u.nome;
-          option.textContent = u.nome;
-          if (etapa.usuario === u.nome) option.selected = true;
-          usuarioSelect.appendChild(option);
-        });
-
-        usuarioSelect.changeHandler = debounce(async () => {
-          if (op.status === 'finalizado' || op.status === 'cancelada') return;
-          const novoUsuario = usuarioSelect.value;
-          if (etapa.usuario === novoUsuario) return;
-
-          op.etapas[index].usuario = novoUsuario;
-          await saveOPChanges(op);
-
-          if (exigeQuantidade && !row.querySelector('.quantidade-lancar')) {
-            const quantidadeDiv = criarQuantidadeDiv(op.etapas[index], op, usuarioSelect, index === etapaAtualIndex, row, produtos);
-            row.appendChild(quantidadeDiv);
-          }
-
-          await atualizarVisualEtapas(op, produtos);
-          await updateFinalizarButtonState(op, produtos);
-        }, 300);
-        usuarioSelect.addEventListener('change', usuarioSelect.changeHandler);
-        row.appendChild(usuarioSelect);
-
-        if (exigeQuantidade && etapa.usuario) {
-          const quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, index === etapaAtualIndex, row, produtos);
-          row.appendChild(quantidadeDiv);
-        }
+  
+  
+          row.appendChild(usuarioSelect);
+  
+        if (exigeQuantidade) {
+        const quantidadeDiv = criarQuantidadeDiv(etapa, op, usuarioSelect, index === etapaAtualIndex, row, produtos);
+        row.appendChild(quantidadeDiv);
       }
+  
+       } // Fim do if/else para tipo de etapa
 
-      fragment.appendChild(row);
+         fragment.appendChild(row);  
+       } // Fim do loop for
+  
+      etapasContainer.appendChild(fragment);
+  
+      await atualizarVisualEtapas(op, produtos, true); // Usa 'op.etapas', 'produtos', chama saveOPChanges se status 'em-aberto'/'produzindo' mudar
+      await updateFinalizarButtonState(op, produtos); // Usa 'op.etapas', 'produtos'
+  
+    } catch (error) {
+      console.error('[loadEtapasEdit] Erro ao carregar etapas:', error);
+      etapasContainer.innerHTML = '<p>Erro ao carregar etapas. Tente novamente.</p>';
+      mostrarPopupMensagem('Erro ao carregar etapas. Tente novamente.', 'erro');
+    } finally {
+      isLoadingEtapas = false; // Garante que a flag seja resetada
     }
-
-    etapasContainer.appendChild(fragment);
-    await atualizarVisualEtapas(op, produtos, true);
-    await updateFinalizarButtonState(op, produtos);
-
-  } catch (error) {
-    console.error('[loadEtapasEdit] Erro ao carregar etapas:', error);
-    etapasContainer.innerHTML = '<p>Erro ao carregar etapas. Tente novamente.</p>';
-  } finally {
-    isLoadingEtapas = false;
   }
-}
+
 
 async function salvarProducao(op, etapa, etapaIndex, produtos) {
   const produto = produtos.find(p => p.nome === op.produto);
@@ -1312,6 +1518,7 @@ try {
 }
 
   };
+
   usuarioSelect.addEventListener('change', async () => {
     if (op.status === 'finalizado' || op.status === 'cancelada') return;
     const novoUsuario = usuarioSelect.value;
@@ -1323,6 +1530,7 @@ try {
     await atualizarVisualEtapas(op, produtos);
     await updateFinalizarButtonState(op, produtos);
   });
+
   const handleInputChange = async () => {
     const etapaAtualIndex = await determinarEtapaAtual(op, produtos);
     const isCurrentEtapa = op.etapas.indexOf(etapa) === etapaAtualIndex;
@@ -2086,18 +2294,48 @@ async function loadAbaContent(aba, forceRefresh = true) {
 }
 
 let cortesCache = {}; // Cache específico para cortes
+let cortesPromise = {}; // Para requisições em andamento por status
+
 
 async function obterCortes(status, forceRefresh = false) {
-  const token = localStorage.getItem('token');
-  const response = await fetch(`/api/cortes?status=${status}`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-    cache: 'no-store' // Garante que não use cache do navegador
-  });
-  if (!response.ok) throw new Error('Erro ao carregar cortes');
+  const cacheKey = status;
 
-  const cortes = await response.json();
-  console.log(`[obterCortes] Cortes buscados diretamente do servidor para status ${status}`);
-  return cortes;
+  if (cortesPromise[cacheKey]) {
+    console.log(`[obterCortes] Requisição em andamento para status "${status}", aguardando...`);
+    return await cortesPromise[cacheKey];
+  }
+
+  if (cortesCache[cacheKey] && !forceRefresh) {
+    console.log(`[obterCortes] Retornando cortes do cache para status "${status}".`);
+    return cortesCache[cacheKey];
+  }
+
+  console.log(`[obterCortes] Buscando cortes diretamente do servidor para status "${status}"...`);
+  cortesPromise[cacheKey] = (async () => { // Armazena a Promise
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/cortes?status=${status}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+         const errorText = await response.text(); // Capture o texto do erro para debugging
+         console.error('[obterCortes] Erro na resposta da API:', response.status, errorText);
+        throw new Error('Erro ao carregar cortes');
+      }
+
+      const cortes = await response.json();
+      console.log(`[obterCortes] Cortes recebidos do servidor para status "${status}":`, cortes.length);
+
+      cortesCache[cacheKey] = cortes;
+
+      return cortes;
+    } finally {
+      delete cortesPromise[cacheKey];
+    }
+  })();
+
+  return await cortesPromise[cacheKey];
 }
 
 // Ajuste nas funções carregarTabela para evitar duplicatas
@@ -2239,20 +2477,35 @@ async function atualizarCorte(id, status, cortador) {
     const updatedCorte = await response.json();
 
     if (updatedCorte.op && updatedCorte.status === 'verificado') {
-      const ordensData = await obterOrdensDeProducao(1, true);
-      const op = ordensData.rows.find(o => o.numero === updatedCorte.op);
-      if (op) {
-        const corteEtapa = op.etapas.find(e => e.processo === 'Corte');
-        if (corteEtapa) {
-          corteEtapa.usuario = cortador;
-          corteEtapa.lancado = true;
-          await saveOPChanges(op);
-          console.log(`[atualizarCorte] Etapa Corte atualizada na OP #${op.numero} para "Corte Realizado"`);
+    // **NÃO CHAME obterOrdensDeProducao(1, true) AQUI!**
+    // Use os dados que já estão no cache global de ordens (ordensCache)
+    // Verifique se ordensCache existe e se tem dados relevantes
+     if (ordensCache && Array.isArray(ordensCache.rows)) {
+       // Procurar a OP pelo número retornado pelo backend
+       const op = ordensCache.rows.find(o => o.numero === updatedCorte.op);
+
+       if (op) {
+         const corteEtapa = op.etapas.find(e => e.processo === 'Corte');
+         if (corteEtapa) {
+           // Atualizar a etapa no objeto OP que está no cache (ou na memória local)
+           corteEtapa.usuario = cortador;
+           corteEtapa.lancado = true;
+           // Agora, salve a OP atualizada no banco de dados
+           await saveOPChanges(op); // Esta chamada PUT é necessária aqui.
+           console.log(`[atualizarCorte] Etapa Corte atualizada na OP #${op.numero} para "Corte Realizado"`);
+          limparCacheOrdens();
+         }
+       } else {
+         console.warn('[atualizarCorte] OP não encontrada no cache para o número:', updatedCorte.op, 'Não foi possível atualizar a etapa Corte.');
         }
-      }
-    }
+     } else {
+        console.warn('[atualizarCorte] Cache de ordens não disponível ou inválido. Não foi possível atualizar a etapa Corte na OP.');
+     }
+
+  }
 
     return updatedCorte;
+
   } catch (error) {
     console.error('[atualizarCorte] Erro:', error);
     mostrarPopupMensagem(`Erro ao atualizar corte: ${error.message}`, 'erro');
@@ -2300,11 +2553,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.error('[admin-ordens-de-producao] Autenticação falhou');
     return;
   }
-
+  
   usuarioLogado = auth.usuario;
   permissoes = auth.permissoes || [];
 
-  limparCacheOrdens(); // Limpa o cache para garantir dados atualizados
+  cachedProdutos = await obterProdutos(); 
 
   const ordensData = await obterOrdensDeProducao(1, true); // Busca todas as ordens (filtradas por "em-aberto" e "produzindo")
   const ordensDeProducao = ordensData.rows;
@@ -2559,9 +2812,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
   if (produtoOP) {
-    const produtos = await obterProdutos();
     produtoOP.addEventListener('change', async (e) => {
-      await loadVariantesSelects(e.target.value, produtos);
+      await loadVariantesSelects(e.target.value, cachedProdutos); // Passe o cache
     });
   }
 
