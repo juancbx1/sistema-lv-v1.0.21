@@ -1316,94 +1316,101 @@ async function loadEtapasEdit(op, skipReload = false) {
   }
 
 
-async function salvarProducao(op, etapa, etapaIndex, produtos) {
-  const produto = produtos.find(p => p.nome === op.produto);
-  if (!produto) throw new Error(`Produto ${op.produto} não encontrado.`);
-
-  const isKit = produto.tipos && produto.tipos.includes('kits');
-  if (isKit) throw new Error(`O produto ${op.produto} é um kit e não possui etapas de produção.`);
-
-  const etapaProduto = produto.etapas?.[etapaIndex];
-  if (!etapaProduto) throw new Error(`Etapa ${etapaIndex} não encontrada para o produto ${op.produto}.`);
-
-  if (etapaProduto.processo !== etapa.processo) throw new Error(`Processo ${etapa.processo} não corresponde à etapa ${etapaIndex} do produto ${op.produto}.`);
-
-  const maquina = etapaProduto.maquina;
-  if (!maquina) throw new Error(`Máquina não definida para o processo ${etapa.processo} do produto ${op.produto}.`);
-
-  const variacao = op.variante || null;
-
-  const dados = {
-    id: Date.now().toString(),
-    opNumero: op.numero,
-    etapaIndex: etapaIndex,
-    processo: etapa.processo,
-    produto: op.produto,
-    variacao: variacao,
-    maquina: maquina,
-    quantidade: parseInt(etapa.quantidade) || 0,
-    funcionario: etapa.usuario || 'Sistema', // Valor padrão se não houver usuário
-    data: new Date().toLocaleString('sv', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T'),
-    lancadoPor: usuarioLogado?.nome || 'Sistema',
-  };
-  console.log('[salvarProducao] Dados enviados para o servidor:', dados);
-
-  if (!dados.opNumero) throw new Error('Número da OP não informado.');
-  if (dados.etapaIndex === undefined || dados.etapaIndex === null) throw new Error('Índice da etapa não informado.');
-  if (!dados.processo) throw new Error('Processo não informado.');
-  if (!dados.produto) throw new Error('Produto não informado.');
-  if (!dados.maquina) throw new Error('Máquina não informada.');
-  if (!dados.quantidade || dados.quantidade <= 0) throw new Error('Quantidade inválida.');
-  // Removido o check de funcionário, já que agora tem valor padrão
-  if (!dados.data) throw new Error('Data não informada.');
-  if (!dados.lancadoPor) throw new Error('Usuário lançador não identificado.');
-
-  try {
-    const responseProducoes = await fetch('/api/producoes', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(dados),
-    });
-
-    if (!responseProducoes.ok) {
-      const error = await responseProducoes.json();
-
-      if (error.details === 'jwt expired') {
-        mostrarPopupMensagem('Sua sessão expirou. Por favor, faça login novamente.', 'erro');
-        localStorage.removeItem('token');
-        localStorage.removeItem('usuarioLogado');
-        limparCacheProdutos();
-        window.location.href = '/login.html';
-        return;
-      }
-      if (responseProducoes.status === 403) {
-        mostrarPopupMensagem('Você não tem permissão para lançar produção.', 'erro');
-      } else if (responseProducoes.status === 409) {
-        mostrarPopupMensagem('Já existe um lançamento para esta OP, etapa e funcionário. Nenhum novo registro foi criado.', 'aviso');
-        return null;
-      }
-      throw new Error(`Erro ao salvar produção: ${error.error || 'Erro desconhecido'}`);
+  async function salvarProducao(op, etapa, etapaIndex, produtos) {
+    if (!etapa.usuario) {
+        console.error('[salvarProducao] Tentativa de salvar produção sem funcionário selecionado para a etapa:', etapa.processo);
+        mostrarPopupMensagem(`Erro: Por favor, selecione um funcionário para a etapa "${etapa.processo}" antes de lançar.`, 'erro');
+        throw new Error(`Funcionário não selecionado para a etapa ${etapa.processo}`);
     }
 
-    const producao = await responseProducoes.json();
-    // Atualizar etapa no op.etapas
-    op.etapas[etapaIndex] = {
-      ...etapa,
-      usuario: dados.funcionario,
-      quantidade: dados.quantidade,
-      lancado: true,
-      ultimoLancamentoId: producao.id
+    const produto = produtos.find(p => p.nome === op.produto);
+    if (!produto) throw new Error(`Produto ${op.produto} não encontrado.`);
+
+    const isKit = produto.tipos && produto.tipos.includes('kits');
+    if (isKit) throw new Error(`O produto ${op.produto} é um kit e não possui etapas de produção.`);
+
+    const etapaProduto = produto.etapas?.[etapaIndex];
+    if (!etapaProduto) throw new Error(`Etapa ${etapaIndex} não encontrada para o produto ${op.produto}.`);
+
+    if (etapaProduto.processo !== etapa.processo) throw new Error(`Processo ${etapa.processo} não corresponde à etapa ${etapaIndex} do produto ${op.produto}.`);
+
+    const maquina = etapaProduto.maquina;
+    if (!maquina) throw new Error(`Máquina não definida para o processo ${etapa.processo} do produto ${op.produto}.`);
+
+    const variacao = op.variante || null;
+
+    const dados = {
+        id: Date.now().toString(),
+        opNumero: op.numero,
+        etapaIndex: etapaIndex,
+        processo: etapa.processo,
+        produto: op.produto,
+        variacao: variacao,
+        maquina: maquina,
+        quantidade: parseInt(etapa.quantidade) || 0,
+        funcionario: etapa.usuario, // Agora usa diretamente o valor validado
+        data: new Date().toLocaleString('sv', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T'),
+        lancadoPor: usuarioLogado?.nome || 'Sistema', // Mantendo fallback para lancadoPor por enquanto
     };
-    await saveOPChanges(op); // Sincronizar com o banco
-    return producao.id;
-  } catch (error) {
-    console.error('[salvarProducao] Erro:', error);
-    throw error;
-  }
+    console.log('[salvarProducao] Dados enviados para o servidor:', dados);
+
+    if (!dados.opNumero) throw new Error('Número da OP não informado.');
+    if (dados.etapaIndex === undefined || dados.etapaIndex === null) throw new Error('Índice da etapa não informado.');
+    if (!dados.processo) throw new Error('Processo não informado.');
+    if (!dados.produto) throw new Error('Produto não informado.');
+    if (!dados.maquina) throw new Error('Máquina não informada.');
+    if (!dados.quantidade || dados.quantidade <= 0) throw new Error('Quantidade inválida.');
+    if (!dados.funcionario) throw new Error('Funcionário não informado.');
+    if (!dados.data) throw new Error('Data não informada.');
+    if (!dados.lancadoPor) throw new Error('Usuário lançador não identificado.');
+
+    try {
+        const responseProducoes = await fetch('/api/producoes', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(dados),
+        });
+
+        if (!responseProducoes.ok) {
+            const error = await responseProducoes.json();
+
+            if (error.details === 'jwt expired') {
+                mostrarPopupMensagem('Sua sessão expirou. Por favor, faça login novamente.', 'erro');
+                localStorage.removeItem('token');
+                localStorage.removeItem('usuarioLogado');
+                limparCacheProdutos();
+                window.location.href = '/login.html';
+                throw new Error('Sessão expirada');
+            }
+            if (responseProducoes.status === 403) {
+                mostrarPopupMensagem('Você não tem permissão para lançar produção.', 'erro');
+                 throw new Error('Permissão negada para lançar produção'); // Lançar erro
+            } else if (responseProducoes.status === 409) {
+                mostrarPopupMensagem('Já existe um lançamento para esta OP, etapa e funcionário. Nenhum novo registro foi criado.', 'aviso');
+                return null;
+            }
+            throw new Error(`Erro ao salvar produção: ${error.error || 'Erro desconhecido'}`);
+        }
+
+        const producao = await responseProducoes.json();
+        op.etapas[etapaIndex] = {
+            ...etapa,
+            usuario: dados.funcionario, // Garante que estamos usando o usuário validado
+            quantidade: dados.quantidade,
+            lancado: true,
+            ultimoLancamentoId: producao.id
+        };
+        await saveOPChanges(op); // Sincronizar com o banco
+        return producao.id; // Retorna o ID do lançamento bem-sucedido
+    } catch (error) {
+        console.error('[salvarProducao] Erro durante o salvamento:', error);
+        throw error;
+    }
 }
+
 
 async function lancarEtapa(op, etapaIndex, quantidade, produtos) {
   const etapa = op.etapas[etapaIndex];
@@ -1486,7 +1493,8 @@ lancarBtn.removeEventListener('click', lancarBtnClickHandler);
 lancarBtn.addEventListener('click', lancarBtnClickHandler);
 
   };
-  const lancarBtnClickHandler = async () => {
+
+const lancarBtnClickHandler = async () => {
     if (lancarBtn.disabled || lancamentosEmAndamento.has(op.edit_id + '-' + etapa.processo)) return;
 
 lancamentosEmAndamento.add(op.edit_id + '-' + etapa.processo);
