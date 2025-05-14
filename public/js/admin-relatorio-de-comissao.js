@@ -347,7 +347,7 @@ async function atualizarRelatorio() {
                 statusPagamentoEl.textContent = `PAGO em ${formatarData(new Date(comissaoJaPaga.data_pagamento_efetivo).toISOString().split('T')[0])} (Confirmado por: ${comissaoJaPaga.confirmado_por_nome || 'N/A'}) (Ref. ${cicloSelecionado.nome})`;
                 statusPagamentoEl.style.color = 'darkblue';
             } else if (comissaoTotalDoCicloCalculada > 0) {
-                let textoStatus = `A Pagar em ${formatarData(dataPrevistaPagamento.toISOString().split('T')[0])}`;
+                let textoStatus = `Pagar até ${formatarData(dataPrevistaPagamento.toISOString().split('T')[0])}`;
                 let corStatus = 'green';
 
                 if (hojeParaComparacao >= dataPrevistaPagamento) {
