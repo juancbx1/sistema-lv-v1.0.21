@@ -3,9 +3,9 @@ import { PRODUTOS, PRODUTOSKITS } from '/js/utils/prod-proc-maq.js';
 // Função para gerenciar cache no localStorage
 export async function getCachedData(key, fetchFunction, expiryMinutes = 5, forceRefresh = false) { // Adicione forceRefresh = false
     const cached = localStorage.getItem(key);
-    const cachedTime = localStorage.getItem(`${key}_timestamp`);
-    const now = Date.now();
-    const expiryMs = expiryMinutes * 60 * 1000;
+    const cachedTime = localStorage.getItem(`${key}_timestamp`);
+    const now = Date.now();
+    const expiryMs = expiryMinutes * 60 * 1000;
 
     // Verifica se o cache existe e não está expirado
     if (cached && cachedTime && (now - cachedTime < expiryMs) && !forceRefresh) { // Adicionado && !forceRefresh
@@ -65,7 +65,7 @@ export async function obterProdutos(forceRefresh = false) {
 
     const produtosCadastrados = await getCachedData('produtosCadastrados', fetchProdutos, 5, forceRefresh); // Passa forceRefresh
     console.log('[obterProdutos] Produtos encontrados (do cache ou API):', produtosCadastrados.length); // Log final do que a função retorna
-    // Adicione um log para verificar o conteúdo de etapasTiktik aqui antes de retornar
+    // Adicione um log para verificar o conteúdo de etapasTiktik aqui antes de retornar
      if (produtosCadastrados.length > 0) {
           console.log('[obterProdutos] etapasTiktik no primeiro produto ANTES de retornar:', produtosCadastrados[0].etapasTiktik);
      }

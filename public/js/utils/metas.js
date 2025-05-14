@@ -1,6 +1,3 @@
-// js/utils/metas.js
-import { obterProdutos } from '/js/utils/storage.js';
-
 // Definição das metas por nível
 const metasPorNivel = {
     1: [
@@ -30,26 +27,34 @@ const metasPorNivel = {
 };
 
 export function obterMetasPorNivel(nivel) {
-    return metasPorNivel[nivel] || metasPorNivel[1];
+    return metasPorNivel[nivel] || metasPorNivel[1]; // Retorna nível 1 como padrão
 }
 
-// Nova função para converter metas em pontos
-export function obterMetasPorNivelEmPontos(nivel) {
+export function obterMetasPorNivelEmPontos(nivel, produtosLista) {
     const metasProcessos = obterMetasPorNivel(nivel);
-    const produtos = obterProdutos();
-    
-    // Calcula a média de pontos por processo com base nos produtos cadastrados
-    let totalPontos = 0;
-    let totalProcessos = 0;
-    produtos.forEach(produto => {
-        produto.processos.forEach((_, index) => {
-            totalPontos += produto.pontos?.[index] || 1;
-            totalProcessos += 1;
+
+    if (!Array.isArray(produtosLista) || produtosLista.length === 0) {
+        console.warn("[obterMetasPorNivelEmPontos] Lista de produtos inválida ou vazia. Retornando metas sem conversão para pontos.");
+        return metasProcessos.map(meta => ({
+            pontos: meta.processos, // Fallback: usa processos como pontos se não puder calcular média
+            valor: meta.valor,
+            processos: meta.processos
+        }));
+    }
+
+    let totalPontosProdutos = 0;
+    let totalProcessosProdutos = 0;
+    produtosLista.forEach(produto => {
+        const processosDoProduto = Array.isArray(produto.processos) ? produto.processos : [];
+        const pontosDoProduto = Array.isArray(produto.pontos) ? produto.pontos : [];
+
+        processosDoProduto.forEach((_, index) => {
+            totalPontosProdutos += pontosDoProduto[index] || 1; // Usa o ponto correspondente ou 1 como default
+            totalProcessosProdutos += 1;
         });
     });
-    const mediaPontosPorProcesso = totalProcessos > 0 ? totalPontos / totalProcessos : 1;
+    const mediaPontosPorProcesso = totalProcessosProdutos > 0 ? totalPontosProdutos / totalProcessosProdutos : 1;
 
-    // Converte metas de processos para pontos
     return metasProcessos.map(meta => ({
         pontos: Math.round(meta.processos * mediaPontosPorProcesso), // Converte para pontos
         valor: meta.valor,
@@ -57,29 +62,26 @@ export function obterMetasPorNivelEmPontos(nivel) {
     }));
 }
 
+export function calcularComissaoSemanal(totalPontosCiclo, nivel, producoesDaSemana = [], produtosLista) {
+    if (!Array.isArray(produtosLista)) {
+        console.error("[calcularComissaoSemanal] Lista de produtos (produtosLista) não é um array válido.");
+        const metasFallback = obterMetasPorNivel(nivel);
+        return { faltam: Math.ceil((metasFallback[0]?.processos || totalPontosCiclo + 1) - totalPontosCiclo) };
+    }
 
-// Função para calcular a comissão semanal (mantida em processos para relatórios)
-export function calcularComissaoSemanal(totalProcessos, nivel, producoes = []) {
-    const metas = obterMetasPorNivel(nivel);
-    const produtos = obterProdutos();
+    const valorParaCompararComMetas = totalPontosCiclo;
+    const metasEmPontos = obterMetasPorNivelEmPontos(nivel, produtosLista);
 
-    let totalPontosPonderados = 0;
-    producoes.forEach(p => {
-        const produto = produtos.find(prod => prod.nome === p.produto);
-        if (produto) {
-            const processoIndex = produto.processos.indexOf(p.processo);
-            const pontos = produto.pontos?.[processoIndex] || 1;
-            totalPontosPonderados += p.quantidade * pontos;
-        }
-    });
+    const metasBatidas = metasEmPontos.filter(m => valorParaCompararComMetas >= m.pontos);
 
-    const processosAjustados = totalPontosPonderados || totalProcessos;
-
-    const metasBatidas = metas.filter(m => processosAjustados >= m.processos);
     if (metasBatidas.length > 0) {
+        metasBatidas.sort((a, b) => a.pontos - b.pontos);
         return metasBatidas[metasBatidas.length - 1].valor;
     } else {
-        const primeiraMeta = metas[0];
-        return { faltam: Math.ceil(primeiraMeta.processos - processosAjustados) };
+        const primeiraMeta = metasEmPontos[0];
+        if (primeiraMeta) {
+            return { faltam: Math.ceil(primeiraMeta.pontos - valorParaCompararComMetas) };
+        }
+        return { faltam: "N/A (sem metas definidas)" };
     }
 }

@@ -24,7 +24,8 @@ export const permissoesDisponiveis = [
     { id: 'lancar-producao', label: 'Lançar Produção (Opera com editar OPs)' },
     { id: 'embalar-produto', label: 'Embalagem de Produto' }, // Para embalagem-de-produtos.html
     { id: 'lancar-arremate', label: 'Lançar Arremate' }, // Para embalagem-de-produtos.html
-    { id: 'acesso-estoque', label: 'Acesso ao Estoque' } // Para estoque.html
+    { id: 'acesso-estoque', label: 'Acesso ao Estoque' }, // Para estoque.html
+    { id: 'confirmar-pagamento-comissao', label: 'Confirmar Pagamento de Comissão' } // Para relatorio-de-comissao.html
 ];
 
 // Apenas o tipo 'admin' terá permissões padrão
@@ -62,6 +63,8 @@ export const permissoesPorTipo = {
         'embalar-produto',
         'lancar-arremate',
         'acesso-estoque',
+        'confirmar-pagamento-comissao'
+
         
     ]
 };
