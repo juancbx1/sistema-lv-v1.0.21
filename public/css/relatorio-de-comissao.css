@@ -429,6 +429,11 @@ body {
 
 /* Breakpoint para telas menores (max-width: 414px, como iPhone XR) */
 @media (max-width: 414px) {
+    .rc-week-item span{
+    font-size: 0.8rem;
+    text-align: left;
+    white-space: unset;
+    }
     .rc-main-content {
         margin-left: 0; /* Se o menu lateral for do tipo overlay/escondido */
     }
