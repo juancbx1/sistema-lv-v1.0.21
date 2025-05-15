@@ -25,7 +25,10 @@ export const permissoesDisponiveis = [
     { id: 'embalar-produto', label: 'Embalagem de Produto' }, // Para embalagem-de-produtos.html
     { id: 'lancar-arremate', label: 'Lançar Arremate' }, // Para embalagem-de-produtos.html
     { id: 'acesso-estoque', label: 'Acesso ao Estoque' }, // Para estoque.html
-    { id: 'confirmar-pagamento-comissao', label: 'Confirmar Pagamento de Comissão' } // Para relatorio-de-comissao.html
+    { id: 'lancar-embalagem-unidade', label: 'Lançar embalagem Unidade' }, // Para relatorio-de-comissao.html
+    { id: 'confirmar-pagamento-comissao', label: 'Confirmar Pagamento de Comissão' }, // Para embalagem-de-produtos.html
+    { id: 'lancar-embalagem', label: 'Lançar Embalagem' }, // Para embalagem-de-produtos.html
+    { id: 'montar-kit', label: 'Montar Kit' } // Para embalagem-de-produtos.html
 ];
 
 // Apenas o tipo 'admin' terá permissões padrão
@@ -63,7 +66,10 @@ export const permissoesPorTipo = {
         'embalar-produto',
         'lancar-arremate',
         'acesso-estoque',
-        'confirmar-pagamento-comissao'
+        'confirmar-pagamento-comissao',
+        'lancar-embalagem-unidade',
+        'montar-kit',
+        'lancar-embalagem'
 
         
     ]

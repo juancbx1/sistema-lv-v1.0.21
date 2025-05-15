@@ -1,4 +1,3 @@
-// API dedicada para buscar Ordens de Produção com status 'finalizado'
 import 'dotenv/config';
 import pkg from 'pg';
 const { Pool } = pkg;

@@ -1,1092 +1,859 @@
-/* Reset básico */
-* {
+/* public/css/embalagem-de-produtos.css */
+
+/*------------------------------------*\
+    #VARIÁVEIS DE COR E RESET (Baseado em relatorio-de-comissao.css)
+\*------------------------------------*/
+:root {
+    --cor-fundo-pagina: #f4f6f8;
+    --cor-texto-principal: #333;
+    --cor-azul-escuro: #2c3e50;       /* Títulos principais, texto escuro */
+    --cor-azul-primario: #3498db;     /* Botões primários, links, destaques */
+    --cor-azul-hover: #2980b9;
+    --cor-azul-subtitulo: #5a7c9b;    /* Subtítulos, texto informativo */
+    --cor-cinza-texto-secundario: #7f8c8d; /* Labels, texto menos importante */
+    --cor-cinza-borda: #dcdfe4;       /* Bordas de inputs, tabelas */
+    --cor-cinza-fundo-input: #f8f9fa; /* Fundo de inputs, linhas de tabela */
+    --cor-branco: #ffffff;
+    --cor-vermelho-erro: #e74c3c;
+    --cor-verde-sucesso: #27ae60;
+    --cor-verde-hover: #229954;
+    --cor-laranja-aviso: #f39c12;
+    --cor-amarelo-destaque: #f1c40f;  /* Para quantidades pendentes, etc. */
+
+    --sombra-card: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --sombra-card-hover: 0 6px 16px rgba(0, 0, 0, 0.12);
+    --raio-borda-padrao: 8px;
+    --raio-borda-input: 6px;
+    --raio-borda-tabela: 10px;
+
+    --font-principal: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
     margin: 0;
     padding: 0;
-    box-sizing: border-box;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 body {
-    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-    min-height: 100vh;
-    overflow-x: hidden;
+    font-family: var(--font-principal);
+    background-color: var(--cor-fundo-pagina);
+    color: var(--cor-texto-principal);
     line-height: 1.6;
-    visibility: hidden; /* Esconde o corpo por padrão */
+    /* visibility é controlado pelo JS (body.autenticado) */
 }
 
-body.autenticado {
-    visibility: visible; /* Mostra o corpo após autenticação */
-}
-
-/* Container principal */
-.container {
-    margin-left: 250px;
-    padding: 30px;
-    max-width: 1200px;
-    margin-right: 30px;
-}
-
-/* Estilo dos Cards (genérico para filtros, registros, formulários, etc.) */
-.filters-card,
-.registros-card,
-.formulario-op,
-.editar-op,
-.embalagem-section,
-.products-section {
-    background: #ffffff;
-    border-radius: 12px;
+/*------------------------------------*\
+    #LAYOUT PRINCIPAL DA PÁGINA
+\*------------------------------------*/
+.ep-main-content {
     padding: 25px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s ease;
-    margin-top: 20px;
+    margin-left: 250px; /* Ajustar se o menu lateral for fixo */
+    transition: margin-left 0.3s ease;
+    max-width: 1300px; /* Um pouco mais de largura */
+    margin-right: auto; /* Centraliza se menor que max-width */
+    margin-left: auto;  /* Centraliza se menor que max-width, ou 250px se menu fixo */
+}
+/* Se o menu lateral é controlado por JS para adicionar margin: */
+body.menu-aberto .ep-main-content {
+    margin-left: 250px;
+}
+body:not(.menu-aberto) .ep-main-content {
+    margin-left: 0; /* Ou o padding que você usa para o menu colapsado */
 }
 
-.filters-card:hover,
-.registros-card:hover,
-.formulario-op:hover,
-.editar-op:hover,
-.embalagem-section:hover,
-.products-section:hover {
-    transform: translateY(-5px);
+
+.ep-page-header {
+    margin-bottom: 30px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid var(--cor-cinza-borda);
 }
 
-.filters-card h1,
-.filters-card h2,
-.registros-card h1,
-.registros-card h2,
-.formulario-op h1,
-.formulario-op h2,
-.editar-op h1,
-.editar-op h2,
-.embalagem-section h1,
-.embalagem-section h2,
-.products-section h1,
-.products-section h2 {
-    font-size: 1.8em;
-    color: #2c3e50;
-    margin-bottom: 20px;
-    border-bottom: 2px solid #3498db;
+.ep-page-header h1 {
+    font-size: 2.2rem;
+    color: var(--cor-azul-escuro);
+    font-weight: 600;
+}
+
+.ep-section {
+    margin-bottom: 40px;
+    background-color: var(--cor-branco);
+    padding: 25px 30px;
+    border-radius: var(--raio-borda-padrao);
+    box-shadow: var(--sombra-card);
+}
+
+.ep-section-title {
+    font-size: 1.7rem;
+    color: var(--cor-azul-escuro);
+    margin-bottom: 10px;
     padding-bottom: 10px;
+    border-bottom: 1px solid #eaeaea;
+    font-weight: 500;
+}
+.ep-section-title-inline { /* Para títulos dentro de cards ou modais */
+    font-size: 1.5rem;
+    color: var(--cor-azul-escuro);
+    margin-bottom: 5px;
+    padding-bottom: 0;
+    border-bottom: none;
+    font-weight: 500;
 }
 
-/* Estilo dos Formulários e Filtros */
-.filter-container,
-.form-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 20px;
+
+.ep-section-description {
+    font-size: 0.95rem;
+    color: var(--cor-cinza-texto-secundario);
+    margin-bottom: 20px;
+    line-height: 1.5;
 }
 
-.filter-group,
-.form-group {
+.ep-sub-title {
+    font-size: 1rem;
+    color: var(--cor-azul-subtitulo);
+    margin-bottom: 15px;
+}
+
+
+/*------------------------------------*\
+    #ELEMENTOS DE FORMULÁRIO (Inputs, Selects, Botões)
+\*------------------------------------*/
+.ep-input,
+.ep-select,
+.ep-textarea {
+    padding: 10px 12px;
+    border: 1px solid var(--cor-cinza-borda);
+    border-radius: var(--raio-borda-input);
+    background-color: var(--cor-cinza-fundo-input);
+    font-size: 0.95rem;
+    width: 100%;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    color: var(--cor-texto-principal);
+}
+.ep-input:focus,
+.ep-select:focus,
+.ep-textarea:focus {
+    outline: none;
+    border-color: var(--cor-azul-primario);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+}
+.ep-input[readonly], .ep-input:disabled,
+.ep-select:disabled, .ep-textarea:disabled {
+    background-color: #e9ecef;
+    color: var(--cor-cinza-texto-secundario);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+.ep-input-grande { /* Para inputs de quantidade na tela de embalar */
+    font-size: 1.1rem;
+    padding: 12px 15px;
+    text-align: center;
+    font-weight: 600;
+}
+
+
+/* Botões */
+.ep-btn {
+    padding: 10px 18px;
+    border: none;
+    border-radius: var(--raio-borda-input);
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
+    line-height: 1.5;
+    display: inline-flex; /* Para alinhar ícones e texto */
+    align-items: center;
+    justify-content: center;
+    gap: 8px; /* Espaço entre ícone e texto */
+}
+.ep-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.ep-btn:active:not(:disabled) {
+    transform: translateY(0px);
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+}
+.ep-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.ep-btn-primary {
+    background-color: var(--cor-azul-primario);
+    color: var(--cor-branco);
+}
+.ep-btn-primary:hover:not(:disabled) {
+    background-color: var(--cor-azul-hover);
+}
+
+.ep-btn-secondary {
+    background-color: var(--cor-cinza-texto-secundario);
+    color: var(--cor-branco);
+}
+.ep-btn-secondary:hover:not(:disabled) {
+    background-color: #6a7879;
+}
+
+.ep-btn-success {
+    background-color: var(--cor-verde-sucesso);
+    color: var(--cor-branco);
+}
+.ep-btn-success:hover:not(:disabled) {
+    background-color: var(--cor-verde-hover);
+}
+
+.ep-btn-danger {
+    background-color: var(--cor-vermelho-erro);
+    color: var(--cor-branco);
+}
+.ep-btn-danger:hover:not(:disabled) {
+    background-color: #c0392b;
+}
+
+.ep-btn-warning {
+    background-color: var(--cor-laranja-aviso);
+    color: var(--cor-branco);
+}
+.ep-btn-warning:hover:not(:disabled) {
+    background-color: #d68910;
+}
+
+.ep-btn-grande {
+    padding: 12px 24px;
+    font-size: 1.05rem;
+    width: 100%; /* Para ocupar a largura no form de embalar */
+    margin-top: 10px;
+}
+
+.ep-form-group {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    margin-bottom: 20px;
+}
+.ep-form-group label {
+    font-size: 0.9rem;
+    color: var(--cor-cinza-texto-secundario);
+    font-weight: 500;
 }
 
-.filter-group label,
-.form-group label {
-    font-size: 1em;
-    font-weight: 600;
-    color: #34495e;
+/*------------------------------------*\
+    #PAINEL DE FILTRO (Para busca de produtos)
+\*------------------------------------*/
+.ep-filter-panel {
+    background-color: var(--cor-branco); /* Mesmo que .ep-section, mas pode ser sutilmente diferente se quiser */
+    padding: 20px 25px;
+    border-radius: var(--raio-borda-padrao);
+    /* box-shadow: var(--sombra-card); */ /* Já tem na section */
+    margin-bottom: 25px;
+    border: 1px solid var(--cor-cinza-borda); /* Borda leve para destacar do fundo da seção */
 }
-
-.filter-group input,
-.filter-group select,
-.filter-group textarea,
-.form-group input,
-.form-group select,
-.form-group textarea {
-    padding: 10px;
-    border: 1px solid #dfe6e9;
-    border-radius: 8px;
-    font-size: 1em;
-    background: #f9f9f9;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+.ep-filter-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    align-items: flex-end;
 }
-
-.filter-group input:focus,
-.filter-group select:focus,
-.filter-group textarea:focus,
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-    border-color: #3498db;
-    box-shadow: 0 0 8px rgba(52, 152, 219, 0.2);
-    outline: none;
-}
-
-.filter-group textarea,
-.form-group textarea {
-    resize: vertical;
-}
-
-/* Estilo de Inputs Desabilitados */
-.filter-group input[readonly],
-.filter-group input:disabled,
-.filter-group select:disabled,
-.form-group input[readonly],
-.form-group input:disabled,
-.form-group select:disabled {
-    background-color: #ecf0f1;
-    color: #7f8c8d;
-    cursor: not-allowed;
-    opacity: 0.65;
-}
-
-/* Estilo dos Botões Genéricos */
-.btn,
-#limparFiltros,
-.botao-incluir-op,
-.botao-voltar-op,
-.botao-salvar-op,
-.botao-cancelar-op,
-.botao-finalizar-op,
-.btn-voltar,
-.btn-estoque {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 1em;
-    font-weight: 600;
-    transition: background 0.3s ease, transform 0.2s ease;
-}
-
-.btn:hover:not(:disabled),
-#limparFiltros:hover:not(:disabled),
-.botao-incluir-op:hover:not(:disabled),
-.botao-voltar-op:hover:not(:disabled),
-.botao-salvar-op:hover:not(:disabled),
-.botao-cancelar-op:hover:not(:disabled),
-.botao-finalizar-op:hover:not(:disabled),
-.btn-voltar:hover:not(:disabled),
-.btn-estoque:hover:not(:disabled) {
-    transform: translateY(-2px);
-}
-
-.btn:disabled,
-#limparFiltros:disabled,
-.botao-incluir-op:disabled,
-.botao-voltar-op:disabled,
-.botao-salvar-op:disabled,
-.botao-cancelar-op:disabled,
-.botao-finalizar-op:disabled,
-.btn-voltar:disabled,
-.btn-estoque:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-/* Botão Primário (ex.: Salvar, Incluir) */
-.btn-primary,
-.botao-incluir-op,
-.botao-salvar-op,
-.botao-finalizar-op {
-    background: #3498db;
-    color: white;
-}
-
-.btn-primary:hover:not(:disabled),
-.botao-incluir-op:hover:not(:disabled),
-.botao-salvar-op:hover:not(:disabled),
-.botao-finalizar-op:hover:not(:disabled) {
-    background: #2980b9;
-}
-
-/* Botão Secundário (ex.: Voltar) */
-.btn-secondary,
-.botao-voltar-op,
-.btn-voltar {
-    background: #7f8c8d;
-    color: white;
-    margin-bottom: 10px;
-}
-
-.btn-secondary:hover:not(:disabled),
-.botao-voltar-op:hover:not(:disabled),
-.btn-voltar:hover:not(:disabled) {
-    background: #6c7778;
-}
-
-/* Botão de Cancelar/Excluir */
-.btn-danger,
-#limparFiltros,
-.botao-cancelar-op {
-    background: #e74c3c;
-    color: white;
-}
-
-.btn-danger:hover:not(:disabled),
-#limparFiltros:hover:not(:disabled),
-.botao-cancelar-op:hover:not(:disabled) {
-    background: #c0392b;
-}
-
-/* Estilo da Tabela Genérica */
-#tabelaProducoes,
-.tabela-op,
-#produtosTable {
-    width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
-    background: #ffffff;
-    border-radius: 10px;
-    overflow: hidden;
-}
-
-#tabelaProducoes thead,
-.tabela-op thead,
-#produtosTable thead {
-    background: #3498db;
-    color: white;
-}
-
-#tabelaProducoes th,
-.tabela-op th,
-#produtosTable th {
-    padding: 10px;
-    font-size: 0.9em;
-    font-weight: 600;
-    text-align: left;
-    white-space: nowrap;
-}
-
-#tabelaProducoes tbody tr,
-.tabela-op tbody tr,
-#produtosTable tbody tr {
-    transition: background 0.3s ease;
-}
-
-#tabelaProducoes tbody tr:nth-child(even),
-.tabela-op tbody tr:nth-child(even),
-#produtosTable tbody tr:nth-child(even) {
-    background: #f8f9fa;
-}
-
-#tabelaProducoes tbody tr:hover,
-.tabela-op tbody tr:hover,
-#produtosTable tbody tr:hover {
-    background: #ecf0f1;
-}
-
-#tabelaProducoes td,
-.tabela-op td,
-#produtosTable td {
-    padding: 10px;
-    font-size: 0.85em;
-    color: #2c3e50;
-    border-bottom: 1px solid #dfe6e9;
-}
-
-/* Estilo da Mensagem de "Sem Registros" */
-.no-records-message {
-    text-align: center;
-    padding: 30px;
-    background: #f8f9fa;
-    border-radius: 10px;
-    border: 1px dashed #dfe6e9;
-    color: #7f8c8d;
-    font-size: 1.2em;
-    display: none; /* Inicialmente escondido */
-}
-
-.no-records-message p {
-    margin: 0;
-}
-
-.no-records-message span {
-    font-weight: 600;
-    color: #3498db;
-}
-
-/* Estilo do Container Principal */
-.container {
+.ep-filter-item {
     display: flex;
     flex-direction: column;
-    gap: 30px;
+    gap: 6px;
+    flex: 1 1 300px; /* Ocupa mais espaço */
+}
+.ep-filter-item label {
+    font-size: 0.9rem;
+    color: var(--cor-cinza-texto-secundario);
+    font-weight: 500;
 }
 
-/* Header */
-.header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+/*------------------------------------*\
+    #TABELAS DE DADOS
+\*------------------------------------*/
+.ep-table-container-wrapper { /* Para controle de overflow e cards mobile */
+    width: 100%;
+}
+.ep-table-container {
+    overflow-x: auto; /* Scroll horizontal para tabelas largas em desktop */
+    /* background-color: var(--cor-branco); */ /* Já está na section */
+    border-radius: var(--raio-borda-tabela); /* Raio para a tabela em si, se não for full-width */
+    /* box-shadow: var(--sombra-card); */
     margin-bottom: 20px;
 }
 
-.header h1 {
-    font-size: 2rem;
-    color: #2c3e50;
-}
-
-.search-input {
-    padding: 10px;
-    border: 1px solid #dfe6e9;
-    border-radius: 8px;
-    font-size: 1em;
-    background: #f9f9f9;
-    width: 300px;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
-}
-
-.search-input:focus {
-    border-color: #3498db;
-    box-shadow: 0 0 8px rgba(52, 152, 219, 0.2);
-    outline: none;
-}
-
-/* Estilo da Tabela */
-#produtosTable {
+.ep-data-table {
     width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
-    background: #ffffff;
-    border-radius: 10px;
-    overflow: hidden;
+    border-collapse: collapse; /* Remove espaços entre células */
+    font-size: 0.9rem;
 }
-
-#produtosTable th:nth-child(3),
-#produtosTable td:nth-child(3) {
-    width: 70px;
+.ep-data-table th,
+.ep-data-table td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid var(--cor-cinza-borda);
+    vertical-align: middle;
+}
+.ep-data-table th {
+    background-color: var(--cor-cinza-fundo-input); /* Cabeçalho sutil */
+    color: var(--cor-azul-escuro);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+.ep-data-table tbody tr:nth-child(even) {
+    background-color: var(--cor-cinza-fundo-input); /* Zebra sutil */
+}
+.ep-data-table tbody tr:hover {
+    background-color: #eaf5fc; /* Destaque azulado bem claro */
+}
+.ep-data-table td .ep-input,
+.ep-data-table td .ep-select {
+    width: auto; /* Para não ocupar 100% da célula por padrão */
+    min-width: 100px; /* Mínimo para selects/inputs na tabela */
+    font-size: 0.9rem; /* Um pouco menor na tabela */
+    padding: 8px 10px;
+}
+.ep-data-table td .input-quantidade-arremate {
+    width: 70px; /* Específico para o input de quantidade */
     text-align: center;
-    padding: 0.5rem;
+}
+.ep-data-table td .select-usuario-tiktik {
+    min-width: 150px;
+}
+.ep-data-table .col-img { width: 60px; text-align: center; padding: 8px; }
+.ep-data-table .col-qtd { width: 80px; text-align: center; font-weight: 600; }
+
+/* Estilo para quantidade pendente na tabela de arremate */
+.ep-data-table .quantidade-pendente-arremate {
+    font-weight: bold;
+    color: var(--cor-laranja-aviso); /* Ou --cor-amarelo-destaque */
+    text-align: center;
 }
 
-#produtosTable tr {
-    transition: background-color 0.2s ease;
-}
-
-#produtosTable tr:hover {
-    cursor: pointer;
-}
-
-.botao-lancar-arremate {
-    /* Seus estilos normais para o botão */
-    padding: 5px 10px;
-    cursor: pointer;
-    background-color: #28a745; /* Verde, por exemplo */
-    color: white;
-    border: none;
-    border-radius: 4px;
-    font-size: 0.9em;
-    transition: background-color 0.2s ease;
-}
-
-.botao-lancar-arremate:hover:not(:disabled) {
-     background-color: #218838; /* Verde mais escuro no hover */
-}
-
-
-/* Estilo para quando o botão está desabilitado (geral ou por permissão) */
-.botao-lancar-arremate:disabled,
-.botao-lancar-arremate.botao-sem-permissao {
-    background-color: #ccc; /* Cinza */
-    color: #666;
-    opacity: 0.7;
-    cursor: not-allowed;
-}
-
-/* Estilo da Miniatura */
-.thumbnail {
-    width: 50px;
-    height: 50px;
-    background-color: #edf2f7;
-    border-radius: 4px;
+/* Miniatura na tabela de embalagem */
+.ep-data-table .ep-thumbnail-tabela {
+    width: 45px;
+    height: 45px;
+    background-color: var(--cor-cinza-fundo-input);
+    border-radius: var(--raio-borda-input);
     overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
+    margin: auto; /* Centraliza na célula */
 }
-
-.thumbnail img {
+.ep-data-table .ep-thumbnail-tabela img {
     width: 100%;
     height: 100%;
     object-fit: cover;
 }
-
-.thumbnail-custom {
-    width: 60px;
-    height: 60px;
-    border: 1px solid #e2e8f0;
+/* Cursor pointer para linhas clicáveis na tabela de embalagem */
+#produtosTableBody tr[data-quantidade-disponivel] {
+    cursor: pointer;
+}
+#produtosTableBody tr[data-quantidade-disponivel="0"],
+#produtosTableBody tr[style*="opacity: 0.5"] { /* Pega o estilo inline também */
+    cursor: not-allowed;
+    opacity: 0.6;
 }
 
-/* Seção de Embalagem */
-.embalagem-header {
+
+/*------------------------------------*\
+    #PAGINAÇÃO
+\*------------------------------------*/
+.ep-pagination-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin-top: 25px;
+    padding: 10px 0;
+}
+.ep-pagination-container .pagination-btn { /* Usando a classe do JS */
+    background-color: var(--cor-branco);
+    color: var(--cor-azul-primario);
+    border: 1px solid var(--cor-azul-primario);
+    padding: 8px 14px;
+}
+.ep-pagination-container .pagination-btn:hover:not(:disabled) {
+    background-color: var(--cor-azul-primario);
+    color: var(--cor-branco);
+}
+.ep-pagination-container .pagination-btn:disabled {
+    border-color: var(--cor-cinza-borda);
+    color: var(--cor-cinza-borda);
+    background-color: var(--cor-cinza-fundo-input);
+    opacity: 0.8;
+}
+.ep-pagination-container .pagination-current {
+    font-size: 0.9rem;
+    color: var(--cor-texto-principal);
+    font-weight: 500;
+    padding: 8px 12px;
+    background-color: var(--cor-fundo-pagina);
+    border-radius: var(--raio-borda-input);
+}
+
+/*------------------------------------*\
+    #SEÇÃO DE DETALHE DA EMBALAGEM (embalarView)
+\*------------------------------------*/
+
+.ep-btn-voltar {
+    margin-bottom: 25px;
+}
+
+.ep-embalar-header {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
+    gap: 20px;
+    margin-bottom: 25px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--cor-cinza-borda);
+}
+.ep-thumbnail-detalhe {
+    width: 80px;
+    height: 80px;
+    border-radius: var(--raio-borda-padrao);
+    background-color: var(--cor-cinza-fundo-input);
+    overflow: hidden;
+    flex-shrink: 0;
+    border: 1px solid var(--cor-cinza-borda);
+}
+.ep-thumbnail-detalhe img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.ep-embalar-title-group {
+    flex-grow: 1;
 }
 
-.embalagem-header .thumbnail {
-    width: 50px;
-    height: 50px;
+.ep-tabs {
+    display: flex;
+    gap: 10px; /* Espaço entre botões de aba */
+    margin-bottom: 25px;
+    border-bottom: 2px solid var(--cor-cinza-borda);
 }
-
-.embalagem-header h2 {
-    font-size: 1.5rem;
-    color: #2c3e50;
-}
-
-.embalagem-info {
-    margin-bottom: 1.5rem;
-}
-
-.embalagem-info p {
+.ep-tab-btn {
+    padding: 12px 20px;
+    border: none;
+    background-color: transparent;
+    color: var(--cor-cinza-texto-secundario);
+    border-radius: var(--raio-borda-input) var(--raio-borda-input) 0 0; /* Cantos arredondados apenas no topo */
+    cursor: pointer;
     font-size: 1rem;
-    margin-bottom: 0.5rem;
+    font-weight: 500;
+    position: relative;
+    bottom: -2px; /* Para sobrepor a borda da .ep-tabs */
+    border-bottom: 2px solid transparent;
+    transition: color 0.2s ease, border-color 0.2s ease;
 }
-
-.embalagem-info strong {
-    color: #4a5568;
-}
-
-/* Estilo das Abas */
-.tabs {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1.5rem;
-}
-
-.tab-btn {
-    padding: 10px 20px;
-    border: none;
-    background-color: #e2e8f0;
-    color: #718096;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 1em;
+.ep-tab-btn.active {
+    color: var(--cor-azul-primario);
+    border-bottom-color: var(--cor-azul-primario);
     font-weight: 600;
-    transition: background-color 0.3s ease, color 0.3s ease, transform 0.2s ease;
+}
+.ep-tab-btn:hover:not(.active) {
+    color: var(--cor-azul-escuro);
 }
 
-.tab-btn.active {
-    background-color: #3182ce;
-    color: #fff;
-}
 
-.tab-btn:hover:not(.active) {
-    background-color: #cbd5e0;
-    transform: translateY(-2px);
-}
-
-.tab-panel {
-    padding: 1rem 0;
-}
-
-.tab-panel label {
+.ep-tab-panel.active {
     display: block;
-    font-size: 18px;
-    font-weight: bold;
-    color: #333;
-    margin-bottom: 0.5rem;
 }
 
-/* Estilo do Botão "Estoque" */
-.btn-estoque {
-    background-color: #38a169;
-    color: #fff;
-    padding: 10px 20px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 1em;
-    font-weight: 600;
-    transition: background 0.3s ease, transform 0.2s ease;
+.ep-embalar-form-card {
+    background-color: var(--cor-fundo-pagina); /* Um fundo sutilmente diferente */
+    padding: 25px;
+    border-radius: var(--raio-borda-padrao);
+    border: 1px solid #e0e4e8;
+}
+.ep-info-group {
+    margin-bottom: 20px;
+    font-size: 0.95rem;
+}
+.ep-info-group p {
+    margin-bottom: 8px;
+    color: var(--cor-texto-principal);
+}
+.ep-info-group strong {
+    color: var(--cor-azul-escuro);
+    min-width: 80px; /* Para alinhar os valores */
+    display: inline-block;
+}
+.ep-qtd-disponivel-destaque {
+    padding: 15px;
+    background-color: var(--cor-azul-primario);
+    color: var(--cor-branco);
+    border-radius: var(--raio-borda-input);
+    margin-bottom: 20px;
+    text-align: center;
+}
+.ep-qtd-disponivel-destaque span {
+    font-size: 1rem;
+    display: block;
+    margin-bottom: 5px;
+    opacity: 0.9;
+}
+.ep-qtd-disponivel-destaque strong {
+    font-size: 1.8rem;
+    font-weight: 700;
+}
+.ep-qtd-disponivel-destaque.changing strong { /* JS pode adicionar esta classe */
+    color: var(--cor-amarelo-destaque);
+    animation: ep-pulse 0.5s ease;
+}
+@keyframes ep-pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
 }
 
-.btn-estoque:hover:not(:disabled) {
-    background-color: #2f855a;
-    transform: translateY(-2px);
+/* Aba Kit */
+#kit-section h3 { /* "Selecione o Kit para Montagem:" */
+    font-size: 1.2rem;
+    color: var(--cor-azul-escuro);
+    margin-bottom: 15px;
+    font-weight: 500;
 }
-
-.btn-estoque:disabled {
-    background-color: #a0aec0;
-    cursor: not-allowed;
-}
-
-/* Estilo para o número "Qtd Disponível" */
-.qtd-disponivel {
-    font-weight: 600;
-    color: #2f855a;
-    font-size: 1.3rem;
-    transition: color 0.3s ease;
-}
-
-.qtd-disponivel.changing {
-    color: #dd6b20;
-    animation: pulse 0.5s ease;
-}
-
-/* Efeito de pulsar */
-@keyframes pulse {
-    0% {
-        transform: scale(1);
-    }
-    50% {
-        transform: scale(1.1);
-    }
-    100% {
-        transform: scale(1);
-    }
-}
-
-/* Utilitários */
-.hidden {
-    display: none;
-}
-
-/* aba KITS */
-
-.kits-list {
+.ep-kits-list {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
+    margin-bottom: 20px;
+}
+.ep-kits-list button { /* Botões de nome do kit */
+    padding: 8px 15px;
+    background-color: var(--cor-branco);
+    color: var(--cor-azul-primario);
+    border: 1px solid var(--cor-azul-primario);
+    border-radius: var(--raio-borda-input);
+    font-weight: 500;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+.ep-kits-list button:hover {
+    background-color: #eaf5fc;
+}
+.ep-kits-list button.active {
+    background-color: var(--cor-azul-primario);
+    color: var(--cor-branco);
+    border-color: var(--cor-azul-primario);
+}
+
+#kit-variacao-composicao-wrapper { /* Container para select de variação e tabela de composição */
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px dashed var(--cor-cinza-borda);
+}
+#kit-variacao-composicao-wrapper.hidden { display: none; }
+
+.ep-kit-composicao-container {
+    margin-top: 15px;
+    margin-bottom: 20px;
+}
+.ep-kit-composicao-container h4 {
+    font-size: 1rem;
+    color: var(--cor-azul-subtitulo);
     margin-bottom: 10px;
+    font-weight: 500;
 }
-
-.kits-list button {
-    padding: 10px 20px;
-    border: none;
-    background-color: #e2e8f0;
-    color: #718096;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 1em;
-    font-weight: 600;
-    transition: background-color 0.3s ease, color 0.3s ease, transform 0.2s ease;
-}
-
-.kits-list button.active {
-    background-color: rgb(49, 130, 206);
-    color: rgb(255, 255, 255);
-}
-
-.kits-list button:hover {
-    background-color: #0056b3;
-}
-
-.kit-variations {
-    padding: 10px;
-    border: 1px solid #dfe6e9;
-    border-radius: 8px;
-    font-size: 1em;
-    background: #f9f9f9;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
-    width: 220px; /* Mesma largura do select-usuario */
-}
-
-.kit-variations select {
-    padding: 10px;
-    border: 1px solid #dfe6e9;
-    border-radius: 8px;
-    font-size: 1em;
-    background: #f9f9f9;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
-    width: 220px; /* Mesma largura do select-usuario */
-}
-
-.kit-variations .select-variacao-kit:focus {
-    border-color: #3498db;
-    box-shadow: 0 0 8px rgba(52, 152, 219, 0.2);
-    outline: none;
-}
-
-.kit-table-container table {
-    margin-bottom: 0;
-}
-
-.kit-table-container {
-    margin-top: 1rem;
-}
-
-#kit-table {
+.ep-mini-table { /* Tabela de composição do kit */
     width: 100%;
     border-collapse: collapse;
+    font-size: 0.85rem;
+    background-color: var(--cor-branco);
+    border: 1px solid #e0e4e8;
+    border-radius: var(--raio-borda-input);
+    overflow: hidden; /* Para o raio da borda funcionar */
 }
-
-#kit-table th, #kit-table td {
-    padding: 0.5rem;
-    border: 1px solid #ddd;
+.ep-mini-table th, .ep-mini-table td {
+    padding: 8px 10px;
     text-align: left;
+    border-bottom: 1px solid #e8eef3;
 }
-
-#kit-table th {
-    background-color: #f9f9f9;
-}
-
-#kit-table input[type="number"] {
-    width: 80px;
-    padding: 0.3rem;
-}
-
-#kit-table input.readonly {
-    background-color: #e9ecef;
-    border: 1px solid #ced4da;
-    color: #495057;
-    pointer-events: none; /* Impede interação */
-}
-
-.error-message {
-    color: #dc3545;
-    margin-top: 0.5rem;
-}
-
-.btn-estoque:disabled {
-    background-color: #6c757d;
-    cursor: not-allowed;
-}
-
-.error-message:not(.hidden) {
-    display: block;
-}
-
-.hidden {
-    display: none;
-}
-
-/* Estilos para o footer da aba Kit */
-.kit-footer-content {
-    margin-top: 15px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.qtd-disponivel-container p {
-    margin: 0;
-    font-size: 18px; /* Aumentar o tamanho da fonte */
-    font-weight: bold;
-    color: #333;
-}
-
-.qtd-disponivel-container p span {
-    color: #e67e22; /* Cor laranja para destacar o número */
-    background-color: #f9e1cc; /* Fundo leve para ênfase */
-    padding: 2px 6px;
-    border-radius: 4px;
-}
-
-.tab-panel input {
-    width: 70px;
-    padding: 15px;
-    border: 1px solid #dfe6e9;
-    border-radius: 8px;
-    font-size: 1em;
-    background: #f9f9f9;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
-}
-
-.qtd-enviar-container {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    flex-wrap: wrap;
-}
-
-.qtd-enviar-container label {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 18px;
-    font-weight: bold;
-    color: #333;
-    margin: 0; /* Remover margens para evitar desalinhamento */
-}
-
-.qtd-enviar-container input[type="number"] {
-    padding: 15px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 14px;
-    height: 45px; /* Definir altura fixa para alinhamento */
-    box-sizing: border-box; /* Garantir que padding não afete a altura */
-}
-
-.qtd-enviar-container button {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 4px;
-    background-color: #e0e0e0; /* Mesma cor das abas inativas */
-    color: #333;
-    cursor: pointer;
-    font-size: 14px;
-    height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background-color 0.3s ease;
-}
-
-.qtd-enviar-container button:disabled {
-    background-color: #cccccc;
-    cursor: not-allowed;
-}
-
-.qtd-enviar-container button:not(:disabled):hover {
-    background-color: #d0d0d0; /* Efeito hover */
-}
-
-.qtd-enviar-container button:not(:disabled) {
-    background-color: #007bff; /* Cor ativa quando não está desativado */
-    color: white;
-}
-
-/* Paginação */
-.pagination-container {
-    display: flex;
-    justify-content: center; /* Centralizar em todos os breakpoints */
-    align-items: center;
-    gap: 10px;
-    margin: 10px 20px 10px;
-   
-}
-
-.pagination-btn {
-    padding: 8px 16px; /* Mesmo padding do botao-incluir-op */
-    border: none;
-    border-radius: 8px;
-    background: #3498db; /* Mesmo estilo do botao-incluir-op */
-    color: white;
-    cursor: pointer;
-    font-size: 1em;
+.ep-mini-table th {
+    background-color: #f0f4f8;
     font-weight: 600;
-    transition: background 0.3s ease, transform 0.2s ease;
 }
-
-.pagination-btn:hover:not(.active) {
-    background: #2980b9; /* Mesmo hover do botao-incluir-op */
-    transform: translateY(-2px);
-}
-
-.pagination-btn.active {
-    background: #2980b9; /* Destaque para página atual */
-    cursor: default;
-}
-
-.pagination-btn.prev,
-.pagination-btn.next {
-    background: #3498db; /* Estilo secundário para Anterior/Próximo */
-}
-
-.pagination-btn.prev:hover:not(.active),
-.pagination-btn.next:hover:not(.active) {
-    background: #6c7778;
-}
-
-.pagination-current {
-    font-size: 0.8em;
+.ep-mini-table td:nth-child(2), /* Qtd Necessária */
+.ep-mini-table td:nth-child(3) { /* Qtd Disponível */
     text-align: center;
-    font-weight: 800;
-    color: #3498db;
-    border-style: none;
-    padding: 5px 5px;
-    background: rgb(248, 249, 250);
-    border-radius: 10px;
-
+    font-weight: 500;
+}
+.ep-mini-table input.readonly { /* Input de qtd disponível na tabela de kit */
+    background-color: transparent;
+    border: none;
+    text-align: center;
+    font-weight: 500;
+    padding: 0;
+    width: 50px;
+}
+.ep-mini-table tr.item-insuficiente td { /* Se um item do kit está em falta */
+    color: var(--cor-vermelho-erro);
+    background-color: #fdecea;
 }
 
-.pagination-ellipsis {
-    font-size: 1em;
-    color: #666;
+.ep-error-message {
+    color: var(--cor-vermelho-erro);
+    font-size: 0.9rem;
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #ffebee;
+    border: 1px solid var(--cor-vermelho-erro);
+    border-radius: var(--raio-borda-input);
+}
+.ep-error-message.hidden { display: none; }
+
+.ep-kit-footer {
+    margin-top: 20px;
+}
+.ep-qtd-kits-montaveis {
+    background-color: var(--cor-laranja-aviso); /* Destaque para kits montáveis */
+}
+
+/*------------------------------------*\
+    #VISUALIZAÇÃO MOBILE (CARDS)
+\*------------------------------------*/
+.ep-product-card-container {
+    display: none; /* Escondido por padrão em telas maiores */
+    grid-template-columns: 1fr; /* Uma coluna por padrão no mobile */
+    gap: 15px;
+    margin-top: 20px;
+}
+.ep-product-card {
+    background-color: var(--cor-branco);
+    border-radius: var(--raio-borda-padrao);
+    padding: 15px;
+    box-shadow: var(--sombra-card);
+    border: 1px solid var(--cor-cinza-borda);
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.ep-product-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--sombra-card-hover);
+}
+.ep-product-card.disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background-color: var(--cor-fundo-pagina);
+}
+.ep-product-card-header {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start; /* Alinha imagem e texto no topo */
+    margin-bottom: 10px;
+}
+.ep-product-card .ep-thumbnail-card {
+    width: 60px;
+    height: 60px;
+    border-radius: var(--raio-borda-input);
+    overflow: hidden;
+    flex-shrink: 0;
+    background-color: var(--cor-cinza-fundo-input);
+}
+.ep-product-card .ep-thumbnail-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.ep-product-card-info {
+    flex-grow: 1;
+}
+.ep-product-card-info .product-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--cor-azul-escuro);
+    margin-bottom: 2px;
+}
+.ep-product-card-info .product-variant,
+.ep-product-card-info .product-op {
+    font-size: 0.85rem;
+    color: var(--cor-cinza-texto-secundario);
+    margin-bottom: 2px;
+}
+.ep-product-card-qty {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--cor-verde-sucesso);
+    text-align: right; /* Ou centralizado no card */
+    margin-top: 8px;
+}
+.ep-product-card.disabled .ep-product-card-qty {
+    color: var(--cor-vermelho-erro);
+}
+
+/* Classe Utilitária */
+.hidden {
+    display: none !important; /* Garante que vai esconder */
+}
+
+/*------------------------------------*\
+    #COMPONENTES - POPUP DE MENSAGEM
+\*------------------------------------*/
+.ep-popup-mensagem {
+    position: fixed;
+    /* Centralização Vertical e Horizontal */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%); /* Ajusta o posicionamento para o centro exato do elemento */
+    
+    padding: 18px 30px; /* Um pouco mais de padding para um visual mais robusto no centro */
+    border-radius: var(--raio-borda-padrao, 8px); /* Borda um pouco maior */
+    box-shadow: 0 5px 15px rgba(0,0,0,0.25); /* Sombra mais pronunciada */
+    z-index: 1100;
+    font-size: 1rem; /* Um pouco maior */
+    font-weight: 500;
+    text-align: center;
+    min-width: 300px;
+    max-width: 500px; /* Limita a largura máxima */
+    width: auto; /* Permite que ele se ajuste ao conteúdo até o max-width */
+    
+    opacity: 0;
+    /* Animação de entrada e saída */
+    animation: ep-popup-fadein-center 0.4s cubic-bezier(0.25, 0.8, 0.25, 1) forwards,
+               ep-popup-fadeout-center 0.4s cubic-bezier(0.25, 0.8, 0.25, 1) 3.6s forwards;
+}
+
+/* Novas animações para centralização */
+@keyframes ep-popup-fadein-center {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -30%); /* Começa um pouco acima do centro e faz fade in */
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%); /* Posição final centralizada */
+    }
+}
+
+@keyframes ep-popup-fadeout-center {
+    from {
+        opacity: 1;
+        transform: translate(-50%, -50%);
+    }
+    to {
+        opacity: 0;
+        transform: translate(-50%, -70%); /* Desaparece para cima */
+        visibility: hidden;
+    }
+}
+
+/* As classes .ep-popup-sucesso, .ep-popup-erro, .ep-popup-aviso permanecem as mesmas */
+.ep-popup-sucesso {
+    background-color: var(--cor-verde-sucesso);
+    color: var(--cor-branco);
+    border-left: 5px solid var(--cor-verde-hover);
+}
+
+.ep-popup-erro {
+    background-color: var(--cor-vermelho-erro);
+    color: var(--cor-branco);
+    border-left: 5px solid #c0392b;
+}
+
+.ep-popup-aviso {
+    background-color: var(--cor-laranja-aviso);
+    color: var(--cor-branco);
+    border-left: 5px solid #d68910;
 }
 
 
-/* Breakpoint para telas menores (max-width: 414px, como iPhone XR) */
-@media (max-width: 414px) {
-    .container {
-        padding: 15px;
+/*------------------------------------*\
+    #RESPONSIVIDADE
+\*------------------------------------*/
+@media (max-width: 1024px) {
+    .ep-main-content {
         margin-left: 0;
-        margin-right: 0;
-    }
-
-    .header {
-        flex-direction: column;
-        gap: 15px;
-        align-items: flex-start;
-    }
-
-    .header h1 {
-        font-size: 1.5rem;
-    }
-
-    .search-input {
-        width: 100%;
-        font-size: 0.9rem;
-    }
-
-    .products-section h2 {
-        font-size: 1.2rem;
-    }
-
-    /* Remover a tabela e criar cards */
-    .products-section {
-        overflow-x: visible; /* Remove a rolagem horizontal */
-    }
-
-    #produtosTable {
-        display: none; /* Esconde a tabela */
-    }
-
-    /* Estilo dos cards */
-    .product-card-container {
-        display: grid;
-        gap: 15px;
-        margin-top: 15px;
-    }
-
-    .product-card {
-        background: #ffffff;
-        border-radius: 10px;
-        padding: 15px;
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-        cursor: pointer;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-        border: 1px solid #dfe6e9;
-    }
-
-    .product-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
-    }
-
-    .product-card div {
-        margin-bottom: 10px;
-        font-size: 0.9rem;
-        color: #2c3e50;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .product-card div strong {
-        font-weight: 600;
-        color: #34495e;
-        margin-bottom: 5px;
-    }
-
-    .product-card .thumbnail {
-        width: 100%;
-        max-width: 100px;
-        height: auto;
-        margin-bottom: 10px;
-        border-radius: 4px;
-        overflow: hidden;
-    }
-
-    .product-card .thumbnail img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-
-    /* Ajustes gerais para telas menores */
-    .embalagem-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .embalagem-header h2 {
-        font-size: 1.2rem;
-    }
-
-    .tabs {
-        flex-direction: column;
-        gap: 10px;
-    }
-
-    .tab-btn {
-        width: 100%;
-        text-align: center;
-    }
-
-    .tab-panel label {
-        font-size: 16px;
-    }
-
-    .tab-panel input {
-        width: 100%;
-        padding: 10px;
-    }
-
-    .btn-estoque {
-        width: 100%;
-        padding: 12px;
-    }
-
-    .kits-list {
-        flex-direction: column;
-    }
-
-    .kits-list button {
-        width: 100%;
-    }
-
-    .kit-variations {
-        width: 100%;
     }
 }
 
-/* Breakpoint para Mobile (max-width: 576px) */
-@media (max-width: 576px) {
-    .container {
+@media (max-width: 768px) { /* Tablets e mobile grande */
+    .ep-main-content {
+        margin-left: 0; /* Assumindo que o menu lateral se torna overlay */
         padding: 20px;
-        margin-left: 0;
-        margin-right: 0;
+    }
+    .ep-page-header h1 { font-size: 1.8rem; }
+    .ep-section-title { font-size: 1.5rem; }
+    .ep-section { padding: 20px; }
+
+    .ep-filter-group {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .ep-filter-item {
+        flex-basis: auto;
     }
 
-    .header {
+    .ep-data-table td .ep-input,
+    .ep-data-table td .ep-select {
+        min-width: 80px; /* Reduzir um pouco */
+    }
+    .ep-data-table td .select-usuario-tiktik {
+        min-width: 120px;
+    }
+    
+    /* Na tela de embalar, abas podem ficar verticais ou apenas empilhar o conteúdo */
+    .ep-embalar-header {
         flex-direction: column;
+        align-items: flex-start;
         gap: 15px;
-        align-items: flex-start;
     }
+    .ep-thumbnail-detalhe { width: 70px; height: 70px; }
+    .ep-tabs {
+        flex-wrap: wrap; /* Permite que os botões quebrem linha se necessário */
+    }
+    .ep-tab-btn { font-size: 0.9rem; padding: 10px 15px;}
 
-    .header h1 {
-        font-size: 1.6rem;
+    /* Mostrar cards em vez da tabela "Pronto para Embalar" */
+    #produtosTableContainer { display: none; }
+    .ep-product-card-container { display: grid; }
+    
+    /* Ajustes na tabela de Arremate para caber melhor */
+    #arremateTable th, #arremateTable td {
+        padding: 10px 8px;
+        font-size: 0.85rem;
     }
-
-    .search-input {
-        width: 100%;
-        font-size: 0.95rem;
-    }
-
-    .products-section h2 {
-        font-size: 1.3rem;
-    }
-
-    #produtosTable th,
-    #produtosTable td {
-        font-size: 0.8rem;
-        padding: 10px;
-    }
-
-    #produtosTable th:nth-child(3),
-    #produtosTable td:nth-child(3) {
-        width: 60px;
-    }
-
-    .thumbnail {
-        width: 45px;
-        height: 45px;
-    }
-
-    .embalagem-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .embalagem-header h2 {
-        font-size: 1.3rem;
-    }
-
-    .tabs {
-        flex-direction: column;
-        gap: 10px;
-    }
-
-    .tab-btn {
-        width: 100%;
-        text-align: center;
-    }
-
-    .tab-panel label {
-        font-size: 16px;
-    }
-
-    .tab-panel input {
-        width: 100%;
-        padding: 12px;
-    }
-
-    .btn-estoque {
-        width: 100%;
-        padding: 12px;
-    }
-
-    .kits-list {
-        flex-direction: column;
-    }
-
-    .kits-list button {
-        width: 100%;
-    }
-
-    .kit-variations {
-        width: 100%;
-    }
+    #arremateTable .input-quantidade-arremate { width: 60px; padding: 6px;}
+    #arremateTable .select-usuario-tiktik { min-width: 130px; }
+    #arremateTable .botao-lancar-arremate { padding: 6px 10px; font-size: 0.85rem;}
 }
 
-/* Breakpoint para iPad Pro (768px a 1024px) */
-@media (min-width: 768px) and (max-width: 1024px) {
-    .container {
-        padding: 25px;
-        margin-left: 0;
-        margin-right: 0;
-    }
+@media (max-width: 480px) { /* Mobile pequeno */
+    .ep-main-content { padding: 15px; }
+    .ep-page-header h1 { font-size: 1.5rem; }
+    .ep-section-title { font-size: 1.3rem; }
+    .ep-section { padding: 15px; }
 
-    .header {
-        flex-direction: row;
-        gap: 20px;
-    }
+    .ep-btn { font-size: 0.9rem; padding: 8px 14px; }
+    .ep-btn-grande { font-size: 1rem; padding: 10px 20px;}
+    .ep-input, .ep-select { font-size: 0.9rem; padding: 8px 10px; }
+    .ep-input-grande { font-size: 1rem; padding: 10px 12px; }
+    
+    .ep-product-card-info .product-name { font-size: 1rem; }
+    .ep-product-card-info .product-variant,
+    .ep-product-card-info .product-op { font-size: 0.8rem; }
+    .ep-product-card-qty { font-size: 0.95rem; }
 
-    .header h1 {
-        font-size: 1.8rem;
-    }
+    .ep-thumbnail-detalhe { width: 60px; height: 60px; }
+    .ep-embalar-title-group .ep-section-title-inline { font-size: 1.3rem; }
+    .ep-embalar-title-group .ep-sub-title { font-size: 0.9rem; }
 
-    .search-input {
-        width: 250px;
-        font-size: 1rem;
-    }
+    .ep-qtd-disponivel-destaque span { font-size: 0.9rem; }
+    .ep-qtd-disponivel-destaque strong { font-size: 1.5rem; }
 
-    .products-section h2 {
-        font-size: 1.5rem;
+    /* Tabela de arremate fica bem apertada, pode precisar de mais ajustes
+       ou transformar em cards também, mas isso é mais complexo devido aos inputs */
+    #arremateTable th, #arremateTable td {
+        font-size: 0.75rem; /* Muito pequeno, mas pode ser necessário */
+        padding: 8px 5px;
+        white-space: normal; /* Permitir quebra de linha nos cabeçalhos */
     }
-
-    #produtosTable th,
-    #produtosTable td {
-        font-size: 0.9rem;
-        padding: 12px;
-    }
-
-    .thumbnail {
-        width: 50px;
-        height: 50px;
-    }
-
-    .embalagem-header {
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .embalagem-header h2 {
-        font-size: 1.5rem;
-    }
-
-    .tabs {
-        flex-direction: row;
-    }
-
-    .tab-btn {
-        width: auto;
-    }
-
-    .tab-panel input {
-        width: 80px;
-    }
-
-    .btn-estoque {
-        width: auto;
-        padding: 10px 20px;
-    }
-
-    .kits-list {
-        flex-direction: row;
-    }
-
-    .kits-list button {
-        width: auto;
-    }
-
-    .kit-variations {
-        width: 220px;
-    }
+    #arremateTable .input-quantidade-arremate { width: 50px; }
+    #arremateTable .select-usuario-tiktik { min-width: 100px; font-size: 0.75rem; }
+    #arremateTable .botao-lancar-arremate { font-size: 0.75rem; padding: 5px 8px;}
+ 
 }
