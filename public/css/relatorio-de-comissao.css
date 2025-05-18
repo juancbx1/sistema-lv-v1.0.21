@@ -369,6 +369,10 @@ body {
 
 /* Breakpoint para Mobile (max-width: 576px) */
 @media (max-width: 576px) {
+    .rc-week-item span {
+    white-space: wrap;
+}
+
     .rc-main-content {
         margin-left: 0; /* Se o menu lateral for do tipo overlay/escondido */
     }
@@ -408,18 +412,13 @@ body {
     .rc-summary-card p {
         font-size: 1.6rem;
     }
-
-
     .rc-week-item {
         flex-direction: column; /* Itens da semana empilhados */
         align-items: flex-start;
         gap: 8px;
         padding: 12px;
     }
-    .rc-week-item span {
-        text-align: left;
-    }
-
+    
     #rc-paid-comissions-table th,
     #rc-paid-comissions-table td {
         padding: 10px 12px;
@@ -429,6 +428,7 @@ body {
 
 /* Breakpoint para telas menores (max-width: 414px, como iPhone XR) */
 @media (max-width: 414px) {
+
     .rc-week-item span{
     font-size: 0.8rem;
     text-align: left;
