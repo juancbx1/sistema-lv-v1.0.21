@@ -370,6 +370,7 @@ body {
 /* Breakpoint para Mobile (max-width: 576px) */
 @media (max-width: 576px) {
     .rc-week-item span {
+    text-align: left;
     white-space: wrap;
 }
 
