@@ -27,6 +27,9 @@
                     <button class="cp-type-btn" data-type="variacoes" role="tab" aria-selected="false">Variações</button>
                     <button class="cp-type-btn" data-type="kits" role="tab" aria-selected="false">Kits</button>
                 </div>
+                <button id="btnAdicionarNovoProduto" class="cp-botao cp-botao-acao">
+                    <i class="fas fa-plus"></i> Adicionar Novo Produto
+                </button>
             </div>
             <table class="tabela-lista-produtos" aria-label="Tabela de produtos">
                 <thead>
@@ -54,6 +57,11 @@
             <div class="abas-conteudo">
                 <div class="conteudo-aba-produto active" id="dados-gerais" role="tabpanel">
                     <form id="productForm">
+                        <div class="grupo-form-produto">
+                    <label for="inputProductName">Nome do Produto:</label>
+                    <input type="text" id="inputProductName" class="form-control-produto" required aria-required="true">
+                </div>
+                <!-- ********************************** -->
                         <div class="grupo-form-produto">
                             <label for="sku">Código (SKU):</label>
                             <input type="text" id="sku" required aria-required="true">

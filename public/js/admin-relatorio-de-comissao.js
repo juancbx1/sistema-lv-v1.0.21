@@ -1,5 +1,4 @@
 import { verificarAutenticacao } from '/js/utils/auth.js';
-import { criarGrafico } from '/js/utils/chart-utils.js';
 import { formatarData } from '/js/utils/date-utils.js';
 import { ciclos } from '/js/utils/ciclos.js';
 import { calcularComissaoSemanal } from '/js/utils/metas.js';
@@ -30,7 +29,7 @@ async function obterUsuariosAPI(forceUpdate = false) {
         mostrarPopupMensagem(`Erro ao carregar dados dos usuários: ${error.message}`, 'erro');
         return [];
     }
-}
+} 
 
 async function obterProdutosAPI(forceUpdate = false) {
     if (cachedProdutos && !forceUpdate) {
@@ -146,28 +145,47 @@ async function carregarFiltrosRelatorio() {
         const dataParaReferenciaCiclo = new Date(); // USA A DATA ATUAL REAL
         const hojeNormalizado = new Date(dataParaReferenciaCiclo.getFullYear(), dataParaReferenciaCiclo.getMonth(), dataParaReferenciaCiclo.getDate());
 
+        let indiceCicloASerSelecionado = -1;
         let indiceUltimoCicloFinalizado = -1;
 
         for (let i = 0; i < ciclos.length; i++) {
             const ciclo = ciclos[i];
             if (ciclo.semanas && ciclo.semanas.length > 0) {
+                const primeiraSemanaDoCiclo = ciclo.semanas[0];
                 const ultimaSemanaDoCiclo = ciclo.semanas[ciclo.semanas.length - 1];
-                const dataFimUltimaSemana = new Date(ultimaSemanaDoCiclo.fim + 'T23:59:59-03:00'); 
-                
-                const dataFimNormalizada = new Date(dataFimUltimaSemana.getFullYear(), dataFimUltimaSemana.getMonth(), dataFimUltimaSemana.getDate());
 
-                if (dataFimNormalizada < hojeNormalizado) {
-                    indiceUltimoCicloFinalizado = i; // Atualiza para este ciclo, pois ele terminou e é mais recente que o anterior
-                } else {
-                    break; 
+                // As datas de início e fim do ciclo completo, normalizadas para comparação
+                const dataInicioCiclo = new Date(primeiraSemanaDoCiclo.inicio + 'T00:00:00-03:00');
+                const dataFimCiclo = new Date(ultimaSemanaDoCiclo.fim + 'T23:59:59-03:00');
+                
+                const dataInicioCicloNormalizada = new Date(dataInicioCiclo.getFullYear(), dataInicioCiclo.getMonth(), dataInicioCiclo.getDate());
+                const dataFimCicloNormalizada = new Date(dataFimCiclo.getFullYear(), dataFimCiclo.getMonth(), dataFimCiclo.getDate());
+
+                // 1. Verificar se hoje está dentro deste ciclo
+                if (hojeNormalizado >= dataInicioCicloNormalizada && hojeNormalizado <= dataFimCicloNormalizada) {
+                    indiceCicloASerSelecionado = i;
+                    break; // Encontrou o ciclo atual, pode parar de procurar
+                }
+
+                // 2. Se não for o ciclo atual, verificar se é o último finalizado até agora
+                if (dataFimCicloNormalizada < hojeNormalizado) {
+                    // Este ciclo terminou antes de hoje.
+                    // Se 'indiceUltimoCicloFinalizado' ainda não foi setado, ou se este ciclo
+                    // terminou DEPOIS do que já estava em 'indiceUltimoCicloFinalizado', atualizamos.
+                    if (indiceUltimoCicloFinalizado === -1 || dataFimCicloNormalizada > new Date(ciclos[indiceUltimoCicloFinalizado].semanas[ciclos[indiceUltimoCicloFinalizado].semanas.length -1].fim + 'T23:59:59-03:00')) {
+                        indiceUltimoCicloFinalizado = i;
+                    }
                 }
             }
         }
         
-        if (indiceUltimoCicloFinalizado !== -1) {
-            filtroCicloEl.value = indiceUltimoCicloFinalizado;
+        // Definir o valor do select com base na prioridade
+        if (indiceCicloASerSelecionado !== -1) {
+            filtroCicloEl.value = indiceCicloASerSelecionado; // Prioridade 1: Ciclo atual
+        } else if (indiceUltimoCicloFinalizado !== -1) {
+            filtroCicloEl.value = indiceUltimoCicloFinalizado; // Prioridade 2: Último ciclo finalizado
         } else if (ciclos.length > 0) {
-            filtroCicloEl.value = 0; 
+            filtroCicloEl.value = 0; // Fallback: Primeiro ciclo da lista
         } else {
             filtroCicloEl.value = ''; // Nenhum ciclo disponível
         }
@@ -211,8 +229,6 @@ async function atualizarRelatorio() {
         return;
     }
 
-    // Obter dados diretamente das variáveis de cache globais
-    // Elas foram populadas no DOMContentLoaded
     const producoes = allProducoes;
     const produtos = cachedProdutos;
     const usuarios = cachedUsuarios;
@@ -261,20 +277,34 @@ async function atualizarRelatorio() {
             });
 
             let pontosSemanaPonderados = 0;
-            let processosSemanaCrus = 0; // Processos crus apenas desta semana
+            let processosSemanaCrus = 0; // Mantém para o total de peças se necessário
             producoesDaSemanaParaCostureira.forEach(p => {
-                const produtoInfo = produtos.find(prod => prod.nome === p.produto);
-                let pontosDoProcesso = 1;
-                if (produtoInfo && Array.isArray(produtoInfo.processos) && Array.isArray(produtoInfo.pontos)) {
-                    const processoIndex = produtoInfo.processos.indexOf(p.processo);
-                    if (processoIndex !== -1 && produtoInfo.pontos[processoIndex] !== undefined) {
-                        pontosDoProcesso = produtoInfo.pontos[processoIndex];
-                    }
-                }
-                processosSemanaCrus += p.quantidade; // Soma processos crus da semana
-                pontosSemanaPonderados += p.quantidade * pontosDoProcesso;
-            });
+                processosSemanaCrus += p.quantidade; // Soma a quantidade de peças
+            console.log(`Processando prod ID: ${p.id}, OP: ${p.op_numero}, Qtd: ${p.quantidade}, Pontos Gerados (raw): '${p.pontos_gerados}', Tipo: ${typeof p.pontos_gerados}`);
+                // Usar os pontos_gerados diretamente do registro de produção
+                
+            let pontosParaEsteLancamento = 0; // Começa com 0 para este lançamento
+
+            if (p.pontos_gerados !== undefined && p.pontos_gerados !== null && String(p.pontos_gerados).trim() !== "") {
+            const valorFloat = parseFloat(p.pontos_gerados);
             
+            if (!isNaN(valorFloat)) { // Verifica se a conversão para float foi bem-sucedida
+                    pontosParaEsteLancamento = valorFloat;
+                } else {
+                    // Se parseFloat falhou (ex: p.pontos_gerados era uma string não numérica)
+                    console.warn(`WARN: p.pontos_gerados para ID ${p.id} ('${p.pontos_gerados}') não pôde ser convertido para um número válido. Usando quantidade como fallback.`);
+                    pontosParaEsteLancamento = p.quantidade; // Fallback: usa a quantidade
+                }
+            } else {
+                // Se p.pontos_gerados é undefined, null, ou string vazia
+                console.warn(`WARN: Produção ID ${p.id} não possui valor válido em 'pontos_gerados' ('${p.pontos_gerados}'). Usando quantidade como fallback.`);
+                pontosParaEsteLancamento = p.quantidade; // Fallback: usa a quantidade
+            }
+            console.log(`Pontos calculados para este lançamento (ID ${p.id}): ${pontosParaEsteLancamento}`);
+            pontosSemanaPonderados += pontosParaEsteLancamento;
+        });
+            console.log(`Fim do loop da semana: processosSemanaCrus = ${processosSemanaCrus}, pontosSemanaPonderados = ${pontosSemanaPonderados}`);
+
             totalProcessosCrusCiclo += processosSemanaCrus; // Acumula processos crus do ciclo
             totalPontosPonderadosCiclo += pontosSemanaPonderados; // Acumula pontos ponderados do ciclo
 
@@ -472,8 +502,13 @@ async function obterComissoesPagasAPI(filtros = {}, forceUpdate = false) {
 
 async function popularFiltrosComissoesPagas() {
     const filtroCostureiraEl = document.getElementById('rc-paid-filter-costureira');
-    const usuarios = cachedUsuarios || await obterUsuariosAPI(); // Reutiliza usuários já carregados
-    const costureiras = usuarios.filter(u => u.tipos && u.tipos.includes('costureira'));
+    const mesPagamentoEl = document.getElementById('rc-paid-filter-month'); // Adicione esta linha para pegar o elemento
+
+    const usuarios = cachedUsuarios || await obterUsuariosAPI(); 
+    const costureiras = usuarios.filter(u => 
+        u.tipos && u.tipos.includes('costureira') &&
+        u.nome && u.nome.toLowerCase() !== 'lixeira' // Já corrigido
+    );
 
     if (filtroCostureiraEl) {
         preencherSelect(filtroCostureiraEl, 'Todas as Costureiras', costureiras, 'nome', 'nome');
@@ -482,6 +517,15 @@ async function popularFiltrosComissoesPagas() {
             filtroCostureiraEl.disabled = true;
         }
     }
+
+    // Adicione este bloco para pré-selecionar o mês atual
+    if (mesPagamentoEl) {
+        const hoje = new Date();
+        const ano = hoje.getFullYear();
+        const mes = (hoje.getMonth() + 1).toString().padStart(2, '0'); // Mês é 0-indexado, +1 para o formato AAAA-MM
+        mesPagamentoEl.value = `${ano}-${mes}`;
+    }
+    
     document.getElementById('rc-apply-paid-filters-btn')?.addEventListener('click', carregarComissoesPagas);
 }
 
@@ -505,16 +549,66 @@ async function carregarComissoesPagas() {
         noDataMsgEl.style.display = 'none';
         comissoesPagas.sort((a,b) => new Date(b.data_pagamento_efetivo || b.created_at) - new Date(a.data_pagamento_efetivo || a.created_at)); // Mais recentes primeiro
 
-        comissoesPagas.forEach(cp => {
+                comissoesPagas.forEach(cp => {
             const tr = tbody.insertRow();
+
+            // Coluna 1: Costureira
             tr.insertCell().textContent = cp.costureira_nome || 'N/A';
+            
+            // Coluna 2: Ciclo Ref.
             tr.insertCell().textContent = cp.ciclo_nome || 'N/A';
-            tr.insertCell().textContent = `${formatarData(cp.ciclo_inicio)} - ${formatarData(cp.ciclo_fim)}`;
-            const valorPagoNumerico = parseFloat(cp.valor_pago); // Converte para número
+            
+            // Coluna 3: Período Ciclo
+            let periodoCicloTexto = 'N/A';
+            if (cp.ciclo_inicio && cp.ciclo_fim) {
+                try {
+                    // Assume que formatarData espera 'YYYY-MM-DD' e cp.ciclo_inicio/fim estão nesse formato ou são compatíveis
+                    const dataInicioFormatada = formatarData(cp.ciclo_inicio.split('T')[0]); // Pega YYYY-MM-DD se for timestamp
+                    const dataFimFormatada = formatarData(cp.ciclo_fim.split('T')[0]);       // Pega YYYY-MM-DD se for timestamp
+
+                    if (dataInicioFormatada && !dataInicioFormatada.toLowerCase().includes('invalid') && !dataInicioFormatada.toLowerCase().includes('nan') &&
+                        dataFimFormatada && !dataFimFormatada.toLowerCase().includes('invalid') && !dataFimFormatada.toLowerCase().includes('nan')) {
+                        periodoCicloTexto = `${dataInicioFormatada} - ${dataFimFormatada}`;
+                    } else {
+                        console.warn(`Problema ao formatar período do ciclo: ${cp.ciclo_inicio} a ${cp.ciclo_fim}. Comissao ID: ${cp.id || 'N/D'}`);
+                        periodoCicloTexto = 'Datas Inválidas';
+                    }
+                } catch (e) {
+                    console.error(`Erro ao formatar período do ciclo para ${cp.ciclo_inicio}-${cp.ciclo_fim}:`, e);
+                    periodoCicloTexto = 'Erro Formatação';
+                }
+            }
+            tr.insertCell().textContent = periodoCicloTexto;
+            
+            // Coluna 4: Valor Pago
+            const valorPagoNumerico = parseFloat(cp.valor_pago);
             tr.insertCell().textContent = `R$ ${(isNaN(valorPagoNumerico) ? 0 : valorPagoNumerico).toFixed(2).replace('.', ',')}`;
-            // Usamos isNaN para tratar casos onde parseFloat pode retornar NaN (ex: se cp.valor_pago for uma string não numérica)            tr.insertCell().textContent = cp.data_pagamento_efetivo ? formatarData(new Date(cp.data_pagamento_efetivo).toISOString().split('T')[0]) : 'N/A';
+            
+            // Coluna 5: Data Pagamento
+            // A linha com comentário no meio que você passou estava errada. Esta é a forma correta:
+            let dataPagamentoTexto = 'N/A';
+            if (cp.data_pagamento_efetivo) {
+                try {
+                    // cp.data_pagamento_efetivo pode ser um timestamp completo (ex: "2023-10-26T10:00:00.000Z")
+                    // formatarData deve receber a parte da data 'YYYY-MM-DD'
+                    const dataApenas = cp.data_pagamento_efetivo.split('T')[0];
+                    dataPagamentoTexto = formatarData(dataApenas);
+                    if (!dataPagamentoTexto || dataPagamentoTexto.toLowerCase().includes('invalid') || dataPagamentoTexto.toLowerCase().includes('nan')) {
+                        console.warn(`Problema ao formatar data de pagamento: ${cp.data_pagamento_efetivo}. Comissao ID: ${cp.id || 'N/D'}`);
+                        dataPagamentoTexto = 'Data Inválida';
+                    }
+                } catch (e) {
+                    console.error(`Erro ao formatar data de pagamento ${cp.data_pagamento_efetivo}:`, e);
+                    dataPagamentoTexto = 'Erro Formatação';
+                }
+            }
+            tr.insertCell().textContent = dataPagamentoTexto;
+            
+            // Coluna 6: Confirmado Por
             tr.insertCell().textContent = cp.confirmado_por_nome || 'N/A';
         });
+
+
     } else {
         noDataMsgEl.style.display = 'block';
     }

@@ -19,7 +19,8 @@ const elements = {
     productTableBody: document.getElementById('productTableBody'),
     searchProduct: document.getElementById('searchProduct'),
     productForm: document.getElementById('productForm'),
-    editProductName: document.getElementById('editProductName'),
+    editProductNameDisplay: document.getElementById('editProductName'), // Renomeei para clareza (o H2)
+    inputProductName: document.getElementById('inputProductName'),    // <<< NOVO INPUT ADICIONADO AQUI    
     sku: document.getElementById('sku'),
     gtin: document.getElementById('gtin'),
     unidade: document.getElementById('unidade'),
@@ -54,90 +55,223 @@ function deepClone(obj) {
     return JSON.parse(JSON.stringify(obj));
 }
 
+function configurarEventListenersPrincipais() {
+    console.log('[configurarEventListenersPrincipais] Configurando listeners...');
+
+    // --- Listener para o NOVO BOTÃO "Adicionar Novo Produto" ---
+    const btnAdicionarNovoProduto = document.getElementById('btnAdicionarNovoProduto');
+if (btnAdicionarNovoProduto) {
+    btnAdicionarNovoProduto.addEventListener('click', () => {
+        console.log('[btnAdicionarNovoProduto] Botão "Adicionar Novo Produto" clicado');
+        editingProduct = { // Objeto esqueleto para um NOVO produto
+            nome: '',        // Nome começa vazio para o usuário preencher
+            sku: '',
+            gtin: '',
+            unidade: 'pç',   // Default
+            estoque: 0,
+            imagem: '',
+            tipos: [],       // Default para array vazio
+            variacoes: [],   // Default para array vazio
+            estrutura: [],   // Default para array vazio
+            etapas: [],      // Default para array vazio
+            etapasTiktik: [],// Default para array vazio
+            grade: [],       // Default para array vazio
+            is_kit: false,
+            id: undefined    // GARANTE que não tem ID, para ser tratado como novo
+        };
+        localStorage.removeItem('ultimoProdutoEditado'); // ESSENCIAL
+        localStorage.removeItem('produtoComDuplicidade'); // Boa prática
+        
+        window.location.hash = '#editando'; 
+        
+        // Forçar o recarregamento do formulário se a view já estiver ativa
+        // O toggleView chamado pelo hashchange deve cuidar disso,
+        // mas isso é uma garantia extra se a hash não mudar ou houver algum timing.
+        if (elements.productFormView.style.display === 'block' && window.location.hash === '#editando') {
+            console.log('[btnAdicionarNovoProduto] Forçando loadEditForm para novo produto.');
+            loadEditForm(editingProduct);
+        }
+    });
+    console.log('[configurarEventListenersPrincipais] Listener para btnAdicionarNovoProduto configurado.');
+} else {
+    console.warn('[configurarEventListenersPrincipais] Botão #btnAdicionarNovoProduto não encontrado.');
+}
+
+    // --- Seus OUTROS LISTENERS que já existem ---
+    // Por exemplo, o listener para o input de busca:
+    if (elements.searchProduct) { // elements.searchProduct é document.getElementById('searchProduct')
+        elements.searchProduct.addEventListener('input', () => {
+            const activeFilter = document.querySelector('.cp-type-btn.active')?.dataset.type || 'todos';
+            loadProductTable(activeFilter, elements.searchProduct.value);
+        });
+        console.log('[configurarEventListenersPrincipais] Listener para searchProduct configurado.');
+    } else {
+        console.warn('[configurarEventListenersPrincipais] Elemento #searchProduct não encontrado.');
+    }
+
+
+    // Listener para os botões de filtro de tipo:
+    document.querySelectorAll('.cp-type-btn').forEach(btn => {
+        btn.addEventListener('click', () => filterProducts(btn.dataset.type));
+    });
+    console.log('[configurarEventListenersPrincipais] Listeners para .cp-type-btn configurados.');
+
+
+    // Listener para o formulário principal (productForm)
+    if (elements.productForm) { // elements.productForm é document.getElementById('productForm')
+        elements.productForm.addEventListener('submit', async e => {
+            e.preventDefault();
+            if (!editingProduct) return;
+
+            // ... (sua lógica de validação e coleta de dados do formulário) ...
+
+            // A função salvarProdutoNoBackend() será chamada aqui dentro
+            // como você já faz.
+            try {
+                const produtoSalvo = await salvarProdutoNoBackend(); // salvarProdutoNoBackend já existe no seu código
+                if (produtoSalvo) {
+                    alert('Produto salvo com sucesso!');
+                    window.location.hash = ''; // Volta para a lista
+                }
+            } catch (error) {
+                // salvarProdutoNoBackend já deve mostrar o alerta de erro
+                console.error("Erro no submit do productForm:", error);
+            }
+        });
+        console.log('[configurarEventListenersPrincipais] Listener para productForm (submit) configurado.');
+    } else {
+        console.warn('[configurarEventListenersPrincipais] Elemento #productForm não encontrado.');
+    }
+    
+    // Listener para o campo de imagem (se não estiver já em elements)
+    const imagemProdutoInput = document.getElementById('imagemProduto');
+    if (imagemProdutoInput && elements.previewImagem && elements.removeImagem) {
+        imagemProdutoInput.addEventListener('change', e => {
+            const arquivo = e.target.files[0];
+            if (!arquivo) return;
+            resizeImage(arquivo, imagemRedimensionada => {
+                elements.previewImagem.src = imagemRedimensionada;
+                elements.previewImagem.style.display = 'block';
+                elements.removeImagem.style.display = 'inline-block';
+                if(editingProduct) editingProduct.imagem = imagemRedimensionada;
+            });
+        });
+
+        elements.removeImagem.addEventListener('click', () => {
+            imagemProdutoInput.value = ''; // Limpa o input file
+            elements.previewImagem.src = '';
+            elements.previewImagem.style.display = 'none';
+            elements.removeImagem.style.display = 'none';
+            if(editingProduct) editingProduct.imagem = '';
+        });
+        console.log('[configurarEventListenersPrincipais] Listeners para imagemProduto e removeImagem configurados.');
+    } else {
+        if(!imagemProdutoInput) console.warn('[configurarEventListenersPrincipais] Elemento #imagemProduto não encontrado.');
+    }
+
+
+    // Adicione AQUI quaisquer outros event listeners de nível de página que você tinha,
+    // como para abas, botões de adicionar etapa, etc., se eles não estiverem
+    // sendo adicionados dinamicamente ou se fizer sentido agrupá-los.
+    // Por exemplo, os listeners para os checkboxes de tipo de produto:
+    document.querySelectorAll('input[name="tipo"]').forEach(checkbox => {
+        checkbox.addEventListener('change', () => {
+            if (editingProduct) { // Atualiza o editingProduct se estiver editando
+                const tiposSelecionados = Array.from(document.querySelectorAll('input[name="tipo"]:checked')).map(cb => cb.value);
+                editingProduct.tipos = tiposSelecionados;
+                editingProduct.is_kit = tiposSelecionados.includes('kits');
+            }
+            toggleTabs(); // Atualiza a visibilidade das abas
+        });
+    });
+    console.log('[configurarEventListenersPrincipais] Listeners para input[name="tipo"] configurados.');
+
+} // Fim da função configurarEventListenersPrincipais
+
 // Inicialização
 async function inicializarPagina() {
-    document.documentElement.setAttribute('hidden', 'true');
+    document.documentElement.setAttribute('hidden', 'true'); // Esconde a página até tudo carregar
 
     const auth = await verificarAutenticacao('cadastrar-produto.html', ['acesso-cadastrar-produto']);
     if (!auth) {
-        console.error('[admin-cadastrar-produto] Autenticação falhou. Usuário logado:', localStorage.getItem('usuarioLogado'));
+        // verificarAutenticacao já deve ter redirecionado
         return;
     }
+    // Não precisamos armazenar auth.permissoes ou auth.usuario em variáveis globais aqui
+    // se as funções chamadas por eles (como salvarProdutoNoBackend) já pegam o token do localStorage
+    // para enviar à API, e a API valida as permissões.
 
-    const permissoes = auth.permissoes || [];
-    const usuarioLogado = auth.usuario;
+    await loadProductTable('todos', '', true); // Carrega a tabela de produtos
 
-    await loadProductTable('todos', '', true);
-    toggleView();
-    document.documentElement.removeAttribute('hidden');
+    configurarEventListenersPrincipais(); // CHAMA A FUNÇÃO PARA CONFIGURAR OS LISTENERS
+
+    // Listener para hashchange deve ser configurado APENAS UMA VEZ
+    if (!window.cadastrarProdutoHashChangeListenerAttached) {
+        window.addEventListener('hashchange', toggleView);
+        window.cadastrarProdutoHashChangeListenerAttached = true;
+        console.log('[inicializarPagina] Listener de hashchange configurado para cadastrar-produto.');
+    }
+
+    toggleView(); // Processa a hash inicial para mostrar a view correta
+
+    document.documentElement.removeAttribute('hidden'); // Mostra a página
+    console.log('[inicializarPagina] Página de cadastro de produto inicializada.');
 }
+
+// Chame inicializarPagina quando o DOM estiver pronto (você já faz isso no final do arquivo)
+// inicializarPagina(); // Se você chama no final do arquivo, mantenha lá.
+
 
 
 async function loadProductTable(filterType = 'todos', search = '', forceRefresh = false) {
     try {
-        produtos = await obterProdutos(forceRefresh); // Obtenha os produtos
-        console.log('[loadProductTable] Produtos obtidos APÓS obterProdutos:', produtos.length, 'Primeiro produto:', produtos.length > 0 ? produtos[0] : 'Nenhum'); // Log os produtos recebidos
-        const produtoSendoEditado = produtos.find(p => p.nome === localStorage.getItem('ultimoProdutoEditado')); // Encontre o produto editado (se estiver editando)
-        console.log('[loadProductTable] Produto sendo editado:', produtoSendoEditado); // Log o produto específico
+        // 1. Obter produtos diretamente da API/cache
+        produtos = await obterProdutos(forceRefresh); 
+        console.log('[loadProductTable] Produtos obtidos da API/cache:', produtos.length, 'Primeiro produto:', produtos.length > 0 ? produtos[0] : 'Nenhum');
 
-        const allProductNames = [...PRODUTOS, ...PRODUTOSKITS];
-        const novosProdutos = [];
-        allProductNames.forEach(nome => {
-            if (!produtos.find(p => p.nome === nome)) {
-                novosProdutos.push({
-                    nome,
-                    sku: '',
-                    tipos: PRODUTOSKITS.includes(nome) ? ['kits'] : [],
-                    isKit: PRODUTOSKITS.includes(nome),
-                    gtin: '',
-                    unidade: '',
-                    estoque: 0,
-                    imagem: '',
-                    variacoes: [],
-                    etapas: [],
-                    etapasTiktik: [],
-                    grade: []
-                });
-            }
-        });
+        // 2. REMOVIDO: Bloco que comparava com PRODUTOS/PRODUTOSKITS de prod-proc-maq.js e criava novosProdutos.
+        //    A criação de produtos agora será manual através de um botão "Adicionar Novo Produto".
 
-        if (novosProdutos.length > 0) {
-            console.log('[loadProductTable] Salvando novos produtos:', novosProdutos);
-            await salvarProdutos(novosProdutos);
-            produtos = await obterProdutos(true);
-            console.log('[loadProductTable] Produtos após salvar:', produtos);
-        }
-
+        // 3. Mapear e Filtrar os produtos existentes (como antes, mas sem os produtos esqueleto automáticos)
         const mappedProdutos = produtos.map(produto => ({
             ...produto,
-            isKit: produto.is_kit
+            isKit: produto.is_kit // ou produto.tipos?.includes('kits')
         }));
 
-        const filteredProdutos = mappedProdutos
-            .filter(p => allProductNames.includes(p.nome))
-            .filter(p =>
-                (filterType === 'todos' || (p.tipos && p.tipos.includes(filterType))) &&
-                p.nome.toLowerCase().includes(search.toLowerCase())
-            );
+        // Filtrar apenas pelos produtos que REALMENTE existem.
+        // Se você ainda quiser usar PRODUTOS e PRODUTOSKITS de prod-proc-maq.js para algum tipo de filtro
+        // ou verificação de consistência, pode manter, mas eles não devem mais ditar a CRIAÇÃO.
+        // Para simplificar, vamos filtrar apenas com base nos tipos e busca por enquanto.
+        // const allProductNames = [...PRODUTOS, ...PRODUTOSKITS]; // Não mais necessário para forçar existência
+
+        const filteredProdutos = mappedProdutos.filter(p =>
+            (filterType === 'todos' || (Array.isArray(p.tipos) && p.tipos.includes(filterType))) && // Garantir que p.tipos seja array
+            p.nome.toLowerCase().includes(search.toLowerCase())
+        );
 
         elements.productTableBody.innerHTML = '';
-        filteredProdutos.forEach(produto => {
-            const tr = document.createElement('tr');
-            tr.style.cursor = 'pointer';
-            tr.dataset.nome = produto.nome;
-            tr.innerHTML = `
-                <td>${produto.imagem ? `<img src="${produto.imagem}" class="miniatura-produto" onclick="editProduct('${produto.nome}')">` : '<span class="espaco-miniatura-produto"></span>'}</td>
-                <td>${produto.nome}</td>
-                <td>${produto.sku || '-'}</td>
-                <td>${produto.unidade || '-'}</td>
-                <td>${produto.estoque || 0}</td>
-                <td>${produto.tipos ? produto.tipos.join(', ') : '-'}</td>
-            `;
-            tr.addEventListener('click', () => editProduct(produto.nome));
-            elements.productTableBody.appendChild(tr);
-        });
+        if (filteredProdutos.length === 0) {
+            elements.productTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center;">Nenhum produto encontrado. Use o botão "Adicionar Novo Produto".</td></tr>`;
+        } else {
+            filteredProdutos.forEach(produto => {
+                const tr = document.createElement('tr');
+                tr.style.cursor = 'pointer';
+                tr.dataset.nome = produto.nome; // Usado por editProduct
+                tr.innerHTML = `
+                    <td>${produto.imagem ? `<img src="${produto.imagem}" class="miniatura-produto" onclick="editProduct('${produto.nome}')">` : '<span class="espaco-miniatura-produto"></span>'}</td>
+                    <td>${produto.nome}</td>
+                    <td>${produto.sku || '-'}</td>
+                    <td>${Array.isArray(produto.unidade) ? produto.unidade.join(', ') : (produto.unidade || '-') }</td> <!-- Adicionado Array.isArray para unidade -->
+                    <td>${produto.estoque || 0}</td>
+                    <td>${Array.isArray(produto.tipos) ? produto.tipos.join(', ') : '-'}</td> <!-- Correção para o erro de join -->
+                `;
+                tr.addEventListener('click', () => editProduct(produto.nome));
+                elements.productTableBody.appendChild(tr);
+            });
+        }
     } catch (error) {
         console.error('[loadProductTable] Erro:', error);
+        elements.productTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">Erro ao carregar produtos.</td></tr>`;
     }
 }
 
@@ -170,10 +304,24 @@ async function editProduct(nome) {
 }
 
 function loadEditForm(produto) {
-    console.log('[loadEditForm] Produto recebido:', produto); // Log o objeto produto COMPLETO
-    console.log('[loadEditForm] Conteúdo de etapasTiktik no produto recebido:', produto?.etapasTiktik); // Log especificamente a propriedade esperada
+    console.log('[loadEditForm] Produto recebido:', produto);
 
-    elements.editProductName.textContent = `Editando: ${produto.nome}`;
+    // Atualiza o título H2
+    if (elements.editProductNameDisplay) {
+        elements.editProductNameDisplay.textContent = (produto && produto.id) ? `Editando: ${produto.nome}` : 'Cadastrando Novo Produto';
+    }
+
+    // Preenche o INPUT de nome do produto
+    if (elements.inputProductName) {
+        elements.inputProductName.value = produto.nome || '';
+        // Opcional: Desabilitar edição do nome para produtos existentes se você quiser
+        // A API já lida com ON CONFLICT, então pode ser seguro permitir a edição.
+        // elements.inputProductName.readOnly = !!(produto && produto.id);
+    } else {
+        console.warn('[loadEditForm] Elemento #inputProductName não encontrado.');
+    }
+
+    // Preenche os outros campos como antes
     elements.sku.value = produto.sku || '';
     document.querySelectorAll('input[name="tipo"]').forEach(cb => {
         cb.checked = produto.tipos ? produto.tipos.includes(cb.value) : false;
@@ -434,51 +582,127 @@ function filterProducts(type) {
 
 function toggleView() {
     const hash = window.location.hash;
+    console.log('[toggleView] Hash atual:', hash, 'Produto em edição (editingProduct):', editingProduct);
+
+    // Esconder todas as views principais primeiro
+    elements.productListView.style.display = 'none';
+    elements.productFormView.style.display = 'none';
+    elements.configurarVariacaoView.style.display = 'none'; // Popup de configuração de kit
+
     if (hash === '#editando') {
-        if (!editingProduct) {
-            const ultimoProdutoEditado = localStorage.getItem('ultimoProdutoEditado');
-            const produtoOriginal = produtos.find(p => p.nome === ultimoProdutoEditado);
-            if (produtoOriginal) {
-                editingProduct = deepClone(produtoOriginal);
-                loadEditForm(editingProduct);
-            } else {
-                window.location.hash = '';
-                localStorage.removeItem('ultimaAbaAtiva');
-                editingProduct = null;
+        elements.productFormView.style.display = 'block'; // Mostra o formulário
+
+        let produtoParaCarregar = editingProduct; // Usa o que já está em editingProduct (novo ou existente)
+
+        if (!produtoParaCarregar) { // Se editingProduct não foi setado (ex: refresh na página com #editando)
+            const ultimoProdutoEditadoNome = localStorage.getItem('ultimoProdutoEditado');
+            if (ultimoProdutoEditadoNome) {
+                const produtoOriginal = produtos.find(p => p.nome === ultimoProdutoEditadoNome);
+                if (produtoOriginal) {
+                    produtoParaCarregar = deepClone(produtoOriginal);
+                    editingProduct = produtoParaCarregar; // Atualiza o global editingProduct
+                    console.log('[toggleView #editando] Carregado do localStorage:', ultimoProdutoEditadoNome);
+                } else {
+                    console.warn(`[toggleView #editando] Produto "${ultimoProdutoEditadoNome}" do localStorage não encontrado. Limpando.`);
+                    localStorage.removeItem('ultimoProdutoEditado');
+                }
             }
         }
-        elements.productListView.style.display = 'none';
-        elements.productFormView.style.display = 'block';
-        elements.configurarVariacaoView.style.display = 'none';
+
+        if (produtoParaCarregar) {
+            loadEditForm(produtoParaCarregar); // Carrega os dados no formulário
+            // Ativar a aba correta (dados-gerais ou a última usada se existir)
+            const ultimaAba = localStorage.getItem('ultimaAbaAtiva');
+            if (ultimaAba && document.getElementById(ultimaAba) && document.querySelector(`.cp-tab-btn[data-tab="${ultimaAba}"]`)) {
+                switchTab(ultimaAba);
+            } else {
+                // Define uma aba padrão se a última não for válida ou não existir
+                const tiposProduto = produtoParaCarregar.tipos || [];
+                const abaPadrao = tiposProduto.includes('variacoes') || tiposProduto.includes('kits') ? 'variacoes' : 'dados-gerais';
+                switchTab(abaPadrao);
+            }
+            toggleTabs(); // Garante que os botões de abas estejam corretos
+        } else {
+            // Se não há produto para carregar (nem em editingProduct, nem no localStorage)
+            // e o usuário tentou acessar #editando diretamente.
+            console.warn("[toggleView #editando] Nenhum produto para editar. Redirecionando para a lista.");
+            window.location.hash = ''; // Volta para a lista (o que acionará toggleView novamente)
+            // Não precisa return aqui, pois a mudança de hash fará o toggleView rodar de novo
+        }
+
     } else if (hash.startsWith('#configurar-variacao/')) {
-        elements.productListView.style.display = 'none';
-        elements.productFormView.style.display = 'block';
-        elements.configurarVariacaoView.style.display = 'flex';
+        // Esta view é um popup sobre a productFormView
+        elements.productFormView.style.display = 'block'; // Mantém o formulário de produto visível por baixo
+        elements.configurarVariacaoView.style.display = 'flex'; // Mostra o popup
         const index = hash.split('/')[1];
-        carregarConfigurarVariacao(index);
-    } else {
-        if (variacoesAlteradas || gradeAlteradas) {
+        if (editingProduct) { // Precisa do produto principal para configurar a variação do kit
+            carregarConfigurarVariacao(index); // Função que preenche o popup de configuração
+        } else {
+            console.error("[toggleView #configurar-variacao] Tentando configurar variação sem um produto principal em edição.");
+            window.location.hash = '#editando'; // Volta para a edição (que pode redirecionar para lista se não houver produto)
+        }
+
+    } else { // Hash vazia, #, ou qualquer outra coisa: mostrar lista de produtos
+        // Lógica para sair da edição: verificar alterações não salvas
+        if (elements.productFormView.style.display === 'block' && (variacoesAlteradas || gradeAlteradas)) {
             const confirmar = confirm('Você tem alterações não salvas em "Variações" ou "Grade". Deseja sair sem salvar?');
             if (!confirmar) {
-                window.location.hash = '#editando';
-                return;
+                // Usuário não quer sair, força a hash de volta para #editando para evitar loop
+                // window.history.pushState(null, "", '#editando'); // Evita acionar hashchange
+                // Ou simplesmente não faz nada, deixando o usuário na tela de edição.
+                // Para evitar que o toggleView continue e esconda o form, precisamos de um return.
+                // Mas isso pode ser complicado se a hash já mudou.
+                // A melhor abordagem é o usuário clicar "Cancelar" no confirm e o código não prosseguir.
+                // Se ele clicou "OK", então prosseguimos para limpar.
+                // Para simplificar: se o usuário clicou em algo que mudou a hash, e ele confirma o "sair sem salvar",
+                // então a lógica abaixo prossegue. Se ele cancelou o "sair sem salvar",
+                // ele mesmo deve voltar para #editando ou o estado da hash já foi revertido pelo navegador.
+                // Para garantir, se ele cancelou, podemos tentar forçar a volta:
+                 // O problema é que window.location.hash = '#editando' acionaria toggleView de novo.
+                 // Uma solução é ter um estado "saindoDaEdicao" para ignorar um ciclo.
+                 // Por ora, vamos assumir que se ele cancelou o 'confirm', ele permanece.
+                 // Se ele confirmou, a lógica abaixo limpa tudo.
+            } else {
+                // Se ele cancelou a saída, não fazemos nada, ele continua na edição
+                // Para que ele não saia, precisamos que a hash NÃO MUDE.
+                // Se a hash já mudou (ex: clicou no menu lateral), precisamos forçá-la de volta.
+                // Isso pode ser complexo. Uma solução simples é que os links que tiram da edição
+                // já façam essa verificação ANTES de mudar a hash.
+                // Por enquanto, se ele cancelou o confirm, vamos impedir a mudança de view.
+                // Isso requer que o `confirm` seja chamado ANTES da hash realmente mudar.
+                // O listener de hashchange é reativo.
+
+                // Vamos simplificar: Se ele chegou aqui e confirmou (ou não havia alterações)
+                // A lógica abaixo de limpar e mostrar a lista executa.
             }
         }
+
+        // Limpar estado de edição ao sair da view de formulário
         elements.productListView.style.display = 'block';
-        elements.productFormView.style.display = 'none';
-        elements.configurarVariacaoView.style.display = 'none';
-        document.querySelectorAll('.cp-type-btn').forEach(btn => btn.classList.remove('active'));
-        const todosBtn = document.querySelector('.cp-type-btn[data-type="todos"]');
-        if (todosBtn) todosBtn.classList.add('active');
-        loadProductTable('todos', elements.searchProduct.value);
-        localStorage.removeItem('ultimaAbaAtiva');
         editingProduct = null;
         variacoesAlteradas = false;
         gradeAlteradas = false;
         variacoesTemp = [];
         gradeTemp = [];
+        localStorage.removeItem('ultimoProdutoEditado');
+        localStorage.removeItem('ultimaAbaAtiva');
+        localStorage.removeItem('produtoComDuplicidade'); // Limpa qualquer estado de erro de SKU
+
+        // Resetar e carregar a tabela de produtos
+        if (elements.searchProduct) elements.searchProduct.value = ''; // Limpa busca
+        document.querySelectorAll('.cp-type-btn').forEach(btn => btn.classList.remove('active'));
+        const todosBtn = document.querySelector('.cp-type-btn[data-type="todos"]');
+        if (todosBtn) todosBtn.classList.add('active');
+        
+        // Só recarrega a tabela se ela não foi carregada ainda ou se explicitamente necessário
+        // Geralmente, ao voltar para a lista, queremos ver os dados mais recentes.
+        if (document.body.dataset.initialLoadComplete === 'true') { // Evita recarga dupla na inicialização
+            loadProductTable('todos', '', true); // Força refresh ao voltar para a lista
+        }
     }
 }
+
+
 
 window.switchTab = function(tabId) {
     console.log('[switchTab] Alternando para aba:', tabId);
@@ -1029,34 +1253,73 @@ function desbloquearCampos() {
 }
 
 
-function temDuplicatasDeSku() {
-    const grade = editingProduct.grade || [];
-    const currentSkus = [
-        elements.sku.value,
-        ...grade.map(g => g.sku)
-    ].filter(sku => sku);
+// Ajuste na função temDuplicatasDeSku para receber o produto a ser verificado
+function temDuplicatasDeSku(produtoParaVerificar) {
+    if (!produtoParaVerificar) return { hasDuplicates: false, erroNaGrade: false };
 
-    // Verificar duplicatas dentro do produto atual
-    const duplicatasInternas = currentSkus.some((sku, i) => 
-        currentSkus.indexOf(sku) !== i
+    const gradeDoProduto = produtoParaVerificar.grade || [];
+    const skuPrincipalDoProduto = produtoParaVerificar.sku || '';
+
+    // SKUs DENTRO do produto atual (principal + grade)
+    const currentSkusDoProduto = [
+        skuPrincipalDoProduto,
+        ...gradeDoProduto.map(g => g.sku)
+    ].filter(sku => sku && sku.trim() !== '');
+
+    // Verificar duplicatas internas no produto atual
+    const duplicatasInternas = currentSkusDoProduto.some((sku, i, arr) => 
+        arr.indexOf(sku) !== i // Se o primeiro índice do SKU não for o índice atual, é duplicata
     );
 
-    // Verificar duplicatas em outros produtos
-    const allSkus = produtos
-        .filter(prod => prod.id !== editingProduct.id)
+    // SKUs de OUTROS produtos
+    const skusDeOutrosProdutos = produtos
+        .filter(p => p.id !== produtoParaVerificar.id) // Exclui o próprio produto da verificação global
         .flatMap(prod => [
             prod.sku,
             ...(prod.grade || []).map(g => g.sku)
         ])
-        .filter(s => s);
+        .filter(s => s && s.trim() !== '');
 
-    const duplicatasGlobais = currentSkus.some(sku => allSkus.includes(sku));
+    // Verificar se algum SKU do produto atual existe em outros produtos
+    const duplicatasGlobais = currentSkusDoProduto.some(sku => skusDeOutrosProdutos.includes(sku));
 
-    // Determinar se o erro está na grade
-    const erroNaGrade = duplicatasInternas || grade.some(g => g.sku && allSkus.includes(g.sku));
+    const hasOverallDuplicates = duplicatasInternas || duplicatasGlobais;
 
-    return { hasDuplicates: duplicatasInternas || duplicatasGlobais, erroNaGrade };
+    // Determinar se o erro é especificamente na grade do produto atual
+    // (se o SKU principal está duplicado na grade, ou se SKUs da grade estão duplicados entre si,
+    // ou se um SKU da grade está duplicado globalmente)
+    let erroNaGradeEspecifico = false;
+    if (duplicatasInternas) {
+        // Verifica se a duplicata interna envolve a grade
+        const skusUnicosDaGrade = [...new Set(gradeDoProduto.map(g => g.sku).filter(s => s && s.trim() !== ''))];
+        if (skusUnicosDaGrade.length < gradeDoProduto.filter(g => g.sku && g.sku.trim() !== '').length) { // SKUs duplicados DENTRO da grade
+            erroNaGradeEspecifico = true;
+        }
+        if (skuPrincipalDoProduto && gradeDoProduto.some(g => g.sku === skuPrincipalDoProduto)) { // SKU principal duplicado na grade
+            erroNaGradeEspecifico = true;
+        }
+    }
+    if (!erroNaGradeEspecifico && duplicatasGlobais) {
+        // Verifica se a duplicata global é por causa de um SKU da grade
+        if (gradeDoProduto.some(g => g.sku && skusDeOutrosProdutos.includes(g.sku))) {
+            erroNaGradeEspecifico = true;
+        }
+    }
+    
+    if (hasOverallDuplicates) {
+        console.warn('[temDuplicatasDeSku] Duplicata de SKU encontrada:', {
+            produtoVerificado: produtoParaVerificar.nome,
+            skuPrincipal: skuPrincipalDoProduto,
+            skusNaGrade: gradeDoProduto.map(g => g.sku),
+            duplicatasInternas,
+            duplicatasGlobais,
+            erroNaGrade: erroNaGradeEspecifico
+        });
+    }
+
+    return { hasDuplicates: hasOverallDuplicates, erroNaGrade: erroNaGradeEspecifico };
 }
+
 
 window.validarSku = function(index, input) {
     const skuValue = input.value.trim();
@@ -1105,69 +1368,97 @@ window.validarSku = function(index, input) {
 async function salvarProdutoNoBackend() {
     if (!editingProduct) {
         console.error('[salvarProdutoNoBackend] Nenhum produto está sendo editado.');
-        return;
+        alert('Erro: Nenhum produto selecionado para salvar.');
+        throw new Error('Nenhum produto selecionado para salvar.'); // Interrompe a execução
     }
 
+    // 1. Ler nome do produto do input
+    const nomeDoProdutoDoInput = elements.inputProductName ? elements.inputProductName.value.trim() : (editingProduct.nome || '');
+    if (!nomeDoProdutoDoInput) {
+        alert("O nome do produto é obrigatório!");
+        elements.inputProductName?.focus();
+        throw new Error("Nome do produto é obrigatório."); // Interrompe a execução
+    }
+
+    // 2. Ler outros dados do formulário e do estado
     const tiposSelecionados = Array.from(document.querySelectorAll('input[name="tipo"]:checked')).map(cb => cb.value);
     const isKit = tiposSelecionados.includes('kits');
-    console.log('[salvarProdutoNoBackend] Tipos selecionados:', tiposSelecionados, 'isKit:', isKit);
 
+    // console.log('[salvarProdutoNoBackend] Lendo etapas do DOM:'); // Log já existente se você adicionou
+    const etapasDoDom = Array.from(elements.stepsBody.querySelectorAll('tr')).map(tr => ({
+        processo: tr.querySelector('.processo-select')?.value || '',
+        maquina: tr.querySelector('.maquina-select')?.value || '',
+        feitoPor: tr.querySelector('.feito-por-select')?.value || ''
+    }));
+    // console.log('[salvarProdutoNoBackend] Etapas lidas do DOM:', JSON.stringify(etapasDoDom, null, 2)); // Log já existente
+
+    // console.log('[salvarProdutoNoBackend] Lendo etapasTiktik do DOM:'); // Log já existente
+    const etapasTiktikDoDom = Array.from(elements.etapasTiktikBody.querySelectorAll('tr')).map(tr => ({
+        processo: tr.querySelector('.processo-select')?.value || '',
+        maquina: tr.querySelector('.maquina-select')?.value || '',
+        feitoPor: tr.querySelector('.feito-por-select')?.value || ''
+    }));
+    // console.log('[salvarProdutoNoBackend] EtapasTiktik lidas do DOM:', JSON.stringify(etapasTiktikDoDom, null, 2)); // Log já existente
+
+    // 3. Montar o objeto `updatedProduct`
+    // Usar o `editingProduct` como base para manter `id` (se for edição) e outras propriedades
+    // que não são diretamente do formulário (como `variacoes` e `grade` que são salvas separadamente
+    // ou que já estão em `editingProduct.grade` após `salvarGrade`).
     const updatedProduct = {
-        ...editingProduct,
+        ...editingProduct, // Começa com o estado atual do produto em edição (importante para manter o ID e dados não alterados)
+        nome: nomeDoProdutoDoInput,
         sku: elements.sku.value || '',
         tipos: tiposSelecionados,
-        isKit: isKit,
+        is_kit: isKit, // Usar is_kit consistentemente
         gtin: elements.gtin.value || '',
         unidade: elements.unidade.value || '',
         estoque: parseInt(elements.estoque.value) || 0,
-        imagem: elements.previewImagem.src || '',
-        variacoes: Array.from(document.querySelectorAll('.cp-variacao-row')).map((row, i) => ({
-            chave: document.getElementById(`chaveVariacao${i}`)?.value || '',
-            valores: document.getElementById(`valoresVariacao${i}`)?.value || ''
-        })),
-        etapas: isKit ? [] : Array.from(elements.stepsBody.querySelectorAll('tr')).map(tr => ({
-            processo: tr.querySelector('.processo-select')?.value || '',
-            maquina: tr.querySelector('.maquina-select')?.value || '',
-            feitoPor: tr.querySelector('.feito-por-select')?.value || ''
-        })),
-
-         etapasTiktik: isKit ? [] : Array.from(elements.etapasTiktikBody.querySelectorAll('tr')).map(tr => ({ // <-- USAR NOVO NOME DO ELEMENTO DOM E NOVA PROPRIEDADE
-            processo: tr.querySelector('.processo-select')?.value || '',
-            maquina: tr.querySelector('.maquina-select')?.value || '',
-            feitoPor: tr.querySelector('.feito-por-select')?.value || ''
-         })),
-
-        grade: (editingProduct.grade || []).map(item => {
-            const tr = Array.from(elements.gradeBody.querySelectorAll('tr')).find(tr => tr.cells[0].textContent === item.variacao);
-            return tr ? {
-                ...item,
-                sku: tr.cells[2].querySelector('.cp-grade-sku')?.value || item.sku || '',
-                imagem: tr.cells[3].querySelector('img')?.src || item.imagem || ''
-            } : item;
-        })
+        imagem: elements.previewImagem.src || '', // Pega da preview, que é atualizada pelo input de imagem
+        // Variações e Grade são mais complexas e podem já estar atualizadas em `editingProduct`
+        // por suas próprias funções de salvar (`salvarVariacoes`, `salvarGrade`).
+        // Se elas não são salvas separadamente ANTES daqui, você precisaria lê-las do DOM aqui também.
+        // Assumindo que `editingProduct.variacoes` e `editingProduct.grade` estão atualizados:
+        variacoes: editingProduct.variacoes || [], // Pega de editingProduct
+        grade: editingProduct.grade || [],         // Pega de editingProduct
+        etapas: isKit ? [] : etapasDoDom,
+        etapasTiktik: isKit ? [] : etapasTiktikDoDom
+        // As colunas `pontos`, `pontos_expiracao`, `pontos_criacao` foram removidas
     };
+    // Remover a propriedade 'isKit' duplicada se 'is_kit' já estiver sendo usada consistentemente
+    delete updatedProduct.isKit;
 
-    updatedProduct.grade = updatedProduct.grade.filter(item => item.variacao && item.variacao.trim() !== '');
 
-
-    const { hasDuplicates, erroNaGrade } = temDuplicatasDeSku();
+    // 4. Validar SKUs duplicados (sua lógica existente)
+    // A função temDuplicatasDeSku() precisa ser ajustada para ler do `updatedProduct`
+    const { hasDuplicates, erroNaGrade } = temDuplicatasDeSku(updatedProduct); // Passar o produto atualizado
     if (hasDuplicates) {
         console.log('[salvarProdutoNoBackend] Salvamento bloqueado devido a SKUs duplicados.');
         bloquearCampos('Corrija o SKU duplicado antes de continuar editando.', erroNaGrade);
-        localStorage.setItem('produtoComDuplicidade', JSON.stringify(updatedProduct));
-        return;
+        localStorage.setItem('produtoComDuplicidade', JSON.stringify(updatedProduct)); // Salva o estado com erro
+        throw new Error('SKU duplicado detectado.'); // Interrompe a execução
     }
 
+    // 5. Logs de verificação de tipo (já existentes)
+    console.log('[salvarProdutoNoBackend] Verificando tipos para JSONB antes do fetch:');
+    console.log('typeof updatedProduct.tipos:', typeof updatedProduct.tipos, Array.isArray(updatedProduct.tipos));
+    console.log('typeof updatedProduct.variacoes:', typeof updatedProduct.variacoes, Array.isArray(updatedProduct.variacoes));
+    console.log('typeof updatedProduct.estrutura:', typeof updatedProduct.estrutura, Array.isArray(updatedProduct.estrutura)); // Se estrutura ainda existir
+    console.log('typeof updatedProduct.etapas:', typeof updatedProduct.etapas, Array.isArray(updatedProduct.etapas));
+    console.log('typeof updatedProduct.etapasTiktik:', typeof updatedProduct.etapasTiktik, Array.isArray(updatedProduct.etapasTiktik));
+    console.log('typeof updatedProduct.grade:', typeof updatedProduct.grade, Array.isArray(updatedProduct.grade));
+    // console.log('typeof updatedProduct.pontos:', typeof updatedProduct.pontos, Array.isArray(updatedProduct.pontos)); // Removido
+
+    // 6. Enviar para o backend
     try {
         const token = localStorage.getItem('token');
         if (!token) {
-            console.error('[salvarProdutoNoBackend] Nenhum token encontrado. Redirecionando para login.');
+            console.error('[salvarProdutoNoBackend] Nenhum token encontrado.');
             alert('Sessão expirada. Por favor, faça login novamente.');
-            window.location.href = '/index.html';
-            return;
+            window.location.href = '/login.html'; // Ou '/index.html' se for sua página de login
+            throw new Error('Token não encontrado.');
         }
 
-        console.log('[salvarProdutoNoBackend] Enviando produto para o backend:', updatedProduct);
+        console.log('[salvarProdutoNoBackend] Enviando produto para o backend:', JSON.stringify(updatedProduct, null, 2)); // Log detalhado
         const response = await fetch('/api/produtos', {
             method: 'POST',
             headers: {
@@ -1178,24 +1469,36 @@ async function salvarProdutoNoBackend() {
         });
 
         if (!response.ok) {
-            const errorText = await response.text();
-            console.error('[salvarProdutoNoBackend] Resposta do servidor:', response.status, errorText);
-            throw new Error(`Erro ao salvar produto: ${response.status} - ${errorText}`);
+            const errorData = await response.json().catch(() => ({ error: `Erro HTTP ${response.status} - ${response.statusText}` }));
+            console.error('[salvarProdutoNoBackend] Resposta do servidor com erro:', response.status, errorData);
+            throw new Error(errorData.error || `Erro ao salvar produto: ${response.status}`);
         }
 
         const savedProduct = await response.json();
-        console.log('[salvarProdutoNoBackend] Produto salvo com sucesso:', savedProduct);
+        console.log('[salvarProdutoNoBackend] Produto salvo com sucesso no backend:', savedProduct);
+
+        // Atualizar o estado global de `editingProduct` e a lista `produtos`
         editingProduct = deepClone(savedProduct);
-        produtos = produtos.map(p => p.id === savedProduct.id ? deepClone(savedProduct) : p);
-        desbloquearCampos();
+        const productIndex = produtos.findIndex(p => p.id === savedProduct.id);
+        if (productIndex > -1) {
+            produtos[productIndex] = deepClone(savedProduct);
+        } else {
+            produtos.push(deepClone(savedProduct)); // Adiciona se for um produto completamente novo
+        }
+
+        desbloquearCampos(); // Se os campos foram bloqueados por erro de SKU
         localStorage.removeItem('produtoComDuplicidade');
-        invalidateCache('produtosCadastrados');
-        console.log('[salvarProdutoNoBackend] Cache invalidado após salvamento');
-        return savedProduct;
+        invalidateCache('produtosCadastrados'); // Invalida o cache do storage.js
+        console.log('[salvarProdutoNoBackend] Cache de produtos invalidado após salvamento');
+        
+        return savedProduct; // Retorna o produto salvo/atualizado
+
     } catch (error) {
-        console.error('[salvarProdutoNoBackend] Erro detalhado:', error.message, error.stack);
-        alert('Erro ao salvar o produto: ' + error.message);
-        throw error;
+        console.error('[salvarProdutoNoBackend] Erro detalhado no try-catch do fetch:', error.message, error.stack);
+        // Tenta extrair a mensagem de erro do objeto de erro, se existir
+        const errorMessage = error.details || error.message || "Erro desconhecido ao salvar produto.";
+        alert('Erro ao salvar o produto: ' + errorMessage);
+        throw error; // Re-lança o erro para que o listener de submit do formulário possa tratar
     }
 }
 

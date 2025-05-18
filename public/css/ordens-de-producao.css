@@ -1,1743 +1,1073 @@
-/* Reset básico */
+/* public/css/ordens-de-producao.css */
+
+:root {
+    --op-cor-fundo-pagina: #f4f6f8; /*类似 a --cor-fundo-pagina */
+    --op-cor-texto-principal: #333;
+    --op-cor-azul-escuro: #2c3e50;  /* Título principal, cabeçalhos de tabela */
+    --op-cor-azul-claro: #3498db;  /* Botões primários, links, destaques */
+    --op-cor-azul-hover: #2980b9;
+    --op-cor-verde-sucesso: #27ae60; /* Botões de salvar, status positivo */
+    --op-cor-verde-hover: #229954;
+    --op-cor-vermelho-perigo: #e74c3c; /* Botões de excluir/cancelar */
+    --op-cor-vermelho-hover: #c0392b;
+    --op-cor-cinza-texto: #555;      /* Texto secundário, labels */
+    --op-cor-cinza-borda: #dcdcdc;  /* Bordas de input, divisórias */
+    --op-cor-cinza-fundo-input: #f8f9fa; /* Fundo de inputs */
+    --op-cor-branco: #ffffff;
+    --op-cor-fundo-card: var(--op-cor-branco);
+
+    --op-sombra-card: 0 3px 8px rgba(0, 0, 0, 0.07);
+    --op-raio-borda-card: 10px;
+    --op-raio-borda-input: 6px;
+    --op-raio-borda-botao: 6px;
+
+    --op-cor-status-em-aberto: #ffc107;  /* Amarelo */
+    --op-cor-status-produzindo: #28a745; /* Verde */
+    --op-cor-status-finalizado: #007bff;  /* Azul */
+    --op-cor-status-cancelada: #dc3545; /* Vermelho */
+    --op-cor-status-todas-ativo: #0056b3; /* Um azul mais escuro para "Todas" quando ativo */
+    --op-cor-texto-botao-ativo: #ffffff; /* Texto branco para botões ativos */
+
+    --op-fonte-principal: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Reset básico se ainda não tiver um global muito abrangente */
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+html {
+    font-size: 16px; /* Base para REMs */
 }
 
 body {
-    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-    min-height: 100vh;
-    overflow-x: hidden;
+    font-family: var(--op-fonte-principal);
+    background-color: var(--op-cor-fundo-pagina);
+    color: var(--op-cor-texto-principal);
     line-height: 1.6;
-    visibility: hidden; /* Esconde o corpo por padrão */
+    visibility: hidden; /* Controlado por JS com a classe .autenticado */
+    margin-left: 250px; /* Ajuste conforme seu menu lateral */
+    transition: margin-left 0.3s ease;
 }
 
 body.autenticado {
-    visibility: visible; /* Mostra o corpo após autenticação */
+    visibility: visible;
 }
 
-.lista-op{
-    width: 100%; /* Garante que ocupem o espaço completo */
-    position: relative; /* Evita sobreposição por posicionamento absoluto */
-}
-
-.formulario-op,
-.editar-op,
-.corte-op,
-.acessocortes-op {
-    position: relative;
-    padding-top: 40px; /* Espaço para o botão "X" não sobrepor o conteúdo */
-}
-
-
-.lista-op#opListView:target,
-.formulario-op#opFormView:target,
-.editar-op#opEditView:target,
-.corte-op#corteView:target,
-.acessocortes-op#acessocortesView:target {
-    display: block; /* Mostra apenas a seção correspondente à hash ativa */
-}
-
-/* Container principal */
+/* Container principal da página de OPs */
 .container-op {
-    margin-left: 270px;
-    padding: 30px;
-    max-width: 1200px;
-    display: block; /* Garante que o container seja um bloco */
-    position: relative; /* Contexto para posicionamento relativo */
-    min-height: 100vh; /* Garante altura mínima para evitar colapsos */
+    padding: 10px;
+    /* max-width: 1300px; /* Opcional: limitar largura em telas grandes */
+    /* margin: 0 auto; /* Centraliza se max-width for usado e menu não estiver fixo */
 }
 
-/* Estilo dos Cards (genérico para filtros, registros, formulários, etc.) */
-.filters-card,
-.registros-card,
-.formulario-op,
-.editar-op,
-.corte-op,
-.acessocortes-op,
-.embalagem-section,
-.products-section {
-    background: #ffffff;
-    border-radius: 12px;
+/* Estilo de Card Genérico (para seções) */
+.op-card-estilizado { /* Nova classe genérica para aplicar o estilo de card */
+    background-color: var(--op-cor-fundo-card);
+    border-radius: var(--op-raio-borda-card);
     padding: 25px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s ease;
-    margin-top: 20px;
+    box-shadow: var(--op-sombra-card);
+    margin-bottom: 30px; /* Espaço entre cards */
 }
 
-.filters-card:hover,
-.registros-card:hover,
-.formulario-op:hover,
-.editar-op:hover,
-.corte-op:hover,
-.acessocortes-op:hover,
-.embalagem-section:hover,
-.products-section:hover {
-    transform: translateY(-5px);
-}
-
-.filters-card h1,
-.filters-card h2,
-.registros-card h1,
-.registros-card h2,
-.formulario-op h1,
-.formulario-op h2,
-.editar-op h1,
-.editar-op h2,
-.corte-op h2,
-.acessocortes-op h2,
-.embalagem-section h1,
-.embalagem-section h2,
-.products-section h1,
-.products-section h2 {
-    font-size: 1.8em;
-    color: #2c3e50;
-    margin-bottom: 20px;
-    border-bottom: 2px solid #3498db;
-    padding-bottom: 10px;
-}
-
-/* Segunda linha: filtros e busca */
-.filters-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
-.corte-op .botao-cortar,
-.acessocortes-op .botao-cortar,
-.acessocortes-op .botao-excluir {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 1em;
-    font-weight: 600;
-    transition: background 0.3s ease, transform 0.2s ease;
-}
-
-.grupo-form-op {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-bottom: 15px; /* Espaçamento consistente */
-}
-
-.grupo-form-op[style*="display: none"] {
-    display: none !important; /* Garante que campos ocultos fiquem fora do layout */
-}
-
-
-/* Ajuste para o conteúdo interno das seções */
-.corte-op .grupo-form-op,
-.acessocortes-op .conteudo-aba {
-    margin-bottom: 15px; /* Espaçamento uniforme entre grupos */
-}
-
-.corte-op .botoes-form-op,
-.acessocortes-op .botoes-tabela {
-    display: flex;
-    justify-content: flex-start;
-    gap: 1rem;
-    margin-top: 20px;
-}
-
-.corte-op .botao-cortar:hover:not(:disabled) {
-    background: #2980b9;
-    transform: translateY(-2px);
-}
-
-.acessocortes-op .botao-cortar {
-    background: #4CAF50;
-    color: white;
-}
-
-.acessocortes-op .botao-cortar:hover:not(:disabled) {
-    background: #45a049;
-    transform: translateY(-2px);
-}
-
-.acessocortes-op .botao-excluir {
-    background: #e74c3c;
-    color: white;
-}
-
-.acessocortes-op .botao-excluir:hover:not(:disabled) {
-    background: #c0392b;
-    transform: translateY(-2px);
-}
-
-/* Ajuste para as abas */
-.abas-cortes {
-    margin: 20px 0;
-    display: flex;
-    gap: 5px;
-}
-
-.aba-btn {
-    padding: 10px 20px;
-    background-color: #e0e0e0;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background-color 0.3s ease, transform 0.2s ease;
-}
-
-.aba-btn:hover {
-    transform: translateY(-2px);
-}
-
-.aba-btn.active {
-    background-color: #4CAF50;
-    color: white;
-}
-
-/* Estilo dos Formulários e Filtros */
-.filter-container,
-.form-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 20px;
-}
-
-.filter-group,
-.form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.filter-group label,
-.form-group label {
-    font-size: 1em;
-    font-weight: 600;
-    color: #34495e;
-}
-
-.filter-group input,
-.filter-group select,
-.filter-group textarea,
-.form-group input,
-.form-group select,
-.form-group textarea {
-    padding: 10px;
-    border: 1px solid #dfe6e9;
-    border-radius: 8px;
-    font-size: 1em;
-    background: #f9f9f9;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
-}
-
-.filter-group input:focus,
-.filter-group select:focus,
-.filter-group textarea:focus,
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-    border-color: #3498db;
-    box-shadow: 0 0 8px rgba(52, 152, 219, 0.2);
-    outline: none;
-}
-
-.filter-group textarea,
-.form-group textarea {
-    resize: vertical;
-}
-
-/* Estilo de Inputs Desabilitados */
-.filter-group input[readonly],
-.filter-group input:disabled,
-.filter-group select:disabled,
-.form-group input[readonly],
-.form-group input:disabled,
-.form-group select:disabled {
-    background-color: #ecf0f1;
-    color: #7f8c8d;
-    cursor: not-allowed;
-    opacity: 0.65;
-}
-
-/* Estilo dos Botões Genéricos */
-.btn,
-#limparFiltros,
-.botao-salvar-op,
-.botao-cancelar-op,
-.botao-finalizar-op,
-.btn-voltar,
-.btn-estoque {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 1em;
-    font-weight: 600;
-    transition: background 0.3s ease, transform 0.2s ease;
-}
-
-.botao-incluir-op,
-.botao-acessar-cortes,
-.botao-adicionar-corte {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 8px;
-    flex-direction: column; /* Empilha os elementos verticalmente */
-    cursor: pointer;
-    font-size: 1em;
-    font-weight: 600;
-    transition: background 0.3s ease, transform 0.2s ease;
-
-}
-
-.btn:hover:not(:disabled),
-#limparFiltros:hover:not(:disabled),
-.botao-incluir-op:hover:not(:disabled),
-.botao-salvar-op:hover:not(:disabled),
-.botao-cancelar-op:hover:not(:disabled),
-.botao-finalizar-op:hover:not(:disabled),
-.btn-voltar:hover:not(:disabled),
-.btn-estoque:hover:not(:disabled),
-.botao-acessar-cortes:hover:not(:disabled),
-.botao-adicionar-corte:hover:not(:disabled) {
-    transform: translateY(-2px);
-}
-
-.btn:disabled,
-#limparFiltros:disabled,
-.botao-incluir-op:disabled,
-.botao-acessar-cortes:disabled,
-.botao-adicionar-corte:disabled,
-.botao-salvar-op:disabled,
-.botao-cancelar-op:disabled,
-.botao-finalizar-op:disabled,
-.btn-voltar:disabled,
-.btn-estoque:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-/* Botão Primário (ex.: Salvar, Incluir) */
-.btn-primary,
-.botao-incluir-op,
-.botao-salvar-op,
-.botao-finalizar-op,
-.botao-acessar-cortes{
-    background: #3498db;
-    color: white;
-}
-
-.botao-adicionar-corte {
-    background: #073f64;
-    color: white;
-}
-
-.btn-primary:hover:not(:disabled),
-.botao-incluir-op:hover:not(:disabled),
-.botao-salvar-op:hover:not(:disabled),
-.botao-adicionar-corte:hover:not(:disabled),
-.botao-acessar-cortes:hover:not(:disabled),
-.botao-finalizar-op:hover:not(:disabled) {
-    background: #2980b9;
-}
-
-/* Botão Secundário (ex.: Voltar) */
-.btn-secondary{
-    background: #7f8c8d;
-    color: white;
-    margin-bottom: 10px;
-}
-
-.btn-secondary:hover:not(:disabled){
-    background: #6c7778;
-}
-
-/* Botão de Cancelar/Excluir */
-.btn-danger,
-#limparFiltros,
-.botao-cancelar-op {
-    background: #e74c3c;
-    color: white;
-}
-
-.btn-danger:hover:not(:disabled),
-#limparFiltros:hover:not(:disabled),
-.botao-cancelar-op:hover:not(:disabled) {
-    background: #c0392b;
-}
-
-
-.tabela-cortados {
-    width: 100%;
-    border-collapse: collapse; /* Mudança: Usar collapse para evitar espaçamentos extras */
-    background: #ffffff;
-    border-radius: 10px;
-    overflow-x: auto;
-    display: table; /* Mudança: Forçar o comportamento de tabela padrão */
-    margin-top: 20px;
-
-}
-
-.tabela-cortados thead {
-    background: #3498db;
-    color: white;
-}
-
-.tabela-cortados tbody {
-    display: table-row-group; /* Mudança: Garantir que o tbody se comporte como grupo de linhas */
-    width: 100%;
-}
-
-.tabela-cortados th,
-.tabela-cortados td {
-    padding: 10px;
-    font-size: 0.9em;
-    font-weight: 600;
-    text-align: left;
-    border-bottom: 1px solid #dfe6e9;
-    word-break: break-word; /* Quebra de linha para texto longo */
-}
-
-.tabela-cortados tr {
-    display: table-row; /* Mudança: Forçar o comportamento de linha de tabela */
-    width: 100%;
-}
-
-.tabela-cortados tbody tr:nth-child(even) {
-    background: #f8f9fa;
-}
-
-/* Definir larguras específicas para cada coluna */
-.tabela-cortados th:first-child,
-.tabela-cortados td:first-child {
-    width: 10%; /* Primeira coluna (checkbox) */
-}
-
-.tabela-cortados th:nth-child(2),
-.tabela-cortados td:nth-child(2) {
-    width: 35%; /* Segunda coluna (Produto) */
-    word-break: break-word;
-}
-
-.tabela-cortados th:nth-child(3),
-.tabela-cortados td:nth-child(3) {
-    width: 35%; /* Terceira coluna (Variação) */
-    word-break: break-word;
-}
-
-.tabela-cortados th:nth-child(4),
-.tabela-cortados td:nth-child(4) {
-    width: 20%; /* Quarta coluna (Qtd) */
-}
-
-/* tabela da lista de cortes / aba 'corte pendente' */
-.tabela-corte-pendente {
-    width: 100%;
-    border-collapse: collapse; /* Mudança: Usar collapse para evitar espaçamentos extras */
-    background: #ffffff;
-    border-radius: 10px;
-    overflow-x: auto;
-    display: table; /* Mudança: Forçar o comportamento de tabela padrão */
-    margin-top: 20px;
-}
-
-.tabela-corte-pendente thead {
-    background: #3498db;
-    color: white;
-}
-
-.tabela-corte-pendente tbody {
-    display: table-row-group; /* Mudança: Garantir que o tbody se comporte como grupo de linhas */
-    width: 100%;
-}
-
-.tabela-corte-pendente th,
-.tabela-corte-pendente td {
-    padding: 10px;
-    font-size: 0.9em;
-    font-weight: 600;
-    text-align: left;
-    border-bottom: 1px solid #dfe6e9;
-    word-break: break-word; /* Quebra de linha para texto longo */
-}
-
-.tabela-corte-pendente tr {
-    display: table-row; /* Mudança: Forçar o comportamento de linha de tabela */
-    width: 100%;
-}
-
-.tabela-corte-pendente tbody tr:nth-child(even) {
-    background: #f8f9fa;
-}
-
-/* Definir larguras específicas para cada coluna */
-.tabela-corte-pendente th:first-child,
-.tabela-corte-pendente td:first-child {
-    width: 10%; /* Ajuste para o status */
-}
-
-.tabela-corte-pendente th:nth-child(2),
-.tabela-corte-pendente td:nth-child(2) {
-    width: 12%; /* Ajuste para o número da OP */
-}
-
-.tabela-corte-pendente th:nth-child(3),
-.tabela-corte-pendente td:nth-child(3) {
-    width: 32%; /* Ajuste para o produto */
-    word-break: break-word; /* Quebra de linha para texto longo */
-}
-
-.tabela-corte-pendente th:nth-child(4),
-.tabela-corte-pendente td:nth-child(4) {
-    width: 26%; /* Ajuste para a variação */
-    word-break: break-word; /* Quebra de linha para texto longo */
-}
-
-.tabela-corte-pendente th:nth-child(5),
-.tabela-corte-pendente td:nth-child(5) {
-    width: 10%; /* Ajuste para a quantidade */
-}
-
-.tabela-corte-pendente tbody tr {
-    transition: background 0.3s ease;
-}
-
-.tabela-corte-pendente tbody tr:hover {
-    background: #ecf0f1;
-}
-
-/* Estilo da Tabela Genérica */
-.tabela-op {
-    width: 100%;
-    border-collapse: separate;
-    background: #ffffff;
-    border-radius: 10px;
-    overflow-x: auto;
-    display: block;
-    margin-top: 20px;
-}
-
-.tabela-op thead {
-    background: #3498db;
-    color: white;
-}
-
-.tabela-op tbody {
-    display: block;
-    width: 100%;
-}
-
-.tabela-op th,
-.tabela-op td {
-    padding: 10px;
-    font-size: 0.9em;
-    font-weight: 600;
-    text-align: left;
-    border-bottom: 1px solid #dfe6e9;
-    word-break: break-word; /* Quebra de linha para texto longo */
-}
-
-.tabela-op tr {
-    display: table;
-    width: 100%;
-    table-layout: fixed; /* Garante que as colunas respeitem as larguras definidas */
-}
-
-.tabela-op tbody tr:nth-child(even) {
-    background: #f8f9fa;
-}
-
-.tabela-op th#sortStatus,
-.tabela-op td:first-child {
-    width: 14%; 
-}
-.tabela-op th#sortNumero,
-.tabela-op td:nth-child(2) {
-    width: 12%;
-}
-
-.tabela-op th#sortProduto,
-.tabela-op td:nth-child(3) {
-    width: 32%; 
-    word-break: break-word; 
-}
-
-.tabela-op th#sortVariante,
-.tabela-op td:nth-child(4) {
-    width: 30%;
-    word-break: break-word;
-}
-
-.tabela-op th#sortQuantidade,
-.tabela-op td:nth-child(5) {
-    width: 12%; 
-}
-
-
-.tabela-op tbody tr{
-    transition: background 0.3s ease;
-}
-
-
-.tabela-op tbody tr:hover{
-    background: #ecf0f1;
-}
-
-.tabela-op td {
-    padding: 10px;
-    font-size: 0.85em;
-    color: #2c3e50;
-    border-bottom: 1px solid #dfe6e9;
-    word-break: break-word; /* Quebra de linha para texto longo */
-}
-
-/* Estilo da Mensagem de "Sem Registros" */
-.no-records-message {
-    text-align: center;
-    padding: 30px;
-    background: #f8f9fa;
-    border-radius: 10px;
-    border: 1px dashed #dfe6e9;
-    color: #7f8c8d;
-    font-size: 1.2em;
-    display: none; /* Inicialmente escondido */
-}
-
-.no-records-message p {
-    margin: 0;
-}
-
-.no-records-message span {
-    font-weight: 600;
-    color: #3498db;
-}
-
-/* Estilo do Cabeçalho */
-.cabecalho-op {
-    display: block;
-    margin-bottom: 20px;
-}
-
-.cabecalho-editar-op {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 20px;
-    margin-top: 20px;
-    margin-bottom: 20px;
-}
-
-.cabecalho-op h1 {
+/* Cabeçalhos de Página e Seção */
+.op-cabecalho-pagina h1 { /* Para o <h1> principal da página */
     font-size: 2rem;
-    color: #2c3e50;
+    color: var(--op-cor-azul-escuro);
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid var(--op-cor-azul-claro);
+    font-weight: 600;
 }
 
-
-.busca-op {
-    padding: 10px;
-    border: 1px solid #dfe6e9;
-    border-radius: 8px;
-    font-size: 1em;
-    background: #f9f9f9;
-    width: 250px;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+.op-titulo-secao { /* Para <h2> ou <h3> dentro dos cards */
+    font-size: 1.5rem;
+    color: var(--op-cor-azul-escuro);
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eaeaea;
+    font-weight: 500;
 }
 
-.busca-op:focus {
-    border-color: #3498db;
-    box-shadow: 0 0 8px rgba(52, 152, 219, 0.2);
-    outline: none;
-}
-
-/* Filtros de Status */
-#statusFilter {
+/* Estilos para Botões Genéricos de Ação da Página de OP */
+.op-botoes-grupo {
     display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
+    flex-wrap: wrap; /* Para quebrar em telas menores */
+    gap: 10px; /* Espaço entre botões */
+    margin-bottom: 20px; /* Espaço abaixo do grupo de botões */
 }
 
-.status-btn {
-    padding: 8px 12px;
+.op-botao {
+    padding: 10px 18px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    border-radius: var(--op-raio-borda-botao);
     border: none;
-    border-radius: 8px;
     cursor: pointer;
-    font-size: 14px;
-    border: 1px solid #dfe6e9;
-    background-color: #f9f9f9;
-    display: flex;
+    transition: background-color 0.2s ease, transform 0.15s ease, box-shadow 0.15s ease;
+    display: inline-flex;
     align-items: center;
-    transition: background-color 0.3s ease, transform 0.2s ease;
+    gap: 8px; /* Espaço entre ícone e texto */
+    text-decoration: none; /* Para botões que são links */
+    color: var(--op-cor-branco); /* Cor do texto padrão para botões coloridos */
 }
-
-.status-btn:hover {
+.op-botao i {
+    font-size: 1em; /* Ícone do mesmo tamanho do texto */
+}
+.op-botao:hover:not(:disabled) {
     transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+.op-botao:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
-.status-btn.active {
-    background-color: #2196f3;
-    color: white;
+.op-botao-principal { /* Ex: Incluir OP */
+    background-color: var(--op-cor-azul-claro);
+}
+.op-botao-principal:hover:not(:disabled) {
+    background-color: var(--op-cor-azul-hover);
 }
 
-.status-bolinha {
-    display: inline-block;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    margin-left: 8px;
+.op-botao-info { /* Ex: Gerenciar, Embalar, Estoque */
+    background-color: #5bc0de; /* Um azul ciano */
+    color: var(--op-cor-branco);
+}
+.op-botao-info:hover:not(:disabled) {
+    background-color: #31b0d5;
 }
 
-/* Cores das etapas (mantidas como estavam) */
-.status-em-aberto {
-    background-color: #ffeb3b; /* Amarelo */
+.op-botao-sucesso { /* Ex: Corte p/ Estoque, Ações de Cortes */
+    background-color: var(--op-cor-verde-sucesso);
+}
+.op-botao-sucesso:hover:not(:disabled) {
+    background-color: var(--op-cor-verde-hover);
 }
 
-.status-produzindo {
-    background-color: #4caf50; /* Verde */
+.op-botao-perigo, .btn-cancelar-op-lista { /* Ex: Excluir, Cancelar OP na lista */
+    background-color: var(--op-cor-vermelho-perigo);
+}
+.op-botao-perigo:hover:not(:disabled), .btn-cancelar-op-lista:hover:not(:disabled) {
+    background-color: var(--op-cor-vermelho-hover);
 }
 
-.status-finalizado {
-    background-color: #2196f3; /* Azul */
-}
-
-.status-cancelada {
-    background-color: #f44336; /* Vermelho */
-}
-
-/* Animação de piscar (mantida como estava) */
-.status-produzindo.blink,
-.status-btn[data-status="produzindo"] .status-produzindo,
-.tabela-op td:first-child .status-produzindo {
-    animation: blink 1.5s infinite;
-}
-
-.tabela-op {
-    margin-top: 20px;
-}
-
-@keyframes blink {
-    0% { opacity: 1; }
-    50% { opacity: 0.5; }
-    100% { opacity: 1; }
-}
-
-/* Terceira linha: ações */
-.botoes-area-acao-rapida,
-.botoes-gestao-cortes {
+/* Container geral para os botões de ação no topo */
+.op-acoes-container {
     display: flex;
+    flex-direction: column; /* Empilha os grupos de ação por padrão */
+    gap: 25px; /* Espaço entre o botão principal e os grupos */
+    margin-bottom: 30px; /* Espaço antes da área de filtros/tabela */
+}
+
+/* Botão de Ação Principal (Incluir OP) */
+.op-acao-principal {
+    display: flex; /* Para centralizar ou alinhar o botão se necessário */
+    justify-content: center; /* Centraliza o botão de incluir OP */
+}
+.op-botao-destaque-incluir {
+    /* Herda de .op-botao, mas com mais destaque */
+    padding: 12px 25px; /* Maior */
+    font-size: 1.1rem; /* Fonte maior */
+    background-color: #0c4b89 ; /* Verde para destaque, ou seu azul principal */
+    color: var(--op-cor-branco);
+    border: none; /* Remover borda se .op-botao tiver */
+    /* box-shadow: 0 4px 12px rgba(45, 206, 137, 0.4); Sombra colorida sutil */
+    font-weight: 600;
+}
+.op-botao-destaque-incluir:hover:not(:disabled) {
+    background-color: var(--op-cor-verde-hover); /* Cor de hover mais escura */
+    transform: translateY(-2px) scale(1.02); /* Efeito de levantar um pouco maior */
+}
+.op-botao-destaque-incluir i {
+    font-size: 1.2em; /* Ícone um pouco maior */
+}
+
+
+/* Grupos de Ações Secundárias e de Cortes */
+.op-grupo-acoes {
+    /* background-color: #fdfdfd; /* Opcional: fundo sutil para o grupo */
+    /* padding: 15px; */
+    /* border-radius: var(--op-raio-borda-input); */
+    /* border: 1px solid #f0f0f0; */
+}
+
+.op-grupo-titulo-sutil {
+    font-size: 0.95rem;
+    color: var(--op-cor-cinza-texto);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+    /* border-bottom: 1px dashed #e0e0e0; */
+    /* padding-bottom: 5px; */
+}
+
+.op-botoes-wrapper {
+    display: flex;
+    flex-wrap: wrap; /* Permite que os botões quebrem linha */
+    gap: 10px;       /* Espaço entre os botões no wrapper */
+}
+
+/* Estilo para botões secundários de ação */
+.op-botao-secundario-acao {
+    /* Herda de .op-botao */
+    background-color: #2b4f73; /* Azul mais claro para ações secundárias */
+    /* Ou outra cor, ex: #6c757d (cinza Bootstrap secondary) */
+    font-size: 0.85rem;
+    padding: 8px 15px;
+}
+.op-botao-secundario-acao:hover:not(:disabled) {
+    background-color: var(--op-cor-azul-hover);
+}
+.op-botao-secundario-acao i {
+    font-size: 0.9em;
+}
+
+
+/* Estilo para botões de corte */
+.op-botao-corte {
+    /* Herda de .op-botao */
+    background-color: #73a1bf; /* Um verde um pouco diferente para cortes */
+    /* Ou outra cor temática, ex: um laranja ou marrom claro */
+    font-size: 0.85rem;
+    padding: 8px 15px;
+}
+.op-botao-corte:hover:not(:disabled) {
+    background-color: #4cae4c;
+}
+.op-botao-corte i {
+    font-size: 0.9em;
+}
+
+/* Estilos para a Coluna de Ações e Botões de Ação na Tabela */
+.op-tabela-estilizada td.op-coluna-acoes {
+    text-align: center; /* Centraliza o ícone/botão na célula */
+    padding: 6px 8px;   /* Padding menor para botões de ícone */
+    min-width: 60px; /* Largura mínima para a coluna de ações */
+}
+
+.op-botao-acao-tabela {
+    background-color: transparent;
+    border: none;
+    padding: 6px 8px; /* Padding ao redor do ícone */
+    cursor: pointer;
+    border-radius: var(--op-raio-borda-botao); /* Raio suave */
+    font-size: 1rem; /* Tamanho base do ícone */
+    line-height: 1; /* Para alinhar bem o ícone */
+    transition: background-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+.op-botao-acao-tabela:hover {
+    background-color: #f0f0f0; /* Fundo sutil no hover */
+    transform: scale(1.1);
+}
+
+.op-botao-cancelar-lista { /* Estilo específico para o botão de cancelar na lista */
+    color: var(--op-cor-vermelho-perigo); /* Cor do ícone vermelho */
+}
+.op-botao-cancelar-lista:hover {
+    color: var(--op-cor-vermelho-hover); /* Cor mais escura no hover */
+    background-color: rgba(220, 53, 69, 0.1); /* Fundo vermelho bem claro no hover */
+}
+
+.op-botao-cancelar-lista .spinner-btn-interno {
+    /* Se você usa spinner dentro deste botão, ajuste o tamanho/cor */
+    width: 0.9em; 
+    height: 0.9em; 
+    border-width: 2px;
+    border-top-color: var(--op-cor-vermelho-perigo); /* Spinner vermelho */
+}
+
+.op-acao-placeholder { /* Para o '-' quando não há ações */
+    color: #aaa;
+    font-style: italic;
+}
+
+
+/* Estilos para Filtros e Busca */
+.op-filtros-container {
+    display: flex;
+    justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
     gap: 15px;
     margin-bottom: 20px;
+    padding: 15px;
+    background-color: #fdfdfd; /* Fundo sutil para a área de filtros */
+    border-radius: var(--op-raio-borda-input);
+    border: 1px solid #e8e8e8;
+}
+
+.op-status-filter-group {
+    display: flex;
     flex-wrap: wrap;
+    gap: 8px;
 }
 
-
-/* Estilo para os cabeçalhos com setas */
-.tabela-op th {
-    position: relative;
+.op-botao-filtro {
+    padding: 8px 15px;
+    font-size: 0.85rem;
+    border: 1px solid var(--op-cor-botao-filtro-padrao-borda);
+    background-color: var(--op-cor-botao-filtro-padrao-fundo);
+    color: var(--op-cor-botao-filtro-padrao-texto);
+    border-radius: var(--op-raio-borda-botao);
     cursor: pointer;
-    padding: 10px 25px 10px 10px; /* Ajuste para texto à esquerda e seta à direita */
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    display: inline-flex; /* Para alinhar bolinha e texto */
+    align-items: center;
+    gap: 6px; /* Espaço entre texto e bolinha */
+}
+.op-botao-filtro:hover:not(.active) { /* Hover para botões não ativos */
+    border-color: #adb5bd;
+    background-color: #e9ecef;
 }
 
-.tabela-op th::after {
-    content: '';
-    position: absolute;
-    right: 10px; /* Setas mais próximas e consistentes */
-    top: 50%;
-    transform: translateY(-50%);
-    width: 0;
-    height: 0;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-top: 5px solid #001e31;
-    opacity: 0.5;
-    transition: transform 0.3s ease, opacity 0.3s ease;
+/* A classe .active apenas adiciona negrito e sombra, as cores vêm do JS */
+.op-botao-filtro.active {
+    font-weight: bold;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    /* As cores de fundo, texto e borda serão definidas pelo JavaScript via style */
 }
 
-.tabela-op th[data-sort]:not([data-sort=""])::after {
-    opacity: 1;
+/* Estilo para as bolinhas de status DENTRO dos botões de filtro */
+.op-botao-filtro .status-bolinha {
+    /* O estilo da bolinha (cor de fundo) já vem de .status-em-aberto, etc. */
+    /* Apenas ajustes de tamanho/margem se necessário aqui */
+    width: 8px;
+    height: 8px;
+    /* margin-left: 6px; /* Removido, pois o gap do flex no botão cuida disso */
 }
 
-.tabela-op th[data-sort="asc"]::after {
-    border-top: none;
-    border-bottom: 5px solid #fff;
-    transform: translateY(-45%);
+.op-input-busca {
+    padding: 9px 12px; /* Altura similar aos botões de filtro */
+    border: 1px solid var(--op-cor-cinza-borda);
+    border-radius: var(--op-raio-borda-input);
+    font-size: 0.9rem;
+    min-width: 250px; /* Largura mínima */
+    flex-grow: 0; /* Ocupa espaço disponível */
+    max-width: 400px; /* Limita a largura */
+}
+.op-input-busca:focus {
+    outline: none;
+    border-color: var(--op-cor-azul-claro);
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
 }
 
-.tabela-op th[data-sort="desc"]::after {
-    border-top: 5px solid #fff;
-    transform: translateY(-55%);
+/* Estilos para a Tabela de OPs */
+.op-tabela-wrapper {
+    overflow-x: auto; /* Permite scroll horizontal em telas pequenas */
+    width: 100%;
 }
-
-/* Estilo do Container de Edição de OP */
-.edit-op-container {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+.op-tabela-estilizada {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0; /* Removido margin-top, pois .op-filtros-container já tem margin-bottom */
 }
-
-/* Estilo para quebrar linha nos inputs de Quantidade e Data Prevista */
-.form-group .input-wrapper {
-    display: block;
-    margin-top: 5px;
+.op-tabela-estilizada th,
+.op-tabela-estilizada td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid #ecf0f1; /* Linha divisória mais suave */
+    font-size: 0.9rem;
+    vertical-align: middle;
 }
-
-/* Estilo das Etapas na View de Edição */
-.input-etapas-processos {
-    font-size: 1em;
+.op-tabela-estilizada th {
+    background-color: var(--op-cor-cinza-fundo-input); /* Fundo do cabeçalho sutil */
+    color: var(--op-cor-azul-escuro);
     font-weight: 600;
-    color: #34495e;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 0.03em;
+    /* Lógica de setas de ordenação (você já tem isso, apenas confirme as classes) */
+}
+.op-tabela-estilizada tbody tr:nth-child(even) {
+    background-color: #fdfdfd; /* Zebra sutil */
+}
+.op-tabela-estilizada tbody tr:hover {
+    background-color: #f0f8ff; /* Azul bem claro no hover */
 }
 
-.etapas-container {
-    margin-top: 0.5rem;
+.op-tabela-estilizada td:last-child { /* Célula de ações */
+    text-align: center; /* Centraliza conteúdo da célula de ações */
+    min-width: 120px; /* Dá espaço para o botão cancelar */
+}
+.op-tabela-estilizada .btn-cancelar-op-lista { /* Já estilizado acima como .op-botao-perigo */
+    font-size: 0.8rem; /* Menor para caber bem na tabela */
+    padding: 4px 8px;
+}
+.op-tabela-estilizada .btn-cancelar-op-lista i {
+    margin-right: 3px;
+}
+
+/* Estilo para o botão quando a OP já está finalizada ou cancelada */
+.op-botao.op-finalizada-btn-estilo {
+    background-color: #6c757d; /* Cinza escuro (Bootstrap secondary) */
+    color: white;
+    border-color: #5a6268;
+    cursor: not-allowed;
+    opacity: 0.8; /* Um pouco menos opaco que um botão totalmente desabilitado */
+}
+.op-botao.op-finalizada-btn-estilo:hover {
+    background-color: #5a6268; /* Mantém a cor no hover */
+}
+
+/* Opcional: Estilo para botão pronto para finalizar (se diferente do sucesso padrão) */
+.op-botao.op-botao-pronta {
+    background-color: var(--op-cor-verde-sucesso); /* Ou uma cor específica */
+}
+.op-botao.op-botao-pronta:hover:not(:disabled) {
+    background-color: var(--op-cor-verde-hover);
+}
+
+
+/* Estilos para Paginação */
+.pagination-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px; /* Espaço entre os botões e o texto */
+    margin-top: 25px; /* Espaço acima da paginação */
+    padding: 10px 0;
+}
+.op-paginacao-container{
+    display: flex;
+    justify-content: center;
+    margin:20px;
+}
+
+.pagination-btn {
+    padding: 8px 16px; /* Tamanho bom para clique */
+    font-size: 0.9rem;
+    font-weight: 500;
+    border-radius: var(--op-raio-borda-botao);
+    border: 1px solid var(--op-cor-cinza-borda); /* Borda sutil */
+    background-color: var(--op-cor-branco);
+    color: var(--op-cor-azul-claro); /* Texto do botão azul */
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pagination-btn:hover:not(:disabled) {
+    background-color: var(--op-cor-azul-claro);
+    color: var(--op-cor-branco);
+    border-color: var(--op-cor-azul-claro);
+    box-shadow: 0 2px 5px rgba(52, 152, 219, 0.2);
+}
+
+.pagination-btn:disabled {
+    background-color: #e9ecef; /* Cinza claro para desabilitado */
+    color: #adb5bd;         /* Texto cinza para desabilitado */
+    border-color: #dee2e6;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.pagination-current { /* Texto "Pág. X de Y" */
+    font-size: 0.9rem;
+    color: var(--op-cor-texto-principal);
+    padding: 8px 12px;
+    font-weight: 500;
+}
+
+/* Status Bolinha (você já tem, apenas garanta que está no CSS) */
+.status-bolinha { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
+.status-em-aberto { background-color: #ffc107; } /* Amarelo */
+.status-produzindo { background-color: #28a745; } /* Verde */
+.status-finalizado { background-color: #007bff; } /* Azul */
+.status-cancelada { background-color: #dc3545; } /* Vermelho */
+.status-produzindo.blink { animation: blink 1.5s infinite; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+/* Link corte pendente na tabela */
+.link-corte-pendente { color: var(--op-cor-azul-claro); text-decoration: none; font-size:0.9em; }
+.link-corte-pendente:hover { text-decoration: underline; }
+
+/* Estilos para Formulários (Inclusão e Edição de OP, Corte p/ Estoque) */
+.op-form-estilizado .op-form-linha {
+    display: flex;
+    gap: 20px; /* Espaço entre grupos na mesma linha */
+    align-items: flex-start; /* Alinha os labels no topo se os inputs tiverem alturas diferentes */
+}
+
+#opEditView .op-form-linha:first-of-type .op-form-grupo { /* Target na primeira .op-form-linha */
+    flex-grow: 1; /* Permite crescer */
+    flex-basis: 45%; /* Tenta dar uma base, ajuste com o gap */
+    max-width: 350px; /* Limita a largura máxima de cada um */
+}
+
+/* Linha para Quantidade e Data na tela de edição */
+#opEditView .op-form-linha:nth-of-type(2) .op-form-grupo { /* Target na segunda .op-form-linha */
+    flex-grow: 0; /* Não deixa crescer desnecessariamente */
+    flex-basis: auto; /* Largura baseada no conteúdo e no max-width do input */
+}
+
+#opEditView #editQuantidadeOP { /* Input de quantidade */
+    max-width: 120px; /* Largura menor */
+}
+
+#opEditView #editDataEntregaOP { /* Input de data */
+    max-width: 180px; /* Largura suficiente para o seletor */
+}
+
+.op-form-estilizado .op-form-grupo {
+    flex: 1 1 auto; /* Permite que os grupos cresçam mas também encolham */
+    min-width: 150px; /* Largura mínima para cada grupo */
+}
+
+/* Para controlar especificamente os inputs problemáticos */
+#grupoEditProdutoOP, #editVarianteContainer {
+    flex-basis: 30%; /* Tenta dividir o espaço, ajuste conforme o gap */
+    /* Ou max-width: 300px; se preferir um tamanho fixo máximo */
+}
+
+#grupoEditQuantidadeOP .op-input, /* Input de quantidade */
+#grupoEditDataEntregaOP .op-input { /* Input de data */
+    max-width: 120px; /* Define uma largura máxima para eles não esticarem demais */
+    width: auto; /* Permite que sejam menores se o conteúdo permitir (para data) */
+}
+#grupoEditQuantidadeOP {
+    flex-grow: 0; /* Impede que o grupo da quantidade cresça demais */
+    flex-basis: 50px; /* Largura base */
+}
+#grupoEditDataEntregaOP {
+     flex-grow: 0;
+     flex-basis: 220px; /* Um pouco mais para o seletor de data */
+}
+
+.op-form-grupo {
     display: flex;
     flex-direction: column;
+    gap: 8px; /* Espaço entre label e input */
+    flex-grow: 0; /* Permite que os grupos cresçam para preencher o espaço da linha */
+}
+.op-form-grupo label { /* Estilo dos labels */
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--op-cor-cinza-texto);
+}
+
+/* Estilo genérico para inputs, selects, textareas dentro dos formulários */
+.op-input, 
+.op-select,
+#opFormView .variantes-selects select, /* Target específico para o select de variantes gerado por JS */
+#corteView .variantes-selects-corte select { /* Target para variantes na tela de corte */
+    width: 100%; /* Ocupa toda a largura do seu op-form-grupo */
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    border: 1px solid var(--op-cor-cinza-borda);
+    border-radius: var(--op-raio-borda-input);
+    background-color: var(--op-cor-fundo-input);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+/* Para selects gerados por JS que podem não ter a classe op-select inicialmente */
+#opFormView .variantes-selects > select,
+#corteView .variantes-selects-corte > select {
+    /* Aplica os mesmos estilos se não tiver a classe .op-select */
+    width: 100%; padding: 10px 12px; font-size: 0.9rem;
+    border: 1px solid var(--op-cor-cinza-borda); border-radius: var(--op-raio-borda-input);
+    background-color: var(--op-cor-fundo-input);
+}
+
+
+.op-input:focus, 
+.op-select:focus,
+#opFormView .variantes-selects select:focus,
+#corteView .variantes-selects-corte select:focus {
+    outline: none;
+    border-color: var(--op-cor-azul-claro);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+}
+.op-input[readonly], .op-input:disabled {
+    background-color: #e9ecef; /* Cinza mais claro para desabilitado */
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.op-form-botoes {
+    display: flex;
     gap: 10px;
+    margin-top: 15px;
+    justify-content: flex-start; /* Alinha botões à esquerda por padrão */
+}
+/* Botão secundário (Cancelar Inclusão) */
+.op-botao-secundario {
+    background-color: var(--op-cor-cinza-texto);
+    color: var(--op-cor-branco);
+}
+.op-botao-secundario:hover:not(:disabled) {
+    background-color: #495057; /* Cinza mais escuro */
+}
+
+/* Estilos para Tela de Edição de OP */
+.op-edit-cabecalho {
+    margin-bottom: 25px;
+}
+.op-edit-cabecalho #opNumero.op-titulo-secao { /* Estilo para o h2 que mostra o número da OP */
+    border-bottom: none; /* Pode não precisar de borda aqui */
+    margin-bottom: 0;
+    font-size: 1.8rem; /* Um pouco maior para destaque */
+}
+
+.op-subtitulo-secao { /* Para "Etapas de Produção" */
+    font-size: 1.2rem;
+    color: var(--op-cor-cinza-texto);
+    margin-top: 20px;
+    margin-bottom: 10px;
+    font-weight: 500;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 5px;
+}
+
+/* --- ESTILOS ESPECÍFICOS PARA INPUTS NO FORMULÁRIO DE INCLUSÃO DE OP --- */
+
+/* Para o select de produto principal */
+#opFormView .op-input-produto-principal {
+    /* Se o .op-form-grupo pai tiver um flex-basis ou max-width, 
+       o width: 100% fará ele preencher esse grupo. 
+       Você pode adicionar max-width aqui também se o grupo for muito largo. */
+    max-width: 400px; /* Exemplo: Limita a largura máxima do select de produto */
+}
+
+/* Para o select de variante */
+#opFormView .op-input-variante {
+    max-width: 350px; /* Exemplo */
+}
+
+/* Para o input de Quantidade da OP */
+#opFormView .op-input-quantidade-op {
+    width: 100px !important;  /* Força uma largura pequena. Use !important com cautela. */
+    max-width: 100px; /* Garante que não ultrapasse */
+    flex-grow: 0; /* Impede de crescer se o .op-form-grupo pai for flex item */
+}
+
+/* Para o input de Número da OP (que é readonly) */
+#opFormView .op-input-numero-op {
+    width: 120px !important; 
+    max-width: 120px;
+    flex-grow: 0;
+    background-color: var(--op-cor-cinza-fundo-input); /* Já deve ter, mas para garantir */
+}
+
+/* Para o input de Data da OP */
+#opFormView .op-input-data-op {
+    width: 180px !important; /* Suficiente para o date picker */
+    max-width: 180px;
+    flex-grow: 0;
+}
+
+/* Para o textarea de Observações (já deve estar bom com width: 100% do .op-input) */
+#opFormView .op-textarea-observacoes {
+    max-width: none;
+}
+
+#opFormView .op-form-linha .op-form-grupo {
+    flex: 1 1 auto;
+    
+}
+#opFormView .op-form-linha .op-form-grupo:has(.op-input-quantidade-op),
+#opFormView .op-form-linha .op-form-grupo:has(.op-input-numero-op) {
+    flex-grow: 0; /* Não deixa o grupo do input de quantidade/numeroOP crescer */
+    flex-basis: auto; /* Deixa a largura ser definida pelo conteúdo (input + label) */
+}
+
+
+/* Para o select de variante no formulário de INCLUSÃO DE OP */
+#opFormView .op-input-variante-opform {
+    /* Se o .op-form-grupo pai (#variantesContainer > .variantes-selects)
+       já tiver um flex-basis ou max-width definido, o width: 100% do .op-select
+       fará ele preencher esse grupo.
+       Se você quiser que o select em si seja menor que o grupo: */
+    max-width: 300px; /* Exemplo: Limita a largura máxima do select de variante */
+    /* width: auto; */ /* Se quiser que ele se ajuste ao conteúdo, mas pode ficar pequeno */
+}
+
+/* Para o select de variante no formulário de CORTE PARA ESTOQUE */
+#corteView .op-input-variante-corteform {
+    max-width: 300px; /* Exemplo: Mesma largura ou diferente, conforme sua necessidade */
+}
+
+/* Isso afeta o container do label + select */
+#opFormView #variantesContainer.op-form-grupo,
+#corteView #variantesCorteContainer.op-form-grupo {
+     /* Se estiverem em uma .op-form-linha com outro campo e você quiser
+        controlar a proporção entre eles: */
+     /* flex-basis: 45%; */
+     max-width: 380px; 
+}
+
+/* --- ESTILOS ESPECÍFICOS PARA INPUTS NA TELA DE REGISTRAR CORTE (#corteView) --- */
+
+/* Para o select de produto na tela de corte */
+#corteView .op-select-produto-corte {
+    max-width: 400px; /* Ajuste conforme necessário */
+}
+
+/* Para o select de variante na tela de corte (já deve ter sido estilizado por .op-input-variante-corteform) */
+#corteView .op-input-variante-corteform {
+    max-width: 350px; /* Ajuste conforme necessário */
+}
+
+/* Para o input de Data do Corte */
+#corteView .op-input-data-corte {
+    width: 180px !important; /* Suficiente para o date picker */
+    max-width: 180px;
+    flex-grow: 0; /* Para não esticar se estiver em .op-form-linha */
+}
+
+/* Para o input de Cortador */
+#corteView .op-input-cortador-corte {
+    max-width: 300px; /* Ajuste conforme necessário */
+    background-color: #e9ecef; /* Fundo para readonly */
+    cursor: not-allowed;
+}
+
+/* Para o input de Quantidade Cortada */
+#corteView .op-input-quantidade-corte {
+    width: 120px !important; 
+    max-width: 120px;
+    flex-grow: 0;
+}
+
+/* Opcional: Ajustes nos .op-form-grupo pais, se necessário para o layout em linha */
+#corteView .op-form-linha .op-form-grupo:has(.op-input-data-corte),
+#corteView .op-form-linha .op-form-grupo:has(.op-input-cortador-corte) {
+    /* Se Data e Cortador estão na mesma linha e você quer que um seja maior que o outro */
+    /* Exemplo:
+    &:has(.op-input-data-corte) { flex-basis: 40%; }
+    &:has(.op-input-cortador-corte) { flex-basis: 58%; } // Para preencher o resto com o gap
+    */
+    /* Ou simplesmente deixe o flex-grow:1 padrão do .op-form-grupo cuidar disso, 
+       e os max-width nos inputs limitarão seu tamanho interno. */
+}
+
+
+/* ==========================================================================
+   Estilos para a Seção de Etapas na Tela de Edição de OP (#opEditView)
+   ========================================================================== */
+
+.op-subtitulo-secao { /* Para o título "Etapas de Produção" */
+    font-size: 1.2rem;
+    color: var(--op-cor-azul-escuro); /* Usando uma cor mais escura para o subtítulo */
+    margin-top: 25px;
+    margin-bottom: 15px;
+    font-weight: 600; /* Um pouco mais de peso */
+    border-bottom: 1px solid #dfe6e9; /* Linha divisória sutil */
+    padding-bottom: 8px;
+}
+
+.op-etapas-container-wrapper {
+    border: 1px solid #e0e0e0; /* Borda suave para o container das etapas */
+    border-radius: var(--op-raio-borda-input); /* Raio consistente */
+    background-color: var(--op-cor-branco); /* Fundo branco para as etapas */
+    /* padding: 10px; /* Opcional: um padding geral se as rows não tiverem borda superior/inferior */
 }
 
 .etapa-row {
     display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1rem;
-    padding: 0.5rem;
-    background-color: #f9f9f9;
-    border-radius: 8px;
-    transition: background-color 0.3s ease;
-}
-
-.etapa-row:hover {
-    background-color: #f1f1f1;
-}
-
-/* Círculo do número da etapa */
-.etapa-numero {
-    display: inline-flex;
-    justify-content: center;
-    align-items: center;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    font-size: 1rem;
-    font-weight: bold;
-    color: #fff;
-    margin-right: 1rem;
-    flex-shrink: 0;
-}
-
-/* Cores das etapas (mantidas como estavam) */
-.etapa-cinza {
-    background-color: #95a5a6; /* Cinza para não trabalhado */
-}
-
-.etapa-azul {
-    background-color: #3498db; /* Azul para trabalhado */
-}
-
-.etapa-verde {
-    background-color: #2ecc71; /* Verde para etapa atual */
-    animation: blink 1s infinite; /* Piscar */
-}
-
-.etapa-top-row {
-    display: flex;
-    align-items: center;
+    align-items: center; /* Alinhamento vertical padrão */
     gap: 10px;
-    margin-bottom: 5px;
-    flex-wrap: wrap;
+    padding: 10px 12px; /* Padding interno da linha */
+    border-bottom: 1px solid #f0f0f0; /* Divisória entre etapas */
+    flex-wrap: nowrap; /* Tenta manter em uma linha, scroll horizontal se necessário em telas muito pequenas */
+                     /* Se preferir quebrar, use 'wrap' e ajuste os flex-basis/min-width */
+    transition: background-color 0.2s ease-in-out, border-left-color 0.2s ease-in-out;
 }
 
-/* Estilo para selects e inputs nas etapas */
-.input-processo,
+.etapa-row:last-child {
+    border-bottom: none;
+}
+
+/* Destaques de estado da linha da etapa (aplicados via JS) */
+.etapa-row.etapa-row-atual {
+    background-color: #e6f7ff; /* Azul muito claro (tipo Bootstrap info-bg) */
+    border-left: 5px solid var(--op-cor-azul-claro); /* Borda de destaque azul */
+    padding-left: 7px; /* Ajusta padding para compensar a borda */
+}
+
+.etapa-row.etapa-row-concluida {
+    background-color: #f8f9fa; /* Fundo cinza bem claro */
+    opacity: 0.85; /* Levemente esmaecida */
+}
+.etapa-row.etapa-row-concluida .etapa-numero.etapa-azul {
+    /* Garante que o número azul de concluído se destaque */
+}
+
+.etapa-row.etapa-row-pendente {
+    /* Pode não precisar de estilo específico se o padrão for para pendente */
+}
+.etapa-row.etapa-row-pendente .select-usuario,
+.etapa-row.etapa-row-pendente .quantidade-input,
+.etapa-row.etapa-row-pendente .botao-lancar {
+    opacity: 0.6;
+    /* pointer-events: none; /* O JS já deve desabilitar os inputs/botões */
+}
+
+
+/* Elementos dentro da linha da etapa */
+.etapa-numero {
+    /* Seus estilos de círculo colorido (etapa-azul, etapa-verde, etapa-cinza) */
+    flex-shrink: 0; /* Não encolhe */
+    margin-right: 8px; /* Espaço à direita do número */
+    width: 28px; /* Aumentar um pouco o tamanho se o número do texto for grande */
+    height: 28px;
+    font-size: 0.9rem;
+    line-height: 28px; /* Centraliza o texto verticalmente */
+}
+
+.etapa-processo { /* Input readonly com nome do processo */
+    padding: 8px 10px;
+    font-size: 0.9rem;
+    border: 1px solid transparent; /* Sem borda para parecer texto normal */
+    border-radius: var(--op-raio-borda-input);
+    background-color: transparent; /* Sem fundo para parecer texto normal */
+    color: var(--op-cor-texto-principal);
+    font-weight: 500; /* Leve destaque */
+    flex-grow: 2;      /* Permite crescer mais */
+    flex-basis: 150px; /* Base */
+    min-width: 120px;  /* Mínimo */
+    margin-right: 5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.etapa-processo[readonly] { /* Para garantir que não pareça um input editável */
+    cursor: default;
+    user-select: none; /* Impede seleção de texto se não desejado */
+}
+
+
 .select-usuario {
-    padding: 10px;
-    border: 1px solid #dfe6e9;
-    border-radius: 8px;
-    font-size: 1em;
-    background: #f9f9f9;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    padding: 8px 10px;
+    font-size: 0.9rem;
+    border: 1px solid var(--op-cor-cinza-borda);
+    border-radius: var(--op-raio-borda-input);
+    background-color: var(--op-cor-branco); /* Fundo branco para se destacar */
+    flex-grow: 3;      /* Mais espaço para o select */
+    flex-basis: 180px;
+    min-width: 160px;
+    margin-right: 5px;
+    height: 38px; /* Para alinhar com outros inputs/botões */
+}
+.select-usuario:disabled {
+    background-color: var(--op-cor-cinza-fundo-input);
+    opacity: 0.7;
 }
 
-.input-processo {
-    width: 150px;
+
+/* Para a etapa de Corte (inputs readonly de status e nome do cortador) */
+.etapa-usuario-status,
+.etapa-usuario-nome {
+    padding: 8px 10px;
+    font-size: 0.85rem; /* Um pouco menor */
+    border: 1px solid transparent;
+    border-radius: var(--op-raio-borda-input);
+    background-color: #f1f3f5; /* Um cinza diferente para diferenciar de inputs normais */
+    color: var(--op-cor-cinza-texto);
+    flex-grow: 1;
+    flex-basis: 130px;
+    min-width: 100px;
+    margin-right: 5px;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.etapa-usuario-status + .etapa-usuario-nome {
+    margin-right: 0; /* Remove margem do último */
 }
 
-.select-usuario {
-    width: 220px;
-}
 
-.input-processo:focus,
-.select-usuario:focus {
-    border-color: #3498db;
-    box-shadow: 0 0 8px rgba(52, 152, 219, 0.2);
-    outline: none;
-}
-
-.botao-lancar.lancado {
-    background-color: #ccc;
-    cursor: not-allowed;
-}
-
+/* Container para Quantidade e Botão Lançar */
 .quantidade-lancar {
     display: flex;
-    gap: 10px;
     align-items: center;
-    padding: 0.5rem;
-    border-radius: 8px;
-    font-size: 1rem;
-    width: auto;
-    min-width: 200px;
+    gap: 8px;
+    margin-left: auto;  /* EMPURRA PARA A DIREITA DA LINHA DA ETAPA */
+    flex-shrink: 0;    /* Não deixa este grupo encolher */
 }
 
 .quantidade-input {
-    width: 80px;
-    padding: 5px;
+    width: 65px; /* Largura menor */
+    padding: 8px;
     text-align: center;
-    border: 1px solid #dfe6e9;
-    border-radius: 8px;
-    font-size: 14px;
-    background: #f9f9f9;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    font-size: 0.9rem;
+    border: 1px solid var(--op-cor-cinza-borda);
+    border-radius: var(--op-raio-borda-input);
+    background-color: var(--op-cor-branco);
+    height: 38px; /* Para alinhar com select e botão */
+}
+.quantidade-input::-webkit-outer-spin-button,
+.quantidade-input::-webkit-inner-spin-button { /* Remove setas no Chrome/Safari/Edge */
+  -webkit-appearance: none;
+  margin: 0;
+}
+.quantidade-input:disabled {
+    background-color: var(--op-cor-cinza-fundo-input);
+    opacity: 0.7;
 }
 
-.quantidade-input:focus {
-    border-color: #3498db;
-    box-shadow: 0 0 8px rgba(52, 152, 219, 0.2);
-    outline: none;
-}
 
-.etapa-processo {
-    border: 1px solid #dfe6e9;
-    padding: 5px;
-    background-color: #f0f0f0;
-    color: #333;
-    width: 150px;
-    margin-right: 10px;
-    border-radius: 8px;
-}
-
-/* Estilo para o botão "Definir" */
-.botao-definir {
-    background-color: #007bff;
-    color: white;
-    border: none;
-    padding: 5px 10px;
-    cursor: pointer;
-    margin-left: 10px;
-    border-radius: 8px;
-    transition: background-color 0.3s ease, transform 0.2s ease;
-}
-
-.botao-definir:hover:not(:disabled) {
-    background-color: #0056b3;
-    transform: translateY(-2px);
-}
-
-.botao-definir:disabled {
-    background-color: #cccccc;
-    cursor: not-allowed;
-}
-
-/* Estilo para o botão "Lançar" */
+/* Botão Lançar/Lançado */
 .botao-lancar {
-    background-color: #cccccc;
-    color: white;
+    /* Herda de .op-botao se tiver essa classe no JS */
+    /* Estilos específicos se não herdar: */
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    border-radius: var(--op-raio-borda-botao);
     border: none;
-    padding: 10px 15px;
-    cursor: not-allowed;
-    margin-left: 10px;
-    border-radius: 8px;
-    transition: background-color 0.3s ease, transform 0.2s ease;
-}
-
-.botao-lancar:not(:disabled) {
-    background-color: #28a745;
     cursor: pointer;
-}
-
-.botao-lancar:not(:disabled):hover {
-    background-color: #218838;
-    transform: translateY(-2px);
-}
-
-/* Estilo para inputs específicos */
-.input-produto-novaOP,
-.variantes-selects-corte,
-.input-produto,
-.variantes-selects select {
-    width: 250px;
-    margin-top: 5px;
-    padding: 10px;
-    border: 1px solid #dfe6e9;
-    border-radius: 8px;
-    font-size: 1em;
-    background: #f9f9f9;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
-}
-
-#editVarianteContainer {
-    margin-top: 10px;
-    width: 100%;
-    box-sizing: border-box;
-}
-
-#editVarianteOP {
-    width: 100%;
-    box-sizing: border-box;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-#editQuantidadeOP,
-#editDataEntregaOP {
-    margin-top: -5px;
-}
-
-.input-quantidade-principal,
-.input-quantidade-novaOP,
-.input-numero-novaOP,
-.input-data,
-.input-data-novaOP,
-#observacoesOP {
-    width: 250px;
-    margin-top: 20px;
-    padding: 10px;
-    border: 1px solid #dfe6e9;
-    border-radius: 8px;
-    font-size: 1em;
-    background: #f9f9f9;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
-}
-
-.input-numero-novaOP {
-    background-color: rgb(211, 211, 211);
-    color: rgb(127, 140, 141);
-    cursor: not-allowed;
-    opacity: 0.65;
-}
-
-.input-numero-novaOP,
-.input-quantidade-principal {
-    width: 70px;
-}
-
-.botoes-form-op {
-    display: flex;
-    justify-content: flex-start;
-    gap: 1rem;
-    margin-top: 20px;
-}
-
-.edit-info {
-    font-size: 14px;
-    color: #666;
-}
-
-/* Popup de Etapas */
-.popup-etapas {
-    border-radius: 8px;
-    max-width: 400px;
+    transition: background-color 0.2s ease, opacity 0.2s ease;
+    color: var(--op-cor-branco);
+    height: 38px; /* Para alinhar com input e select */
+    min-width: 90px; /* Largura mínima para o texto */
     text-align: center;
-    background: #fff;
-    padding: 20px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 1000;
 }
 
-.popup-etapas h3 {
-    margin-bottom: 15px;
+.botao-lancar:not(:disabled):not(.lancado) { /* Habilitado para lançar */
+    background-color: var(--op-cor-verde-sucesso);
+}
+.botao-lancar:not(:disabled):not(.lancado):hover {
+    background-color: var(--op-cor-verde-hover);
 }
 
-.popup-etapas div {
-    margin: 10px 0;
-    text-align: left;
-}
-
-.popup-etapas button {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-}
-
-.popup-etapas button:disabled {
-    background-color: #ccc;
-    cursor: not-allowed;
-}
-
-/* Paginação */
-.pagination-container {
-    display: flex;
-    justify-content: center; /* Centralizar em todos os breakpoints */
-    align-items: center;
-    gap: 10px;
-    margin: 10px 20px 10px;
-   
-}
-
-.pagination-btn {
-    padding: 10px 20px; /* Mesmo padding do botao-incluir-op */
-    border: none;
-    border-radius: 8px;
-    background: #3498db; /* Mesmo estilo do botao-incluir-op */
-    color: white;
-    cursor: pointer;
-    font-size: 1em;
-    font-weight: 600;
-    transition: background 0.3s ease, transform 0.2s ease;
-}
-
-.pagination-btn:hover:not(.active) {
-    background: #2980b9; /* Mesmo hover do botao-incluir-op */
-    transform: translateY(-2px);
-}
-
-.pagination-btn.active {
-    background: #2980b9; /* Destaque para página atual */
+.botao-lancar.lancado { /* Já foi lançado */
+    background-color: #6c757d; /* Cinza escuro (Bootstrap secondary) */
     cursor: default;
 }
-
-.pagination-btn.prev,
-.pagination-btn.next {
-    background: #3498db; /* Estilo secundário para Anterior/Próximo */
+.botao-lancar.lancado:hover {
+     background-color: #5a6268;
 }
 
-.pagination-btn.prev:hover:not(.active),
-.pagination-btn.next:hover:not(.active) {
-    background: #6c7778;
+/* Desabilitado E AINDA NÃO lançado (ex: não é a etapa atual) */
+.botao-lancar.disabled-not-launched { 
+    background-color: #adb5bd !important; /* Cinza claro (Bootstrap light gray) */
+    color: #495057 !important;
+    cursor: not-allowed;
+    opacity: 0.65 !important;
 }
 
-.pagination-current {
-    padding: 10px 20px;
-    font-size: 1em;
-    font-weight: 800;
-    color: #3498db;
-    border-style: none;
-    padding: 8px 15px;
-    background: rgb(248,249,250);
-    border-radius:10px;
-
+/* Link "Ver Detalhes Corte" na etapa de corte */
+#opEditView .etapa-row .link-corte-pendente-etapa { /* Nova classe para o link dentro da etapa */
+    color: var(--op-cor-azul-claro);
+    text-decoration: none;
+    font-size: 0.85rem;
+    margin-left: 10px; /* Espaço após os inputs de status/nome do cortador */
+    white-space: nowrap;
+}
+#opEditView .etapa-row .link-corte-pendente-etapa:hover {
+    text-decoration: underline;
 }
 
-.pagination-ellipsis {
-    padding: 10px 15px;
-    font-size: 1em;
-    color: #666;
-}
-
-.botao-corte {
-    padding: 8px 16px;
-    background-color: #4CAF50;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    margin-left: 10px;
-}
-
-.botao-corte:hover {
-    background-color: #45a049;
-}
-
-.corte-op {
-    padding: 20px;
-    max-width: 800px;
-    margin: 0 auto;
-}
-
-.input-cortador {
-    background-color: #d3d3d3;
-    padding: 8px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    width: 200px;
-}
-
-.acessocortes-op {
-    padding: 20px;
-    max-width: 800px;
-    margin: 0 auto;
-}
-
-.cabecalho-op h2 {
-    display: inline-block;
-    margin: 0;
+/* Garante que o contêiner do link na etapa de corte se alinhe bem */
+.etapa-row > div[style*="margin-left: auto"] {
+    display: flex;
+    align-items: center;
 }
 
 .botao-fechar {
     position: absolute;
-    top: 10px;
-    right: 10px;
-    background-color: #f44336;
-    color: white;
-    border: none;
-    border-radius: 50%;
+    top: 15px;  /* Distância do topo do card pai */
+    right: 15px; /* Distância da direita do card pai */
     width: 30px;
     height: 30px;
-    cursor: pointer;
-    font-size: 16px;
-    line-height: 30px;
+    border-radius: 50%; /* Para ser redondo */
+    background-color: var(--op-cor-vermelho-perigo);
+    color: var(--op-cor-branco);
+    border: none;
+    font-size: 1rem; /* Tamanho do 'X' */
+    font-weight: bold;
+    line-height: 30px; /* Centraliza o 'X' verticalmente */
     text-align: center;
-    transition: background-color 0.3s ease, transform 0.2s ease;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    transition: background-color 0.2s ease, transform 0.2s ease;
 }
-
 .botao-fechar:hover {
-    background-color: #da190b;
-    transform: translateY(-2px);
+    background-color: var(--op-cor-vermelho-hover);
+    transform: scale(1.1);
 }
 
-.abas-cortes {
-    margin: 20px 0;
+/* Container para quantidade e botão lançar */
+.quantidade-lancar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0; /* Não encolhe */
+}
+.quantidade-input { /* Input de quantidade na etapa */
+    width: 70px; /* Largura fixa pequena */
+    padding: 8px;
+    text-align: center;
+    font-size: 0.9rem;
+    border: 1px solid var(--op-cor-cinza-borda);
+    border-radius: var(--op-raio-borda-input);
 }
 
-.aba-btn {
-    padding: 10px 20px;
-    background-color: #ddd;
+/* Botão Lançar/Lançado dentro das etapas */
+.etapa-row .botao-lancar {
+    padding: 8px 15px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    border-radius: var(--op-raio-borda-botao); /* <<< USA A VARIÁVEL DE RAIO */
     border: none;
     cursor: pointer;
-    margin-right: 5px;
+    transition: background-color 0.2s ease, opacity 0.2s ease;
+    color: var(--op-cor-branco); /* Texto branco por padrão */
 }
 
-.aba-btn.active {
-    background-color: #4CAF50;
-    color: white;
+.etapa-row .botao-lancar:not(:disabled) { /* Quando está habilitado para lançar */
+        background-color: #173087;
+}
+.etapa-row .botao-lancar:not(:disabled):hover {
+    background-color: var(--op-cor-verde-hover);
 }
 
-.conteudo-aba {
-    padding: 5px;
-    background-color: #f9f9f9;
-    border-radius: 5px;
+.etapa-row .botao-lancar.lancado {
+    background-color: #6c757d; /* Cinza escuro para "Lançado" */
+    color: var(--op-cor-branco);
+    cursor: default;
 }
-
-
-.refresh-animation {
-  animation: refresh 0.5s ease-in-out;
-}
-
-@keyframes refresh {
-  0% { opacity: 0.5; transform: scale(0.98); }
-  50% { opacity: 1; transform: scale(1.02); }
-  100% { opacity: 1; transform: scale(1); }
+.etapa-row .botao-lancar.lancado:hover {
+     background-color: #5a6268;
 }
 
 
-
-/* Breakpoint para iPad Pro (768px a 1024px) */
-@media (min-width: 768px) and (max-width: 1024px) {
-    .container-op {
-        margin:20px;
-        padding: 20px;
-    }
-
-    .filters-card {
-        padding-left: 15px;
-    }
-
-/* tabela da lista de cortes / aba 'corte pendente' para ipad*/
-.tabela-corte-pendente th,
-.tabela-corte-pendente td {
-    padding: 10px;
-    font-size: 1em;
-    font-weight: 600;
-    text-align: left;
-    border-bottom: 1px solid #dfe6e9;
-    word-break: break-word; /* Quebra de linha para texto longo */
-}
-
-/* Definir larguras específicas para cada coluna */
-.tabela-corte-pendente th:first-child,
-.tabela-corte-pendente td:first-child {
-    width: 8%; /* Ajuste para o status */
-}
-
-.tabela-corte-pendente th:nth-child(2),
-.tabela-corte-pendente td:nth-child(2) {
-    width: 10%; /* Ajuste para o número da OP */
-}
-
-.tabela-corte-pendente th:nth-child(3),
-.tabela-corte-pendente td:nth-child(3) {
-    width: 35%; /* Ajuste para o produto */
-    word-break: break-word; /* Quebra de linha para texto longo */
-}
-
-.tabela-corte-pendente th:nth-child(4),
-.tabela-corte-pendente td:nth-child(4) {
-    width: 25%; /* Ajuste para a variação */
-    word-break: break-word; /* Quebra de linha para texto longo */
-}
-
-.tabela-corte-pendente th:nth-child(5),
-.tabela-corte-pendente td:nth-child(5) {
-    width: 10%; /* Ajuste para a quantidade */
+.etapa-row .botao-lancar:disabled:not(.lancado) { /* Desabilitado mas AINDA NÃO lançado */
+    background-color: #adb5bd; /* Um cinza claro para desabilitado */
+    cursor: not-allowed;
+    opacity: 0.7;
 }
 
 
-    .cabecalho-editar-op {
-        flex-direction: row;
-        gap: 15px;
-    }
-
-    .busca-op {
-        width: 250px;
-    }
-
-    .botao-incluir-op {
-        width: auto;
-        margin-right: 0;
-    }
-
-    #statusFilter {
-        gap: 8px;
-    }
-
-    .status-btn {
-        font-size: 13px;
-        padding: 7px 11px;
-    }
-
-    .tabela-op th,
-    .tabela-op td {
-        font-size: 0.85rem;
-        padding: 9px;
-    }
-
-    .formulario-op,
-    .editar-op {
-        padding: 20px;
-    }
-
-    .input-produto,
-    .variantes-selects select,
-    .input-quantidade-principal,
-    .input-quantidade-novaOP,
-    .input-numero-novaOP,
-    .input-data,
-    .input-data-novaOP,
-    #observacoesOP {
-        width: 200px;
-    }
-
-    .botoes-form-op {
-        gap: 15px;
-    }
-
-    .etapa-row {
-        gap: 8px;
-    }
-
-    .input-processo,
-    .select-usuario {
-        width: 180px;
-    }
-
-    .quantidade-lancar {
-        min-width: 180px;
-    }
-
-    .pagination-btn,
-    .pagination-current {
-        font-size: 0.95em;
-        padding: 8px 15px;
-    }
-
-    .pagination-ellipsis {
-        font-size: 0.95em;
-        padding: 8px 15px;
-    }
+#finalizarOP.op-botao:disabled { /* Quando o botão Finalizar OP está desabilitado */
+    background-color: #ccc; /* Cinza bem claro */
+    border: 1px solid #bbb;
+    color: #777;
+    opacity: 0.6;
 }
 
-/* Breakpoint para Mobile (max-width: 576px) */
-@media (max-width: 576px) {
-    .container-op {
-        margin-left: 0;
-        padding: 15px;
-        width: 100%;
-    }
-    .filters-row {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .botao-incluir-op,
-    .botao-adicionar-corte,
-    .botao-acessar-cortes {
-        width: 45%;
-        padding: 10px 10px;
-        display: flex;
-        flex-direction: column; /* Empilha os elementos verticalmente */
-
-    }
-
-    .area-filtros-tabela{
-        background: #ffffff;
-        border-radius: 12px;
-        padding: 10px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-        transition: transform 0.2s ease;
-        margin-top: 20px;
-        
-    }
-
-    .area-filtros-tabela{
-        transform: translateY(-5px);
-    }
-
-    .acao-rapida-tt,
-    .gestao-cortes-tt{
-        display: flex;
-        justify-content: center;
-    }
-
-    .titulo-acao-rapida,
-    .titulo-gestao-cortes{
-        font-size: 1.2em;
-        color: #2c3e50;
-        margin-bottom: 20px;
-        font-weight: 600;
-    
-    }
-
-    .textos-botoes-acao-rapida{
-        color: white;
-        font-size: 1em;
-        font-weight: 600;
-
-    }
-
-    .icons-botoes{
-        font-size: 30px;
-        margin-bottom: 5px; /* Espaço entre o ícone e o texto */
-
-    }
-
-    .botoes-area-acao-rapida,
-    .botoes-gestao-cortes {
-        display: flex;
-        gap: 15px;
-        margin-bottom: 20px;
-        flex-wrap: wrap;
-        justify-content: center;
-    }
-
-    /* tabela da lista de cortes / aba 'corte pendente' Mobile (max-width: 576px)*/
-.tabela-corte-pendente th,
-.tabela-corte-pendente td {
-    padding: 8px;
-    font-size: 0.7em;
-    font-weight: 600;
-    text-align: left;
-    border-bottom: 1px solid #dfe6e9;
-    word-break: break-word; /* Quebra de linha para texto longo */
+/* Link para ver corte pendente (dentro da etapa de corte) */
+#etapasContainer .etapa-row a { /* Target específico */
+    color: var(--op-cor-azul-claro);
+    text-decoration: none;
+    font-size: 0.85rem;
+    margin-left: 10px;
+}
+#etapasContainer .etapa-row a:hover {
+    text-decoration: underline;
 }
 
-/* Definir larguras específicas para cada coluna */
-.tabela-corte-pendente th:first-child,
-.tabela-corte-pendente td:first-child {
-    width: 8%; /* Ajuste para o status */
-}
-
-.tabela-corte-pendente th:nth-child(2),
-.tabela-corte-pendente td:nth-child(2) {
-    width: 14%; /* Ajuste para o número da OP */
-}
-
-.tabela-corte-pendente th:nth-child(3),
-.tabela-corte-pendente td:nth-child(3) {
-    width: 28%; /* Ajuste para o produto */
-    word-break: break-word; /* Quebra de linha para texto longo */
-}
-
-.tabela-corte-pendente th:nth-child(4),
-.tabela-corte-pendente td:nth-child(4) {
-    width: 25%; /* Ajuste para a variação */
-    word-break: break-word; /* Quebra de linha para texto longo */
-}
-
-.tabela-corte-pendente th:nth-child(5),
-.tabela-corte-pendente td:nth-child(5) {
-    width: 12%; /* Ajuste para a quantidade */
-}
-.tabela-corte-pendente th:nth-child(6),
-.tabela-corte-pendente td:nth-child(6) {
-    width: 12%; /* Ajuste para a OP */
-}
-
-    .filters-card {
-        padding-left: 15px;
-        padding-right: 15px;
-        padding-top: 15px;
-        padding-bottom: 15px;
-    }
-
-    .cabecalho-editar-op {
-        flex-direction: column;
-        gap: 10px;
-    }
-
-    .busca-op {
-        max-width: 100%;
-        font-size: 0.9em;
-    }
-
-    #statusFilter {
-        flex-wrap: wrap;
-        gap: 5px;
-    }
-
-    .status-btn {
-        font-size: 12px;
-        padding: 15px 12px;
-    }
-
-    .tabela-op th,
-    .tabela-op td {
-        font-size: 0.8rem;
-        padding: 8px;
-    }
-
-    .formulario-op,
-    .editar-op {
-        padding: 15px;
-    }
-
-    .input-produto-novaOP,
-    .variantes-selects-corte,
-    .input-produto,
-    .variantes-selects select,
-    .input-quantidade-principal,
-    .input-quantidade-novaOP,
-    .input-numero-novaOP,
-    .input-data,
-    .input-data-novaOP,
-    #observacoesOP {
-        width: 80%;
-        margin-top: 10px;
-    }
-
-    .botoes-form-op {
-        gap: 10px;
-    }
-
-    .botao-salvar-op,
-    .botao-cancelar-op,
-    .botao-finalizar-op {
-        width: 100%;
-    }
-
-    .etapa-row {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 5px;
-    }
-
-    .input-processo,
-    .select-usuario {
-        width: 100%;
-    }
-
-    .quantidade-lancar {
-        min-width: 100%;
-    }
-
-    /* Paginação */
-.pagination-container {
-    display: flex;
-    justify-content: center; /* Centralizar em todos os breakpoints */
-    align-items: center;
-    gap: 10px;
-    margin: 10px 20px 10px;
-   
-}
-    .pagination-btn,
-    .pagination-current {
-        text-align: center;
-        font-size: 0.9em;
-        padding: 8px 15px;
-    }
-
-    .pagination-ellipsis {
-        font-size: 0.9em;
-        padding: 8px 15px;
-    }
-
-    .tabela-op th#sortStatus,
-    .tabela-op td:first-child {
-        width: 16%; 
-    }
-    .tabela-op th#sortNumero,
-    .tabela-op td:nth-child(2) {
-        width: 12%;
-    }
-    
-    .tabela-op th#sortProduto,
-    .tabela-op td:nth-child(3) {
-        width: 30%; 
-        word-break: break-word; 
-    }
-    
-    .tabela-op th#sortVariante,
-    .tabela-op td:nth-child(4) {
-        width: 30%;
-        word-break: break-word;
-    }
-    
-    .tabela-op th#sortQuantidade,
-    .tabela-op td:nth-child(5) {
-        width: 12%; 
-    }
-
-
-}
-
-/* Breakpoint para telas menores (max-width: 414px, como iPhone XR) */
-@media (max-width: 414px) {
-    .container-op {
-        padding: 10px;
-    }
-
-    .textos-botoes-acao-rapida {
-        color: white;
-        font-size: 0.9em;
-        font-weight: 600;
-    }
-
-.tabela-corte-pendente th,
-.tabela-corte-pendente td {
-    padding: 4px;
-    font-size: 0.65em;
-    font-weight: 600;
-    text-align: left;
-    border-bottom: 1px solid #dfe6e9;
-    word-break: break-word; /* Quebra de linha para texto longo */
-}
-
-/* Definir larguras específicas para cada coluna */
-.tabela-corte-pendente th:first-child,
-.tabela-corte-pendente td:first-child {
-    width: 10%; /* Ajuste para o status */
-}
-
-.tabela-corte-pendente th:nth-child(2),
-.tabela-corte-pendente td:nth-child(2) {
-    width: 14%; /* Ajuste para o número da PN*/
-}
-
-.tabela-corte-pendente th:nth-child(3),
-.tabela-corte-pendente td:nth-child(3) {
-    width: 28%; /* Ajuste para o produto */
-    word-break: break-word; /* Quebra de linha para texto longo */
-}
-
-.tabela-corte-pendente th:nth-child(4),
-.tabela-corte-pendente td:nth-child(4) {
-    width: 25%; /* Ajuste para a variação */
-    word-break: break-word; /* Quebra de linha para texto longo */
-}
-
-.tabela-corte-pendente th:nth-child(5),
-.tabela-corte-pendente td:nth-child(5) {
-    width: 12%; /* Ajuste para a quantidade */
-}
-
-    .filters-card {
-        padding-left: 15px;
-        padding-right: 10px;
-    }
-
-    .cabecalho-op h1 {
-        font-size: 1.5rem;
-    }
-
-    .busca-op {
-        font-size: 0.7rem;
-        padding: 8px;
-        width: 100%;
-    }
-
-    .status-btn {
-        font-size: 10px;
-        padding: 5px 8px;
-    }
-
-    .tabela-op th,
-    .tabela-op td {
-        font-size: 0.7rem;
-        padding: 6px;
-    }
-
-    /* Paginação */
-.pagination-container {
-    display: flex;
-    justify-content: center; /* Centralizar em todos os breakpoints */
-    align-items: center;
-    gap: 10px;
-    margin: 10px 20px 10px;
-   
-}
-    .pagination-btn,
-    .pagination-current {
-        text-align: center;
-        font-size: 0.8em;
-        padding: 8px 15px;
-    }
-
-    .pagination-ellipsis {
-        font-size: 0.8em;
-        padding: 8px 15px;
-    }
-}
-
-
-
-/* pop up de erro para usuario que quer lançar sem permissão */
-.popup-mensagem {
-    font-family: Arial, sans-serif;
-    font-size: 16px;
-    line-height: 1.5;
-}
-
-.popup-mensagem.popup-erro {
-    border: 1px solid #f5c6cb;
-}
-
-.popup-mensagem.popup-sucesso {
-    border: 1px solid #c3e6cb;
-}
-
-.popup-mensagem p {
-    margin: 0 0 10px 0;
-}
-
-.popup-mensagem button {
-    transition: background-color 0.3s;
-}
-
-.popup-mensagem button:hover {
-    background-color: #c82333; /* Para erro */
-}
-
-.popup-mensagem.popup-sucesso button:hover {
-    background-color: #218838; /* Para sucesso */
-}
-
-/* estilo spinner */
 .spinner {
-    display: flex;
+    display: flex; /* Garante que seja visível se o conteúdo for apenas o texto */
     justify-content: center;
     align-items: center;
     padding: 20px;
-    font-size: 16px;
-    color: #666;
+    font-size: 1rem; /* Ajuste o tamanho da fonte */
+    color: #555; /* Cor do texto do spinner */
+    min-height: 50px; /* Para dar um espaço visível */
 }
 
 .spinner::before {
@@ -1747,7 +1077,7 @@ body.autenticado {
     height: 20px;
     margin-right: 10px;
     border: 3px solid #ccc;
-    border-top: 3px solid #007bff;
+    border-top-color: var(--op-cor-azul-claro); /* Usa sua variável de cor */
     border-radius: 50%;
     animation: spin 1s linear infinite;
 }
@@ -1755,4 +1085,354 @@ body.autenticado {
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+}
+
+/* Garante que o wrapper da tabela nas seções de corte permita scroll */
+#cortesPendentesView .op-tabela-wrapper,
+#cortesEmEstoqueView .op-tabela-wrapper {
+    overflow-x: auto;
+    margin-top: 15px; /* Espaço após o título da seção */
+}
+
+/* Estilos para as tabelas de corte, se precisarem de algo além de .op-tabela-estilizada */
+.tabela-corte-pendente th, .tabela-corte-pendente td,
+.tabela-cortados th, .tabela-cortados td {
+    /* Seus estilos de padding, font-size específicos podem ir aqui se necessário */
+    /* Ex: font-size: 0.85rem; */
+}
+
+/* Alinhamento do checkbox no cabeçalho */
+.op-tabela-estilizada th input[type="checkbox"] {
+    margin: 0; /* Remove margens padrão do checkbox */
+    vertical-align: middle;
+}
+ .op-tabela-estilizada td input[type="checkbox"] {
+    vertical-align: middle;
+    /* Para centralizar o checkbox na célula se ela for maior */
+    /* display: block; margin: auto; */
+}
+
+
+/* Container dos botões abaixo das tabelas de corte */
+#cortesPendentesView .op-form-botoes,
+#cortesEmEstoqueView .op-form-botoes {
+    justify-content: flex-start; /* Alinha botões à esquerda */
+    padding-top: 15px; /* Espaço acima dos botões */
+}
+
+/* Ajustes gerais para telas menores TIPO IPAD (aplicado a todos os breakpoints mobile) */
+@media (max-width: 1024px) {
+    body {
+    margin-left: 0;
+    }
+
+    .op-filtros-container {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .op-input-busca {
+        min-width: 100%;
+    }
+    .op-botoes-grupo {
+        justify-content: center; /* Centraliza botões em telas menores */
+    }
+    .op-botao {
+        flex-grow: 0; /* Faz botões ocuparem mais espaço se necessário */
+        justify-content: center;
+    }
+
+}
+
+/* Breakpoint para Mobile (max-width: 576px) */
+@media (max-width: 576px) {
+    body {
+    margin-left: 0;
+    }
+    .op-form-estilizado .op-form-linha{
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        margin-bottom: 25px;
+    }
+
+    #opFormView .op-input-produto-principal {
+    max-width: 270px;
+}
+
+#opFormView .op-input-quantidade-op {
+    width: 70px !important;
+    max-width: 100px;
+}
+
+#opFormView .op-input-numero-op {
+    width: 120px !important;
+    max-width: 80px;
+}
+
+    .op-card-estilizado {
+        padding: 15px;
+    }
+
+    .op-input, .op-select, #opFormView  select, #corteView .variantes-selects-corte select {
+    width: 100%;
+    }
+
+    .op-etapas-container-wrapper .etapa-row {
+        flex-direction: column; /* <<< FAZ OS ITENS INTERNOS EMPILHAREM VERTICALMENTE */
+        align-items: stretch;   /* <<< FAZ OS ITENS INTERNOS OCUPAREM A LARGURA TOTAL */
+        gap: 8px;               /* Espaço menor entre os itens empilhados */
+        padding: 10px;          /* Padding um pouco menor na linha da etapa */
+    }
+
+    .op-etapas-container-wrapper .etapa-row.etapa-row-atual {
+        padding-left: 10px; /* Mantém o padding original se a borda for removida ou adaptada */
+        /* A borda esquerda pode ficar estranha com itens empilhados, talvez remover ou adaptar */
+        /* border-left: none; */ 
+        /* Ou um destaque diferente: */
+        /* box-shadow: inset 3px 0 0 var(--op-cor-azul-claro); */
+    }
+
+    .etapa-row .etapa-numero {
+        display: none; /* Opcional: Esconder o número para economizar espaço, o índice visual já existe */
+                       /* Ou alinhar à esquerda: align-self: flex-start; margin-bottom: 5px; */
+    }
+
+    .etapa-row .etapa-processo,
+    .etapa-row .select-usuario,
+    .etapa-row .etapa-usuario-status,
+    .etapa-row .etapa-usuario-nome {
+        width: 100%;        /* Ocupa a largura total */
+        flex-basis: auto;   /* Reseta flex-basis */
+        margin-right: 0;    /* Remove margens laterais */
+        margin-bottom: 8px; /* Espaço abaixo de cada um */
+        text-align: left;   /* Garante alinhamento à esquerda para status/nome */
+    }
+    .etapa-row .etapa-processo {
+        font-size: 1rem; /* Pode aumentar um pouco o nome do processo */
+        font-weight: 600;
+    }
+
+
+    .etapa-row .quantidade-lancar {
+        width: 100%;         /* Ocupa a largura total */
+        margin-left: 0;      /* Remove o margin-left: auto */
+        justify-content: space-between; /* Distribui Qtd e Lançar nas extremidades */
+        margin-top: 5px;     /* Pequeno espaço acima */
+    }
+
+    .etapa-row .quantidade-input {
+        width: 80px; /* Pode manter um tamanho fixo razoável ou usar flex-grow */
+        /* flex-grow: 1; */ /* Se quiser que o input de qtd cresça */
+    }
+
+    .etapa-row .botao-lancar {
+        min-width: 100px; /* Garante que o botão tenha um bom tamanho */
+        /* flex-grow: 1; */ /* Se quiser que o botão cresça com o input de qtd */
+    }
+
+    /* Link para "Ver Detalhes Corte" na etapa de corte */
+    #opEditView .etapa-row .link-corte-pendente-etapa,
+    .etapa-row > div[style*="margin-left: auto"] { /* Target do container do link */
+        width: 100%;
+        margin-left: 0;
+        text-align: left; /* Alinha à esquerda no mobile */
+        margin-top: 5px;
+    }
+    .op-form-estilizado .op-form-grupo {
+    flex: 1 1 auto;
+    min-width: 100px;
+    }
+
+    #opEditView #editQuantidadeOP {
+    max-width: 80px;
+}
+
+.etapa-row .etapa-corte-info-container {
+    display: flex; /* FAZ OS INPUTS INTERNOS FICAREM LADO A LADO */
+    width: 100%;    /* O container ocupa a largura da etapa-row */
+    gap: 8px;       /* Espaço entre os inputs de status e nome */
+    margin-bottom: 8px; /* Espaço abaixo deste grupo, se houver link abaixo */
+}
+
+.etapa-row .etapa-corte-info-container .etapa-usuario-status,
+.etapa-row .etapa-corte-info-container .etapa-usuario-nome {
+    flex: 1 1 50%; /* Tenta dividir o espaço igualmente, mas permite encolher/crescer */
+    margin-right: 0; /* Remove margens individuais, o gap do pai cuida disso */
+    min-width: 100px; /* Para não ficarem muito pequenos */
+    /* Os estilos de padding, font-size, background já vêm das classes .etapa-usuario-status/nome */
+}
+
+.etapa-row .corte-status-nome-container-mobile {
+        display: flex;      /* Faz os inputs filhos (status e nome) ficarem lado a lado */
+        width: 100%;        /* O container ocupa a largura disponível na linha da etapa */
+        gap: 8px;           /* Espaço entre o input de status e o input de nome */
+        /* Não precisa de margin-bottom aqui, pois o gap da .etapa-row (pai) cuidará disso */
+    }
+
+    .etapa-row .corte-status-nome-container-mobile .etapa-usuario-status,
+    .etapa-row .corte-status-nome-container-mobile .etapa-usuario-nome {
+        flex: 1;          /* Faz cada input ocupar metade do espaço disponível no container */
+        margin-right: 0;  /* Remove margens individuais se houver */
+        /* Mantém os estilos de padding, font-size, background que você já tem 
+           para .etapa-usuario-status e .etapa-usuario-nome */
+    }
+
+    /* Garante que o input de nome do processo "Corte" ocupe a largura total no mobile */
+    .etapa-row .etapa-processo {
+        width: 100%;
+        margin-bottom: 0; /* O gap da .etapa-row já dá espaço */
+        /* Seus outros estilos para .etapa-processo (fonte, etc.) permanecem */
+    }
+
+    /* Garante que o container do link (se existir) ocupe a largura total no mobile */
+    .etapa-row .etapa-corte-link-container {
+        width: 100%;
+        text-align: left; /* Ou center, conforme preferir */
+        margin-top: 0; /* O gap da .etapa-row já dá espaço */
+    }
+
+    #opFormView .op-input-variante-opform {
+    max-width: 270px;
+
+    }
+
+    .op-botoes-wrapper .op-botao { /* Para .op-botao-secundario-acao e .op-botao-corte */
+        flex-basis: calc(50% - 5px); /* Tenta fazer 2 botões por linha (5px é metade do gap) */
+        /* Ou width: 100%; para um botão por linha */
+        justify-content: center; /* Centraliza ícone e texto no botão */
+        font-size: 0.8rem; /* Fonte um pouco menor nos botões */
+        padding: 10px 8px; /* Ajusta padding */
+    }
+    .op-botao-destaque-incluir { /* Botão principal no mobile */
+        width: 60%; /* Ocupa a largura total */
+        padding: 15px 15px;
+        font-size: 1.2rem;
+    }
+    .op-grupo-titulo-sutil {
+        text-align: center; /* Centraliza os títulos sutil */
+    }
+
+   #corteView .op-input-data-corte {
+    width: 150px !important;
+    
+}
+
+    #corteView .op-select-produto-corte {
+    max-width: 250px;
+    }
+    #corteView .op-input-variante-corteform {
+    max-width: 250px;
+    }
+
+    #corteView .op-input-cortador-corte {
+    max-width: 150px;
+}
+
+#corteView .op-input-quantidade-corte {
+    width: 80px !important;
+}
+
+}
+
+/* Breakpoint para telas menores (max-width: 414px, como iPhone XR) */
+@media (max-width: 414px) {
+    body {
+    margin-left: 0;
+    }
+    .op-form-estilizado .op-form-linha{
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        margin-bottom: 15px;
+    }
+    .op-input, .op-select, #opFormView  select, #corteView .variantes-selects-corte select {
+    width: 100%;
+    font-size: 0.8rem;
+    }
+
+    .op-etapas-container-wrapper .etapa-row {
+        flex-direction: column; /* <<< FAZ OS ITENS INTERNOS EMPILHAREM VERTICALMENTE */
+        align-items: stretch;   /* <<< FAZ OS ITENS INTERNOS OCUPAREM A LARGURA TOTAL */
+        gap: 8px;               /* Espaço menor entre os itens empilhados */
+        padding: 10px;          /* Padding um pouco menor na linha da etapa */
+    }
+
+    .op-etapas-container-wrapper .etapa-row.etapa-row-atual {
+        padding-left: 10px; /* Mantém o padding original se a borda for removida ou adaptada */
+        /* A borda esquerda pode ficar estranha com itens empilhados, talvez remover ou adaptar */
+        /* border-left: none; */ 
+        /* Ou um destaque diferente: */
+        /* box-shadow: inset 3px 0 0 var(--op-cor-azul-claro); */
+    }
+
+    #opFormView .op-input-produto-principal {
+        max-width: 220px;
+    }
+
+    #opFormView .op-input-variante-opform {
+        max-width: 220px;
+    }
+
+    #opFormView .op-input-numero-op {
+        width: 60px !important;
+
+    }
+
+    .etapa-row .etapa-numero {
+        display: none; /* Opcional: Esconder o número para economizar espaço, o índice visual já existe */
+                       /* Ou alinhar à esquerda: align-self: flex-start; margin-bottom: 5px; */
+    }
+
+    .etapa-row .etapa-processo,
+    .etapa-row .select-usuario,
+    .etapa-row .etapa-usuario-status,
+    .etapa-row .etapa-usuario-nome {
+        width: 100%;        /* Ocupa a largura total */
+        flex-basis: auto;   /* Reseta flex-basis */
+        margin-right: 0;    /* Remove margens laterais */
+        margin-bottom: 8px; /* Espaço abaixo de cada um */
+        text-align: left;   /* Garante alinhamento à esquerda para status/nome */
+    }
+    .etapa-row .etapa-processo {
+        font-size: 1rem; /* Pode aumentar um pouco o nome do processo */
+        font-weight: 600;
+    }
+
+
+    .etapa-row .quantidade-lancar {
+        width: 100%;         /* Ocupa a largura total */
+        margin-left: 0;      /* Remove o margin-left: auto */
+        justify-content: space-between; /* Distribui Qtd e Lançar nas extremidades */
+        margin-top: 5px;     /* Pequeno espaço acima */
+    }
+
+    .etapa-row .quantidade-input {
+        width: 80px; /* Pode manter um tamanho fixo razoável ou usar flex-grow */
+        /* flex-grow: 1; */ /* Se quiser que o input de qtd cresça */
+    }
+
+    .etapa-row .botao-lancar {
+        min-width: 100px; /* Garante que o botão tenha um bom tamanho */
+        /* flex-grow: 1; */ /* Se quiser que o botão cresça com o input de qtd */
+    }
+
+    /* Link para "Ver Detalhes Corte" na etapa de corte */
+    #opEditView .etapa-row .link-corte-pendente-etapa,
+    .etapa-row > div[style*="margin-left: auto"] { /* Target do container do link */
+        width: 100%;
+        margin-left: 0;
+        text-align: left; /* Alinha à esquerda no mobile */
+        margin-top: 5px;
+    }
+    .op-form-estilizado .op-form-grupo {
+    flex: 1 1 auto;
+    min-width: 100px;
+    }
+
+    #opEditView #editQuantidadeOP {
+    max-width: 80px;
+}
+
 }

@@ -7,10 +7,6 @@ export const PRODUTOS = [
     'Fronha',
     'Touca de Cetim (Dupla Face)',
     'Faixa de Cabelo',
-    'Top Faixa',
-    'Calcinha',
-    'Cropped',
-    'Regata Feminina',
 ];
 
 export const PRODUTOSKITS = [

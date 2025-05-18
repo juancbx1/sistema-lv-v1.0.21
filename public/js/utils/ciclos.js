@@ -214,3 +214,29 @@ export function getCicloAtual() {
     }
     return null; // Caso não encontre a semana atual
 }
+
+// --- NOVA FUNÇÃO ADICIONADA ---
+// Esta função retorna o OBJETO COMPLETO do ciclo que está ativo na data de referência.
+export function getObjetoCicloCompletoAtual(dataReferencia = new Date()) {
+    const hojeNormalizado = new Date(dataReferencia.getFullYear(), dataReferencia.getMonth(), dataReferencia.getDate());
+
+    for (const ciclo of ciclos) { // Itera sobre o array 'ciclos' exportado
+        if (ciclo.semanas && ciclo.semanas.length > 0) {
+            // Pega a data de início da primeira semana e a data de fim da última semana do ciclo
+            const inicioPrimeiraSemanaStr = ciclo.semanas[0].inicio;
+            const fimUltimaSemanaStr = ciclo.semanas[ciclo.semanas.length - 1].fim;
+
+            const inicioCiclo = new Date(inicioPrimeiraSemanaStr);
+            inicioCiclo.setHours(0, 0, 0, 0); // Normaliza para o início do dia
+
+            const fimCiclo = new Date(fimUltimaSemanaStr);
+            fimCiclo.setHours(23, 59, 59, 999); // Normaliza para o fim do dia
+
+            if (hojeNormalizado >= inicioCiclo && hojeNormalizado <= fimCiclo) {
+                return ciclo; // Retorna o objeto do ciclo inteiro (ex: { nome: "Ciclo 5", semanas: [...] })
+            }
+        }
+    }
+    return null; // Nenhum ciclo atual encontrado
+}
+// --- FIM DA NOVA FUNÇÃO ---

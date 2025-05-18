@@ -9,7 +9,7 @@ export const permissoesDisponiveis = [
     { id: 'acesso-usuarios-cadastrados', label: 'Acesso a Usuários Cadastrados' }, // Para usuarios-cadastrados.html
     { id: 'acesso-permissoes-usuarios', label: 'Acesso a Permissões de Usuários' }, // Para permissoes-usuarios.html
     { id: 'acesso-relatorio-de-assinaturas', label: 'Acesso a Relatório de Assinaturas' }, // Para relatorio-de-assinaturas.html
-    { id: 'acesso-producao-diaria', label: 'Acesso a Produção Diária' }, // Para producao-diaria.html (nova permissão)
+    { id: 'acesso-producao-geral-costura', label: 'Acesso a Produção Geral de Costureiras' }, // Para producao-geral-costura.html 
     { id: 'acesso-relatorio-de-comissao', label: 'Acesso a Relatório de Comissão' }, // Para relatorio-de-comissao.html
     { id: 'acesso-ponto-por-processo', label: 'Acesso a Ponto por Processo' }, // Para ponto-por-processo.html
     { id: 'criar-op', label: 'Criar Ordem de Produção' }, // Para ordens-de-producao.html
@@ -28,7 +28,8 @@ export const permissoesDisponiveis = [
     { id: 'lancar-embalagem-unidade', label: 'Lançar embalagem Unidade' }, // Para relatorio-de-comissao.html
     { id: 'confirmar-pagamento-comissao', label: 'Confirmar Pagamento de Comissão' }, // Para embalagem-de-produtos.html
     { id: 'lancar-embalagem', label: 'Lançar Embalagem' }, // Para embalagem-de-produtos.html
-    { id: 'montar-kit', label: 'Montar Kit' } // Para embalagem-de-produtos.html
+    { id: 'montar-kit', label: 'Montar Kit' }, // Para embalagem-de-produtos.html
+    { id: 'gerenciar-produtos', label: 'Gerenciar Configuracoes de Produtos' } // Para cadastrar-produtos.html
 ];
 
 // Apenas o tipo 'admin' terá permissões padrão
@@ -53,7 +54,7 @@ export const permissoesPorTipo = {
         'acesso-permissoes-usuarios',
         'acesso-relatorio-de-assinaturas',
         'acesso-relatorio-de-comissao',
-        'acesso-producao-diaria', 
+        'acesso-producao-geral-costura', 
         'acesso-ponto-por-processo',
         'criar-op',
         'editar-op',
@@ -69,7 +70,8 @@ export const permissoesPorTipo = {
         'confirmar-pagamento-comissao',
         'lancar-embalagem-unidade',
         'montar-kit',
-        'lancar-embalagem'
+        'lancar-embalagem',
+        'gerenciar-produtos'
 
         
     ]

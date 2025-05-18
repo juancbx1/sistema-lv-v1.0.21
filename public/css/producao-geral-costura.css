@@ -1,4 +1,4 @@
-/* css/producao-diaria.css */
+/* css/producao-geral-costura.css */
 
 /* Reset básico */
 * {
@@ -148,6 +148,161 @@ body.autenticado {
     background-color: #cbd5e0;
     transform: translateY(-2px);
 }
+
+.canvas-container {
+    position: relative;
+    width: 100%;
+    min-height: 200px; /* Para dar espaço à mensagem mesmo se o canvas for pequeno */
+}
+.no-data-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255, 255, 255, 0.8); /* Fundo semi-transparente */
+    text-align: center;
+    padding: 20px;
+    border-radius: 8px; /* Se o card tiver */
+}
+.no-data-overlay p {
+    font-size: 1.1em;
+    color: #555;
+    font-weight: 500;
+}
+
+/* Estilos para os Filtros do Card Produção Geral Detalhada */
+.filtros-producao-geral {
+    display: flex;
+    flex-wrap: wrap; /* Para quebrar em telas menores */
+    gap: 20px;       /* Espaço entre os itens de filtro */
+    align-items: flex-end; /* Alinha os botões com a base dos inputs/selects */
+    margin-bottom: 25px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.filtros-producao-geral .filtro-item {
+    display: flex;
+    flex-direction: column; /* Label em cima, input/select embaixo */
+    gap: 5px;
+    min-width: 180px; /* Largura mínima para cada item de filtro */
+    flex-grow: 1; /* Para que tentem ocupar o espaço */
+}
+
+.filtros-producao-geral .filtro-item label {
+    font-size: 0.9em;
+    color: #555;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.filtros-producao-geral .filtro-item select,
+.filtros-producao-geral .filtro-item input[type="date"] {
+    padding: 10px 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 0.95em;
+    background-color: #f9f9f9;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.075);
+}
+
+.filtros-producao-geral .filtro-item select:focus,
+.filtros-producao-geral .filtro-item input[type="date"]:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+    outline: none;
+}
+
+.filtros-producao-geral .filtro-item button#pg-btn-aplicar-filtros {
+    padding: 10px 20px; /* Ajuste o padding para o botão */
+    align-self: stretch; /* Para ocupar a altura do contêiner flexível, se necessário */
+    height: 42px; /* Mesma altura dos inputs/selects, ajuste conforme o padding deles */
+    margin-top: auto; /* Empurra para baixo se a label não existir ou for menor */
+}
+
+.filtros-comparativo-geral {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    align-items: flex-end;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.filtros-comparativo-geral .filtro-item {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 180px;
+}
+
+.filtros-comparativo-geral .filtro-item label {
+    font-size: 0.9em;
+    color: #555;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.filtros-comparativo-geral .filtro-item select,
+.filtros-comparativo-geral .filtro-item input[type="date"] {
+    padding: 9px 10px; /* Um pouco menor que os outros filtros para diferenciar */
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 0.9em;
+    background-color: #fdfdfd;
+}
+
+
+/* Estilos para a Tabela de Produção Geral Detalhada */
+#tabelaProducaoGeral {
+    width: 100%;
+    border-collapse: collapse; /* Remove espaço entre bordas */
+    margin-top: 20px;
+    font-size: 0.9em;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+#tabelaProducaoGeral thead tr {
+    background-color: #3498db; /* Azul que você já usa */
+    color: #ffffff;
+    text-align: left;
+    font-weight: bold;
+}
+
+#tabelaProducaoGeral th,
+#tabelaProducaoGeral td {
+    padding: 12px 15px;
+    border: 1px solid #ddd; /* Linhas delicadas para separar células */
+}
+
+#tabelaProducaoGeral tbody tr {
+    border-bottom: 1px solid #f0f0f0; /* Linha um pouco mais sutil para separar linhas */
+}
+
+#tabelaProducaoGeral tbody tr:nth-of-type(even) {
+    background-color: #f9f9f9; /* Cor alternada para linhas */
+}
+
+#tabelaProducaoGeral tbody tr:hover {
+    background-color: #f1f1f1; /* Efeito hover */
+}
+
+#pg-total-produzido {
+    margin-top: 15px;
+    padding: 10px;
+    background-color: #e9ecef;
+    border-top: 2px solid #3498db;
+    text-align: right;
+    font-size: 1.1em;
+    font-weight: bold;
+    color: #2c3e50;
+}
+
 
 /* Estilo do Total de Processos */
 .total-processos {

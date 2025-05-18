@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>Pontos por Processo</title>
     <link rel="stylesheet" href="/css/ponto-por-processo.css">
-    <link rel="stylesheet" href="/css/menu-lateral.css">
+    <link rel="stylesheet" href="/css/menu-lateral.css"> <!-- Mantenha se estiver usando -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
@@ -12,14 +12,54 @@
         <i class="fas fa-bars"></i>
         <i class="fas fa-times"></i>
     </div>
-    <div class="container">
-        <section class="pontos-por-processo">
-            <h1>Pontos por Processo</h1>
-            <div id="produtosContainer" class="produtos-container"></div>
+
+    <div class="ppp-container-principal"> <!-- Renomeado para evitar conflito com o container do menu -->
+        <header class="ppp-cabecalho-pagina">
+            <h1>Configuração de Pontos por Processo</h1>
+        </header>
+
+        <section class="ppp-secao-configuracao" id="secaoPontosPadrao">
+            <h2 class="ppp-titulo-secao">Pontos Padrão por Processo</h2>
+            <div class="ppp-filtros">
+                <div class="ppp-grupo-filtro">
+                    <label for="filtroProduto">Filtrar por Produto:</label>
+                    <select id="filtroProduto" class="ppp-select">
+                        <option value="">Todos os Produtos</option>
+                        <!-- Opções de produtos serão carregadas aqui -->
+                    </select>
+                </div>
+                <button id="btnAdicionarNovaConfiguracao" class="ppp-botao ppp-botao-adicionar">
+                    <i class="fas fa-plus"></i> Adicionar Nova Configuração
+                </button>
+            </div>
+
+            <div class="ppp-tabela-container">
+                <table class="ppp-tabela" id="tabelaPontosPadrao">
+                    <thead>
+                        <tr>
+                            <th>Produto</th>
+                            <th>Processo</th>
+                            <th>Pontos Padrão</th>
+                            <th>Ativo</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpoTabelaPontosPadrao">
+                    </tbody>
+                </table>
+            </div>
+            <div id="ppp-mensagem-feedback" class="ppp-mensagem" style="display: none;"></div>
         </section>
+
+        <!-- Seção para Gincanas/Períodos Especiais (a ser implementada depois) -->
+        <section class="ppp-secao-configuracao" id="secaoPeriodosEspeciais" style="margin-top: 40px;">
+             <h2 class="ppp-titulo-secao">Períodos de Pontuação Especial (Gincanas)</h2>
+             <p><em>(Em desenvolvimento)</em></p>
+        </section>
+
     </div>
 
     <script src="/js/admin-ponto-por-processo.js" type="module"></script>
-    <script src="/js/carregar-menu-lateral.js" type="module"></script>
+    <script src="/js/carregar-menu-lateral.js" type="module"></script> <!-- Mantenha se estiver usando -->
 </body>
 </html>

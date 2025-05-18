@@ -125,7 +125,6 @@ export async function verificarAutenticacao(pagina, permissoesDeAcessoRequeridas
     }
 
     document.body.classList.add('autenticado');
-    console.log(`[verificarAutenticacao] Usuário ${usuarioLogadoServer.nome} autenticado para ${pagina}. Permissões:`, permissoesUsuarioServer);
     return { usuario: usuarioLogadoServer, permissoes: permissoesUsuarioServer };
 
   } catch (error) {

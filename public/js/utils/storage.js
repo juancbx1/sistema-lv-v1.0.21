@@ -9,7 +9,6 @@ export async function getCachedData(key, fetchFunction, expiryMinutes = 5, force
 
     // Verifica se o cache existe e não está expirado
     if (cached && cachedTime && (now - cachedTime < expiryMs) && !forceRefresh) { // Adicionado && !forceRefresh
-            console.log(`[${key}] Usando dados do cache`);
             try {
             return JSON.parse(cached);
             } catch (e) {
@@ -19,7 +18,6 @@ export async function getCachedData(key, fetchFunction, expiryMinutes = 5, force
         }
 
     // Se não houver cache ou estiver expirado, busca da API
-    console.log(`[${key}] ${forceRefresh ? 'Forçando busca de' : 'Buscando novos'} dados da API`); // Ajuste o log
     const data = await fetchFunction(); // Executa a busca real na API
 
      // Atualiza o cache com os novos dados
@@ -54,33 +52,43 @@ export async function obterProdutos(forceRefresh = false) {
         }
         const produtos = await response.json(); // Parseia a resposta JSON
 
-        console.log('[obterProdutos] Produtos buscados da API e parseados:', produtos.length); // Log para ver os dados da API
          // Adicione um log para verificar o conteúdo de etapasTiktik aqui diretamente do resultado da API
          if (produtos.length > 0) {
-              console.log('[obterProdutos] etapasTiktik no primeiro produto direto da API:', produtos[0].etapasTiktik);
          }
 
      return produtos;
     };
 
     const produtosCadastrados = await getCachedData('produtosCadastrados', fetchProdutos, 5, forceRefresh); // Passa forceRefresh
-    console.log('[obterProdutos] Produtos encontrados (do cache ou API):', produtosCadastrados.length); // Log final do que a função retorna
     // Adicione um log para verificar o conteúdo de etapasTiktik aqui antes de retornar
      if (produtosCadastrados.length > 0) {
-          console.log('[obterProdutos] etapasTiktik no primeiro produto ANTES de retornar:', produtosCadastrados[0].etapasTiktik);
      }
      
     return produtosCadastrados;
 }
 
 export async function salvarProdutos(produtos) {
+    const token = localStorage.getItem('token'); // Obter o token
+    if (!token) {
+        console.error('[salvarProdutos storage.js] Token não encontrado. Não é possível salvar produtos.');
+        throw new Error('Token de autenticação não encontrado para salvar produtos.');
+        // Poderia redirecionar para login ou mostrar uma mensagem mais amigável aqui também.
+    }
+
     for (const produto of produtos) {
         const response = await fetch('/api/produtos', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}` // <<< ADICIONAR TOKEN AQUI
+            },
             body: JSON.stringify(produto)
         });
-        if (!response.ok) throw new Error('Erro ao salvar produtos');
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: `Erro HTTP ${response.status}` }));
+            console.error(`[salvarProdutos storage.js] Erro ao salvar produto "${produto.nome}":`, response.status, errorData);
+            throw new Error(errorData.error || 'Erro ao salvar produtos via storage.js');
+        }
     }
     // Após salvar, invalidar o cache para garantir que os dados sejam recarregados
     invalidateCache('produtosCadastrados');
@@ -102,12 +110,23 @@ export async function obterOrdensFinalizadas(forceRefresh = false) {
 
 export function limparCacheOrdensFinalizadas() {
     invalidateCache('ordensFinalizadas');
-    console.log('[obterOrdensFinalizadas] Cache de ordens finalizadas limpo');
 }
 
 
-export function obterUsuarios() {
-    return JSON.parse(localStorage.getItem('usuarios')) || [];
+export async function obterUsuarios(forceRefresh = false) { // Adicionar forceRefresh
+    const fetchUsuarios = async () => {
+        const token = localStorage.getItem('token');
+        const response = await fetch('/api/usuarios', {
+            headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[storage-fetchUsuarios] Erro na API:', response.status, errorText);
+            throw new Error(`Erro ao buscar usuários: ${response.status}`);
+        }
+        return await response.json();
+    };
+    return await getCachedData('todosUsuariosCached', fetchUsuarios, 15, forceRefresh); // Cache de 15 min
 }
 
 export function salvarUsuarios(usuarios) {

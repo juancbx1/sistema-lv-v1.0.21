@@ -20,7 +20,7 @@
                 <button id="logoutBtn" class="logout-btn btn-danger">Sair</button>
             </div>
         </div>
-    </header>
+    </header> 
 
     <!-- Conteúdo do Dashboard -->
     <div class="container dashboard-content">
@@ -51,10 +51,13 @@
                 <canvas id="graficoProducaoDia"></canvas>
             </div>
 
-            <!-- Card Próxima Comissão -->
-            <div class="card proxima-comissao">
-                <h2>Próxima Comissão</h2>
-                <p><em>Algo incrível está chegando...</em></p>
+           <!-- Card Andamento do Ciclo Atual -->
+            <div class="card andamento-ciclo"> <!-- Nova classe CSS para estilização se necessário -->
+            <h2 id="tituloAndamentoCiclo">Seu Progresso no Ciclo Atual:</h2> <!-- Título dinâmico -->
+                <div class="ciclo-semanas-list" id="cd-weeks-list"> <!-- cd = costureira dashboard -->
+        <!-- As semanas serão preenchidas pelo JavaScript -->
+            <p>Carregando informações do ciclo...</p>
+            </div>
             </div>
 
             <!-- Card Detalhamento de Processos -->

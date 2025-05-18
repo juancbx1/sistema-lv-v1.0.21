@@ -1,8 +1,9 @@
 import { verificarAutenticacao, logout } from '/js/utils/auth.js';
 import { criarGrafico } from '/js/utils/chart-utils.js';
 import { calcularComissaoSemanal, obterMetasPorNivel } from '/js/utils/metas.js';
-import { getCicloAtual } from '/js/utils/ciclos.js';
 import { obterProdutos } from '/js/utils/storage.js';
+import { getCicloAtual, getObjetoCicloCompletoAtual } from '/js/utils/ciclos.js';
+import { formatarData } from '/js/utils/date-utils.js'; // Adicione esta linha
 
 // Variáveis globais
 let usuarioLogado = null;
@@ -10,6 +11,7 @@ let processosExibidos = 0;
 let filtroAtivo = 'dia'; // Padrão: dia
 let dataSelecionadaDia = new Date();
 let dataSelecionadaSemana = new Date();
+let paginaAtualDetalhes = 1; // NOVA VARIÁVEL GLOBAL para a paginação do detalhamento
 
 async function obterProducoes() {
     const token = localStorage.getItem('token');
@@ -93,96 +95,150 @@ function carregarMetas(metaAtual) {
 
 async function atualizarDashboard() {
     try {
-        const producoes = await obterProducoes();
+        const todasProducoes = await obterProducoes(); // Pega TODAS as produções
         const produtos = await obterProdutos();
-        verificarDadosServidor(producoes, produtos);
+        
+        if (!usuarioLogado) {
+            console.error("[atualizarDashboard] Usuário não logado ao tentar atualizar dashboard.");
+            // Adicione uma mensagem para o usuário na UI, se possível
+            document.getElementById('saudacaoCostureira').textContent = 'Erro: Usuário não identificado. Por favor, recarregue a página ou faça login novamente.';
+            // Opcionalmente, desabilitar ou esconder os cards
+            const cardsSection = document.querySelector('.dashboard-cards');
+            if(cardsSection) cardsSection.style.display = 'none';
+            return; 
+        }
+
+        verificarDadosServidor(todasProducoes, produtos); 
         atualizarSaudacao();
         document.getElementById('nivelValor').innerHTML = `<i class="fas fa-trophy"></i> ${usuarioLogado.nivel || 1}`;
-        atualizarCardMeta(producoes, produtos);
-        atualizarGraficoProducao(producoes);
-        atualizarAssinaturaCard(producoes);
-        atualizarDetalhamentoProcessos(producoes, produtos);
+
+        // Filtra UMA VEZ aqui para obter apenas as produções do usuário logado
+        const producoesDoUsuarioLogado = todasProducoes.filter(p => p.funcionario === usuarioLogado.nome);
+
+        // Passe a lista JÁ FILTRADA para todas as funções que precisam dela
+        atualizarCardMeta(producoesDoUsuarioLogado, produtos);
+        atualizarGraficoProducao(producoesDoUsuarioLogado); 
+        atualizarAssinaturaCard(producoesDoUsuarioLogado); 
+        atualizarDetalhamentoProcessos(producoesDoUsuarioLogado, produtos);
+        await atualizarCardAndamentoCiclo(producoesDoUsuarioLogado, produtos);
+
     } catch (error) {
         console.error('[atualizarDashboard] Erro ao carregar dados:', error.message);
-        alert('Erro ao carregar dashboard. Tente novamente.');
+        const saudacaoEl = document.getElementById('saudacaoCostureira');
+        if (saudacaoEl) saudacaoEl.textContent = 'Ops! Algo deu errado ao carregar seus dados.';
+        // Poderia mostrar uma mensagem mais detalhada ou um botão para tentar novamente
+        alert('Erro ao carregar o dashboard. Verifique sua conexão e tente recarregar a página.');
     }
 }
 
-function atualizarCardMeta(producoes, produtos) {
+function atualizarCardMeta(producoesDaCostureira, produtos) {
     const metaSelect = document.getElementById('metaSelect');
-    let metaSelecionada = getMetaSelecionada();
 
-    if (!metaSelecionada) {
+    // --- INÍCIO DA LÓGICA RESTAURADA PARA metaSelecionada ---
+    let metaSelecionada = getMetaSelecionada(); // Tenta pegar do localStorage
+
+    if (!metaSelecionada && metaSelect) { // Adicionei verificação se metaSelect existe
+        // Pega do valor atual do select, ou usa 0 como padrão se o select não tiver valor ou não existir
         metaSelecionada = parseInt(metaSelect.value) || 0;
+    } else if (!metaSelecionada) { // Se metaSelect não existe e não tem nada no localStorage
+        metaSelecionada = 0; // Define um padrão
     }
+    // --- FIM DA LÓGICA RESTAURADA PARA metaSelecionada ---
 
-    carregarMetas(metaSelecionada);
+    carregarMetas(metaSelecionada); // Agora metaSelecionada deve estar definida
 
-    const cicloAtual = getCicloAtual();
-    if (!cicloAtual) {
-        console.error('Nenhum ciclo atual encontrado.');
-        document.getElementById('quantidadeProcessos').textContent = 0;
+    const cicloInfo = getCicloAtual(); 
+    if (!cicloInfo || !cicloInfo.semana) { 
+        console.error('Nenhuma semana de ciclo atual encontrada para o card de metas.');
+        const qtdProcessosEl = document.getElementById('quantidadeProcessos');
+        const processosFaltantesEl = document.getElementById('processosFaltantes');
+        if (qtdProcessosEl) qtdProcessosEl.textContent = 0;
+        if (processosFaltantesEl) processosFaltantesEl.textContent = 'Informação da semana atual indisponível.';
+        // Para evitar mais erros, limpe também os outros campos relacionados à meta
+        const comissaoGarantidaEl = document.getElementById('comissaoGarantida');
+        const semMetaBatidaEl = document.getElementById('semMetaBatida');
+        if (comissaoGarantidaEl) comissaoGarantidaEl.style.display = 'none';
+        if (semMetaBatidaEl) semMetaBatidaEl.style.display = 'block'; // Ou 'Informação indisponível'
         return;
     }
 
-    const inicioSemana = cicloAtual.semana.inicio;
-    const fimSemana = cicloAtual.semana.fim;
-    const producoesSemana = producoes.filter(p => {
+    const inicioSemana = cicloInfo.semana.inicio; 
+    const fimSemana = cicloInfo.semana.fim;
+
+    const producoesSemana = producoesDaCostureira.filter(p => {
         const dataProducao = new Date(p.data);
-        return p.funcionario === usuarioLogado.nome && dataProducao >= inicioSemana && dataProducao <= fimSemana;
+        return dataProducao >= inicioSemana && dataProducao <= fimSemana;
     });
 
-    let totalPontosPonderados = 0;
+    let totalPontosDaSemana = 0;
     producoesSemana.forEach(p => {
-        const produtoNomeNormalizado = normalizarTexto(p.produto);
-        const produto = produtos.find(prod => normalizarTexto(prod.nome) === produtoNomeNormalizado);
-        if (produto && Array.isArray(produto.etapas) && Array.isArray(produto.pontos)) {
-            const etapaIndex = produto.etapas.findIndex(e => e.processo === p.processo);
-            const pontosPorProcesso = etapaIndex !== -1 && produto.pontos[etapaIndex] ? produto.pontos[etapaIndex] : 1;
-            totalPontosPonderados += p.quantidade * pontosPorProcesso;
+        if (p.pontos_gerados !== undefined && p.pontos_gerados !== null) {
+            const pontos = parseFloat(p.pontos_gerados);
+            if (!isNaN(pontos)) {
+                totalPontosDaSemana += pontos;
+            } else {
+                console.warn(`[atualizarCardMeta] Produção ID ${p.id} com 'pontos_gerados' não numérico ('${p.pontos_gerados}'). Usando quantidade como fallback.`);
+                totalPontosDaSemana += p.quantidade || 0;
+            }
         } else {
-            console.warn(`Produto ou processo não encontrado ou sem pontos: ${p.produto} - ${p.processo}`);
-            totalPontosPonderados += p.quantidade; // Usa 1 como default se não houver pontos
+            console.warn(`[atualizarCardMeta] Produção ID ${p.id} (OP: ${p.op_numero}, Produto: ${p.produto}, Processo: ${p.processo}) não possui 'pontos_gerados'. Usando p.quantidade como fallback para pontos.`);
+            totalPontosDaSemana += p.quantidade || 0; 
         }
     });
 
-    const totalPontos = totalPontosPonderados;
+    // Renomeando para totalPontos para manter consistência com o resto da função original
+    const totalPontos = totalPontosDaSemana; 
     const nivel = usuarioLogado.nivel || 1;
     const metas = obterMetasPorNivel(nivel);
-    const metaInfo = metas.find(m => m.processos === metaSelecionada) || { valor: 0 };
+    const metaInfo = metas.find(m => m.processos === metaSelecionada) || { valor: 0, processos: metaSelecionada }; // Garante que metaInfo.processos exista
 
-    const progresso = metaSelecionada ? (totalPontos / metaSelecionada) * 100 : 0;
-    document.getElementById('progressoBarra').style.width = `${Math.min(progresso, 100)}%`;
-    document.getElementById('quantidadeProcessos').textContent = Math.round(totalPontos);
-
-    const pontosFaltantes = metaSelecionada - totalPontos;
+    const progresso = metaInfo.processos ? (totalPontos / metaInfo.processos) * 100 : 0;
+    const progressoBarraEl = document.getElementById('progressoBarra');
+    const quantidadeProcessosEl = document.getElementById('quantidadeProcessos');
     const processosFaltantesEl = document.getElementById('processosFaltantes');
-    processosFaltantesEl.innerHTML = pontosFaltantes > 0 
-        ? `Faltam <span class="highlight">${Math.ceil(pontosFaltantes)}</span> pontos para atingir a meta de ${metaSelecionada} pontos` 
-        : 'Meta atingida!';
+
+    if (progressoBarraEl) progressoBarraEl.style.width = `${Math.min(progresso, 100)}%`;
+    if (quantidadeProcessosEl) quantidadeProcessosEl.textContent = Math.round(totalPontos);
+
+    const pontosFaltantes = metaInfo.processos - totalPontos;
+    if (processosFaltantesEl) {
+        if (metaInfo.processos > 0) { // Só mostra "faltam" se houver uma meta definida
+             processosFaltantesEl.innerHTML = pontosFaltantes > 0 
+            ? `Faltam <span class="highlight">${Math.ceil(pontosFaltantes)}</span> pontos para atingir a meta de ${metaInfo.processos} pontos` 
+            : 'Meta atingida!';
+        } else {
+            processosFaltantesEl.innerHTML = 'Nenhuma meta selecionada para calcular o progresso.';
+        }
+    }
 
     const metasBatidas = metas.filter(m => totalPontos >= m.processos);
-    const maiorMetaBatida = metasBatidas.length > 0 ? metasBatidas[metasBatidas.length - 1] : null;
+    const maiorMetaBatida = metasBatidas.length > 0 ? metasBatidas.sort((a, b) => b.processos - a.processos)[0] : null; // Pega a de maior valor
+    
     const comissaoGarantidaEl = document.getElementById('comissaoGarantida');
     const valorComissaoEl = document.getElementById('valorComissao');
     const semMetaBatidaEl = document.getElementById('semMetaBatida');
+
     if (maiorMetaBatida) {
-        valorComissaoEl.textContent = `R$ ${maiorMetaBatida.valor.toFixed(2)}`;
-        comissaoGarantidaEl.style.display = 'block';
-        semMetaBatidaEl.style.display = 'none';
+        if(valorComissaoEl) valorComissaoEl.textContent = `R$ ${maiorMetaBatida.valor.toFixed(2)}`;
+        if(comissaoGarantidaEl) comissaoGarantidaEl.style.display = 'block';
+        if(semMetaBatidaEl) semMetaBatidaEl.style.display = 'none';
     } else {
-        comissaoGarantidaEl.style.display = 'none';
-        semMetaBatidaEl.style.display = 'block';
+        if(comissaoGarantidaEl) comissaoGarantidaEl.style.display = 'none';
+        if(semMetaBatidaEl) semMetaBatidaEl.style.display = 'block';
+        if(valorComissaoEl) valorComissaoEl.textContent = `R$ 0,00`; // Limpa o valor se nenhuma meta foi batida
     }
 }
 
-function atualizarGraficoProducao(producoes) {
+function atualizarGraficoProducao(producoesDaCostureira) { // Parâmetro agora é a lista JÁ FILTRADA
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
-    const producoesHoje = producoes.filter(p => {
+
+    // O filtro por 'p.funcionario === usuarioLogado.nome' FOI REMOVIDO daqui
+    // pois 'producoesDaCostureira' já contém apenas as produções do usuário logado.
+    const producoesHoje = producoesDaCostureira.filter(p => {
         const dataProducao = new Date(p.data);
         dataProducao.setHours(0, 0, 0, 0);
-        return p.funcionario === usuarioLogado.nome && dataProducao.getTime() === hoje.getTime();
+        return dataProducao.getTime() === hoje.getTime(); // Mantém apenas o filtro de data
     });
 
     const horas = Array(24).fill(0);
@@ -204,17 +260,138 @@ function atualizarGraficoProducao(producoes) {
         ctx,
         'line',
         labels,
-        '',
+        '', // Título do gráfico pode ser removido se não usado ou definido aqui
         dados,
-        ['rgba(66, 153, 225, 0.2)'],
-        ['rgba(66, 153, 225, 1)']
+        ['rgba(66, 153, 225, 0.2)'], // areaStyle
+        ['rgba(66, 153, 225, 1)']  // lineStyle
     );
 }
 
-function atualizarAssinaturaCard(producoes) {
-    const producoesNaoAssinadas = producoes.filter(p => p.funcionario === usuarioLogado.nome && !p.assinada);
-    document.getElementById('btnConferirAssinaturas').onclick = () => verificarAssinaturas(producoesNaoAssinadas);
+// Adicione esta função em algum lugar no seu arquivo,
+// talvez perto das outras funções de atualização de UI.
+
+async function atualizarCardAndamentoCiclo(producoesUsuario, produtos) {
+    const cardContainer = document.getElementById('cd-weeks-list');
+    const tituloEl = document.getElementById('tituloAndamentoCiclo');
+
+    if (!cardContainer || !tituloEl) {
+        console.warn('[atualizarCardAndamentoCiclo] Elementos do card não encontrados.');
+        return;
+    }
+
+    cardContainer.innerHTML = '<p>Analisando seu progresso...</p>';
+
+    // ANTES: const cicloAtual = getObjetoCicloAtual(new Date()); // Ou algo similar que passamos na resposta anterior
+    // DEPOIS: Usar a nova função importada corretamente
+    const cicloCompletoAtual = getObjetoCicloCompletoAtual(new Date()); // <<< MUDANÇA AQUI
+
+    // Agora 'cicloCompletoAtual' é o objeto do ciclo ou null
+    if (!cicloCompletoAtual || !cicloCompletoAtual.semanas || cicloCompletoAtual.semanas.length === 0) {
+        tituloEl.textContent = 'Nenhum ciclo ativo no momento.';
+        cardContainer.innerHTML = '<p>Fique de olho para o início do próximo ciclo ou verifique as configurações de ciclo.</p>';
+        return;
+    }
+
+    // O resto da função usa 'cicloCompletoAtual' no lugar de 'cicloAtual' que usamos no rascunho anterior
+    const nomeCiclo = cicloCompletoAtual.nome || "Ciclo Atual";
+    tituloEl.textContent = `Sua jornada no ${nomeCiclo}:`;
+
+    const inicioPrimeiraSemanaCiclo = new Date(cicloCompletoAtual.semanas[0].inicio + 'T00:00:00-03:00');
+    const fimUltimaSemanaCiclo = new Date(cicloCompletoAtual.semanas[cicloCompletoAtual.semanas.length - 1].fim + 'T23:59:59-03:00');
+
+    const producoesDoCicloParaCostureira = producoesUsuario.filter(p => {
+        const dataProducao = new Date(p.data);
+        return dataProducao >= inicioPrimeiraSemanaCiclo && dataProducao <= fimUltimaSemanaCiclo;
+    });
+
+    cardContainer.innerHTML = ''; 
+
+    const dataReferenciaHoje = new Date();
+    const hojeParaComparacao = new Date(dataReferenciaHoje.getFullYear(), dataReferenciaHoje.getMonth(), dataReferenciaHoje.getDate());
+
+    cicloCompletoAtual.semanas.forEach((semana, index) => { // Usa cicloCompletoAtual.semanas
+        const inicioSemanaDate = new Date(semana.inicio + 'T00:00:00-03:00');
+        const fimSemanaDate = new Date(semana.fim + 'T23:59:59-03:00');
+
+        const producoesDaSemana = producoesDoCicloParaCostureira.filter(p => {
+            const dataProducao = new Date(p.data);
+            return dataProducao >= inicioSemanaDate && dataProducao <= fimSemanaDate;
+        });
+
+        let pontosSemanaPonderados = 0;
+        producoesDaSemana.forEach(p => {
+            let pontosParaEsteLancamento = 0;
+            if (p.pontos_gerados !== undefined && p.pontos_gerados !== null && String(p.pontos_gerados).trim() !== "") {
+                const valorFloat = parseFloat(p.pontos_gerados);
+                if (!isNaN(valorFloat)) {
+                    pontosParaEsteLancamento = valorFloat;
+                } else {
+                    pontosParaEsteLancamento = p.quantidade; 
+                }
+            } else {
+                pontosParaEsteLancamento = p.quantidade; 
+            }
+            pontosSemanaPonderados += pontosParaEsteLancamento;
+        });
+
+        const inicioSemanaParaComparacao = new Date(inicioSemanaDate.getFullYear(), inicioSemanaDate.getMonth(), inicioSemanaDate.getDate());
+        const fimSemanaParaComparacao = new Date(fimSemanaDate.getFullYear(), fimSemanaDate.getMonth(), fimSemanaDate.getDate());
+        const isSemanaAtual = hojeParaComparacao >= inicioSemanaParaComparacao && hojeParaComparacao <= fimSemanaParaComparacao;
+
+        const semanaDiv = document.createElement('div');
+        semanaDiv.className = 'cd-week-item';
+        semanaDiv.innerHTML = `
+            <button class="${isSemanaAtual ? 'semana-atual-cd' : ''}" disabled>
+                S${index + 1} (${formatarData(semana.inicio)} a ${formatarData(semana.fim)})
+            </button>
+            <span class="${isSemanaAtual ? 'pontos-atual-cd' : ''}">
+                ${Math.round(pontosSemanaPonderados)} ${Math.round(pontosSemanaPonderados) === 1 ? 'Ponto' : 'Pontos'}
+            </span>
+        `;
+        cardContainer.appendChild(semanaDiv);
+    });
+     if (cicloCompletoAtual.semanas.length === 0 && cardContainer.innerHTML === '') { // Adicional para garantir mensagem se não houver semanas
+        cardContainer.innerHTML = '<p>Este ciclo ainda não tem semanas definidas.</p>';
+    }
 }
+
+function atualizarTextoDatepickerSemana() {
+    const inputSemana = $("#datepickerSemana");
+    if (!inputSemana.length) return;
+
+    const dataBaseParaCalculo = new Date(dataSelecionadaSemana.getTime()); // Cria uma cópia
+
+    // Calcula o início da semana (Domingo)
+    const diaDaSemana = dataBaseParaCalculo.getDay(); // 0 para Domingo, 1 para Segunda, ..., 6 para Sábado
+    // Subtrai o número de dias correspondente ao dia da semana para chegar ao Domingo
+    // Ex: Se for Terça (dia 2), subtrai 2 dias. Se for Domingo (dia 0), subtrai 0 dias.
+    dataBaseParaCalculo.setDate(dataBaseParaCalculo.getDate() - diaDaSemana);
+    const inicioSemanaDisplay = new Date(dataBaseParaCalculo.getTime());
+    inicioSemanaDisplay.setHours(0, 0, 0, 0);
+
+    // Calcula o fim da semana (Sábado)
+    const fimSemanaDisplay = new Date(inicioSemanaDisplay.getTime());
+    fimSemanaDisplay.setDate(inicioSemanaDisplay.getDate() + 6);
+    fimSemanaDisplay.setHours(23, 59, 59, 999);
+
+    inputSemana.val(`${inicioSemanaDisplay.toLocaleDateString('pt-BR')} - ${fimSemanaDisplay.toLocaleDateString('pt-BR')}`);
+    console.log(`[atualizarTextoDatepickerSemana] dataSelecionadaSemana: ${dataSelecionadaSemana.toLocaleDateString('pt-BR')}, Início Display: ${inicioSemanaDisplay.toLocaleDateString('pt-BR')}, Fim Display: ${fimSemanaDisplay.toLocaleDateString('pt-BR')}`);
+}
+
+
+function atualizarAssinaturaCard(producoesDaCostureira) { // Parâmetro agora é a lista JÁ FILTRADA
+    // O filtro por 'p.funcionario === usuarioLogado.nome' FOI REMOVIDO daqui
+    // pois 'producoesDaCostureira' já contém apenas as produções do usuário logado.
+    const producoesNaoAssinadas = producoesDaCostureira.filter(p => !p.assinada); // Mantém apenas o filtro de !p.assinada
+
+    const btnConferir = document.getElementById('btnConferirAssinaturas');
+    if (btnConferir) {
+        btnConferir.onclick = () => verificarAssinaturas(producoesNaoAssinadas);
+    } else {
+        console.warn("[atualizarAssinaturaCard] Botão 'btnConferirAssinaturas' não encontrado.");
+    }
+}
+
 
 function verificarAssinaturas(producoesNaoAssinadas) {
     if (producoesNaoAssinadas.length === 0) {
@@ -382,7 +559,7 @@ function gerarIdUnico() {
     return 'assinatura_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
 
-function atualizarDetalhamentoProcessos(producoes, produtos) {
+function atualizarDetalhamentoProcessos(producoesDaCostureira, produtos) { // Parâmetro é a lista JÁ FILTRADA
     const filtroDiaTexto = document.getElementById('filtroDia');
     const filtroSemanaTexto = document.getElementById('filtroSemana');
     const totalProcessosEl = document.getElementById('totalProcessos');
@@ -392,15 +569,14 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
     const paginacaoNumeros = document.getElementById('paginacaoNumeros');
 
     if (!filtroDiaTexto || !filtroSemanaTexto || !totalProcessosEl || !listaProcessos || !btnAnterior || !btnProximo || !paginacaoNumeros) {
-        console.error('Um ou mais elementos necessários não foram encontrados no DOM:', {
-            filtroDiaTexto, filtroSemanaTexto, totalProcessosEl, listaProcessos, btnAnterior, btnProximo, paginacaoNumeros
-        });
+        console.error('Um ou mais elementos necessários para o detalhamento de processos não foram encontrados no DOM.');
         return;
     }
 
-    // Removido o filtro p.assinada para mostrar todos os processos do usuário
-    const producoesUsuario = producoes.filter(p => p.funcionario === usuarioLogado.nome).sort((a, b) => new Date(b.data) - new Date(a.data));
-    console.log('Produções do usuário (assinadas e não assinadas):', producoesUsuario);
+    // A lista 'producoesDaCostureira' já está filtrada pelo usuário.
+    // Apenas aplicamos o sort aqui.
+    const producoesUsuarioOrdenadas = producoesDaCostureira.sort((a, b) => new Date(b.data) - new Date(a.data));
+    // console.log('Produções ordenadas da costureira para detalhamento:', producoesUsuarioOrdenadas); // Log opcional
 
     let paginaAtual = 1;
     const itensPorPagina = 8;
@@ -411,25 +587,35 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
     }
 
     function filtrarProducoes() {
+        // 'producoesUsuarioOrdenadas' já contém apenas as produções do usuário logado.
+        // Aplicamos apenas o filtro de período (dia ou semana).
         if (filtroAtivo === 'dia') {
             const diaSelecionado = normalizarData(dataSelecionadaDia);
-            return producoesUsuario.filter(p => {
+            return producoesUsuarioOrdenadas.filter(p => {
                 const dataProducao = normalizarData(p.data);
                 return dataProducao.getTime() === diaSelecionado.getTime();
             });
-        } else {
-            const inicioSemana = normalizarData(dataSelecionadaSemana);
-            inicioSemana.setDate(inicioSemana.getDate() - inicioSemana.getDay());
-            const fimSemana = new Date(inicioSemana);
-            fimSemana.setDate(inicioSemana.getDate() + 6);
-            fimSemana.setHours(23, 59, 59, 999);
-            return producoesUsuario.filter(p => {
-                const dataProducao = normalizarData(p.data);
-                return dataProducao >= inicioSemana && dataProducao <= fimSemana;
+        } else { // filtroAtivo === 'semana'
+            // Calcula o início da semana (Domingo) para dataSelecionadaSemana
+            const inicioSemanaSelecionada = normalizarData(dataSelecionadaSemana);
+            inicioSemanaSelecionada.setDate(inicioSemanaSelecionada.getDate() - inicioSemanaSelecionada.getDay()); 
+            
+            const fimSemanaSelecionada = new Date(inicioSemanaSelecionada);
+            fimSemanaSelecionada.setDate(inicioSemanaSelecionada.getDate() + 6);
+            fimSemanaSelecionada.setHours(23, 59, 59, 999); // Garante que cobre o dia inteiro
+
+            return producoesUsuarioOrdenadas.filter(p => {
+                const dataProducao = normalizarData(p.data); // Compara apenas a parte da data
+                return dataProducao >= inicioSemanaSelecionada && dataProducao <= fimSemanaSelecionada;
             });
         }
     }
 
+    // O restante da função 'atualizarDetalhamentoProcessos' continua igual,
+    // pois as sub-funções (calcularTotalProcessos, renderizarPaginacao, renderizarProcessos, etc.)
+    // já usam o resultado de 'filtrarProducoes()', que por sua vez usa 'producoesUsuarioOrdenadas'.
+
+    // --- INÍCIO DO CÓDIGO QUE VOCÊ JÁ TEM E DEVE MANTER ---
     function calcularTotalProcessos(producoesFiltradas) {
         return producoesFiltradas.reduce((total, p) => total + p.quantidade, 0);
     }
@@ -446,7 +632,7 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
                 btn.addEventListener('click', () => {
                     paginaAtual = i;
                     renderizarProcessos();
-                    atualizarBotoesPaginacao();
+                    // atualizarBotoesPaginacao(); // renderizarPaginacao já é chamada por renderizarProcessos, que chama esta
                     listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 });
                 paginacaoNumeros.appendChild(btn);
@@ -461,7 +647,6 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
             btn.addEventListener('click', () => {
                 paginaAtual = firstPage;
                 renderizarProcessos();
-                atualizarBotoesPaginacao();
                 listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
             });
             paginacaoNumeros.appendChild(btn);
@@ -476,11 +661,7 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
                 btn = document.createElement('button');
                 btn.textContent = paginaAtual;
                 btn.classList.add('active');
-                btn.addEventListener('click', () => {
-                    renderizarProcessos();
-                    atualizarBotoesPaginacao();
-                    listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                });
+                // Não precisa de event listener aqui, pois já é a página ativa
                 paginacaoNumeros.appendChild(btn);
 
                 const dots2 = document.createElement('span');
@@ -488,24 +669,26 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
                 dots2.style.margin = '0 5px';
                 dots2.style.color = '#4a5568';
                 paginacaoNumeros.appendChild(dots2);
-            } else {
-                const dots = document.createElement('span');
+            } else if (totalPaginas > 2) { // Evita "..." se só houver 2 páginas e a lógica acima não cobrir
+                 const dots = document.createElement('span');
                 dots.textContent = '...';
                 dots.style.margin = '0 5px';
                 dots.style.color = '#4a5568';
                 paginacaoNumeros.appendChild(dots);
             }
 
-            btn = document.createElement('button');
-            btn.textContent = lastPage;
-            btn.classList.add(lastPage === paginaAtual ? 'active' : 'inactive');
-            btn.addEventListener('click', () => {
-                paginaAtual = lastPage;
-                renderizarProcessos();
-                atualizarBotoesPaginacao();
-                listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            });
-            paginacaoNumeros.appendChild(btn);
+
+            if (totalPaginas > 1) { // Só adiciona o botão da última página se houver mais de uma página
+                btn = document.createElement('button');
+                btn.textContent = lastPage;
+                btn.classList.add(lastPage === paginaAtual ? 'active' : 'inactive');
+                btn.addEventListener('click', () => {
+                    paginaAtual = lastPage;
+                    renderizarProcessos();
+                    listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
+                paginacaoNumeros.appendChild(btn);
+            }
         }
 
         btnAnterior.disabled = paginaAtual === 1;
@@ -521,9 +704,10 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
         listaProcessos.innerHTML = processosParaExibir.length > 0 
             ? processosParaExibir.map(p => {
                 const produtoNomeNormalizado = normalizarTexto(p.produto);
-                const produto = produtos.find(prod => normalizarTexto(prod.nome) === produtoNomeNormalizado);
+                // 'produtos' é o array completo de produtos passado como parâmetro para atualizarDetalhamentoProcessos
+                const produtoInfo = produtos.find(prod => normalizarTexto(prod.nome) === produtoNomeNormalizado);
                 const variacao = p.variacao || 'N/A';
-                const statusAssinatura = p.assinada ? 'Assinado' : 'Pendente'; // Adiciona indicação de status
+                const statusAssinatura = p.assinada ? 'Assinado' : 'Pendente';
 
                 return `
                     <div class="processo-item" style="background: #F9F9F9; border: 1px solid #EDEDED; border-radius: 8px; padding: 10px; margin-bottom: 10px;">
@@ -539,179 +723,240 @@ function atualizarDetalhamentoProcessos(producoes, produtos) {
 
         const total = calcularTotalProcessos(producoesFiltradas);
         totalProcessosEl.textContent = `TOTAL DE PROCESSOS: ${total}`;
-        renderizarPaginacao(producoesFiltradas);
+        renderizarPaginacao(producoesFiltradas); // Chama renderizarPaginacao aqui
+        // Não precisa chamar atualizarBotoesPaginacao separadamente se renderizarPaginacao já cuida disso.
     }
 
-    function atualizarBotoesPaginacao() {
-        const producoesFiltradas = filtrarProducoes();
-        const totalPaginas = Math.ceil(producoesFiltradas.length / itensPorPagina);
-        btnAnterior.disabled = paginaAtual === 1;
-        btnProximo.disabled = paginaAtual === totalPaginas || totalPaginas === 0;
-        paginacaoNumeros.querySelectorAll('button').forEach(btn => {
-            const isActive = parseInt(btn.textContent) === paginaAtual;
-            btn.classList.remove('active', 'inactive');
-            btn.classList.add(isActive ? 'active' : 'inactive');
-        });
-    }
+    // 'atualizarBotoesPaginacao' pode ser simplificada ou integrada em 'renderizarPaginacao'
+    // Se 'renderizarPaginacao' já atualiza classes active/inactive e o estado dos botões next/prev,
+    // 'atualizarBotoesPaginacao' pode não ser necessária como uma função separada chamada externamente.
+    // Por segurança, vamos mantê-la, mas garantir que 'renderizarPaginacao' a chame se precisar, ou faça o trabalho ela mesma.
+    // No seu código, renderizarPaginacao já define btnAnterior.disabled e btnProximo.disabled.
+    // E os botões de número já têm suas classes definidas dentro de renderizarPaginacao.
 
     btnAnterior.onclick = () => {
         if (paginaAtual > 1) {
             paginaAtual--;
             renderizarProcessos();
-            atualizarBotoesPaginacao();
+            // renderizarPaginacao() é chamada dentro de renderizarProcessos()
             listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     };
 
     btnProximo.onclick = () => {
-        const totalPaginas = Math.ceil(filtrarProducoes().length / itensPorPagina);
+        const totalPaginas = Math.ceil(filtrarProducoes().length / itensPorPagina); // Recalcula aqui para garantir
         if (paginaAtual < totalPaginas) {
             paginaAtual++;
             renderizarProcessos();
-            atualizarBotoesPaginacao();
+            // renderizarPaginacao() é chamada dentro de renderizarProcessos()
             listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     };
 
     filtroDiaTexto.onclick = () => {
-        console.log('Clique em filtroDia');
         paginaAtual = 1;
         filtroAtivo = 'dia';
         filtroDiaTexto.classList.add('active');
         filtroSemanaTexto.classList.remove('active');
+        $("#datepickerDia").datepicker('setDate', dataSelecionadaDia); // Garante que o datepicker reflita a data
         renderizarProcessos();
         listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
     filtroSemanaTexto.onclick = () => {
-        console.log('Clique em filtroSemana');
         paginaAtual = 1;
         filtroAtivo = 'semana';
         filtroSemanaTexto.classList.add('active');
         filtroDiaTexto.classList.remove('active');
+        atualizarTextoDatepickerSemana(); // Garante que o texto do input da semana seja atualizado
         renderizarProcessos();
         listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
-    $("#datepickerDia").datepicker({
-        dateFormat: 'dd/mm/yy',
-        defaultDate: dataSelecionadaDia,
-        onSelect: function(dateText) {
-            console.log('Seleção de data no datepickerDia:', dateText);
-            const [dia, mes, ano] = dateText.split('/');
-            dataSelecionadaDia = new Date(ano, mes - 1, dia);
-            paginaAtual = 1;
-            filtroAtivo = 'dia';
-            filtroDiaTexto.classList.add('active');
-            filtroSemanaTexto.classList.remove('active');
-            renderizarProcessos();
-            listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-    }).datepicker('setDate', dataSelecionadaDia);
+    // A inicialização dos datepickers e a chamada inicial de renderizarProcessos()
+    // já estão no DOMContentLoaded, então não precisam ser repetidas aqui.
+    // Apenas garantimos que, ao trocar de filtro, a renderização ocorra.
 
-    $("#datepickerSemana").datepicker({
-        dateFormat: 'dd/mm/yy',
-        defaultDate: dataSelecionadaSemana,
-        onSelect: function(dateText) {
-            console.log('Seleção de data no datepickerSemana:', dateText);
-            const [dia, mes, ano] = dateText.split('/');
-            dataSelecionadaSemana = new Date(ano, mes - 1, dia);
-            paginaAtual = 1;
-            filtroAtivo = 'semana';
-            filtroSemanaTexto.classList.add('active');
-            filtroDiaTexto.classList.remove('active');
-            renderizarProcessos();
-            listaProcessos.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-    });
-
-    const inicioSemanaAtual = new Date();
-    inicioSemanaAtual.setDate(inicioSemanaAtual.getDate() - inicioSemanaAtual.getDay());
-    const fimSemanaAtual = new Date(inicioSemanaAtual);
-    fimSemanaAtual.setDate(inicioSemanaAtual.getDate() + 6);
-    $("#datepickerSemana").val(`${inicioSemanaAtual.toLocaleDateString('pt-BR')} - ${fimSemanaAtual.toLocaleDateString('pt-BR')}`);
-
-    console.log('Inicializando filtros: dia como padrão');
-    filtroAtivo = 'dia';
-    filtroDiaTexto.classList.add('active');
-    filtroSemanaTexto.classList.remove('active');
-    renderizarProcessos();
+    // Chamada inicial para renderizar os processos com o filtro padrão (dia ou o que estiver ativo)
+    if (!filtroDiaTexto.classList.contains('active') && !filtroSemanaTexto.classList.contains('active')) {
+        filtroAtivo = 'dia'; 
+        filtroDiaTexto.classList.add('active');
+        filtroSemanaTexto.classList.remove('active');
+        $("#datepickerDia").datepicker('setDate', dataSelecionadaDia);
+   }
+   renderizarProcessos();
+   // --- FIM DO CÓDIGO QUE VOCÊ JÁ TEM E DEVE MANTER ---
 }
 
 // Eventos
 document.addEventListener('DOMContentLoaded', async () => {
     usuarioLogado = await verificarAutenticacaoCostureira();
     if (!usuarioLogado) {
-        throw new Error('Autenticação falhou, redirecionando...');
+        // Se a autenticação falhar, verificarAutenticacaoCostureira já deve redirecionar.
+        // Mas por segurança, podemos parar a execução aqui.
+        console.error("Falha na autenticação. Interrompendo inicialização do dashboard.");
+        return; 
     }
 
-    $("#datepickerDia").datepicker({
-        dateFormat: 'dd/mm/yy',
-        defaultDate: dataSelecionadaDia,
-        onSelect: async function(dateText) {
-            const [dia, mes, ano] = dateText.split('/');
-            dataSelecionadaDia = new Date(ano, mes - 1, dia);
+    // Cache para as produções do usuário e produtos para evitar múltiplas chamadas à API
+    // dentro dos event handlers dos datepickers.
+    let cachedProducoesUsuario = [];
+    let cachedProdutos = [];
+
+    // Função para buscar e cachear os dados se necessário
+    async function getDadosParaFiltros() {
+        if (cachedProducoesUsuario.length === 0 || cachedProdutos.length === 0) {
+            console.log("[getDadosParaFiltros] Cache vazio, buscando dados da API...");
+            const todasProducoes = await obterProducoes();
+            cachedProdutos = await obterProdutos(); // Cacheia produtos
+            // Filtra e cacheia produções do usuário
+            if (usuarioLogado && usuarioLogado.nome) {
+                cachedProducoesUsuario = todasProducoes.filter(p => p.funcionario === usuarioLogado.nome);
+            } else {
+                console.error("[getDadosParaFiltros] Nome do usuário logado não encontrado para filtrar produções.");
+                cachedProducoesUsuario = []; // Evita erros, mas indica um problema
+            }
+        }
+        return { producoes: cachedProducoesUsuario, produtos: cachedProdutos };
+    }
+
+    // Inicializar datepickers e outros elementos que dependem de dados
+    try {
+        // Carrega os dados iniciais para o dashboard principal
+        await atualizarDashboard(); // Esta função já popula cachedProducoesUsuario e cachedProdutos através de suas chamadas internas se as ajustarmos
+
+        // Configuração dos Datepickers
+        $("#datepickerDia").datepicker({
+            dateFormat: 'dd/mm/yy',
+            defaultDate: dataSelecionadaDia, // Usa a variável global
+            onSelect: async function(dateText) {
+                const [dia, mes, ano] = dateText.split('/');
+                dataSelecionadaDia = new Date(ano, mes - 1, dia);
+                filtroAtivo = 'dia';
+                document.getElementById('filtroDia')?.classList.add('active');
+                document.getElementById('filtroSemana')?.classList.remove('active');
+                
+                // USA OS DADOS CACHEADOS para atualizar apenas o detalhamento
+                const dados = await getDadosParaFiltros(); // Pega do cache ou busca se necessário
+                atualizarDetalhamentoProcessos(dados.producoes, dados.produtos);
+            }
+        }).datepicker('setDate', dataSelecionadaDia); // Define a data inicial
+
+        $("#datepickerSemana").datepicker({
+            dateFormat: 'dd/mm/yy', // A data clicada é apenas uma referência para a semana
+            onSelect: async function(dateText) {
+                const [dia, mes, ano] = dateText.split('/');
+                dataSelecionadaSemana = new Date(ano, mes - 1, dia); 
+                atualizarTextoDatepickerSemana(); // Atualiza o display do input para mostrar o intervalo da semana
+
+                filtroAtivo = 'semana';
+                document.getElementById('filtroSemana')?.classList.add('active');
+                document.getElementById('filtroDia')?.classList.remove('active');
+
+                // USA OS DADOS CACHEADOS
+                const dados = await getDadosParaFiltros();
+                atualizarDetalhamentoProcessos(dados.producoes, dados.produtos);
+            }
+        });
+        // Define o texto inicial para o datepicker da semana
+        dataSelecionadaSemana = new Date(); // Define para hoje
+        dataSelecionadaSemana.setHours(0,0,0,0);
+        atualizarTextoDatepickerSemana(); // Atualiza o display do input
+
+        // Os event listeners para 'filtroDia' e 'filtroSemana' já estão dentro de 
+        // 'atualizarDetalhamentoProcessos' ou podem ser movidos para cá também
+        // se 'atualizarDetalhamentoProcessos' for chamada com os dados cacheados.
+
+        // Se os handlers de clique para filtroDiaTexto e filtroSemanaTexto
+        // ainda estiverem dentro de atualizarDetalhamentoProcessos, eles usarão
+        // a 'producoesDaCostureira' que foi passada para essa instância de atualizarDetalhamentoProcessos.
+        // Se eles chamarem uma nova busca de produções, aí está o problema.
+
+        // Vamos garantir que eles também usem dados cacheados se forem definidos aqui:
+        document.getElementById('filtroDia')?.addEventListener('click', async () => {
+            if (filtroAtivo === 'dia' && $("#datepickerDia").datepicker('getDate').getTime() === dataSelecionadaDia.getTime()) return; // Evita recarregar se já estiver ativo com a mesma data
+
+            paginaAtual = 1; // Resetar paginação (supondo que paginaAtual é global ou acessível)
             filtroAtivo = 'dia';
-            const filtroDia = document.getElementById('filtroDia');
-            const filtroSemana = document.getElementById('filtroSemana');
-            if (filtroDia) filtroDia.classList.add('active');
-            if (filtroSemana) filtroSemana.classList.remove('active');
-            const producoes = await obterProducoes();
-            const produtos = await obterProdutos();
-            atualizarDetalhamentoProcessos(producoes, produtos);
-        }
-    }).datepicker('setDate', dataSelecionadaDia);
+            document.getElementById('filtroDia')?.classList.add('active');
+            document.getElementById('filtroSemana')?.classList.remove('active');
+            // Garante que dataSelecionadaDia esteja correta se o usuário não usou o datepicker
+             if (!$("#datepickerDia").datepicker('getDate') || $("#datepickerDia").datepicker('getDate').getTime() !== dataSelecionadaDia.getTime()) {
+                $("#datepickerDia").datepicker('setDate', dataSelecionadaDia);
+            }
 
-    $("#datepickerSemana").datepicker({
-        dateFormat: 'dd/mm/yy',
-        defaultDate: dataSelecionadaSemana,
-        onSelect: async function(dateText) {
-            const [dia, mes, ano] = dateText.split('/');
-            dataSelecionadaSemana = new Date(ano, mes - 1, dia);
+            const dados = await getDadosParaFiltros();
+            atualizarDetalhamentoProcessos(dados.producoes, dados.produtos);
+            document.getElementById('listaProcessos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+
+        document.getElementById('filtroSemana')?.addEventListener('click', async () => {
+            if (filtroAtivo === 'semana') return; // Evita recarregar se já estiver ativo
+
+            paginaAtual = 1;
             filtroAtivo = 'semana';
-            const filtroSemana = document.getElementById('filtroSemana');
-            const filtroDia = document.getElementById('filtroDia');
-            if (filtroSemana) filtroSemana.classList.add('active');
-            if (filtroDia) filtroDia.classList.remove('active');
-            const producoes = await obterProducoes();
-            const produtos = await obterProdutos();
-            atualizarDetalhamentoProcessos(producoes, produtos);
+            document.getElementById('filtroSemana')?.classList.add('active');
+            document.getElementById('filtroDia')?.classList.remove('active');
+            atualizarTextoDatepickerSemana(); // Garante que o texto do input da semana seja atualizado
+
+            const dados = await getDadosParaFiltros();
+            atualizarDetalhamentoProcessos(dados.producoes, dados.produtos);
+            document.getElementById('listaProcessos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+
+
+    } catch (e) {
+        console.error("Erro durante a inicialização dos componentes do dashboard:", e);
+        // Tratar erro de inicialização
+    }
+
+        document.getElementById('metaSelect')?.addEventListener('change', async () => {
+        const metaSelect = document.getElementById('metaSelect');
+        const editarMetaBtn = document.getElementById('editarMetaBtn');
+
+        if (!metaSelect) {
+            console.warn("Elemento metaSelect não encontrado no evento change.");
+            return;
         }
-    });
-
-    const inicioSemanaAtual = new Date();
-    inicioSemanaAtual.setDate(inicioSemanaAtual.getDate() - inicioSemanaAtual.getDay());
-    const fimSemanaAtual = new Date(inicioSemanaAtual);
-    fimSemanaAtual.setDate(inicioSemanaAtual.getDate() + 6);
-    $("#datepickerSemana").val(`${inicioSemanaAtual.toLocaleDateString('pt-BR')} - ${fimSemanaAtual.toLocaleDateString('pt-BR')}`);
-
-    await atualizarDashboard();
-
-    document.getElementById('metaSelect').addEventListener('change', async () => {
-        const metaSelect = document.getElementById('metaSelect');
-        const editarMetaBtn = document.getElementById('editarMetaBtn');
+        
         const novaMeta = parseInt(metaSelect.value);
-        salvarMetaSelecionada(novaMeta);
-        metaSelect.disabled = true;
-        editarMetaBtn.textContent = 'Editar Meta';
-        const producoes = await obterProducoes();
-        const produtos = await obterProdutos();
-        atualizarCardMeta(producoes, produtos);
+        salvarMetaSelecionada(novaMeta); // Salva a meta selecionada no localStorage
+
+        metaSelect.disabled = true; // Desabilita o select após a escolha
+        if (editarMetaBtn) {
+            editarMetaBtn.textContent = 'Editar Meta'; // Restaura o texto do botão
+        }
+        
+        // USA OS DADOS CACHEADOS para atualizar o card de meta
+        const dados = await getDadosParaFiltros(); // getDadosParaFiltros() já foi definido
+        atualizarCardMeta(dados.producoes, dados.produtos); 
     });
 
-    document.getElementById('editarMetaBtn').addEventListener('click', async () => {
+    document.getElementById('editarMetaBtn')?.addEventListener('click', async () => {
         const metaSelect = document.getElementById('metaSelect');
         const editarMetaBtn = document.getElementById('editarMetaBtn');
-        if (metaSelect.disabled) {
+
+        if (!metaSelect || !editarMetaBtn) { // Verificação de segurança
+            console.warn("Elementos metaSelect ou editarMetaBtn não encontrados.");
+            return;
+        }
+
+        if (metaSelect.disabled) { // Se está desabilitado, o usuário quer habilitar para editar
             metaSelect.disabled = false;
-            editarMetaBtn.textContent = 'Escolher Meta';
+            editarMetaBtn.textContent = 'Escolher Meta'; // Ou 'Salvar Meta', 'Confirmar Meta'
             metaSelect.focus();
-        } else {
+        } else { // Se está habilitado, o usuário clicou para "salvar" a escolha
             metaSelect.disabled = true;
             editarMetaBtn.textContent = 'Editar Meta';
-            const producoes = await obterProducoes();
-            const produtos = await obterProdutos();
-            atualizarCardMeta(producoes, produtos);
+            
+            // Aqui é o ponto crucial:
+            // AO INVÉS DE buscar producoes e produtos da API novamente:
+            // const producoes = await obterProducoes();
+            // const produtos = await obterProdutos();
+            
+            // USE OS DADOS CACHEADOS:
+            const dados = await getDadosParaFiltros(); // getDadosParaFiltros() é a função que definimos antes
+            atualizarCardMeta(dados.producoes, dados.produtos); // Passa os dados corretos (já filtrados pelo usuário)
         }
     });
 

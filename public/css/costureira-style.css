@@ -159,17 +159,18 @@ body {
 
 .progress-bar {
     flex: 1;
-    height: 8px;
-    background: #e2e8f0;
-    border-radius: 4px;
+    height: 20px;
+    background-color: #e9ecef; /* Cor de fundo da barra container */    border-radius: 4px;
     overflow: hidden;
+    border-radius: .25rem;
 }
 
 .progress-fill {
     height: 100%;
     background: linear-gradient(90deg, #4299e1, #63b3ed);
     width: 0%;
-    transition: width 0.5s ease;
+    transition: width 0.6s ease;
+    border-radius: .25rem;
 }
 
 .processos-destaque {
@@ -224,6 +225,69 @@ body {
     color: #718096;
     font-size: 0.95rem;
 }
+
+/* Estilos para o Card de Andamento do Ciclo */
+.card.andamento-ciclo {
+    /* Mantenha ou adapte os estilos gerais de .card */
+    /* background-color: #f0f9ff; /* Exemplo de cor de fundo */
+}
+
+.card.andamento-ciclo h2 {
+    /* Estilo do título do card */
+    /* color: #1e40af; */ /* Exemplo */
+    margin-bottom: 15px;
+}
+
+.ciclo-semanas-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px; /* Espaço entre os itens da semana */
+}
+
+.cd-week-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background-color: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.cd-week-item button {
+    background-color: #e9ecef; /* Cor para o botão da semana */
+    color: #495057;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-weight: 500;
+    cursor: default; /* Já que é desabilitado e só para display */
+}
+
+.cd-week-item button.semana-atual-cd {
+    background-color: #3b82f6; /* Destaque para a semana atual */
+    color: white;
+    font-weight: bold;
+}
+
+.cd-week-item span {
+    color: #374151;
+    font-weight: 500;
+}
+
+.cd-week-item span.pontos-atual-cd {
+    color: #10b981; /* Destaque para os pontos da semana atual */
+    font-weight: bold;
+}
+
+/* Mensagens dentro do card */
+.ciclo-semanas-list p {
+    text-align: center;
+    color: #6b7280;
+    padding: 20px 0;
+}
+
 
 /* Card Detalhamento de Processos */
 .detalhamento-card .filtros {
