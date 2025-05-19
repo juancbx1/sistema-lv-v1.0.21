@@ -90,11 +90,9 @@ async function fetchFromAPI(endpoint, options = {}) {
 
 async function buscarOpsFinalizadas() {
     const endpoint = '/ops-para-embalagem?all=true';
-    console.log(`[buscarOpsFinalizadas] Buscando OPs finalizadas em ${endpoint}...`);
     try {
         const data = await fetchFromAPI(endpoint);
         const ops = data?.rows || [];
-        console.log(`[buscarOpsFinalizadas] ${ops.length} OPs finalizadas encontradas.`);
         opDataCache.clear(); // Limpa cache antigo de OPs
         ops.forEach(op => opDataCache.set(op.numero, op)); // Popula com OPs completas
         return ops;
@@ -127,11 +125,9 @@ async function buscarArrematesRegistrados(opNumero = null) {
 
 async function buscarUsuarios() {
     if (todosOsUsuarios.length > 0) return todosOsUsuarios;
-    console.log('[buscarUsuarios] Buscando usuários da API...');
     try {
         const data = await fetchFromAPI('/usuarios'); // API retorna { rows: [...] } ou array
         todosOsUsuarios = Array.isArray(data) ? data : (data?.rows || []);
-        console.log(`[buscarUsuarios] ${todosOsUsuarios.length} usuários carregados.`);
         return todosOsUsuarios;
     } catch (error) {
         console.error('[buscarUsuarios] Erro:', error);
@@ -142,10 +138,8 @@ async function buscarUsuarios() {
 
 async function buscarTodosProdutos() {
     if (todosOsProdutos.length > 0) return todosOsProdutos;
-    console.log('[buscarTodosProdutos] Buscando produtos...');
     try {
         todosOsProdutos = await obterProdutos();
-        console.log(`[buscarTodosProdutos] ${todosOsProdutos.length} produtos carregados.`);
         return todosOsProdutos;
     } catch (error) {
         console.error('[buscarTodosProdutos] Erro:', error);
@@ -170,13 +164,36 @@ async function buscarOpPorNumero(opNumero) {
 }
 
 function obterQuantidadeFinalProduzida(op) {
-    if (op?.etapas && op.etapas.length > 0) {
-        const ultimaEtapa = op.etapas[op.etapas.length - 1];
-        const qtdUltimaEtapa = parseInt(ultimaEtapa?.quantidade);
-        if (!isNaN(qtdUltimaEtapa) && qtdUltimaEtapa > 0) return qtdUltimaEtapa;
+    if (!op) return 0; // Adiciona verificação se OP é nula/undefined
+
+    if (op.etapas && Array.isArray(op.etapas) && op.etapas.length > 0) {
+        for (let i = op.etapas.length - 1; i >= 0; i--) {
+            const etapa = op.etapas[i];
+            // Verifica se a etapa existe e se 'quantidade' está definida (não null/undefined)
+            if (etapa && typeof etapa.quantidade !== 'undefined' && etapa.quantidade !== null) {
+                const qtdEtapa = parseInt(etapa.quantidade, 10);
+                // Verifica se a conversão para int resultou em um número válido
+                if (!isNaN(qtdEtapa) && qtdEtapa >= 0) {
+                    // Considerar se uma etapa com quantidade 0 significa "sem produção finalizada"
+                    // Para o propósito de "produto pronto", geralmente esperamos > 0, mas 0 pode ser válido.
+                    return qtdEtapa;
+                }
+            }
+        }
+        console.warn(`[obterQuantidadeFinalProduzida] OP ${op.numero}: Nenhuma etapa com quantidade válida encontrada. Etapas:`, op.etapas);
+    } else {
+        console.warn(`[obterQuantidadeFinalProduzida] OP ${op.numero}: Não possui etapas ou etapas não é um array.`);
     }
-    const qtdPrincipal = parseInt(op?.quantidade);
-    return isNaN(qtdPrincipal) ? 0 : qtdPrincipal;
+
+    // Fallback para a quantidade principal da OP se nenhuma etapa tiver quantidade válida
+    const qtdPrincipal = parseInt(op.quantidade, 10);
+    if (!isNaN(qtdPrincipal) && qtdPrincipal >= 0) {
+        console.log(`[obterQuantidadeFinalProduzida] OP ${op.numero}: Usando quantidade principal da OP: ${qtdPrincipal}`);
+        return qtdPrincipal;
+    }
+    
+    console.error(`[obterQuantidadeFinalProduzida] OP ${op.numero}: Não foi possível determinar a quantidade final. Retornando 0.`);
+    return 0;
 }
 
 async function obterUsuariosTiktikParaProduto(produtoNome) {
@@ -206,7 +223,6 @@ async function obterUsuariosTiktikParaProduto(produtoNome) {
         }
         return false;
     });
-    console.log(`[obterUsuariosTiktik] ${usuariosFiltrados.length} usuários tipo '${tipoFeitoPor}' para ${produtoNome}.`);
     return usuariosFiltrados;
 }
 
@@ -214,7 +230,6 @@ async function obterUsuariosTiktikParaProduto(produtoNome) {
 // --- Lógica de Renderização (AJUSTADA PARA NOVO HTML/CSS) ---
 
 async function carregarTabelaArremate(opsParaArrematar) {
-    console.log(`[carregarTabelaArremate] Renderizando ${opsParaArrematar.length} OPs para arremate.`);
     const tbody = document.getElementById('arremateTableBody');
     const paginationContainer = document.getElementById('arrematePaginationContainer'); // ID do HTML novo
     if (!tbody || !paginationContainer) {
@@ -319,14 +334,16 @@ async function carregarTabelaArremate(opsParaArrematar) {
 }
 
 
-async function carregarTabelaProdutosEmbalagem(opsProntas) {
-    console.log(`[carregarTabelaProdutosEmbalagem] Renderizando ${opsProntas.length} OPs para embalagem.`);
+// public/js/admin-embalagem-de-produtos.js
+
+async function carregarTabelaProdutosEmbalagem(arrematesParaEmbalar) { // Nome do parâmetro mudou
+    console.log(`[carregarTabelaProdutosEmbalagem] Renderizando ${arrematesParaEmbalar.length} arremates para embalagem.`);
     const tbody = document.getElementById('produtosTableBody');
-    const paginationContainer = document.getElementById('paginationContainer'); // ID da pag embalagem
-    const searchInput = document.getElementById('searchProduto'); // ID do input de busca
+    const paginationContainer = document.getElementById('paginationContainer');
+    const searchInput = document.getElementById('searchProduto');
 
     if (!tbody || !paginationContainer || !searchInput) {
-        console.error('[carregarTabelaProdutosEmbalagem] Elementos tbody, paginationContainer ou searchInput não encontrados.');
+        console.error('[carregarTabelaProdutosEmbalagem] Elementos DOM não encontrados.');
         return;
     }
 
@@ -334,73 +351,71 @@ async function carregarTabelaProdutosEmbalagem(opsProntas) {
     paginationContainer.innerHTML = '';
 
     const search = searchInput.value.toLowerCase();
-    let filteredOPs = opsProntas;
+    let filteredArremates = arrematesParaEmbalar; // Nome da variável mudou
     if (search) {
-        filteredOPs = opsProntas.filter(op =>
-            op.produto.toLowerCase().includes(search) ||
-            (op.variante && op.variante.toLowerCase().includes(search)) ||
-            op.numero.toString().includes(search)
+        filteredArremates = arrematesParaEmbalar.filter(arr => // 'arr' de arremate
+            arr.produto.toLowerCase().includes(search) ||
+            (arr.variante && arr.variante.toLowerCase().includes(search)) ||
+            arr.op_numero_origem.toString().includes(search) || // Pode buscar pela OP de origem
+            arr.id_arremate.toString().includes(search) // Pode buscar pelo ID do arremate
         );
     }
 
-    const totalItems = filteredOPs.length;
+    const totalItems = filteredArremates.length;
     const totalPages = Math.ceil(totalItems / itemsPerPageEmbalagem);
     if (currentPageEmbalagem > totalPages) currentPageEmbalagem = Math.max(1, totalPages);
 
     const startIndex = (currentPageEmbalagem - 1) * itemsPerPageEmbalagem;
     const endIndex = Math.min(startIndex + itemsPerPageEmbalagem, totalItems);
-    const paginatedOPs = filteredOPs.slice(startIndex, endIndex);
+    const paginatedArremates = filteredArremates.slice(startIndex, endIndex); // Nome da variável mudou
 
-    if (paginatedOPs.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 20px;">${search ? 'Nenhum produto encontrado para "' + search + '".' : 'Nenhum produto pronto para embalar.'}</td></tr>`;
-        adjustForMobile(); // Chama para garantir que a mensagem apareça corretamente no mobile se for o caso
+    if (paginatedArremates.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 20px;">${search ? 'Nenhum arremate encontrado para "' + search + '".' : 'Nenhum item pronto para embalar.'}</td></tr>`;
+        adjustForMobile();
         return;
     }
 
     const fragment = document.createDocumentFragment();
-    const produtosCadastrados = await buscarTodosProdutos();
+    const produtosCadastrados = await buscarTodosProdutos(); // Para imagens
 
-    for (const op of paginatedOPs) {
+    for (const arremateItem of paginatedArremates) { // 'arremateItem'
         const tr = document.createElement('tr');
-        tr.dataset.opNumero = op.numero;
-        tr.dataset.opEditId = op.edit_id;
-        tr.dataset.produto = op.produto;
-        tr.dataset.variante = op.variante || '-';
+        // Armazenar dados importantes no dataset da linha
+        tr.dataset.idArremate = arremateItem.id_arremate; // ID do Arremate
+        tr.dataset.produto = arremateItem.produto;
+        tr.dataset.variante = arremateItem.variante || '-';
+        tr.dataset.opNumeroOrigem = arremateItem.op_numero_origem;
+        // A quantidade disponível é diretamente do objeto arremateItem
+        tr.dataset.quantidadeDisponivel = arremateItem.quantidade_disponivel_para_embalar;
 
-        const quantidadeTotalArrematadaParaEstaOP = op.quantidade_arrematada;
-        const quantidadeDisponivelReal = await obterQuantidadeDisponivelAjustada(
-            op.produto,
-            op.variante || '-',
-            quantidadeTotalArrematadaParaEstaOP,
-            op.numero
-        );
-        tr.dataset.quantidadeDisponivel = quantidadeDisponivelReal;
-
-        const produtoCadastrado = produtosCadastrados.find(p => p.nome === op.produto);
-        const gradeItem = produtoCadastrado?.grade?.find(g => g.variacao === (op.variante === '-' ? '' : op.variante));
+        const produtoCadastrado = produtosCadastrados.find(p => p.nome === arremateItem.produto);
+        const gradeItem = produtoCadastrado?.grade?.find(g => g.variacao === (arremateItem.variante === '-' ? '' : arremateItem.variante));
         const imagem = gradeItem?.imagem || '';
 
         tr.innerHTML = `
-            <td>${op.produto}</td>
-            <td>${op.variante || '-'}</td>
+            <td>${arremateItem.produto}</td>
+            <td>${arremateItem.variante || '-'}</td>
             <td class="col-img"><div class="ep-thumbnail-tabela">${imagem ? `<img src="${imagem}" alt="Miniatura">` : ''}</div></td>
-            <td class="col-qtd">${quantidadeDisponivelReal}</td>
-            <td>${op.numero}</td>
+            <td class="col-qtd">${arremateItem.quantidade_disponivel_para_embalar}</td> 
+            <td>OP Origem: ${arremateItem.op_numero_origem} (Arremate ID: ${arremateItem.id_arremate})</td> 
         `;
+        // A coluna OP Origem agora pode mostrar mais detalhes
 
-        if (quantidadeDisponivelReal > 0 && permissoes.includes('lancar-embalagem')) { // Adicionada verificação de permissão
+        if (arremateItem.quantidade_disponivel_para_embalar > 0 && permissoes.includes('lancar-embalagem')) {
             tr.style.cursor = 'pointer';
-            tr.addEventListener('click', () => handleProductClick(op));
+            // Passamos o objeto 'arremateItem' inteiro para handleProductClick
+            tr.addEventListener('click', () => handleProductClick(arremateItem));
         } else {
             tr.style.opacity = '0.6';
             tr.style.cursor = 'not-allowed';
-            tr.title = quantidadeDisponivelReal <= 0 ? 'Quantidade zerada para embalagem' : 'Sem permissão para embalar';
+            tr.title = arremateItem.quantidade_disponivel_para_embalar <= 0 ? 'Quantidade zerada para embalagem' : 'Sem permissão para embalar';
         }
         fragment.appendChild(tr);
     }
     tbody.appendChild(fragment);
 
     if (totalPages > 1) {
+        // Lógica de paginação (existente)
         let paginationHTML = `<button class="ep-btn pagination-btn prev" data-page="${Math.max(1, currentPageEmbalagem - 1)}" ${currentPageEmbalagem === 1 ? 'disabled' : ''}>Anterior</button>`;
         paginationHTML += `<span class="pagination-current">Pág. ${currentPageEmbalagem} de ${totalPages}</span>`;
         paginationHTML += `<button class="ep-btn pagination-btn next" data-page="${Math.min(totalPages, currentPageEmbalagem + 1)}" ${currentPageEmbalagem === totalPages ? 'disabled' : ''}>Próximo</button>`;
@@ -409,11 +424,12 @@ async function carregarTabelaProdutosEmbalagem(opsProntas) {
         paginationContainer.querySelectorAll('.pagination-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 currentPageEmbalagem = parseInt(btn.dataset.page);
-                carregarTabelaProdutosEmbalagem(opsProntasParaEmbalarGlobal);
+                // Passar a lista correta (arrematesParaEmbalar ou opsProntasParaEmbalarGlobal)
+                carregarTabelaProdutosEmbalagem(opsProntasParaEmbalarGlobal); 
             });
         });
     }
-    adjustForMobile(); // Chama após renderizar a tabela
+    adjustForMobile();
 }
 
 // --- Lógica de Eventos (AJUSTADA) ---
@@ -510,63 +526,70 @@ async function handleLancarArremateClick(event) {
     }
 }
 
-async function handleProductClick(op) { // op é o objeto da opsProntasParaEmbalarGlobal
-    console.log(`[handleProductClick] Clicado em:`, op);
+// public/js/admin-embalagem-de-produtos.js
 
-    // Elementos da view de lista (que serão escondidos)
+// A função handleProductClick recebe o objeto 'arremateItem' diretamente
+async function handleProductClick(arremateItem) {
+    console.log(`[handleProductClick] Clicado em Arremate ID: ${arremateItem.id_arremate}`, arremateItem);
+
     const arremateView = document.getElementById('arremateView');
     const embalagemListView = document.getElementById('embalagemListView');
-    // Elemento da view de detalhe (que será mostrado)
     const embalarView = document.getElementById('embalarView');
 
-    // Recalcula a quantidade disponível REAL no momento do clique
-    const quantidadeTotalArrematada = op.quantidade_arrematada; // Já é a soma
-    const quantidadeDisponivelReal = await obterQuantidadeDisponivelAjustada(
-        op.produto,
-        op.variante || '-',
-        quantidadeTotalArrematada,
-        op.numero
-    );
+    // A quantidade_disponivel_para_embalar já está calculada e correta no arremateItem
+    const quantidadeDisponivelReal = arremateItem.quantidade_disponivel_para_embalar;
 
     if (quantidadeDisponivelReal <= 0) {
         mostrarPopupMensagem('Este item não possui mais quantidade para embalagem.', 'aviso');
-        await carregarTabelaProdutosEmbalagem(opsProntasParaEmbalarGlobal); // Atualiza a lista
+        // A lista já deve estar atualizada, mas uma recarga não faria mal se houvesse concorrência
+        // await atualizarListasArremateEEmbalagem(); // Considerar se necessário
         return;
     }
 
     if (arremateView && embalagemListView && embalarView) {
-        arremateView.classList.add('hidden'); // Usando classe 'hidden'
+        arremateView.classList.add('hidden');
         embalagemListView.classList.add('hidden');
         embalarView.classList.remove('hidden');
-        window.location.hash = '#embalar';
+        window.location.hash = '#embalar'; // Navega para a view de embalagem
 
+        // Armazenar dados do ARREMATE que está sendo embalado
         localStorage.setItem('embalagemAtual', JSON.stringify({
-            op_numero: op.numero,
-            op_edit_id: op.edit_id,
-            produto: op.produto,
-            variante: op.variante || '-',
-            quantidade: quantidadeDisponivelReal // Passa a quantidade REAL disponível
+            id_arremate: arremateItem.id_arremate, // ID do arremate é crucial
+            op_numero_origem: arremateItem.op_numero_origem,
+            op_edit_id_origem: arremateItem.op_edit_id_origem, // Se usado para kits ou info adicional
+            produto: arremateItem.produto,
+            variante: arremateItem.variante || '-',
+            // 'quantidade' aqui é a quantidade disponível PARA ESTA SESSÃO DE EMBALAGEM
+            // que é o saldo atual do arremate
+            quantidade: quantidadeDisponivelReal 
         }));
 
-        await carregarEmbalagem(op.produto, op.variante || '-', quantidadeDisponivelReal);
+        // Chama carregarEmbalagem com os dados do arremate
+        await carregarEmbalagem(
+            arremateItem.produto, 
+            arremateItem.variante || '-', 
+            quantidadeDisponivelReal // Passa a quantidade disponível deste arremate
+        );
     } else {
-        console.error('[handleProductClick] Uma ou mais views não encontradas (arremateView, embalagemListView, embalarView).');
+        console.error('[handleProductClick] Uma ou mais views não encontradas.');
     }
 }
 
 async function atualizarListasArremateEEmbalagem() {
-    console.log('[atualizarListasArremateEEmbalagem] Atualizando listas...');
     try {
-        const [opsFinalizadasOriginais, arrematesJaRegistrados] = await Promise.all([
+        // buscarArrematesRegistrados() é crucial para AMBAS as listas agora
+        const [opsFinalizadasOriginais, todosOsArrematesDoSistema] = await Promise.all([
             buscarOpsFinalizadas(),
-            buscarArrematesRegistrados()
+            buscarArrematesRegistrados() // Isso já busca todos e atualiza 'todosOsArrematesRegistrados'
         ]);
 
+        // 1. Montar lista para a TABELA DE ARREMATE (Itens Aguardando Arremate)
+        // Esta lógica permanece a mesma: OPs finalizadas com quantidade pendente de arremate.
         opsParaArrematarGlobal = [];
         for (const op of opsFinalizadasOriginais) {
             const quantidadeProduzidaOriginal = obterQuantidadeFinalProduzida(op);
             let totalJaArrematadoParaEstaOP = 0;
-            arrematesJaRegistrados
+            todosOsArrematesDoSistema // Usar a lista completa de arremates
                 .filter(arremate => arremate.op_numero === op.numero)
                 .forEach(arremate => {
                     totalJaArrematadoParaEstaOP += parseInt(arremate.quantidade_arrematada) || 0;
@@ -574,56 +597,58 @@ async function atualizarListasArremateEEmbalagem() {
             const quantidadePendenteDeArremate = quantidadeProduzidaOriginal - totalJaArrematadoParaEstaOP;
             if (quantidadePendenteDeArremate > 0) {
                 opsParaArrematarGlobal.push({
-                    ...op,
+                    ...op, // Dados da OP original
                     quantidade_produzida_original: quantidadeProduzidaOriginal,
                     quantidade_pendente_arremate: quantidadePendenteDeArremate,
                 });
             }
         }
 
-        const opsAgrupadasParaEmbalagem = new Map();
-        for (const arremate of arrematesJaRegistrados) {
-            const opNumero = arremate.op_numero;
-            const quantidadeArrematadaNesteLancamento = parseInt(arremate.quantidade_arrematada) || 0;
-            if (quantidadeArrematadaNesteLancamento <= 0) continue;
+        // 2. Montar lista para a TABELA DE EMBALAGEM (Produtos Prontos para Embalar)
+        // Esta lista agora será composta por ARREMATES que ainda têm saldo para serem embalados.
+        opsProntasParaEmbalarGlobal = [];
+        for (const arremate of todosOsArrematesDoSistema) {
+            const quantidadeTotalNesteArremate = parseInt(arremate.quantidade_arrematada) || 0;
+            const quantidadeJaEmbaladaNesteArremate = parseInt(arremate.quantidade_ja_embalada) || 0; // Vem da nova coluna
+            const saldoParaEmbalarNesteArremate = quantidadeTotalNesteArremate - quantidadeJaEmbaladaNesteArremate;
 
-            const opOriginalCorrespondente = opsFinalizadasOriginais.find(o => o.numero === opNumero) || opDataCache.get(opNumero); // Tenta cache se não achar na lista de finalizadas
-            if (!opOriginalCorrespondente) {
-                console.warn(`[atualizarListas] OP ${opNumero} do arremate ID ${arremate.id} não encontrada.`);
-                continue;
-            }
+            if (saldoParaEmbalarNesteArremate > 0) {
+                // Para a tabela de embalagem, precisamos de alguns dados da OP original também (como edit_id se usado para kits, etc.)
+                // Mas o ID principal para a ação de embalar será o arremate.id
+                // Se a OP original for necessária para algo (ex: imagem do produto), podemos tentar buscá-la
+                // ou garantir que os dados do produto no arremate são suficientes.
+                // Por simplicidade agora, vamos focar nos dados do arremate.
 
-            if (!opsAgrupadasParaEmbalagem.has(opNumero)) {
-                opsAgrupadasParaEmbalagem.set(opNumero, {
-                    numero: opNumero,
-                    edit_id: opOriginalCorrespondente.edit_id,
-                    produto: opOriginalCorrespondente.produto,
-                    variante: opOriginalCorrespondente.variante,
-                    etapas: opOriginalCorrespondente.etapas, // Para obterQuantidadeFinalProduzida, se necessário
-                    quantidade_total_arrematada_para_op: 0,
+                opsProntasParaEmbalarGlobal.push({
+                    // Dados principais vêm do ARREMATE
+                    id_arremate: arremate.id, // MUITO IMPORTANTE
+                    op_numero_origem: arremate.op_numero, // Para referência
+                    op_edit_id_origem: arremate.op_edit_id, // Para referência, se necessário
+                    produto: arremate.produto,
+                    variante: arremate.variante,
+                    // A quantidade_disponivel_para_embalar é o saldo deste arremate específico
+                    quantidade_disponivel_para_embalar: saldoParaEmbalarNesteArremate,
+                    // Mantemos o total original do arremate para informação, se necessário
+                    quantidade_total_do_arremate: quantidadeTotalNesteArremate 
                 });
             }
-            const opAgrupada = opsAgrupadasParaEmbalagem.get(opNumero);
-            opAgrupada.quantidade_total_arrematada_para_op += quantidadeArrematadaNesteLancamento;
         }
-        opsProntasParaEmbalarGlobal = Array.from(opsAgrupadasParaEmbalagem.values()).map(opAgrupada => ({
-            ...opAgrupada,
-            quantidade_arrematada: opAgrupada.quantidade_total_arrematada_para_op
-        }));
 
+        // Ajustar paginação e carregar as tabelas
         const totalPagesArremate = Math.ceil(opsParaArrematarGlobal.length / itemsPerPageArremate);
         currentPageArremate = Math.min(currentPageArremate, Math.max(1, totalPagesArremate));
+        // currentPageEmbalagem será ajustado dentro de carregarTabelaProdutosEmbalagem
 
         await carregarTabelaArremate(opsParaArrematarGlobal);
         await carregarTabelaProdutosEmbalagem(opsProntasParaEmbalarGlobal);
 
-        // Controle de visibilidade das seções principais
+        // Controle de visibilidade das seções (lógica existente)
         const arremateView = document.getElementById('arremateView');
         const embalagemListView = document.getElementById('embalagemListView');
         const embalarView = document.getElementById('embalarView');
 
         if (!arremateView || !embalagemListView || !embalarView) {
-            console.error("[atualizarListas] Views não encontradas."); return;
+            console.error("[atualizarListasArremateEEmbalagem] Views não encontradas."); return;
         }
         
         if (window.location.hash === '#embalar') {
@@ -633,14 +658,15 @@ async function atualizarListasArremateEEmbalagem() {
         } else {
             embalarView.classList.add('hidden');
             opsParaArrematarGlobal.length > 0 ? arremateView.classList.remove('hidden') : arremateView.classList.add('hidden');
-            embalagemListView.classList.remove('hidden'); // Lista de embalagem sempre visível ou com mensagem de vazia
+            embalagemListView.classList.remove('hidden');
         }
+
     } catch (error) {
-        console.error('[atualizarListasArremateEEmbalagem] Erro:', error);
-        mostrarPopupMensagem('Erro ao atualizar dados da página.', 'erro');
+        console.error('[atualizarListasArremateEEmbalagem] Erro geral:', error);
+        mostrarPopupMensagem('Erro ao atualizar dados da página de embalagem.', 'erro');
     }
-    console.log('[atualizarListasArremateEEmbalagem] Listas atualizadas.');
 }
+
 
 // --- Funções de Popup, Debounce (sem alteração significativa) ---
 function mostrarPopupMensagem(mensagem, tipo = 'erro') {
@@ -656,29 +682,6 @@ function mostrarPopupMensagem(mensagem, tipo = 'erro') {
         if (activePopup) activePopup.remove();
     }, 4000);
 }
-/* CSS para ep-popup-mensagem (adicione ao seu CSS principal)
-.ep-popup-mensagem {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 12px 25px;
-    border-radius: 6px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.15);
-    z-index: 1050;
-    font-size: 0.95rem;
-    font-weight: 500;
-    opacity: 0;
-    animation: ep-popup-fadein 0.3s forwards, ep-popup-fadeout 0.3s 3.7s forwards;
-}
-@keyframes ep-popup-fadein { from { opacity: 0; bottom: 0px; } to { opacity: 1; bottom: 20px; } }
-@keyframes ep-popup-fadeout { from { opacity: 1; bottom: 20px; } to { opacity: 0; bottom: 0px; } }
-
-.ep-popup-sucesso { background-color: var(--cor-verde-sucesso); color: var(--cor-branco); }
-.ep-popup-erro { background-color: var(--cor-vermelho-erro); color: var(--cor-branco); }
-.ep-popup-aviso { background-color: var(--cor-laranja-aviso); color: var(--cor-branco); }
-*/
-
 
 function debounce(func, wait) {
     let timeout;
@@ -761,18 +764,51 @@ function adjustForMobile() {
 
 // --- Funções de Kit (AJUSTADAS PARA NOVOS IDs/CLASSES E LÓGICA) ---
 async function temKitsDisponiveis(produto, variante) {
-    // Lógica existente parece OK, apenas garantir que buscarTodosProdutos funciona
+    console.log(`[temKitsDisponiveis] Verificando para Produto: "${produto}", Variante: "${variante}"`); // Log 1
     const produtos = await buscarTodosProdutos();
-    const kits = produtos.filter(p => p.is_kit);
+    if (!produtos || produtos.length === 0) {
+        console.warn('[temKitsDisponiveis] Nenhum produto carregado (todosOsProdutos está vazio). Retornando false.');
+        return false;
+    }
+
+    const kits = produtos.filter(p => p.is_kit === true); // Garanta a comparação com booleano se 'is_kit' for booleano
+    console.log(`[temKitsDisponiveis] Encontrados ${kits.length} produtos marcados como is_kit.`); // Log 2
+
+    if (kits.length === 0) return false;
+
+    const produtoLower = produto.toLowerCase();
     const varAtualLower = (variante === '-' ? '' : variante).toLowerCase();
-    return kits.some(kit =>
-        kit.grade?.some(g =>
-            g.composicao?.some(c =>
-                (c.produto || kit.nome).toLowerCase() === produto.toLowerCase() &&
-                (c.variacao === '-' ? '' : (c.variacao || '')).toLowerCase() === varAtualLower
-            )
-        )
-    );
+    console.log(`[temKitsDisponiveis] Buscando por produtoLower: "${produtoLower}", varAtualLower: "${varAtualLower}"`); // Log 3
+
+    let encontrado = false;
+    for (const kit of kits) {
+        // console.log(`[temKitsDisponiveis] Verificando Kit: "${kit.nome}"`); // Log Detalhado (pode gerar muito log)
+        if (kit.grade && Array.isArray(kit.grade)) {
+            for (const g of kit.grade) {
+                // console.log(`[temKitsDisponiveis] Verificando Grade do Kit "${kit.nome}", Variação da Grade: "${g.variacao}"`); // Log Detalhado
+                if (g.composicao && Array.isArray(g.composicao)) {
+                    for (const c of g.composicao) {
+                        const compProdutoNome = (c.produto || kit.nome); // Se c.produto não existir, usa o nome do kit (comum para kits simples)
+                        const compProdutoNomeLower = compProdutoNome.toLowerCase();
+                        const compVariacao = (c.variacao === '-' ? '' : (c.variacao || ''));
+                        const compVariacaoLower = compVariacao.toLowerCase();
+
+                        // console.log(`[temKitsDisponiveis] -- Componente: P: "${compProdutoNomeLower}", V: "${compVariacaoLower}"`); // Log Detalhado
+
+                        if (compProdutoNomeLower === produtoLower && compVariacaoLower === varAtualLower) {
+                            console.log(`[temKitsDisponiveis] ENCONTRADO! Kit: "${kit.nome}", Componente: P:"${compProdutoNome}", V:"${compVariacao}"`); // Log 4
+                            encontrado = true;
+                            break; // Sai do loop de composicao
+                        }
+                    }
+                }
+                if (encontrado) break; // Sai do loop de grade
+            }
+        }
+        if (encontrado) break; // Sai do loop de kits
+    }
+    console.log(`[temKitsDisponiveis] Resultado final para "${produto}"/"${variante}": ${encontrado}`); // Log 5
+    return encontrado;
 }
 
 async function carregarKitsDisponiveis(produtoBase, varianteBase) {
@@ -814,21 +850,33 @@ async function carregarKitsDisponiveis(produtoBase, varianteBase) {
 
 async function carregarVariacoesKit(nomeKit, produtoBase, varianteBase) {
     const produtos = await buscarTodosProdutos();
-    const kitVariacoesSelect = document.getElementById('kit-variacoes'); // Novo ID
-    const kitTableContainer = document.getElementById('kit-table-container'); // Novo ID
-    const kitFooter = document.getElementById('kit-footer'); // Novo ID
-    const kitErrorMessage = document.getElementById('kit-error-message'); // Novo ID
+    const kitVariacoesSelect = document.getElementById('kit-variacoes'); 
+    const kitTableContainer = document.getElementById('kit-table-container'); 
+    const kitFooter = document.getElementById('kit-footer'); // Ainda pegamos para controlar visibilidade se necessário
+    const kitErrorMessage = document.getElementById('kit-error-message'); 
 
-    if (!kitVariacoesSelect || !kitTableContainer || !kitFooter || !kitErrorMessage) return;
+    // Validação básica dos elementos principais do kit
+    if (!kitVariacoesSelect || !kitTableContainer || !kitFooter || !kitErrorMessage) {
+        console.error("[carregarVariacoesKit] Elementos DOM para seleção de variação do kit não encontrados.");
+        return;
+    }
 
     kitVariacoesSelect.innerHTML = '<option value="">Carregando...</option>';
-    kitTableContainer.classList.add('hidden');
-    kitFooter.innerHTML = '';
+    
+    // Apenas controlar a visibilidade, não limpar o conteúdo se ele for estático
+    kitTableContainer.classList.add('hidden'); 
+    kitFooter.classList.add('hidden'); // Esconde o footer inteiro inicialmente ou quando nenhuma variação é selecionada
     kitErrorMessage.classList.add('hidden');
+    // NÃO FAÇA: kitFooter.innerHTML = ''; 
 
     const kit = produtos.find(p => p.is_kit && p.nome === nomeKit);
     if (!kit || !kit.grade) {
-        kitVariacoesSelect.innerHTML = '<option value="">Erro: Kit não encontrado</option>'; return;
+        kitVariacoesSelect.innerHTML = '<option value="">Erro: Kit não encontrado</option>'; 
+        // Pode ser útil mostrar uma mensagem de erro no kitErrorMessage aqui também se kit não encontrado
+        kitFooter.classList.remove('hidden'); // Mostra o footer para exibir a mensagem de erro
+        kitErrorMessage.textContent = 'Kit não encontrado ou não possui grade.';
+        kitErrorMessage.classList.remove('hidden');
+        return;
     }
 
     const varBaseLower = (varianteBase === '-' ? '' : varianteBase).toLowerCase();
@@ -841,11 +889,14 @@ async function carregarVariacoesKit(nomeKit, produtoBase, varianteBase) {
 
     if (variacoesFiltradas.length === 0) {
         kitVariacoesSelect.innerHTML = '<option value="">Nenhuma variação deste kit usa o item base</option>';
+        kitFooter.classList.remove('hidden'); // Mostra o footer para exibir a mensagem de erro
         kitErrorMessage.textContent = 'Nenhuma variação do kit selecionado utiliza o produto/variante base.';
         kitErrorMessage.classList.remove('hidden');
         return;
     }
 
+    // Se chegou aqui, há variações, então o footer pode ser mostrado quando uma variação for selecionada
+    // Mas ele ainda está escondido por padrão até uma seleção válida.
     kitVariacoesSelect.innerHTML = '<option value="">Selecione a variação do Kit</option>';
     variacoesFiltradas.forEach(grade => {
         const option = document.createElement('option');
@@ -858,150 +909,297 @@ async function carregarVariacoesKit(nomeKit, produtoBase, varianteBase) {
     const newSelect = kitVariacoesSelect.cloneNode(true);
     kitVariacoesSelect.parentNode.replaceChild(newSelect, kitVariacoesSelect);
     newSelect.addEventListener('change', (e) => {
-        if (e.target.value) carregarTabelaKit(nomeKit, e.target.value);
-        else { // "Selecione" escolhido
-            kitTableContainer.classList.add('hidden');
-            kitFooter.innerHTML = '';
-            kitErrorMessage.classList.add('hidden');
+        // Pegar os elementos novamente aqui ou passá-los para garantir o escopo correto
+        const currentKitTableContainer = document.getElementById('kit-table-container');
+        const currentKitFooter = document.getElementById('kit-footer');
+        const currentKitErrorMessage = document.getElementById('kit-error-message');
+
+        if (e.target.value) { // Se uma variação válida do kit foi selecionada
+            currentKitTableContainer?.classList.remove('hidden'); // Mostra a tabela de composição
+            currentKitFooter?.classList.remove('hidden');         // Mostra o footer
+            currentKitErrorMessage?.classList.add('hidden');    // Esconde mensagens de erro antigas
+            carregarTabelaKit(nomeKit, e.target.value);
+        } else { // "Selecione a variação do Kit" foi escolhido
+            currentKitTableContainer?.classList.add('hidden');
+            currentKitFooter?.classList.add('hidden'); // Esconde o footer se nenhuma variação selecionada
+            // NÃO FAÇA: currentKitFooter.innerHTML = '';
+            currentKitErrorMessage?.classList.add('hidden'); // Garante que msg de erro também seja escondida
         }
     });
 }
 
-async function carregarTabelaKit(kitNome, variacaoKitSelecionada) {
-    const produtos = await buscarTodosProdutos();
-    const kit = produtos.find(p => p.nome === kitNome && p.is_kit);
-    const kitTableBody = document.getElementById('kit-table-body');
-    const kitFooter = document.getElementById('kit-footer');
-    const kitErrorMessage = document.getElementById('kit-error-message');
-    const kitTableContainer = document.getElementById('kit-table-container');
-    const qtdEnviarKitsInput = document.getElementById('qtd-enviar-kits'); // Novo ID
-    const kitEstoqueBtn = document.getElementById('kit-estoque-btn'); // Novo ID
-
-    if (!kitTableBody || !kitFooter || !kitErrorMessage || !kitTableContainer || !qtdEnviarKitsInput || !kitEstoqueBtn) return;
-
-    kitTableBody.innerHTML = `<tr><td colspan="3">Carregando composição...</td></tr>`; // Colspan 3 agora
-    kitFooter.innerHTML = ''; // Será preenchido depois
-    kitErrorMessage.classList.add('hidden');
-    kitTableContainer.classList.remove('hidden'); // Mostra o container da tabela
-
-    if (!kit || !kit.grade) { /* ... erro ... */ return; }
-    const variacaoDoKit = kit.grade.find(g => g.variacao === variacaoKitSelecionada);
-    if (!variacaoDoKit || !variacaoDoKit.composicao || variacaoDoKit.composicao.length === 0) {
-        kitErrorMessage.textContent = 'Variação do kit sem composição.';
-        kitErrorMessage.classList.remove('hidden');
-        kitTableBody.innerHTML = '';
-        kitTableContainer.classList.add('hidden'); // Esconde se não há composição
-        qtdEnviarKitsInput.disabled = true;
-        kitEstoqueBtn.disabled = true;
+function atualizarEstadoBotaoMontarKit() {
+    const inputQtd = document.getElementById('qtd-enviar-kits');
+    const btnMontar = document.getElementById('kit-estoque-btn');
+    if (!inputQtd || !btnMontar) {
+        console.warn("[atualizarEstadoBotaoMontarKit] Input ou botão não encontrado.");
         return;
     }
 
-    const composicao = variacaoDoKit.composicao;
-    kitTableBody.innerHTML = '';
-    let menorQuantidadePossivel = Infinity;
-    let todasDisponiveis = true;
+    const valor = parseInt(inputQtd.value) || 0;
+    const maxKits = parseInt(inputQtd.max) || 0; // Pega o max do atributo do input
+    
+    // Habilita se o valor for > 0, <= maxKits, E o usuário tiver permissão
+    btnMontar.disabled = !(valor > 0 && valor <= maxKits && permissoes.includes('montar-kit'));
+    console.log(`[atualizarEstadoBotaoMontarKit] Valor: ${valor}, Max: ${maxKits}, Permissão: ${permissoes.includes('montar-kit')}, Botão Desabilitado: ${btnMontar.disabled}`);
+}
 
-    for (const item of composicao) {
-        const produtoComponente = item.produto || kit.nome;
-        const varianteComponente = item.variacao || '-';
-        const quantidadeNecessaria = parseInt(item.quantidade) || 1;
 
-        const opComponente = opsProntasParaEmbalarGlobal.find(op =>
-            op.produto === produtoComponente && (op.variante || '-') === varianteComponente
-        );
-        let qtdDisponivelComponente = 0;
-        if (opComponente) {
-            const qtdInicialComp = opComponente.quantidade_arrematada; // Já é a soma dos arremates
-            qtdDisponivelComponente = await obterQuantidadeDisponivelAjustada(
-                produtoComponente, varianteComponente, qtdInicialComp, opComponente.numero
-            );
+async function carregarTabelaKit(kitNome, variacaoKitSelecionada) {
+    console.log(`[carregarTabelaKit] Carregando tabela para Kit: "${kitNome}", Variação: "${variacaoKitSelecionada}"`);
+
+    // 1. Obter referências aos elementos DOM
+    const kitTableBody = document.getElementById('kit-table-body');
+    const qtdDisponivelKitsSpan = document.getElementById('qtd-disponivel-kits');
+    const qtdEnviarKitsInput = document.getElementById('qtd-enviar-kits');
+    const kitEstoqueBtn = document.getElementById('kit-estoque-btn');
+    const kitErrorMessage = document.getElementById('kit-error-message');
+    const kitTableContainer = document.getElementById('kit-table-container');
+
+    // Validação dos elementos
+    if (!kitTableBody || !qtdDisponivelKitsSpan || !qtdEnviarKitsInput || !kitEstoqueBtn || !kitErrorMessage || !kitTableContainer) {
+        console.error("[carregarTabelaKit] Elementos DOM cruciais para a tabela de kit não encontrados.");
+        if (!kitTableBody) console.error("-> Falta ID: kit-table-body");
+        if (!qtdDisponivelKitsSpan) console.error("-> Falta ID: qtd-disponivel-kits");
+        if (!qtdEnviarKitsInput) console.error("-> Falta ID: qtd-enviar-kits");
+        if (!kitEstoqueBtn) console.error("-> Falta ID: kit-estoque-btn");
+        if (!kitErrorMessage) console.error("-> Falta ID: kit-error-message");
+        if (!kitTableContainer) console.error("-> Falta ID: kit-table-container");
+        return; // Interrompe se elementos essenciais não existem
+    }
+
+    // Reset visual inicial
+    kitErrorMessage.classList.add('hidden');
+    kitErrorMessage.textContent = '';
+    kitTableContainer.classList.remove('hidden'); // Garante que o container da tabela é visível
+    kitTableBody.innerHTML = `<tr><td colspan="3">Analisando disponibilidade dos componentes...</td></tr>`;
+    qtdEnviarKitsInput.disabled = true;
+    kitEstoqueBtn.disabled = true;
+    qtdDisponivelKitsSpan.textContent = '0'; // Reseta contagem
+
+    // 2. Obter dados do kit e sua composição
+    const todosOsProdutosCadastrados = await buscarTodosProdutos(); // Certifique-se que esta função retorna a lista correta
+    const kitSelecionado = todosOsProdutosCadastrados.find(p => p.nome === kitNome && p.is_kit === true);
+
+    if (!kitSelecionado || !kitSelecionado.grade) {
+        kitErrorMessage.textContent = 'Definição do kit selecionado não encontrada ou inválida.';
+        kitErrorMessage.classList.remove('hidden');
+        kitTableBody.innerHTML = ''; // Limpa "Analisando..."
+        kitTableContainer.classList.add('hidden');
+        console.error(`[carregarTabelaKit] Kit "${kitNome}" não encontrado ou sem grade.`, kitSelecionado);
+        return;
+    }
+
+    const variacaoDoKitObj = kitSelecionado.grade.find(g => g.variacao === variacaoKitSelecionada);
+    if (!variacaoDoKitObj || !variacaoDoKitObj.composicao || variacaoDoKitObj.composicao.length === 0) {
+        kitErrorMessage.textContent = `A variação "${variacaoKitSelecionada}" do kit "${kitNome}" não possui componentes definidos.`;
+        kitErrorMessage.classList.remove('hidden');
+        kitTableBody.innerHTML = ''; // Limpa "Analisando..."
+        kitTableContainer.classList.add('hidden');
+        console.warn(`[carregarTabelaKit] Variação "${variacaoKitSelecionada}" do kit "${kitNome}" sem composição.`);
+        return;
+    }
+    const composicaoDoKit = variacaoDoKitObj.composicao; // Array de componentes do kit
+    kitTableBody.innerHTML = ''; // Limpa o "Analisando..." para adicionar as linhas reais
+
+    // 3. Calcular disponibilidade dos componentes e quantos kits são montáveis
+    let menorQuantidadeKitsMontaveis = Infinity;
+    let todosComponentesDisponiveisParaUmKit = true;
+
+    console.log(`[carregarTabelaKit] Composição para "${kitNome} - ${variacaoKitSelecionada}":`, JSON.stringify(composicaoDoKit, null, 2));
+
+    for (const itemComponente of composicaoDoKit) {
+        const nomeProdutoComponente = itemComponente.produto; // Ex: "Scrunchie (Padrão)"
+        const varianteComponente = itemComponente.variacao || '-'; // Ex: "Preto"
+        const quantidadeNecessariaPorKit = parseInt(itemComponente.quantidade) || 1;
+
+        if (!nomeProdutoComponente) {
+            console.warn("[carregarTabelaKit] Componente na composição do kit sem nome de produto:", itemComponente);
+            // Adicionar uma linha indicando o problema, mas não quebrar tudo
+            const trError = document.createElement('tr');
+            trError.classList.add('item-insuficiente');
+            trError.innerHTML = `<td colspan="3">Erro: Componente mal definido no cadastro do kit.</td>`;
+            kitTableBody.appendChild(trError);
+            todosComponentesDisponiveisParaUmKit = false; // Impede a montagem
+            menorQuantidadeKitsMontaveis = 0;
+            continue; // Pula para o próximo componente
         }
-        if (qtdDisponivelComponente < quantidadeNecessaria) todasDisponiveis = false;
+        
+        let qtdDisponivelTotalComponente = 0;
+        console.log(`[carregarTabelaKit] Verificando componente: ${nomeProdutoComponente} (${varianteComponente}), Necessário/kit: ${quantidadeNecessariaPorKit}`);
+
+        // Todos os componentes vêm da soma dos arremates com saldo
+        opsProntasParaEmbalarGlobal // Esta é a lista de arremates com saldo
+            .filter(arr => arr.produto === nomeProdutoComponente && (arr.variante || '-') === varianteComponente)
+            .forEach(arr => {
+                qtdDisponivelTotalComponente += arr.quantidade_disponivel_para_embalar;
+            });
+        
+        console.log(`[carregarTabelaKit] -> Disponibilidade total do componente (soma de arremates): ${qtdDisponivelTotalComponente}`);
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${produtoComponente} ${varianteComponente !== '-' ? `(${varianteComponente})` : ''}</td>
-            <td style="text-align:center;">${quantidadeNecessaria}</td>
+            <td>${nomeProdutoComponente} ${varianteComponente !== '-' ? `(${varianteComponente})` : ''}</td>
+            <td style="text-align:center;">${quantidadeNecessariaPorKit}</td>
             <td style="text-align:center;">
-                <input type="number" class="ep-input readonly" value="${qtdDisponivelComponente}" readonly title="Disponível: ${qtdDisponivelComponente}">
+                <input type="number" class="ep-input readonly" value="${qtdDisponivelTotalComponente}" readonly title="Disponível: ${qtdDisponivelTotalComponente}">
             </td>
         `;
-        if (qtdDisponivelComponente < quantidadeNecessaria) tr.classList.add('item-insuficiente');
+        
+        if (qtdDisponivelTotalComponente < quantidadeNecessariaPorKit) {
+            tr.classList.add('item-insuficiente');
+            todosComponentesDisponiveisParaUmKit = false; 
+        }
         kitTableBody.appendChild(tr);
-        menorQuantidadePossivel = Math.min(menorQuantidadePossivel, Math.floor(qtdDisponivelComponente / quantidadeNecessaria));
+
+        if (quantidadeNecessariaPorKit > 0) {
+            menorQuantidadeKitsMontaveis = Math.min(menorQuantidadeKitsMontaveis, Math.floor(qtdDisponivelTotalComponente / quantidadeNecessariaPorKit));
+        } else { // Se um componente tem necessidade 0, algo está errado na definição do kit
+            console.warn(`[carregarTabelaKit] Componente ${nomeProdutoComponente} tem quantidade necessária 0 no kit ${kitNome}.`);
+            menorQuantidadeKitsMontaveis = 0; 
+        }
     }
 
-    const maxKitsMontaveis = todasDisponiveis ? menorQuantidadePossivel : 0;
-    document.getElementById('qtd-disponivel-kits').textContent = maxKitsMontaveis; // Atualiza o span no footer
+    const maxKitsMontaveisCalculado = todosComponentesDisponiveisParaUmKit ? menorQuantidadeKitsMontaveis : 0;
+    const maxKitsMontaveisFinal = (maxKitsMontaveisCalculado === Infinity || composicaoDoKit.length === 0) ? 0 : maxKitsMontaveisCalculado;
 
-    if (maxKitsMontaveis <= 0) {
-        kitErrorMessage.textContent = 'Quantidade insuficiente de componentes para montar este kit.';
+    qtdDisponivelKitsSpan.textContent = maxKitsMontaveisFinal;
+    console.log(`[carregarTabelaKit] Máximo de kits "${kitNome} - ${variacaoKitSelecionada}" montáveis: ${maxKitsMontaveisFinal}`);
+
+    if (maxKitsMontaveisFinal <= 0 && composicaoDoKit.length > 0) {
+        kitErrorMessage.textContent = 'Quantidade insuficiente de um ou mais componentes para montar este kit.';
         kitErrorMessage.classList.remove('hidden');
     }
 
-    // Configurar input e botão no footer (que já existe no HTML)
-    qtdEnviarKitsInput.value = "0";
-    qtdEnviarKitsInput.max = maxKitsMontaveis;
-    qtdEnviarKitsInput.disabled = maxKitsMontaveis <= 0;
-    kitEstoqueBtn.disabled = true; // Começa desabilitado até que uma quantidade > 0 seja inserida
+    // 4. Configurar o input de quantidade de kits e o botão
+    qtdEnviarKitsInput.value = maxKitsMontaveisFinal > 0 ? "1" : "0";
+    qtdEnviarKitsInput.max = maxKitsMontaveisFinal;
+    qtdEnviarKitsInput.disabled = maxKitsMontaveisFinal <= 0;
 
-    // Limpar e adicionar listener para input de qtd de kits
-    const newQtdEnviarKitsInput = qtdEnviarKitsInput.cloneNode(true);
-    qtdEnviarKitsInput.parentNode.replaceChild(newQtdEnviarKitsInput, qtdEnviarKitsInput);
-    newQtdEnviarKitsInput.addEventListener('input', () => {
-        let valor = parseInt(newQtdEnviarKitsInput.value) || 0;
+    // --- GERENCIAMENTO DOS EVENT LISTENERS ---
+    // Remover listener antigo do input, se existir
+    if (qtdEnviarKitsInput._inputListener) {
+        qtdEnviarKitsInput.removeEventListener('input', qtdEnviarKitsInput._inputListener);
+    }
+    // Criar o novo handler para o input
+    const handleQtdInputChange = () => {
+        let valor = parseInt(qtdEnviarKitsInput.value) || 0;
+        const maxKitsDoInput = parseInt(qtdEnviarKitsInput.max) || 0;
+        
         if (valor < 0) valor = 0;
-        else if (valor > maxKitsMontaveis) valor = maxKitsMontaveis;
-        newQtdEnviarKitsInput.value = valor;
-        kitEstoqueBtn.disabled = valor <= 0;
-    });
-    
-    // Limpar e adicionar listener para botão de enviar kit
-    const newKitEstoqueBtn = kitEstoqueBtn.cloneNode(true);
-    kitEstoqueBtn.parentNode.replaceChild(newKitEstoqueBtn, kitEstoqueBtn);
-    newKitEstoqueBtn.disabled = true; // Garante que comece desabilitado
-    newKitEstoqueBtn.addEventListener('click', () => {
-        const qtdKitsParaEnviar = parseInt(newQtdEnviarKitsInput.value) || 0;
-        if (qtdKitsParaEnviar > 0 && qtdKitsParaEnviar <= maxKitsMontaveis) {
-            enviarKitParaEstoque(kitNome, variacaoKitSelecionada, qtdKitsParaEnviar);
+        else if (valor > maxKitsDoInput) valor = maxKitsDoInput;
+        qtdEnviarKitsInput.value = valor; // Atualiza o valor do input se foi corrigido
+        
+        atualizarEstadoBotaoMontarKit(); 
+    };
+    // Adicionar o novo listener e armazenar sua referência
+    qtdEnviarKitsInput.addEventListener('input', handleQtdInputChange);
+    qtdEnviarKitsInput._inputListener = handleQtdInputChange;
+
+    // Remover listener antigo do botão, se existir
+    if (kitEstoqueBtn._clickListener) {
+        kitEstoqueBtn.removeEventListener('click', kitEstoqueBtn._clickListener);
+    }
+    // Criar o novo handler para o botão
+    const handleMontarKitClick = () => {
+        const qtdKitsParaEnviar = parseInt(qtdEnviarKitsInput.value) || 0;
+        const maxKitsPermitidos = parseInt(qtdEnviarKitsInput.max) || 0;
+
+        if (qtdKitsParaEnviar > 0 && qtdKitsParaEnviar <= maxKitsPermitidos) {
+            // Passa a 'composicaoDoKit' que foi lida da definição do kit
+            enviarKitParaEstoque(kitNome, variacaoKitSelecionada, qtdKitsParaEnviar, composicaoDoKit);
         } else {
-            mostrarPopupMensagem('Quantidade de kits inválida.', 'erro');
+            mostrarPopupMensagem('Quantidade de kits inválida ou excede o máximo montável.', 'erro');
         }
-    });
+    };
+    // Adicionar o novo listener e armazenar sua referência
+    kitEstoqueBtn.addEventListener('click', handleMontarKitClick);
+    kitEstoqueBtn._clickListener = handleMontarKitClick;
+
+    // Chamada inicial para definir o estado do botão
+    atualizarEstadoBotaoMontarKit(); 
+    console.log("[carregarTabelaKit] Configuração de listeners e estado inicial do botão concluída.");
 }
 
-async function enviarKitParaEstoque(kitNome, variacaoKit, qtdKitsEnviados) {
+
+async function enviarKitParaEstoque(nomeDoKitProduto, variacaoDoKitProduto, qtdKitsParaEnviar, composicaoDoKitSelecionado) {
     const btn = document.getElementById('kit-estoque-btn');
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Embalando...';
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Montando Kits...';
     }
-    try {
-        const produtos = await buscarTodosProdutos();
-        const kitDef = produtos.find(p => p.nome === kitNome && p.is_kit);
-        if (!kitDef) throw new Error('Kit não encontrado.');
-        const variacaoDoKit = kitDef.grade.find(g => g.variacao === variacaoKit);
-        if (!variacaoDoKit?.composicao) throw new Error('Composição do kit não encontrada.');
 
-        for (const item of variacaoDoKit.composicao) {
-            const prodComp = item.produto || kitNome;
-            const varComp = item.variacao || '-';
-            const qtdNecPorKit = parseInt(item.quantidade) || 1;
-            const qtdTotalUsada = qtdKitsEnviados * qtdNecPorKit;
-            const opComp = opsProntasParaEmbalarGlobal.find(op =>
-                op.produto === prodComp && (op.variante || '-') === varComp
-            );
-            if (!opComp) throw new Error(`OP para componente ${prodComp}:${varComp} não achada.`);
-            await atualizarQuantidadeEmbalada(prodComp, varComp, qtdTotalUsada, opComp.numero, opComp.edit_id);
+    try {
+        // <<< LOG DE DEPURAÇÃO >>>
+        console.log("[DEPURAÇÃO enviarKit] opsProntasParaEmbalarGlobal:", JSON.stringify(opsProntasParaEmbalarGlobal, null, 2));
+        const arremate14Info = opsProntasParaEmbalarGlobal.find(arr => arr.id_arremate === 14);
+        console.log("[DEPURAÇÃO enviarKit] Info do Arremate ID 14 em opsProntasParaEmbalarGlobal:", arremate14Info);
+        // <<< FIM DO LOG >>>
+        const componentesParaPayload = []; // Array de { id_arremate?, produto, variante, quantidade_usada_total_para_kits }
+                                         // id_arremate só será preenchido para componentes consumidos de arremates específicos
+
+        // Para cada item na composição do kit que o usuário quer montar:
+        for (const itemCompDefinicao of composicaoDoKitSelecionado) { // itemCompDefinicao é da definição do kit
+            const nomeComp = itemCompDefinicao.produto;
+            const varComp = itemCompDefinicao.variacao || '-';
+            const qtdNecessariaPorKit = parseInt(itemCompDefinicao.quantidade) || 1;
+            let qtdTotalDesteComponenteNecessaria = qtdKitsParaEnviar * qtdNecessariaPorKit;
+
+            // Encontrar os arremates disponíveis para ESTE componente específico
+            const arrematesDisponiveisParaEsteComponente = opsProntasParaEmbalarGlobal
+                .filter(arr => arr.produto === nomeComp && (arr.variante || '-') === varComp)
+                .sort((a, b) => a.id_arremate - b.id_arremate); // FIFO
+
+            for (const arremateOrigem of arrematesDisponiveisParaEsteComponente) {
+                if (qtdTotalDesteComponenteNecessaria <= 0) break;
+
+                const qtdDisponivelNesteArremateOrigem = arremateOrigem.quantidade_disponivel_para_embalar;
+                const qtdAUsarDesteArremateOrigem = Math.min(qtdTotalDesteComponenteNecessaria, qtdDisponivelNesteArremateOrigem);
+
+                if (qtdAUsarDesteArremateOrigem > 0) {
+                    componentesParaPayload.push({
+                        id_arremate: arremateOrigem.id_arremate, // Sempre teremos o id_arremate agora
+                        produto: arremateOrigem.produto,
+                        variante: arremateOrigem.variante,
+                        quantidade_usada: qtdAUsarDesteArremateOrigem // Quantidade USADA DESTE ARREMATE para os kits
+                    });
+                    qtdTotalDesteComponenteNecessaria -= qtdAUsarDesteArremateOrigem;
+                }
+            }
+
+            if (qtdTotalDesteComponenteNecessaria > 0) {
+                throw new Error(`Insuficiência calculada para o componente ${nomeComp} - ${varComp} (${qtdTotalDesteComponenteNecessaria} ainda necessários). Isso não deveria acontecer se a UI calculou corretamente.`);
+            }
         }
-        mostrarPopupMensagem(`${qtdKitsEnviados} kit(s) de ${kitNome} - ${variacaoKit} embalados!`, 'sucesso');
+        
+        const payload = {
+            kit_nome: nomeDoKitProduto,
+            kit_variante: variacaoDoKitProduto === '-' ? null : variacaoDoKitProduto,
+            quantidade_kits_montados: qtdKitsParaEnviar,
+            // A API /api/kits/montar agora só precisa de uma lista de todos os componentes consumidos de arremates
+            componentes_consumidos_de_arremates: componentesParaPayload 
+            // O campo 'outros_componentes_usados' não é mais necessário se tudo vem de arremates
+        };
+
+        console.log("[enviarKitParaEstoque] Payload para /api/kits/montar (nova lógica):", JSON.stringify(payload, null, 2));
+
+        // Chamar a API /api/kits/montar (precisaremos ajustar a API de backend para este novo payload)
+        const resultadoMontagem = await fetchFromAPI('/kits/montar', { // A API precisa ser ajustada
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+
+        console.log("[enviarKitParaEstoque] Resposta da montagem do kit:", resultadoMontagem);
+        mostrarPopupMensagem(resultadoMontagem.message || `${qtdKitsParaEnviar} kit(s) montado(s)!`, 'sucesso');
+        todosOsArrematesRegistrados = []; 
         window.location.hash = '';
         localStorage.removeItem('embalagemAtual');
         await atualizarListasArremateEEmbalagem();
+
     } catch (error) {
         console.error('[enviarKitParaEstoque] Erro:', error);
-        mostrarPopupMensagem(`Erro ao embalar kit: ${error.message}`, 'erro');
-        if (btn) {
+        mostrarPopupMensagem(`Erro ao montar kit: ${error.message || 'Verifique o console.'}`, 'erro');
+        if (btn) { // Reabilitar botão
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-boxes"></i> Montar e Embalar Kits';
         }
@@ -1050,152 +1248,182 @@ async function atualizarQuantidadeEmbalada(produto, variante, quantidadeEnviada,
 }
 
 
-// --- Função Principal de Carregamento da Tela de Embalagem (AJUSTADA) ---
-async function carregarEmbalagem(produto, variante, quantidadeDisponivel) {
-    console.log(`[carregarEmbalagem] Para ${produto}:${variante}, Qtd Disp: ${quantidadeDisponivel}`);
+// --- Função Principal de Carregamento da Tela de Embalagem
+// public/js/admin-embalagem-de-produtos.js
 
-    // Elementos da tela de detalhe
+async function carregarEmbalagem(produto, variante, quantidadeDisponivelParaEstaSessao) {
+    console.log(`[carregarEmbalagem] Para ${produto}:${variante}, Qtd Disp (deste arremate): ${quantidadeDisponivelParaEstaSessao}`);
+
+     // <<< INÍCIO DO LOG DE DEPURAÇÃO DE DADOS DO PRODUTO/KIT >>>
+    if (todosOsProdutos && todosOsProdutos.length > 0) {
+        const produtoSendoEmbalado = todosOsProdutos.find(p => p.nome === produto);
+
+        // Encontre um KIT de exemplo que DEVERIA usar este produto
+        // Substitua "NomeDoSeuKitDeExemplo" pelo nome real de um kit
+        const kitDeExemplo = todosOsProdutos.find(p => p.nome === "NomeDoSeuKitDeExemplo" && p.is_kit); 
+        if (kitDeExemplo) {
+        }
+    } else {
+        console.warn("[DEPURAÇÃO KIT] todosOsProdutos está vazio, não é possível depurar dados de kit.");
+    }
+    // <<< FIM DO LOG DE DEPURAÇÃO >>>
+
+    const embalagemAtualData = JSON.parse(localStorage.getItem('embalagemAtual') || '{}');
+    // Precisamos do id_arremate que foi salvo
+    if (!embalagemAtualData.id_arremate) {
+        mostrarPopupMensagem('Erro: Dados do arremate para embalagem não encontrados. Voltando para lista.', 'erro');
+        window.location.hash = ''; // Volta para a lista
+        return;
+    }
+    console.log('[carregarEmbalagem] Dados do localStorage (embalagemAtualData):', embalagemAtualData);
+
+    const opOrigemParaExibicao = embalagemAtualData.op_numero_origem; // Usar para exibir, se quiser
+
+    // ... (Elementos DOM como antes: embalagemTitleEl, produtoNomeEl, etc.)
     const embalagemTitleEl = document.getElementById('embalagemTitle');
     const embalagemSubTitleEl = document.getElementById('embalagemSubTitle');
     const produtoNomeEl = document.getElementById('produtoNome');
     const varianteNomeEl = document.getElementById('varianteNome');
-    const opOrigemEmbalagemEl = document.getElementById('opOrigemEmbalagem');
+    const opOrigemEmbalagemEl = document.getElementById('opOrigemEmbalagem'); // Pode mostrar a OP de origem e ID Arremate
     const qtdDisponivelElUnidade = document.getElementById('qtdDisponivel');
     const qtdEnviarInputUnidade = document.getElementById('qtdEnviar');
     const estoqueBtnUnidade = document.getElementById('estoqueBtn');
     const embalagemThumbnailEl = document.getElementById('embalagemThumbnail');
     
-    // --- PONTO CRÍTICO PARA AS ABAS ---
-    // Certifique-se de que estes seletores correspondem EXATAMENTE ao seu HTML redesenhado
-    // No HTML que você me mostrou, os botões de aba estão dentro de <div class="ep-tabs">
-    // e têm a classe 'ep-tab-btn' e o atributo 'data-tab'.
-    const kitTabBtn = document.querySelector('.ep-tabs button[data-tab="kit"]'); // Mais específico
-    const unidadeTabBtn = document.querySelector('.ep-tabs button[data-tab="unidade"]'); // Mais específico
+    // ... (Abas de Kit - por enquanto, focaremos na unidade)
+    const kitTabBtn = document.querySelector('.ep-tabs button[data-tab="kit"]');
+    const unidadeTabBtn = document.querySelector('.ep-tabs button[data-tab="unidade"]');
     const kitTabPanel = document.getElementById('kit-tab');
     const unidadeTabPanel = document.getElementById('unidade-tab');
-    // Wrapper que contém o select de variação do kit e a tabela de composição
     const kitVariacaoComposicaoWrapper = document.getElementById('kit-variacao-composicao-wrapper');
 
-
-    // Validação básica de elementos
-    if (!embalagemTitleEl || !embalagemSubTitleEl || !produtoNomeEl || !varianteNomeEl || !opOrigemEmbalagemEl ||
-        !qtdDisponivelElUnidade || !qtdEnviarInputUnidade || !estoqueBtnUnidade || !embalagemThumbnailEl ||
-        !kitTabBtn || !unidadeTabBtn || !kitTabPanel || !unidadeTabPanel || !kitVariacaoComposicaoWrapper ) { // Adicionado kitVariacaoComposicaoWrapper
-        console.error('[carregarEmbalagem] Um ou mais elementos DOM da tela de embalagem não foram encontrados. Verifique os IDs e classes.');
-        // Log detalhado dos elementos que podem estar faltando:
-        if (!kitTabBtn) console.error("Elemento kitTabBtn não encontrado. Verifique se existe um botão com data-tab='kit' dentro de .ep-tabs.");
-        if (!unidadeTabBtn) console.error("Elemento unidadeTabBtn não encontrado. Verifique se existe um botão com data-tab='unidade' dentro de .ep-tabs.");
-        if (!kitTabPanel) console.error("Elemento kitTabPanel (ID: kit-tab) não encontrado.");
-        if (!unidadeTabPanel) console.error("Elemento unidadeTabPanel (ID: unidade-tab) não encontrado.");
-        if (!kitVariacaoComposicaoWrapper) console.error("Elemento kitVariacaoComposicaoWrapper (ID: kit-variacao-composicao-wrapper) não encontrado.");
-
+    if (!embalagemTitleEl || /* ...outros elementos... */ !unidadeTabPanel ) {
+        console.error('[carregarEmbalagem] Um ou mais elementos DOM da tela de embalagem não foram encontrados.');
         mostrarPopupMensagem('Erro ao carregar interface de embalagem.', 'erro');
         window.location.hash = ''; return;
     }
-
-    // ... (resto do preenchimento de dados: embalagemAtualData, imagem, títulos, etc.) ...
-    const embalagemAtualData = JSON.parse(localStorage.getItem('embalagemAtual') || '{}');
-    const opNumeroAtual = embalagemAtualData.op_numero;
-    // const opEditIdAtual = embalagemAtualData.op_edit_id; // Descomente se usar
-
+    
     const produtoCadastrado = todosOsProdutos.find(p => p.nome === produto);
     const gradeItem = produtoCadastrado?.grade?.find(g => g.variacao === (variante === '-' ? '' : variante));
     const imagem = gradeItem?.imagem || '';
     embalagemThumbnailEl.innerHTML = imagem ? `<img src="${imagem}" alt="Imagem ${produto} ${variante}">` : 'Sem imagem';
 
     embalagemTitleEl.textContent = `Embalar Detalhes`;
-    embalagemSubTitleEl.textContent = `${produto}${variante !== '-' ? ` - ${variante}` : ''} (OP Origem: ${opNumeroAtual})`;
+    // Mostrar mais info no subtítulo
+    embalagemSubTitleEl.textContent = 
+        `${produto}${variante !== '-' ? ` - ${variante}` : ''} (Arremate ID: ${embalagemAtualData.id_arremate}, OP Origem: ${opOrigemParaExibicao})`;
     
     produtoNomeEl.textContent = produto;
     varianteNomeEl.textContent = variante !== '-' ? variante : 'Padrão';
-    opOrigemEmbalagemEl.textContent = opNumeroAtual;
-    qtdDisponivelElUnidade.textContent = quantidadeDisponivel;
-    if (qtdDisponivelElUnidade.parentElement && qtdDisponivelElUnidade.parentElement.classList.contains('ep-qtd-disponivel-destaque')) {
+    // Atualizar o que é mostrado como "origem"
+    opOrigemEmbalagemEl.textContent = `Arremate ID: ${embalagemAtualData.id_arremate} (OP: ${opOrigemParaExibicao})`;
+    
+    qtdDisponivelElUnidade.textContent = quantidadeDisponivelParaEstaSessao;
+    if (qtdDisponivelElUnidade.parentElement?.classList.contains('ep-qtd-disponivel-destaque')) {
         qtdDisponivelElUnidade.parentElement.classList.remove('changing');
     }
-    qtdEnviarInputUnidade.value = '';
-    qtdEnviarInputUnidade.max = quantidadeDisponivel;
-    // estoqueBtnUnidade.disabled = true; // Será definido abaixo com base na permissão
-
-    // --- LÓGICA DAS ABAS ---
-    const temKits = await temKitsDisponiveis(produto, variante);
-    console.log(`[carregarEmbalagem] Produto ${produto}:${variante} pode ser usado em kits? ${temKits}`);
-
-    // Reset inicial das abas e painéis
-    unidadeTabBtn.classList.remove('active');
-    kitTabBtn.classList.remove('active');
-    unidadeTabPanel.classList.remove('active', 'hidden'); // Remove active e hidden
-    kitTabPanel.classList.remove('active', 'hidden');   // Remove active e hidden
-    kitVariacaoComposicaoWrapper.classList.add('hidden'); // Esconde o conteúdo do kit por padrão
-
-    const podeEmbalarUnidade = permissoes.includes('lancar-embalagem-unidade');
-    const podeMontarKit = permissoes.includes('montar-kit');
-
-    if (temKits && podeMontarKit) {
-        console.log("[carregarEmbalagem] Mostrar Aba Kit como ativa.");
-        kitTabBtn.style.display = 'inline-flex'; // Garante que o botão da aba kit seja visível
-        kitTabBtn.classList.add('active');
-        kitTabPanel.classList.add('active');    // Torna o painel do kit ativo
-        kitTabPanel.classList.remove('hidden'); // Garante que o painel do kit seja visível
-        
-        unidadeTabPanel.classList.add('hidden'); // Esconde o painel de unidade
-        unidadeTabBtn.classList.remove('active'); // Garante que a aba unidade não esteja ativa
-
-        await carregarKitsDisponiveis(produto, variante); // Carrega os kits
-    } else if (podeEmbalarUnidade) {
-        console.log("[carregarEmbalagem] Mostrar Aba Unidade como ativa.");
-        kitTabBtn.style.display = 'none';       // Esconde o botão da aba kit
-        kitTabPanel.classList.add('hidden');    // Garante que o painel do kit esteja escondido
-        kitTabPanel.classList.remove('active'); // Garante que o painel kit não esteja ativo
-        
-        unidadeTabBtn.classList.add('active');
-        unidadeTabPanel.classList.add('active');  // Torna o painel de unidade ativo
-        unidadeTabPanel.classList.remove('hidden'); // Garante que o painel de unidade seja visível
-    } else {
-        // Nenhum tipo de embalagem permitido ou disponível
-        console.log("[carregarEmbalagem] Nenhuma opção de embalagem disponível ou permitida.");
-        kitTabBtn.style.display = 'none';
-        unidadeTabBtn.style.display = 'none'; // Poderia esconder ambas as abas
-        kitTabPanel.classList.add('hidden');
-        unidadeTabPanel.classList.add('hidden');
-        mostrarPopupMensagem('Nenhuma opção de embalagem permitida para este item.', 'aviso');
-    }
+    qtdEnviarInputUnidade.value = ''; // Limpa o input
+    // O máximo que pode ser enviado é a quantidade disponível DESTE ARREMATE
+    qtdEnviarInputUnidade.max = quantidadeDisponivelParaEstaSessao; 
     
-    // Habilitar/desabilitar botão da aba unidade com base na permissão e quantidade
-    estoqueBtnUnidade.disabled = !podeEmbalarUnidade || quantidadeDisponivel <= 0 || qtdEnviarInputUnidade.value === '' || parseInt(qtdEnviarInputUnidade.value) <=0;
+    // --- LÓGICA DAS ABAS (RESTAURADA E AJUSTADA) ---
+const temKits = await temKitsDisponiveis(produto, variante); // Função que você já tem
+console.log(`[carregarEmbalagem] Produto ${produto}:${variante} pode ser usado em kits? ${temKits}`);
 
+const podeEmbalarUnidade = permissoes.includes('lancar-embalagem'); // Ou sua permissão específica 'lancar-embalagem-unidade'
+const podeMontarKit = permissoes.includes('montar-kit'); // Sua permissão para montar kits
+console.log(`[carregarEmbalagem] Permissão 'montar-kit': ${podeMontarKit}`); // Log de Permissão
 
-    // Configuração Aba Unidade (Listeners) - GARANTIR QUE ESTES ELEMENTOS SÃO OS ATUAIS
+// Reset inicial das abas e painéis
+unidadeTabBtn.classList.remove('active');
+kitTabBtn.classList.remove('active');
+unidadeTabPanel.classList.remove('active', 'hidden'); 
+kitTabPanel.classList.remove('active', 'hidden');   
+kitVariacaoComposicaoWrapper.classList.add('hidden'); // Esconde o conteúdo do kit por padrão
+
+let abaInicialAtiva = null;
+
+console.log(`[carregarEmbalagem] Decisão de Aba: temKits=${temKits}, podeMontarKit=${podeMontarKit}, podeEmbalarUnidade=${podeEmbalarUnidade}`);
+    if (temKits && podeMontarKit) {
+    console.log("[carregarEmbalagem] ENTRANDO no bloco if (temKits && podeMontarKit)");
+        kitTabBtn.style.display = 'inline-flex'; // Garante que o botão da aba kit seja visível
+        unidadeTabBtn.style.display = 'inline-flex'; // Garante que o botão da aba unidade também seja visível (se permitido)
+    
+    abaInicialAtiva = 'kit'; // Prioriza kit se disponível e permitido
+    
+} else if (podeEmbalarUnidade) {
+    console.log("[carregarEmbalagem] ENTRANDO no bloco else if (podeEmbalarUnidade)");
+    kitTabBtn.style.display = 'none';       // Esconde o botão da aba kit
+    unidadeTabBtn.style.display = 'inline-flex'; 
+
+    abaInicialAtiva = 'unidade';
+
+} else {
+    console.log("[carregarEmbalagem] ENTRANDO no bloco else (nenhuma opção)");
+    kitTabBtn.style.display = 'none';
+    unidadeTabBtn.style.display = 'none';
+    // Poderia mostrar uma mensagem na área de conteúdo
+    mostrarPopupMensagem('Nenhuma opção de embalagem permitida para este item.', 'aviso');
+    // Limpar painéis
+    kitTabPanel.classList.add('hidden');
+    unidadeTabPanel.classList.add('hidden');
+}
+
+// Ativar a aba e painel corretos
+if (abaInicialAtiva === 'kit') {
+    kitTabBtn.classList.add('active');
+    kitTabPanel.classList.add('active');
+    kitTabPanel.classList.remove('hidden');
+    
+    unidadeTabPanel.classList.add('hidden'); // Esconde o painel de unidade
+    unidadeTabBtn.classList.remove('active');
+
+    // Carrega os kits SE a aba de kit for a ativa
+    await carregarKitsDisponiveis(produto, variante); 
+} else if (abaInicialAtiva === 'unidade') {
+    unidadeTabBtn.classList.add('active');
+    unidadeTabPanel.classList.add('active');
+    unidadeTabPanel.classList.remove('hidden');
+
+    kitTabPanel.classList.add('hidden'); // Esconde o painel de kit
+    kitTabBtn.classList.remove('active');
+}
+
+// Habilitar/desabilitar botão de embalar unidade com base na permissão e quantidade
+// (Esta parte já existia e deve continuar funcionando para a aba unidade)
+estoqueBtnUnidade.disabled = !podeEmbalarUnidade || quantidadeDisponivelParaEstaSessao <= 0 || true;
+
+    // --- Listeners para Aba Unidade (Botão de Embalar) ---
+    // Limpar e recriar listeners para evitar duplicidade
     let currentQtdEnviarInputUnidade = document.getElementById('qtdEnviar');
     let currentEstoqueBtnUnidade = document.getElementById('estoqueBtn');
-
-    // Recria os listeners para evitar duplicidade ou referências antigas
+    
     const newQtdEnviarInput = currentQtdEnviarInputUnidade.cloneNode(true);
     currentQtdEnviarInputUnidade.parentNode.replaceChild(newQtdEnviarInput, currentQtdEnviarInputUnidade);
-    currentQtdEnviarInputUnidade = newQtdEnviarInput; // Atualiza a referência
+    currentQtdEnviarInputUnidade = newQtdEnviarInput;
 
     const newEstoqueBtnUnidade = currentEstoqueBtnUnidade.cloneNode(true);
     currentEstoqueBtnUnidade.parentNode.replaceChild(newEstoqueBtnUnidade, currentEstoqueBtnUnidade);
-    currentEstoqueBtnUnidade = newEstoqueBtnUnidade; // Atualiza a referência
+    currentEstoqueBtnUnidade = newEstoqueBtnUnidade;
     
-    // Definir o estado inicial do botão da unidade
-    currentEstoqueBtnUnidade.disabled = !podeEmbalarUnidade || quantidadeDisponivel <= 0 || true; // Começa desabilitado (true no final) até que algo seja digitado
+    currentEstoqueBtnUnidade.disabled = !podeEmbalarUnidade || quantidadeDisponivelParaEstaSessao <= 0 || true;
+
 
     currentQtdEnviarInputUnidade.addEventListener('input', () => {
         const valor = parseInt(currentQtdEnviarInputUnidade.value) || 0;
         const qtdDispPai = currentQtdEnviarInputUnidade.closest('.ep-embalar-form-card')?.querySelector('.ep-qtd-disponivel-destaque');
         const qtdDispSpan = qtdDispPai?.querySelector('strong#qtdDisponivel');
-
         let habilitarBotao = false;
-        if (valor >= 1 && valor <= quantidadeDisponivel) {
-            if (qtdDispSpan) qtdDispSpan.textContent = quantidadeDisponivel - valor;
+
+        if (valor >= 1 && valor <= quantidadeDisponivelParaEstaSessao) {
+            if (qtdDispSpan) qtdDispSpan.textContent = quantidadeDisponivelParaEstaSessao - valor;
             if (qtdDispPai) qtdDispPai.classList.add('changing');
             habilitarBotao = true;
         } else {
-            if (valor > quantidadeDisponivel) currentQtdEnviarInputUnidade.value = quantidadeDisponivel;
+            if (valor > quantidadeDisponivelParaEstaSessao) currentQtdEnviarInputUnidade.value = quantidadeDisponivelParaEstaSessao;
             else if (valor <= 0 && currentQtdEnviarInputUnidade.value !== '') currentQtdEnviarInputUnidade.value = '';
             
-            if (qtdDispSpan) qtdDispSpan.textContent = quantidadeDisponivel;
+            if (qtdDispSpan) qtdDispSpan.textContent = quantidadeDisponivelParaEstaSessao;
             if (qtdDispPai) qtdDispPai.classList.remove('changing');
             habilitarBotao = false;
         }
@@ -1204,23 +1432,55 @@ async function carregarEmbalagem(produto, variante, quantidadeDisponivel) {
 
     currentEstoqueBtnUnidade.addEventListener('click', async () => {
         const quantidadeEnviada = parseInt(currentQtdEnviarInputUnidade.value);
-        if (isNaN(quantidadeEnviada) || quantidadeEnviada < 1 || quantidadeEnviada > quantidadeDisponivel) {
+        if (isNaN(quantidadeEnviada) || quantidadeEnviada <= 0 || quantidadeEnviada > quantidadeDisponivelParaEstaSessao) {
             mostrarPopupMensagem('Quantidade inválida!', 'erro'); return;
         }
+
         currentEstoqueBtnUnidade.disabled = true;
         currentEstoqueBtnUnidade.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+        
+        // Os dados do arremate estão em embalagemAtualData (do localStorage)
+        const { id_arremate, produto: prodNome, variante: prodVar } = embalagemAtualData;
+
         try {
-            // opNumeroAtual e opEditIdAtual precisam estar definidos corretamente no escopo
-            const embalagemAtual = JSON.parse(localStorage.getItem('embalagemAtual') || '{}');
-            await atualizarQuantidadeEmbalada(produto, variante, quantidadeEnviada, embalagemAtual.op_numero, embalagemAtual.op_edit_id);
-            mostrarPopupMensagem(`${quantidadeEnviada} unidade(s) embalada(s)!`, 'sucesso');
+            // Passo 1: Registrar entrada no estoque
+            console.log(`[Embalar] Enviando para estoque: Arremate ID ${id_arremate}, Produto ${prodNome}, Qtd ${quantidadeEnviada}`);
+            const resultadoEstoque = await fetchFromAPI('/estoque/entrada-producao', {
+                method: 'POST',
+                body: JSON.stringify({
+                    produto_nome: prodNome,
+                    variante_nome: prodVar === '-' ? null : prodVar,
+                    quantidade_entrada: quantidadeEnviada,
+                    id_arremate_origem: id_arremate 
+                })
+            });
+            console.log('[Embalar] Resposta da API de entrada no estoque:', resultadoEstoque);
+            mostrarPopupMensagem(`${quantidadeEnviada} unidade(s) de ${prodNome} enviada(s) para o estoque!`, 'sucesso');
+
+            // Passo 2: Atualizar o arremate (quantidade_ja_embalada)
+            console.log(`[Embalar] Atualizando arremate ID ${id_arremate} para registrar ${quantidadeEnviada} como embaladas.`);
+            const resultadoArremate = await fetchFromAPI(`/arremates/${id_arremate}/registrar-embalagem`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    quantidade_que_foi_embalada_desta_vez: quantidadeEnviada
+                })
+            });
+            console.log('[Embalar] Resposta da API de atualização do arremate:', resultadoArremate);
+            // Não precisa de popup para este, o do estoque é suficiente.
+
+            // <<< LIMPAR O CACHE DE ARREMATES >>>
+            todosOsArrematesRegistrados = []; // Agora deve buscar arremates frescos
+
+            // Limpar e voltar para a lista
             window.location.hash = '';
             localStorage.removeItem('embalagemAtual');
-            await atualizarListasArremateEEmbalagem();
+            await atualizarListasArremateEEmbalagem(); // Recarrega tudo
+
         } catch (error) {
-            // Erro já tratado em atualizarQuantidadeEmbalada ou fetchFromAPI se for 403
-            // Apenas reabilita o botão
-            currentEstoqueBtnUnidade.disabled = !podeEmbalarUnidade || quantidadeDisponivel <= 0;
+            console.error('[Embalar] Erro ao embalar e enviar:', error);
+            mostrarPopupMensagem(`Erro ao embalar: ${error.message || 'Verifique o console.'}`, 'erro');
+            // Reabilitar botão em caso de erro
+            currentEstoqueBtnUnidade.disabled = !podeEmbalarUnidade || quantidadeDisponivelParaEstaSessao <= 0;
             currentEstoqueBtnUnidade.innerHTML = '<i class="fas fa-box-open"></i> Embalar e Enviar';
         }
     });
@@ -1255,7 +1515,6 @@ function alternarAba(event) {
 
 // --- Inicialização e Listeners (AJUSTADOS) ---
 async function inicializar() {
-    console.log('[inicializar] Embalagem...');
     try {
         const auth = await verificarAutenticacao('embalagem-de-produtos.html', ['acesso-embalagem-de-produtos']);
         if (!auth) { window.location.href = 'acesso-negado.html'; return; }
@@ -1275,7 +1534,6 @@ async function inicializar() {
         console.error('[inicializar] Erro geral:', error);
         mostrarPopupMensagem('Erro crítico ao carregar. Tente recarregar.', 'erro');
     }
-    console.log('[inicializar] Embalagem concluída.');
 }
 
 function setupEventListeners() {
@@ -1305,7 +1563,6 @@ function setupEventListeners() {
 
 async function handleHashChange() {
     const hash = window.location.hash;
-    console.log(`[handleHashChange] Hash: ${hash}`);
 
     const arremateView = document.getElementById('arremateView');
     const embalagemListView = document.getElementById('embalagemListView'); // View da lista de produtos para embalar

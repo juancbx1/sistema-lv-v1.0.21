@@ -1652,14 +1652,32 @@ window.loadVariacoesKit = function() {
     }
 };
 
-elements.addVariacaoKitBtn.addEventListener('click', () => {
-    const variacao = elements.variacaoKitSelect.value;
-    if (!variacao || variacao === 'Selecione uma variação') return;
 
-    kitComposicaoTemp.push({ variacao, quantidade: 1 });
+elements.addVariacaoKitBtn.addEventListener('click', () => {
+    const produtoNome = elements.produtoKitSelect.value; // <<< CAPTURAR O NOME DO PRODUTO BASE
+    const variacao = elements.variacaoKitSelect.value;
+    
+    if (!produtoNome) { // Validar se um produto base foi selecionado
+        alert('Selecione o produto base para o componente do kit.');
+        elements.produtoKitSelect.focus();
+        return;
+    }
+    if (!variacao || variacao === 'Selecione uma variação') {
+        alert('Selecione uma variação para o componente do kit.');
+        elements.variacaoKitSelect.focus();
+        return;
+    }
+
+    // Adicionar à composição temporária com o nome do produto
+    kitComposicaoTemp.push({ 
+        produto: produtoNome, // <<< SALVAR O NOME DO PRODUTO
+        variacao: variacao, 
+        quantidade: 1 // Default inicial
+    });
     renderizarComposicaoKit();
-    console.log('[addVariacaoKitBtn] Composição adicionada localmente (sem salvamento automático):', kitComposicaoTemp);
-    // Remover gradeAlteradas = true aqui
+    console.log('[addVariacaoKitBtn] Composição adicionada localmente:', kitComposicaoTemp);
+    // Não precisa de gradeAlteradas = true aqui, pois isso é para a grade do kit principal, não sua composição.
+    // O salvamento da composição acontece em salvarComposicaoKit.
 });
 
 function renderizarComposicaoKit() {
@@ -1667,8 +1685,9 @@ function renderizarComposicaoKit() {
     kitComposicaoTemp.forEach((comp, idx) => {
         const div = document.createElement('div');
         div.className = 'composicao-kit-row';
+        // Exibir o nome do produto e a variação. Tornar o nome do produto readonly.
         div.innerHTML = `
-            <input type="text" value="${comp.variacao}" readonly>
+            <input type="text" value="${comp.produto} - ${comp.variacao}" readonly class="composicao-produto-variacao-display"> 
             <input type="number" min="1" value="${comp.quantidade}" onchange="atualizarQuantidadeKit(${idx}, this.value)">
             <button class="cp-remove-btn" onclick="removerComposicaoKit(${idx})">X</button>
         `;

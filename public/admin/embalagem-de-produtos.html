@@ -130,48 +130,64 @@
             <!-- PAINEL DA ABA KIT -->
             <div class="ep-tab-panel" id="kit-tab">
                 <div class="ep-embalar-form-card">
-                    <div id="kit-section">
-                        <h3>Selecione o Kit para Montagem:</h3>
-                        <div id="kits-list" class="ep-kits-list">
-                            <!-- Botões de kit gerados por JS -->
-                        </div>
-                        
-                        <div id="kit-variacao-composicao-wrapper" class="hidden">
-                            <div class="ep-form-group">
-                                <label for="kit-variacoes">Selecione a Variação do Kit:</label>
-                                <select id="kit-variacoes" class="ep-select">
-                                    <!-- Opções de variação do kit geradas por JS -->
-                                </select>
-                            </div>
+                   <!-- Seção para selecionar o Kit e a Variação do Kit -->
+    <div id="kit-selection-area" class="ep-form-section">
+        <h4>1. Selecione o Kit</h4>
+        <div id="kits-list" class="ep-button-group">
+            <!-- Botões dos kits que usam o produto base serão inseridos aqui pelo JS -->
+            <p>Carregando kits disponíveis...</p>
+        </div>
 
-                            <div id="kit-table-container" class="ep-kit-composicao-container hidden">
-                                <h4>Componentes Necessários para 1 Kit:</h4>
-                                <table id="kit-table" class="ep-mini-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Componente (Produto/Variação)</th>
-                                            <th>Qtd. Necessária</th>
-                                            <th>Qtd. Disponível</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="kit-table-body"></tbody>
-                                </table>
-                                <p id="kit-error-message" class="ep-error-message hidden"></p>
-                            </div>
-                        
-                            <div id="kit-footer" class="ep-kit-footer">
-                                <div class="ep-qtd-disponivel-destaque ep-qtd-kits-montaveis">
-                                    <span>Kits Montáveis com Estoque Atual:</span>
-                                    <strong id="qtd-disponivel-kits">0</strong>
-                                </div>
-                                <div class="ep-form-group">
-                                    <label for="qtd-enviar-kits">Quantidade de Kits a Montar e Embalar:</label>
-                                    <input type="number" id="qtd-enviar-kits" class="ep-input ep-input-grande" min="0" placeholder="0" disabled>
-                                </div>
-                                <button id="kit-estoque-btn" class="ep-btn ep-btn-success ep-btn-grande" disabled><i class="fas fa-boxes"></i> Montar e Embalar Kits</button>
-                            </div>
-                        </div>
-                    </div>
+        <div id="kit-variacao-composicao-wrapper" class="hidden"> <!-- Este wrapper controla a visibilidade do resto -->
+            <div class="ep-form-group">
+                <label for="kit-variacoes">Selecione a Variação do Kit:</label>
+                <select id="kit-variacoes" class="ep-select">
+                    <option value="">Primeiro selecione um kit acima</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Seção para mostrar a composição do kit selecionado e interagir -->
+    <div id="kit-details-area" class="ep-form-section">
+        <h4>2. Composição e Montagem</h4>
+        
+        <!-- Container da Tabela de Composição do Kit -->
+        <div id="kit-table-container" class="hidden"> <!-- Começa escondido, mostrado pelo JS -->
+            <table class="ep-table ep-table-narrow">
+                <thead>
+                    <tr>
+                        <th>Componente do Kit</th>
+                        <th style="text-align: center;">Qtd. Necessária</th>
+                        <th style="text-align: center;">Qtd. Disponível</th>
+                    </tr>
+                </thead>
+                <tbody id="kit-table-body">
+                    <!-- Linhas da composição serão adicionadas aqui pelo JS -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Rodapé com informações de montagem e botão -->
+        <div id="kit-footer">
+            <p id="kit-error-message" class="ep-error-text hidden"></p> <!-- Para mensagens de erro -->
+            
+            <div class="ep-kit-summary" style="margin-top: 15px;">
+                <span>Kits Montáveis: <strong id="qtd-disponivel-kits">0</strong></span>
+                
+                <div class="ep-form-group ep-form-group-inline" style="margin-top: 10px;">
+                    <label for="qtd-enviar-kits">Montar Quantidade:</label>
+                    <input type="number" id="qtd-enviar-kits" class="ep-input" min="0" value="0" style="width: 80px;">
+                </div>
+
+                <button id="kit-estoque-btn" class="ep-btn ep-btn-primary" disabled style="margin-top: 10px;">
+                    <i class="fas fa-boxes"></i> Montar e Embalar Kits
+                </button>
+            </div>
+        </div>
+    </div>
+
+<!-- Fechamento do <div class="ep-tab-panel" id="kit-tab"> -->
                 </div>
             </div>
         </section>

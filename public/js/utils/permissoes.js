@@ -29,7 +29,8 @@ export const permissoesDisponiveis = [
     { id: 'confirmar-pagamento-comissao', label: 'Confirmar Pagamento de Comissão' }, // Para embalagem-de-produtos.html
     { id: 'lancar-embalagem', label: 'Lançar Embalagem' }, // Para embalagem-de-produtos.html
     { id: 'montar-kit', label: 'Montar Kit' }, // Para embalagem-de-produtos.html
-    { id: 'gerenciar-produtos', label: 'Gerenciar Configuracoes de Produtos' } // Para cadastrar-produtos.html
+    { id: 'gerenciar-produtos', label: 'Gerenciar Configuracoes de Produtos' }, // Para cadastrar-produtos.html
+    { id: 'gerenciar-estoque', label: 'Gerenciar Estoque' } // Para estoque.html
 ];
 
 // Apenas o tipo 'admin' terá permissões padrão
@@ -71,7 +72,8 @@ export const permissoesPorTipo = {
         'lancar-embalagem-unidade',
         'montar-kit',
         'lancar-embalagem',
-        'gerenciar-produtos'
+        'gerenciar-produtos',
+        'gerenciar-estoque' 
 
         
     ]

@@ -615,6 +615,188 @@ body:not(.menu-aberto) .ep-main-content {
 }
 
 /*------------------------------------*\
+    #ABA KIT - ESTILOS ESPECÍFICOS
+\*------------------------------------*/
+
+/* Área de seleção do Kit e Variação do Kit */
+.ep-tab-panel#kit-tab .ep-form-section { /* Estilo para as seções dentro da aba kit */
+    padding: 20px;
+    margin-bottom: 20px;
+    background-color: #fdfdfd; /* Um pouco mais claro que o fundo do card principal */
+    border: 1px solid #e9ecef;
+    border-radius: var(--raio-borda-input);
+}
+
+.ep-tab-panel#kit-tab .ep-form-section h4 {
+    font-size: 1.1rem; /* Menor que o título da aba */
+    color: var(--cor-azul-subtitulo);
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eaeaea;
+    font-weight: 500;
+}
+
+/* Lista de botões dos Kits disponíveis */
+#kits-list { /* Já é .ep-button-group, mas podemos adicionar especificidade */
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+#kits-list .ep-btn { /* Estilo para os botões de nome do kit */
+    background-color: var(--cor-branco);
+    color: var(--cor-azul-primario);
+    border: 1px solid var(--cor-cinza-borda);
+    padding: 8px 15px; /* Um pouco mais de padding */
+    font-weight: 500;
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+#kits-list .ep-btn:hover:not(.active) {
+    border-color: var(--cor-azul-primario);
+    background-color: #eef8ff; /* Um azul bem claro no hover */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+#kits-list .ep-btn.active { /* ESTILO PARA O BOTÃO DO KIT ATIVO */
+    background-color: var(--cor-azul-primario);
+    color: var(--cor-branco);
+    border-color: var(--cor-azul-primario);
+    box-shadow: 0 2px 5px rgba(52, 152, 219, 0.3);
+    font-weight: 600;
+}
+
+/* Wrapper para select de variação e tabela de composição */
+#kit-variacao-composicao-wrapper {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px dashed var(--cor-cinza-borda);
+}
+#kit-variacao-composicao-wrapper.hidden { /* Já existe no seu CSS, mas garantindo */
+    display: none !important;
+} 
+#kit-variacao-composicao-wrapper .ep-form-group {
+    margin-bottom: 15px; /* Menor margem dentro desta seção */
+}
+
+
+/* Container da Tabela de Composição do Kit */
+#kit-table-container {
+    margin-top: 10px;
+    margin-bottom: 20px;
+    border: 1px solid var(--cor-cinza-borda);
+    border-radius: var(--raio-borda-input);
+    overflow: hidden; /* Para o raio da borda funcionar com a tabela */
+}
+
+#kit-table-container .ep-table-narrow th,
+#kit-table-container .ep-table-narrow td {
+    padding: 10px 12px; /* Padding um pouco menor para tabela de composição */
+    font-size: 0.88rem;
+}
+#kit-table-container .ep-table-narrow th {
+    background-color: #f8f9fa; /* Um pouco mais sutil */
+}
+
+/* Input de quantidade disponível na tabela de composição */
+#kit-table-body input.readonly.ep-input { 
+    background-color: transparent;
+    border: none;
+    text-align: center;
+    font-weight: 500;
+    padding: 0;
+    width: 60px; /* Ajustar conforme necessário */
+    box-shadow: none; /* Remover sombra do foco */
+    cursor: default;
+}
+#kit-table-body tr.item-insuficiente td {
+    color: var(--cor-vermelho-erro);
+    background-color: #fff0f0; /* Fundo vermelho bem claro */
+}
+#kit-table-body tr.item-insuficiente input.readonly.ep-input {
+    color: var(--cor-vermelho-erro); /* Garante que o texto do input também fique vermelho */
+}
+
+
+/* Rodapé da seção de Kits */
+#kit-footer {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--cor-cinza-borda);
+}
+
+#kit-footer .ep-kit-summary {
+    display: flex;
+    flex-direction: column; /* Empilha os itens */
+    align-items: flex-start; /* Alinha à esquerda */
+    gap: 12px; /* Espaço entre os itens do sumário */
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: var(--raio-borda-input);
+}
+
+#kit-footer .ep-kit-summary span { /* "Kits Montáveis: X" */
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--cor-texto-principal);
+}
+#kit-footer .ep-kit-summary span strong {
+    color: var(--cor-verde-sucesso); /* Destaca a quantidade montável */
+    font-size: 1.2rem;
+}
+
+#kit-footer .ep-kit-summary .ep-form-group-inline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%; /* Para ocupar a largura disponível */
+}
+#kit-footer .ep-kit-summary .ep-form-group-inline label {
+    white-space: nowrap; /* Evita quebra de linha na label */
+    margin-bottom: 0; /* Remove margem inferior da label */
+    font-size: 0.95rem;
+}
+#kit-footer .ep-kit-summary #qtd-enviar-kits {
+    width: 80px; /* Tamanho fixo para o input de quantidade */
+    flex-grow: 0; /* Não deixa crescer */
+    text-align: center;
+}
+#kit-footer .ep-kit-summary #kit-estoque-btn {
+    width: auto; /* Para não ocupar 100% por padrão, a menos que seja o único item */
+    align-self: flex-end; /* Alinha o botão à direita se houver espaço */
+    padding-left: 25px; /* Mais padding para botão de ação principal */
+    padding-right: 25px;
+}
+
+#kit-error-message.ep-error-text { /* Para mensagens de erro específicas do kit */
+    /* Já deve herdar estilos de .ep-error-message, mas podemos ser específicos */
+    margin-bottom: 15px; /* Espaço antes do sumário se houver erro */
+}
+
+
+/* Ajustes para o popup de configuração de composição do kit (que já existe no seu cadastrar-produto) */
+/* Se você reutilizar o CSS do cadastrar-produto, pode não precisar disso. */
+/* Mas se for específico para embalagem: */
+#configurarVariacaoView.popup-produto { /* Supondo que você use essa view/ID */
+    /* Estilos para o popup, se necessário */
+}
+#configurarVariacaoView .composicao-kit-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+#configurarVariacaoView .composicao-kit-row input[type="text"] {
+    flex-grow: 1;
+    background-color: var(--cor-cinza-fundo-input); /* Para o display readonly */
+}
+#configurarVariacaoView .composicao-kit-row input[type="number"] {
+    width: 70px;
+    text-align: center;
+}
+
+/*------------------------------------*\
     #VISUALIZAÇÃO MOBILE (CARDS)
 \*------------------------------------*/
 .ep-product-card-container {

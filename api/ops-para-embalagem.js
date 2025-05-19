@@ -1,97 +1,115 @@
+// api/ops-para-embalagem.js
 import 'dotenv/config';
 import pkg from 'pg';
 const { Pool } = pkg;
 import jwt from 'jsonwebtoken';
+import express from 'express'; // <<< ADICIONADO
 
-console.log('[api/ops-para-embalagem] Iniciando carregamento...');
-
+const router = express.Router(); // <<< ADICIONADO
 const pool = new Pool({
     connectionString: process.env.POSTGRES_URL,
-    timezone: 'UTC', // Manter UTC no banco
+    timezone: 'UTC',
 });
-
 const SECRET_KEY = process.env.JWT_SECRET;
+
 if (!SECRET_KEY) {
-    console.error('[api/ops-para-embalagem] ERRO CRÍTICO: JWT_SECRET não definida!');
+    console.error('[router/ops-para-embalagem] ERRO CRÍTICO: JWT_SECRET não definida!');
 }
 
-// Função para verificar o token JWT (Reutilizada)
-const verificarToken = (req) => {
-    console.log('[api/ops-para-embalagem] Verificando token...');
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) throw new Error('Token não fornecido');
+// Função verificarToken (Reutilizada - pode ser movida para utils)
+const verificarTokenInterna = (reqOriginal) => {
+    console.log('[router/ops-para-embalagem - verificarTokenInterna] Verificando token...');
+    const authHeader = reqOriginal.headers.authorization;
+    if (!authHeader) {
+        const error = new Error('Token não fornecido');
+        error.statusCode = 401;
+        throw error;
+    }
+    const token = authHeader.split(' ')[1];
+    if (!token) {
+        const error = new Error('Token mal formatado');
+        error.statusCode = 401;
+        throw error;
+    }
     try {
         const decoded = jwt.verify(token, SECRET_KEY, { ignoreExpiration: false });
         return decoded;
     } catch (error) {
-        console.error('[api/ops-para-embalagem] Erro ao verificar token:', error.message);
-        if (error.name === 'TokenExpiredError') throw new Error('Token expirado');
-        if (error.name === 'JsonWebTokenError') throw new Error('Token inválido');
-        throw error;
+        console.error('[router/ops-para-embalagem - verificarTokenInterna] Erro ao verificar token:', error.message);
+        const newError = new Error(error.name === 'TokenExpiredError' ? 'Token expirado' : 'Token inválido');
+        newError.statusCode = 401;
+        if (error.name === 'TokenExpiredError') newError.details = 'jwt expired';
+        throw newError;
     }
 };
 
-export default async function handler(req, res) {
-    console.log('[api/ops-para-embalagem] Requisição recebida:', req.method, req.url);
-    const { method, query } = req;
-
-    if (method !== 'GET') {
-        console.warn(`[api/ops-para-embalagem] Método ${method} não permitido.`);
-        res.setHeader('Allow', ['GET']);
-        return res.status(405).end(`Método ${method} não permitido`);
-    }
-
+// Middleware para este router
+router.use(async (req, res, next) => {
+    let cliente;
     try {
-        // 1. Verificar Autenticação e Permissão
-        const usuarioLogado = verificarToken(req);
-        console.log('[api/ops-para-embalagem] Usuário autenticado:', usuarioLogado.nome);
+        console.log(`[router/ops-para-embalagem] Recebida ${req.method} em ${req.originalUrl}`);
+        req.usuarioLogado = verificarTokenInterna(req);
+        console.log('[router/ops-para-embalagem middleware] Usuário autenticado:', req.usuarioLogado.nome);
 
-        // Verifica permissão para acessar a área de embalagem
-        if (!usuarioLogado.permissoes || !usuarioLogado.permissoes.includes('acesso-embalagem-de-produtos')) {
-            console.warn(`[api/ops-para-embalagem] Permissão 'acesso-embalagem-de-produtos' negada para ${usuarioLogado.nome}`);
-            return res.status(403).json({ error: 'Permissão negada para acessar OPs para embalagem.' });
+        if (!req.usuarioLogado.permissoes || !req.usuarioLogado.permissoes.includes('acesso-embalagem-de-produtos')) {
+            console.warn(`[router/ops-para-embalagem middleware] Permissão 'acesso-embalagem-de-produtos' negada para ${req.usuarioLogado.nome}`);
+            const err = new Error('Permissão negada para acessar OPs para embalagem.');
+            err.statusCode = 403;
+            throw err;
         }
+        
+        cliente = await pool.connect();
+        req.dbCliente = cliente;
+        console.log('[router/ops-para-embalagem middleware] Conexão com o banco estabelecida.');
+        next();
+    } catch (error) {
+        console.error('[router/ops-para-embalagem middleware] Erro:', error.message);
+        if (cliente) cliente.release();
+        const statusCode = error.statusCode || 500;
+        const responseError = { error: error.message };
+        if (error.details) responseError.details = error.details;
+        res.status(statusCode).json(responseError);
+    }
+});
 
-        // 2. Parâmetros da Query (Opcional: suportar `all` ou paginação)
+// GET /api/ops-para-embalagem/
+router.get('/', async (req, res) => {
+    const { dbCliente } = req; // req.usuarioLogado já validado
+    const { query } = req; // req.query já contém os parâmetros da URL
+    try {
+        console.log('[router/ops-para-embalagem GET] Processando...');
+        // Parâmetros da Query
         const fetchAll = query.all === 'true';
         const page = parseInt(query.page) || 1;
-        // Ajuste o limite padrão se desejar um valor diferente para esta API
-        const limit = parseInt(query.limit) || 50; // Ex: padrão maior
+        const limit = parseInt(query.limit) || 50; // Ajuste conforme sua necessidade
         const offset = (page - 1) * limit;
 
-        // 3. Construir a Query SQL
+        // Construir a Query SQL
         const baseQuery = `FROM ordens_de_producao WHERE status = 'finalizado'`;
-        // Ordenar por data de finalização (mais recente primeiro) ou número da OP
         const orderBy = `ORDER BY data_final DESC NULLS LAST, CAST(numero AS INTEGER) DESC`;
 
-        // Query para buscar os dados
         let queryText = `SELECT * ${baseQuery} ${orderBy}`;
         let queryParams = [];
 
-        // Query para contar o total (para paginação)
-        let totalQuery = `SELECT COUNT(*) ${baseQuery}`;
-        let totalParams = []; // status = 'finalizado' já está no baseQuery
+        let totalQuery = `SELECT COUNT(*) AS count ${baseQuery}`; // Adicionado alias 'count'
+        // totalParams não é necessário aqui, pois não há placeholders em baseQuery
 
-        // Aplicar paginação se `all=true` NÃO for passado
         if (!fetchAll) {
             queryText += ` LIMIT $1 OFFSET $2`;
             queryParams = [limit, offset];
         } else {
-            console.log('[api/ops-para-embalagem] Buscando todas as OPs finalizadas (all=true).');
+            console.log('[router/ops-para-embalagem GET] Buscando todas as OPs finalizadas (all=true).');
         }
 
-        // 4. Executar as Queries
-        console.log('[api/ops-para-embalagem] Executando query principal:', queryText, queryParams);
-        const result = await pool.query(queryText, queryParams);
+        console.log('[router/ops-para-embalagem GET] Executando query principal:', queryText, queryParams);
+        const result = await dbCliente.query(queryText, queryParams);
 
-        console.log('[api/ops-para-embalagem] Executando query de contagem:', totalQuery, totalParams);
-        const totalResult = await pool.query(totalQuery, totalParams);
-        const total = parseInt(totalResult.rows[0].count);
-        const pages = fetchAll ? 1 : Math.ceil(total / limit); // Apenas 1 página se buscar tudo
+        console.log('[router/ops-para-embalagem GET] Executando query de contagem:', totalQuery);
+        const totalResult = await dbCliente.query(totalQuery);
+        const total = parseInt(totalResult.rows[0].count); // Acessa pelo alias 'count'
+        const pages = fetchAll ? 1 : (limit > 0 ? Math.ceil(total / limit) : 1);
 
-        console.log(`[api/ops-para-embalagem] ${result.rows.length} OPs finalizadas encontradas (Total: ${total}).`);
-
-        // 5. Retornar a Resposta
+        console.log(`[router/ops-para-embalagem GET] ${result.rows.length} OPs finalizadas encontradas (Total: ${total}).`);
         res.status(200).json({
             rows: result.rows,
             total: total,
@@ -100,18 +118,17 @@ export default async function handler(req, res) {
         });
 
     } catch (error) {
-        // 6. Tratamento de Erros (Similar ao anterior)
-        console.error('[api/ops-para-embalagem] Erro não tratado:', {
+        console.error('[router/ops-para-embalagem GET] Erro não tratado:', {
             message: error.message,
             stack: error.stack,
-            url: req.url,
         });
-        let statusCode = 500;
-        let errorMessage = 'Erro interno no servidor.';
-        if (error.message === 'Token não fornecido' || error.message === 'Token inválido' || error.message === 'Token expirado') {
-            statusCode = 401;
-            errorMessage = error.message;
+        res.status(error.statusCode || 500).json({ error: error.message || 'Erro interno ao buscar OPs para embalagem.' });
+    } finally {
+        if (dbCliente) {
+            console.log('[router/ops-para-embalagem GET] Liberando cliente do banco.');
+            dbCliente.release();
         }
-        res.status(statusCode).json({ error: errorMessage, details: error.message });
     }
-}
+});
+
+export default router; // <<< EXPORTAR O ROUTER

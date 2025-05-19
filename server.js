@@ -26,6 +26,18 @@ console.log('ordensDeProducaoRouter:', typeof ordensDeProducaoRouter, ordensDePr
 import comissoesPagasRouter from './api/comissoes-pagas.js'; // Assumindo que você criou o arquivo com este nome
 console.log('comissoesPagasRouter:', typeof comissoesPagasRouter, comissoesPagasRouter ? 'Carregado' : 'NÃO CARREGADO');
 
+import arrematesRouter from './api/arremates.js';
+console.log('arrematesRouter:', typeof arrematesRouter, arrematesRouter ? 'Carregado' : 'NÃO CARREGADO');
+
+import opsParaEmbalagemRouter from './api/ops-para-embalagem.js';
+console.log('opsParaEmbalagemRouter:', typeof opsParaEmbalagemRouter, opsParaEmbalagemRouter ? 'Carregado' : 'NÃO CARREGADO');
+
+import estoqueRouter from './api/estoque.js';
+console.log('estoqueRouter:', typeof estoqueRouter, estoqueRouter ? 'Carregado' : 'NÃO CARREGADO');
+
+import kitsRouter from './api/kits.js'; // <<< ADICIONAR IMPORT
+console.log('kitsRouter:', typeof kitsRouter, kitsRouter ? 'Carregado' : 'NÃO CARREGADO');
+
 const app = express();
 console.log('Aplicação Express inicializada.');
 
@@ -48,7 +60,11 @@ const routers = {
     configuracaoPontosRouter,
     produtosRouter,
     ordensDeProducaoRouter,
-    comissoesPagasRouter
+    comissoesPagasRouter,
+    arrematesRouter, // <<< ADICIONAR
+    opsParaEmbalagemRouter,
+    estoqueRouter,
+    kitsRouter
 };
 for (const routerName in routers) {
     if (!routers[routerName] || typeof routers[routerName] !== 'function') {
@@ -69,6 +85,35 @@ if (ordensDeProducaoRouter && typeof ordensDeProducaoRouter === 'function') { //
 if (comissoesPagasRouter && typeof comissoesPagasRouter === 'function') {
     app.use('/api/comissoes-pagas', comissoesPagasRouter);
     console.log("Rota /api/comissoes-pagas montada.");
+}
+if (arrematesRouter && typeof arrematesRouter === 'function') {
+    app.use('/api/arremates', arrematesRouter);
+    console.log("Rota /api/arremates (Express Router) montada.");
+} else {
+    console.error("ERRO FATAL: arrematesRouter não foi carregado ou não é uma função router válida!");
+}
+
+if (opsParaEmbalagemRouter && typeof opsParaEmbalagemRouter === 'function') {
+    app.use('/api/ops-para-embalagem', opsParaEmbalagemRouter);
+    console.log("Rota /api/ops-para-embalagem (Express Router) montada.");
+} else {
+    console.error("ERRO FATAL: opsParaEmbalagemRouter não foi carregado ou não é uma função router válida!");
+}
+
+// <<< ADICIONAR ESTE BLOCO PARA MONTAR O ROUTER DE ESTOQUE >>>
+if (estoqueRouter && typeof estoqueRouter === 'function') {
+    app.use('/api/estoque', estoqueRouter);
+    console.log("Rota /api/estoque (Express Router) montada.");
+} else {
+    console.error("ERRO FATAL: estoqueRouter não foi carregado ou não é uma função router válida!");
+}
+
+// <<< ADICIONAR PARA MONTAR O ROUTER DE KITS >>>
+if (kitsRouter && typeof kitsRouter === 'function') {
+    app.use('/api/kits', kitsRouter);
+    console.log("Rota /api/kits (Express Router) montada.");
+} else {
+    console.error("ERRO FATAL: kitsRouter não foi carregado ou não é uma função router válida!");
 }
 
 app.get('/api/ping', (req, res) => res.status(200).json({ message: 'pong do server.js' }));
