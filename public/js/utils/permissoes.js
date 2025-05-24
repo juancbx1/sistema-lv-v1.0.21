@@ -30,7 +30,13 @@ export const permissoesDisponiveis = [
     { id: 'lancar-embalagem', label: 'Lançar Embalagem' }, // Para embalagem-de-produtos.html
     { id: 'montar-kit', label: 'Montar Kit' }, // Para embalagem-de-produtos.html
     { id: 'gerenciar-produtos', label: 'Gerenciar Configuracoes de Produtos' }, // Para cadastrar-produtos.html
-    { id: 'gerenciar-estoque', label: 'Gerenciar Estoque' } // Para estoque.html
+    { id: 'gerenciar-estoque', label: 'Gerenciar Estoque' }, // Para estoque.html
+    { id: 'registrar-corte', label: 'Registrar Corte para Estoque' }, // Para ordens-de-producao.html
+    { id: 'excluir-estoque-corte', label: 'Excluir Corte do Estoque' }, // Para ordens-de-producao.html
+    { id: 'marcar-como-cortado', label: 'Marcar Corte como Cortado' }, // Para ordens-de-producao.html
+    { id: 'excluir-corte-pendente', label: 'Excluir Corte Pendente' }, // Para ordens-de-producao.html
+    { id: 'finalizar-op', label: 'Finalizar uma OP' }, // Para ordens-de-producao.html
+    { id: 'cancelar-op', label: 'Cancelar uma OP' } // Para ordens-de-producao.html
 ];
 
 // Apenas o tipo 'admin' terá permissões padrão

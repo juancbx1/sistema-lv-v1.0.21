@@ -186,13 +186,6 @@ body.autenticado {
 }
 
 
-/* Grupos de Ações Secundárias e de Cortes */
-.op-grupo-acoes {
-    /* background-color: #fdfdfd; /* Opcional: fundo sutil para o grupo */
-    /* padding: 15px; */
-    /* border-radius: var(--op-raio-borda-input); */
-    /* border: 1px solid #f0f0f0; */
-}
 
 .op-grupo-titulo-sutil {
     font-size: 0.95rem;
@@ -697,6 +690,11 @@ body.autenticado {
      max-width: 380px; 
 }
 
+/* Para os spinners internos, garantir que não causem eventos indesejados */
+.spinner-btn-interno {
+    pointer-events: none;
+}
+
 /* --- ESTILOS ESPECÍFICOS PARA INPUTS NA TELA DE REGISTRAR CORTE (#corteView) --- */
 
 /* Para o select de produto na tela de corte */
@@ -729,19 +727,6 @@ body.autenticado {
     max-width: 120px;
     flex-grow: 0;
 }
-
-/* Opcional: Ajustes nos .op-form-grupo pais, se necessário para o layout em linha */
-#corteView .op-form-linha .op-form-grupo:has(.op-input-data-corte),
-#corteView .op-form-linha .op-form-grupo:has(.op-input-cortador-corte) {
-    /* Se Data e Cortador estão na mesma linha e você quer que um seja maior que o outro */
-    /* Exemplo:
-    &:has(.op-input-data-corte) { flex-basis: 40%; }
-    &:has(.op-input-cortador-corte) { flex-basis: 58%; } // Para preencher o resto com o gap
-    */
-    /* Ou simplesmente deixe o flex-grow:1 padrão do .op-form-grupo cuidar disso, 
-       e os max-width nos inputs limitarão seu tamanho interno. */
-}
-
 
 /* ==========================================================================
    Estilos para a Seção de Etapas na Tela de Edição de OP (#opEditView)
@@ -790,13 +775,7 @@ body.autenticado {
     background-color: #f8f9fa; /* Fundo cinza bem claro */
     opacity: 0.85; /* Levemente esmaecida */
 }
-.etapa-row.etapa-row-concluida .etapa-numero.etapa-azul {
-    /* Garante que o número azul de concluído se destaque */
-}
 
-.etapa-row.etapa-row-pendente {
-    /* Pode não precisar de estilo específico se o padrão for para pendente */
-}
 .etapa-row.etapa-row-pendente .select-usuario,
 .etapa-row.etapa-row-pendente .quantidade-input,
 .etapa-row.etapa-row-pendente .botao-lancar {
@@ -1094,13 +1073,6 @@ body.autenticado {
     margin-top: 15px; /* Espaço após o título da seção */
 }
 
-/* Estilos para as tabelas de corte, se precisarem de algo além de .op-tabela-estilizada */
-.tabela-corte-pendente th, .tabela-corte-pendente td,
-.tabela-cortados th, .tabela-cortados td {
-    /* Seus estilos de padding, font-size específicos podem ir aqui se necessário */
-    /* Ex: font-size: 0.85rem; */
-}
-
 /* Alinhamento do checkbox no cabeçalho */
 .op-tabela-estilizada th input[type="checkbox"] {
     margin: 0; /* Remove margens padrão do checkbox */
@@ -1118,13 +1090,138 @@ body.autenticado {
 #cortesEmEstoqueView .op-form-botoes {
     justify-content: flex-start; /* Alinha botões à esquerda */
     padding-top: 15px; /* Espaço acima dos botões */
+
+}
+
+/* ==========================================================================
+   # ESTILOS PARA OS POPUPS DE MENSAGEM (Sucesso, Erro, Aviso)
+   ========================================================================== */
+
+/* Contêiner principal do popup */
+.popup-mensagem {
+    position: fixed;
+    top: 50%; /* Centraliza verticalmente */
+    left: 50%; /* Centraliza horizontalmente */
+    transform: translate(-50%, -50%); /* Ajusta para o centro exato do elemento */
+    padding: 25px 30px; /* Padding interno */
+    border-radius: var(--op-raio-borda-card); /* Usa a variável de raio de borda de card */
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25); /* Sombra customizada para popups */
+    z-index: 10000; /* Z-index alto para ficar acima de tudo */
+    max-width: 450px; /* Largura máxima para legibilidade */
+    width: 90%; /* Responsivo */
+    text-align: center;
+    font-family: var(--op-fonte-principal); /* Usa a variável de fonte */
+    animation: fadeIn 0.3s ease-out; /* Animação de entrada */
+    display: flex; /* Para centralizar conteúdo e botão */
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Animação de entrada */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translate(-50%, -60%); }
+    to { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+/* Animação de saída (opcional, para quando o popup desaparece) */
+@keyframes fadeOut {
+    from { opacity: 1; transform: translate(-50%, -50%); }
+    to { opacity: 0; transform: translate(-50%, -60%); }
+}
+
+/* Estilos para o texto da mensagem */
+.popup-mensagem p {
+    font-size: 1rem;
+    line-height: 1.5;
+    margin-bottom: 15px; /* Espaço antes do botão OK */
+    font-weight: 500;
+    color: var(--op-cor-texto-principal); /* Usa a variável de cor de texto principal */
+}
+
+/* Tipos de mensagem: sucesso, erro, aviso (usando suas variáveis de cor) */
+.popup-mensagem.popup-sucesso {
+    background-color: #d4edda; /* Verde claro - mantenho o valor direto, pois não há var para cor de fundo de popup específico */
+    color: var(--op-cor-verde-sucesso); /* Texto verde usando sua var */
+    border: 1px solid #c3e6cb; /* Borda verde clara */
+}
+
+.popup-mensagem.popup-erro {
+    background-color: #f8d7da; /* Vermelho claro */
+    color: var(--op-cor-vermelho-perigo); /* Texto vermelho usando sua var */
+    border: 1px solid #f5c6cb;
+}
+
+.popup-mensagem.popup-aviso {
+    background-color: #fff3cd; /* Amarelo claro */
+    color: var(--op-cor-status-em-aberto); /* Texto amarelo usando sua var (ou uma mais escura se tiver) */
+    border: 1px solid #ffeeba;
+}
+
+/* Estilo do botão OK dentro do popup (usando suas variáveis de botão) */
+.popup-mensagem button {
+    padding: 10px 25px;
+    margin-top: 10px;
+    background-color: var(--op-cor-cinza-texto); /* Usa seu cinza de texto para o botão OK */
+    color: var(--op-cor-branco);
+    border: none;
+    border-radius: var(--op-raio-borda-botao); /* Usa a variável de raio de borda de botão */
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    transition: background-color 0.2s ease;
+}
+
+.popup-mensagem button:hover {
+    background-color: #495057; /* Um cinza um pouco mais escuro no hover */
+}
+
+/* Overlay de fundo para bloquear interação com a página */
+.popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.4); /* Fundo semi-transparente */
+    z-index: 9999; /* Um pouco abaixo do popup */
+    animation: fadeInOverlay 0.3s ease-out;
+}
+
+@keyframes fadeInOverlay {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes fadeOutOverlay { /* Animação de saída para o overlay */
+    from { opacity: 1; }
+    to { opacity: 0; }
 }
 
 /* Ajustes gerais para telas menores TIPO IPAD (aplicado a todos os breakpoints mobile) */
 @media (max-width: 1024px) {
     body {
     margin-left: 0;
+    padding: 40px 40px 10px 40px;
     }
+    .op-botao-filtro{
+       font-size: 1.2rem;
+    }
+
+    .op-botao-secundario-acao  {
+    font-size: 1.2rem;
+ }
+
+ .op-botao-corte{
+    font-size: 1.2rem;
+ }
+
+ .op-botao-destaque-incluir{
+    font-size: 1.2rem;
+ }
+ .op-grupo-titulo-sutil {
+    font-size: 1.2rem;
+ }
 
     .op-filtros-container {
         flex-direction: column;
@@ -1132,6 +1229,7 @@ body.autenticado {
     }
     .op-input-busca {
         min-width: 100%;
+        font-size: 1.2rem;
     }
     .op-botoes-grupo {
         justify-content: center; /* Centraliza botões em telas menores */
@@ -1139,7 +1237,34 @@ body.autenticado {
     .op-botao {
         flex-grow: 0; /* Faz botões ocuparem mais espaço se necessário */
         justify-content: center;
+        font-size: 1.2rem;
+
     }
+
+    .popup-mensagem {
+        max-width: 60%; /* Pode ser um pouco maior em tablets */
+        padding: 25px 30px; /* Mantém o padding normal */
+        font-size: 0.95rem; /* Fonte um pouco menor */
+    }
+
+    .popup-mensagem p {
+        font-size: 0.95rem;
+    }
+
+    .popup-mensagem button {
+        padding: 10px 20px;
+        font-size: 0.9rem;
+    }
+
+    .op-titulo-secao {
+    font-size: 2rem;
+    padding: 10px 10px 10px 40px;
+}
+
+.op-tabela-estilizada th, .op-tabela-estilizada td {
+    font-size: 1.2rem;
+ }
+ 
 
 }
 
@@ -1147,7 +1272,22 @@ body.autenticado {
 @media (max-width: 576px) {
     body {
     margin-left: 0;
+    padding: 15px 10px;
     }
+    .op-filtros-container{
+        padding: 5px;
+    } 
+
+    .op-botao-filtro{
+    padding: 8px 10px;
+    font-size: 0.8rem;
+ }
+
+    .op-cabecalho-pagina h1 {
+        font-size: 1.8rem;
+        padding: 0 0 10px 20px;
+    }
+
     .op-form-estilizado .op-form-linha{
         display: flex;
         gap: 20px;
@@ -1159,6 +1299,19 @@ body.autenticado {
     #opFormView .op-input-produto-principal {
     max-width: 270px;
 }
+
+.op-tabela-estilizada th, .op-tabela-estilizada td {
+    font-size: 0.8rem;
+ }
+
+    .op-input-busca {
+        font-size: 0.8rem;
+    }
+    
+    .op-botao-secundario-acao .op-botao-corte 
+ .op-grupo-titulo-sutil .op-botao-destaque-incluir {
+    font-size: 0.8rem;
+ }
 
 #opFormView .op-input-quantidade-op {
     width: 70px !important;
@@ -1302,8 +1455,8 @@ body.autenticado {
         /* Ou width: 100%; para um botão por linha */
         justify-content: center; /* Centraliza ícone e texto no botão */
         font-size: 0.8rem; /* Fonte um pouco menor nos botões */
-        padding: 10px 8px; /* Ajusta padding */
     }
+
     .op-botao-destaque-incluir { /* Botão principal no mobile */
         width: 60%; /* Ocupa a largura total */
         padding: 15px 15px;
@@ -1332,6 +1485,36 @@ body.autenticado {
 #corteView .op-input-quantidade-corte {
     width: 80px !important;
 }
+
+.op-titulo-secao {
+    font-size: 1.5rem;
+    color: var(--op-cor-azul-escuro);
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    padding: 0 35px 20px 35px;
+    border-bottom: 1px solid #eaeaea;
+    font-weight: 500;
+    text-align: center;
+}
+
+.popup-mensagem {
+        max-width: 90%; /* Ocupa mais espaço em telas pequenas */
+        padding: 20px 25px; /* Padding um pouco menor */
+        font-size: 0.9rem; /* Fonte ainda menor */
+    }
+
+    .popup-mensagem p {
+        font-size: 0.9rem;
+    }
+
+    .popup-mensagem button {
+        padding: 8px 18px;
+        font-size: 0.85rem;
+    }
+    .op-botao {
+        font-size: 0.9rem;
+
+    }
 
 }
 
@@ -1434,5 +1617,21 @@ body.autenticado {
     #opEditView #editQuantidadeOP {
     max-width: 80px;
 }
+
+.popup-mensagem {
+        max-width: 95%; /* Quase total para telas bem pequenas */
+        padding: 15px 20px; /* Padding mínimo */
+        font-size: 0.85rem; /* Fonte mínima para caber */
+    }
+
+    .popup-mensagem p {
+        font-size: 0.85rem;
+        margin-bottom: 10px; /* Menos espaço antes do botão */
+    }
+
+    .popup-mensagem button {
+        padding: 7px 15px;
+        font-size: 0.8rem;
+    }
 
 }

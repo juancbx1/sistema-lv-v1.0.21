@@ -12,7 +12,6 @@ const pool = new Pool({
 });
 const SECRET_KEY = process.env.JWT_SECRET;
 
-// Função verificarToken (deve estar definida ou importada)
 const verificarTokenOriginal = (reqOriginal) => {
     const authHeader = reqOriginal.headers.authorization;
     if (!authHeader) {
@@ -35,19 +34,17 @@ const verificarTokenOriginal = (reqOriginal) => {
     }
 };
 
-// Middleware para este router
+// Middleware para este router: Adquire a conexão e verifica o token
 router.use(async (req, res, next) => {
-    let cliente;
     try {
-        console.log(`[router/ordens-de-producao] Recebida ${req.method} em ${req.originalUrl}`);
+        console.log(`[router/ordens-de-producao middleware] Recebida ${req.method} em ${req.originalUrl}`);
         req.usuarioLogado = verificarTokenOriginal(req);
-        cliente = await pool.connect();
-        req.dbCliente = cliente;
+        req.dbClient = await pool.connect();
         console.log('[router/ordens-de-producao middleware] Conexão com o banco estabelecida.');
         next();
     } catch (error) {
         console.error('[router/ordens-de-producao middleware] Erro:', error.message);
-        if (cliente) cliente.release();
+        if (req.dbClient) req.dbClient.release(); // Libera em caso de erro no middleware
         const statusCode = error.statusCode || 500;
         res.status(statusCode).json({ error: error.message, details: error.details });
     }
@@ -55,7 +52,7 @@ router.use(async (req, res, next) => {
 
 // GET /api/ordens-de-producao/
 router.get('/', async (req, res) => {
-    const { dbCliente, usuarioLogado } = req;
+    const { dbClient, usuarioLogado } = req;
     const { query } = req;
     try {
         if (!usuarioLogado.permissoes.includes('acesso-ordens-de-producao')) {
@@ -73,29 +70,21 @@ router.get('/', async (req, res) => {
 
         if (getNextNumber) {
             console.log('[API OPs GET] Branch: getNextNumber');
-            const getNextNumberQueryText = `SELECT numero FROM ordens_de_producao ORDER BY CAST(numero AS INTEGER) DESC`; // Nome diferente para evitar conflito
-            const result = await dbCliente.query(getNextNumberQueryText);
-            if (dbCliente) dbCliente.release();
+            const getNextNumberQueryText = `SELECT numero FROM ordens_de_producao ORDER BY CAST(numero AS INTEGER) DESC`;
+            const result = await dbClient.query(getNextNumberQueryText);
+            // NÃO HÁ dbClient.release() aqui pois já está no finally global para este endpoint
             return res.status(200).json(result.rows.map(row => row.numero));
         }
 
         const queryTextBase = 'SELECT * FROM ordens_de_producao';
         const countQueryTextBase = 'SELECT COUNT(*) FROM ordens_de_producao';
 
-        // <<< DECLARE AS VARIÁVEIS AQUI FORA >>>
-        let queryText;
-        let countQueryText;
-        let queryParams = []; // Inicialize como array vazio
-        let countQueryParams = []; // Inicialize como array vazio
         let whereClausesNew = [];
         let dynamicParams = [];
         let currentParamIdx = 1;
-        // <<< FIM DAS DECLARAÇÕES EXTERNAS >>>
 
-        // Filtro de Status
         if (noStatusFilter) {
             console.log('[API OPs GET] Branch: noStatusFilter (REALMENTE TODAS)');
-            /* nada a adicionar em whereClausesNew ou dynamicParams */
         } else if (statusFilter) {
             console.log(`[API OPs GET] Branch: statusFilter = ${statusFilter}`);
             whereClausesNew.push(`status = $${currentParamIdx++}`);
@@ -103,10 +92,8 @@ router.get('/', async (req, res) => {
         } else {
             console.log('[API OPs GET] Branch: Filtro PADRÃO de status (em-aberto, produzindo)');
             whereClausesNew.push(`status IN ('em-aberto', 'produzindo')`);
-            // Nenhum parâmetro dinâmico para este caso, a string já está completa
         }
 
-        // Filtro de Busca (SearchTerm)
         if (searchTerm) {
             console.log(`[API OPs GET] Aplicando searchTerm: ${searchTerm}`);
             whereClausesNew.push(`(
@@ -119,29 +106,22 @@ router.get('/', async (req, res) => {
         }
 
         const finalWhereCondition = whereClausesNew.length > 0 ? `WHERE ${whereClausesNew.join(' AND ')}` : '';
-        queryText = `${queryTextBase} ${finalWhereCondition} ORDER BY CAST(numero AS INTEGER) DESC`;
-        countQueryText = `${countQueryTextBase} ${finalWhereCondition}`;
+        let queryText = `${queryTextBase} ${finalWhereCondition} ORDER BY CAST(numero AS INTEGER) DESC`;
+        let countQueryText = `${countQueryTextBase} ${finalWhereCondition}`;
 
-        // Atribui os parâmetros construídos dinamicamente
-        // Estes já estão corretos por causa do escopo e da modificação acima
-        queryParams = [...dynamicParams];
-        countQueryParams = [...dynamicParams];
-
+        let queryParams = [...dynamicParams];
+        let countQueryParams = [...dynamicParams];
 
         if (!fetchAll) {
             queryText += ` LIMIT $${currentParamIdx++} OFFSET $${currentParamIdx++}`;
-            queryParams.push(limit, offset); // Adiciona ao array de queryParams principal
-            // countQueryParams não precisa de limit/offset
+            queryParams.push(limit, offset);
         }
-        // Se fetchAll for true, não adicionamos LIMIT e OFFSET,
-        // e queryParams/countQueryParams (que são cópias de dynamicParams) estão corretos para as queries sem paginação.
-
 
         console.log('[API OPs GET] Query Principal:', queryText, queryParams);
-        const result = await dbCliente.query(queryText, queryParams);
+        const result = await dbClient.query(queryText, queryParams);
 
         console.log('[API OPs GET] Query de Contagem:', countQueryText, countQueryParams);
-        const totalResult = await dbCliente.query(countQueryText, countQueryParams);
+        const totalResult = await dbClient.query(countQueryText, countQueryParams);
         const total = parseInt(totalResult.rows[0].count);
 
         res.status(200).json({
@@ -155,16 +135,42 @@ router.get('/', async (req, res) => {
         console.error('[router/ordens-de-producao GET] Erro detalhado:', error.message, error.stack);
         res.status(500).json({ error: 'Erro ao buscar ordens de produção', details: error.message });
     } finally {
-        if (dbCliente) {
+        if (dbClient) {
             console.log('[router/ordens-de-producao GET] Liberando cliente do banco.');
-            dbCliente.release();
+            dbClient.release();
         }
     }
 });
 
+// GET /api/ordens-de-producao/:id (NOVA ROTA PARA BUSCAR UMA ÚNICA OP)
+router.get('/:id', async (req, res) => {
+    const { dbClient, usuarioLogado } = req;
+    try {
+        if (!usuarioLogado.permissoes.includes('acesso-ordens-de-producao')) {
+            return res.status(403).json({ error: 'Permissão negada.' });
+        }
+        const opIdentifier = req.params.id; // Pode ser edit_id ou numero
+
+        const result = await dbClient.query(
+            `SELECT * FROM ordens_de_producao WHERE edit_id = $1 OR numero = $1`,
+            [opIdentifier]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Ordem de Produção não encontrada.' });
+        }
+        res.status(200).json(result.rows[0]);
+    } catch (error) {
+        console.error(`[router/ordens-de-producao GET /:id] Erro:`, error.message, error.stack);
+        res.status(500).json({ error: 'Erro ao buscar OP.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release(); // LIBERA O CLIENTE AQUI
+    }
+});
+
+
 // POST /api/ordens-de-producao/
 router.post('/', async (req, res) => {
-    const { dbCliente, usuarioLogado } = req;
+    const { dbClient, usuarioLogado } = req;
     try {
         if (!usuarioLogado.permissoes.includes('criar-op')) {
             return res.status(403).json({ error: 'Permissão negada.' });
@@ -177,11 +183,11 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Quantidade deve ser positiva.' });
         }
         const editId = fornecido_edit_id || Date.now().toString() + Math.random().toString(36).substring(2, 7);
-        const checkExists = await dbCliente.query('SELECT 1 FROM ordens_de_producao WHERE numero = $1', [numero]);
+        const checkExists = await dbClient.query('SELECT 1 FROM ordens_de_producao WHERE numero = $1', [numero]);
         if (checkExists.rowCount > 0) {
             return res.status(409).json({ error: 'Número da OP já existe.' });
         }
-        const result = await dbCliente.query(
+        const result = await dbClient.query(
             `INSERT INTO ordens_de_producao (numero, produto, variante, quantidade, data_entrega, observacoes, status, edit_id, etapas, data_criacao)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP) RETURNING *`,
             [numero, produto, variante || null, quantidade, data_entrega, observacoes || '', status || 'em-aberto', editId, JSON.stringify(etapas || [])]
@@ -192,22 +198,33 @@ router.post('/', async (req, res) => {
         if (error.code === '23505') return res.status(409).json({ error: 'Conflito de dados.', details: error.detail });
         res.status(500).json({ error: 'Erro ao criar OP.', details: error.message });
     } finally {
-        if (dbCliente) dbCliente.release();
+        if (dbClient) dbClient.release(); // LIBERA O CLIENTE AQUI
     }
 });
 
 // PUT /api/ordens-de-producao/
 router.put('/', async (req, res) => {
-    const { dbCliente, usuarioLogado } = req;
+    const { dbClient, usuarioLogado } = req;
     try {
-        if (!usuarioLogado.permissoes.includes('editar-op')) {
-            return res.status(403).json({ error: 'Permissão negada.' });
-        }
         const { edit_id, numero, produto, variante, quantidade, data_entrega, observacoes, status, etapas, data_final } = req.body;
+
+        // Permissão para cancelar a OP
+        if (status === 'cancelada' && !usuarioLogado.permissoes.includes('cancelar-op')) {
+            return res.status(403).json({ error: 'Permissão negada para cancelar Ordem de Produção.' });
+        }
+        // Permissão para finalizar a OP
+        if (status === 'finalizado' && !usuarioLogado.permissoes.includes('finalizar-op')) {
+            return res.status(403).json({ error: 'Permissão negada para finalizar Ordem de Produção.' });
+        }
+        // Permissão geral para editar a OP (se não for cancelando/finalizando)
+        if (status !== 'cancelada' && status !== 'finalizado' && !usuarioLogado.permissoes.includes('editar-op')) {
+             return res.status(403).json({ error: 'Permissão negada para editar Ordem de Produção.' });
+        }
+
         if (!edit_id) return res.status(400).json({ error: 'edit_id é obrigatório.' });
-        const result = await dbCliente.query(
-            `UPDATE ordens_de_producao 
-             SET numero = $1, produto = $2, variante = $3, quantidade = $4, data_entrega = $5, 
+        const result = await dbClient.query(
+            `UPDATE ordens_de_producao
+             SET numero = $1, produto = $2, variante = $3, quantidade = $4, data_entrega = $5,
                  observacoes = $6, status = $7, etapas = $8, data_final = $9, data_atualizacao = CURRENT_TIMESTAMP
              WHERE edit_id = $10 RETURNING *`,
             [numero, produto, variante || null, quantidade, data_entrega, observacoes || '', status, JSON.stringify(etapas || []), data_final || null, edit_id]
@@ -219,7 +236,7 @@ router.put('/', async (req, res) => {
         if (error.code === '23505') return res.status(409).json({ error: 'Conflito de dados.', details: error.detail });
         res.status(500).json({ error: 'Erro ao atualizar OP.', details: error.message });
     } finally {
-        if (dbCliente) dbCliente.release();
+        if (dbClient) dbClient.release(); // LIBERA O CLIENTE AQUI
     }
 });
 

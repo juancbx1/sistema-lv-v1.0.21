@@ -39,7 +39,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const nomeUsuarioSpan = document.getElementById('nomeUsuario');
     if (usuarioLogado && usuarioLogado.nome) {
       nomeUsuarioSpan.textContent = usuarioLogado.nome;
-      console.log('Menu Lateral - 2. Nome do usuário exibido:', usuarioLogado.nome);
     } else {
       nomeUsuarioSpan.textContent = 'Usuário Desconhecido';
       console.log('Menu Lateral - 2. Usuário desconhecido exibido.');

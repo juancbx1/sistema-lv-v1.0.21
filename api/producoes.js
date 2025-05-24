@@ -3,20 +3,16 @@ import 'dotenv/config';
 import pkg from 'pg';
 const { Pool } = pkg;
 import jwt from 'jsonwebtoken';
-import express from 'express'; // <<< ADICIONADO
+import express from 'express';
 
-const router = express.Router(); // <<< ADICIONADO
+const router = express.Router();
 const pool = new Pool({
     connectionString: process.env.POSTGRES_URL,
     timezone: 'UTC',
 });
 const SECRET_KEY = process.env.JWT_SECRET;
 
-// --- Suas funções verificarToken (pode ser movida para utils se repetida) ---
-const verificarToken = (reqOriginal) => { // Renomeado para evitar conflito com req do Express
-    // No Express, req já é o objeto da requisição, não precisa passar.
-    // Se for usar como middleware do Express, o 'req' já estará disponível.
-    // Para este exemplo, vamos assumir que o middleware abaixo o chamará.
+const verificarToken = (reqOriginal) => {
     const authHeader = reqOriginal.headers.authorization;
     if (!authHeader) {
         const error = new Error('Token não fornecido');
@@ -41,20 +37,17 @@ const verificarToken = (reqOriginal) => { // Renomeado para evitar conflito com 
         throw error;
     }
 };
-// --------------------------------------------------------------------------
 
-// <<< ADICIONADO: Middleware para este router >>>
+// Middleware para este router: Adquire a conexão e verifica o token
 router.use(async (req, res, next) => {
-    let cliente;
     try {
         console.log(`[router/producoes] Recebida ${req.method} em ${req.originalUrl}`);
-        req.usuarioLogado = verificarToken(req); // Usar o 'req' do Express aqui
-        cliente = await pool.connect();
-        req.dbCliente = cliente;
+        req.usuarioLogado = verificarToken(req);
+        req.dbClient = await pool.connect();
         next();
     } catch (error) {
         console.error('[router/producoes] Erro no middleware:', error.message);
-        if (cliente) cliente.release();
+        if (req.dbClient) req.dbClient.release(); // Libera em caso de erro no middleware
         const statusCode = error.statusCode || 500;
         const responseError = { error: error.message };
         if (error.details) responseError.details = error.details;
@@ -62,24 +55,22 @@ router.use(async (req, res, next) => {
     }
 });
 
-
-
 // POST /api/producoes/
 router.post('/', async (req, res) => {
-    const { usuarioLogado, dbCliente } = req;
+    const { usuarioLogado, dbClient } = req;
 
     try {
         console.log('[router/producoes POST] Iniciando lançamento de produção...');
+        // Permissão para lançar produção
         if (!usuarioLogado.permissoes.includes('lancar-producao')) {
             return res.status(403).json({ error: 'Permissão negada para lançar produção' });
         }
 
-        const { 
-            id, opNumero, etapaIndex, processo, produto, variacao, 
-            maquina, quantidade, funcionario, data, lancadoPor 
+        const {
+            id, opNumero, etapaIndex, processo, produto, variacao,
+            maquina, quantidade, funcionario, data, lancadoPor
         } = req.body;
 
-        // Validações básicas (como você já tem)
         if (!id || !opNumero || etapaIndex === undefined || !processo || !produto || quantidade === undefined || !funcionario || !data || !lancadoPor) {
             return res.status(400).json({ error: 'Dados incompletos para lançamento de produção.' });
         }
@@ -88,9 +79,9 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Quantidade inválida.' });
         }
 
-        let parsedDate; // Lógica de data como você já tem
+        let parsedDate;
         try {
-            if (data && !data.includes('-03')) parsedDate = `${data}-03:00`; // Ajuste para seu fuso se necessário
+            if (data && !data.includes('-03')) parsedDate = `${data}-03:00`;
             else parsedDate = data;
             const dateTest = new Date(parsedDate);
             if (isNaN(dateTest.getTime())) throw new Error('Formato de data inválido para produção.');
@@ -99,17 +90,16 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Formato de data inválido para produção.' });
         }
 
-        // --- LÓGICA PARA PONTOS ---
-        let valorPontoAplicado = 1.00; // Default
+        let valorPontoAplicado = 1.00;
 
         console.log(`[router/producoes POST] Buscando configuração de pontos para Produto: "${produto}", Processo: "${processo}"`);
         const configPontosQuery = `
-            SELECT pontos_padrao 
+            SELECT pontos_padrao
             FROM configuracoes_pontos_processos
             WHERE produto_nome = $1 AND processo_nome = $2 AND ativo = TRUE
             LIMIT 1;
         `;
-        const configPontosResult = await dbCliente.query(configPontosQuery, [produto, processo]);
+        const configPontosResult = await dbClient.query(configPontosQuery, [produto, processo]);
 
         if (configPontosResult.rows.length > 0) {
             valorPontoAplicado = parseFloat(configPontosResult.rows[0].pontos_padrao);
@@ -120,59 +110,44 @@ router.post('/', async (req, res) => {
 
         const pontosGerados = parsedQuantidade * valorPontoAplicado;
         console.log(`[router/producoes POST] Quantidade: ${parsedQuantidade}, Pontos Gerados: ${pontosGerados}`);
-        // --- FIM DA LÓGICA PARA PONTOS ---
-
-        // Verificar duplicidade (como você já tem, se necessário)
-        // const checkDuplicate = await dbCliente.query(...);
-        // if (checkDuplicate.rows.length > 0) {
-        //     return res.status(409).json({ error: 'Lançamento duplicado detectado.' });
-        // }
 
         console.log('[router/producoes POST] Inserindo produção no banco...');
         const insertProducaoQuery = `
             INSERT INTO producoes (
-                id, op_numero, etapa_index, processo, produto, variacao, maquina, 
-                quantidade, funcionario, data, lancado_por, 
-                valor_ponto_aplicado, pontos_gerados 
-                /* Adicione outras colunas como edicoes, assinada, version se você as preenche aqui */
+                id, op_numero, etapa_index, processo, produto, variacao, maquina,
+                quantidade, funcionario, data, lancado_por,
+                valor_ponto_aplicado, pontos_gerados
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             RETURNING *;
         `;
-        // Ajuste os placeholders e o array de values conforme as colunas da sua tabela
-        const result = await dbCliente.query(insertProducaoQuery, [
+        const result = await dbClient.query(insertProducaoQuery, [
             id, opNumero, etapaIndex, processo, produto, variacao, maquina,
             parsedQuantidade, funcionario, parsedDate, lancadoPor,
             valorPontoAplicado, pontosGerados
         ]);
-        
+
         console.log('[router/producoes POST] Produção lançada com sucesso:', result.rows[0].id);
-        // Retornar o ID do frontend (id) junto com os dados do banco,
-        // pois o ID do frontend é usado para controle de `lancamentosEmAndamento`
-        res.status(201).json({ ...result.rows[0], id: id }); 
+        res.status(201).json({ ...result.rows[0], id: id });
 
     } catch (error) {
         console.error('[router/producoes POST] Erro detalhado:', error.message, error.stack);
         const dbErrorDetail = error.detail || error.message;
         const dbErrorCode = error.code;
-        // Tratar erro de constraint unique (chave primária 'id' por exemplo)
-        if (dbErrorCode === '23505') { // unique_violation
+        if (dbErrorCode === '23505') {
              res.status(409).json({ error: 'Erro de conflito ao salvar produção (ex: ID duplicado).', details: dbErrorDetail, code: dbErrorCode });
         } else {
             res.status(500).json({ error: 'Erro interno ao salvar produção.', details: dbErrorDetail, code: dbErrorCode });
         }
     } finally {
-        if (dbCliente) dbCliente.release();
+        if (dbClient) dbClient.release(); // LIBERA O CLIENTE AQUI
     }
 });
 
-
-
-// <<< MODIFICADO: GET /api/producoes/ >>>
+// GET /api/producoes/
 router.get('/', async (req, res) => {
-    const { usuarioLogado, dbCliente } = req;
+    const { usuarioLogado, dbClient } = req;
     try {
-        // ... (sua lógica de permissão e query) ...
         if (!usuarioLogado.permissoes.includes('acesso-gerenciar-producao') && !usuarioLogado.tipos.includes('costureira')) {
             return res.status(403).json({ error: 'Permissão negada' });
         }
@@ -190,29 +165,28 @@ router.get('/', async (req, res) => {
         } else {
             queryText = 'SELECT * FROM producoes ORDER BY data DESC';
         }
-        const result = await dbCliente.query(queryText, queryParams);
+        const result = await dbClient.query(queryText, queryParams);
         res.status(200).json(result.rows);
     } catch (error) {
         console.error('[router/producoes] Erro no GET:', error);
         res.status(error.statusCode || 500).json({ error: error.message });
     } finally {
-        if (dbCliente) dbCliente.release();
+        if (dbClient) dbClient.release(); // LIBERA O CLIENTE AQUI
     }
 });
 
-// <<< MODIFICADO: PUT /api/producoes/:id (ou pode ser PUT / e ID no corpo) >>>
-// Se o ID estiver na URL, mude para router.put('/:id', ...)
-router.put('/', async (req, res) => { // Assumindo ID no corpo, como antes
-    const { usuarioLogado, dbCliente } = req;
+// PUT /api/producoes/
+router.put('/', async (req, res) => {
+    const { usuarioLogado, dbClient } = req;
     try {
         console.log('[router/producoes] Processando PUT...');
         const { id, quantidade, edicoes, assinada } = req.body;
-        // ... (sua lógica de validação e permissão) ...
-        if (!id || (quantidade === undefined && assinada === undefined && edicoes === undefined)) { // edicoes também pode ser opcional
+
+        if (!id || (quantidade === undefined && assinada === undefined && edicoes === undefined)) {
             return res.status(400).json({ error: 'Dados incompletos. Pelo menos id e um campo para atualizar (quantidade, edicoes ou assinada) são necessários.' });
         }
 
-        const checkResult = await dbCliente.query('SELECT * FROM producoes WHERE id = $1', [id]);
+        const checkResult = await dbClient.query('SELECT * FROM producoes WHERE id = $1', [id]);
         if (checkResult.rows.length === 0) {
             return res.status(404).json({ error: 'Produção não encontrada' });
         }
@@ -225,7 +199,7 @@ router.put('/', async (req, res) => { // Assumindo ID no corpo, como antes
             return res.status(403).json({ error: 'Permissão negada' });
         }
 
-        const result = await dbCliente.query(
+        const result = await dbClient.query(
             `UPDATE producoes
              SET quantidade = COALESCE($1, quantidade),
                  edicoes = COALESCE($2, edicoes),
@@ -238,25 +212,23 @@ router.put('/', async (req, res) => { // Assumindo ID no corpo, como antes
         console.error('[router/producoes] Erro no PUT:', error);
         res.status(error.statusCode || 500).json({ error: error.message });
     } finally {
-        if (dbCliente) dbCliente.release();
+        if (dbClient) dbClient.release(); // LIBERA O CLIENTE AQUI
     }
 });
 
-
-// <<< MODIFICADO: DELETE /api/producoes/:id (ou pode ser DELETE / e ID no corpo) >>>
-// Se o ID estiver na URL, mude para router.delete('/:id', ...)
-router.delete('/', async (req, res) => { // Assumindo ID no corpo, como antes
-    const { usuarioLogado, dbCliente } = req;
+// DELETE /api/producoes/
+router.delete('/', async (req, res) => {
+    const { usuarioLogado, dbClient } = req;
     try {
         console.log('[router/producoes] Processando DELETE...');
         if (!usuarioLogado.permissoes.includes('excluir-registro-producao')) {
             return res.status(403).json({ error: 'Permissão negada' });
         }
-        const { id } = req.body; // ID vem do corpo da requisição
+        const { id } = req.body;
         if (!id) {
             return res.status(400).json({ error: 'ID não fornecido no corpo da requisição' });
         }
-        const deleteResult = await dbCliente.query(
+        const deleteResult = await dbClient.query(
             'DELETE FROM producoes WHERE id = $1 RETURNING *',
             [id]
         );
@@ -268,8 +240,8 @@ router.delete('/', async (req, res) => { // Assumindo ID no corpo, como antes
         console.error('[router/producoes] Erro no DELETE:', error);
         res.status(error.statusCode || 500).json({ error: error.message });
     } finally {
-        if (dbCliente) dbCliente.release();
+        if (dbClient) dbClient.release(); // LIBERA O CLIENTE AQUI
     }
 });
 
-export default router; // <<< EXPORTAR O ROUTER
+export default router;
