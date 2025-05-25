@@ -3,9 +3,9 @@ import 'dotenv/config';
 import pkg from 'pg';
 const { Pool } = pkg;
 import jwt from 'jsonwebtoken';
-import express from 'express'; // <<< ADICIONADO
+import express from 'express';
 
-const router = express.Router(); // <<< ADICIONADO
+const router = express.Router();
 const pool = new Pool({
     connectionString: process.env.POSTGRES_URL,
     timezone: 'UTC',
@@ -131,4 +131,4 @@ router.get('/', async (req, res) => {
     }
 });
 
-export default router; // <<< EXPORTAR O ROUTER
+export default router;

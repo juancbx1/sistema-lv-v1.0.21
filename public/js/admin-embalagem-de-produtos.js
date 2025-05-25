@@ -1,5 +1,5 @@
 import { verificarAutenticacao } from '/js/utils/auth.js';
-import { obterProdutos, invalidateCache } from '/js/utils/storage.js'; // Removido getCachedData se não usado diretamente
+import { obterProdutos, invalidateCache } from '/js/utils/storage.js';
 
 // --- Variáveis Globais ---
 let usuarioLogado = null;
@@ -11,13 +11,21 @@ let todosOsArrematesRegistrados = [];
 
 // Paginação para Arremate
 let currentPageArremate = 1;
-const itemsPerPageArremate = 10; // Pode ser ajustado no CSS ou JS se necessário
+const itemsPerPageArremate = 5;
 let opsParaArrematarGlobal = [];
+
+
+let produtosParaArrematarAgregados = [];
+let arremateAgregadoEmVisualizacao = null; 
+
 
 // Paginação para Embalagem
 let currentPageEmbalagem = 1;
-const itemsPerPageEmbalagem = 10; // Pode ser ajustado
+const itemsPerPageEmbalagem = 5; // Pode ser ajustado
 let opsProntasParaEmbalarGlobal = [];
+let produtosProntosParaEmbalarAgregados = [];
+let embalagemAgregadoEmVisualizacao = null; 
+
 
 const lancamentosArremateEmAndamento = new Set();
 
@@ -229,94 +237,849 @@ async function obterUsuariosTiktikParaProduto(produtoNome) {
 
 // --- Lógica de Renderização (AJUSTADA PARA NOVO HTML/CSS) ---
 
-async function carregarTabelaArremate(opsParaArrematar) {
-    const tbody = document.getElementById('arremateTableBody');
-    const paginationContainer = document.getElementById('arrematePaginationContainer'); // ID do HTML novo
-    if (!tbody || !paginationContainer) {
-        console.error('[carregarTabelaArremate] Elementos tbody ou paginationContainer não encontrados.');
+// async function carregarTabelaArremate(opsParaArrematar) {
+//     const tbody = document.getElementById('arremateTableBody');
+//     const paginationContainer = document.getElementById('arrematePaginationContainer'); // ID do HTML novo
+//     if (!tbody || !paginationContainer) {
+//         console.error('[carregarTabelaArremate] Elementos tbody ou paginationContainer não encontrados.');
+//         return;
+//     }
+
+//     tbody.innerHTML = '';
+//     paginationContainer.innerHTML = '';
+
+//     if (opsParaArrematar.length === 0) {
+//         // Colspan agora é 8 por causa das colunas "Arrematar Qtd." e "Ação" separadas
+//         tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 20px;">Nenhum item aguardando arremate.</td></tr>`;
+//         return;
+//     }
+
+//     const totalItems = opsParaArrematar.length;
+//     const totalPages = Math.ceil(totalItems / itemsPerPageArremate);
+//     const startIndex = (currentPageArremate - 1) * itemsPerPageArremate;
+//     const endIndex = Math.min(startIndex + itemsPerPageArremate, totalItems);
+//     const paginatedOPs = opsParaArrematar.slice(startIndex, endIndex);
+
+//     const usuariosTiktikPromises = paginatedOPs.map(op => obterUsuariosTiktikParaProduto(op.produto));
+//     const usuariosPorOP = await Promise.all(usuariosTiktikPromises);
+
+//     const fragment = document.createDocumentFragment();
+//     paginatedOPs.forEach((op, index) => {
+//         const tr = document.createElement('tr');
+//         tr.dataset.opNumero = op.numero;
+//         tr.dataset.opEditId = op.edit_id;
+//         tr.dataset.produto = op.produto;
+//         tr.dataset.variante = op.variante || '-';
+
+//         const quantidadePendente = op.quantidade_pendente_arremate;
+//         const usuariosTiktikDisponiveis = usuariosPorOP[index];
+//         const temPermissaoLancar = permissoes.includes('lancar-arremate');
+
+//         // Desabilitar controles se não houver usuários, quantidade ou permissão
+//         const controlesDesabilitados = usuariosTiktikDisponiveis.length === 0 || quantidadePendente === 0 || !temPermissaoLancar;
+
+//         tr.innerHTML = `
+//             <td>${op.numero}</td>
+//             <td>${op.produto}</td>
+//             <td>${op.variante || '-'}</td>
+//             <td>${op.quantidade_produzida_original}</td>
+//             <td class="quantidade-pendente-arremate">${quantidadePendente}</td>
+//             <td>
+//                 <select class="ep-select select-usuario-tiktik" ${controlesDesabilitados ? 'disabled' : ''} title="${!temPermissaoLancar ? 'Sem permissão' : ''}">
+//                     <option value="">${usuariosTiktikDisponiveis.length === 0 ? 'Nenhum Tiktik' : 'Selecione...'}</option>
+//                     ${usuariosTiktikDisponiveis.map(user => `<option value="${user.nome}">${user.nome}</option>`).join('')}
+//                 </select>
+//             </td>
+//             <td>
+//                 <input type="number" class="ep-input input-quantidade-arremate" value="${quantidadePendente}" 
+//                        min="1" max="${quantidadePendente}" style="width: 80px;" ${controlesDesabilitados ? 'disabled' : ''} title="${!temPermissaoLancar ? 'Sem permissão' : ''}">
+//             </td>
+//             <td>
+//                 <button class="ep-btn ep-btn-primary botao-lancar-arremate" ${controlesDesabilitados ? 'disabled' : ''} title="${!temPermissaoLancar ? 'Sem permissão para lançar' : (controlesDesabilitados && temPermissaoLancar ? 'Selecione usuário e/ou verifique quantidade' : 'Lançar Arremate')}">
+//                     Lançar
+//                 </button>
+//             </td>
+//         `;
+
+//         const btnLancar = tr.querySelector('.botao-lancar-arremate');
+//         const inputQuantidade = tr.querySelector('.input-quantidade-arremate');
+//         const selectUser = tr.querySelector('.select-usuario-tiktik');
+
+//         const atualizarEstadoBotaoLancar = () => {
+//             if (btnLancar && inputQuantidade && selectUser) {
+//                 const qtdValida = parseInt(inputQuantidade.value) > 0 && parseInt(inputQuantidade.value) <= parseInt(inputQuantidade.max);
+//                 const usuarioSelecionado = selectUser.value !== "";
+//                 btnLancar.disabled = !(qtdValida && usuarioSelecionado && temPermissaoLancar);
+//             }
+//         };
+        
+//         if (btnLancar) btnLancar.addEventListener('click', handleLancarArremateClick);
+//         if (inputQuantidade) inputQuantidade.addEventListener('input', atualizarEstadoBotaoLancar);
+//         if (selectUser) selectUser.addEventListener('change', atualizarEstadoBotaoLancar);
+        
+//         // Chamada inicial para definir o estado do botão
+//         if (temPermissaoLancar) atualizarEstadoBotaoLancar();
+
+
+//         fragment.appendChild(tr);
+//     });
+
+//     tbody.appendChild(fragment);
+
+//     if (totalPages > 1) {
+//         let paginationHTML = `<button class="ep-btn pagination-btn prev" data-page="${Math.max(1, currentPageArremate - 1)}" ${currentPageArremate === 1 ? 'disabled' : ''}>Anterior</button>`;
+//         paginationHTML += `<span class="pagination-current">Pág. ${currentPageArremate} de ${totalPages}</span>`;
+//         paginationHTML += `<button class="ep-btn pagination-btn next" data-page="${Math.min(totalPages, currentPageArremate + 1)}" ${currentPageArremate === totalPages ? 'disabled' : ''}>Próximo</button>`;
+//         paginationContainer.innerHTML = paginationHTML;
+
+//         paginationContainer.querySelectorAll('.pagination-btn').forEach(btn => {
+//             btn.addEventListener('click', () => {
+//                 currentPageArremate = parseInt(btn.dataset.page);
+//                 carregarTabelaArremate(opsParaArrematarGlobal);
+//             });
+//         });
+//     }
+// }
+
+
+// public/js/admin-embalagem-de-produtos.js
+
+// async function carregarTabelaProdutosEmbalagem(arrematesParaEmbalar) { // Nome do parâmetro mudou
+//     console.log(`[carregarTabelaProdutosEmbalagem] Renderizando ${arrematesParaEmbalar.length} arremates para embalagem.`);
+//     const tbody = document.getElementById('produtosTableBody');
+//     const paginationContainer = document.getElementById('paginationContainer');
+//     const searchInput = document.getElementById('searchProduto');
+
+//     if (!tbody || !paginationContainer || !searchInput) {
+//         console.error('[carregarTabelaProdutosEmbalagem] Elementos DOM não encontrados.');
+//         return;
+//     }
+
+//     tbody.innerHTML = '';
+//     paginationContainer.innerHTML = '';
+
+//     const search = searchInput.value.toLowerCase();
+//     let filteredArremates = arrematesParaEmbalar; // Nome da variável mudou
+//     if (search) {
+//         filteredArremates = arrematesParaEmbalar.filter(arr => // 'arr' de arremate
+//             arr.produto.toLowerCase().includes(search) ||
+//             (arr.variante && arr.variante.toLowerCase().includes(search)) ||
+//             arr.op_numero_origem.toString().includes(search) || // Pode buscar pela OP de origem
+//             arr.id_arremate.toString().includes(search) // Pode buscar pelo ID do arremate
+//         );
+//     }
+
+//     const totalItems = filteredArremates.length;
+//     const totalPages = Math.ceil(totalItems / itemsPerPageEmbalagem);
+//     if (currentPageEmbalagem > totalPages) currentPageEmbalagem = Math.max(1, totalPages);
+
+//     const startIndex = (currentPageEmbalagem - 1) * itemsPerPageEmbalagem;
+//     const endIndex = Math.min(startIndex + itemsPerPageEmbalagem, totalItems);
+//     const paginatedArremates = filteredArremates.slice(startIndex, endIndex); // Nome da variável mudou
+
+//     if (paginatedArremates.length === 0) {
+//         tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 20px;">${search ? 'Nenhum arremate encontrado para "' + search + '".' : 'Nenhum item pronto para embalar.'}</td></tr>`;
+//         adjustForMobile();
+//         return;
+//     }
+
+//     const fragment = document.createDocumentFragment();
+//     const produtosCadastrados = await buscarTodosProdutos(); // Para imagens
+
+//     for (const arremateItem of paginatedArremates) { // 'arremateItem'
+//         const tr = document.createElement('tr');
+//         // Armazenar dados importantes no dataset da linha
+//         tr.dataset.idArremate = arremateItem.id_arremate; // ID do Arremate
+//         tr.dataset.produto = arremateItem.produto;
+//         tr.dataset.variante = arremateItem.variante || '-';
+//         tr.dataset.opNumeroOrigem = arremateItem.op_numero_origem;
+//         // A quantidade disponível é diretamente do objeto arremateItem
+//         tr.dataset.quantidadeDisponivel = arremateItem.quantidade_disponivel_para_embalar;
+
+//         const produtoCadastrado = produtosCadastrados.find(p => p.nome === arremateItem.produto);
+//         const gradeItem = produtoCadastrado?.grade?.find(g => g.variacao === (arremateItem.variante === '-' ? '' : arremateItem.variante));
+//         const imagem = gradeItem?.imagem || '';
+
+//         tr.innerHTML = `
+//             <td>${arremateItem.produto}</td>
+//             <td>${arremateItem.variante || '-'}</td>
+//             <td class="col-img"><div class="ep-thumbnail-tabela">${imagem ? `<img src="${imagem}" alt="Miniatura">` : ''}</div></td>
+//             <td class="col-qtd">${arremateItem.quantidade_disponivel_para_embalar}</td> 
+//             <td>OP Origem: ${arremateItem.op_numero_origem} (Arremate ID: ${arremateItem.id_arremate})</td> 
+//         `;
+//         // A coluna OP Origem agora pode mostrar mais detalhes
+
+//         if (arremateItem.quantidade_disponivel_para_embalar > 0 && permissoes.includes('lancar-embalagem')) {
+//             tr.style.cursor = 'pointer';
+//             // Passamos o objeto 'arremateItem' inteiro para handleProductClick
+//             tr.addEventListener('click', () => handleProductClick(arremateItem));
+//         } else {
+//             tr.style.opacity = '0.6';
+//             tr.style.cursor = 'not-allowed';
+//             tr.title = arremateItem.quantidade_disponivel_para_embalar <= 0 ? 'Quantidade zerada para embalagem' : 'Sem permissão para embalar';
+//         }
+//         fragment.appendChild(tr);
+//     }
+//     tbody.appendChild(fragment);
+
+//     if (totalPages > 1) {
+//         // Lógica de paginação (existente)
+//         let paginationHTML = `<button class="ep-btn pagination-btn prev" data-page="${Math.max(1, currentPageEmbalagem - 1)}" ${currentPageEmbalagem === 1 ? 'disabled' : ''}>Anterior</button>`;
+//         paginationHTML += `<span class="pagination-current">Pág. ${currentPageEmbalagem} de ${totalPages}</span>`;
+//         paginationHTML += `<button class="ep-btn pagination-btn next" data-page="${Math.min(totalPages, currentPageEmbalagem + 1)}" ${currentPageEmbalagem === totalPages ? 'disabled' : ''}>Próximo</button>`;
+//         paginationContainer.innerHTML = paginationHTML;
+
+//         paginationContainer.querySelectorAll('.pagination-btn').forEach(btn => {
+//             btn.addEventListener('click', () => {
+//                 currentPageEmbalagem = parseInt(btn.dataset.page);
+//                 // Passar a lista correta (arrematesParaEmbalar ou opsProntasParaEmbalarGlobal)
+//                 carregarTabelaProdutosEmbalagem(opsProntasParaEmbalarGlobal); 
+//             });
+//         });
+//     }
+//     adjustForMobile();
+// }
+
+async function handleLancarArremateAgregado() {
+    // 1. Verificações Iniciais
+    // Certifica-se de que há um item agregado em visualização (o card que foi clicado)
+    if (!arremateAgregadoEmVisualizacao) {
+        mostrarPopupMensagem('Erro: Nenhum produto agregado selecionado para arremate.', 'erro');
         return;
     }
 
-    tbody.innerHTML = '';
+    // 2. Obter Referências dos Elementos DOM
+    // IMPORTANTE: Obtenha as referências dos elementos que estão ATUALMENTE na página.
+    const selectUsuarioArremateEl = document.getElementById('selectUsuarioArremate');
+    const inputQuantidadeArrematarEl = document.getElementById('inputQuantidadeArrematar');
+    const btnLancarArremateAgregadoEl = document.getElementById('btnLancarArremateAgregado');
+
+    // 3. Salvar o HTML Original do Botão ANTES DE MODIFICÁ-LO
+    // Esta é a chave para restaurar o texto/ícone original após o spinner.
+    const originalButtonHtml = btnLancarArremateAgregadoEl.innerHTML;
+
+    // 4. Obter Valores dos Inputs e Validar
+    const usuarioTiktik = selectUsuarioArremateEl?.value;
+    const quantidadeParaArrematar = parseInt(inputQuantidadeArrematarEl?.value) || 0;
+    const totalPendenteAgregado = arremateAgregadoEmVisualizacao.total_quantidade_pendente_arremate;
+
+    // Validações básicas (estas são importantes para evitar requisições desnecessárias)
+    if (!usuarioTiktik) {
+        mostrarPopupMensagem('Selecione o usuário do arremate.', 'aviso');
+        selectUsuarioArremateEl?.focus();
+        return;
+    }
+    if (isNaN(quantidadeParaArrematar) || quantidadeParaArrematar <= 0) {
+        mostrarPopupMensagem('Insira uma quantidade válida para arrematar.', 'aviso');
+        inputQuantidadeArrematarEl?.focus();
+        return;
+    }
+    if (quantidadeParaArrematar > totalPendenteAgregado) {
+        mostrarPopupMensagem(`Quantidade excede o total pendente (${totalPendenteAgregado}).`, 'aviso');
+        inputQuantidadeArrematarEl.value = totalPendenteAgregado; // Corrige o valor
+        inputQuantidadeArrematarEl?.focus();
+        return;
+    }
+
+    // 5. Desabilitar Controles e Mostrar Spinner
+    // Isso evita cliques múltiplos e dá feedback ao usuário.
+    btnLancarArremateAgregadoEl.disabled = true;
+    btnLancarArremateAgregadoEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Lançando...';
+    selectUsuarioArremateEl.disabled = true;
+    inputQuantidadeArrematarEl.disabled = true;
+
+    // Variáveis para controlar o fluxo de lançamento e erro
+    let quantidadeRestanteParaArrematar = quantidadeParaArrematar;
+    const lancamentosRealizados = [];
+    let erroDuranteLancamento = false; // Flag para indicar se houve um erro no `try`
+
+    try {
+        // 6. Lógica de Consumo FIFO (First-In, First-Out) das OPs individuais
+        // Ordena as OPs pendentes pelo número (assumindo que número menor = OP mais antiga)
+        const opsOrdenadas = arremateAgregadoEmVisualizacao.ops_detalhe
+            .filter(op => op.quantidade_pendente_arremate > 0)
+            .sort((a, b) => {
+                // Tenta converter para int para ordem numérica, se não, compara como string
+                const numA = parseInt(a.numero);
+                const numB = parseInt(b.numero);
+                if (!isNaN(numA) && !isNaN(numB)) {
+                    return numA - numB;
+                }
+                return a.numero.localeCompare(b.numero);
+            });
+
+        // Itera sobre as OPs e lança arremates parciais/totais
+        for (const op of opsOrdenadas) {
+            if (quantidadeRestanteParaArrematar <= 0) break; // Já arrematou o suficiente
+
+            const qtdPendenteNestaOP = op.quantidade_pendente_arremate;
+            const qtdAArrematarDestaOP = Math.min(quantidadeRestanteParaArrematar, qtdPendenteNestaOP);
+
+            if (qtdAArrematarDestaOP > 0) {
+                const arremateData = {
+                    op_numero: op.numero,
+                    op_edit_id: op.edit_id,
+                    produto: op.produto,
+                    variante: op.variante === '-' ? null : op.variante,
+                    quantidade_arrematada: qtdAArrematarDestaOP,
+                    usuario_tiktik: usuarioTiktik
+                };
+                console.log(`[handleLancarArremateAgregado] Lançando ${qtdAArrematarDestaOP} para OP ${op.numero}`);
+                const resultadoLancamento = await fetchFromAPI('/arremates', {
+                    method: 'POST',
+                    body: JSON.stringify(arremateData)
+                });
+                lancamentosRealizados.push(resultadoLancamento);
+                quantidadeRestanteParaArrematar -= qtdAArrematarDestaOP;
+            }
+        }
+
+        // 7. Feedback de Sucesso ao Usuário
+        if (lancamentosRealizados.length > 0) {
+            mostrarPopupMensagem(`Arremate de ${quantidadeParaArrematar} unidade(s) de ${arremateAgregadoEmVisualizacao.produto} (${arremateAgregadoEmVisualizacao.variante}) lançado!`, 'sucesso');
+        } else {
+            mostrarPopupMensagem('Nenhum arremate foi lançado.', 'aviso');
+        }
+        
+        // 8. Atualizar a UI com os Novos Dados
+        todosOsArrematesRegistrados = []; // Limpa cache para buscar dados frescos do servidor
+        await atualizarListasArremateEEmbalagem(); // Re-fetch e re-renderiza todas as listas principais
+
+        // Verifica se o item agregado ainda tem saldo pendente após o lançamento
+        const itemAtualizado = produtosParaArrematarAgregados.find(item => 
+            item.produto === arremateAgregadoEmVisualizacao.produto && item.variante === arremateAgregadoEmVisualizacao.variante
+        );
+        
+        if (itemAtualizado && itemAtualizado.total_quantidade_pendente_arremate > 0) {
+            // Se ainda houver saldo, recarrega a tela de detalhe com os dados atualizados
+            localStorage.setItem('arremateAgregadoAtual', JSON.stringify(itemAtualizado));
+            // Chamar sem await para que a função principal possa finalizar o finally rapidamente
+            carregarArremateDetalhe(itemAtualizado); 
+        } else {
+            // Se não houver mais saldo para este produto/variação, volta para a lista principal
+            window.location.hash = ''; // Isso irá acionar handleHashChange e limpar o localStorage
+            localStorage.removeItem('arremateAgregadoAtual');
+        }
+
+    } catch (error) {
+        // 9. Tratamento de Erros
+        erroDuranteLancamento = true; // Define a flag de erro para o bloco `finally`
+        console.error(`[handleLancarArremateAgregado] Erro ao lançar arremate agregado para ${arremateAgregadoEmVisualizacao.produto}:${arremateAgregadoEmVisualizacao.variante}:`, error);
+
+        if (error.status === 403) {
+            mostrarPopupMensagem('Você não possui autorização para lançar Arremate.', 'erro');
+        } else if (error.status === 409) {
+            mostrarPopupMensagem(`Conflito: Um dos arremates pode já ter sido lançado ou dados inconsistentes.`, 'aviso');
+        } else if (error.message && error.status !== 401) { // 401 é tratado no `fetchFromAPI`
+            mostrarPopupMensagem(`Erro ao lançar arremate: ${error.message}.`, 'erro');
+        }
+
+    } finally {
+        // 10. Bloco `finally` para Limpeza e Restauração da UI
+        // Este bloco é EXECUTADO SEMPRE, independentemente de haver sucesso (`try`) ou erro (`catch`).
+        
+        if (erroDuranteLancamento) {
+            // Se houve um erro:
+            // Restaura COMPLETAMENTE os elementos ao seu estado inicial (habilitados e com texto original)
+            if (btnLancarArremateAgregadoEl) {
+                btnLancarArremateAgregadoEl.disabled = false; // Reabilita o botão
+                btnLancarArremateAgregadoEl.innerHTML = originalButtonHtml; // Restaura o texto/ícone original
+            }
+            if (selectUsuarioArremateEl) selectUsuarioArremateEl.disabled = false;
+            if (inputQuantidadeArrematarEl) inputQuantidadeArrematarEl.disabled = false;
+        } else {
+            // Se a operação foi um SUCESSO:
+            // Simplesmente restaura o texto/ícone original do botão (remove o spinner).
+            // A reabilitação correta e a reconfiguração dos inputs/selects
+            // serão feitas pela chamada de `carregarArremateDetalhe(itemAtualizado)`
+            // ou pela navegação (`window.location.hash = ''`),
+            // que por sua vez chama `atualizarListasArremateEEmbalagem` e re-renderiza tudo.
+            // Isso evita que o spinner fique visível por um tempo desnecessário.
+            if (btnLancarArremateAgregadoEl) {
+                btnLancarArremateAgregadoEl.innerHTML = originalButtonHtml;
+                // Não precisa mexer no `disabled` aqui; `carregarArremateDetalhe` vai cuidar disso.
+            }
+        }
+    }
+}
+
+// --- Lógica de Eventos (AJUSTADA) ---
+
+// async function handleLancarArremateClick(event) {
+//     const btn = event.target.closest('.botao-lancar-arremate');
+//     if (!btn) return;
+//     const opCard = btn.closest('.ep-op-arremate-card'); // Mudou para opCard
+//     if (!opCard) return;
+
+//     const opNumero = opCard.dataset.opNumero; // Agora vem do dataset do card
+//     const opEditId = opCard.dataset.opEditId;
+//     const produto = opCard.dataset.produto;
+//     const variante = opCard.dataset.variante;
+
+//     const selectUser = opCard.querySelector('.select-usuario-tiktik');
+//     const usuarioTiktik = selectUser?.value;
+//     const inputQuantidadeArremate = opCard.querySelector('.input-quantidade-arremate');
+    
+//     if (!inputQuantidadeArremate) {
+//         mostrarPopupMensagem('Erro: Campo de quantidade não encontrado.', 'erro');
+//         return;
+//     }
+
+//     const quantidadeParaArrematar = parseInt(inputQuantidadeArremate.value);
+//     const quantidadePendenteMax = parseInt(inputQuantidadeArremate.max);
+
+//     if (!opNumero || !produto) {
+//         mostrarPopupMensagem('Erro: Dados da OP não encontrados.', 'erro'); return;
+//     }
+//     if (!usuarioTiktik) {
+//         mostrarPopupMensagem('Selecione o usuário do arremate.', 'aviso');
+//         selectUser?.focus(); return;
+//     }
+//     if (isNaN(quantidadeParaArrematar) || quantidadeParaArrematar <= 0) {
+//         mostrarPopupMensagem('Insira uma quantidade válida para arrematar.', 'aviso');
+//         inputQuantidadeArremate.focus(); return;
+//     }
+//     if (quantidadeParaArrematar > quantidadePendenteMax) {
+//         mostrarPopupMensagem(`Quantidade excede o pendente (${quantidadePendenteMax}).`, 'aviso');
+//         inputQuantidadeArremate.value = quantidadePendenteMax;
+//         inputQuantidadeArremate.focus(); return;
+//     }
+
+//     const lockKey = `${opNumero}-${usuarioTiktik}-${quantidadeParaArrematar}-${Date.now()}`;
+//     if (lancamentosArremateEmAndamento.has(lockKey)) return;
+
+//     btn.disabled = true;
+//     const originalButtonText = btn.textContent;
+//     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Lançando...';
+//     if (selectUser) selectUser.disabled = true;
+//     if (inputQuantidadeArremate) inputQuantidadeArremate.disabled = true; // Use if para garantir que existe
+//     lancamentosArremateEmAndamento.add(lockKey);
+
+//     try {
+//         const arremateData = {
+//             op_numero: opNumero,
+//             op_edit_id: opEditId,
+//             produto: produto,
+//             variante: variante === '-' ? null : variante,
+//             quantidade_arrematada: quantidadeParaArrematar,
+//             usuario_tiktik: usuarioTiktik
+//         };
+//         const resultado = await fetchFromAPI('/arremates', {
+//             method: 'POST',
+//             body: JSON.stringify(arremateData)
+//         });
+//         console.log('[handleLancarArremateClick] Arremate salvo:', resultado);
+//         mostrarPopupMensagem(`Arremate de ${quantidadeParaArrematar} unidade(s) para OP ${opNumero} lançado!`, 'sucesso');
+        
+//         // Re-renderizar o detalhe do arremate para refletir a mudança
+//         todosOsArrematesRegistrados = []; // Limpa cache para buscar frescos
+//         const arremateAgregadoAtual = JSON.parse(localStorage.getItem('arremateAgregadoAtual') || '{}');
+//         if (arremateAgregadoAtual && arremateAgregadoAtual.produto) {
+//             // Para atualizar o arremateDetailView, precisamos recriar o aggregatedItem
+//             // Isso é feito chamando a atualização de listas global e depois re-navegando se necessário
+//             await atualizarListasArremateEEmbalagem(); // Recarrega TODOS os dados globais
+
+//             // Após a atualização, precisamos encontrar o item agregado atualizado
+//             const itemAtualizado = produtosParaArrematarAgregados.find(item => 
+//                 item.produto === arremateAgregadoAtual.produto && item.variante === arremateAgregadoAtual.variante
+//             );
+            
+//             if (itemAtualizado && window.location.hash === '#arremate-detalhe') {
+//                 // Atualiza o localStorage e recarrega a tela de detalhes se o item ainda existir
+//                 localStorage.setItem('arremateAgregadoAtual', JSON.stringify(itemAtualizado));
+//                 await carregarArremateDetalhe(itemAtualizado);
+//             } else {
+//                 // Se o item não tiver mais OPs pendentes, volta para a lista principal
+//                 window.location.hash = ''; // Isso vai acionar handleHashChange
+//                 localStorage.removeItem('arremateAgregadoAtual');
+//             }
+//         } else {
+//             // Se não há dados agregados no localStorage, apenas volte para a lista principal
+//             window.location.hash = '';
+//             localStorage.removeItem('arremateAgregadoAtual');
+//         }
+
+
+//     } catch (error) {
+//         console.error(`[handleLancarArremateClick] Erro ao lançar arremate para OP ${opNumero}:`, error);
+
+//         if (error.status === 403) {
+//             mostrarPopupMensagem('Você não possui autorização para lançar Arremate.', 'erro');
+//         } else if (error.status === 409) {
+//             mostrarPopupMensagem(`Este arremate específico pode já ter sido lançado. Verifique os registros.`, 'aviso');
+//         } else if (error.message && error.status !== 401) {
+//             mostrarPopupMensagem(`Erro ao lançar arremate: ${error.message}.`, 'erro');
+//         }
+
+//         // Reabilita o botão e inputs em caso de erro
+//         if (opCard.contains(btn)) {
+//             btn.disabled = false;
+//             btn.innerHTML = originalButtonText; // Restaura o texto/ícone original
+//         }
+//         if (opCard.contains(selectUser)) selectUser.disabled = false;
+//         if (opCard.contains(inputQuantidadeArremate)) inputQuantidadeArremate.disabled = false;
+
+//     } finally {
+//         lancamentosArremateEmAndamento.delete(lockKey);
+//     }
+// }
+
+
+async function handleProductClick(agregado) { // Parâmetro agora é o objeto agregado
+    console.log(`[handleProductClick] Clicado em Produto Agregado para Embalagem:`, agregado);
+
+    const arremateView = document.getElementById('arremateView');
+    const embalagemListView = document.getElementById('embalagemListView');
+    const embalarView = document.getElementById('embalarView');
+    const arremateDetailView = document.getElementById('arremateDetailView');
+
+    // A quantidade disponível para esta sessão de embalagem é o total_quantidade_disponivel_para_embalar do agregado
+    const quantidadeDisponivelReal = agregado.total_quantidade_disponivel_para_embalar;
+
+    if (quantidadeDisponivelReal <= 0) {
+        mostrarPopupMensagem('Este item não possui mais quantidade para embalagem.', 'aviso');
+        // A lista já deve estar atualizada, mas uma recarga não faria mal se houvesse concorrência
+        // await atualizarListasArremateEEmbalagem(); // Considerar se necessário
+        return;
+    }
+
+    if (arremateView && embalagemListView && embalarView && arremateDetailView) {
+        arremateView.classList.add('hidden');
+        embalagemListView.classList.add('hidden');
+        embalarView.classList.remove('hidden');
+        arremateDetailView.classList.add('hidden'); // Certifica que a tela de detalhe de arremate está escondida
+        window.location.hash = '#embalar'; // Navega para a view de embalagem
+
+        embalagemAgregadoEmVisualizacao = agregado; // Armazena o objeto agregado globalmente
+
+        // Armazenar dados importantes para a tela de embalagem no localStorage
+        // O `id_arremate` individual não é mais necessário aqui, mas o `produto`, `variante` e `quantidade` agregada sim.
+        localStorage.setItem('embalagemAtual', JSON.stringify({
+            produto: agregado.produto,
+            variante: agregado.variante || '-',
+            quantidade: quantidadeDisponivelReal, // Total agregado disponível
+            //arremates_origem: agregado.arremates_detalhe // Podemos passar os arremates individuais aqui, mas a carregarEmbalagem buscará do global
+        }));
+
+        // Chama carregarEmbalagem com os dados agregados
+        await carregarEmbalagem(
+            agregado.produto, 
+            agregado.variante || '-', 
+            quantidadeDisponivelReal // Passa a quantidade total disponível deste agregado
+        );
+    } else {
+        console.error('[handleProductClick] Uma ou mais views não encontradas.');
+    }
+}
+
+
+async function atualizarListasArremateEEmbalagem() {
+    try {
+        // Re-busque tudo para garantir dados frescos após qualquer operação
+        const [opsFinalizadasOriginais, todosOsArrematesDoSistema] = await Promise.all([
+            buscarOpsFinalizadas(),
+            buscarArrematesRegistrados()
+        ]);
+
+        // --- 1. Calcular opsParaArrematarGlobal (Lista de OPs INDIVIDUAIS com saldo) ---
+        opsParaArrematarGlobal = []; // Resetando a lista de OPs individuais pendentes
+        for (const op of opsFinalizadasOriginais) {
+            const quantidadeProduzidaOriginal = obterQuantidadeFinalProduzida(op);
+            let totalJaArrematadoParaEstaOP = 0;
+            todosOsArrematesDoSistema
+                .filter(arremate => arremate.op_numero === op.numero)
+                .forEach(arremate => {
+                    totalJaArrematadoParaEstaOP += parseInt(arremate.quantidade_arrematada) || 0;
+                });
+            const quantidadePendenteDeArremate = quantidadeProduzidaOriginal - totalJaArrematadoParaEstaOP;
+            if (quantidadePendenteDeArremate > 0) {
+                opsParaArrematarGlobal.push({
+                    ...op,
+                    quantidade_produzida_original: quantidadeProduzidaOriginal,
+                    quantidade_pendente_arremate: quantidadePendenteDeArremate,
+                });
+            }
+        }
+        console.log(`[atualizarListasArremateEEmbalagem] OPs individuais pendentes de arremate: ${opsParaArrematarGlobal.length}`);
+
+
+        // --- 2. AGREGAR OPs INDIVIDUAIS em produtosParaArrematarAgregados ---
+        const aggregatedMap = new Map(); // Mapa para agrupar por "produto|variante"
+
+        opsParaArrematarGlobal.forEach(op => {
+            const produtoKey = `${op.produto}|${op.variante || '-'}`;
+            if (!aggregatedMap.has(produtoKey)) {
+                aggregatedMap.set(produtoKey, {
+                    produto: op.produto,
+                    variante: op.variante || '-',
+                    total_quantidade_pendente_arremate: 0,
+                    ops_detalhe: [] // Array para guardar as OPs individuais
+                });
+            }
+            const aggregatedItem = aggregatedMap.get(produtoKey);
+            aggregatedItem.total_quantidade_pendente_arremate += op.quantidade_pendente_arremate;
+            aggregatedItem.ops_detalhe.push(op); // Adiciona a OP completa ao detalhe
+        });
+
+        // Converter o mapa para um array global
+        produtosParaArrematarAgregados = Array.from(aggregatedMap.values());
+        console.log(`[atualizarListasArremateEEmbalagem] Produtos agregados para arremate: ${produtosParaArrematarAgregados.length}`);
+
+
+        // --- 3. Calcular opsProntasParaEmbalarGlobal (Lista de ARREMATES INDIVIDUAIS com saldo) ---
+        // Este passo já está correto e deve ser mantido.
+        opsProntasParaEmbalarGlobal = [];
+        for (const arremate of todosOsArrematesDoSistema) {
+            const quantidadeTotalNesteArremate = parseInt(arremate.quantidade_arrematada) || 0;
+            const quantidadeJaEmbaladaNesteArremate = parseInt(arremate.quantidade_ja_embalada) || 0;
+            const saldoParaEmbalarNesteArremate = quantidadeTotalNesteArremate - quantidadeJaEmbaladaNesteArremate;
+
+            if (saldoParaEmbalarNesteArremate > 0) {
+                opsProntasParaEmbalarGlobal.push({ // Renomeei para 'arrematesDisponiveisParaEmbalar' internamente, mas a variável global é 'opsProntasParaEmbalarGlobal'
+                    id_arremate: arremate.id,
+                    op_numero_origem: arremate.op_numero,
+                    op_edit_id_origem: arremate.op_edit_id,
+                    produto: arremate.produto,
+                    variante: arremate.variante,
+                    quantidade_disponivel_para_embalar: saldoParaEmbalarNesteArremate,
+                    quantidade_total_do_arremate: quantidadeTotalNesteArremate,
+                    quantidade_ja_embalada_deste_arremate: quantidadeJaEmbaladaNesteArremate
+                });
+            }
+        }
+        console.log(`[atualizarListasArremateEEmbalagem] Arremates individuais prontos para embalar: ${opsProntasParaEmbalarGlobal.length}`);
+
+
+        // --- 4. AGREGAR ARREMATES INDIVIDUAIS em produtosProntosParaEmbalarAgregados ---
+        const aggregatedEmbalagemMap = new Map();
+
+        opsProntasParaEmbalarGlobal.forEach(arremate => {
+            const produtoKey = `${arremate.produto}|${arremate.variante || '-'}`;
+            if (!aggregatedEmbalagemMap.has(produtoKey)) {
+                aggregatedEmbalagemMap.set(produtoKey, {
+                    produto: arremate.produto,
+                    variante: arremate.variante || '-',
+                    total_quantidade_disponivel_para_embalar: 0,
+                    arremates_detalhe: [] // Array para guardar os objetos de arremate individuais
+                });
+            }
+            const aggregatedItem = aggregatedEmbalagemMap.get(produtoKey);
+            aggregatedItem.total_quantidade_disponivel_para_embalar += arremate.quantidade_disponivel_para_embalar;
+            aggregatedItem.arremates_detalhe.push(arremate); // Adiciona o arremate completo ao detalhe
+        });
+
+        produtosProntosParaEmbalarAgregados = Array.from(aggregatedEmbalagemMap.values());
+        console.log(`[atualizarListasArremateEEmbalagem] Produtos agregados para embalar: ${produtosProntosParaEmbalarAgregados.length}`);
+
+
+        // --- Renderizar as novas views ---
+        // Paginação para Arremate (cards agregados de arremate)
+        const totalPagesArremateAggregated = Math.ceil(produtosParaArrematarAgregados.length / itemsPerPageArremate);
+        currentPageArremate = Math.min(currentPageArremate, Math.max(1, totalPagesArremateAggregated));
+        await carregarCardsArremate(produtosParaArrematarAgregados);
+
+        // Paginação para Embalagem (cards agregados de embalagem)
+        const totalPagesEmbalagemAggregated = Math.ceil(produtosProntosParaEmbalarAgregados.length / itemsPerPageEmbalagem);
+        currentPageEmbalagem = Math.min(currentPageEmbalagem, Math.max(1, totalPagesEmbalagemAggregated));
+        // AGORA CHAMA A NOVA FUNÇÃO PARA CARREGAR OS CARDS AGREGADOS DE EMBALAGEM
+        await carregarCardsEmbalagem(produtosProntosParaEmbalarAgregados);
+
+
+        // --- Controle de visibilidade das seções (NÃO MUDOU AQUI) ---
+        const arremateView = document.getElementById('arremateView');
+        const embalagemListView = document.getElementById('embalagemListView');
+        const embalarView = document.getElementById('embalarView');
+        const arremateDetailView = document.getElementById('arremateDetailView'); // NOVO ELEMENTO
+
+        if (!arremateView || !embalagemListView || !embalarView || !arremateDetailView) {
+            console.error("[atualizarListasArremateEEmbalagem] Views não encontradas."); return;
+        }
+
+        // ... (Lógica de visibilidade baseada no hash - MANTIDA) ...
+        if (window.location.hash === '#embalar') {
+            arremateView.classList.add('hidden');
+            embalagemListView.classList.add('hidden');
+            embalarView.classList.remove('hidden');
+            arremateDetailView.classList.add('hidden');
+            // carregarEmbalagem será chamada via handleHashChange
+        } else if (window.location.hash === '#arremate-detalhe') {
+            arremateView.classList.add('hidden');
+            embalagemListView.classList.add('hidden');
+            embalarView.classList.add('hidden');
+            arremateDetailView.classList.remove('hidden');
+            // carregarArremateDetalhe será chamada via handleHashChange
+        } else {
+            embalarView.classList.add('hidden');
+            arremateDetailView.classList.add('hidden');
+            arremateView.classList.remove('hidden');
+            embalagemListView.classList.remove('hidden');
+        }
+
+    } catch (error) {
+        console.error('[atualizarListasArremateEEmbalagem] Erro geral:', error);
+        mostrarPopupMensagem('Erro ao atualizar dados da página de embalagem.', 'erro');
+    }
+}
+
+async function carregarCardsEmbalagem(agregadosParaEmbalar) {
+    console.log(`[carregarCardsEmbalagem] Renderizando ${agregadosParaEmbalar.length} produtos agregados para embalagem.`);
+    const cardContainer = document.getElementById('productCardContainer');
+    const paginationContainer = document.getElementById('paginationContainer');
+    const searchInput = document.getElementById('searchProduto');
+
+    if (!cardContainer || !paginationContainer || !searchInput) {
+        console.error('[carregarCardsEmbalagem] Elementos DOM não encontrados.');
+        return;
+    }
+
+    cardContainer.innerHTML = '';
     paginationContainer.innerHTML = '';
 
-    if (opsParaArrematar.length === 0) {
-        // Colspan agora é 8 por causa das colunas "Arrematar Qtd." e "Ação" separadas
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 20px;">Nenhum item aguardando arremate.</td></tr>`;
+    const search = searchInput.value.toLowerCase();
+    let filteredAggregated = agregadosParaEmbalar;
+    if (search) {
+        filteredAggregated = agregadosParaEmbalar.filter(item =>
+            item.produto.toLowerCase().includes(search) ||
+            (item.variante && item.variante.toLowerCase().includes(search))
+            // Não buscamos por OP ou ID de arremate aqui, pois estamos agregando.
+        );
+    }
+
+    const totalItems = filteredAggregated.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPageEmbalagem);
+    if (currentPageEmbalagem > totalPages) currentPageEmbalagem = Math.max(1, totalPages);
+
+    const startIndex = (currentPageEmbalagem - 1) * itemsPerPageEmbalagem;
+    const endIndex = Math.min(startIndex + itemsPerPageEmbalagem, totalItems);
+    const paginatedAggregated = filteredAggregated.slice(startIndex, endIndex);
+
+    if (paginatedAggregated.length === 0) {
+        cardContainer.innerHTML = `<p style="text-align: center; padding: 20px; color: var(--cor-cinza-texto-secundario);">
+            ${search ? 'Nenhum produto encontrado para "' + search + '".' : 'Nenhum item pronto para embalar.'}
+        </p>`;
+        paginationContainer.classList.add('hidden'); // Esconde paginação se não há itens
+        return;
+    }
+    paginationContainer.classList.remove('hidden'); // Mostra paginação se há itens
+
+
+    const fragment = document.createDocumentFragment();
+    const produtosCadastrados = await buscarTodosProdutos(); // Para imagens
+
+    paginatedAggregated.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'ep-product-card';
+        // Armazenar o objeto agregado completo no dataset
+        card.dataset.embalagemAgregada = JSON.stringify(item);
+
+        const produtoCadastrado = produtosCadastrados.find(p => p.nome === item.produto);
+        const gradeItem = produtoCadastrado?.grade?.find(g => g.variacao === (item.variante === '-' ? '' : item.variante));
+        const imagem = gradeItem?.imagem || '';
+
+        const temPermissaoEmbalar = permissoes.includes('lancar-embalagem');
+        const quantidadeDisponivel = item.total_quantidade_disponivel_para_embalar;
+
+        if (quantidadeDisponivel <= 0 || !temPermissaoEmbalar) {
+            card.classList.add('disabled');
+            card.title = quantidadeDisponivel <= 0 ? 'Quantidade zerada para embalagem' : 'Sem permissão para embalar';
+        } else {
+            // Ao clicar, passamos o item agregado completo para handleProductClick
+            card.addEventListener('click', () => handleProductClick(item));
+        }
+
+        card.innerHTML = `
+            <div class="ep-product-card-header">
+                <div class="ep-thumbnail-card">${imagem ? `<img src="${imagem}" alt="Miniatura">` : ''}</div>
+                <div class="ep-product-card-info">
+                    <div class="product-name">${item.produto}</div>
+                    <div class="product-variant">${item.variante !== '-' ? item.variante : 'Padrão'}</div>
+                    <!-- REMOVIDO: OP Origem, pois não é relevante na agregação -->
+                </div>
+            </div>
+            <div class="ep-product-card-qty">Disponível: ${quantidadeDisponivel}</div>
+        `;
+        fragment.appendChild(card);
+    });
+    cardContainer.appendChild(fragment);
+
+    if (totalPages > 1) {
+        let paginationHTML = `<button class="ep-btn pagination-btn prev" data-page="${Math.max(1, currentPageEmbalagem - 1)}" ${currentPageEmbalagem === 1 ? 'disabled' : ''}>Anterior</button>`;
+        paginationHTML += `<span class="pagination-current">Pág. ${currentPageEmbalagem} de ${totalPages}</span>`;
+        paginationHTML += `<button class="ep-btn pagination-btn next" data-page="${Math.min(totalPages, currentPageEmbalagem + 1)}" ${currentPageEmbalagem === totalPages ? 'disabled' : ''}>Próximo</button>`;
+        paginationContainer.innerHTML = paginationHTML;
+
+        paginationContainer.querySelectorAll('.pagination-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentPageEmbalagem = parseInt(btn.dataset.page);
+                carregarCardsEmbalagem(produtosProntosParaEmbalarAgregados); // Recarrega os cards agregados
+            });
+        });
+    }
+}
+
+
+
+async function carregarCardsArremate(agregadosParaArremate) {
+    const cardContainer = document.getElementById('arremateCardContainer');
+    const paginationContainer = document.getElementById('arrematePaginationContainer');
+    if (!cardContainer || !paginationContainer) {
+        console.error('[carregarCardsArremate] Elementos cardContainer ou paginationContainer (arremate) não encontrados.');
         return;
     }
 
-    const totalItems = opsParaArrematar.length;
+    cardContainer.innerHTML = '';
+    paginationContainer.innerHTML = '';
+
+    if (agregadosParaArremate.length === 0) {
+        cardContainer.innerHTML = `<p style="text-align: center; padding: 20px; color: var(--cor-cinza-texto-secundario);">Nenhum produto aguardando arremate.</p>`;
+        paginationContainer.classList.add('hidden'); // Esconde paginação se não há itens
+        return;
+    }
+    paginationContainer.classList.remove('hidden');
+
+    const totalItems = agregadosParaArremate.length;
     const totalPages = Math.ceil(totalItems / itemsPerPageArremate);
     const startIndex = (currentPageArremate - 1) * itemsPerPageArremate;
     const endIndex = Math.min(startIndex + itemsPerPageArremate, totalItems);
-    const paginatedOPs = opsParaArrematar.slice(startIndex, endIndex);
+    const paginatedAggregated = agregadosParaArremate.slice(startIndex, endIndex);
 
-    const usuariosTiktikPromises = paginatedOPs.map(op => obterUsuariosTiktikParaProduto(op.produto));
-    const usuariosPorOP = await Promise.all(usuariosTiktikPromises);
+    const produtosCadastrados = await buscarTodosProdutos(); // Para imagens
 
     const fragment = document.createDocumentFragment();
-    paginatedOPs.forEach((op, index) => {
-        const tr = document.createElement('tr');
-        tr.dataset.opNumero = op.numero;
-        tr.dataset.opEditId = op.edit_id;
-        tr.dataset.produto = op.produto;
-        tr.dataset.variante = op.variante || '-';
+    paginatedAggregated.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'ep-arremate-card';
+        // Armazene o objeto agregado completo no dataset ou globalmente
+        // Usaremos JSON.stringify para armazenar, e JSON.parse para recuperar
+        card.dataset.arremateAgregado = JSON.stringify(item);
 
-        const quantidadePendente = op.quantidade_pendente_arremate;
-        const usuariosTiktikDisponiveis = usuariosPorOP[index];
-        const temPermissaoLancar = permissoes.includes('lancar-arremate');
+        const produtoCadastrado = produtosCadastrados.find(p => p.nome === item.produto);
+        const gradeItem = produtoCadastrado?.grade?.find(g => g.variacao === (item.variante === '-' ? '' : item.variante));
+        const imagem = gradeItem?.imagem || '';
 
-        // Desabilitar controles se não houver usuários, quantidade ou permissão
-        const controlesDesabilitados = usuariosTiktikDisponiveis.length === 0 || quantidadePendente === 0 || !temPermissaoLancar;
-
-        tr.innerHTML = `
-            <td>${op.numero}</td>
-            <td>${op.produto}</td>
-            <td>${op.variante || '-'}</td>
-            <td>${op.quantidade_produzida_original}</td>
-            <td class="quantidade-pendente-arremate">${quantidadePendente}</td>
-            <td>
-                <select class="ep-select select-usuario-tiktik" ${controlesDesabilitados ? 'disabled' : ''} title="${!temPermissaoLancar ? 'Sem permissão' : ''}">
-                    <option value="">${usuariosTiktikDisponiveis.length === 0 ? 'Nenhum Tiktik' : 'Selecione...'}</option>
-                    ${usuariosTiktikDisponiveis.map(user => `<option value="${user.nome}">${user.nome}</option>`).join('')}
-                </select>
-            </td>
-            <td>
-                <input type="number" class="ep-input input-quantidade-arremate" value="${quantidadePendente}" 
-                       min="1" max="${quantidadePendente}" style="width: 80px;" ${controlesDesabilitados ? 'disabled' : ''} title="${!temPermissaoLancar ? 'Sem permissão' : ''}">
-            </td>
-            <td>
-                <button class="ep-btn ep-btn-primary botao-lancar-arremate" ${controlesDesabilitados ? 'disabled' : ''} title="${!temPermissaoLancar ? 'Sem permissão para lançar' : (controlesDesabilitados && temPermissaoLancar ? 'Selecione usuário e/ou verifique quantidade' : 'Lançar Arremate')}">
-                    Lançar
-                </button>
-            </td>
+        card.innerHTML = `
+            <div class="ep-arremate-card-header">
+                <div class="ep-thumbnail-card">${imagem ? `<img src="${imagem}" alt="Miniatura">` : ''}</div>
+                <div class="ep-arremate-card-info">
+                    <div class="product-name">${item.produto}</div>
+                    <div class="product-variant">${item.variante !== '-' ? item.variante : 'Padrão'}</div>
+                </div>
+            </div>
+            <div class="ep-arremate-card-qty">Pendente: <strong>${item.total_quantidade_pendente_arremate}</strong></div>
         `;
-
-        const btnLancar = tr.querySelector('.botao-lancar-arremate');
-        const inputQuantidade = tr.querySelector('.input-quantidade-arremate');
-        const selectUser = tr.querySelector('.select-usuario-tiktik');
-
-        const atualizarEstadoBotaoLancar = () => {
-            if (btnLancar && inputQuantidade && selectUser) {
-                const qtdValida = parseInt(inputQuantidade.value) > 0 && parseInt(inputQuantidade.value) <= parseInt(inputQuantidade.max);
-                const usuarioSelecionado = selectUser.value !== "";
-                btnLancar.disabled = !(qtdValida && usuarioSelecionado && temPermissaoLancar);
-            }
-        };
         
-        if (btnLancar) btnLancar.addEventListener('click', handleLancarArremateClick);
-        if (inputQuantidade) inputQuantidade.addEventListener('input', atualizarEstadoBotaoLancar);
-        if (selectUser) selectUser.addEventListener('change', atualizarEstadoBotaoLancar);
-        
-        // Chamada inicial para definir o estado do botão
-        if (temPermissaoLancar) atualizarEstadoBotaoLancar();
+        // O card estará habilitado se houver quantidade pendente e permissão
+        const temPermissaoParaArremate = permissoes.includes('lancar-arremate');
+        if (item.total_quantidade_pendente_arremate > 0 && temPermissaoParaArremate) {
+            card.addEventListener('click', () => handleArremateCardClick(item));
+        } else {
+            card.classList.add('disabled');
+            card.title = item.total_quantidade_pendente_arremate <= 0 ? 'Quantidade zerada para arremate' : 'Sem permissão para lançar arremate';
+        }
 
-
-        fragment.appendChild(tr);
+        fragment.appendChild(card);
     });
-
-    tbody.appendChild(fragment);
+    cardContainer.appendChild(fragment);
 
     if (totalPages > 1) {
         let paginationHTML = `<button class="ep-btn pagination-btn prev" data-page="${Math.max(1, currentPageArremate - 1)}" ${currentPageArremate === 1 ? 'disabled' : ''}>Anterior</button>`;
@@ -327,346 +1090,192 @@ async function carregarTabelaArremate(opsParaArrematar) {
         paginationContainer.querySelectorAll('.pagination-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 currentPageArremate = parseInt(btn.dataset.page);
-                carregarTabelaArremate(opsParaArrematarGlobal);
+                carregarCardsArremate(produtosParaArrematarAgregados); // Recarrega os cards
             });
         });
     }
 }
 
-
-// public/js/admin-embalagem-de-produtos.js
-
-async function carregarTabelaProdutosEmbalagem(arrematesParaEmbalar) { // Nome do parâmetro mudou
-    console.log(`[carregarTabelaProdutosEmbalagem] Renderizando ${arrematesParaEmbalar.length} arremates para embalagem.`);
-    const tbody = document.getElementById('produtosTableBody');
-    const paginationContainer = document.getElementById('paginationContainer');
-    const searchInput = document.getElementById('searchProduto');
-
-    if (!tbody || !paginationContainer || !searchInput) {
-        console.error('[carregarTabelaProdutosEmbalagem] Elementos DOM não encontrados.');
-        return;
-    }
-
-    tbody.innerHTML = '';
-    paginationContainer.innerHTML = '';
-
-    const search = searchInput.value.toLowerCase();
-    let filteredArremates = arrematesParaEmbalar; // Nome da variável mudou
-    if (search) {
-        filteredArremates = arrematesParaEmbalar.filter(arr => // 'arr' de arremate
-            arr.produto.toLowerCase().includes(search) ||
-            (arr.variante && arr.variante.toLowerCase().includes(search)) ||
-            arr.op_numero_origem.toString().includes(search) || // Pode buscar pela OP de origem
-            arr.id_arremate.toString().includes(search) // Pode buscar pelo ID do arremate
-        );
-    }
-
-    const totalItems = filteredArremates.length;
-    const totalPages = Math.ceil(totalItems / itemsPerPageEmbalagem);
-    if (currentPageEmbalagem > totalPages) currentPageEmbalagem = Math.max(1, totalPages);
-
-    const startIndex = (currentPageEmbalagem - 1) * itemsPerPageEmbalagem;
-    const endIndex = Math.min(startIndex + itemsPerPageEmbalagem, totalItems);
-    const paginatedArremates = filteredArremates.slice(startIndex, endIndex); // Nome da variável mudou
-
-    if (paginatedArremates.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 20px;">${search ? 'Nenhum arremate encontrado para "' + search + '".' : 'Nenhum item pronto para embalar.'}</td></tr>`;
-        adjustForMobile();
-        return;
-    }
-
-    const fragment = document.createDocumentFragment();
-    const produtosCadastrados = await buscarTodosProdutos(); // Para imagens
-
-    for (const arremateItem of paginatedArremates) { // 'arremateItem'
-        const tr = document.createElement('tr');
-        // Armazenar dados importantes no dataset da linha
-        tr.dataset.idArremate = arremateItem.id_arremate; // ID do Arremate
-        tr.dataset.produto = arremateItem.produto;
-        tr.dataset.variante = arremateItem.variante || '-';
-        tr.dataset.opNumeroOrigem = arremateItem.op_numero_origem;
-        // A quantidade disponível é diretamente do objeto arremateItem
-        tr.dataset.quantidadeDisponivel = arremateItem.quantidade_disponivel_para_embalar;
-
-        const produtoCadastrado = produtosCadastrados.find(p => p.nome === arremateItem.produto);
-        const gradeItem = produtoCadastrado?.grade?.find(g => g.variacao === (arremateItem.variante === '-' ? '' : arremateItem.variante));
-        const imagem = gradeItem?.imagem || '';
-
-        tr.innerHTML = `
-            <td>${arremateItem.produto}</td>
-            <td>${arremateItem.variante || '-'}</td>
-            <td class="col-img"><div class="ep-thumbnail-tabela">${imagem ? `<img src="${imagem}" alt="Miniatura">` : ''}</div></td>
-            <td class="col-qtd">${arremateItem.quantidade_disponivel_para_embalar}</td> 
-            <td>OP Origem: ${arremateItem.op_numero_origem} (Arremate ID: ${arremateItem.id_arremate})</td> 
-        `;
-        // A coluna OP Origem agora pode mostrar mais detalhes
-
-        if (arremateItem.quantidade_disponivel_para_embalar > 0 && permissoes.includes('lancar-embalagem')) {
-            tr.style.cursor = 'pointer';
-            // Passamos o objeto 'arremateItem' inteiro para handleProductClick
-            tr.addEventListener('click', () => handleProductClick(arremateItem));
-        } else {
-            tr.style.opacity = '0.6';
-            tr.style.cursor = 'not-allowed';
-            tr.title = arremateItem.quantidade_disponivel_para_embalar <= 0 ? 'Quantidade zerada para embalagem' : 'Sem permissão para embalar';
-        }
-        fragment.appendChild(tr);
-    }
-    tbody.appendChild(fragment);
-
-    if (totalPages > 1) {
-        // Lógica de paginação (existente)
-        let paginationHTML = `<button class="ep-btn pagination-btn prev" data-page="${Math.max(1, currentPageEmbalagem - 1)}" ${currentPageEmbalagem === 1 ? 'disabled' : ''}>Anterior</button>`;
-        paginationHTML += `<span class="pagination-current">Pág. ${currentPageEmbalagem} de ${totalPages}</span>`;
-        paginationHTML += `<button class="ep-btn pagination-btn next" data-page="${Math.min(totalPages, currentPageEmbalagem + 1)}" ${currentPageEmbalagem === totalPages ? 'disabled' : ''}>Próximo</button>`;
-        paginationContainer.innerHTML = paginationHTML;
-
-        paginationContainer.querySelectorAll('.pagination-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                currentPageEmbalagem = parseInt(btn.dataset.page);
-                // Passar a lista correta (arrematesParaEmbalar ou opsProntasParaEmbalarGlobal)
-                carregarTabelaProdutosEmbalagem(opsProntasParaEmbalarGlobal); 
-            });
-        });
-    }
-    adjustForMobile();
-}
-
-// --- Lógica de Eventos (AJUSTADA) ---
-
-async function handleLancarArremateClick(event) {
-    const btn = event.target.closest('.botao-lancar-arremate'); // Garante que pegamos o botão
-    if (!btn) return;
-    const tr = btn.closest('tr');
-    if (!tr) return;
-
-    const opNumero = tr.dataset.opNumero;
-    const opEditId = tr.dataset.opEditId;
-    const produto = tr.dataset.produto;
-    const variante = tr.dataset.variante;
-
-    const selectUser = tr.querySelector('.select-usuario-tiktik');
-    const usuarioTiktik = selectUser?.value;
-    const inputQuantidadeArremate = tr.querySelector('.input-quantidade-arremate');
-    
-    if (!inputQuantidadeArremate) {
-        mostrarPopupMensagem('Erro: Campo de quantidade não encontrado.', 'erro');
-        return;
-    }
-
-    const quantidadeParaArrematar = parseInt(inputQuantidadeArremate.value);
-    const quantidadePendenteMax = parseInt(inputQuantidadeArremate.max);
-
-    if (!opNumero || !produto) {
-        mostrarPopupMensagem('Erro: Dados da OP não encontrados.', 'erro'); return;
-    }
-    if (!usuarioTiktik) {
-        mostrarPopupMensagem('Selecione o usuário do arremate.', 'aviso');
-        selectUser?.focus(); return;
-    }
-    if (isNaN(quantidadeParaArrematar) || quantidadeParaArrematar <= 0) {
-        mostrarPopupMensagem('Insira uma quantidade válida para arrematar.', 'aviso');
-        inputQuantidadeArremate.focus(); return;
-    }
-    if (quantidadeParaArrematar > quantidadePendenteMax) {
-        mostrarPopupMensagem(`Quantidade excede o pendente (${quantidadePendenteMax}).`, 'aviso');
-        inputQuantidadeArremate.value = quantidadePendenteMax;
-        inputQuantidadeArremate.focus(); return;
-    }
-
-    const lockKey = `${opNumero}-${usuarioTiktik}-${quantidadeParaArrematar}-${Date.now()}`;
-    if (lancamentosArremateEmAndamento.has(lockKey)) return;
-
-    btn.disabled = true;
-    const originalButtonText = btn.textContent;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Lançando...'; // Adiciona ícone de carregamento
-    if (selectUser) selectUser.disabled = true;
-    inputQuantidadeArremate.disabled = true;
-    lancamentosArremateEmAndamento.add(lockKey);
-
-    try {
-        const arremateData = {
-            op_numero: opNumero,
-            op_edit_id: opEditId,
-            produto: produto,
-            variante: variante === '-' ? null : variante,
-            quantidade_arrematada: quantidadeParaArrematar,
-            usuario_tiktik: usuarioTiktik
-        };
-        const resultado = await fetchFromAPI('/arremates', { // API /api/arremates deve retornar 403 se sem permissão
-            method: 'POST',
-            body: JSON.stringify(arremateData)
-        });
-        console.log('[handleLancarArremateClick] Arremate salvo:', resultado);
-         mostrarPopupMensagem(`Arremate de ${quantidadeParaArrematar} unidade(s) para OP ${opNumero} lançado!`, 'sucesso');
-        todosOsArrematesRegistrados = [];
-        await atualizarListasArremateEEmbalagem();
-
-    } catch (error) {
-        console.error(`[handleLancarArremateClick] Erro ao lançar arremate para OP ${opNumero}:`, error);
-
-        if (error.status === 403) { // <<< NOVO: Trata o 403 Forbidden especificamente
-            mostrarPopupMensagem('Você não possui autorização para lançar Arremate.', 'erro');
-        } else if (error.status === 409) { // Se sua API retorna 409 para duplicata
-            mostrarPopupMensagem(`Este arremate específico pode já ter sido lançado. Verifique os registros.`, 'aviso');
-        }
-        else if (error.message && error.status !== 401) { // 401 já é tratado em fetchFromAPI
-             mostrarPopupMensagem(`Erro ao lançar arremate: ${error.message}.`, 'erro');
-        }
-
-        if (tr.contains(btn)) {
-            btn.disabled = false; // Reabilita o botão original
-            btn.innerHTML = 'Lançar'; // Restaura o texto/ícone original
-        }
-        if (tr.contains(selectUser)) selectUser.disabled = false;
-        if (tr.contains(inputQuantidadeArremate)) inputQuantidadeArremate.disabled = false;
-
-    } finally {
-        lancamentosArremateEmAndamento.delete(lockKey);
-    }
-}
-
-// public/js/admin-embalagem-de-produtos.js
-
-// A função handleProductClick recebe o objeto 'arremateItem' diretamente
-async function handleProductClick(arremateItem) {
-    console.log(`[handleProductClick] Clicado em Arremate ID: ${arremateItem.id_arremate}`, arremateItem);
+async function handleArremateCardClick(agregado) {
+    console.log('[handleArremateCardClick] Clicado em Arremate Agregado:', agregado);
 
     const arremateView = document.getElementById('arremateView');
     const embalagemListView = document.getElementById('embalagemListView');
     const embalarView = document.getElementById('embalarView');
+    const arremateDetailView = document.getElementById('arremateDetailView'); // NOVO ELEMENTO
 
-    // A quantidade_disponivel_para_embalar já está calculada e correta no arremateItem
-    const quantidadeDisponivelReal = arremateItem.quantidade_disponivel_para_embalar;
-
-    if (quantidadeDisponivelReal <= 0) {
-        mostrarPopupMensagem('Este item não possui mais quantidade para embalagem.', 'aviso');
-        // A lista já deve estar atualizada, mas uma recarga não faria mal se houvesse concorrência
-        // await atualizarListasArremateEEmbalagem(); // Considerar se necessário
+    if (!arremateView || !embalagemListView || !embalarView || !arremateDetailView) {
+        console.error('[handleArremateCardClick] Uma ou mais views não encontradas.');
         return;
     }
 
-    if (arremateView && embalagemListView && embalarView) {
-        arremateView.classList.add('hidden');
-        embalagemListView.classList.add('hidden');
-        embalarView.classList.remove('hidden');
-        window.location.hash = '#embalar'; // Navega para a view de embalagem
+    // Esconde as views principais e mostra a de detalhe de arremate
+    arremateView.classList.add('hidden');
+    embalagemListView.classList.add('hidden');
+    embalarView.classList.add('hidden'); // Certifica que a tela de embalar também está escondida
+    arremateDetailView.classList.remove('hidden');
+    
+    // Armazenar os dados do item agregado no localStorage para que a página possa recarregar ou navegar
+    localStorage.setItem('arremateAgregadoAtual', JSON.stringify(agregado));
+    window.location.hash = '#arremate-detalhe'; // Define o hash para navegação e recarregamento
 
-        // Armazenar dados do ARREMATE que está sendo embalado
-        localStorage.setItem('embalagemAtual', JSON.stringify({
-            id_arremate: arremateItem.id_arremate, // ID do arremate é crucial
-            op_numero_origem: arremateItem.op_numero_origem,
-            op_edit_id_origem: arremateItem.op_edit_id_origem, // Se usado para kits ou info adicional
-            produto: arremateItem.produto,
-            variante: arremateItem.variante || '-',
-            // 'quantidade' aqui é a quantidade disponível PARA ESTA SESSÃO DE EMBALAGEM
-            // que é o saldo atual do arremate
-            quantidade: quantidadeDisponivelReal 
-        }));
-
-        // Chama carregarEmbalagem com os dados do arremate
-        await carregarEmbalagem(
-            arremateItem.produto, 
-            arremateItem.variante || '-', 
-            quantidadeDisponivelReal // Passa a quantidade disponível deste arremate
-        );
-    } else {
-        console.error('[handleProductClick] Uma ou mais views não encontradas.');
-    }
+    // Carregar os detalhes na nova view
+    await carregarArremateDetalhe(agregado);
 }
 
-async function atualizarListasArremateEEmbalagem() {
-    try {
-        // buscarArrematesRegistrados() é crucial para AMBAS as listas agora
-        const [opsFinalizadasOriginais, todosOsArrematesDoSistema] = await Promise.all([
-            buscarOpsFinalizadas(),
-            buscarArrematesRegistrados() // Isso já busca todos e atualiza 'todosOsArrematesRegistrados'
-        ]);
+async function carregarArremateDetalhe(agregado) {
+    console.log('[carregarArremateDetalhe] Carregando detalhes para:', agregado);
 
-        // 1. Montar lista para a TABELA DE ARREMATE (Itens Aguardando Arremate)
-        // Esta lógica permanece a mesma: OPs finalizadas com quantidade pendente de arremate.
-        opsParaArrematarGlobal = [];
-        for (const op of opsFinalizadasOriginais) {
-            const quantidadeProduzidaOriginal = obterQuantidadeFinalProduzida(op);
-            let totalJaArrematadoParaEstaOP = 0;
-            todosOsArrematesDoSistema // Usar a lista completa de arremates
-                .filter(arremate => arremate.op_numero === op.numero)
-                .forEach(arremate => {
-                    totalJaArrematadoParaEstaOP += parseInt(arremate.quantidade_arrematada) || 0;
-                });
-            const quantidadePendenteDeArremate = quantidadeProduzidaOriginal - totalJaArrematadoParaEstaOP;
-            if (quantidadePendenteDeArremate > 0) {
-                opsParaArrematarGlobal.push({
-                    ...op, // Dados da OP original
-                    quantidade_produzida_original: quantidadeProduzidaOriginal,
-                    quantidade_pendente_arremate: quantidadePendenteDeArremate,
-                });
-            }
-        }
+    arremateAgregadoEmVisualizacao = agregado; // Armazena o objeto agregado globalmente
 
-        // 2. Montar lista para a TABELA DE EMBALAGEM (Produtos Prontos para Embalar)
-        // Esta lista agora será composta por ARREMATES que ainda têm saldo para serem embalados.
-        opsProntasParaEmbalarGlobal = [];
-        for (const arremate of todosOsArrematesDoSistema) {
-            const quantidadeTotalNesteArremate = parseInt(arremate.quantidade_arrematada) || 0;
-            const quantidadeJaEmbaladaNesteArremate = parseInt(arremate.quantidade_ja_embalada) || 0; // Vem da nova coluna
-            const saldoParaEmbalarNesteArremate = quantidadeTotalNesteArremate - quantidadeJaEmbaladaNesteArremate;
+    const arremateDetailTitleEl = document.getElementById('arremateDetailTitle');
+    const arremateDetailSubTitleEl = document.getElementById('arremateDetailSubTitle');
+    const arremateDetailThumbnailEl = document.getElementById('arremateDetailThumbnail');
+    const totalQtdPendenteArremateEl = document.getElementById('totalQtdPendenteArremate');
+    
+    const produtoNomeArremateDetalheEl = document.getElementById('produtoNomeArremateDetalhe');
+    const varianteNomeArremateDetalheEl = document.getElementById('varianteNomeArremateDetalhe');
+    const qtdPendenteTotalArremateEl = document.getElementById('qtdPendenteTotalArremate');
+    
+    // --- ATENÇÃO AQUI: PEGUE AS REFERÊNCIAS REAIS DOS ELEMENTOS ---
+    // Se você está clonando e substituindo, as referências de const precisarão ser atualizadas
+    // no momento em que os elementos são realmente usados após a substituição.
+    // É mais seguro obter as referências DOS ELEMENTOS CLONADOS se você for substituí-los.
+    // No entanto, para este caso, o cloneNode(true) só está sendo feito para "limpar" listeners.
+    // Se você não for CLONAR E SUBSTITUIR O BOTÃO, NÃO PRECISA DA LÓGICA DE CLONE ABAIXO PARA ELE.
+    // Pelo que entendi, você está clonando o SELECT e o INPUT.
 
-            if (saldoParaEmbalarNesteArremate > 0) {
-                // Para a tabela de embalagem, precisamos de alguns dados da OP original também (como edit_id se usado para kits, etc.)
-                // Mas o ID principal para a ação de embalar será o arremate.id
-                // Se a OP original for necessária para algo (ex: imagem do produto), podemos tentar buscá-la
-                // ou garantir que os dados do produto no arremate são suficientes.
-                // Por simplicidade agora, vamos focar nos dados do arremate.
+    // Pegue as referências que VÃO SER CLONADAS/SUBSTITUÍDAS PRIMEIRO
+    let selectUsuarioArremateEl = document.getElementById('selectUsuarioArremate');
+    let inputQuantidadeArrematarEl = document.getElementById('inputQuantidadeArrematar');
+    const btnLancarArremateAgregadoEl = document.getElementById('btnLancarArremateAgregado');
 
-                opsProntasParaEmbalarGlobal.push({
-                    // Dados principais vêm do ARREMATE
-                    id_arremate: arremate.id, // MUITO IMPORTANTE
-                    op_numero_origem: arremate.op_numero, // Para referência
-                    op_edit_id_origem: arremate.op_edit_id, // Para referência, se necessário
-                    produto: arremate.produto,
-                    variante: arremate.variante,
-                    // A quantidade_disponivel_para_embalar é o saldo deste arremate específico
-                    quantidade_disponivel_para_embalar: saldoParaEmbalarNesteArremate,
-                    // Mantemos o total original do arremate para informação, se necessário
-                    quantidade_total_do_arremate: quantidadeTotalNesteArremate 
-                });
-            }
-        }
 
-        // Ajustar paginação e carregar as tabelas
-        const totalPagesArremate = Math.ceil(opsParaArrematarGlobal.length / itemsPerPageArremate);
-        currentPageArremate = Math.min(currentPageArremate, Math.max(1, totalPagesArremate));
-        // currentPageEmbalagem será ajustado dentro de carregarTabelaProdutosEmbalagem
+    if (!arremateDetailTitleEl || !selectUsuarioArremateEl || !inputQuantidadeArrematarEl || !btnLancarArremateAgregadoEl) {
+        console.error('[carregarArremateDetalhe] Um ou mais elementos DOM do detalhe de arremate não foram encontrados.');
+        mostrarPopupMensagem('Erro ao carregar detalhes do arremate.', 'erro');
+        return;
+    }
 
-        await carregarTabelaArremate(opsParaArrematarGlobal);
-        await carregarTabelaProdutosEmbalagem(opsProntasParaEmbalarGlobal);
+    // Preenche informações do cabeçalho
+    arremateDetailTitleEl.textContent = `Arrematar: ${agregado.produto}`;
+    arremateDetailSubTitleEl.textContent = agregado.variante !== '-' ? `Variação: ${agregado.variante}` : 'Variação: Padrão';
+    totalQtdPendenteArremateEl.textContent = agregado.total_quantidade_pendente_arremate;
+    
+    // Preenche informações no card do formulário
+    produtoNomeArremateDetalheEl.textContent = agregado.produto;
+    varianteNomeArremateDetalheEl.textContent = agregado.variante !== '-' ? agregado.variante : 'Padrão';
+    qtdPendenteTotalArremateEl.textContent = agregado.total_quantidade_pendente_arremate;
 
-        // Controle de visibilidade das seções (lógica existente)
-        const arremateView = document.getElementById('arremateView');
-        const embalagemListView = document.getElementById('embalagemListView');
-        const embalarView = document.getElementById('embalarView');
 
-        if (!arremateView || !embalagemListView || !embalarView) {
-            console.error("[atualizarListasArremateEEmbalagem] Views não encontradas."); return;
-        }
-        
-        if (window.location.hash === '#embalar') {
-            arremateView.classList.add('hidden');
-            embalagemListView.classList.add('hidden');
-            embalarView.classList.remove('hidden');
+    const produtosCadastrados = await buscarTodosProdutos();
+    const produtoCadastrado = produtosCadastrados.find(p => p.nome === agregado.produto);
+    const gradeItem = produtoCadastrado?.grade?.find(g => g.variacao === (agregado.variante === '-' ? '' : agregado.variante));
+    const imagem = gradeItem?.imagem || '';
+    arremateDetailThumbnailEl.innerHTML = imagem ? `<img src="${imagem}" alt="Imagem ${agregado.produto} ${agregado.variante}">` : 'Sem imagem';
+
+    const usuariosTiktikDisponiveis = await obterUsuariosTiktikParaProduto(agregado.produto);
+    const temPermissaoLancar = permissoes.includes('lancar-arremate');
+    console.log('[carregarArremateDetalhe] Permissão "lancar-arremate":', temPermissaoLancar);
+
+
+    // --- Gerenciamento de Listeners e Elementos Dinâmicos ---
+
+    // 1. Preencher e re-adicionar listener para o SELECT de usuários
+    const newSelectUsuario = selectUsuarioArremateEl.cloneNode(false); // Clone apenas a tag, não o conteúdo
+    newSelectUsuario.id = 'selectUsuarioArremate'; // Garante o ID
+    newSelectUsuario.className = 'ep-select'; // Garante a classe
+
+    newSelectUsuario.innerHTML = `<option value="">${usuariosTiktikDisponiveis.length === 0 ? 'Nenhum Tiktik' : 'Selecione...'}</option>`;
+    usuariosTiktikDisponiveis.forEach(user => {
+        const option = document.createElement('option');
+        option.value = user.nome;
+        option.textContent = user.nome;
+        newSelectUsuario.appendChild(option);
+    });
+    
+    selectUsuarioArremateEl.parentNode.replaceChild(newSelectUsuario, selectUsuarioArremateEl);
+    selectUsuarioArremateEl = newSelectUsuario; // ATUALIZA A REFERÊNCIA DA VARIÁVEL
+
+
+    // 2. Re-adicionar listener para o INPUT de quantidade
+    const newQuantidadeInput = inputQuantidadeArrematarEl.cloneNode(true);
+    newQuantidadeInput.id = 'inputQuantidadeArrematar';
+    newQuantidadeInput.className = 'ep-input ep-input-grande';
+    inputQuantidadeArrematarEl.parentNode.replaceChild(newQuantidadeInput, inputQuantidadeArrematarEl);
+    inputQuantidadeArrematarEl = newQuantidadeInput; // ATUALIZA A REFERÊNCIA DA VARIÁVEL
+
+
+    // --- Funções de Validação e Habilitação/Desabilitação ---
+
+    // Esta função será o callback dos listeners e também chamada uma vez
+    const updateLancarButtonState = () => {
+        // Pega os valores ATUAIS dos elementos (importante após clonagem/substituição)
+        const currentQtd = parseInt(inputQuantidadeArrematarEl.value);
+        const currentUsuario = selectUsuarioArremateEl.value;
+
+        // Validação da quantidade
+        const qtdValida = currentQtd > 0 && currentQtd <= agregado.total_quantidade_pendente_arremate;
+        console.log(`[updateLancarButtonState] Quantidade (${currentQtd}) válida: ${qtdValida}`);
+
+        // Validação do usuário
+        const usuarioSelecionado = currentUsuario !== "";
+        console.log(`[updateLancarButtonState] Usuário selecionado (${currentUsuario}): ${usuarioSelecionado}`);
+
+        // Condições para habilitar o botão
+        const shouldEnableButton = qtdValida && usuarioSelecionado && temPermissaoLancar;
+        console.log(`[updateLancarButtonState] temPermissaoLancar: ${temPermissaoLancar}`);
+        console.log(`[updateLancarButtonState] Habilitar botão? ${shouldEnableButton}`);
+
+        btnLancarArremateAgregadoEl.disabled = !shouldEnableButton;
+        // Ajusta a classe para feedback visual se a quantidade estiver acima do max
+        if (currentQtd > agregado.total_quantidade_pendente_arremate) {
+            inputQuantidadeArrematarEl.classList.add('ep-input-error'); // Adicione uma classe de erro no seu CSS
         } else {
-            embalarView.classList.add('hidden');
-            opsParaArrematarGlobal.length > 0 ? arremateView.classList.remove('hidden') : arremateView.classList.add('hidden');
-            embalagemListView.classList.remove('hidden');
+            inputQuantidadeArrematarEl.classList.remove('ep-input-error');
         }
+    };
+    
+    // Configurar input de quantidade e select de usuários
+    inputQuantidadeArrematarEl.value = ''; // Limpa o valor
+    inputQuantidadeArrematarEl.min = 1;
+    inputQuantidadeArrematarEl.max = agregado.total_quantidade_pendente_arremate;
+    
+    // Desabilitar inicialmente se não houver quantidade ou permissão
+    const initiallyDisabled = agregado.total_quantidade_pendente_arremate === 0 || !temPermissaoLancar || usuariosTiktikDisponiveis.length === 0;
+    inputQuantidadeArrematarEl.disabled = initiallyDisabled;
+    selectUsuarioArremateEl.disabled = initiallyDisabled;
+    btnLancarArremateAgregadoEl.disabled = initiallyDisabled; // Define o estado inicial do botão
 
-    } catch (error) {
-        console.error('[atualizarListasArremateEEmbalagem] Erro geral:', error);
-        mostrarPopupMensagem('Erro ao atualizar dados da página de embalagem.', 'erro');
+    if (initiallyDisabled) {
+        if (!temPermissaoLancar) {
+            btnLancarArremateAgregadoEl.title = 'Sem permissão para lançar arremate.';
+        } else if (agregado.total_quantidade_pendente_arremate === 0) {
+            btnLancarArremateAgregadoEl.title = 'Nenhuma quantidade pendente para arremate.';
+        } else if (usuariosTiktikDisponiveis.length === 0) {
+            btnLancarArremateAgregadoEl.title = 'Nenhum usuário Tiktik disponível para este produto.';
+        }
+    } else {
+        btnLancarArremateAgregadoEl.title = 'Lançar Arremate';
     }
-}
 
+
+    // Adicionar os listeners aos elementos atualizados
+    selectUsuarioArremateEl.addEventListener('change', updateLancarButtonState);
+    inputQuantidadeArrematarEl.addEventListener('input', updateLancarButtonState);
+
+    // Adicionar listener ao botão Lançar Arremate Agregado
+    // Remover o listener antigo para evitar duplicidade
+    if (btnLancarArremateAgregadoEl._clickListener) {
+        btnLancarArremateAgregadoEl.removeEventListener('click', btnLancarArremateAgregadoEl._clickListener);
+    }
+    btnLancarArremateAgregadoEl.addEventListener('click', handleLancarArremateAgregado);
+    btnLancarArremateAgregadoEl._clickListener = handleLancarArremateAgregado; // Armazena a referência
+
+
+    updateLancarButtonState(); // Chama para definir o estado inicial do botão
+    console.log('[carregarArremateDetalhe] Configuração de listeners e estado inicial do botão concluída.');
+}
 
 // --- Funções de Popup, Debounce (sem alteração significativa) ---
 function mostrarPopupMensagem(mensagem, tipo = 'erro') {
@@ -693,72 +1302,6 @@ function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
     };
-}
-
-// --- Função para Mobile (AJUSTADA) ---
-function adjustForMobile() {
-    const isMobileView = window.innerWidth <= 768; // Ponto de quebra do CSS para cards
-    const tableContainer = document.getElementById('produtosTableContainer'); // Container da tabela desktop
-    const cardContainer = document.getElementById('productCardContainer'); // Container dos cards mobile
-    const tableBody = document.getElementById('produtosTableBody');
-
-    if (!tableContainer || !cardContainer || !tableBody) {
-        console.warn('[adjustForMobile] Elementos da tabela de embalagem ou cards não encontrados.');
-        return;
-    }
-
-    if (isMobileView) {
-        tableContainer.classList.add('hidden'); // Esconde tabela desktop
-        cardContainer.classList.remove('hidden'); // Mostra container de cards
-        cardContainer.innerHTML = ''; // Limpa cards antigos
-
-        let hasRows = false;
-        Array.from(tableBody.getElementsByTagName('tr')).forEach(row => {
-            const cells = row.getElementsByTagName('td');
-            if (cells.length > 0 && !row.querySelector('td[colspan]')) { // Não é linha de "nenhum item"
-                hasRows = true;
-                const card = document.createElement('div');
-                card.className = 'ep-product-card';
-                Object.keys(row.dataset).forEach(key => card.dataset[key] = row.dataset[key]);
-
-                const quantidadeDisponivel = parseFloat(row.dataset.quantidadeDisponivel) || 0;
-                const temPermissaoEmbalarMobile = permissoes.includes('lancar-embalagem');
-
-                if (quantidadeDisponivel <= 0 || !temPermissaoEmbalarMobile) {
-                    card.classList.add('disabled');
-                    card.title = quantidadeDisponivel <= 0 ? 'Quantidade zerada' : 'Sem permissão';
-                } else {
-                    card.addEventListener('click', () => row.click()); // Simula clique na linha da tabela original
-                }
-                
-                // Thumbnail: cells[2] contém <div class="ep-thumbnail-tabela"><img></div>
-                const thumbnailHTML = cells[2]?.querySelector('.ep-thumbnail-tabela')?.innerHTML || '';
-
-                card.innerHTML = `
-                    <div class="ep-product-card-header">
-                        <div class="ep-thumbnail-card">${thumbnailHTML}</div>
-                        <div class="ep-product-card-info">
-                            <div class="product-name">${cells[0]?.textContent || 'N/A'}</div>
-                            <div class="product-variant">${cells[1]?.textContent || '-'}</div>
-                            <div class="product-op">OP Origem: ${cells[4]?.textContent || 'N/A'}</div>
-                        </div>
-                    </div>
-                    <div class="ep-product-card-qty">Disponível: ${cells[3]?.textContent || '0'}</div>
-                `;
-                cardContainer.appendChild(card);
-            }
-        });
-        if (!hasRows && tableBody.firstChild?.querySelector('td[colspan]')) {
-            // Se não tem linhas de dados, mas tem a mensagem de "nenhum item", exibe-a nos cards
-            cardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--cor-cinza-texto-secundario);">${tableBody.firstChild.textContent}</p>`;
-        }
-
-
-    } else { // Tela maior
-        tableContainer.classList.remove('hidden'); // Mostra tabela desktop
-        cardContainer.classList.add('hidden');    // Esconde container de cards
-        cardContainer.innerHTML = '';             // Limpa cards
-    }
 }
 
 
@@ -1121,54 +1664,52 @@ async function carregarTabelaKit(kitNome, variacaoKitSelecionada) {
     console.log("[carregarTabelaKit] Configuração de listeners e estado inicial do botão concluída.");
 }
 
-
 async function enviarKitParaEstoque(nomeDoKitProduto, variacaoDoKitProduto, qtdKitsParaEnviar, composicaoDoKitSelecionado) {
     const btn = document.getElementById('kit-estoque-btn');
+    const originalButtonHtml = btn.innerHTML; // Salva o HTML original
     if (btn) {
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Montando Kits...';
     }
 
     try {
-        // <<< LOG DE DEPURAÇÃO >>>
-        console.log("[DEPURAÇÃO enviarKit] opsProntasParaEmbalarGlobal:", JSON.stringify(opsProntasParaEmbalarGlobal, null, 2));
-        const arremate14Info = opsProntasParaEmbalarGlobal.find(arr => arr.id_arremate === 14);
-        console.log("[DEPURAÇÃO enviarKit] Info do Arremate ID 14 em opsProntasParaEmbalarGlobal:", arremate14Info);
-        // <<< FIM DO LOG >>>
-        const componentesParaPayload = []; // Array de { id_arremate?, produto, variante, quantidade_usada_total_para_kits }
-                                         // id_arremate só será preenchido para componentes consumidos de arremates específicos
+        const componentesParaPayload = []; 
 
         // Para cada item na composição do kit que o usuário quer montar:
-        for (const itemCompDefinicao of composicaoDoKitSelecionado) { // itemCompDefinicao é da definição do kit
+        for (const itemCompDefinicao of composicaoDoKitSelecionado) { 
             const nomeComp = itemCompDefinicao.produto;
             const varComp = itemCompDefinicao.variacao || '-';
             const qtdNecessariaPorKit = parseInt(itemCompDefinicao.quantidade) || 1;
             let qtdTotalDesteComponenteNecessaria = qtdKitsParaEnviar * qtdNecessariaPorKit;
 
-            // Encontrar os arremates disponíveis para ESTE componente específico
+            // Encontrar os arremates individuais disponíveis para ESTE componente específico
+            // É crucial usar opsProntasParaEmbalarGlobal que já tem os saldos ATUALIZADOS
             const arrematesDisponiveisParaEsteComponente = opsProntasParaEmbalarGlobal
                 .filter(arr => arr.produto === nomeComp && (arr.variante || '-') === varComp)
-                .sort((a, b) => a.id_arremate - b.id_arremate); // FIFO
+                .sort((a, b) => a.id_arremate - b.id_arremate); // FIFO: consumir dos mais antigos primeiro
 
+            // Distribuir a quantidade necessária entre os arremates disponíveis
             for (const arremateOrigem of arrematesDisponiveisParaEsteComponente) {
-                if (qtdTotalDesteComponenteNecessaria <= 0) break;
+                if (qtdTotalDesteComponenteNecessaria <= 0) break; // Já consumiu tudo que precisa
 
                 const qtdDisponivelNesteArremateOrigem = arremateOrigem.quantidade_disponivel_para_embalar;
                 const qtdAUsarDesteArremateOrigem = Math.min(qtdTotalDesteComponenteNecessaria, qtdDisponivelNesteArremateOrigem);
 
                 if (qtdAUsarDesteArremateOrigem > 0) {
+                    // Adiciona ao payload para a API de montagem de kit
                     componentesParaPayload.push({
-                        id_arremate: arremateOrigem.id_arremate, // Sempre teremos o id_arremate agora
+                        id_arremate: arremateOrigem.id_arremate,
                         produto: arremateOrigem.produto,
                         variante: arremateOrigem.variante,
-                        quantidade_usada: qtdAUsarDesteArremateOrigem // Quantidade USADA DESTE ARREMATE para os kits
+                        quantidade_usada: qtdAUsarDesteArremateOrigem 
                     });
                     qtdTotalDesteComponenteNecessaria -= qtdAUsarDesteArremateOrigem;
                 }
             }
 
             if (qtdTotalDesteComponenteNecessaria > 0) {
-                throw new Error(`Insuficiência calculada para o componente ${nomeComp} - ${varComp} (${qtdTotalDesteComponenteNecessaria} ainda necessários). Isso não deveria acontecer se a UI calculou corretamente.`);
+                // Isso indica um erro lógico grave, pois a UI deveria ter impedido isso.
+                throw new Error(`Insuficiência inesperada para o componente ${nomeComp} - ${varComp}. Faltam ${qtdTotalDesteComponenteNecessaria}.`);
             }
         }
         
@@ -1176,35 +1717,41 @@ async function enviarKitParaEstoque(nomeDoKitProduto, variacaoDoKitProduto, qtdK
             kit_nome: nomeDoKitProduto,
             kit_variante: variacaoDoKitProduto === '-' ? null : variacaoDoKitProduto,
             quantidade_kits_montados: qtdKitsParaEnviar,
-            // A API /api/kits/montar agora só precisa de uma lista de todos os componentes consumidos de arremates
             componentes_consumidos_de_arremates: componentesParaPayload 
-            // O campo 'outros_componentes_usados' não é mais necessário se tudo vem de arremates
         };
 
-        console.log("[enviarKitParaEstoque] Payload para /api/kits/montar (nova lógica):", JSON.stringify(payload, null, 2));
+        console.log("[enviarKitParaEstoque] Payload para /api/kits/montar:", JSON.stringify(payload, null, 2));
 
-        // Chamar a API /api/kits/montar (precisaremos ajustar a API de backend para este novo payload)
-        const resultadoMontagem = await fetchFromAPI('/kits/montar', { // A API precisa ser ajustada
+        // Chamar a API /api/kits/montar (que você já implementou no backend)
+        const resultadoMontagem = await fetchFromAPI('/kits/montar', {
             method: 'POST',
             body: JSON.stringify(payload)
         });
 
         console.log("[enviarKitParaEstoque] Resposta da montagem do kit:", resultadoMontagem);
         mostrarPopupMensagem(resultadoMontagem.message || `${qtdKitsParaEnviar} kit(s) montado(s)!`, 'sucesso');
+        
+        // Limpar caches e recarregar
         todosOsArrematesRegistrados = []; 
-        window.location.hash = '';
-        localStorage.removeItem('embalagemAtual');
-        await atualizarListasArremateEEmbalagem();
+        window.location.hash = ''; // Volta para a lista principal
+        localStorage.removeItem('embalagemAtual'); // Limpa o cache da tela de embalagem
+        embalagemAgregadoEmVisualizacao = null; // Limpa o objeto agregado global
+
+        // Atualiza TODAS as listas para refletir as mudanças
+        await atualizarListasArremateEEmbalagem(); 
 
     } catch (error) {
         console.error('[enviarKitParaEstoque] Erro:', error);
         mostrarPopupMensagem(`Erro ao montar kit: ${error.message || 'Verifique o console.'}`, 'erro');
-        if (btn) { // Reabilitar botão
+        if (btn) { // Reabilita botão e restaura texto em caso de erro
             btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-boxes"></i> Montar e Embalar Kits';
+            btn.innerHTML = originalButtonHtml;
         }
     }
 }
+
+
+
 
 async function obterQuantidadeDisponivelAjustada(produto, variante, quantidadeInicialArrematada, opNumero) {
     try {
@@ -1249,180 +1796,165 @@ async function atualizarQuantidadeEmbalada(produto, variante, quantidadeEnviada,
 
 
 // --- Função Principal de Carregamento da Tela de Embalagem
-// public/js/admin-embalagem-de-produtos.js
-
 async function carregarEmbalagem(produto, variante, quantidadeDisponivelParaEstaSessao) {
-    console.log(`[carregarEmbalagem] Para ${produto}:${variante}, Qtd Disp (deste arremate): ${quantidadeDisponivelParaEstaSessao}`);
+    console.log(`[carregarEmbalagem] Para ${produto}:${variante}, Qtd Disp (total agregado): ${quantidadeDisponivelParaEstaSessao}`);
 
-     // <<< INÍCIO DO LOG DE DEPURAÇÃO DE DADOS DO PRODUTO/KIT >>>
-    if (todosOsProdutos && todosOsProdutos.length > 0) {
-        const produtoSendoEmbalado = todosOsProdutos.find(p => p.nome === produto);
+    // Acessa o item agregado global. Se a navegação foi direta via hash, pode precisar buscar.
+    if (!embalagemAgregadoEmVisualizacao || 
+        embalagemAgregadoEmVisualizacao.produto !== produto || 
+        (embalagemAgregadoEmVisualizacao.variante || '-') !== (variante || '-')) {
+        
+        embalagemAgregadoEmVisualizacao = produtosProntosParaEmbalarAgregados.find(item => 
+            item.produto === produto && (item.variante || '-') === (variante || '-')
+        );
 
-        // Encontre um KIT de exemplo que DEVERIA usar este produto
-        // Substitua "NomeDoSeuKitDeExemplo" pelo nome real de um kit
-        const kitDeExemplo = todosOsProdutos.find(p => p.nome === "NomeDoSeuKitDeExemplo" && p.is_kit); 
-        if (kitDeExemplo) {
+        if (!embalagemAgregadoEmVisualizacao) {
+            mostrarPopupMensagem('Erro: Dados do produto para embalagem não encontrados. Voltando para lista.', 'erro');
+            window.location.hash = '';
+            return;
         }
-    } else {
-        console.warn("[DEPURAÇÃO KIT] todosOsProdutos está vazio, não é possível depurar dados de kit.");
     }
-    // <<< FIM DO LOG DE DEPURAÇÃO >>>
+    console.log('[carregarEmbalagem] Objeto agregado atual:', embalagemAgregadoEmVisualizacao);
 
-    const embalagemAtualData = JSON.parse(localStorage.getItem('embalagemAtual') || '{}');
-    // Precisamos do id_arremate que foi salvo
-    if (!embalagemAtualData.id_arremate) {
-        mostrarPopupMensagem('Erro: Dados do arremate para embalagem não encontrados. Voltando para lista.', 'erro');
-        window.location.hash = ''; // Volta para a lista
-        return;
-    }
-    console.log('[carregarEmbalagem] Dados do localStorage (embalagemAtualData):', embalagemAtualData);
-
-    const opOrigemParaExibicao = embalagemAtualData.op_numero_origem; // Usar para exibir, se quiser
-
-    // ... (Elementos DOM como antes: embalagemTitleEl, produtoNomeEl, etc.)
+    // --- Obter referências aos elementos DOM ---
     const embalagemTitleEl = document.getElementById('embalagemTitle');
     const embalagemSubTitleEl = document.getElementById('embalagemSubTitle');
     const produtoNomeEl = document.getElementById('produtoNome');
     const varianteNomeEl = document.getElementById('varianteNome');
-    const opOrigemEmbalagemEl = document.getElementById('opOrigemEmbalagem'); // Pode mostrar a OP de origem e ID Arremate
+    const opOrigemEmbalagemEl = document.getElementById('opOrigemEmbalagem');
     const qtdDisponivelElUnidade = document.getElementById('qtdDisponivel');
-    const qtdEnviarInputUnidade = document.getElementById('qtdEnviar');
-    const estoqueBtnUnidade = document.getElementById('estoqueBtn');
     const embalagemThumbnailEl = document.getElementById('embalagemThumbnail');
     
-    // ... (Abas de Kit - por enquanto, focaremos na unidade)
+    // Referências dos botões e inputs das abas
     const kitTabBtn = document.querySelector('.ep-tabs button[data-tab="kit"]');
     const unidadeTabBtn = document.querySelector('.ep-tabs button[data-tab="unidade"]');
     const kitTabPanel = document.getElementById('kit-tab');
     const unidadeTabPanel = document.getElementById('unidade-tab');
     const kitVariacaoComposicaoWrapper = document.getElementById('kit-variacao-composicao-wrapper');
 
-    if (!embalagemTitleEl || /* ...outros elementos... */ !unidadeTabPanel ) {
+    // Validação básica dos elementos
+    if (!embalagemTitleEl || !unidadeTabPanel || !kitTabBtn || !unidadeTabBtn) {
         console.error('[carregarEmbalagem] Um ou mais elementos DOM da tela de embalagem não foram encontrados.');
         mostrarPopupMensagem('Erro ao carregar interface de embalagem.', 'erro');
         window.location.hash = ''; return;
     }
     
+    // --- Preencher informações do produto (cabeçalho e thumbnail) ---
     const produtoCadastrado = todosOsProdutos.find(p => p.nome === produto);
     const gradeItem = produtoCadastrado?.grade?.find(g => g.variacao === (variante === '-' ? '' : variante));
     const imagem = gradeItem?.imagem || '';
     embalagemThumbnailEl.innerHTML = imagem ? `<img src="${imagem}" alt="Imagem ${produto} ${variante}">` : 'Sem imagem';
 
     embalagemTitleEl.textContent = `Embalar Detalhes`;
-    // Mostrar mais info no subtítulo
-    embalagemSubTitleEl.textContent = 
-        `${produto}${variante !== '-' ? ` - ${variante}` : ''} (Arremate ID: ${embalagemAtualData.id_arremate}, OP Origem: ${opOrigemParaExibicao})`;
+    embalagemSubTitleEl.textContent = `${produto}${variante !== '-' ? ` - ${variante}` : ''}`;
     
     produtoNomeEl.textContent = produto;
     varianteNomeEl.textContent = variante !== '-' ? variante : 'Padrão';
-    // Atualizar o que é mostrado como "origem"
-    opOrigemEmbalagemEl.textContent = `Arremate ID: ${embalagemAtualData.id_arremate} (OP: ${opOrigemParaExibicao})`;
-    
-    qtdDisponivelElUnidade.textContent = quantidadeDisponivelParaEstaSessao;
+    opOrigemEmbalagemEl.textContent = `Origem: Várias OPs / Arremates`;
+
+    qtdDisponivelElUnidade.textContent = quantidadeDisponivelParaEstaSessao; 
     if (qtdDisponivelElUnidade.parentElement?.classList.contains('ep-qtd-disponivel-destaque')) {
         qtdDisponivelElUnidade.parentElement.classList.remove('changing');
     }
-    qtdEnviarInputUnidade.value = ''; // Limpa o input
-    // O máximo que pode ser enviado é a quantidade disponível DESTE ARREMATE
-    qtdEnviarInputUnidade.max = quantidadeDisponivelParaEstaSessao; 
     
-    // --- LÓGICA DAS ABAS (RESTAURADA E AJUSTADA) ---
-const temKits = await temKitsDisponiveis(produto, variante); // Função que você já tem
-console.log(`[carregarEmbalagem] Produto ${produto}:${variante} pode ser usado em kits? ${temKits}`);
-
-const podeEmbalarUnidade = permissoes.includes('lancar-embalagem'); // Ou sua permissão específica 'lancar-embalagem-unidade'
-const podeMontarKit = permissoes.includes('montar-kit'); // Sua permissão para montar kits
-console.log(`[carregarEmbalagem] Permissão 'montar-kit': ${podeMontarKit}`); // Log de Permissão
-
-// Reset inicial das abas e painéis
-unidadeTabBtn.classList.remove('active');
-kitTabBtn.classList.remove('active');
-unidadeTabPanel.classList.remove('active', 'hidden'); 
-kitTabPanel.classList.remove('active', 'hidden');   
-kitVariacaoComposicaoWrapper.classList.add('hidden'); // Esconde o conteúdo do kit por padrão
-
-let abaInicialAtiva = null;
-
-console.log(`[carregarEmbalagem] Decisão de Aba: temKits=${temKits}, podeMontarKit=${podeMontarKit}, podeEmbalarUnidade=${podeEmbalarUnidade}`);
-    if (temKits && podeMontarKit) {
-    console.log("[carregarEmbalagem] ENTRANDO no bloco if (temKits && podeMontarKit)");
-        kitTabBtn.style.display = 'inline-flex'; // Garante que o botão da aba kit seja visível
-        unidadeTabBtn.style.display = 'inline-flex'; // Garante que o botão da aba unidade também seja visível (se permitido)
+    // --- CLONAR E SUBSTITUIR ELEMENTOS PARA REMOVER LISTENERS ANTIGOS ---
+    // Isso é crucial para evitar listeners duplicados e garantir que estamos sempre
+    // trabalhando com as referências mais recentes dos elementos no DOM.
     
-    abaInicialAtiva = 'kit'; // Prioriza kit se disponível e permitido
+    // Primeiro, obtenha as referências originais antes de clonar.
+    const qtdEnviarInputUnidadeOriginal = document.getElementById('qtdEnviar');
+    const estoqueBtnUnidadeOriginal = document.getElementById('estoqueBtn');
+
+    // Clone e substitua o input de quantidade
+    const newQtdEnviarInput = qtdEnviarInputUnidadeOriginal.cloneNode(true);
+    qtdEnviarInputUnidadeOriginal.parentNode.replaceChild(newQtdEnviarInput, qtdEnviarInputUnidadeOriginal);
+    const currentQtdEnviarInputUnidade = newQtdEnviarInput; // Esta é a referência ATUALizada
+
+    // Clone e substitua o botão de estoque
+    const newEstoqueBtnUnidade = estoqueBtnUnidadeOriginal.cloneNode(true);
+    estoqueBtnUnidadeOriginal.parentNode.replaceChild(newEstoqueBtnUnidade, estoqueBtnUnidadeOriginal);
+    const currentEstoqueBtnUnidade = newEstoqueBtnUnidade; // Esta é a referência ATUALizada
     
-} else if (podeEmbalarUnidade) {
-    console.log("[carregarEmbalagem] ENTRANDO no bloco else if (podeEmbalarUnidade)");
-    kitTabBtn.style.display = 'none';       // Esconde o botão da aba kit
-    unidadeTabBtn.style.display = 'inline-flex'; 
-
-    abaInicialAtiva = 'unidade';
-
-} else {
-    console.log("[carregarEmbalagem] ENTRANDO no bloco else (nenhuma opção)");
-    kitTabBtn.style.display = 'none';
-    unidadeTabBtn.style.display = 'none';
-    // Poderia mostrar uma mensagem na área de conteúdo
-    mostrarPopupMensagem('Nenhuma opção de embalagem permitida para este item.', 'aviso');
-    // Limpar painéis
-    kitTabPanel.classList.add('hidden');
-    unidadeTabPanel.classList.add('hidden');
-}
-
-// Ativar a aba e painel corretos
-if (abaInicialAtiva === 'kit') {
-    kitTabBtn.classList.add('active');
-    kitTabPanel.classList.add('active');
-    kitTabPanel.classList.remove('hidden');
+    // Configurar o input de quantidade (valores e estado inicial)
+    currentQtdEnviarInputUnidade.value = '';
+    currentQtdEnviarInputUnidade.min = 1;
+    currentQtdEnviarInputUnidade.max = quantidadeDisponivelParaEstaSessao; 
     
-    unidadeTabPanel.classList.add('hidden'); // Esconde o painel de unidade
+    // Determinar permissões
+    const podeEmbalarUnidade = permissoes.includes('lancar-embalagem');
+    const podeMontarKit = permissoes.includes('montar-kit');
+
+    // Desabilita o botão de estoque inicialmente se não houver permissão ou quantidade
+    currentEstoqueBtnUnidade.disabled = !podeEmbalarUnidade || quantidadeDisponivelParaEstaSessao <= 0;
+
+
+    // --- Lógica das Abas (Kit/Unidade) ---
+    const temKits = await temKitsDisponiveis(produto, variante);
+
     unidadeTabBtn.classList.remove('active');
-
-    // Carrega os kits SE a aba de kit for a ativa
-    await carregarKitsDisponiveis(produto, variante); 
-} else if (abaInicialAtiva === 'unidade') {
-    unidadeTabBtn.classList.add('active');
-    unidadeTabPanel.classList.add('active');
-    unidadeTabPanel.classList.remove('hidden');
-
-    kitTabPanel.classList.add('hidden'); // Esconde o painel de kit
     kitTabBtn.classList.remove('active');
-}
+    unidadeTabPanel.classList.remove('active', 'hidden'); 
+    kitTabPanel.classList.remove('active', 'hidden');   
+    kitVariacaoComposicaoWrapper.classList.add('hidden');
 
-// Habilitar/desabilitar botão de embalar unidade com base na permissão e quantidade
-// (Esta parte já existia e deve continuar funcionando para a aba unidade)
-estoqueBtnUnidade.disabled = !podeEmbalarUnidade || quantidadeDisponivelParaEstaSessao <= 0 || true;
+    let abaInicialAtiva = null;
 
-    // --- Listeners para Aba Unidade (Botão de Embalar) ---
-    // Limpar e recriar listeners para evitar duplicidade
-    let currentQtdEnviarInputUnidade = document.getElementById('qtdEnviar');
-    let currentEstoqueBtnUnidade = document.getElementById('estoqueBtn');
-    
-    const newQtdEnviarInput = currentQtdEnviarInputUnidade.cloneNode(true);
-    currentQtdEnviarInputUnidade.parentNode.replaceChild(newQtdEnviarInput, currentQtdEnviarInputUnidade);
-    currentQtdEnviarInputUnidade = newQtdEnviarInput;
+    // Lógica para decidir qual aba ativar inicialmente
+    if (temKits && podeMontarKit) {
+        kitTabBtn.style.display = 'inline-flex';
+        unidadeTabBtn.style.display = 'inline-flex';
+        abaInicialAtiva = 'kit';
+    } else if (podeEmbalarUnidade) {
+        kitTabBtn.style.display = 'none';
+        unidadeTabBtn.style.display = 'inline-flex'; 
+        abaInicialAtiva = 'unidade';
+    } else {
+        kitTabBtn.style.display = 'none';
+        unidadeTabBtn.style.display = 'none';
+        mostrarPopupMensagem('Nenhuma opção de embalagem permitida para este item.', 'aviso');
+        kitTabPanel.classList.add('hidden');
+        unidadeTabPanel.classList.add('hidden');
+    }
 
-    const newEstoqueBtnUnidade = currentEstoqueBtnUnidade.cloneNode(true);
-    currentEstoqueBtnUnidade.parentNode.replaceChild(newEstoqueBtnUnidade, currentEstoqueBtnUnidade);
-    currentEstoqueBtnUnidade = newEstoqueBtnUnidade;
-    
-    currentEstoqueBtnUnidade.disabled = !podeEmbalarUnidade || quantidadeDisponivelParaEstaSessao <= 0 || true;
+    // Ativar a aba e carregar conteúdo conforme a decisão
+    if (abaInicialAtiva === 'kit') {
+        kitTabBtn.classList.add('active');
+        kitTabPanel.classList.add('active');
+        kitTabPanel.classList.remove('hidden');
+        unidadeTabPanel.classList.add('hidden');
+        unidadeTabBtn.classList.remove('active');
+        await carregarKitsDisponiveis(produto, variante); 
+    } else if (abaInicialAtiva === 'unidade') {
+        unidadeTabBtn.classList.add('active');
+        unidadeTabPanel.classList.add('active');
+        unidadeTabPanel.classList.remove('hidden');
+        kitTabPanel.classList.add('hidden');
+        kitTabBtn.classList.remove('active');
+    }
 
 
+    // --- Listener para o Input de Quantidade da Unidade ---
+    // Este listener é adicionado ao NOVO input (`currentQtdEnviarInputUnidade`)
     currentQtdEnviarInputUnidade.addEventListener('input', () => {
-        const valor = parseInt(currentQtdEnviarInputUnidade.value) || 0;
+        let valor = parseInt(currentQtdEnviarInputUnidade.value) || 0;
         const qtdDispPai = currentQtdEnviarInputUnidade.closest('.ep-embalar-form-card')?.querySelector('.ep-qtd-disponivel-destaque');
         const qtdDispSpan = qtdDispPai?.querySelector('strong#qtdDisponivel');
         let habilitarBotao = false;
+
+        // Garante que o valor no input não exceda o max
+        if (valor > quantidadeDisponivelParaEstaSessao) {
+            currentQtdEnviarInputUnidade.value = quantidadeDisponivelParaEstaSessao;
+            valor = quantidadeDisponivelParaEstaSessao;
+        } else if (valor < 0) {
+            currentQtdEnviarInputUnidade.value = 0;
+            valor = 0;
+        }
 
         if (valor >= 1 && valor <= quantidadeDisponivelParaEstaSessao) {
             if (qtdDispSpan) qtdDispSpan.textContent = quantidadeDisponivelParaEstaSessao - valor;
             if (qtdDispPai) qtdDispPai.classList.add('changing');
             habilitarBotao = true;
         } else {
-            if (valor > quantidadeDisponivelParaEstaSessao) currentQtdEnviarInputUnidade.value = quantidadeDisponivelParaEstaSessao;
-            else if (valor <= 0 && currentQtdEnviarInputUnidade.value !== '') currentQtdEnviarInputUnidade.value = '';
-            
             if (qtdDispSpan) qtdDispSpan.textContent = quantidadeDisponivelParaEstaSessao;
             if (qtdDispPai) qtdDispPai.classList.remove('changing');
             habilitarBotao = false;
@@ -1430,61 +1962,126 @@ estoqueBtnUnidade.disabled = !podeEmbalarUnidade || quantidadeDisponivelParaEsta
         currentEstoqueBtnUnidade.disabled = !podeEmbalarUnidade || !habilitarBotao;
     });
 
-    currentEstoqueBtnUnidade.addEventListener('click', async () => {
+    // --- Listener para o Botão "Embalar e Enviar para Estoque" ---
+    // Este listener é adicionado ao NOVO botão (`currentEstoqueBtnUnidade`)
+    // É importante remover o listener anterior ANTES de adicionar o novo para evitar duplicação.
+    if (currentEstoqueBtnUnidade._clickListener) {
+        currentEstoqueBtnUnidade.removeEventListener('click', currentEstoqueBtnUnidade._clickListener);
+    }
+
+    const handleEstoqueBtnClick = async () => { // Função nomeada para facilitar o reuso e remoção
         const quantidadeEnviada = parseInt(currentQtdEnviarInputUnidade.value);
         if (isNaN(quantidadeEnviada) || quantidadeEnviada <= 0 || quantidadeEnviada > quantidadeDisponivelParaEstaSessao) {
             mostrarPopupMensagem('Quantidade inválida!', 'erro'); return;
         }
 
+        // --- Salvar o HTML original do botão ANTES de modificá-lo ---
+        const originalButtonHtml = currentEstoqueBtnUnidade.innerHTML;
+
+        // Desabilita o botão e o input e mostra o spinner
         currentEstoqueBtnUnidade.disabled = true;
         currentEstoqueBtnUnidade.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+        currentQtdEnviarInputUnidade.disabled = true;
         
-        // Os dados do arremate estão em embalagemAtualData (do localStorage)
-        const { id_arremate, produto: prodNome, variante: prodVar } = embalagemAtualData;
+        const { produto: prodNome, variante: prodVar } = embalagemAgregadoEmVisualizacao;
+
+        let erroDuranteOperacao = false; // Flag para controlar o comportamento do `finally`
 
         try {
-            // Passo 1: Registrar entrada no estoque
-            console.log(`[Embalar] Enviando para estoque: Arremate ID ${id_arremate}, Produto ${prodNome}, Qtd ${quantidadeEnviada}`);
+            let quantidadeRestanteParaEmbalar = quantidadeEnviada;
+            const lancamentosArremateAtualizados = [];
+
+            // Ordena os arremates individuais por ID (FIFO) para consumir dos mais antigos
+            const arrematesOrdenados = embalagemAgregadoEmVisualizacao.arremates_detalhe
+                .filter(arremate => arremate.quantidade_disponivel_para_embalar > 0)
+                .sort((a, b) => a.id_arremate - b.id_arremate);
+
+            for (const arremate of arrematesOrdenados) {
+                if (quantidadeRestanteParaEmbalar <= 0) break;
+
+                const qtdDisponivelNesteArremate = arremate.quantidade_disponivel_para_embalar;
+                const qtdAEmbalarDesteArremate = Math.min(quantidadeRestanteParaEmbalar, qtdDisponivelNesteArremate);
+
+                if (qtdAEmbalarDesteArremate > 0) {
+                    console.log(`[Embalar Unidade] Atualizando arremate ID ${arremate.id_arremate} para registrar ${qtdAEmbalarDesteArremate} como embaladas.`);
+                    await fetchFromAPI(`/arremates/${arremate.id_arremate}/registrar-embalagem`, {
+                        method: 'PUT',
+                        body: JSON.stringify({
+                            quantidade_que_foi_embalada_desta_vez: qtdAEmbalarDesteArremate
+                        })
+                    });
+                    lancamentosArremateAtualizados.push({ id: arremate.id_arremate, qtd: qtdAEmbalarDesteArremate });
+                    quantidadeRestanteParaEmbalar -= qtdAEmbalarDesteArremate;
+                }
+            }
+
+            if (quantidadeRestanteParaEmbalar > 0) {
+                throw new Error('Erro interno: Quantidade restante não foi totalmente embalada. Saldo insuficiente inesperado.');
+            }
+
+            console.log(`[Embalar Unidade] Enviando para estoque final: Produto ${prodNome}, Qtd ${quantidadeEnviada}`);
             const resultadoEstoque = await fetchFromAPI('/estoque/entrada-producao', {
                 method: 'POST',
                 body: JSON.stringify({
                     produto_nome: prodNome,
                     variante_nome: prodVar === '-' ? null : prodVar,
                     quantidade_entrada: quantidadeEnviada,
-                    id_arremate_origem: id_arremate 
                 })
             });
-            console.log('[Embalar] Resposta da API de entrada no estoque:', resultadoEstoque);
+            console.log('[Embalar Unidade] Resposta da API de entrada no estoque:', resultadoEstoque);
             mostrarPopupMensagem(`${quantidadeEnviada} unidade(s) de ${prodNome} enviada(s) para o estoque!`, 'sucesso');
 
-            // Passo 2: Atualizar o arremate (quantidade_ja_embalada)
-            console.log(`[Embalar] Atualizando arremate ID ${id_arremate} para registrar ${quantidadeEnviada} como embaladas.`);
-            const resultadoArremate = await fetchFromAPI(`/arremates/${id_arremate}/registrar-embalagem`, {
-                method: 'PUT',
-                body: JSON.stringify({
-                    quantidade_que_foi_embalada_desta_vez: quantidadeEnviada
-                })
-            });
-            console.log('[Embalar] Resposta da API de atualização do arremate:', resultadoArremate);
-            // Não precisa de popup para este, o do estoque é suficiente.
-
-            // <<< LIMPAR O CACHE DE ARREMATES >>>
-            todosOsArrematesRegistrados = []; // Agora deve buscar arremates frescos
-
-            // Limpar e voltar para a lista
-            window.location.hash = '';
+            // Limpar caches globais para forçar recarga de dados frescos
+            todosOsArrematesRegistrados = []; 
+            // Limpa o estado da UI para forçar a navegação para a lista principal
+            window.location.hash = ''; 
             localStorage.removeItem('embalagemAtual');
-            await atualizarListasArremateEEmbalagem(); // Recarrega tudo
+            embalagemAgregadoEmVisualizacao = null; // Limpa o objeto agregado global
+
+            // Chamar a atualização das listas principais, mas não precisamos de await aqui
+            // porque a navegação já está acontecendo e o `finally` vai resetar o botão.
+            atualizarListasArremateEEmbalagem(); 
 
         } catch (error) {
-            console.error('[Embalar] Erro ao embalar e enviar:', error);
+            erroDuranteOperacao = true; // Sinaliza que houve um erro
+            console.error('[Embalar Unidade] Erro ao embalar e enviar:', error);
             mostrarPopupMensagem(`Erro ao embalar: ${error.message || 'Verifique o console.'}`, 'erro');
-            // Reabilitar botão em caso de erro
-            currentEstoqueBtnUnidade.disabled = !podeEmbalarUnidade || quantidadeDisponivelParaEstaSessao <= 0;
-            currentEstoqueBtnUnidade.innerHTML = '<i class="fas fa-box-open"></i> Embalar e Enviar';
+        } finally {
+            // Este bloco é EXECUTADO SEMPRE, independentemente de sucesso ou erro.
+            // Ele restaura o estado visual do botão e do input.
+
+            if (currentEstoqueBtnUnidade) { // Sempre verificar se o elemento ainda existe
+                currentEstoqueBtnUnidade.innerHTML = originalButtonHtml; // Remove o spinner
+                if (erroDuranteOperacao) {
+                    currentEstoqueBtnUnidade.disabled = false; // Reabilita em caso de erro
+                }
+            }
+            if (currentQtdEnviarInputUnidade) { // Sempre verificar se o elemento ainda existe
+                currentQtdEnviarInputUnidade.disabled = false; // Reabilita em caso de erro/sucesso
+                // Não redefinimos o value aqui, pois ele pode ter sido corrigido pelo usuário ou zerado pelo sucesso.
+                // A nova renderização da UI ou o listener do input cuidará do valor.
+            }
+            // Para o caso de sucesso, o botão ainda pode estar desabilitado
+            // se a quantidade total disponível agora for 0, o que é o comportamento esperado.
+            // A re-validação pelo 'input' listener (ou a recarga da tela) cuida disso.
         }
-    });
-}
+    };
+    // Anexa o novo listener ao botão, e armazena a referência para futura remoção.
+    currentEstoqueBtnUnidade.addEventListener('click', handleEstoqueBtnClick);
+    currentEstoqueBtnUnidade._clickListener = handleEstoqueBtnClick; // Salva a referência do listener
+
+
+    // --- Lógica para o botão de Montar Kits (se a aba de Kit for ativa) ---
+    // Esta parte foi modificada em discussões anteriores.
+    // Garanta que a função `enviarKitParaEstoque` também tenha o mesmo padrão de `finally` para o seu botão.
+    // (Não está incluída aqui para manter o foco apenas na `carregarEmbalagem` completa)
+    // Se você usa o `carregarKitsDisponiveis` e ele anexa o listener a `kit-estoque-btn`,
+    // você precisa garantir que `enviarKitParaEstoque` (que é o callback desse listener)
+    // também tenha o `try...catch...finally` completo para resetar o `kit-estoque-btn`.
+} // Fim da função carregarEmbalagem
+
+
+
 
 function alternarAba(event) {
     const tabBtn = event.target.closest('.ep-tab-btn');
@@ -1529,26 +2126,38 @@ async function inicializar() {
         await atualizarListasArremateEEmbalagem(); // Carrega dados e renderiza
         setupEventListeners();
         handleHashChange(); // Verifica hash inicial
-        adjustForMobile(); // Ajuste inicial para mobile
     } catch (error) {
         console.error('[inicializar] Erro geral:', error);
         mostrarPopupMensagem('Erro crítico ao carregar. Tente recarregar.', 'erro');
     }
 }
 
+
 function setupEventListeners() {
     const searchProdutoInput = document.getElementById('searchProduto');
     if (searchProdutoInput) {
         searchProdutoInput.addEventListener('input', debounce(() => {
             currentPageEmbalagem = 1;
-            carregarTabelaProdutosEmbalagem(opsProntasParaEmbalarGlobal);
+            carregarCardsEmbalagem(produtosProntosParaEmbalarAgregados); // Modificado para carregarCardsEmbalagem
         }, 350));
     }
 
-    const voltarBtn = document.getElementById('voltarBtn');
-    if (voltarBtn) {
-        voltarBtn.addEventListener('click', () => {
-            window.location.hash = '';
+    // NOVO: Listener para o botão 'X' de fechar a tela de detalhe de ARREMATE
+    const fecharArremateBtn = document.getElementById('fecharArremateBtn');
+    if (fecharArremateBtn) {
+        fecharArremateBtn.addEventListener('click', () => {
+            window.location.hash = ''; // Volta para a raiz (lista de cards agregados de arremate)
+            localStorage.removeItem('arremateAgregadoAtual');
+            // Não precisa de await atualizarListasArremateEEmbalagem() aqui,
+            // porque handleHashChange já fará isso quando o hash for limpo.
+        });
+    }
+
+    // NOVO: Listener para o botão 'X' de fechar a tela de detalhe de EMBALAGEM
+    const fecharEmbalagemBtn = document.getElementById('fecharEmbalagemBtn');
+    if (fecharEmbalagemBtn) {
+        fecharEmbalagemBtn.addEventListener('click', () => {
+            window.location.hash = ''; // Volta para a raiz (lista de cards agregados de embalagem)
             localStorage.removeItem('embalagemAtual');
         });
     }
@@ -1558,17 +2167,18 @@ function setupEventListeners() {
     });
 
     window.addEventListener('hashchange', handleHashChange);
-    window.addEventListener('resize', debounce(adjustForMobile, 200));
 }
+
 
 async function handleHashChange() {
     const hash = window.location.hash;
 
     const arremateView = document.getElementById('arremateView');
-    const embalagemListView = document.getElementById('embalagemListView'); // View da lista de produtos para embalar
-    const embalarView = document.getElementById('embalarView'); // View de detalhe da embalagem
+    const embalagemListView = document.getElementById('embalagemListView');
+    const embalarView = document.getElementById('embalarView');
+    const arremateDetailView = document.getElementById('arremateDetailView');
 
-    if (!arremateView || !embalagemListView || !embalarView) {
+    if (!arremateView || !embalagemListView || !embalarView || !arremateDetailView) {
         console.error("[handleHashChange] Views não encontradas."); return;
     }
 
@@ -1578,20 +2188,39 @@ async function handleHashChange() {
             arremateView.classList.add('hidden');
             embalagemListView.classList.add('hidden');
             embalarView.classList.remove('hidden');
-            // A função carregarEmbalagem deve ser chamada aqui
+            arremateDetailView.classList.add('hidden'); 
             await carregarEmbalagem(embalagemData.produto, embalagemData.variante, embalagemData.quantidade);
         } else {
             console.warn('[handleHashChange] #embalar sem dados válidos. Voltando para lista.');
-            window.location.hash = ''; // Força o else a ser executado
+            window.location.hash = ''; 
         }
-    } else { // Se não for #embalar, ou se dados inválidos para #embalar
+    } else if (hash === '#arremate-detalhe') { 
+        const arremateAgregadoData = JSON.parse(localStorage.getItem('arremateAgregadoAtual') || 'null');
+        if (arremateAgregadoData && arremateAgregadoData.produto && arremateAgregadoData.ops_detalhe) {
+            arremateView.classList.add('hidden');
+            embalagemListView.classList.add('hidden');
+            embalarView.classList.add('hidden');
+            arremateDetailView.classList.remove('hidden');
+            await carregarArremateDetalhe(arremateAgregadoData);
+        } else {
+            console.warn('[handleHashChange] #arremate-detalhe sem dados válidos. Voltando para lista de arremates.');
+            window.location.hash = ''; 
+        }
+    } else { // Se não for nenhuma hash específica, mostra as listas principais
         embalarView.classList.add('hidden');
-        localStorage.removeItem('embalagemAtual');
-        if (window.location.hash === '') { // Só recarrega se voltou para a "home" da página
-             await atualizarListasArremateEEmbalagem();
+        arremateDetailView.classList.add('hidden'); 
+        localStorage.removeItem('embalagemAtual'); 
+        localStorage.removeItem('arremateAgregadoAtual'); 
+
+        // Se o hash está vazio, mostre as duas seções principais
+        arremateView.classList.remove('hidden');
+        embalagemListView.classList.remove('hidden');
+        
+        // E só recarrega as listas se o hash está vazio.
+        if (window.location.hash === '') { 
+            await atualizarListasArremateEEmbalagem();
         }
     }
-     adjustForMobile(); // Ajusta para mobile após mudança de view
 }
 
 // --- Ponto de Entrada ---

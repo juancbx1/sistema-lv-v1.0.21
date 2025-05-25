@@ -12,10 +12,12 @@ const pool = new Pool({
 });
 const SECRET_KEY = process.env.JWT_SECRET;
 
-// --- Middleware de Autenticação e Conexão (copie de outro router, ex: api/estoque.js) ---
+if (!SECRET_KEY) {
+    console.error('[router/kits] ERRO CRÍTICO: JWT_SECRET não está definida!');
+}
+
+// Função verificarToken (Reutilizada - idealmente seria um módulo compartilhado)
 const verificarTokenInterna = (reqOriginal) => {
-    // ... (lógica completa de verificação do token)
-    console.log('[router/kits - verificarTokenInterna] Verificando token...');
     const authHeader = reqOriginal.headers.authorization;
     if (!authHeader) {
         const error = new Error('Token não fornecido');
@@ -29,8 +31,7 @@ const verificarTokenInterna = (reqOriginal) => {
         throw error;
     }
     try {
-        const decoded = jwt.verify(token, SECRET_KEY, { ignoreExpiration: false });
-        return decoded;
+        return jwt.verify(token, SECRET_KEY, { ignoreExpiration: false });
     } catch (error) {
         console.error('[router/kits - verificarTokenInterna] Erro ao verificar token:', error.message);
         const newError = new Error(error.name === 'TokenExpiredError' ? 'Token expirado' : 'Token inválido');
@@ -40,6 +41,7 @@ const verificarTokenInterna = (reqOriginal) => {
     }
 };
 
+// Middleware para este router: autenticação e conexão com banco
 router.use(async (req, res, next) => {
     let cliente;
     try {
@@ -47,20 +49,21 @@ router.use(async (req, res, next) => {
         req.usuarioLogado = verificarTokenInterna(req);
         console.log('[router/kits middleware] Usuário autenticado:', req.usuarioLogado.nome);
 
-        if (!req.usuarioLogado.permissoes?.includes('montar-kit')) { // Permissão específica
-             console.warn(`[router/kits middleware] Permissão 'montar-kit' negada para ${req.usuarioLogado.nome}`);
-             const err = new Error('Permissão negada para montar kits.');
-             err.statusCode = 403;
-             throw err;
+        // Permissão específica para montar kits (você pode ajustar 'montar-kit')
+        if (!req.usuarioLogado.permissoes || !req.usuarioLogado.permissoes.includes('montar-kit')) {
+            console.warn(`[router/kits middleware] Permissão 'montar-kit' negada para ${req.usuarioLogado.nome}`);
+            const err = new Error('Permissão negada para montar kits.');
+            err.statusCode = 403;
+            throw err;
         }
-        
+
         cliente = await pool.connect();
         req.dbCliente = cliente;
         console.log('[router/kits middleware] Conexão com o banco estabelecida.');
         next();
     } catch (error) {
         console.error('[router/kits middleware] Erro:', error.message);
-        if (cliente) cliente.release(); // Garante que o cliente é liberado em caso de erro no middleware
+        if (cliente) cliente.release();
         const statusCode = error.statusCode || 500;
         const responseError = { error: error.message };
         if (error.details) responseError.details = error.details;
@@ -68,93 +71,116 @@ router.use(async (req, res, next) => {
     }
 });
 
-// POST /api/kits/montar - Registrar a montagem de um kit
+// POST /api/kits/montar
 router.post('/montar', async (req, res) => {
     const { dbCliente, usuarioLogado } = req;
     const {
         kit_nome,
         kit_variante,
         quantidade_kits_montados,
-        componentes_consumidos_de_arremates // Novo nome do campo no payload
+        componentes_consumidos_de_arremates // ARRAY DE OBJETOS: { id_arremate, produto, variante, quantidade_usada }
     } = req.body;
 
-    if (!kit_nome || !quantidade_kits_montados || quantidade_kits_montados <= 0 || 
-        !componentes_consumidos_de_arremates || componentes_consumidos_de_arremates.length === 0) { // Verifica se o array existe e não é vazio
-        return res.status(400).json({ error: 'Dados incompletos para montar o kit.' });
+    console.log('[router/kits POST /montar] Dados recebidos:', JSON.stringify(req.body, null, 2));
+
+    // Validação inicial
+    if (!kit_nome || !quantidade_kits_montados || !componentes_consumidos_de_arremates || !Array.isArray(componentes_consumidos_de_arremates) || quantidade_kits_montados <= 0) {
+        return res.status(400).json({ error: 'Dados inválidos para montar kit.' });
+    }
+    if (componentes_consumidos_de_arremates.length === 0) {
+        return res.status(400).json({ error: 'Nenhum componente especificado para consumo.' });
     }
 
     try {
-        await dbCliente.query('BEGIN');
+        await dbCliente.query('BEGIN'); // INICIA A TRANSAÇÃO
 
-        // 1. Atualizar arremates e registrar SAÍDA para TODOS os componentes (vindos de arremates)
-        for (const comp of componentes_consumidos_de_arremates) {
-            if (!comp.id_arremate || !comp.produto || comp.quantidade_usada <= 0) {
-                throw new Error(`Dados inválidos para componente consumido do arremate ID ${comp.id_arremate}.`);
+        // 1. Consumir componentes dos arremates (Atualizar quantidade_ja_embalada)
+        for (const componente of componentes_consumidos_de_arremates) {
+            const { id_arremate, produto, variante, quantidade_usada } = componente;
+
+            if (!id_arremate || !quantidade_usada || quantidade_usada <= 0) {
+                throw new Error('Componente com dados inválidos: id_arremate ou quantidade_usada ausente/inválido.');
             }
-            
-            // Segurança: Buscar o arremate
-            const arremateAtual = await dbCliente.query(
-                'SELECT quantidade_arrematada, quantidade_ja_embalada FROM arremates WHERE id = $1 FOR UPDATE',
-                [comp.id_arremate]
+
+            // Busca o arremate para verificar o saldo e bloquear a linha
+            // FOR UPDATE garante que ninguém mais atualize essa linha ao mesmo tempo
+            const arremateResult = await dbCliente.query(
+                'SELECT id, quantidade_arrematada, quantidade_ja_embalada FROM arremates WHERE id = $1 FOR UPDATE',
+                [id_arremate]
             );
-            if (arremateAtual.rows.length === 0) throw new Error(`Arremate ID ${comp.id_arremate} não encontrado.`);
-            const saldoArremate = arremateAtual.rows[0].quantidade_arrematada - arremateAtual.rows[0].quantidade_ja_embalada;
-            if (comp.quantidade_usada > saldoArremate) {
-                throw new Error(`Tentativa de usar ${comp.quantidade_usada} do arremate ID ${comp.id_arremate}, mas apenas ${saldoArremate} estão disponíveis.`);
+
+            if (arremateResult.rows.length === 0) {
+                throw new Error(`Arremate de origem (ID: ${id_arremate}) não encontrado para o componente "${produto}" - "${variante}".`);
             }
 
-            // Atualiza arremate
+            const arremate = arremateResult.rows[0];
+            const saldoAtual = arremate.quantidade_arrematada - arremate.quantidade_ja_embalada;
+
+            if (saldoAtual < quantidade_usada) {
+                throw new Error(`Saldo insuficiente no arremate ${id_arremate} para o componente "${produto}" - "${variante}". Saldo: ${saldoAtual}, Necessário: ${quantidade_usada}.`);
+            }
+
+            // Atualiza a quantidade_ja_embalada no registro de arremate
             await dbCliente.query(
                 'UPDATE arremates SET quantidade_ja_embalada = quantidade_ja_embalada + $1 WHERE id = $2',
-                [comp.quantidade_usada, comp.id_arremate]
+                [quantidade_usada, id_arremate]
             );
-            
-            // Registrar movimento de SAÍDA para o componente
-            const varianteCompParaDB = (comp.variante === '' || comp.variante === '-') ? null : comp.variante;
-            await dbCliente.query(
-                `INSERT INTO estoque_movimentos 
-                    (produto_nome, variante_nome, quantidade, tipo_movimento, origem_arremate_id, usuario_responsavel, observacao)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                [
-                    comp.produto, 
-                    varianteCompParaDB, 
-                    -comp.quantidade_usada, // Negativo para saída
-                    'SAIDA_COMPONENTE_KIT', // Tipo de movimento genérico para componente de kit
-                    comp.id_arremate,
-                    usuarioLogado.nome,
-                    `Usado em ${quantidade_kits_montados}x ${kit_nome} (${kit_variante || 'Padrão'})`
-                ]
-            );
+            console.log(`[router/kits POST /montar] Consumido ${quantidade_usada} de ${produto} (${variante}) do arremate ${id_arremate}.`);
         }
 
-        // 2. Registrar ENTRADA para o KIT MONTADO
-        const varianteKitParaDB = (kit_variante === '' || kit_variante === '-') ? null : kit_variante;
-        const kitEntradaResult = await dbCliente.query(
-            `INSERT INTO estoque_movimentos
-                (produto_nome, variante_nome, quantidade, tipo_movimento, usuario_responsavel, observacao)
-             VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-            [
-                kit_nome,
-                varianteKitParaDB,
-                quantidade_kits_montados,
-                'ENTRADA_KIT_MONTADO',
-                usuarioLogado.nome,
-                `Montagem de ${quantidade_kits_montados} kit(s)`
-            ]
+        // 2. Registrar o kit montado como entrada no estoque (opcional, dependendo do seu estoque)
+        // Se você tem uma tabela de estoque consolidado de produtos (não de arremates), adicione aqui:
+        // Exemplo (adapte para sua estrutura de estoque):
+        try {
+            // Supondo uma tabela 'estoque' com (produto_nome, variante_nome, quantidade)
+            // Se não existir, crie-a ou adapte a lógica para onde seu estoque final vai
+            await dbCliente.query(
+                `INSERT INTO estoque_movimentos (
+                    produto_nome, 
+                    variante_nome, 
+                    quantidade, 
+                    tipo_movimento, 
+                    data_movimento,
+                    usuario_responsavel,
+                    observacao
+                    -- Se você quiser rastrear de qual(is) arremate(s) os componentes vieram,
+                    -- precisaria de uma coluna JSONB ou array no estoque_movimentos, ou uma tabela de ligação.
+                    -- Por simplicidade, para o kit, vamos considerar a origem 'KIT_MONTADO'.
+                )
+                VALUES ($1, $2, $3, $4, NOW(), $5, $6);`,
+                [
+                    kit_nome,
+                    kit_variante || null,
+                    quantidade_kits_montados,
+                    'ENTRADA_PRODUCAO_KIT_MONTADO', // Novo tipo de movimento para kits
+                    usuarioLogado.nome, // Nome do usuário que montou o kit
+                    `Montagem de ${quantidade_kits_montados} kit(s) ${kit_nome} (${kit_variante || 'Padrão'})` // Observação
+                ]
+            );
+            console.log(`[router/kits POST /montar] ${quantidade_kits_montados} kits "${kit_nome}" (${kit_variante || 'Padrão'}) registrados em estoque_movimentos.`);
+        } catch (stockError) {
+            console.error('[router/kits POST /montar] Erro ao registrar kit no estoque_movimentos:', stockError.message);
+            // É crucial relançar o erro para que a transação seja desfeita (ROLLBACK)
+            throw new Error(`Erro ao registrar kit no estoque: ${stockError.message}`);
+        }
+
+        // 3. Opcional: Registrar um log de montagem de kit (para auditoria)
+        // Se você tem uma tabela 'log_montagem_kits' com (kit_nome, kit_variante, quantidade_montada, data, usuario_montador)
+        await dbCliente.query(
+            `INSERT INTO log_montagem_kits (kit_nome, kit_variante, quantidade_montada, data_montagem, usuario_id, usuario_nome)
+             VALUES ($1, $2, $3, NOW(), $4, $5);`,
+            [kit_nome, kit_variante || null, quantidade_kits_montados, usuarioLogado.id, usuarioLogado.nome]
         );
+        console.log(`[router/kits POST /montar] Log de montagem de kit registrado.`);
 
-        await dbCliente.query('COMMIT');
+        await dbCliente.query('COMMIT'); // FINALIZA A TRANSAÇÃO COM SUCESSO
 
-        console.log(`[router/kits POST /montar] Kit ${kit_nome} montado e registrado com sucesso (nova lógica).`);
-        res.status(201).json({
-            message: `${quantidade_kits_montados} kit(s) de ${kit_nome} montado(s) com sucesso!`,
-            kitEntradaEstoque: kitEntradaResult.rows[0]
-        });
+        res.status(200).json({ message: `${quantidade_kits_montados} kit(s) "${kit_nome}" montado(s) e registrado(s) com sucesso!` });
 
     } catch (error) {
-        await dbCliente.query('ROLLBACK'); // Desfaz em caso de erro
-        console.error(`[router/kits POST /montar] Erro ao montar kit ${kit_nome}:`, error.message, error.stack);
-        res.status(error.statusCode || 500).json({ error: 'Erro ao montar kit.', details: error.message });
+        await dbCliente.query('ROLLBACK'); // DESFAZ TUDO EM CASO DE ERRO
+        console.error('[router/kits POST /montar] Erro na transação de montagem de kit:', error.message, error.stack);
+        res.status(400).json({ error: error.message || 'Erro ao montar kits.' });
     } finally {
         if (dbCliente) dbCliente.release();
     }

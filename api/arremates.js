@@ -3,9 +3,9 @@ import 'dotenv/config';
 import pkg from 'pg';
 const { Pool } = pkg;
 import jwt from 'jsonwebtoken';
-import express from 'express'; // <<< ADICIONADO
+import express from 'express';
 
-const router = express.Router(); // <<< ADICIONADO
+const router = express.Router(); 
 const pool = new Pool({
     connectionString: process.env.POSTGRES_URL,
     timezone: 'UTC',
@@ -138,14 +138,18 @@ router.post('/', async (req, res) => {
 });
 
 // GET /api/arremates/
+// GET /api/arremates/
 router.get('/', async (req, res) => {
-    const { dbCliente } = req; // req.usuarioLogado já validado pelo middleware
-    const { op_numero } = req.query; // Query params do Express
+    const { dbCliente } = req;
+    const { op_numero } = req.query;
     try {
         console.log('[router/arremates GET] Processando...');
         let queryText;
         let queryParams = [];
 
+        // ATENÇÃO: Se quiser ser explícito e otimizar, mude o `SELECT *` para isto:
+        // `SELECT id, op_numero, op_edit_id, produto, variante, quantidade_arrematada, quantidade_ja_embalada, usuario_tiktik, data_lancamento FROM arremates ...`
+        // Por agora, `SELECT *` funciona se a coluna foi adicionada.
         if (op_numero) {
             console.log(`[router/arremates GET] Buscando arremates para OP específica: ${op_numero}`);
             queryText = 'SELECT * FROM arremates WHERE op_numero = $1 ORDER BY data_lancamento DESC';
@@ -247,4 +251,4 @@ router.put('/:id_arremate/registrar-embalagem', async (req, res) => {
     }
 });
 
-export default router; // <<< EXPORTAR O ROUTER
+export default router;
