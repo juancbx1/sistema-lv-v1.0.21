@@ -5,6 +5,9 @@ const { Pool } = pkg;
 import jwt from 'jsonwebtoken';
 import express from 'express';
 
+// Importar a função de buscar permissões completas
+import { getPermissoesCompletasUsuarioDB } from './usuarios.js'; // Verifique o caminho
+
 const router = express.Router();
 const pool = new Pool({
     connectionString: process.env.POSTGRES_URL,
@@ -16,9 +19,9 @@ if (!SECRET_KEY) {
     console.error('[router/ops-para-embalagem] ERRO CRÍTICO: JWT_SECRET não definida!');
 }
 
-// Função verificarToken (Reutilizada - pode ser movida para utils)
+// Função verificarTokenInterna (mantenha a sua ou use uma centralizada)
 const verificarTokenInterna = (reqOriginal) => {
-    console.log('[router/ops-para-embalagem - verificarTokenInterna] Verificando token...');
+    // console.log('[router/ops-para-embalagem - verificarTokenInterna] Verificando token...');
     const authHeader = reqOriginal.headers.authorization;
     if (!authHeader) {
         const error = new Error('Token não fornecido');
@@ -33,9 +36,10 @@ const verificarTokenInterna = (reqOriginal) => {
     }
     try {
         const decoded = jwt.verify(token, SECRET_KEY, { ignoreExpiration: false });
-        return decoded;
+        // console.log('[router/ops-para-embalagem - verificarTokenInterna] Token decodificado:', decoded);
+        return decoded; // Retorna o payload do token
     } catch (error) {
-        console.error('[router/ops-para-embalagem - verificarTokenInterna] Erro ao verificar token:', error.message);
+        // console.error('[router/ops-para-embalagem - verificarTokenInterna] Erro ao verificar token:', error.message);
         const newError = new Error(error.name === 'TokenExpiredError' ? 'Token expirado' : 'Token inválido');
         newError.statusCode = 401;
         if (error.name === 'TokenExpiredError') newError.details = 'jwt expired';
@@ -45,88 +49,100 @@ const verificarTokenInterna = (reqOriginal) => {
 
 // Middleware para este router
 router.use(async (req, res, next) => {
-    let cliente;
+    let clienteConectado; // Cliente para o middleware
     try {
-        console.log(`[router/ops-para-embalagem] Recebida ${req.method} em ${req.originalUrl}`);
-        req.usuarioLogado = verificarTokenInterna(req);
-        console.log('[router/ops-para-embalagem middleware] Usuário autenticado:', req.usuarioLogado.nome);
+        // console.log(`[router/ops-para-embalagem MID] Recebida ${req.method} em ${req.originalUrl}`);
+        req.usuarioLogado = verificarTokenInterna(req); // req.usuarioLogado é o payload do token
+        // console.log(`[router/ops-para-embalagem MID] Usuário autenticado: ${req.usuarioLogado.nome || req.usuarioLogado.nome_usuario}`);
 
-        if (!req.usuarioLogado.permissoes || !req.usuarioLogado.permissoes.includes('acesso-embalagem-de-produtos')) {
-            console.warn(`[router/ops-para-embalagem middleware] Permissão 'acesso-embalagem-de-produtos' negada para ${req.usuarioLogado.nome}`);
+        clienteConectado = await pool.connect(); // Conecta para buscar permissões
+        // Não anexamos a req.dbCliente aqui, pois getPermissoesCompletasUsuarioDB gerencia seu cliente
+        // E a rota GET / também vai pegar seu próprio cliente.
+
+        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(clienteConectado, req.usuarioLogado.id);
+        // console.log(`[router/ops-para-embalagem MID] Permissões DB para ${req.usuarioLogado.nome || req.usuarioLogado.nome_usuario}:`, permissoesCompletas);
+        
+        if (!permissoesCompletas.includes('acesso-embalagem-de-produtos')) {
+            // console.warn(`[router/ops-para-embalagem MID] Permissão 'acesso-embalagem-de-produtos' negada para ${req.usuarioLogado.nome || req.usuarioLogado.nome_usuario}.`);
             const err = new Error('Permissão negada para acessar OPs para embalagem.');
             err.statusCode = 403;
-            throw err;
+            throw err; // Será pego pelo catch abaixo
         }
         
-        cliente = await pool.connect();
-        req.dbCliente = cliente;
-        console.log('[router/ops-para-embalagem middleware] Conexão com o banco estabelecida.');
+        // Se chegou aqui, tem permissão.
+        // A rota GET obterá seu próprio cliente DB.
         next();
     } catch (error) {
-        console.error('[router/ops-para-embalagem middleware] Erro:', error.message);
-        if (cliente) cliente.release();
+        console.error('[router/ops-para-embalagem MID] Erro no middleware:', error.message, error.stack ? error.stack.substring(0,300):"");
         const statusCode = error.statusCode || 500;
         const responseError = { error: error.message };
         if (error.details) responseError.details = error.details;
         res.status(statusCode).json(responseError);
+    } finally {
+        if (clienteConectado) {
+            clienteConectado.release(); // Libera o cliente usado pelo middleware
+            // console.log('[router/ops-para-embalagem MID] Cliente DB do middleware liberado.');
+        }
     }
 });
 
 // GET /api/ops-para-embalagem/
 router.get('/', async (req, res) => {
-    const { dbCliente } = req; // req.usuarioLogado já validado
-    const { query } = req; // req.query já contém os parâmetros da URL
+    // req.usuarioLogado já foi validado e anexado pelo middleware.
+    // A permissão 'acesso-embalagem-de-produtos' também já foi validada pelo middleware.
+    const { query } = req;
+    let dbClienteRota; // Cliente específico para esta rota
+
     try {
-        console.log('[router/ops-para-embalagem GET] Processando...');
-        // Parâmetros da Query
+        dbClienteRota = await pool.connect(); // Pega uma nova conexão para a rota
+        // console.log('[router/ops-para-embalagem GET] Processando...');
+        
         const fetchAll = query.all === 'true';
         const page = parseInt(query.page) || 1;
-        const limit = parseInt(query.limit) || 50; // Ajuste conforme sua necessidade
+        const limit = parseInt(query.limit) || 50;
         const offset = (page - 1) * limit;
 
-        // Construir a Query SQL
         const baseQuery = `FROM ordens_de_producao WHERE status = 'finalizado'`;
-        const orderBy = `ORDER BY data_final DESC NULLS LAST, CAST(numero AS INTEGER) DESC`;
+        // Ajuste na ordenação para OPs com número não puramente numérico
+        const orderBy = `ORDER BY data_final DESC NULLS LAST, CAST(NULLIF(REGEXP_REPLACE(numero, '\\D', '', 'g'), '') AS INTEGER) DESC NULLS LAST, numero DESC`;
+
 
         let queryText = `SELECT * ${baseQuery} ${orderBy}`;
         let queryParams = [];
-
-        let totalQuery = `SELECT COUNT(*) AS count ${baseQuery}`; // Adicionado alias 'count'
-        // totalParams não é necessário aqui, pois não há placeholders em baseQuery
+        let totalQuery = `SELECT COUNT(*) AS count ${baseQuery}`;
 
         if (!fetchAll) {
             queryText += ` LIMIT $1 OFFSET $2`;
             queryParams = [limit, offset];
         } else {
-            console.log('[router/ops-para-embalagem GET] Buscando todas as OPs finalizadas (all=true).');
+            // console.log('[router/ops-para-embalagem GET] Buscando todas as OPs finalizadas (all=true).');
         }
 
-        console.log('[router/ops-para-embalagem GET] Executando query principal:', queryText, queryParams);
-        const result = await dbCliente.query(queryText, queryParams);
+        // console.log('[router/ops-para-embalagem GET] Executando query principal:', queryText, queryParams);
+        const result = await dbClienteRota.query(queryText, queryParams);
 
-        console.log('[router/ops-para-embalagem GET] Executando query de contagem:', totalQuery);
-        const totalResult = await dbCliente.query(totalQuery);
-        const total = parseInt(totalResult.rows[0].count); // Acessa pelo alias 'count'
-        const pages = fetchAll ? 1 : (limit > 0 ? Math.ceil(total / limit) : 1);
+        // console.log('[router/ops-para-embalagem GET] Executando query de contagem:', totalQuery);
+        const totalResult = await dbClienteRota.query(totalQuery); // Não precisa de params aqui
+        const total = parseInt(totalResult.rows[0].count);
+        
+        const totalPages = limit > 0 ? Math.ceil(total / limit) : (total > 0 ? 1 : 0);
 
-        console.log(`[router/ops-para-embalagem GET] ${result.rows.length} OPs finalizadas encontradas (Total: ${total}).`);
+        // console.log(`[router/ops-para-embalagem GET] ${result.rows.length} OPs finalizadas encontradas (Total: ${total}).`);
         res.status(200).json({
             rows: result.rows,
             total: total,
             page: fetchAll ? 1 : page,
-            pages: pages,
+            pages: totalPages,
         });
 
     } catch (error) {
-        console.error('[router/ops-para-embalagem GET] Erro não tratado:', {
-            message: error.message,
-            stack: error.stack,
-        });
-        res.status(error.statusCode || 500).json({ error: error.message || 'Erro interno ao buscar OPs para embalagem.' });
+        console.error('[router/ops-para-embalagem GET] Erro não tratado:', error.message, error.stack ? error.stack.substring(0,300):"");
+        const statusCode = error.statusCode || 500;
+        res.status(statusCode).json({ error: error.message || 'Erro interno ao buscar OPs para embalagem.' });
     } finally {
-        if (dbCliente) {
-            console.log('[router/ops-para-embalagem GET] Liberando cliente do banco.');
-            dbCliente.release();
+        if (dbClienteRota) {
+            dbClienteRota.release();
+            // console.log('[router/ops-para-embalagem GET] Cliente DB da rota liberado.');
         }
     }
 });

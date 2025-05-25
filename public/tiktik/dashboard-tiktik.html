@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Tiktik</title>
+    <link rel="stylesheet" href="/css/tiktik-style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="dashboard-header">
+        <div class="header-content">
+            <h1 id="saudacaoTiktik"></h1>
+            <div class="user-info">
+                <button id="logoutBtn" class="logout-btn btn-danger">Sair</button>
+            </div> 
+        </div>
+    </header> 
+
+    <!-- Conteúdo do Dashboard -->
+    <div class="container dashboard-content">
+        <section class="dashboard-cards">
+            <!-- Card Alcance de Meta -->
+            <div class="card meta-card">
+                <h2>Alcance de Meta</h2>
+                <div class="meta-controls">
+                    <select id="metaSelectTiktik"></select>
+                    <button id="editarMetaBtnTiktik" class="action-btn btn-primary">Editar Meta</button>
+                </div>
+                <div class="progress-section">
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div id="progressoBarraTiktik" class="progress-fill"></div>
+                        </div>
+                        <p class="processos-destaque">Arremates: <span id="quantidadeProduzidaTiktik">0</span></p>
+                    </div>
+                    <p id="itensFaltantesTiktik" class="itensFaltantesTiktik">Faltam 0 arremates para atingir a sua Meta</p>
+                </div>
+            </div>
+
+            <!-- Card Produção do Dia -->
+            <div class="card producao-dia">
+                <h2>Arremates do Dia</h2>
+                <canvas id="graficoProducaoDiaTiktik"></canvas>
+            </div>
+
+           <!-- Card Andamento do Ciclo Atual -->
+            <div class="card andamento-ciclo"> <!-- Nova classe CSS para estilização se necessário -->
+            <h2 id="tituloAndamentoCicloTiktik">Seu Progresso no Ciclo Atual:</h2> <!-- Título dinâmico -->
+                <div class="ciclo-semanas-list" id="cd-weeks-list-tiktik"> <!-- cd = costureira dashboard -->
+        <!-- As semanas serão preenchidas pelo JavaScript -->
+            <p>Carregando informações do ciclo...</p>
+            </div>
+            </div>
+
+            <!-- Card Detalhamento de Processos -->
+            <div class="card detalhamento-card">
+                <h2>Detalhamento de Arremates</h2>
+                <div class="filtros">
+                    <div class="filtro-container">
+                        <span id="filtroDiaTiktik" class="filtro-texto active">Filtrar por Dia</span>
+                        <input type="text" id="datepickerDiaTiktik" class="datepicker" placeholder="Selecione o dia">
+                    </div>
+                    <div class="filtro-container">
+                        <span id="filtroSemanaTiktik" class="filtro-texto">Filtrar por Semana</span>
+                        <input type="text" id="datepickerSemanaTiktik" class="datepicker" placeholder="Selecione a semana">
+                    </div>
+                </div>
+                <p id="totalItensTiktik" class="total-processos">TOTAL DE ARREMATES: 0</p>
+                <div class="processos-wrapper">
+                    <ul id="listaProducaoTiktik" class="processos-lista"></ul>
+                </div>
+                <div id="paginacaoContainerTiktik" class="paginacao">
+                    <button id="btnAnteriorTiktik" class="paginacao-btn btn-primary">Anterior</button>
+                    <div id="paginacaoNumerosTiktik" class="paginacao-numeros"></div>
+                    <button id="btnProximoTiktik" class="paginacao-btn btn-primary">Próximo</button>
+                </div>
+            </div>
+
+            <!-- Novo Card Assinatura de Processos -->
+            <div class="card assinatura-card">
+                <h2>Assinatura de Arremates</h2>
+                <p class="assinatura-descricao">Mantenha seus registros em dia: revise e confirme os arremates pendentes para garantir a precisão e o progresso do seu trabalho.</p>
+                <button id="btnConferirAssinaturas" class="action-btn btn-primary">Conferir</button>
+            </div>
+        </section>
+    </div>
+
+    <!-- Popup para sem assinaturas pendentes -->
+    <div id="popupSemAssinaturas" class="popup" style="display: none;">
+        <div class="popup-content">
+            <h2>Informação</h2>
+            <p>Não existem arremates pendentes de assinatura.</p>
+            <button id="fecharPopupSemAssinaturas" class="action-btn btn-primary">Fechar</button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+    <script src="/js/tiktik-dashboard.js" type="module"></script>
+</body>
+</html>

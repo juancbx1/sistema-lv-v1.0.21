@@ -484,76 +484,71 @@ function mostrarTelaAssinaturas(producoes) {
 async function assinarSelecionados(ids) {
     try {
         const token = localStorage.getItem('token');
-        const agora = new Date();
-        const assinaturas = JSON.parse(localStorage.getItem('assinaturas')) || [];
+        // const agora = new Date(); // Não precisamos mais de 'agora' aqui
+        // const assinaturas = JSON.parse(localStorage.getItem('assinaturas')) || []; // Lógica de 'assinaturas' no localStorage pode ser mantida se quiser um log local
 
-        // Buscar as produções atuais para obter o valor de edicoes
-        const producoes = await obterProducoes();
+        // REMOVIDO: A busca por 'producoes' e 'edicoesAtual' aqui, pois não devem ser enviados pela costureira ao assinar.
+        // O backend agora lida com o que pode ser alterado com base na permissão.
 
         for (const id of ids) {
-            const producao = producoes.find(p => p.id === id);
-            const edicoesAtual = producao ? (producao.edicoes || 0) : 0; // Mantém o valor atual ou usa 0
-
-            const requestBody = { 
-                id, 
-                assinada: true, 
-                edicoes: edicoesAtual // Inclui edicoes no corpo da requisição
+            const requestBody = {
+                id: id,         // Envia o ID da produção
+                assinada: true  // Envia a intenção de marcar como assinada
+                // NÃO ENVIE 'quantidade' NEM 'edicoes' daqui quando a costureira está apenas assinando
             };
+            console.log('[assinarSelecionados] Enviando requestBody:', JSON.stringify(requestBody)); // Log para confirmar
+
             const response = await fetch('/api/producoes', {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(requestBody),
+                body: JSON.stringify(requestBody), // Envia o corpo corrigido
             });
 
-            const responseText = await response.text();
-            console.log('[assinarSelecionados] Resposta do servidor:', responseText);
+            const responseText = await response.text(); // Sempre tente ler o texto para debug
+            console.log(`[assinarSelecionados] Resposta do servidor para ID ${id}: ${response.status} - ${responseText}`);
 
             if (!response.ok) {
-                throw new Error(`Erro ao assinar produção ${id}: ${responseText}`);
+                // Tenta parsear como JSON se for um erro estruturado
+                let errorJson = { error: `Erro HTTP ${response.status}` };
+                try {
+                    errorJson = JSON.parse(responseText);
+                } catch(e) {
+                    // Mantém o erro HTTP se não for JSON
+                    if (responseText.trim() !== "") errorJson.error = responseText;
+                }
+                throw new Error(`Erro ao assinar produção ${id}: ${errorJson.error || `Status ${response.status}`}`);
             }
         }
 
+        // Se chegou aqui, todas as assinaturas selecionadas (ou as que não deram erro) foram processadas
+        // A lógica de registro local de assinatura (se você a mantiver) pode vir aqui.
+        // Exemplo:
+        /*
         const registroAssinatura = {
-            id: gerarIdUnico(),
+            idUnico: gerarIdUnico(), // Certifique-se que gerarIdUnico existe e funciona
             costureira: usuarioLogado.nome,
-            dataHora: agora.toISOString(),
-            dispositivo: navigator.userAgent,
-            producoesAssinadas: ids.map(id => ({
-                idProducao: id,
-            }))
+            dataHora: new Date().toISOString(),
+            dispositivo: navigator.userAgent, // Opcional
+            producoesAssinadasIds: ids // Apenas os IDs que foram enviados com sucesso
         };
+        // Adicionar geolocalização se necessário
+        // assinaturas.push(registroAssinatura);
+        // localStorage.setItem('assinaturas', JSON.stringify(assinaturas));
+        */
+        alert('Processos selecionados foram enviados para assinatura!'); // Mensagem mais genérica
 
-        if (navigator.geolocation) {
-            await new Promise((resolve) => {
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        registroAssinatura.localizacao = {
-                            latitude: position.coords.latitude,
-                            longitude: position.coords.longitude
-                        };
-                        resolve();
-                    },
-                    () => {
-                        registroAssinatura.localizacao = 'Não disponível';
-                        resolve();
-                    },
-                    { timeout: 5000 }
-                );
-            });
-        } else {
-            registroAssinatura.localizacao = 'Geolocalização não suportada';
-        }
-
-        assinaturas.push(registroAssinatura);
-        localStorage.setItem('assinaturas', JSON.stringify(assinaturas));
     } catch (error) {
-        console.error('[assinarSelecionados] Erro:', error.message);
-        alert('Erro ao assinar processos selecionados: ' + error.message);
+        console.error('[assinarSelecionados] Erro:', error.message, error.stack ? error.stack.substring(0,300) : "");
+        // Garante que a mensagem do erro seja mostrada
+        const errorMessage = error.message.includes("Erro ao assinar produção") ? error.message : `Erro ao processar assinaturas: ${error.message}`;
+        alert(errorMessage);
     }
 }
+
+
 
 function gerarIdUnico() {
     return 'assinatura_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);

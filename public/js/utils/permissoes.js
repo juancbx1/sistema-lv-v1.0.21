@@ -12,6 +12,7 @@ export const permissoesDisponiveis = [
     { id: 'acesso-producao-geral-costura', label: 'Acesso a Produção Geral de Costureiras' }, // Para producao-geral-costura.html 
     { id: 'acesso-relatorio-de-comissao', label: 'Acesso a Relatório de Comissão' }, // Para relatorio-de-comissao.html
     { id: 'acesso-ponto-por-processo', label: 'Acesso a Ponto por Processo' }, // Para ponto-por-processo.html
+    { id: 'acesso-dashboard-tiktik', label: 'Acesso a Dashboard Tiktik' }, // Para dashboard-tiktik.html
     { id: 'criar-op', label: 'Criar Ordem de Produção' }, // Para ordens-de-producao.html
     { id: 'editar-op', label: 'Editar Ordem de Produção' }, // Para ordens-de-producao.html
     { id: 'editar-usuarios', label: 'Editar Usuários' }, // Para usuarios-cadastrados.html
@@ -36,19 +37,30 @@ export const permissoesDisponiveis = [
     { id: 'marcar-como-cortado', label: 'Marcar Corte como Cortado' }, // Para ordens-de-producao.html
     { id: 'excluir-corte-pendente', label: 'Excluir Corte Pendente' }, // Para ordens-de-producao.html
     { id: 'finalizar-op', label: 'Finalizar uma OP' }, // Para ordens-de-producao.html
-    { id: 'cancelar-op', label: 'Cancelar uma OP' } // Para ordens-de-producao.html
+    { id: 'cancelar-op', label: 'Cancelar uma OP' }, // Para ordens-de-producao.html
+    { id: 'acesso-admin-geral', label: 'Acesso Geral para Telas de Admins' }, // Para usuário tiktik/costureira ser redirecionado para home.html
+    { id: 'ver-proprias-producoes', label: 'Permite ver as próprias producoes' }, // Para costureiras e tiktik (dashboards)
+    { id: 'ver-proprios-arremates', label: 'Permite ver os próprios arremates' }, // Para costureiras e tiktik (dashboards)
+    { id: 'assinar-propria-producao-costureira', label: 'Permite assinar a própria producao' } // Para costureiras (dashboard)
+
 ];
 
 // Apenas o tipo 'admin' terá permissões padrão
 export const permissoesPorTipo = {
     supervisor: [],
     lider_setor: [],
-    tiktik: [],
+    tiktik: [
+        'acesso-dashboard-tiktik',
+        'ver-proprias-producoes'
+    ],
     cortador: [],
-    costureira: ['acesso-costureira-dashboard'
-        
+    costureira: [
+        'acesso-costureira-dashboard',
+        'ver-proprias-producoes',
+        'assinar-propria-producao-costureira'
     ],
     admin: [
+        'acesso-admin-geral', 
         'acesso-home',
         'acesso-costureira-dashboard', // Admin também pode acessar a dashboard
         'acesso-cadastrar-usuarios',
