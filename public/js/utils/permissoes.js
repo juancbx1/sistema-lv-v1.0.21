@@ -30,7 +30,7 @@ export const permissoesDisponiveis = [
     { id: 'confirmar-pagamento-comissao', label: 'Confirmar Pagamento de Comissão' }, // Para embalagem-de-produtos.html
     { id: 'lancar-embalagem', label: 'Lançar Embalagem' }, // Para embalagem-de-produtos.html
     { id: 'montar-kit', label: 'Montar Kit' }, // Para embalagem-de-produtos.html
-    { id: 'gerenciar-produtos', label: 'Gerenciar Configuracoes de Produtos' }, // Para cadastrar-produtos.html
+    { id: 'gerenciar-produtos', label: 'Gerenciar Produtos' }, // Para cadastrar-produtos.html
     { id: 'gerenciar-estoque', label: 'Gerenciar Estoque' }, // Para estoque.html
     { id: 'registrar-corte', label: 'Registrar Corte para Estoque' }, // Para ordens-de-producao.html
     { id: 'excluir-estoque-corte', label: 'Excluir Corte do Estoque' }, // Para ordens-de-producao.html
