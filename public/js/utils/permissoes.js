@@ -41,8 +41,8 @@ export const permissoesDisponiveis = [
     { id: 'acesso-admin-geral', label: 'Acesso Geral para Telas de Admins' }, // Para usuário tiktik/costureira ser redirecionado para home.html
     { id: 'ver-proprias-producoes', label: 'Permite ver as próprias producoes' }, // Para costureiras e tiktik (dashboards)
     { id: 'ver-proprios-arremates', label: 'Permite ver os próprios arremates' }, // Para costureiras e tiktik (dashboards)
-    { id: 'assinar-propria-producao-costureira', label: 'Permite assinar a própria producao' } // Para costureiras (dashboard)
-
+    { id: 'assinar-propria-producao-costureira', label: 'Permite assinar a própria producao' }, // Para costureiras (dashboard)
+    { id: 'ver-lista-produtos', label: 'Permite visualizar a lista de produtos cadastrados' } // para api/produtos.js
 ];
 
 // Apenas o tipo 'admin' terá permissões padrão
@@ -91,7 +91,8 @@ export const permissoesPorTipo = {
         'montar-kit',
         'lancar-embalagem',
         'gerenciar-produtos',
-        'gerenciar-estoque' 
+        'gerenciar-estoque',
+        'ver-lista-produtos'
 
         
     ]

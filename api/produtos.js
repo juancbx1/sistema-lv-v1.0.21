@@ -11,55 +11,56 @@ import { getPermissoesCompletasUsuarioDB } from './usuarios.js'; // Verifique o 
 const router = express.Router();
 const pool = new Pool({
     connectionString: process.env.POSTGRES_URL,
-    ssl: process.env.POSTGRES_URL ? { rejectUnauthorized: false } : undefined,
-    timezone: 'UTC', // Boa prática
+    ssl: process.env.POSTGRES_URL ? { rejectUnauthorized: false } : undefined, // Configuração SSL para NeonDB
+    timezone: 'UTC',
 });
 const SECRET_KEY = process.env.JWT_SECRET;
 
-// Função verificarTokenOriginal
+// Função verificarTokenOriginal (usada pelo middleware)
 const verificarTokenOriginal = (reqOriginal) => {
     const authHeader = reqOriginal.headers.authorization;
-    if (!authHeader) throw new Error('Token não fornecido');
+    if (!authHeader) {
+        // Para GET, não lançamos erro aqui, a rota decidirá se autenticação é obrigatória
+        if (reqOriginal.method !== 'GET') {
+            const error = new Error('Token não fornecido');
+            error.statusCode = 401;
+            throw error;
+        }
+        return null; // Retorna null se não houver token para GET
+    }
     const token = authHeader.split(' ')[1];
-    if (!token) throw new Error('Token mal formatado');
+    if (!token && reqOriginal.method !== 'GET') { // Token mal formatado só é erro se não for GET opcional
+        const error = new Error('Token mal formatado');
+        error.statusCode = 401;
+        throw error;
+    }
+    if (!token && reqOriginal.method === 'GET') return null; // Sem token, mas é GET opcional
+
     try {
         const decoded = jwt.verify(token, SECRET_KEY);
         // console.log('[api/produtos - verificarTokenOriginal] Token decodificado:', decoded);
         return decoded;
     } catch (err) {
-        const error = new Error('Token inválido ou expirado');
-        error.statusCode = 401;
-        if (err.name === 'TokenExpiredError') error.details = 'jwt expired';
-        throw error;
+        // Se for GET e o token for inválido, não lança erro aqui, req.usuarioLogado será null
+        if (reqOriginal.method !== 'GET') {
+            const error = new Error('Token inválido ou expirado');
+            error.statusCode = 401;
+            if (err.name === 'TokenExpiredError') error.details = 'jwt expired';
+            throw error;
+        }
+        console.warn('[api/produtos - verificarTokenOriginal] Token inválido para GET, continuando sem usuário.');
+        return null; // Token inválido para GET, trata como não autenticado
     }
 };
 
-// Middleware para este router: Apenas autentica o token.
-// A gestão de conexão DB e verificação de permissões detalhadas fica em cada rota.
+// Middleware para este router: Apenas autentica o token (se presente).
 router.use(async (req, res, next) => {
     try {
         // console.log(`[router/produtos MID] Recebida ${req.method} em ${req.originalUrl}`);
-        // Para rotas que não sejam GET, o token é obrigatório
-        if (req.method !== 'GET') {
-            req.usuarioLogado = verificarTokenOriginal(req);
-        } else {
-            // Para GET, o token é opcional. Se fornecido e válido, req.usuarioLogado será definido.
-            // Se não fornecido ou inválido, req.usuarioLogado permanecerá undefined.
-            // A rota GET decidirá se o acesso público é permitido ou se requer autenticação/permissão.
-            if (req.headers.authorization) {
-                try {
-                    req.usuarioLogado = verificarTokenOriginal(req);
-                } catch (tokenError) {
-                    // console.warn('[router/produtos MID] Token inválido ou ausente para GET, continuando sem usuário logado.');
-                    req.usuarioLogado = null; // Garante que é null se o token falhar
-                }
-            } else {
-                req.usuarioLogado = null; // Sem token, sem usuário logado
-            }
-        }
+        req.usuarioLogado = verificarTokenOriginal(req); // Define req.usuarioLogado (pode ser null para GETs)
         next();
-    } catch (error) { // Erro vindo de verificarTokenOriginal para métodos não-GET
-        console.error('[router/produtos MID] Erro no middleware (provavelmente token):', error.message);
+    } catch (error) { // Erro vindo de verificarTokenOriginal para métodos não-GET que exigem token
+        console.error('[router/produtos MID] Erro no middleware (provavelmente token obrigatório ausente/inválido):', error.message);
         const statusCode = error.statusCode || 500;
         res.status(statusCode).json({ error: error.message, details: error.details });
     }
@@ -67,51 +68,56 @@ router.use(async (req, res, next) => {
 
 // GET /api/produtos/
 router.get('/', async (req, res) => {
-    // req.usuarioLogado pode ser null aqui se o GET for público e sem token
     const { usuarioLogado } = req;
     let dbClient;
 
     try {
+        if (!usuarioLogado || !usuarioLogado.id) {
+            return res.status(401).json({ error: 'Autenticação necessária para visualizar produtos.' });
+        }
+
         dbClient = await pool.connect();
+        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
 
-        // OPCIONAL: Adicionar verificação de permissão se a listagem de produtos não for pública
-        // if (usuarioLogado) { // Só verifica permissão se houver um usuário logado
-        //     const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
-        //     if (!permissoesCompletas.includes('ver-lista-produtos')) { // Exemplo de permissão
-        //         return res.status(403).json({ error: 'Permissão negada para visualizar produtos.' });
-        //     }
-        // } else {
-        //     // Se a rota GET *exige* login, mesmo que para verificar permissão, você negaria aqui.
-        //     // Se for pública, não faz nada.
-        // }
+        if (!permissoesCompletas.includes('ver-lista-produtos')) {
+            return res.status(403).json({ error: 'Permissão negada para visualizar a lista de produtos.' });
+        }
 
-        // console.log('[router/produtos GET] Buscando produtos...');
-        const queryText = 'SELECT id, nome, sku, gtin, unidade, estoque, imagem, tipos, variacoes, estrutura, etapas, "etapastiktik" AS "etapasTiktik", grade, is_kit, data_atualizacao FROM produtos ORDER BY nome ASC';
+        // ***** CORREÇÃO NA QUERY: Removido data_criacao e data_atualizacao *****
+        const queryText = `
+            SELECT id, nome, sku, gtin, unidade, estoque, imagem, 
+                   tipos, variacoes, estrutura, etapas, 
+                   "etapastiktik" AS "etapasTiktik", 
+                   grade, is_kit 
+            FROM produtos ORDER BY nome ASC`;
+            // Removi , data_criacao, data_atualizacao da linha acima
+            
         const result = await dbClient.query(queryText);
-        // console.log('[router/produtos GET] Produtos buscados:', result.rows.length);
         res.status(200).json(result.rows);
 
     } catch (error) {
         console.error('[router/produtos GET] Erro:', error.message, error.stack ? error.stack.substring(0,300) : "");
-        res.status(500).json({ error: 'Erro ao buscar produtos', details: error.message });
+        const errorMessage = (process.env.NODE_ENV === 'production' && (!error.statusCode || error.statusCode === 500))
+                           ? 'Erro interno ao buscar produtos.'
+                           : error.message;
+        res.status(error.statusCode || 500).json({ error: errorMessage, details: process.env.NODE_ENV !== 'production' ? error.detail : undefined });
     } finally {
         if (dbClient) dbClient.release();
     }
 });
 
-// POST /api/produtos/ (Criar ou Atualizar produto - UPSERT)
+// Rota POST /api/produtos/ (Criar ou Atualizar produto - UPSERT)
 router.post('/', async (req, res) => {
-    const { usuarioLogado } = req; // req.usuarioLogado foi definido no middleware se não for GET
+    const { usuarioLogado } = req;
     let dbClient;
 
-    if (!usuarioLogado) { // Segurança extra: métodos não-GET devem ter usuário logado
-        return res.status(401).json({ error: "Autenticação necessária para esta ação." });
+    if (!usuarioLogado || !usuarioLogado.id) {
+        return res.status(401).json({ error: "Autenticação necessária para gerenciar produtos." });
     }
 
     try {
         dbClient = await pool.connect();
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
-        // console.log(`[API Produtos POST] Permissões de ${usuarioLogado.nome || usuarioLogado.nome_usuario}:`, permissoesCompletas);
 
         if (!permissoesCompletas.includes('gerenciar-produtos')) {
              return res.status(403).json({ error: 'Permissão negada para gerenciar produtos.' });
@@ -123,14 +129,19 @@ router.post('/', async (req, res) => {
         }
         const isKitValue = produto.is_kit === true || (Array.isArray(produto.tipos) && produto.tipos.includes('kits'));
 
-        // Adicionando data_criacao e data_atualizacao no INSERT se não existir, e atualizando data_atualizacao no UPDATE
+        // ***** CORREÇÃO NA QUERY POST: Removido data_criacao e data_atualizacao do INSERT direto *****
+        // Se você não tem as colunas no DB, não pode tentar inserir/atualizar explicitamente.
+        // Se elas tivessem DEFAULT no DB, o DB cuidaria disso no INSERT.
+        // Para UPDATE, um gatilho seria o ideal para data_atualizacao.
+        // Por agora, vamos remover a tentativa de gerenciá-las pela aplicação se elas não existem.
         const query = `
             INSERT INTO produtos (
                 nome, sku, gtin, unidade, estoque, imagem,
                 tipos, variacoes, estrutura, etapas, "etapastiktik", grade,
-                is_kit, data_criacao, data_atualizacao 
+                is_kit 
+                ${produto.data_criacao ? ', data_criacao' : ''} -- Adiciona data_criacao apenas se fornecido
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13 ${produto.data_criacao ? ', $14' : ''})
             ON CONFLICT (nome) 
             DO UPDATE SET
                 sku = EXCLUDED.sku,
@@ -144,8 +155,8 @@ router.post('/', async (req, res) => {
                 etapas = EXCLUDED.etapas,
                 "etapastiktik" = EXCLUDED."etapastiktik",
                 grade = EXCLUDED.grade,
-                is_kit = EXCLUDED.is_kit,
-                data_atualizacao = CURRENT_TIMESTAMP
+                is_kit = EXCLUDED.is_kit
+                -- data_atualizacao = CURRENT_TIMESTAMP  // Removido se a coluna não existe ou se há gatilho
             RETURNING *; 
         `;
         const values = [
@@ -157,28 +168,40 @@ router.post('/', async (req, res) => {
             isKitValue
         ];
 
+        if (produto.data_criacao) { // Adiciona ao array de valores se existir
+            values.push(produto.data_criacao);
+        }
+
+
         const result = await dbClient.query(query, values);
-        // console.log('[router/produtos POST] Produto salvo/atualizado:', result.rows[0].nome);
-        res.status(200).json(result.rows[0]); // Retorna 200 para UPSERT que pode ser CREATE ou UPDATE
+        res.status(result.command === 'INSERT' && !produto.data_criacao ? 201 : 200).json(result.rows[0]); // Ajuste do status
 
     } catch (error) {
         console.error('[router/produtos POST] Erro:', error.message, error.stack ? error.stack.substring(0,300) : "");
         const dbErrorCode = error.code;
-        if (dbErrorCode === '23505') { // Unique violation
-            res.status(409).json({ error: 'Erro de conflito (ex: nome de produto duplicado).', details: error.detail });
-        } else {
-            res.status(500).json({ error: 'Erro interno ao salvar/atualizar produto', details: error.message });
+        const dbErrorDetail = error.detail;
+        if (dbErrorCode === '23505') {
+            res.status(409).json({ error: 'Erro de conflito (ex: nome de produto duplicado).', details: dbErrorDetail });
+        } else if (error.message.includes('column "data_criacao" does not exist') || error.message.includes('column "data_atualizacao" does not exist')) {
+            // Erro específico se ainda houver tentativa de usar as colunas
+            console.error("Tentativa de usar colunas de data inexistentes na tabela produtos:", error.message);
+            res.status(500).json({ error: 'Erro de configuração da tabela produtos (colunas de data ausentes).', details: error.message });
+        }
+         else {
+            res.status(500).json({ error: 'Erro interno ao salvar/atualizar produto', details: dbErrorDetail || error.message });
         }
     } finally {
         if (dbClient) dbClient.release();
     }
 });
 
-// Se você tiver rotas PUT (para atualização parcial por ID) ou DELETE, aplique o mesmo padrão:
-// 1. Obtenha dbClient com pool.connect()
-// 2. Chame getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id)
-// 3. Verifique a permissão específica (ex: 'gerenciar-produtos' ou 'excluir-produto')
-// 4. Execute a lógica da rota
-// 5. Libere dbClient no finally
+// Adicione suas rotas PUT (para atualização por ID) e DELETE aqui,
+// seguindo o mesmo padrão:
+// 1. Verificar se usuarioLogado existe (obrigatório).
+// 2. Conectar dbClient.
+// 3. Chamar getPermissoesCompletasUsuarioDB.
+// 4. Verificar a permissão específica (ex: 'gerenciar-produtos' ou 'excluir-produto').
+// 5. Executar a lógica da rota.
+// 6. Liberar dbClient no finally.
 
 export default router;
