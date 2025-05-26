@@ -5,28 +5,26 @@ const { Pool } = pkg;
 import jwt from 'jsonwebtoken';
 import express from 'express';
 
+// Importar a função de buscar permissões completas
+import { getPermissoesCompletasUsuarioDB } from './usuarios.js'; // Verifique o caminho
+
 const router = express.Router();
 const pool = new Pool({
     connectionString: process.env.POSTGRES_URL,
+    timezone: 'UTC', // Adicionado para consistência
 });
 const SECRET_KEY = process.env.JWT_SECRET;
 
-// --- Funções de Autenticação (copie de outra API sua ou crie/importe) ---
+// Função verificarToken (mantenha ou centralize)
 const verificarToken = (req) => {
     const authHeader = req.headers.authorization;
-    if (!authHeader) {
-        const error = new Error('Token não fornecido');
-        error.statusCode = 401;
-        throw error;
-    }
+    if (!authHeader) throw new Error('Token não fornecido');
     const token = authHeader.split(' ')[1];
-    if (!token) {
-        const error = new Error('Token mal formatado');
-        error.statusCode = 401;
-        throw error;
-    }
+    if (!token) throw new Error('Token mal formatado');
     try {
-        return jwt.verify(token, SECRET_KEY);
+        const decoded = jwt.verify(token, SECRET_KEY);
+        // console.log('[api/comissoes-pagas - verificarToken] Token decodificado:', decoded);
+        return decoded;
     } catch (err) {
         const error = new Error('Token inválido ou expirado');
         error.statusCode = 401;
@@ -35,27 +33,14 @@ const verificarToken = (req) => {
     }
 };
 
-const verificarPermissao = (usuarioLogado, permissaoNecessaria) => {
-    if (!usuarioLogado || !Array.isArray(usuarioLogado.permissoes) || !usuarioLogado.permissoes.includes(permissaoNecessaria)) {
-        const error = new Error('Permissão negada');
-        error.statusCode = 403;
-        throw error;
-    }
-};
-// --------------------------------------------------------------------------
-
-// Middleware para este router
+// Middleware para este router: Apenas autentica o token.
 router.use(async (req, res, next) => {
-    let cliente;
     try {
-        console.log(`[API /comissoes-pagas] Recebida ${req.method} em ${req.originalUrl}`);
+        // console.log(`[API /comissoes-pagas MID] Recebida ${req.method} em ${req.originalUrl}`);
         req.usuarioLogado = verificarToken(req);
-        cliente = await pool.connect();
-        req.dbCliente = cliente;
         next();
     } catch (error) {
-        console.error('[API /comissoes-pagas] Erro no middleware:', error.message);
-        if (cliente) cliente.release();
+        console.error('[API /comissoes-pagas MID] Erro no middleware:', error.message);
         const statusCode = error.statusCode || 500;
         const responseError = { error: error.message };
         if (error.details) responseError.details = error.details;
@@ -65,13 +50,18 @@ router.use(async (req, res, next) => {
 
 // GET /api/comissoes-pagas
 router.get('/', async (req, res) => {
-    const { dbCliente, usuarioLogado } = req;
+    const { usuarioLogado } = req; // Do token
+    let dbCliente;
     try {
-        // Ajuste a permissão conforme necessário, ex: 'acesso-relatorio-de-comissao'
-        verificarPermissao(usuarioLogado, 'acesso-relatorio-de-comissao');
+        dbCliente = await pool.connect();
+        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbCliente, usuarioLogado.id);
+        // console.log(`[API Comissoes GET /] Permissões de ${usuarioLogado.nome || usuarioLogado.nome_usuario}:`, permissoesCompletas);
 
-        const { costureira_nome, mes_pagamento } = req.query; // mes_pagamento no formato YYYY-MM
+        if (!permissoesCompletas.includes('acesso-relatorio-de-comissao')) {
+            return res.status(403).json({ error: 'Permissão negada para acessar relatório de comissões.' });
+        }
 
+        const { costureira_nome, mes_pagamento } = req.query;
         let queryText = 'SELECT * FROM comissoes_pagas';
         const conditions = [];
         const queryParams = [];
@@ -82,7 +72,6 @@ router.get('/', async (req, res) => {
             queryParams.push(costureira_nome);
         }
         if (mes_pagamento) {
-            // Validar formato YYYY-MM
             if (!/^\d{4}-\d{2}$/.test(mes_pagamento)) {
                 return res.status(400).json({ error: "Formato de mes_pagamento inválido. Use YYYY-MM." });
             }
@@ -96,12 +85,12 @@ router.get('/', async (req, res) => {
         }
         queryText += ' ORDER BY data_pagamento_efetivo DESC, created_at DESC';
 
-        console.log(`[API GET /comissoes-pagas] Query: ${queryText}`, queryParams);
+        // console.log(`[API GET /comissoes-pagas] Query: ${queryText}`, queryParams);
         const result = await dbCliente.query(queryText, queryParams);
         res.status(200).json(result.rows);
 
     } catch (error) {
-        console.error('[API GET /comissoes-pagas] Erro:', error.message, error.stack);
+        console.error('[API GET /comissoes-pagas] Erro:', error.message, error.stack ? error.stack.substring(0,300):"");
         res.status(error.statusCode || 500).json({ error: error.message });
     } finally {
         if (dbCliente) dbCliente.release();
@@ -110,55 +99,55 @@ router.get('/', async (req, res) => {
 
 // POST /api/comissoes-pagas
 router.post('/', async (req, res) => {
-    const { dbCliente, usuarioLogado } = req;
+    const { usuarioLogado } = req;
+    let dbCliente;
     try {
-        verificarPermissao(usuarioLogado, 'confirmar-pagamento-comissao');
+        dbCliente = await pool.connect();
+        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbCliente, usuarioLogado.id);
+        // console.log(`[API Comissoes POST /] Permissões de ${usuarioLogado.nome || usuarioLogado.nome_usuario}:`, permissoesCompletas);
+
+        if (!permissoesCompletas.includes('confirmar-pagamento-comissao')) {
+            return res.status(403).json({ error: 'Permissão negada para confirmar pagamento de comissão.' });
+        }
 
         const {
-            costureira_nome,
-            ciclo_nome,
-            ciclo_inicio,
-            ciclo_fim,
-            valor_pago,
-            data_prevista_pagamento,
-            data_pagamento_efetivo, // Será a data/hora atual da confirmação
-            confirmado_por_nome,
-            observacoes
+            costureira_nome, ciclo_nome, ciclo_inicio, ciclo_fim, valor_pago,
+            data_prevista_pagamento, data_pagamento_efetivo, // data_pagamento_efetivo pode vir ou ser NOW()
+            confirmado_por_nome, observacoes
         } = req.body;
 
         if (!costureira_nome || !ciclo_nome || !ciclo_inicio || !ciclo_fim || valor_pago === undefined) {
             return res.status(400).json({ error: 'Campos obrigatórios ausentes (costureira, ciclo, valor).' });
         }
-        if (isNaN(parseFloat(valor_pago)) || parseFloat(valor_pago) < 0) { // Permite 0 se for o caso
+        const valorPagoFloat = parseFloat(valor_pago);
+        if (isNaN(valorPagoFloat) || valorPagoFloat < 0) {
              return res.status(400).json({ error: 'Valor pago inválido.' });
         }
 
         const queryText = `
             INSERT INTO comissoes_pagas 
-            (costureira_nome, ciclo_nome, ciclo_inicio, ciclo_fim, valor_pago, data_prevista_pagamento, data_pagamento_efetivo, confirmado_por_nome, observacoes)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            (costureira_nome, ciclo_nome, ciclo_inicio, ciclo_fim, valor_pago, 
+             data_prevista_pagamento, data_pagamento_efetivo, 
+             confirmado_por_nome, observacoes, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
             RETURNING *;
         `;
         const values = [
-            costureira_nome,
-            ciclo_nome,
-            ciclo_inicio,
-            ciclo_fim,
-            parseFloat(valor_pago),
+            costureira_nome, ciclo_nome, ciclo_inicio, ciclo_fim, valorPagoFloat,
             data_prevista_pagamento || null,
-            data_pagamento_efetivo || new Date().toISOString(), // Usa a data/hora atual se não fornecida
-            confirmado_por_nome || usuarioLogado.nome, // Usa o usuário logado se não fornecido
+            data_pagamento_efetivo || new Date().toISOString(), 
+            confirmado_por_nome || (usuarioLogado.nome || usuarioLogado.nome_usuario),
             observacoes || null
         ];
 
-        console.log(`[API POST /comissoes-pagas] Inserindo:`, values);
+        // console.log(`[API POST /comissoes-pagas] Inserindo:`, values);
         const result = await dbCliente.query(queryText, values);
         res.status(201).json(result.rows[0]);
 
     } catch (error) {
-        console.error('[API POST /comissoes-pagas] Erro:', error.message, error.stack);
-        if (error.code === '23505') { // unique_violation (costureira_nome, ciclo_nome)
-            return res.status(409).json({ error: 'Este pagamento de comissão já foi registrado para esta costureira e ciclo.', details: error.detail });
+        console.error('[API POST /comissoes-pagas] Erro:', error.message, error.stack ? error.stack.substring(0,300):"");
+        if (error.code === '23505') { 
+            return res.status(409).json({ error: 'Este pagamento de comissão já foi registrado.', details: error.detail });
         }
         res.status(error.statusCode || 500).json({ error: error.message, details: error.detail });
     } finally {
