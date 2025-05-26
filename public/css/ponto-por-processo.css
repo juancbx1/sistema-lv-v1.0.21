@@ -236,10 +236,15 @@ body.menu-aberto .ppp-container-principal { /* Adapte para a classe do seu menu 
 }
 
 /* Responsividade */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
     body {
         margin-left: 0; /* Para menu overlay em mobile */
     }
+
+}
+
+@media (max-width: 768px) {
+
     .ppp-container-principal {
         padding: 15px;
         margin-left: auto; /* Reset para centralizar se o menu estiver escondido */
