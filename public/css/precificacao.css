@@ -1,0 +1,148 @@
+/* public/css/precificacao.css */
+:root {
+    --pr-cor-fundo-pagina: #f4f6f8;
+    --pr-cor-texto-principal: #333;
+    --pr-cor-azul-escuro: #2c3e50;
+    --pr-cor-azul-primario: #3498db;
+    --pr-cor-azul-hover: #2980b9;
+    --pr-cor-verde-sucesso: #27ae60;
+    --pr-cor-cinza-borda: #dcdfe4;
+    --pr-cor-cinza-fundo-input: #f8f9fa;
+    --pr-cor-branco: #ffffff;
+    /* Adicione mais variáveis conforme necessário */
+
+    --pr-sombra-padrao: 0 3px 8px rgba(0, 0, 0, 0.07);
+    --pr-raio-borda-card: 8px;
+    --pr-raio-borda-input: 6px;
+    --pr-raio-borda-botao: 6px;
+    --pr-font-principal: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    font-family: var(--pr-font-principal);
+    background-color: var(--pr-cor-fundo-pagina);
+    color: var(--pr-cor-texto-principal);
+    margin-left: 250px; /* Se usar menu fixo */
+
+}
+
+.pr-lista-detalhada {
+    list-style-type: none;
+    padding-left: 0;
+}
+.pr-lista-detalhada li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 5px;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 0.9rem;
+}
+.pr-lista-detalhada li:last-child {
+    border-bottom: none;
+}
+.pr-lista-detalhada li span:first-child { /* Nome do item */
+    flex-grow: 1;
+}
+.pr-lista-detalhada li span:nth-child(2) { /* Quantidade */
+    min-width: 120px; /* Ajuste conforme necessário */
+    text-align: right;
+    margin-right: 15px;
+    color: #555;
+}
+.pr-acoes-item-lista button {
+    background: none; border: none; cursor: pointer;
+    margin-left: 8px; font-size: 0.9em;
+}
+.pr-acoes-item-lista .pr-btn-editar-item { color: var(--pr-cor-azul-primario); }
+.pr-acoes-item-lista .pr-btn-remover-item { color: var(--pr-cor-vermelho-perigo); }
+
+
+@media (max-width: 1024px) { body { margin-left: 0; } }
+
+
+.pr-container-principal { padding: 20px; max-width: 1600px; margin: 0 auto; }
+.pr-cabecalho-pagina { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid var(--pr-cor-cinza-borda); }
+.pr-cabecalho-pagina h1 { font-size: 1.8rem; color: var(--pr-cor-azul-escuro); }
+
+.pr-card {
+    background-color: var(--pr-cor-branco);
+    border-radius: var(--pr-raio-borda-card);
+    padding: 20px;
+    box-shadow: var(--pr-sombra-padrao);
+    margin-bottom: 25px;
+}
+.pr-titulo-secao { font-size: 1.4rem; color: var(--pr-cor-azul-escuro); margin-bottom: 15px; padding-bottom:8px; border-bottom:1px solid #eee; }
+.pr-subtitulo-secao { font-size: 1.1rem; color: #555; margin-bottom: 10px; margin-top:15px; }
+
+/* Abas de Configuração */
+.pr-tabs-config { display: flex; margin-bottom: 20px; border-bottom: 1px solid var(--pr-cor-cinza-borda); }
+.pr-tab-btn {
+    padding: 10px 15px; background: none; border: none; cursor: pointer;
+    font-size: 0.95rem; color: #777; border-bottom: 3px solid transparent; margin-bottom: -1px;
+}
+.pr-tab-btn.active { color: var(--pr-cor-azul-primario); border-bottom-color: var(--pr-cor-azul-primario); font-weight: 500; }
+.pr-tab-panel { display: none; }
+.pr-tab-panel.active { display: block; animation: pr-fadeIn 0.3s ease; }
+@keyframes pr-fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* Tabelas */
+.pr-tabela-wrapper { overflow-x: auto; }
+.pr-tabela-estilizada { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.pr-tabela-estilizada th, .pr-tabela-estilizada td { padding: 10px 12px; border: 1px solid var(--pr-cor-cinza-borda); text-align: left; }
+.pr-tabela-estilizada th { background-color: var(--pr-cor-cinza-fundo-input); font-weight: 500; }
+.pr-tabela-estilizada tbody tr:nth-child(even) { background-color: #fdfdfd; }
+.pr-tabela-estilizada .pr-acoes-tabela button { background:none; border:none; cursor:pointer; margin:0 4px; font-size:0.9em; }
+.pr-tabela-estilizada .pr-acoes-tabela .pr-btn-editar { color: var(--pr-cor-azul-primario); }
+.pr-tabela-estilizada .pr-acoes-tabela .pr-btn-excluir { color: var(--pr-cor-vermelho-perigo); }
+
+/* Inputs e Botões Genéricos */
+.pr-form-grupo { margin-bottom: 15px; }
+.pr-form-grupo label { display: block; margin-bottom: 5px; font-size: 0.85rem; color: #555; }
+.pr-input, .pr-select, .pr-textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--pr-cor-cinza-borda);
+    border-radius: var(--pr-raio-borda-input); font-size: 0.9rem;
+}
+.pr-btn {
+    padding: 8px 15px; border-radius: var(--pr-raio-borda-botao); border: none;
+    cursor: pointer; font-size: 0.9rem; color: var(--pr-cor-branco);
+    display: inline-flex; align-items: center; gap: 6px;
+}
+.pr-btn i { margin-right: 5px; }
+.pr-btn-primario { background-color: var(--pr-cor-azul-primario); }
+.pr-btn-primario:hover { background-color: var(--pr-cor-azul-hover); }
+.pr-btn-secundario-outline {
+    background-color: transparent; color: var(--pr-cor-azul-primario);
+    border: 1px solid var(--pr-cor-azul-primario);
+}
+ .pr-btn-secundario-outline:hover {
+    background-color: var(--pr-cor-azul-primario); color: var(--pr-cor-branco);
+}
+.pr-btn-sucesso { background-color: var(--pr-cor-verde-sucesso); }
+
+
+/* Modal */
+.pr-modal { display: none; position: fixed; z-index: 1001; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
+.pr-modal-conteudo { background-color: #fff; margin: 10% auto; padding: 25px; border-radius: var(--pr-raio-borda-card); width: 90%; max-width: 600px; position: relative; }
+.pr-modal-fechar { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; line-height: 1; }
+.pr-modal-fechar:hover, .pr-modal-fechar:focus { color: black; text-decoration: none; }
+#modalTitulo { margin-top: 0; margin-bottom: 20px; font-size: 1.3rem; }
+#formModalGenerico .pr-form-grupo { margin-bottom: 12px; } /* Espaçamento menor no modal */
+
+.pr-card-interno {
+    border: 1px solid #e0e0e0;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: var(--pr-raio-borda-input);
+    background-color: #fdfdfd;
+}
+.pr-card-interno h4 {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--pr-cor-azul-subtitulo);
+    margin-bottom: 10px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 5px;
+}
+.pr-card-interno h4 i { margin-right: 8px; }
+

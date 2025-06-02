@@ -1,0 +1,694 @@
+/* public/css/ordens-de-arremates.css */
+
+/*------------------------------------*\
+    #VARIÁVEIS GLOBAIS (OA = Ordens de Arremate)
+\*------------------------------------*/
+:root {
+    --oa-cor-fundo-pagina: #f4f6f8;
+    --oa-cor-texto-principal: #333;
+    --oa-cor-azul-escuro: #2c3e50;     /* Títulos, texto importante */
+    --oa-cor-azul-primario: #3498db;   /* Botões primários, links */
+    --oa-cor-azul-hover: #2980b9;
+    --oa-cor-azul-subtitulo: #5a7c9b;  /* Subtítulos, info */
+    --oa-cor-verde-sucesso: #27ae60;   /* Sucesso, botões de salvar */
+    --oa-cor-verde-hover: #229954;
+    --oa-cor-vermelho-perigo: #e74c3c; /* Erro, botões de excluir */
+    --oa-cor-vermelho-hover: #c0392b;
+    --oa-cor-laranja-aviso: #f39c12;   /* Avisos, quantidades pendentes */
+    --oa-cor-amarelo-destaque: #f1c40f;
+    --oa-cor-cinza-texto-secundario: #7f8c8d; /* Labels, texto menos importante */
+    --oa-cor-cinza-borda: #dcdfe4;
+    --oa-cor-cinza-fundo-input: #f8f9fa;
+    --oa-cor-cinza-fundo-alternativo: #f9fbfd;
+    --oa-cor-branco: #ffffff;
+
+    --oa-sombra-padrao: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --oa-sombra-hover: 0 6px 16px rgba(0, 0, 0, 0.12);
+
+    --oa-raio-borda-container: 10px;
+    --oa-raio-borda-card: 8px;
+    --oa-raio-borda-input: 6px;
+    --oa-raio-borda-botao: 6px;
+
+    --oa-font-principal: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/*------------------------------------*\
+    #RESET BÁSICO E ESTILOS DE BODY
+\*------------------------------------*/
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    font-size: 16px;
+}
+
+body {
+    font-family: var(--oa-font-principal);
+    background-color: var(--oa-cor-fundo-pagina);
+    color: var(--oa-cor-texto-principal);
+    line-height: 1.6;
+    visibility: hidden; 
+    margin-left: 250px; 
+    transition: margin-left 0.3s ease;
+}
+
+body.autenticado {
+    visibility: visible;
+}
+
+@media (max-width: 1024px) {
+    body {
+        margin-left: 0;
+    }
+}
+
+/*------------------------------------*\
+    #LAYOUT PRINCIPAL DA PÁGINA
+\*------------------------------------*/
+/* Se você tiver um container principal no HTML de arremates, use esta classe */
+/* Ex: <main class="oa-container-principal"> */
+.oa-container-principal {
+    padding: 20px;
+    max-width: 1400px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Novo estilo para a linha flexível de formulário */
+.oa-form-linha-flex {
+    display: flex;
+    flex-direction: column; /* PADRÃO: Um embaixo do outro (Desktop First) */
+    gap: 20px; /* Espaço entre os grupos de formulário na coluna */
+}
+
+.oa-form-linha-flex .oa-form-grupo {
+    flex-grow: 1; /* Permite que os grupos internos cresçam se houver espaço (útil para lado a lado) */
+    margin-bottom: 0; /* Remove a margem inferior padrão do .oa-form-grupo, pois o gap do pai cuida disso */
+}
+
+/* Estilo específico para o input de quantidade de arremate, se necessário */
+.oa-input-qtde-arrematar {
+    width: 100%
+}
+
+.oa-cabecalho-pagina {
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid var(--oa-cor-azul-primario);
+}
+
+.oa-cabecalho-pagina h1 {
+    font-size: 2rem;
+    color: var(--oa-cor-azul-escuro);
+    font-weight: 600;
+}
+
+.oa-card { /* Estilo principal para seções */
+    background-color: var(--oa-cor-branco);
+    border-radius: var(--oa-raio-borda-container);
+    padding: 25px;
+    box-shadow: var(--oa-sombra-padrao);
+    margin-bottom: 30px;
+}
+
+.oa-titulo-secao {
+    font-size: 1.6rem;
+    color: var(--oa-cor-azul-escuro);
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eaeaea;
+    font-weight: 500;
+}
+
+.oa-descricao-secao { /* Para parágrafos descritivos abaixo do título */
+    font-size: 0.95rem;
+    color: var(--oa-cor-cinza-texto-secundario);
+    margin-bottom: 20px;
+    line-height: 1.5;
+    text-align: center; 
+    font-style: italic;
+}
+
+.oa-subtitulo-secao { /* Para subtítulos dentro de cards ou seções menores */
+    font-size: 1.2rem; /* Um pouco maior que .oa-subtitulo */
+    color: var(--oa-cor-azul-subtitulo);
+    margin-top: 20px; /* Espaçamento antes */
+    margin-bottom: 15px;
+    font-weight: 500;
+    border-bottom: 1px solid #eee; /* Linha sutil */
+    padding-bottom: 8px;
+}
+
+
+/*------------------------------------*\
+    #ELEMENTOS DE FORMULÁRIO (na tela de detalhe)
+\*------------------------------------*/
+.oa-form-estilizado .oa-form-grupo {
+    margin-bottom: 20px;
+}
+.oa-form-estilizado label {
+    display: block;
+    font-size: 0.9rem;
+    color: var(--oa-cor-cinza-texto-secundario);
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.oa-input,
+.oa-select,
+.oa-textarea { /* Se houver textareas */
+    width: 100%;
+    padding: 10px 14px;
+    font-size: 0.95rem;
+    border: 1px solid var(--oa-cor-cinza-borda);
+    border-radius: var(--oa-raio-borda-input);
+    background-color: var(--oa-cor-cinza-fundo-input);
+    color: var(--oa-cor-texto-principal);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.oa-input:focus,
+.oa-select:focus,
+.oa-textarea:focus {
+    outline: none;
+    border-color: var(--oa-cor-azul-primario);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+}
+.oa-input[readonly], .oa-input:disabled,
+.oa-select:disabled, .oa-textarea:disabled {
+    background-color: #e9ecef;
+    cursor: not-allowed;
+    opacity: 0.8;
+}
+
+.oa-input-qtde-arrematar{
+    width: 50%;
+    padding: 10px 14px;
+    font-size: 1.2rem;
+    border: 1px solid var(--oa-cor-cinza-borda);
+    border-radius: var(--oa-raio-borda-input);
+    background-color: var(--oa-cor-cinza-fundo-input);
+    color: var(--oa-cor-texto-principal);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+
+/* Botões */
+.oa-btn {
+    padding: 10px 20px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    border-radius: var(--oa-raio-borda-botao);
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.15s ease, box-shadow 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    text-decoration: none;
+    color: var(--oa-cor-branco);
+}
+.oa-btn i {
+    font-size: 1em; 
+}
+.oa-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+}
+.oa-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.oa-btn-primario { background-color: var(--oa-cor-azul-primario); }
+.oa-btn-primario:hover:not(:disabled) { background-color: var(--oa-cor-azul-hover); }
+
+.oa-btn-sucesso { background-color: var(--oa-cor-verde-sucesso); }
+.oa-btn-sucesso:hover:not(:disabled) { background-color: var(--oa-cor-verde-hover); }
+
+.oa-btn-perigo { background-color: var(--oa-cor-vermelho-perigo); }
+.oa-btn-perigo:hover:not(:disabled) { background-color: var(--oa-cor-vermelho-hover); }
+
+.oa-form-botoes {
+    display: flex;
+    gap: 12px;
+    margin-top: 25px; /* Mais espaço antes dos botões de ação do formulário */
+    justify-content: center; /* Centraliza botões na tela de detalhe */
+}
+.oa-form-botoes .oa-btn { /* Botões dentro de um form de detalhe podem ser maiores */
+    padding: 12px 28px;
+    font-size: 1rem;
+}
+
+/*------------------------------------*\
+    #CARDS DE ARREMATE (na lista principal)
+\*------------------------------------*/
+/* .op-arremate-card-container já existe no seu HTML proposto, mas vamos usar um prefixo oa- */
+.oa-arremate-card-container { 
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.op-arremate-card { /* MANTENDO .op- pois o JS já usa essa classe para os cards de arremate */
+    background-color: var(--oa-cor-branco);
+    border-radius: var(--oa-raio-borda-card);
+    padding: 20px;
+    box-shadow: var(--oa-sombra-padrao);
+    border: 1px solid var(--oa-cor-cinza-borda);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    text-align: center;
+    cursor: pointer;
+}
+.op-arremate-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--oa-sombra-hover);
+}
+
+/* Estilos internos do card de arremate (thumbnail, info, pendente) */
+/* Adapte de .op-embalagem-card-thumbnail, etc. do CSS de embalagem, mudando para oa- se necessário */
+.op-arremate-card-thumbnail {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%; 
+    overflow: hidden;
+    margin: 0 auto 15px auto;
+    background-color: var(--oa-cor-cinza-fundo-input);
+    border: 2px solid var(--oa-cor-cinza-borda);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.op-arremate-card-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.op-arremate-card-info {
+    margin-bottom: 15px;
+    flex-grow: 1;
+}
+.op-arremate-card-produto {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--oa-cor-azul-escuro);
+    margin-bottom: 3px;
+}
+.op-arremate-card-variante {
+    font-size: 0.9rem;
+    color: var(--oa-cor-cinza-texto-secundario);
+}
+
+.op-arremate-card-pendente {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--oa-cor-texto-principal);
+    padding-top: 10px;
+    border-top: 1px dashed var(--oa-cor-cinza-borda);
+}
+.op-arremate-card-pendente strong {
+    font-size: 1.3rem;
+    color: var(--oa-cor-laranja-aviso); /* Laranja para pendente */
+    font-weight: 700;
+    margin-left: 5px;
+}
+
+/*------------------------------------*\
+    #PAGINAÇÃO
+\*------------------------------------*/
+.oa-paginacao-container { 
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin-top: 30px;
+    padding: 10px 0;
+}
+/* JS usa 'pagination-btn', então estilizamos essa classe */
+.oa-paginacao-container .pagination-btn {
+    background-color: var(--oa-cor-branco);
+    color: var(--oa-cor-azul-primario);
+    border: 1px solid var(--oa-cor-azul-primario);
+    padding: 8px 16px; /* Reutilizando o padding dos botões .ep-btn */
+    font-size: 0.95rem;
+    font-weight: 500;
+    border-radius: var(--oa-raio-borda-botao);
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+.oa-paginacao-container .pagination-btn:hover:not(:disabled) {
+    background-color: var(--oa-cor-azul-primario);
+    color: var(--oa-cor-branco);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.oa-paginacao-container .pagination-btn:disabled {
+    border-color: var(--oa-cor-cinza-borda);
+    color: #aabbc3;
+    background-color: var(--oa-cor-cinza-fundo-input);
+    opacity: 0.8;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+.oa-paginacao-container .pagination-current {
+    font-size: 0.95rem;
+    color: var(--oa-cor-texto-principal);
+    font-weight: 500;
+}
+
+/*------------------------------------*\
+    #TELA DE DETALHE DO ARREMATE (#arremateDetalheView)
+\*------------------------------------*/
+#arremateDetalheView { 
+    position: relative; 
+    padding-top: 50px; 
+}
+/* Botão fechar (geral) */
+.botao-fechar { /* Se o JS usa essa classe diretamente */
+    position: absolute;
+    top: 15px;     
+    right: 15px;    
+    width: 36px;    
+    height: 36px;   
+    border-radius: 50%;
+    border: none;
+    font-size: 1.1rem; 
+    font-weight: bold;
+    line-height: 36px;
+    text-align: center; 
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.15s ease;
+    z-index: 10;      
+}
+/* Específico para o botão de fechar arremate se ele tiver .oa-btn-perigo */
+#arremateDetalheView .botao-fechar.oa-btn-perigo {
+    background-color: var(--oa-cor-vermelho-perigo);
+    color: var(--oa-cor-branco);
+}
+#arremateDetalheView .botao-fechar.oa-btn-perigo:hover {
+    background-color: var(--oa-cor-vermelho-hover);
+    transform: scale(1.1); 
+    box-shadow: 0 4px 8px rgba(0,0,0,0.25);
+}
+
+/* Header do detalhe do arremate */
+.ep-arremate-detail-header { /* Se reutilizar classe de embalagem, ok */
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 25px;
+    /* text-align: center;  Opcional se quiser tudo centralizado no header */
+}
+/* Thumbnail na tela de detalhe */
+.ep-thumbnail-detalhe { /* Se reutilizar classe de embalagem */
+    width: 100px;
+    height: 100px;
+    border-radius: var(--oa-raio-borda-card);
+    background-color: var(--oa-cor-cinza-fundo-input);
+    overflow: hidden;
+    flex-shrink: 0;
+    border: 1px solid var(--oa-cor-cinza-borda);
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 10px auto; /* Centraliza se o header for column */
+}
+.ep-thumbnail-detalhe img {
+    width: 100%; height: 100%; object-fit: cover;
+}
+.ep-arremate-detail-title-group { /* Se reutilizar classe de embalagem */
+    flex-grow: 1;
+    text-align: center; /* Centraliza os textos abaixo da imagem */
+}
+/* Destaque para quantidade pendente agregada */
+.ep-qtd-disponivel-destaque-small { /* Se reutilizar classe de embalagem */
+    display: inline-block;
+    padding: 8px 15px;
+    background-color: var(--oa-cor-cinza-fundo-alternativo);
+    border: 1px solid var(--oa-cor-cinza-borda);
+    border-radius: var(--oa-raio-borda-input);
+    margin-top: 8px;
+}
+.ep-qtd-disponivel-destaque-small strong {
+    color: var(--oa-cor-laranja-aviso);
+    font-size: 1.2em;
+}
+
+/* Lista de OPs de Origem */
+#arremateOpsOrigemContainer {
+    background-color: var(--oa-cor-cinza-fundo-alternativo);
+    border: 1px solid var(--oa-cor-cinza-borda);
+    border-radius: var(--oa-raio-borda-input);
+    padding: 15px;
+    max-height: 250px; /* Altura máxima com scroll */
+    overflow-y: auto;
+    margin-top: 10px; /* Espaço após o subtítulo */
+}
+#arremateOpsOrigemContainer ul {
+    list-style-type: none;
+    padding-left: 0;
+}
+#arremateOpsOrigemContainer li {
+    padding: 6px 0;
+    font-size: 0.9rem;
+    color: var(--oa-cor-texto-principal);
+    border-bottom: 1px dotted #e0e0e0;
+}
+#arremateOpsOrigemContainer li:last-child {
+    border-bottom: none;
+}
+
+
+/*------------------------------------*\
+    #UTILITÁRIOS (Spinner, Popups)
+\*------------------------------------*/
+.spinner { 
+    display: flex; justify-content: center; align-items: center;
+    padding: 25px; font-size: 1rem; color: #555; min-height: 60px;
+}
+.spinner::before {
+    content: ''; display: inline-block; width: 22px; height: 22px;
+    margin-right: 12px; border: 3px solid #ccc;
+    border-top-color: var(--oa-cor-azul-primario); /* Usa variável OA */
+    border-radius: 50%; animation: oa-spin 1s linear infinite;
+}
+@keyframes oa-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+.spinner-btn-interno { 
+    width: 1em; height: 1em; border-width: 2px; margin-right: 8px;
+    border-style: solid; border-color: rgba(255,255,255,0.3);
+    border-top-color: var(--oa-cor-branco); 
+    border-radius: 50%; animation: oa-spin 0.8s linear infinite;
+    display: inline-block;
+}
+
+/* Popups (usando o mesmo padrão de animação e estrutura) */
+.popup-mensagem {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 25px 30px; border-radius: var(--oa-raio-borda-container);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    z-index: 10002; max-width: 480px; width: 90%;
+    text-align: center; font-family: var(--oa-font-principal);
+    animation: oa-fadeInPopup 0.3s ease-out; /* Prefixo oa- na animação */
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.popup-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background-color: rgba(0, 0, 0, 0.45);
+    z-index: 10001; animation: oa-fadeInOverlayPopup 0.3s ease-out;
+}
+@keyframes oa-fadeInPopup { from { opacity: 0; transform: translate(-50%, -55%); } to { opacity: 1; transform: translate(-50%, -50%); } }
+/* Adicione oa-fadeOutPopup e oa-fadeOutOverlayPopup se for usar animação de saída para popups */
+
+.popup-mensagem p { font-size: 1.05rem; line-height: 1.5; margin-bottom: 20px; font-weight: 500; }
+.popup-mensagem.popup-sucesso { background-color: #e0f2e9; color: var(--oa-cor-verde-sucesso); border-left: 5px solid var(--oa-cor-verde-sucesso); }
+.popup-mensagem.popup-erro { background-color: #fdecea; color: var(--oa-cor-vermelho-perigo); border-left: 5px solid var(--oa-cor-vermelho-perigo); }
+.popup-mensagem.popup-aviso { background-color: #fff8e1; color: var(--oa-cor-laranja-aviso); border-left: 5px solid var(--oa-cor-laranja-aviso); }
+.popup-mensagem button { 
+    padding: 10px 28px; margin-top: 10px; 
+    background-color: var(--oa-cor-azul-escuro);
+    color: var(--oa-cor-branco); border: none; border-radius: var(--oa-raio-borda-botao);
+    cursor: pointer; font-size: 0.95rem; font-weight: 600; transition: background-color 0.2s ease;
+}
+.popup-mensagem button:hover { background-color: #4a617a; }
+
+.hidden { display: none !important; }
+
+/*------------------------------------*\
+    #RESPONSIVIDADE
+\*------------------------------------*/
+@media (max-width: 1024px) { /* Tablets */
+    .oa-container-principal {
+        padding: 50px;
+    }
+    .oa-cabecalho-pagina h1 { font-size: 1.8rem; }
+    .oa-titulo-secao { font-size: 1.4rem; }
+    .oa-card { padding: 20px; }
+    .oa-arremate-card-container {
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 15px;
+    }
+
+
+    .oa-input, .oa-select, .oa-textarea {
+        width: 100%;
+        padding: 10px 14px;
+        font-size: 1.2rem;
+    }
+    .oa-form-estilizado label {
+        display: block;
+        font-size: 1.2rem;
+    }
+
+    .ep-qtd-disponivel-destaque-small {
+    font-size: 1.2em;
+    }
+
+}
+
+@media (max-width: 768px) { /* Mobile grande / Tablet retrato */
+    .oa-cabecalho-pagina h1 { font-size: 1.6rem; text-align: center; }
+    .oa-titulo-secao { font-size: 1.3rem; text-align: center; }
+    .oa-card { padding: 15px; }
+
+    .oa-arremate-card-container {
+        grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    }
+    .op-arremate-card-produto { font-size: 1.05rem; }
+    .op-arremate-card-variante { font-size: 0.85rem; }
+    .op-arremate-card-pendente strong { font-size: 1.1rem; }
+
+    #arremateDetalheView { padding-top: 60px; }
+    #arremateDetalheView .ep-arremate-detail-header { /* Se reutilizar nome de classe */
+        flex-direction: column;
+        align-items: center;
+    }
+    #arremateDetalheView .botao-fechar {
+        top: 10px; right: 10px; width: 32px; height: 32px; line-height: 32px; font-size: 1rem;
+    }
+    .oa-form-botoes { flex-direction: column; align-items: stretch; }
+    .oa-form-botoes .oa-btn { width: 100%; }
+
+     .oa-form-linha-flex {
+        flex-direction: row; /* MUDANÇA: Lado a lado em telas menores */
+        gap: 15px; /* Espaço entre os campos lado a lado */
+        align-items: flex-end; /* Alinha os itens pela base se tiverem alturas diferentes (label+input) */
+    }
+
+    .oa-form-linha-flex .oa-form-grupo {
+        /* Cada grupo (label+input) ocupará uma parte do espaço. 
+           Se forem 2 itens, flex-basis: calc(50% - (gap / 2)) é uma boa. */
+        flex-basis: calc(50% - 7.5px); /* 7.5px é metade do gap de 15px */
+        min-width: 120px; /* Largura mínima para cada campo */
+    }
+
+    /* Para o input de quantidade, podemos querer que ele seja menor que o select de usuário */
+    .oa-form-linha-flex .oa-form-grupo:has(.oa-input-qtde-arrematar) {
+        flex-grow: 0;   /* Não deixa o grupo da quantidade crescer tanto */
+        flex-basis: auto; /* Deixa a largura ser definida pelo conteúdo (input + label) */
+    }
+    .oa-input-qtde-arrematar {
+        width: 100%; /* Ocupa o espaço do seu grupo */
+        max-width: 120px; /* Mas não mais que isso */
+    }
+}
+
+@media (max-width: 480px) { /* Smartphones médios e menores */
+    .oa-container-principal { padding: 20px; }
+    .oa-cabecalho-pagina h1 { font-size: 1.5rem; }
+    .oa-titulo-secao { font-size: 1.2rem; }
+    .oa-card { padding: 15px; }
+    .oa-input, .oa-select { font-size: 0.9rem; padding: 15px 12px; }
+    .oa-btn { font-size: 0.9rem; padding: 9px 16px; }
+
+    .ep-qtd-disponivel-destaque-small {
+        font-size: 0.9em;
+    }
+
+    .oa-arremate-card-container {
+        grid-template-columns: 1fr; 
+        gap: 15px;
+    }
+
+    .oa-form-botoes .oa-btn {
+        width: 50%;
+    }
+
+    .oa-form-botoes {
+        display: flex;
+        gap: 12px;
+        margin-top: 25px;
+        justify-content: center;
+        flex-direction: row;
+    }
+
+    .op-arremate-card { padding: 15px; }
+    .op-arremate-card-thumbnail { width: 70px; height: 70px; margin-bottom: 10px; }
+    .op-arremate-card-produto { font-size: 1rem; }
+    .op-arremate-card-variante { font-size: 0.8rem; }
+    .op-arremate-card-pendente { font-size: 0.95rem; }
+    .op-arremate-card-pendente strong { font-size: 1.15rem; }
+
+    #arremateDetalheView { padding-top: 55px; }
+    #arremateDetalheView .ep-thumbnail-detalhe { width: 80px; height: 80px; }
+    #arremateDetalheTitulo { font-size: 1.25rem; } /* Assumindo que você usa este ID */
+    #arremateDetailSubTitle { font-size: 0.85rem; }
+
+    #arremateDetalheView .botao-fechar {
+        top: 12px; right: 12px; width: 30px; height: 30px; line-height: 30px; font-size: 0.9rem;
+    }
+    .oa-form-estilizado label { font-size: 0.85rem; }
+
+    .popup-mensagem { width: 95%; padding: 15px 20px; }
+    .popup-mensagem p { font-size: 0.9rem; margin-bottom: 15px; }
+    .popup-mensagem button { padding: 8px 20px; font-size: 0.9rem; }
+
+    .oa-form-linha-flex {
+        /* Pode manter lado a lado ou voltar para coluna se ficar muito apertado */
+        /* flex-direction: column; */ /* DESCOMENTE SE QUISER VOLTAR PARA COLUNA */
+        /* gap: 15px; */ /* Ajuste o gap se voltar para coluna */
+        align-items: stretch; /* Se voltar para coluna, estica para preencher */
+    }
+
+    /* Se mantiver lado a lado em 480px, os ajustes de 768px podem ser suficientes.
+       Se voltar para coluna, os .oa-form-grupo voltam ao comportamento padrão. */
+    .oa-form-linha-flex .oa-form-grupo:has(.oa-input-qtde-arrematar) {
+        max-width: 150px;
+    }
+    .oa-input-qtde-arrematar {
+        width: 80%;
+
+    }
+}
+
+@media (max-width: 414px) { /* iPhone XR e similares */
+    .oa-cabecalho-pagina h1 { font-size: 1.3rem; }
+    .oa-titulo-secao { font-size: 1.15rem; }
+    .oa-card { padding: 10px; }
+    .oa-input, .oa-select { font-size: 0.8rem; padding: 7px 9px; }
+    .oa-btn { font-size: 0.85rem; padding: 7px 12px; }
+
+    .op-arremate-card-thumbnail { width: 60px; height: 60px; }
+    .op-arremate-card-produto { font-size: 0.95rem; }
+    .op-arremate-card-variante { font-size: 0.75rem; }
+    .op-arremate-card-pendente { font-size: 0.9rem; }
+    .op-arremate-card-pendente strong { font-size: 1.05rem; }
+    
+    #arremateDetalheView { padding-top: 45px; }
+    #arremateDetalheView .ep-thumbnail-detalhe { width: 65px; height: 65px; }
+    #arremateDetalheTitulo { font-size: 1.2rem; }
+    #arremateDetailSubTitle { font-size: 0.8rem; }
+    #arremateDetalheView .botao-fechar {
+        top: 8px; right: 8px; width: 28px; height: 28px; line-height: 28px; font-size: 0.85rem;
+    }
+    .popup-mensagem p { font-size: 0.85rem; margin-bottom: 10px; }
+    .popup-mensagem button { padding: 7px 15px; font-size: 0.8rem; }
+}

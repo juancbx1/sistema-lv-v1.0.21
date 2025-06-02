@@ -195,13 +195,4 @@ router.post('/', async (req, res) => {
     }
 });
 
-// Adicione suas rotas PUT (para atualização por ID) e DELETE aqui,
-// seguindo o mesmo padrão:
-// 1. Verificar se usuarioLogado existe (obrigatório).
-// 2. Conectar dbClient.
-// 3. Chamar getPermissoesCompletasUsuarioDB.
-// 4. Verificar a permissão específica (ex: 'gerenciar-produtos' ou 'excluir-produto').
-// 5. Executar a lógica da rota.
-// 6. Liberar dbClient no finally.
-
 export default router;

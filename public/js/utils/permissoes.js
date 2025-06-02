@@ -42,7 +42,13 @@ export const permissoesDisponiveis = [
     { id: 'ver-proprias-producoes', label: 'Permite ver as próprias producoes' }, // Para costureiras e tiktik (dashboards)
     { id: 'ver-proprios-arremates', label: 'Permite ver os próprios arremates' }, // Para costureiras e tiktik (dashboards)
     { id: 'assinar-propria-producao-costureira', label: 'Permite assinar a própria producao' }, // Para costureiras (dashboard)
-    { id: 'ver-lista-produtos', label: 'Permite visualizar a lista de produtos cadastrados' } // para api/produtos.js
+    { id: 'ver-lista-produtos', label: 'Permite visualizar a lista de produtos cadastrados' }, // para api/produtos.js
+    { id: 'acesso-ordens-de-arremates', label: 'Acesso a Ordens de Arremate' }, // para ordens-de-arremate.html
+    { id: 'gerenciar-precificacao', label: 'Permite Gerenciar Precificacao' }, // para precificacao.html
+    { id: 'acesso-precificacao', label: 'Acesso a Precificação' }, // para precificacao.html
+    { id: 'gerenciar-niveis-alerta-estoque', label: 'Permite Gerenciar os Níveis de Estoque Baixo e Urgente' }, // para estoque.html
+    { id: 'ajustar-saldo', label: 'Permite dar Entrada, Saída e Balanço' } // para estoque.html
+
 ];
 
 // Apenas o tipo 'admin' terá permissões padrão
@@ -92,7 +98,12 @@ export const permissoesPorTipo = {
         'lancar-embalagem',
         'gerenciar-produtos',
         'gerenciar-estoque',
-        'ver-lista-produtos'
+        'ver-lista-produtos',
+        'acesso-ordens-de-arremates',
+        'gerenciar-precificacao',
+        'acesso-precificacao',
+        'gerenciar-niveis-alerta-estoque',
+        'ajustar-saldo'
 
         
     ]

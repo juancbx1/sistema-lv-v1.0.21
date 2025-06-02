@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ordens de Arremate</title>
+    <link rel="stylesheet" href="/css/ordens-de-arremates.css">
+    <link rel="stylesheet" href="/css/menu-lateral.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div class="hamburger-menu">
+        <i class="fas fa-bars"></i>
+        <i class="fas fa-times"></i>
+    </div>
+
+    <main class="oa-container-principal"> 
+        <section class="oa-card" id="arrematesListView">
+            <div class="oa-cabecalho-pagina">
+                <h1>Ordens de Arremate</h1>
+            </div>
+
+            <div class="oa-card" style="margin-bottom: 30px;"> 
+                <h2 class="oa-titulo-secao">Produtos Pendentes de Arremate</h2>
+                <p class="oa-descricao-secao">
+                    Produtos que foram produzidos e agora aguardam o processo de arremate pela equipe Tiktik.
+                </p>
+            </div>
+
+            <div class="oa-card" id="arrematesCardContainerWrapper">
+                <div id="arremateCardsContainer" class="oa-arremate-card-container">
+                    <div class="spinner">Carregando produtos para arremate...</div>
+                </div>
+                <div id="arrematePaginationContainer" class="oa-paginacao-container" style="display: none;">
+                </div>
+            </div>
+        </section>
+
+        <!-- Seção para Detalhes e Lançamento do Arremate (inicialmente oculta) -->
+        <section class="oa-card" id="arremateDetalheView" style="display: none;">
+            <button class="botao-fechar oa-btn-perigo" id="fecharArremateDetalheBtn" title="Voltar para Lista">X</button>
+            
+            <h2 class="oa-titulo-secao" id="arremateDetalheTitulo">Lançar Arremate para: Produto (Variante)</h2>
+
+            <div class="oa-form-estilizado" id="formArremateDetalhe">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <div class="ep-thumbnail-detalhe" id="arremateDetalheThumbnail" style="margin: 0 auto 10px auto; width: 100px; height: 100px;">
+                    </div>
+                    <p style="font-size: 1.2em; font-weight: bold; color: var(--oa-cor-azul-escuro);"><span id="arremateProdutoNomeDetalhe"></span> <span id="arremateVarianteNomeDetalhe" style="font-weight: normal; color: var(--oa-cor-cinza-texto-secundario);"></span></p>
+                    <p class="ep-qtd-disponivel-destaque-small" style="margin-top:5px; display:inline-block; background-color: var(--oa-cor-laranja-aviso); color: var(--oa-cor-branco);">
+                        Total Pendente: <strong id="arremateTotalPendenteAgregado" style="color: var(--oa-cor-branco);">0</strong>
+                    </p>
+                </div>
+
+               <div class="oa-form-linha-flex"> 
+                    <div class="oa-form-grupo">
+                        <label for="selectUsuarioArremate">Feito Por:</label>
+                        <select id="selectUsuarioArremate" class="oa-select" required>
+                            <option value="">Carregando usuários...</option>
+                        </select>
+                    </div>
+
+                    <div class="oa-form-grupo">
+                        <label for="inputQuantidadeArrematar">Qtde Arrematada</label>
+                        <input type="number" id="inputQuantidadeArrematar" class="oa-input oa-input-qtde-arrematar" min="1" required placeholder="Qtd.">
+                    </div>
+                </div>
+                
+                <h3 class="oa-subtitulo-secao" style="font-size: 1.1rem; margin-top: 25px;">OPs de Origem com Saldo:</h3>
+                <div id="arremateOpsOrigemContainer" class="oa-tabela-wrapper" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--oa-cor-cinza-borda); border-radius: var(--oa-raio-borda-input); padding:10px; background-color: var(--oa-cor-cinza-fundo-alternativo);">
+                    <p style="text-align:center; color: var(--oa-cor-cinza-texto-secundario); font-style: italic;">Detalhes das OPs de origem aparecerão aqui.</p>
+                </div>
+
+                <div class="oa-form-botoes" style="margin-top: 30px;">
+                    <button type="button" id="btnLancarArremateAgregado" class="oa-btn oa-btn-sucesso">
+                        <i class="fas fa-check"></i> Lançar Arremate
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="/js/admin-ordens-de-arremates.js" type="module"></script>
+    <script src="/js/carregar-menu-lateral.js" type="module"></script>
+</body>
+</html>

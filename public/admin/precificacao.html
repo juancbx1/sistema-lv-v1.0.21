@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Precificação de Produtos</title>
+    <link rel="stylesheet" href="/css/menu-lateral.css">
+    <link rel="stylesheet" href="/css/precificacao.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div class="hamburger-menu">
+        <i class="fas fa-bars"></i>
+        <i class="fas fa-times"></i>
+    </div>
+
+    <main class="pr-container-principal">
+        <header class="pr-cabecalho-pagina">
+            <h1>Precificação Detalhada de Produtos</h1>
+        </header>
+
+        <!-- Seção de Configurações Globais e Cadastros Base -->
+        <section class="pr-card" id="configuracoesGeraisPrecificacao">
+            <h2 class="pr-titulo-secao">Configurações e Cadastros Base</h2>
+            <div class="pr-tabs-config">
+                <button class="pr-tab-btn active" data-tab="materiasPrimas">Matérias-Primas</button>
+                <button class="pr-tab-btn" data-tab="maoDeObra">Mão de Obra</button>
+                <button class="pr-tab-btn" data-tab="despesas">Despesas Operacionais</button>
+                <button class="pr-tab-btn" data-tab="canaisVenda">Canais de Venda</button>
+            </div>
+
+            <div class="pr-tab-content">
+                <div id="tabMateriasPrimas" class="pr-tab-panel active">
+                    <h3 class="pr-subtitulo-secao">Gerenciar Matérias-Primas</h3>
+                    <button class="pr-btn pr-btn-primario" id="btnNovaMateriaPrima" style="margin-bottom: 15px;"><i class="fas fa-plus"></i> Nova Matéria-Prima</button>
+                    <div class="pr-tabela-wrapper">
+                        <table class="pr-tabela-estilizada" id="tabelaMateriasPrimas">
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Unidade</th>
+                                    <th>Preço/Un.</th>
+                                    <th>Atualizado em</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="tabMaoDeObra" class="pr-tab-panel">
+                    <h3 class="pr-subtitulo-secao">Gerenciar Tipos de Mão de Obra</h3>
+                    <button class="pr-btn pr-btn-primario" id="btnNovoTipoMaoDeObra" style="margin-bottom: 15px;"><i class="fas fa-plus"></i> Novo Tipo de Mão de Obra</button>
+                    <div class="pr-tabela-wrapper">
+                         <table class="pr-tabela-estilizada" id="tabelaTiposMaoDeObra">
+                            <thead>
+                                <tr>
+                                    <th>Nome do Tipo</th>
+                                    <th>Salário Base</th>
+                                    <th>Custo/Hora (aprox.)</th>
+                                    <th>Ativo</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="tabDespesas" class="pr-tab-panel">
+                    <h3 class="pr-subtitulo-secao">Gerenciar Despesas Operacionais</h3>
+                    <button class="pr-btn pr-btn-primario" id="btnNovaDespesa" style="margin-bottom: 15px;"><i class="fas fa-plus"></i> Nova Despesa</button>
+                    <div class="pr-tabela-wrapper">
+                        <table class="pr-tabela-estilizada" id="tabelaDespesas">
+                            <thead>
+                                <tr>
+                                    <th>Descrição</th>
+                                    <th>Valor Mensal</th>
+                                    <th>Tipo</th>
+                                    <th>Ativo</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="tabCanaisVenda" class="pr-tab-panel">
+                    <h3 class="pr-subtitulo-secao">Gerenciar Canais de Venda</h3>
+                    <button class="pr-btn pr-btn-primario" id="btnNovoCanalVenda" style="margin-bottom: 15px;"><i class="fas fa-plus"></i> Novo Canal de Venda</button>
+                     <div class="pr-tabela-wrapper">
+                        <table class="pr-tabela-estilizada" id="tabelaCanaisVenda">
+                            <thead>
+                                <tr>
+                                    <th>Nome do Canal</th>
+                                    <th>Taxa %</th>
+                                    <th>Taxa Fixa</th>
+                                    <th>Taxa Adic. %</th>
+                                    <th>Ativo</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Seção de Precificação por Produto -->
+        <section class="pr-card" id="precificacaoProdutoSection">
+            <h2 class="pr-titulo-secao">Precificar Produto</h2>
+            <div class="pr-form-grupo">
+                <label for="selectProdutoParaPrecificar">Selecione o Produto (Base):</label>
+                <select id="selectProdutoParaPrecificar" class="pr-select">
+                    <option value="">Carregando produtos...</option>
+                </select>
+            </div>
+            <div class="pr-form-grupo" id="variacaoProdutoPrecificarWrapper" style="display: none;">
+                <label for="selectVariacaoParaPrecificar">Selecione a Variação:</label>
+                <select id="selectVariacaoParaPrecificar" class="pr-select">
+                    <option value="">Selecione um produto base primeiro</option>
+                </select>
+            </div>
+
+            <div id="areaDetalhePrecificacao" style="display:none; margin-top: 20px; padding-top:20px; border-top: 1px solid var(--pr-cor-cinza-borda);">
+                <h3 class="pr-subtitulo-secao" id="tituloProdutoPrecificando">Precificando: [Produto - Variação]</h3>
+                
+                <div class="pr-card-interno" id="composicaoMPCard">
+                    <h4><i class="fas fa-leaf"></i> Composição de Matéria-Prima</h4>
+                    <div id="listaComposicaoMP" style="margin-bottom:10px;"></div>
+                    <button class="pr-btn pr-btn-secundario-outline" id="btnAddMatPrimaProduto"><i class="fas fa-plus-circle"></i> Adicionar Matéria-Prima</button>
+                </div>
+
+                <div class="pr-card-interno" id="custoMOCard">
+                    <h4><i class="fas fa-users-cog"></i> Custo de Mão de Obra</h4>
+                    <div id="listaCustoMO" style="margin-bottom:10px;"></div>
+                    <button class="pr-btn pr-btn-secundario-outline" id="btnAddMaoDeObraProduto"><i class="fas fa-plus-circle"></i> Adicionar Mão de Obra</button>
+                </div>
+                
+                <div class="pr-card-interno" id="canalPrecificacaoCard">
+                    <h4><i class="fas fa-calculator"></i> Configurar Preço por Canal</h4>
+                    <div class="pr-form-grupo">
+                        <label for="selectCanalPrecificacao">Canal de Venda:</label>
+                        <select id="selectCanalPrecificacao" class="pr-select"></select>
+                    </div>
+                    <div id="inputsResultadosPrecificacao">
+                    </div>
+                    <button class="pr-btn pr-btn-sucesso" id="btnSalvarPrecificacaoProduto" style="margin-top:15px;"><i class="fas fa-save"></i> Salvar Precificação</button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+    
+    <div id="modalGenericoPrecificacao" class="pr-modal" style="display:none;">
+        <div class="pr-modal-conteudo">
+            <span class="pr-modal-fechar" id="fecharModalGenericoPrecificacao">X</span>
+            <h3 id="modalTitulo"></h3>
+            <form id="formModalGenerico">
+            </form>
+            <div class="pr-form-botoes" style="justify-content: flex-end;">
+                <button type="button" class="pr-btn pr-btn-secundario" id="btnCancelarModal">Cancelar</button>
+                <button type="submit" form="formModalGenerico" class="pr-btn pr-btn-primario" id="btnSalvarModal">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/admin-precificacao.js" type="module"></script>
+    <script src="/js/carregar-menu-lateral.js" type="module"></script>
+</body>
+</html>

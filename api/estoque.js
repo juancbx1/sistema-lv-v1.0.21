@@ -56,56 +56,75 @@ router.use(async (req, res, next) => {
 // GET /api/estoque/saldo
 router.get('/saldo', async (req, res) => {
     const { usuarioLogado } = req;
-    let dbCliente;
+    let dbClient; // Variável declarada
     try {
-        dbCliente = await pool.connect();
-        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbCliente, usuarioLogado.id);
+        // === VERIFIQUE SE ESTA LINHA ESTÁ PRESENTE E CORRETA ===
+        dbClient = await pool.connect(); 
+        // ======================================================
+
+        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
 
         if (!permissoesCompletas.includes('acesso-estoque')) {
             return res.status(403).json({ error: 'Permissão negada para visualizar saldo do estoque.' });
         }
 
         const { produto_nome, variante_nome } = req.query;
-        // console.log('[router/estoque GET /saldo] Buscando saldo...');
+        
         let queryText = `
             SELECT 
-                produto_nome, 
-                COALESCE(variante_nome, '-') as variante_nome,
+                em.produto_nome, 
+                COALESCE(em.variante_nome, '-') AS variante_nome,
+                COALESCE(
+                    (SELECT g.sku
+                     FROM produtos p,
+                          jsonb_to_recordset(p.grade) AS g(sku TEXT, variacao TEXT)
+                     WHERE p.nome = em.produto_nome 
+                       AND ( (em.variante_nome IS NULL AND (g.variacao IS NULL OR g.variacao = '-' OR g.variacao = 'Padrão')) OR (em.variante_nome IS NOT NULL AND g.variacao = em.variante_nome) )
+                     LIMIT 1),
+                    (SELECT p.sku FROM produtos p WHERE p.nome = em.produto_nome LIMIT 1),
+                    em.produto_nome || COALESCE('_VAR_' || em.variante_nome, '_BASE')
+                ) AS produto_ref_id,
                 SUM(CASE 
-                    WHEN tipo_movimento LIKE 'ENTRADA%' OR tipo_movimento = 'AJUSTE_BALANCO_POSITIVO' THEN quantidade
-                    WHEN tipo_movimento LIKE 'SAIDA%' OR tipo_movimento = 'AJUSTE_BALANCO_NEGATIVO' THEN -ABS(quantidade) 
+                    WHEN em.tipo_movimento LIKE 'ENTRADA%' OR em.tipo_movimento = 'AJUSTE_BALANCO_POSITIVO' THEN em.quantidade
+                    WHEN em.tipo_movimento LIKE 'SAIDA%' OR em.tipo_movimento = 'AJUSTE_BALANCO_NEGATIVO' THEN -ABS(em.quantidade) 
                     ELSE 0 
                 END) AS saldo_atual
-            FROM estoque_movimentos
-        `; // Ajustado para somar entradas e subtrair saídas
+            FROM estoque_movimentos em
+        `; 
+        
         const queryParams = [];
         const whereClauses = [];
         let paramIndex = 1;
 
         if (produto_nome) {
-            whereClauses.push(`produto_nome ILIKE $${paramIndex++}`);
+            whereClauses.push(`em.produto_nome ILIKE $${paramIndex++}`);
             queryParams.push(`%${produto_nome}%`);
         }
         if (variante_nome && variante_nome !== '-') {
-            whereClauses.push(`variante_nome ILIKE $${paramIndex++}`);
+            whereClauses.push(`em.variante_nome ILIKE $${paramIndex++}`);
             queryParams.push(`%${variante_nome}%`);
         } else if (variante_nome === '-') {
-            whereClauses.push(`variante_nome IS NULL`);
+            whereClauses.push(`em.variante_nome IS NULL`);
         }
 
         if (whereClauses.length > 0) {
             queryText += ' WHERE ' + whereClauses.join(' AND ');
         }
-        queryText += ' GROUP BY produto_nome, variante_nome ORDER BY produto_nome, variante_nome';
+        queryText += ' GROUP BY em.produto_nome, em.variante_nome, produto_ref_id ORDER BY em.produto_nome, em.variante_nome';
 
-        const result = await dbCliente.query(queryText, queryParams);
-        // console.log(`[router/estoque GET /saldo] ${result.rows.length} agrupamentos de saldo encontrados.`);
+        // AQUI A VARIÁVEL dbClient É USADA:
+        const result = await dbClient.query(queryText, queryParams); 
         res.status(200).json(result.rows);
+
     } catch (error) {
         console.error('[router/estoque GET /saldo] Erro:', error.message, error.stack ? error.stack.substring(0,300):"");
-        res.status(500).json({ error: 'Erro ao buscar saldo do estoque.', details: error.message });
+        // Modificado para retornar o details do erro original se for 'dbClient is not defined'
+        const details = error.message === 'dbClient is not defined' ? error.message : (error.detail || error.message);
+        res.status(500).json({ error: 'Erro ao buscar saldo do estoque.', details: details });
     } finally {
-        if (dbCliente) dbCliente.release();
+        if (dbClient) { // Se dbClient foi definido (conectado), então libera
+            dbClient.release();
+        }
     }
 });
 
@@ -165,6 +184,7 @@ router.post('/entrada-producao', async (req, res) => {
 
 
 // GET /api/estoque/movimentos
+// --- ROTA GET /movimentos ATUALIZADA E COMPLETA ---
 router.get('/movimentos', async (req, res) => {
     const { usuarioLogado } = req;
     let dbCliente;
@@ -172,41 +192,74 @@ router.get('/movimentos', async (req, res) => {
         dbCliente = await pool.connect();
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbCliente, usuarioLogado.id);
         
-        if (!permissoesCompletas.includes('gerenciar-estoque') && !permissoesCompletas.includes('acesso-estoque-completo')) {
-            return res.status(403).json({ error: 'Permissão negada para visualizar histórico de movimentos do estoque.' });
+        if (!permissoesCompletas.includes('acesso-estoque')) { // Simplificando: se pode ver estoque, pode ver histórico
+            return res.status(403).json({ error: 'Permissão negada para visualizar histórico de movimentos.' });
         }
 
-        const { produto_nome, variante_nome, tipo_movimento, data_inicio, data_fim, limit = 50, page = 1 } = req.query;
+        const { 
+            // produto_nome, // NÃO desestruture aqui diretamente
+            // variante_nome será pego de req.query.variante_nome
+            tipo_movimento, 
+            data_inicio, 
+            data_fim, 
+            limit = 10,
+            page = 1 
+        } = req.query;
         const offset = (parseInt(page) - 1) * parseInt(limit);
 
-        // console.log('[router/estoque GET /movimentos] Buscando histórico...');
-        let queryText = `SELECT * FROM estoque_movimentos`;
-        let countQueryText = `SELECT COUNT(*) as count FROM estoque_movimentos`; // Adicionado alias
+        // Obter e tratar produto_nome
+        let produtoNomeOriginalDaQuery = req.query.produto_nome;
+        let produtoNomeTratadoParaSQL;
+        if (produtoNomeOriginalDaQuery) {
+            produtoNomeTratadoParaSQL = produtoNomeOriginalDaQuery.replace(/\+/g, ' '); // Substitui '+' por espaço
+        }
+
+        // Obter e tratar variante_nome
+        let varianteNomeOriginalDaQuery = req.query.variante_nome;
+        let varianteNomeTratadaParaSQL;
+        if (varianteNomeOriginalDaQuery) {
+            varianteNomeTratadaParaSQL = varianteNomeOriginalDaQuery.replace(/\+/g, ' '); 
+        } else {
+            varianteNomeTratadaParaSQL = null; 
+        }
+
+        console.log(`[API /movimentos] Recebido req.query:`, JSON.parse(JSON.stringify(req.query)));
+        console.log(`[API /movimentos] produtoNomeTratadoParaSQL: '${produtoNomeTratadoParaSQL}', varianteNomeTratadaParaSQL: '${varianteNomeTratadaParaSQL}'`);
+
+        let queryText = `SELECT * FROM estoque_movimentos em`;
+        let countQueryText = `SELECT COUNT(*) as count FROM estoque_movimentos em`;
         
         const queryParams = [];
         const whereClauses = [];
         let paramIndex = 1;
 
-        if (produto_nome) {
-            whereClauses.push(`produto_nome ILIKE $${paramIndex++}`);
-            queryParams.push(`%${produto_nome}%`);
+        if (produtoNomeTratadoParaSQL) { // Usa a variável tratada
+            whereClauses.push(`em.produto_nome = $${paramIndex++}`); 
+            queryParams.push(produtoNomeTratadoParaSQL); // Usa a variável tratada
         }
-        if (variante_nome && variante_nome !== '-') {
-            whereClauses.push(`variante_nome ILIKE $${paramIndex++}`);
-            queryParams.push(`%${variante_nome}%`);
-        } else if (variante_nome === '-') {
-            whereClauses.push(`variante_nome IS NULL`);
+
+        // Lógica para variante_nome usando a variável tratada
+        if (varianteNomeOriginalDaQuery) { 
+            if (varianteNomeTratadaParaSQL === '-' || varianteNomeTratadaParaSQL === 'Padrão') {
+                whereClauses.push(`(em.variante_nome IS NULL OR em.variante_nome = '-' OR em.variante_nome = 'Padrão')`);
+            } else {
+                whereClauses.push(`em.variante_nome = $${paramIndex++}`);
+                queryParams.push(varianteNomeTratadaParaSQL); 
+            }
+        } else { 
+            whereClauses.push(`em.variante_nome IS NULL`);
         }
+        
         if (tipo_movimento) {
-            whereClauses.push(`tipo_movimento = $${paramIndex++}`);
+            whereClauses.push(`em.tipo_movimento = $${paramIndex++}`);
             queryParams.push(tipo_movimento);
         }
         if (data_inicio) {
-            whereClauses.push(`DATE(data_movimento) >= $${paramIndex++}`); // Compara apenas a data
+            whereClauses.push(`DATE(em.data_movimento AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') >= $${paramIndex++}`);
             queryParams.push(data_inicio);
         }
         if (data_fim) {
-            whereClauses.push(`DATE(data_movimento) <= $${paramIndex++}`); // Compara apenas a data
+            whereClauses.push(`DATE(em.data_movimento AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') <= $${paramIndex++}`);
             queryParams.push(data_fim);
         }
 
@@ -214,24 +267,36 @@ router.get('/movimentos', async (req, res) => {
         queryText += whereCondition;
         countQueryText += whereCondition;
         
-        queryText += ` ORDER BY data_movimento DESC, id DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
-        queryParams.push(parseInt(limit), offset);
+        // Guarda os parâmetros apenas do WHERE para a query de contagem
+        const countParams = [...queryParams]; 
+
+        queryText += ` ORDER BY em.data_movimento DESC, em.id DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+        queryParams.push(parseInt(limit), offset); 
+
+        console.log("[API /movimentos] Query SQL Final:", queryText);
+        console.log("[API /movimentos] Parâmetros da Query:", queryParams);
 
         const result = await dbCliente.query(queryText, queryParams);
-        const totalResult = await dbCliente.query(countQueryText, queryParams.slice(0, paramIndex - 3)); // Remove limit e offset dos params
         
-        const total = parseInt(totalResult.rows[0].count);
-        const pages = Math.ceil(total / parseInt(limit));
+        console.log("[API /movimentos] Query de Contagem SQL:", countQueryText);
+        console.log("[API /movimentos] Parâmetros da Query de Contagem:", countParams);
+        const totalResult = await dbCliente.query(countQueryText, countParams); 
+        
+        const total = totalResult.rows[0] ? parseInt(totalResult.rows[0].count) : 0;
+        const pages = Math.ceil(total / parseInt(limit)) || 1; // Garante pelo menos 1 página
 
-        // console.log(`[router/estoque GET /movimentos] ${result.rows.length} movimentos encontrados (Total: ${total}).`);
+        console.log(`[API /movimentos] ${result.rows.length} movimentos encontrados (Total: ${total}, Página: ${page}, Total Págs: ${pages}).`);
         res.status(200).json({ rows: result.rows, total, page: parseInt(page), pages });
+
     } catch (error) {
-        console.error('[router/estoque GET /movimentos] Erro:', error.message, error.stack ? error.stack.substring(0,300):"");
+        console.error('[API /movimentos] Erro na rota:', error.message, error.stack ? error.stack.substring(0,500):"");
         res.status(500).json({ error: 'Erro ao buscar movimentos do estoque.', details: error.message });
     } finally {
         if (dbCliente) dbCliente.release();
     }
 });
+// --- FIM ROTA GET /movimentos ---
+
 
 // POST /api/estoque/movimento-manual
 router.post('/movimento-manual', async (req, res) => {
