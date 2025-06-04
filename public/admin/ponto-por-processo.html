@@ -2,9 +2,9 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Pontos por Processo</title>
+    <title>Pontos por Processo e Atividade</title> <!-- Título atualizado -->
     <link rel="stylesheet" href="/css/ponto-por-processo.css">
-    <link rel="stylesheet" href="/css/menu-lateral.css"> <!-- Mantenha se estiver usando -->
+    <link rel="stylesheet" href="/css/menu-lateral.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
@@ -13,19 +13,28 @@
         <i class="fas fa-times"></i>
     </div>
 
-    <div class="ppp-container-principal"> <!-- Renomeado para evitar conflito com o container do menu -->
+    <div class="ppp-container-principal">
         <header class="ppp-cabecalho-pagina">
-            <h1>Configuração de Pontos por Processo</h1>
+            <h1>Configuração de Pontos por Processo e Atividade</h1> <!-- Título atualizado -->
         </header>
 
         <section class="ppp-secao-configuracao" id="secaoPontosPadrao">
-            <h2 class="ppp-titulo-secao">Pontos Padrão por Processo</h2>
+            <h2 class="ppp-titulo-secao">Pontos Padrão</h2>
             <div class="ppp-filtros">
                 <div class="ppp-grupo-filtro">
                     <label for="filtroProduto">Filtrar por Produto:</label>
                     <select id="filtroProduto" class="ppp-select">
                         <option value="">Todos os Produtos</option>
-                        <!-- Opções de produtos serão carregadas aqui -->
+                    </select>
+                </div>
+                <!-- Adicionar filtro por Tipo de Atividade (Opcional, mas útil) -->
+                <div class="ppp-grupo-filtro">
+                    <label for="filtroTipoAtividade">Filtrar por Tipo:</label>
+                    <select id="filtroTipoAtividade" class="ppp-select">
+                        <option value="">Todos os Tipos</option>
+                        <option value="costura_op_costureira">Costura OP (Costureira)</option>
+                        <option value="processo_op_tiktik">Processo OP (Tiktik)</option>
+                        <option value="arremate_tiktik">Arremate (Tiktik)</option>
                     </select>
                 </div>
                 <button id="btnAdicionarNovaConfiguracao" class="ppp-botao ppp-botao-adicionar">
@@ -38,28 +47,25 @@
                     <thead>
                         <tr>
                             <th>Produto</th>
-                            <th>Processo</th>
+                            <th>Processo/Atividade</th> <!-- Nome da coluna atualizado -->
+                            <th>Tipo de Atividade</th>  <!-- NOVA COLUNA -->
                             <th>Pontos Padrão</th>
                             <th>Ativo</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody id="corpoTabelaPontosPadrao">
+                        <!-- Linhas serão carregadas aqui -->
                     </tbody>
                 </table>
             </div>
             <div id="ppp-mensagem-feedback" class="ppp-mensagem" style="display: none;"></div>
         </section>
-
-        <!-- Seção para Gincanas/Períodos Especiais (a ser implementada depois) -->
-        <section class="ppp-secao-configuracao" id="secaoPeriodosEspeciais" style="margin-top: 40px;">
-             <h2 class="ppp-titulo-secao">Períodos de Pontuação Especial (Gincanas)</h2>
-             <p><em>(Em desenvolvimento)</em></p>
-        </section>
-
+        
+        <!-- Seção Gincanas (mantida) -->
     </div>
 
     <script src="/js/admin-ponto-por-processo.js" type="module"></script>
-    <script src="/js/carregar-menu-lateral.js" type="module"></script> <!-- Mantenha se estiver usando -->
+    <script src="/js/carregar-menu-lateral.js" type="module"></script>
 </body>
 </html>

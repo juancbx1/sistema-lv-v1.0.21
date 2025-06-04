@@ -47,7 +47,9 @@ export const permissoesDisponiveis = [
     { id: 'gerenciar-precificacao', label: 'Permite Gerenciar Precificacao' }, // para precificacao.html
     { id: 'acesso-precificacao', label: 'Acesso a Precificação' }, // para precificacao.html
     { id: 'gerenciar-niveis-alerta-estoque', label: 'Permite Gerenciar os Níveis de Estoque Baixo e Urgente' }, // para estoque.html
-    { id: 'ajustar-saldo', label: 'Permite dar Entrada, Saída e Balanço' } // para estoque.html
+    { id: 'ajustar-saldo', label: 'Permite dar Entrada, Saída e Balanço' }, // para estoque.html
+    { id: 'assinar-propria-producao-tiktik', label: 'Permite o Tiktik assinar a própria producao' }, // para dashboard-tiktik.html
+    { id: 'assinar-proprio-arremate', label: 'Permite o Tiktik assinar o próprio arremate' } // para dashboard-tiktik.html
 
 ];
 
@@ -57,7 +59,9 @@ export const permissoesPorTipo = {
     lider_setor: [],
     tiktik: [
         'acesso-dashboard-tiktik',
-        'ver-proprias-producoes'
+        'ver-proprias-producoes',
+        'assinar-propria-producao-tiktik',
+        'assinar-proprio-arremate'
     ],
     cortador: [],
     costureira: [

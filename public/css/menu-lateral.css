@@ -1,276 +1,292 @@
-/* css/menu-lateral.css */
+/* public/css/menu-lateral.css */
+
+:root {
+    /* Cores inspiradas no seu padrão, mas podem ser ajustadas para o menu */
+    --ml-cor-fundo: #2c3e50; /* Um azul escuro para o fundo do menu */
+    --ml-cor-texto: #ecf0f1; /* Texto claro para contraste */
+    --ml-cor-texto-hover: #ffffff;
+    --ml-cor-fundo-hover: #34495e; /* Um azul um pouco mais claro para hover */
+    --ml-cor-fundo-ativo: #2980b9; /* Azul primário para o item ativo */
+    --ml-cor-borda-header: #34495e;
+    --ml-cor-icone: #bdc3c7; /* Cinza claro para ícones */
+    --ml-cor-icone-hover: #ffffff;
+    --ml-cor-logout-fundo: #c0392b; /* Vermelho para o botão sair */
+    --ml-cor-logout-fundo-hover: #e74c3c;
+
+    --ml-font-principal: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    --ml-sombra-menu: 2px 0 10px rgba(0, 0, 0, 0.2);
+    --ml-raio-borda: 6px;
+}
+
 .menu-lateral {
     position: fixed;
     left: 0;
     top: 0;
-    width: 250px;
+    width: 260px; /* Um pouco mais largo */
     height: 100vh;
-    max-height: 100vh;
-    background-color: #ffffff;
-    color: #0f3c5a;
-    padding: 20px 0;
-    padding-bottom: 20px;
-    box-shadow: 3px 0 15px rgba(0, 0, 0, 0.3);
+    background-color: var(--ml-cor-fundo);
+    color: var(--ml-cor-texto);
+    box-shadow: var(--ml-sombra-menu);
     overflow-y: auto;
-    z-index: 1000;
-    transition: transform 0.3s ease;
-    box-sizing: border-box;
+    z-index: 1001; /* Acima do conteúdo principal, mas abaixo de modais de página inteira */
+    transition: transform 0.3s ease-in-out;
+    display: flex;
+    flex-direction: column; /* Para organizar header, lista e logout */
 }
 
+/* Estilo da barra de rolagem (opcional, mas melhora o visual) */
+.menu-lateral::-webkit-scrollbar {
+    width: 6px;
+}
+.menu-lateral::-webkit-scrollbar-track {
+    background: var(--ml-cor-fundo);
+}
+.menu-lateral::-webkit-scrollbar-thumb {
+    background: var(--ml-cor-fundo-hover);
+    border-radius: 3px;
+}
+.menu-lateral::-webkit-scrollbar-thumb:hover {
+    background: var(--ml-cor-texto-hover);
+}
+
+
 .menu-header {
-    padding: 20px;
-    border-bottom: 1px solid #2e3b55;
+    padding: 20px 15px;
+    border-bottom: 1px solid var(--ml-cor-borda-header);
     text-align: center;
+    margin-bottom: 10px; /* Espaço após o header */
 }
 
 .user-info {
     display: flex;
-    flex-direction: column; /* Empilha a foto, botão e texto verticalmente */
-    align-items: center; /* Centraliza horizontalmente */
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
     gap: 10px;
-    font-size: 1.2rem;
-    color: #0f3c5a;
-    font-weight: 600;
 }
 
 .user-photo-wrapper {
-    position: relative;
-    width: 80px; /* Tamanho maior para a miniatura */
-    height: 80px;
-    border-radius: 50%; /* Torna a miniatura redonda */
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
     overflow: hidden;
-    border: 2px solid #6e8efb; /* Borda para destacar */
+    border: 3px solid var(--ml-cor-fundo-hover); /* Borda sutil */
+    box-shadow: 0 0 10px rgba(0,0,0,0.3);
+    cursor: pointer; /* Para indicar que pode clicar para mudar foto */
 }
 
 #userPhoto {
     width: 100%;
     height: 100%;
-    object-fit: cover; /* Garante que a imagem preencha o círculo sem distorção */
+    object-fit: cover;
 }
 
-
-.user-info i {
-    font-size: 2rem;
-    color: #356687;
+#usuarioLogado { /* "Bem-vindo, Nome" */
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--ml-cor-texto);
+    margin-top: 5px;
 }
-
-/* Destaque no texto "Bem-vindo, Fulano" */
-#usuarioLogado {
-    font-size: 1.3rem; /* Aumenta o tamanho da fonte */
-    font-weight: 700; /* Negrito */
-    color: #0f3c5a;
-    background-color: rgba(164, 255, 164, 0.027);/* Fundo leve para destaque */
-    padding: 5px 10px;
-    border-radius: 5px;
-}
-
-.user-info #nomeUsuario {
-    color: #356687;
+#usuarioLogado #nomeUsuario {
+    font-weight: 600;
+    display: block; /* Para que o nome fique abaixo de "Bem-vindo," se for longo */
 }
 
 .menu-lateral ul {
     list-style: none;
     padding: 0;
     margin: 0;
+    flex-grow: 1; /* Faz a lista de links ocupar o espaço disponível */
 }
 
 .menu-lateral li {
-    margin: 5px 0;
+    margin: 0; /* Remove margem padrão do li */
 }
 
-.menu-lateral a {
-    color: #0f3c5a;
+/* Links principais e títulos de seção */
+.menu-lateral ul > li > a,
+.menu-lateral .menu-section-title {
+    color: var(--ml-cor-texto);
     text-decoration: none;
     padding: 12px 20px;
     display: flex;
     align-items: center;
-    gap: 10px;
-    transition: background-color 0.3s ease, color 0.3s ease;
+    gap: 12px; /* Espaço entre ícone e texto */
+    font-size: 0.95rem;
+    font-weight: 400;
+    border-left: 4px solid transparent; /* Para indicador ativo */
+    transition: background-color 0.2s ease, color 0.2s ease, border-left-color 0.2s ease;
+}
+.menu-lateral ul > li > a i,
+.menu-lateral .menu-section-title i { /* Ícones principais */
+    font-size: 1.1em; /* Tamanho relativo ao texto do link */
+    width: 20px; /* Largura fixa para alinhar texto */
+    text-align: center;
+    color: var(--ml-cor-icone);
+    transition: color 0.2s ease;
 }
 
-.menu-lateral a:hover {
-    background-color: #f9f9f9;
-    color: #0f3c5a;
+.menu-lateral ul > li > a:hover,
+.menu-lateral .menu-section-title:hover {
+    background-color: var(--ml-cor-fundo-hover);
+    color: var(--ml-cor-texto-hover);
+    border-left-color: var(--ml-cor-texto-hover); /* Muda a cor da borda no hover */
+}
+.menu-lateral ul > li > a:hover i,
+.menu-lateral .menu-section-title:hover i {
+    color: var(--ml-cor-icone-hover);
 }
 
-.menu-lateral a.active {
-    background-color: #356687;
-    color: #ffffff;
+.menu-lateral ul > li > a.active { /* Link ativo */
+    background-color: var(--ml-cor-fundo-ativo);
+    color: var(--ml-cor-texto-hover);
     font-weight: 500;
+    border-left-color: var(--ml-cor-texto-hover); /* Borda de destaque para ativo */
+}
+.menu-lateral ul > li > a.active i {
+    color: var(--ml-cor-texto-hover);
 }
 
-/* Estilo das seções expansíveis */
+/* Seções Expansíveis */
 .menu-section-title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 20px;
     cursor: pointer;
-    color: #0f3c5a;
-    transition: background-color 0.3s ease, color 0.3s ease;
 }
-
-.menu-section-title:hover {
-    background-color: #3498db;
-    color: #ffffff;
-}
-
-.menu-section-title::before {
-    content: '\f054';
-    font-family: 'Font Awesome 5 Free', 'FontAwesome';
+.menu-section-title::after { /* Seta para expansão */
+    content: '\f078'; /* Ícone de seta para baixo do Font Awesome */
+    font-family: 'Font Awesome 5 Free', 'FontAwesome'; /* Assegure-se que está correto */
     font-weight: 900;
-    font-size: 0.8rem;
+    font-size: 0.7rem;
+    margin-left: auto; /* Empurra a seta para a direita */
     transition: transform 0.3s ease;
-    display: inline-block;
-    margin-right: 5px;
 }
-
-.menu-section-title.expanded::before {
-    transform: rotate(90deg);
+.menu-section-title.expanded::after {
+    transform: rotate(-180deg); /* Seta para cima */
 }
 
 .menu-subsection {
-    display: block;
-    background-color: #f9f9f9;
-    padding: 0;
+    display: none; /* Escondido por padrão */
+    background-color: rgba(0,0,0,0.1); /* Fundo sutil para subseção */
+    padding-left: 15px; /* Indentação para subitens */
+    overflow: hidden; /* Para animação suave */
+    max-height: 0; /* Para animação de altura */
+    transition: max-height 0.3s ease-in-out;
 }
-
+.menu-section-title.expanded + .menu-subsection {
+    display: block; /* JS vai controlar isso, mas é bom ter o estilo */
+    max-height: 500px; /* Altura máxima para a animação, ajuste se tiver muitos subitens */
+}
 .menu-subsection li a {
-    padding: 10px 20px 10px 40px;
+    padding: 10px 20px 10px 25px; /* Mais padding à esquerda */
     font-size: 0.9rem;
-    color: #0f3c5a;
+    color: var(--ml-cor-texto); /* Cor do texto do subitem */
+    opacity: 0.9;
 }
-
+.menu-subsection li a::before { /* Bolinha para subitem */
+    content: "\f111"; /* fas fa-circle */
+    font-family: 'Font Awesome 5 Free', 'FontAwesome';
+    font-weight: 400; /* solid é 900, regular é 400 */
+    font-size: 0.5rem;
+    margin-right: 10px;
+    opacity: 0.7;
+}
 .menu-subsection li a:hover {
-    background-color: #3498db;
-    color: #ffffff;
+    background-color: var(--ml-cor-fundo-hover);
+    color: var(--ml-cor-texto-hover);
+    opacity: 1;
+}
+.menu-subsection li a.active {
+    background-color: var(--ml-cor-fundo-ativo);
+    color: var(--ml-cor-texto-hover);
+    font-weight: 500;
+    opacity: 1;
+}
+.menu-subsection li a.active::before{
+    font-weight: 900; /* Círculo preenchido para ativo */
+    opacity: 1;
 }
 
-/* Ajuste no logout-btn para centralizar */
-.logout-btn {
+
+/* Botão Sair */
+.ml-logout-wrapper { /* Novo wrapper para o botão de sair */
+    padding: 15px 20px;
+    margin-top: auto; /* Empurra para o final do menu flex column */
+    border-top: 1px solid var(--ml-cor-borda-header);
+}
+#logoutBtn.ml-logout-btn { /* ID do seu botão com nova classe */
     display: flex;
     align-items: center;
-    justify-content: center; /* Centraliza o conteúdo */
+    justify-content: center;
     gap: 10px;
-    width: 160px; /* Ajustado para caber bem no menu */
-    padding: 12px 20px;
-    background-color: #e74c3c;
-    color: white;
+    width: 100%; 
+    padding: 12px 15px;
+    background-color: var(--ml-cor-logout-fundo);
+    color: var(--ml-cor-branco);
     border: none;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
+    font-weight: 500;
     cursor: pointer;
-    transition: background-color 0.3s ease;
-    margin: 20px auto; /* Centraliza o botão no menu */
-    position: static; /* Remove o posicionamento relativo */
-    border-radius: 5px;
+    transition: background-color 0.2s ease;
+    border-radius: var(--ml-raio-borda);
+}
+#logoutBtn.ml-logout-btn:hover {
+    background-color: var(--ml-cor-logout-fundo-hover);
 }
 
-.logout-btn:hover {
-    background-color: #c0392b;
-}
-
-
-/* Botão Hambúrguer */
+/* Botão Hambúrguer (para telas menores) */
 .hamburger-menu {
-    display: none; /* Escondido por padrão no desktop */
+    display: none; 
     position: fixed;
-    font-size: 1.2rem;
-    color: #2c3e50;
+    top: 15px;
+    left: 15px;
+    font-size: 1.5rem; /* Tamanho do ícone */
+    color: var(--ml-cor-fundo); /* Cor do ícone do hambúrguer */
+    background-color: var(--ml-cor-branco);
+    padding: 8px 10px;
+    border-radius: var(--ml-raio-borda);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     cursor: pointer;
-    z-index: 1100;
-    background: #ffffff;
-    padding: 8px;
-    border-radius: 5px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    top: 10px;
-    left: 10px;
+    z-index: 1002; /* Acima do menu lateral quando fechado */
+    transition: left 0.3s ease-in-out;
+}
+.hamburger-menu .fa-bars { display: inline-block; }
+.hamburger-menu .fa-times { display: none; }
+.hamburger-menu.active .fa-bars { display: none; }
+.hamburger-menu.active .fa-times { display: inline-block; }
+
+/* Responsividade */
+@media (max-width: 1024px) {
+    body { margin-left: 0; } /* Remove a margem para o conteúdo principal ocupar tudo */
+    .menu-lateral {
+        transform: translateX(-100%); /* Esconde o menu para fora da tela */
+        box-shadow: none; /* Remove sombra quando escondido */
+    }
+    .menu-lateral.active { /* Classe adicionada pelo JS para mostrar o menu */
+        transform: translateX(0);
+        box-shadow: var(--ml-sombra-menu); /* Mostra sombra quando ativo */
+    }
+    .hamburger-menu {
+        display: block; /* Mostra o botão hambúrguer */
+    }
+    .hamburger-menu.active { /* Move o hambúrguer quando o menu está aberto */
+        left: calc(260px + 15px); /* Largura do menu + um respiro */
+    }
 }
 
-/* Ícones padrão */
-.hamburger-menu .fa-bars {
-    display: inline-block;
-}
-
-.hamburger-menu .fa-times {
-    display: none;
-}
-
-/* Quando o menu está ativo, alterna os ícones */
-.hamburger-menu.active .fa-bars {
-    display: none;
-}
-
-.hamburger-menu.active .fa-times {
-    display: inline-block;
-}
-
-
-/* Ajustes para responsividade */
 @media (max-width: 768px) {
-    .menu-lateral {
-        width: 200px; /* Mantém a largura consistente */
-        transform: translateX(-100%);
-    }
-
-    .menu-lateral.active {
-        transform: translateX(0);
-    }
-
-    .logout-btn {
-        width: 140px; /* Ajusta a largura para o menu menor */
-        margin: 20px auto;
-    }
-
-    .user-info {
-        white-space: normal;
-        flex-wrap: wrap;
-        text-align: center;
-    }
+    .menu-lateral { width: 240px; } /* Menu um pouco mais estreito */
+    .hamburger-menu.active { left: calc(240px + 15px); }
+    .menu-lateral ul > li > a, .menu-lateral .menu-section-title { padding: 10px 15px; font-size: 0.9rem; gap: 10px;}
+    .menu-subsection li a { padding: 8px 15px 8px 30px; font-size: 0.85rem; }
+    #logoutBtn.ml-logout-btn { padding: 10px 15px; font-size: 0.9rem;}
+    .user-photo-wrapper { width: 60px; height: 60px; }
+    #usuarioLogado { font-size: 0.9rem; }
 }
 
-/* Ajustes para mobile (max-width: 576px) */
-@media (max-width: 576px) {
-    .hamburger-menu {
-        display: block; /* Mostra o botão hambúrguer no mobile */
-        top: 10px;
-        left: 10px;
-    }
-
-    .menu-lateral {
-        width: 200px; /* Mantém a largura consistente */
-        transform: translateX(-100%);
-    }
-
-    .menu-lateral.active {
-        transform: translateX(0);
-    }
-
-    .logout-btn {
-        width: 140px;
-        margin: 20px auto;
-    }
+@media (max-width: 480px) {
+    .menu-lateral { width: 220px; }
+    .hamburger-menu.active { left: calc(220px + 10px); }
+    .hamburger-menu { font-size: 1.3rem; padding: 6px 8px; }
 }
 
-/* Ajustes para iPad Pro (768px a 1024px) */
-@media (min-width: 768px) and (max-width: 1024px) {
-    .hamburger-menu {
-        display: block;
-        top: 10px;
-        left: 10px;
-    }
-
-    .menu-lateral {
-        width: 200px; /* Mantém a largura consistente */
-        transform: translateX(-100%);
-    }
-
-    .menu-lateral.active {
-        transform: translateX(0);
-    }
-
-    .logout-btn {
-        width: 140px;
-        margin: 20px auto;
-    }
+@media (max-width: 414px) {
+    /* Ajustes finos se necessário, mas 480px deve cobrir bem */
 }

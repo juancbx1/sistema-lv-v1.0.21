@@ -57,6 +57,129 @@ body {
 .pr-acoes-item-lista .pr-btn-editar-item { color: var(--pr-cor-azul-primario); }
 .pr-acoes-item-lista .pr-btn-remover-item { color: var(--pr-cor-vermelho-perigo); }
 
+.pr-spinner::before { /* Adaptado de es-spinner */
+    content: ''; 
+    display: inline-block; 
+    width: 18px; /* Tamanho menor para texto */
+    height: 18px;
+    margin-right: 8px; 
+    vertical-align: text-bottom; /* Alinha melhor com o texto */
+    border: 2px solid var(--pr-cor-cinza-borda, #ccc); 
+    border-top-color: var(--pr-cor-azul-primario); 
+    border-radius: 50%; 
+    animation: pr-spin 1s linear infinite;
+}
+@keyframes pr-spin { 
+    0% { transform: rotate(0deg); } 
+    100% { transform: rotate(360deg); } 
+}
+
+/* Popup de Mensagem Estilo Padrão */
+.pr-popup-mensagem {
+    position: fixed; 
+    top: 50%; 
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 25px 30px; 
+    border-radius: var(--pr-raio-borda-card); /* Use sua variável de raio */
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    z-index: 10002; 
+    max-width: 480px; 
+    width: 90%;
+    text-align: center; 
+    font-family: var(--pr-font-principal); /* Sua variável de fonte */
+    animation: pr-fadeInPopup 0.3s ease-out; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center;
+    border-left-width: 5px; /* Para a barrinha lateral colorida */
+    border-left-style: solid;
+}
+.pr-popup-overlay {
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.45); 
+    z-index: 10001; 
+    animation: pr-fadeInOverlayPopup 0.3s ease-out;
+}
+
+/* Animações para o Popup */
+@keyframes pr-fadeInPopup { 
+    from { opacity: 0; transform: translate(-50%, -55%); } 
+    to { opacity: 1; transform: translate(-50%, -50%); } 
+}
+@keyframes pr-fadeOutPopup { 
+    from { opacity: 1; transform: translate(-50%, -50%); } 
+    to { opacity: 0; transform: translate(-50%, -60%); } 
+}
+@keyframes pr-fadeInOverlayPopup { 
+    from { opacity: 0; } 
+    to { opacity: 1; } 
+}
+@keyframes pr-fadeOutOverlayPopup { 
+    from { opacity: 1; } 
+    to { opacity: 0; } 
+}
+
+.pr-popup-mensagem p { 
+    font-size: 1.05rem; 
+    line-height: 1.5; 
+    margin-bottom: 20px; 
+    font-weight: 500; 
+}
+/* Cores específicas para os tipos de popup */
+.pr-popup-mensagem.popup-sucesso { 
+    background-color: #e6ffed; 
+    color: var(--pr-cor-verde-sucesso, #27ae60); /* Fallback se variável não definida */
+    border-left-color: var(--pr-cor-verde-sucesso, #27ae60); 
+}
+.pr-popup-mensagem.popup-erro { 
+    background-color: #ffebee; 
+    color: var(--pr-cor-vermelho-perigo, #e74c3c); 
+    border-left-color: var(--pr-cor-vermelho-perigo, #e74c3c); 
+}
+.pr-popup-mensagem.popup-aviso { 
+    background-color: #fff4e0; 
+    color: var(--pr-cor-laranja-aviso, #f39c12); 
+    border-left-color: var(--pr-cor-laranja-aviso, #f39c12); 
+}
+/* Botão OK dentro do Popup */
+.pr-popup-mensagem button { 
+    padding: 10px 28px; 
+    margin-top: 10px; 
+    background-color: var(--pr-cor-azul-escuro, #2c3e50); 
+    color: var(--pr-cor-branco, #fff); 
+    border: none; 
+    border-radius: var(--pr-raio-borda-botao, 6px);
+    cursor: pointer; 
+    font-size: 0.95rem; 
+    font-weight: 600; 
+    transition: background-color 0.2s ease;
+}
+.pr-popup-mensagem button:hover { 
+    background-color: #4a617a; /* Tom mais escuro do azul escuro */
+}
+
+.pr-form-grid-precificacao {
+    display: grid;
+    grid-template-columns: 1fr; /* Uma coluna por padrão (mobile) */
+    gap: 25px;
+}
+.pr-custos-base-col, .pr-config-canal-col {
+    padding: 15px;
+    border: 1px solid var(--pr-cor-cinza-borda);
+    border-radius: var(--pr-raio-borda-input);
+}
+.pr-subtitulo-col {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--pr-cor-azul-escuro);
+    margin-bottom: 15px;
+}
 
 @media (max-width: 1024px) { body { margin-left: 0; } }
 
@@ -146,3 +269,16 @@ body {
 }
 .pr-card-interno h4 i { margin-right: 8px; }
 
+@media (max-width: 768px) {
+    .pr-popup-mensagem { padding: 20px 25px; }
+    .pr-popup-mensagem p { font-size: 1rem; }
+    .pr-popup-mensagem button { padding: 9px 24px; font-size: 0.9rem; }
+    .pr-form-grid-precificacao {
+        grid-template-columns: 1fr 1.2fr; /* Coluna da direita um pouco maior */
+    }
+}
+@media (max-width: 480px) {
+    .pr-popup-mensagem { padding: 18px 20px; width: 92%; }
+    .pr-popup-mensagem p { font-size: 0.9rem; margin-bottom: 15px; }
+    .pr-popup-mensagem button { padding: 8px 20px; font-size: 0.85rem; }
+}

@@ -46,19 +46,24 @@ router.use(async (req, res, next) => {
 
 // GET /api/precificacao-config/:produtoRefId/composicao-mp
 router.get('/:produtoRefId/composicao-mp', async (req, res) => {
-    const { produtoRefId } = req.params;
+    const { produtoRefId } = req.params; // Vem da URL
     let dbClient;
     try {
         dbClient = await pool.connect();
         const query = `
             SELECT pcm.id, pcm.produto_ref_id, pcm.materia_prima_id, mp.nome as materia_prima_nome, 
-                   pcm.quantidade_utilizada, pcm.unidade_medida_utilizada, mp.unidade_medida as materia_prima_unidade_base, mp.preco_por_unidade as materia_prima_preco
+                   pcm.quantidade_utilizada, pcm.unidade_medida_utilizada, 
+                   mp.unidade_medida as materia_prima_unidade_base, 
+                   mp.preco_por_unidade as materia_prima_preco
             FROM produto_composicao_mp pcm
             JOIN materias_primas mp ON pcm.materia_prima_id = mp.id
-            WHERE pcm.produto_ref_id = $1
+            WHERE pcm.produto_ref_id = $1  -- Usa o produtoRefId (SKU da variação)
             ORDER BY mp.nome ASC;
         `;
+        // Adicione logs aqui para ver o produtoRefId que a API recebe
+        console.log(`[API GET /composicao-mp] Buscando para produto_ref_id: '${produtoRefId}'`);
         const result = await dbClient.query(query, [produtoRefId]);
+        console.log(`[API GET /composicao-mp] Encontrados ${result.rows.length} itens de composição.`);
         res.status(200).json(result.rows);
     } catch (error) {
         console.error('[API/precificacao-config GET composicao-mp] Erro:', error);

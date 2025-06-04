@@ -83,14 +83,15 @@ router.get('/', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada para visualizar a lista de produtos.' });
         }
 
-        // ***** CORREÇÃO NA QUERY: Removido data_criacao e data_atualizacao *****
+        // ***** CORREÇÃO NA QUERY: Usando os nomes corretos das colunas e alias para o frontend *****
         const queryText = `
             SELECT id, nome, sku, gtin, unidade, estoque, imagem, 
                    tipos, variacoes, estrutura, etapas, 
                    "etapastiktik" AS "etapasTiktik", 
-                   grade, is_kit 
+                   grade, is_kit,
+                   criado_em AS "dataCriacao",      -- Corrigido e com alias
+                   data_atualizacao AS "dataAtualizacao" -- Nome correto e com alias (opcional, mas bom para consistência)
             FROM produtos ORDER BY nome ASC`;
-            // Removi , data_criacao, data_atualizacao da linha acima
             
         const result = await dbClient.query(queryText);
         res.status(200).json(result.rows);
@@ -129,19 +130,19 @@ router.post('/', async (req, res) => {
         }
         const isKitValue = produto.is_kit === true || (Array.isArray(produto.tipos) && produto.tipos.includes('kits'));
 
-        // ***** CORREÇÃO NA QUERY POST: Removido data_criacao e data_atualizacao do INSERT direto *****
-        // Se você não tem as colunas no DB, não pode tentar inserir/atualizar explicitamente.
-        // Se elas tivessem DEFAULT no DB, o DB cuidaria disso no INSERT.
-        // Para UPDATE, um gatilho seria o ideal para data_atualizacao.
-        // Por agora, vamos remover a tentativa de gerenciá-las pela aplicação se elas não existem.
+        // ***** CORREÇÃO NA QUERY POST *****
+        // Removido 'data_criacao' do INSERT direto (assumindo que o DB lida com 'criado_em' via DEFAULT)
+        // Adicionado 'data_atualizacao = CURRENT_TIMESTAMP' no DO UPDATE SET
+        // Adicionado aliases no RETURNING para consistência com o GET
         const query = `
             INSERT INTO produtos (
                 nome, sku, gtin, unidade, estoque, imagem,
                 tipos, variacoes, estrutura, etapas, "etapastiktik", grade,
                 is_kit 
-                ${produto.data_criacao ? ', data_criacao' : ''} -- Adiciona data_criacao apenas se fornecido
+                -- Coluna 'criado_em' não é listada aqui, assumindo DEFAULT no DB ou valor já existente
+                -- Coluna 'data_atualizacao' não é listada aqui para INSERT, será NULL ou valor de um UPDATE
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13 ${produto.data_criacao ? ', $14' : ''})
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             ON CONFLICT (nome) 
             DO UPDATE SET
                 sku = EXCLUDED.sku,
@@ -155,9 +156,15 @@ router.post('/', async (req, res) => {
                 etapas = EXCLUDED.etapas,
                 "etapastiktik" = EXCLUDED."etapastiktik",
                 grade = EXCLUDED.grade,
-                is_kit = EXCLUDED.is_kit
-                -- data_atualizacao = CURRENT_TIMESTAMP  // Removido se a coluna não existe ou se há gatilho
-            RETURNING *; 
+                is_kit = EXCLUDED.is_kit,
+                data_atualizacao = CURRENT_TIMESTAMP  -- <<< ESSENCIAL PARA ATUALIZAR ESTE CAMPO
+            RETURNING 
+                id, nome, sku, gtin, unidade, estoque, imagem, 
+                tipos, variacoes, estrutura, etapas, 
+                "etapastiktik" AS "etapasTiktik", 
+                grade, is_kit,
+                criado_em AS "dataCriacao",
+                data_atualizacao AS "dataAtualizacao";
         `;
         const values = [
             produto.nome, produto.sku || null, produto.gtin || null,
@@ -167,27 +174,42 @@ router.post('/', async (req, res) => {
             JSON.stringify(produto.etapasTiktik || []), JSON.stringify(produto.grade || []),
             isKitValue
         ];
-
-        if (produto.data_criacao) { // Adiciona ao array de valores se existir
-            values.push(produto.data_criacao);
-        }
-
+        // Não precisamos mais de lógica condicional para values.push(produto.data_criacao)
 
         const result = await dbClient.query(query, values);
-        res.status(result.command === 'INSERT' && !produto.data_criacao ? 201 : 200).json(result.rows[0]); // Ajuste do status
+        // Determinar se foi INSERT ou UPDATE para o status code
+        // Se 'data_atualizacao' no resultado for NULL ou igual a 'criado_em' (aproximadamente),
+        // é provável que tenha sido um INSERT novo.
+        // Se 'data_atualizacao' tiver um valor e for diferente de 'criado_em', foi um UPDATE.
+        // Uma forma mais simples: se o xmax do sistema (pg_xact_commit_timestamp(xmin) != pg_xact_commit_timestamp(xmax)) for diferente
+        // ou verificar se data_atualizacao é NOT NULL no resultado, já que no INSERT ele seria NULL (a menos que o update o definisse)
+        
+        const produtoRetornado = result.rows[0];
+        let statusCode = 200; // Padrão para UPDATE
+
+        // Se dataAtualizacao está nula E dataCriacao existe, provavelmente foi um INSERT
+        // (A lógica exata para 201 vs 200 pode ser complexa sem saber o xmax do registro antes da query)
+        // Por simplicidade, vamos basear no que foi enviado versus o que foi retornado.
+        // Se o frontend enviou um ID e esse ID já existia, é um update.
+        // Mas a query é por 'nome', então se o 'nome' já existia, é um update.
+        // A Vercel/Neon pode não retornar xmax diretamente, então uma heurística:
+        // Se a 'dataAtualizacao' retornada for muito próxima de agora e diferente de 'dataCriacao', foi um UPDATE.
+        // Se 'dataAtualizacao' for NULL ou igual a 'dataCriacao', foi um INSERT.
+        // Como 'data_atualizacao' é setada no DO UPDATE, se ela tiver um valor, foi um update.
+        // Se ela for NULL, foi um INSERT (e o RETURNING pegou o valor NULL de data_atualizacao).
+        if (produtoRetornado.dataAtualizacao === null) { // Ou seja, o DO UPDATE não foi executado.
+            statusCode = 201; // Created
+        }
+
+        res.status(statusCode).json(produtoRetornado);
 
     } catch (error) {
         console.error('[router/produtos POST] Erro:', error.message, error.stack ? error.stack.substring(0,300) : "");
         const dbErrorCode = error.code;
         const dbErrorDetail = error.detail;
-        if (dbErrorCode === '23505') {
+        if (dbErrorCode === '23505') { // Unique constraint (ex: nome duplicado)
             res.status(409).json({ error: 'Erro de conflito (ex: nome de produto duplicado).', details: dbErrorDetail });
-        } else if (error.message.includes('column "data_criacao" does not exist') || error.message.includes('column "data_atualizacao" does not exist')) {
-            // Erro específico se ainda houver tentativa de usar as colunas
-            console.error("Tentativa de usar colunas de data inexistentes na tabela produtos:", error.message);
-            res.status(500).json({ error: 'Erro de configuração da tabela produtos (colunas de data ausentes).', details: error.message });
-        }
-         else {
+        } else {
             res.status(500).json({ error: 'Erro interno ao salvar/atualizar produto', details: dbErrorDetail || error.message });
         }
     } finally {

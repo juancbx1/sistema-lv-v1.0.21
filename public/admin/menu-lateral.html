@@ -1,61 +1,58 @@
-  <!-- // admin/menu-lateral.html-->
-  <div class="menu-lateral">
+<!-- public/admin/menu-lateral.html -->
+<div class="menu-lateral">
     <div class="menu-header">
         <div class="user-info">
-            <div class="user-photo-wrapper">
-                <img id="userPhoto" src="../images/semFoto.png" alt="Foto do usuário">
+            <div class="user-photo-wrapper" id="userPhotoTrigger" title="Clique para alterar foto (funcionalidade futura)">
+                <img id="userPhoto" src="/img/placeholder-image.png" alt="Foto do usuário">
+                <!-- Imagem placeholder padrão, JS pode atualizar -->
             </div>
-            <input type="file" id="uploadPhoto" accept="image/*" style="display: none;">
-            <span id="usuarioLogado">Bem-vindo, <span id="nomeUsuario">Usuário</span></span>
+            <input type="file" id="uploadPhotoInput" accept="image/*" style="display: none;">
+            <span id="usuarioLogado">Bem-vindo,<br><strong id="nomeUsuario">Usuário</strong></span>
         </div>
     </div>
     <ul>
-        <li><a href="home.html"><i class="fas fa-home"></i> Home</a></li>
+        <li><a href="/admin/home.html"><i class="fas fa-home"></i> Home</a></li>
 
-        <!-- Seção Produtos (expansível) -->
         <li class="menu-section">
-            <span class="menu-section-title"><i class="fas fa-box"></i> Produção & Estoque</span>
+            <span class="menu-section-title"><i class="fas fa-industry"></i> Produção & Estoque</span>
             <ul class="menu-subsection">
-                <li><a href="cadastrar-produto.html">Cadastrar Produto</a></li>
-                <li><a href="ordens-de-producao.html">Ordens de Produção</a></li>
-                <li><a href="ordens-de-arremates.html">Ordens de Arremate</a></li>
-                <li><a href="embalagem-de-produtos.html">Embalagem de Produtos</a></li>
-                <li><a href="estoque.html">Estoque</a></li>
+                <li><a href="/admin/cadastrar-produto.html"><i class="fas fa-plus-square"></i> Cadastrar Produto</a></li>
+                <li><a href="/admin/ordens-de-producao.html"><i class="fas fa-tasks"></i> Ordens de Produção</a></li>
+                <li><a href="/admin/ordens-de-arremates.html"><i class="fas fa-cut"></i> Ordens de Arremate</a></li>
+                <li><a href="/admin/embalagem-de-produtos.html"><i class="fas fa-box-open"></i> Embalagem</a></li>
+                <li><a href="/admin/estoque.html"><i class="fas fa-cubes"></i> Estoque</a></li>
+            </ul>
+        </li>
+        
+        <li class="menu-section">
+            <span class="menu-section-title"><i class="fas fa-tools"></i> Ferramentas</span>
+            <ul class="menu-subsection">
+                <li><a href="/admin/precificacao.html"><i class="fas fa-dollar-sign"></i> Precificação</a></li>
+                <li><a href="/admin/ponto-por-processo.html"><i class="fas fa-clipboard-check"></i> Ponto por Processo</a></li>
             </ul>
         </li>
 
-        <!-- Seção Cadastro de Usuários (expansível) -->
         <li class="menu-section">
-            <span class="menu-section-title"><i class="fas fa-users"></i> Cadastro de Usuários</span>
+            <span class="menu-section-title"><i class="fas fa-users-cog"></i> Gestão de Usuários</span>
             <ul class="menu-subsection">
-                <li><a href="cadastrar-usuario.html">Cadastrar Usuário</a></li>
-                <li><a href="usuarios-cadastrados.html">Gerenciar Usuários</a></li>
+                <li><a href="/admin/cadastrar-usuario.html"><i class="fas fa-user-plus"></i> Cadastrar Usuário</a></li>
+                <li><a href="/admin/usuarios-cadastrados.html"><i class="fas fa-users"></i> Gerenciar Usuários</a></li>
+                <li><a href="/admin/permissoes-usuarios.html"><i class="fas fa-user-shield"></i> Permissões</a></li>
             </ul>
         </li>
 
-        <!-- Seção Processos (expansível) -->
         <li class="menu-section">
-            <span class="menu-section-title"><i class="fas fa-cogs"></i> Processos</span>
+            <span class="menu-section-title"><i class="fas fa-chart-line"></i> Relatórios & Processos</span>
             <ul class="menu-subsection">
-                <li><a href="gerenciar-producao.html">Gerenciar Produção</a></li>
-                <li><a href="permissoes-usuarios.html">Permissão dos Usuários</a></li>
-                <li><a href="producao-geral-costura.html">Produção Geral Costureiras</a></li>
-                <li><a href="ponto-por-processo.html">Ponto por Processo</a></li>
-                <li><a href="#">Relatório de Assinaturas</a></li>
-            </ul>
-        </li>
-
-        <!-- Seção Comissionamento (expansível) -->
-        <li class="menu-section">
-            <span class="menu-section-title"><i class="fas fa-dollar-sign"></i> Comissionamento</span>
-            <ul class="menu-subsection">
-                <li><a href="relatorio-de-comissao.html">Relatório de Comissão</a></li>
+                <li><a href="/admin/gerenciar-producao.html"><i class="fas fa-tasks"></i> Gerenciar Produção</a></li>
+                <li><a href="/admin/producao-geral-costura.html"><i class="fas fa-female"></i> Prod. Costureiras</a></li>
+                <li><a href="/admin/relatorio-de-assinaturas.html"><i class="fas fa-signature"></i> Rel. Assinaturas</a></li>
+                <li><a href="/admin/relatorio-de-comissao.html"><i class="fas fa-percentage"></i> Rel. Comissão</a></li>
             </ul>
         </li>
     </ul>
-    <div class="menu-spacer"></div> <!-- Adicionado para reservar espaço -->
-    <button id="logoutBtn" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Sair</button>
+    
+    <div class="ml-logout-wrapper">
+        <button id="logoutBtn" class="ml-logout-btn"><i class="fas fa-sign-out-alt"></i> Sair</button>
     </div>
 </div>
-
-

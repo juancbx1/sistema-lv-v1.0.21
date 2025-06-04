@@ -6,10 +6,6 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import express from 'express';
 
-// Importações para getPermissoesCompletasUsuarioDB
-// Ajuste este caminho se 'permissoes.js' estiver em um local diferente em relação a esta pasta 'api'
-// Se permissoes.js está em 'public/js/utils/permissoes.js'
-// e este arquivo (api/usuarios.js) está em 'api/', o caminho relativo é '../public/js/utils/permissoes.js'
 import { permissoesDisponiveis as frontendPermissoesDisponiveis, permissoesPorTipo as frontendPermissoesPorTipo } from '../public/js/utils/permissoes.js';
 
 const router = express.Router();
@@ -155,21 +151,7 @@ router.get('/me', async (req, res) => {
 router.get('/', async (req, res) => {
     const { dbCliente } = req;
     try {
-        // Apenas usuários com permissão podem listar todos os usuários
-        // Esta verificação de permissão deve acontecer aqui, usando as permissões do usuarioLogado (do token)
-        // e, se necessário, buscando as permissões completas como em /me ou em /api/producoes.
-        // Por agora, vou assumir que o middleware de /api/usuarios já lida com uma permissão geral de acesso.
-        // Se não, você precisaria adicionar:
-        // const permissoesUsuario = await getPermissoesCompletasUsuarioDB(dbCliente, req.usuarioLogado.id);
-        // if (!permissoesUsuario.includes('acesso-usuarios-cadastrados')) { // ou similar
-        //     return res.status(403).json({ error: 'Permissão negada para listar usuários.' });
-        // }
-
         const result = await dbCliente.query('SELECT id, nome, nome_usuario, email, tipos, nivel, permissoes FROM usuarios ORDER BY nome ASC');
-        // Para cada usuário listado, idealmente também calcularíamos suas permissões completas
-        // se o frontend precisar delas diretamente na lista.
-        // Mas para a página de usuários cadastrados que você tem, ela já faz chamadas PUT para atualizar,
-        // então talvez não seja necessário enviar permissões completas de TODOS os usuários aqui.
         res.status(200).json(result.rows);
     } catch (error) {
         console.error('[router/usuarios GET] Erro:', error);

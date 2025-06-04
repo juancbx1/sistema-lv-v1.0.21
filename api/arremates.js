@@ -62,60 +62,76 @@ router.use(async (req, res, next) => {
 
 // POST /api/arremates/
 router.post('/', async (req, res) => {
-    const { usuarioLogado } = req; // Do token
+    const { usuarioLogado } = req;
     let dbClient; 
 
     try {
-        dbClient = await pool.connect(); // Obtém conexão para esta rota
+        dbClient = await pool.connect();
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
-        // console.log(`[API Arremates POST] Permissões de ${usuarioLogado.nome || usuarioLogado.nome_usuario}:`, permissoesCompletas);
-
         if (!permissoesCompletas.includes('lancar-arremate')) {
-            // console.warn(`[router/arremates POST] Permissão 'lancar-arremate' negada para ${usuarioLogado.nome || usuarioLogado.nome_usuario}`);
             return res.status(403).json({ error: 'Permissão negada para lançar arremate.' });
         }
 
-        const {
-            op_numero, op_edit_id, produto, variante,
-            quantidade_arrematada, usuario_tiktik
-        } = req.body;
-        // console.log('[router/arremates POST] Dados recebidos:', req.body);
+        const { op_numero, op_edit_id, produto, variante, quantidade_arrematada, usuario_tiktik } = req.body;
 
-        if (!op_numero || !produto || quantidade_arrematada === undefined || !usuario_tiktik) { // quantidade_arrematada pode ser 0? Se não, >=0
-            // console.error('[router/arremates POST] Dados incompletos:', { op_numero, produto, quantidade_arrematada, usuario_tiktik });
+        if (!op_numero || !produto || quantidade_arrematada === undefined || !usuario_tiktik) {
             return res.status(400).json({ error: 'Dados incompletos. Campos obrigatórios: op_numero, produto, quantidade_arrematada, usuario_tiktik.' });
         }
         const quantidadeNum = parseInt(quantidade_arrematada);
-        if (isNaN(quantidadeNum) || quantidadeNum <= 0) { // Assume que arremate tem que ser > 0
-            // console.error('[router/arremates POST] Quantidade inválida:', quantidade_arrematada);
+        if (isNaN(quantidadeNum) || quantidadeNum <= 0) {
             return res.status(400).json({ error: 'Quantidade arrematada deve ser um número positivo.' });
         }
 
-        // console.log(`[router/arremates POST] Inserindo arremate para OP ${op_numero} com qtd ${quantidadeNum}...`);
-        const result = await dbClient.query( // Usa o dbClient desta rota
-            `INSERT INTO arremates (op_numero, op_edit_id, produto, variante, quantidade_arrematada, usuario_tiktik, data_lancamento)
-             VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        // --- CÁLCULO DE PONTOS NO MOMENTO DO LANÇAMENTO ---
+        let valorPontoAplicado; // Será definido abaixo
+        
+        const configPontosQuery = `
+            SELECT pontos_padrao FROM configuracoes_pontos_processos
+            WHERE produto_nome = $1 
+              AND tipo_atividade = 'arremate_tiktik' 
+            /* E processo_nome = 'Arremate (Config)' -- Se você padronizou assim */
+              AND ativo = TRUE 
+            LIMIT 1;
+        `;
+        const configResult = await dbClient.query(configPontosQuery, [produto]);
+
+        if (configResult.rows.length > 0 && configResult.rows[0].pontos_padrao !== null) {
+            const pontosPadraoConfig = parseFloat(configResult.rows[0].pontos_padrao);
+            // Garante que o ponto da configuração seja um número positivo
+            if (!isNaN(pontosPadraoConfig) && pontosPadraoConfig > 0) {
+                valorPontoAplicado = pontosPadraoConfig;
+            } else {
+                console.warn(`[API Arremates POST] Configuração de pontos inválida (valor: ${configResult.rows[0].pontos_padrao}) para arremate do produto: ${produto}. Usando valor padrão 1.00.`);
+                valorPontoAplicado = 1.00;
+            }
+        } else {
+            console.warn(`[API Arremates POST] Configuração de pontos não encontrada ou inativa para arremate do produto: ${produto}. Usando valor padrão 1.00.`);
+            valorPontoAplicado = 1.00; // Padrão se não houver configuração ou se o valor for inválido
+        }
+           
+        const pontosGerados = quantidadeNum * valorPontoAplicado;
+        // --- FIM DO CÁLCULO DE PONTOS ---
+
+        const result = await dbClient.query(
+            `INSERT INTO arremates 
+                (op_numero, op_edit_id, produto, variante, quantidade_arrematada, usuario_tiktik, data_lancamento, valor_ponto_aplicado, pontos_gerados, assinada)
+             VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, $8, FALSE)
              RETURNING *`,
-            [op_numero, op_edit_id || null, produto, variante || null, quantidadeNum, usuario_tiktik]
+            [op_numero, op_edit_id || null, produto, variante || null, quantidadeNum, usuario_tiktik, valorPontoAplicado, pontosGerados]
         );
 
         if (result.rows.length === 0) {
             throw new Error('Falha ao inserir o registro de arremate, nenhum dado retornado.');
         }
-
-        // console.log('[router/arremates POST] Novo arremate salvo:', result.rows[0]);
         res.status(201).json(result.rows[0]);
 
     } catch (error) {
-        console.error('[router/arremates POST] Erro não tratado:', error.message, error.stack ? error.stack.substring(0,500):"");
-        const statusCode = error.statusCode || 500; // Mantém o status code original, se houver
-        const errorMsg = error.code === '23505' ? 'Conflito de dados (arremate já existe?).' : (error.message || 'Erro interno ao salvar arremate.');
+        console.error('[API Arremates POST] Erro:', error.message);
+        const statusCode = error.statusCode || (error.code === '23505' ? 409 : 500);
+        const errorMsg = error.code === '23505' ? 'Conflito de dados.' : (error.message || 'Erro interno ao salvar arremate.');
         res.status(statusCode).json({ error: errorMsg, details: error.detail });
     } finally {
-        if (dbClient) {
-            dbClient.release();
-            // console.log('[router/arremates POST] Cliente DB liberado.');
-        }
+        if (dbClient) dbClient.release();
     }
 });
 
@@ -261,6 +277,67 @@ router.put('/:id_arremate/registrar-embalagem', async (req, res) => {
             dbClient.release();
             // console.log('[router/arremates PUT /:id/registrar-embalagem] Cliente DB liberado.');
         }
+    }
+});
+
+//ENDPOINT PARA TIKTIK ASSINAR UM LOTE DE ARREMATES
+router.put('/assinar-lote', async (req, res) => {
+    const { usuarioLogado } = req; // Do token (Tiktik)
+    const { ids_arremates } = req.body; // Espera um array de IDs
+    let dbClient;
+
+    if (!Array.isArray(ids_arremates) || ids_arremates.length === 0) {
+        return res.status(400).json({ error: 'Lista de IDs de arremates é obrigatória.' });
+    }
+
+    try {
+        dbClient = await pool.connect();
+        const permissoesUsuario = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
+
+        // Verificar se o usuário é um Tiktik e tem permissão para assinar seus arremates
+        // (Você pode criar uma permissão específica como 'assinar-proprio-arremate')
+        if (!permissoesUsuario.includes('assinar-proprio-arremate')) { // CRIE ESSA PERMISSÃO
+             return res.status(403).json({ error: 'Permissão negada para assinar arremates.' });
+        }
+
+        // Garantir que todos os arremates pertencem ao Tiktik logado antes de atualizar
+        // Isso é uma camada extra de segurança, embora a query de UPDATE também filtre.
+        const checkOwnerQuery = `
+            SELECT id FROM arremates 
+            WHERE id = ANY($1::int[]) AND usuario_tiktik != $2; 
+        `;
+        // Converte para INT se seus IDs são numéricos. Se forem UUIDs/TEXT, ajuste o ::int[]
+        const nonOwnedArremates = await dbClient.query(checkOwnerQuery, [ids_arremates, usuarioLogado.nome]);
+
+        if (nonOwnedArremates.rows.length > 0) {
+            return res.status(403).json({ 
+                error: 'Alguns dos arremates selecionados não pertencem a você ou não existem.',
+                detalhes: nonOwnedArremates.rows.map(r => r.id)
+            });
+        }
+        
+        const updateResult = await dbClient.query(
+            'UPDATE arremates SET assinada = TRUE WHERE id = ANY($1::int[]) AND usuario_tiktik = $2 RETURNING id, assinada',
+            // Ajuste $1::int[] para $1::text[] se seus IDs de arremate forem strings/UUIDs
+            [ids_arremates, usuarioLogado.nome] 
+        );
+
+        if (updateResult.rowCount === 0) {
+            return res.status(404).json({ error: 'Nenhum arremate foi atualizado. Verifique os IDs ou se já estavam assinados.' });
+        }
+        
+        // Se precisar retornar todos os arremates atualizados, pode fazer um SELECT depois.
+        // Por ora, uma mensagem de sucesso e a contagem.
+        res.status(200).json({ 
+            message: `${updateResult.rowCount} arremate(s) assinado(s) com sucesso.`,
+            atualizados: updateResult.rows 
+        });
+
+    } catch (error) {
+        console.error('[API /arremates/assinar-lote PUT] Erro:', error.message);
+        res.status(500).json({ error: 'Erro interno ao assinar arremates.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
     }
 });
 

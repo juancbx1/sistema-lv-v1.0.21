@@ -79,8 +79,6 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Dados incompletos para lançamento de produção.' });
         }
         const parsedQuantidade = parseInt(quantidade, 10);
-        // Permitir quantidade 0 para Tiktik, mas não para outros? A lógica está no frontend.
-        // Aqui, apenas validamos se é um número. O frontend deve garantir que >0 se necessário.
         if (isNaN(parsedQuantidade) || parsedQuantidade < 0) { 
             return res.status(400).json({ error: 'Quantidade inválida (deve ser um número >= 0).' });
         }
@@ -88,10 +86,6 @@ router.post('/', async (req, res) => {
 
         let parsedDate;
         try {
-            // Ajuste de fuso horário, se necessário, deve ser consistente.
-            // Se 'data' já vem com fuso, não precisa adicionar '-03:00'.
-            // Se vem como string local sem fuso, a conversão para timestampz no PG pode depender do fuso do servidor.
-            // Por simplicidade, assumindo que 'data' está no formato esperado ou já é UTC.
             parsedDate = data; 
             const dateTest = new Date(parsedDate);
             if (isNaN(dateTest.getTime())) throw new Error('Formato de data inválido para produção.');
@@ -101,7 +95,6 @@ router.post('/', async (req, res) => {
         }
 
         let valorPontoAplicado = 1.00; // Default
-        // console.log(`[router/producoes POST] Buscando pontos para Produto: "${produto}", Processo: "${processo}"`);
         const configPontosResult = await dbClient.query(
             `SELECT pontos_padrao FROM configuracoes_pontos_processos
              WHERE produto_nome = $1 AND processo_nome = $2 AND ativo = TRUE LIMIT 1;`,
@@ -110,15 +103,11 @@ router.post('/', async (req, res) => {
 
         if (configPontosResult.rows.length > 0) {
             valorPontoAplicado = parseFloat(configPontosResult.rows[0].pontos_padrao);
-            // console.log(`[router/producoes POST] Pontos encontrados. Valor Aplicado: ${valorPontoAplicado}`);
         } else {
-            // console.log(`[router/producoes POST] Nenhuma config de pontos. Usando default: ${valorPontoAplicado}`);
         }
 
         const pontosGerados = parsedQuantidade * valorPontoAplicado;
-        // console.log(`[router/producoes POST] Qtd: ${parsedQuantidade}, Pontos Gerados: ${pontosGerados}`);
 
-        // console.log('[router/producoes POST] Inserindo produção no banco...');
         const result = await dbClient.query(
             `INSERT INTO producoes (
                 id, op_numero, etapa_index, processo, produto, variacao, maquina,
@@ -345,6 +334,60 @@ router.delete('/', async (req, res) => {
     } catch (error) {
         console.error('[router/producoes DELETE] Erro:', error.message, error.stack ? error.stack.substring(0,500):"");
         res.status(500).json({ error: 'Erro ao excluir produção.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+//ENDPOINT PARA TIKTIK ASSINAR UMA OP (PRODUÇÃO)
+router.put('/assinar-tiktik-op', async (req, res) => {
+    const { usuarioLogado } = req; 
+    const { id_producao_op } = req.body;
+    let dbClient;
+
+    if (!id_producao_op) {
+        return res.status(400).json({ error: 'ID da produção da OP é obrigatório.' });
+    }
+
+    try {
+        dbClient = await pool.connect();
+        const permissoesUsuario = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
+
+        // Verificar se o usuário é um Tiktik e tem permissão para assinar suas próprias OPs
+        // (Você pode criar uma permissão específica como 'assinar-propria-op-tiktik')
+        // Por agora, vamos verificar se ele é o funcionário da OP.
+        if (!permissoesUsuario.includes('assinar-propria-producao-tiktik')) { // CRIE ESSA PERMISSÃO
+             return res.status(403).json({ error: 'Permissão negada para assinar esta produção de OP.' });
+        }
+
+        const producaoResult = await dbClient.query(
+            'SELECT funcionario FROM producoes WHERE id = $1',
+            [id_producao_op]
+        );
+
+        if (producaoResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Produção da OP não encontrada.' });
+        }
+
+        const funcionarioDaProducao = producaoResult.rows[0].funcionario;
+        if (funcionarioDaProducao !== usuarioLogado.nome) {
+            return res.status(403).json({ error: 'Você só pode assinar produções de OP feitas por você.' });
+        }
+
+        const updateResult = await dbClient.query(
+            'UPDATE producoes SET assinada_por_tiktik = TRUE WHERE id = $1 RETURNING *',
+            [id_producao_op]
+        );
+
+        if (updateResult.rowCount === 0) {
+            // Isso não deveria acontecer se a verificação acima passou, mas é uma segurança
+            return res.status(404).json({ error: 'Falha ao atualizar assinatura da produção da OP (não encontrada após verificação).' });
+        }
+        res.status(200).json({ message: 'Produção da OP assinada com sucesso pelo Tiktik.', producao: updateResult.rows[0] });
+
+    } catch (error) {
+        console.error('[API /producoes/assinar-tiktik-op PUT] Erro:', error.message);
+        res.status(500).json({ error: 'Erro interno ao assinar produção da OP.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }

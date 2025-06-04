@@ -235,36 +235,115 @@ body.menu-aberto .ppp-container-principal { /* Adapte para a classe do seu menu 
     border: 1px solid #f5c6cb;
 }
 
-/* Responsividade */
-@media (max-width: 1024px) {
-    body {
-        margin-left: 0; /* Para menu overlay em mobile */
-    }
+/* --- SPINNER E CARREGAMENTO --- */
 
+
+.ppp-spinner {
+    border: 3px solid var(--ppp-cor-cinza-borda); 
+    border-top: 3px solid var(--ppp-cor-azul-claro); 
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    animation: ppp-spin 1s linear infinite;
+    display: inline-block; /* Para ficar ao lado do texto "Carregando..." */
+    margin-right: 8px;
+}
+@keyframes ppp-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+.ppp-carregando, .ppp-erro-carregar { text-align: center; color: var(--ppp-cor-cinza-medio-texto); font-style: italic; }
+
+/* --- BREAKPOINTS --- */
+
+/* Telas de Tablet e Desktops Pequenos (ex: iPads em paisagem) */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .ppp-container-principal {
+        padding: 20px;
+    }
+    .ppp-cabecalho-pagina h1 {
+        font-size: 1.8rem;
+    }
+    .ppp-titulo-secao {
+        font-size: 1.4rem;
+    }
+    /* Mantém filtros em linha se couber, ou ajusta o gap */
+    .ppp-filtros {
+        gap: 20px;
+    }
+    .ppp-filtros-esquerda {
+        gap: 20px;
+    }
 }
 
-@media (max-width: 768px) {
-
+/* Telas Menores (Smartphones Médios - ex: iPhone 14 Pro Max tem ~430px) */
+@media (max-width: 480px) {
     .ppp-container-principal {
         padding: 15px;
-        margin-left: auto; /* Reset para centralizar se o menu estiver escondido */
     }
-    body.menu-aberto .ppp-container-principal { /* Se o menu aberto em mobile empurra o conteúdo */
-        margin-left: 250px; /* Ou a largura do seu menu */
+    .ppp-cabecalho-pagina h1 {
+        font-size: 1.5rem;
+        margin-bottom: 20px;
     }
-
+    .ppp-titulo-secao {
+        font-size: 1.25rem;
+    }
     .ppp-filtros {
+        flex-direction: column; /* Empilha tudo */
+        align-items: stretch; /* Faz os elementos ocuparem a largura */
+    }
+    .ppp-filtros-esquerda {
         flex-direction: column;
         align-items: stretch;
+        width: 100%;
     }
     .ppp-grupo-filtro {
         width: 100%;
     }
     .ppp-select, .ppp-input {
+        min-width: unset; /* Remove largura mínima */
         width: 100%;
-        min-width: unset;
+    }
+    .ppp-botao-adicionar {
+        width: 100%; /* Botão de adicionar ocupa largura total */
+        margin-top: 10px;
+    }
+    .ppp-tabela {
+        font-size: 0.8rem; /* Reduz fonte da tabela */
+    }
+    .ppp-tabela th, .ppp-tabela td {
+        padding: 8px 10px;
     }
     .ppp-tabela input[type="number"] {
-        width: 70px;
+        width: 60px; /* Input de pontos menor */
+        padding: 5px;
+    }
+    .ppp-tabela .ppp-botao {
+        padding: 6px 10px;
+        font-size: 0.8rem;
+    }
+    .ppp-tabela .ppp-botao i {
+        margin-right: 4px; /* Menos espaço para ícone */
+    }
+}
+
+/* Telas Ainda Menores (ex: iPhone SE tem 375px) */
+@media (max-width: 414px) {
+    .ppp-container-principal {
+        padding: 10px;
+    }
+    .ppp-cabecalho-pagina h1 {
+        font-size: 1.3rem;
+    }
+    .ppp-titulo-secao {
+        font-size: 1.15rem;
+    }
+    /* Outros ajustes finos se necessário, herdando do 480px */
+    .ppp-tabela th, .ppp-tabela td {
+        padding: 6px 8px;
+    }
+     .ppp-tabela .ppp-botao {
+        font-size: 0.75rem; /* Botões ainda menores */
+        gap: 4px;
+    }
+    .ppp-tabela .ppp-botao i {
+        display: none; /* Esconder ícones se o espaço for muito pequeno */
     }
 }

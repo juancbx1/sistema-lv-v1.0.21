@@ -1,24 +1,12 @@
 // public/js/utils/metas-tiktik.js
-export const METAS_TIKTIK = [
-    { tipo: 'diaria', descricao: 'Meta Diária Padrão', quantidade: 50 },
-    { tipo: 'semanal', descricao: 'Meta Semanal Padrão', quantidade: 250 }
-    // Adicione mais metas se necessário, talvez por tipo de produto se fizer sentido.
-];
+export const METAS_TIKTIK_CONFIG = [
+    { pontos: 4000, valor: 40, descricao: "Meta Bronze" }, // Adicionei descrição para clareza
+    { pontos: 4700, valor: 50, descricao: "Meta Prata" },
+    { pontos: 5400, valor: 70, descricao: "Meta Ouro" },
+    { pontos: 6400, valor: 110, descricao: "Meta Diamante" }
+]; // Seus valores de meta
 
-export function obterMetasTiktik(tipoMeta = null) {
-    if (tipoMeta) {
-        return METAS_TIKTIK.filter(meta => meta.tipo === tipoMeta);
-    }
-    return METAS_TIKTIK;
+export function obterMetasTiktik() {
+    // Retorna uma cópia para evitar modificações acidentais no array original
+    return [...METAS_TIKTIK_CONFIG].sort((a, b) => a.pontos - b.pontos); // Ordena por pontos, da menor para a maior
 }
-
-// Se, no futuro, houver algum tipo de bônus por quantidade, podemos adicionar funções aqui.
-// Exemplo:
-// export function calcularBonusTiktik(quantidadeProduzida, metaSelecionada) {
-//     if (quantidadeProduzida > metaSelecionada.quantidade) {
-//         const excedente = quantidadeProduzida - metaSelecionada.quantidade;
-//         // return excedente * VALOR_POR_ITEM_EXTRA; // Definir VALOR_POR_ITEM_EXTRA
-//         return 0; // Placeholder
-//     }
-//     return 0;
-// }

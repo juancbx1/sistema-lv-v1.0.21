@@ -47,16 +47,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Configurar seções expansíveis
     const menuSections = document.querySelectorAll('.menu-section-title');
     menuSections.forEach(section => {
-      const subsection = section.nextElementSibling;
-      subsection.style.display = 'block';
-      section.classList.add('expanded');
+    const subsection = section.nextElementSibling;
+    // Definir estado inicial (ex: todos abertos ou fechados)
+    // Se quiser começar fechado (exceto talvez o da página atual):
+    // subsection.style.maxHeight = null; 
+    // section.classList.remove('expanded');
 
-      section.addEventListener('click', () => {
-        const isExpanded = subsection.style.display === 'block';
-        subsection.style.display = isExpanded ? 'none' : 'block';
-        section.classList.toggle('expanded', !isExpanded);
-      });
+    // Para começar aberto:
+    if (subsection) { // Adiciona verificação se subsection existe
+         subsection.style.maxHeight = subsection.scrollHeight + "px";
+         section.classList.add('expanded');
+    }
+
+
+    section.addEventListener('click', () => {
+        section.classList.toggle('expanded');
+        if (subsection) { // Adiciona verificação
+            if (section.classList.contains('expanded')) {
+                subsection.style.maxHeight = subsection.scrollHeight + "px";
+            } else {
+                subsection.style.maxHeight = null;
+            }
+        }
     });
+});
 
     // Marcar página atual
     const currentPage = window.location.pathname.split('/').pop();

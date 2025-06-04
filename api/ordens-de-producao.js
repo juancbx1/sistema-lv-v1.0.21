@@ -64,13 +64,10 @@ router.get('/', async (req, res) => {
 
     try {
         dbClient = await pool.connect();
-        // console.log(`[API OPs GET /] Usuário do token: ${usuarioLogado.nome || usuarioLogado.nome_usuario}, ID: ${usuarioLogado.id}`);
 
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
-        // console.log(`[API OPs GET /] Permissões Completas do DB para ${usuarioLogado.nome || usuarioLogado.nome_usuario}:`, permissoesCompletas);
 
         if (!permissoesCompletas.includes('acesso-ordens-de-producao')) {
-            // console.log(`[API OPs GET /] Permissão 'acesso-ordens-de-producao' negada para ${usuarioLogado.nome || usuarioLogado.nome_usuario}.`);
             return res.status(403).json({ error: 'Permissão negada para acessar ordens de produção.' });
         }
 
@@ -84,7 +81,6 @@ router.get('/', async (req, res) => {
         const searchTerm = query.search ? String(query.search).trim() : null;
 
         if (getNextNumber) {
-            // console.log('[API OPs GET /] Branch: getNextNumber');
             const getNextNumberQueryText = `SELECT numero FROM ordens_de_producao ORDER BY CAST(NULLIF(REGEXP_REPLACE(numero, '\\D', '', 'g'), '') AS INTEGER) DESC NULLS LAST, numero DESC`;
             const result = await dbClient.query(getNextNumberQueryText);
             return res.status(200).json(result.rows.map(row => row.numero));
@@ -97,18 +93,14 @@ router.get('/', async (req, res) => {
         let currentParamIdx = 1;
 
         if (noStatusFilter) {
-            // console.log('[API OPs GET /] Branch: noStatusFilter (buscando todas as OPs sem filtro de status)');
         } else if (statusFilter) {
-            // console.log(`[API OPs GET /] Branch: statusFilter = ${statusFilter}`);
             whereClausesNew.push(`status = $${currentParamIdx++}`);
             dynamicParams.push(statusFilter);
         } else {
-            // console.log('[API OPs GET /] Branch: Filtro PADRÃO de status (em-aberto, produzindo)');
             whereClausesNew.push(`status IN ('em-aberto', 'produzindo')`);
         }
 
         if (searchTerm) {
-            // console.log(`[API OPs GET /] Aplicando searchTerm: ${searchTerm}`);
             whereClausesNew.push(`(
                 numero ILIKE $${currentParamIdx++} OR
                 produto ILIKE $${currentParamIdx++} OR
@@ -130,10 +122,8 @@ router.get('/', async (req, res) => {
             queryParamsForData.push(limit, offset);
         }
 
-        // console.log('[API OPs GET /] Query Principal:', queryText, queryParamsForData);
         const result = await dbClient.query(queryText, queryParamsForData);
 
-        // console.log('[API OPs GET /] Query de Contagem:', countQueryText, queryParamsForCount);
         const totalResult = await dbClient.query(countQueryText, queryParamsForCount);
         const total = parseInt(totalResult.rows[0].count);
         
@@ -153,7 +143,6 @@ router.get('/', async (req, res) => {
     } finally {
         if (dbClient) {
             dbClient.release();
-            // console.log('[router/ordens-de-producao GET /] Liberando cliente do banco.');
         }
     }
 });
@@ -166,11 +155,9 @@ router.get('/:id', async (req, res) => {
 
     try {
         dbClient = await pool.connect();
-        // console.log(`[API OPs GET /:id] Usuário do token: ${usuarioLogado.nome || usuarioLogado.nome_usuario}, ID: ${usuarioLogado.id}, buscando OP: ${opIdentifier}`);
 
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
         if (!permissoesCompletas.includes('acesso-ordens-de-producao')) { // Ou uma permissão mais específica como 'ver-detalhe-op'
-            // console.log(`[API OPs GET /:id] Permissão 'acesso-ordens-de-producao' negada para ${usuarioLogado.nome || usuarioLogado.nome_usuario}.`);
             return res.status(403).json({ error: 'Permissão negada para ver detalhes da OP.' });
         }
 
@@ -188,7 +175,6 @@ router.get('/:id', async (req, res) => {
     } finally {
         if (dbClient) {
             dbClient.release();
-            // console.log('[router/ordens-de-producao GET /:id] Liberando cliente do banco.');
         }
     }
 });
@@ -238,7 +224,6 @@ router.post('/', async (req, res) => {
     } finally {
         if (dbClient) {
             dbClient.release();
-            // console.log('[router/ordens-de-producao POST] Liberando cliente do banco.');
         }
     }
 });
@@ -257,13 +242,6 @@ router.put('/', async (req, res) => {
             return res.status(400).json({ error: 'O campo "edit_id" é obrigatório para atualização.' });
         }
 
-        // Busca a OP atual para verificar o status antes da mudança (se necessário para lógica de permissão)
-        // const opAtualResult = await dbClient.query('SELECT status FROM ordens_de_producao WHERE edit_id = $1', [edit_id]);
-        // if (opAtualResult.rows.length === 0) {
-        //     return res.status(404).json({ error: 'OP não encontrada para verificar status antes de atualizar.' });
-        // }
-        // const statusAtualDaOP = opAtualResult.rows[0].status;
-
         let permissaoConcedida = false;
         // Lógica de permissão para diferentes ações
         if (status === 'cancelada' && permissoesCompletas.includes('cancelar-op')) {
@@ -277,7 +255,6 @@ router.put('/', async (req, res) => {
 
 
         if (!permissaoConcedida) {
-            // console.log(`[API OPs PUT] Permissão negada para ${usuarioLogado.nome || usuarioLogado.nome_usuario} alterar OP ${edit_id} para status ${status}. Permissões: ${permissoesCompletas.join(', ')}`);
             return res.status(403).json({ error: 'Permissão negada para realizar esta alteração na Ordem de Produção.' });
         }
         
@@ -292,10 +269,6 @@ router.put('/', async (req, res) => {
             // A validação de quantidade já existe no frontend para o form, e o saveOPChanges envia a quantidade atual
         }
 
-
-        // Construir a query de UPDATE dinamicamente seria mais robusto,
-        // mas para simplificar, vamos atualizar todos os campos se eles vierem.
-        // O frontend (saveOPChanges) envia o objeto OP completo.
         const result = await dbClient.query(
             `UPDATE ordens_de_producao
              SET numero = $1, 
@@ -339,7 +312,6 @@ router.put('/', async (req, res) => {
     } finally {
         if (dbClient) {
             dbClient.release();
-            // console.log('[router/ordens-de-producao PUT] Liberando cliente do banco.');
         }
     }
 });

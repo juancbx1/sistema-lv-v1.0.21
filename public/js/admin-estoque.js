@@ -12,7 +12,7 @@ let niveisEstoqueAlertaCache = [];
 let produtoSelecionadoParaConfigNiveis = null;
 let editandoNivelId = null;
 let currentPageEstoqueTabela = 1;
-const itemsPerPageEstoqueTabela = 6; // Ajustado para um valor mais comum
+const itemsPerPageEstoqueTabela = 7; // Ajustado para um valor mais comum
 let saldosEstoqueGlobaisCompletos = [];
 let filtroAlertaAtivo = null;
 let todosOsProdutosCadastrados = [];
@@ -27,7 +27,7 @@ let inputNivelUrgenteElement;
 let niveisValidationMessageElement;
 
 let currentPageHistorico = 1;
-const itemsPerPageHistorico = 6; // Quantos movimentos por página
+const itemsPerPageHistorico = 7; // Quantos movimentos por página
 
 // --- FUNÇÃO DE POPUP DE MENSAGEM (Simples - Adapte ou use uma global se tiver) ---
 function mostrarPopupEstoque(mensagem, tipo = 'info', duracao = 4000, permitirHTML = false) { // Adicionado duracao e permitirHTML
@@ -657,11 +657,6 @@ function renderizarTabelaEstoque(itensDeEstoque, produtosDefinicoes, isFilteredB
 
     const fragment = document.createDocumentFragment();
     itensDeEstoque.forEach(item => {
-        // Lógica para não mostrar saldo 0 (ou negativo) a menos que buscando (já existente)
-        // if (item.saldo_atual <= 0 && !document.getElementById('searchEstoque')?.value) { 
-        //     // return; // Descomente se não quiser mostrar saldo 0
-        // }
-
         const produtoDef = produtosDefinicoes.find(p => p.nome === item.produto_nome);
         let imagemSrc = '/img/placeholder-image.png'; // Seu placeholder
         if (produtoDef) { 
@@ -986,8 +981,6 @@ function renderizarHistoricoMovimentacoes(movimentos) {
         const quantidadeClasse = mov.quantidade > 0 && (mov.tipo_movimento.includes('ENTRADA') || mov.tipo_movimento.includes('POSITIVO')) ? 'quantidade-entrada' : 
                                mov.quantidade < 0 && (mov.tipo_movimento.includes('SAIDA') || mov.tipo_movimento.includes('NEGATIVO')) ? 'quantidade-saida' : '';
         
-        // Se o tipo for BALANCO, a 'quantidade' na tabela já é o saldo final do ajuste.
-        // O valor real movimentado é o que foi inserido (positivo ou negativo).
         let qtdExibida = mov.quantidade;
 
         tr.innerHTML = `
@@ -1038,17 +1031,12 @@ async function carregarDetalhesEHistoricoItem(item) {
         console.error("ERRO CRÍTICO: View #detalheItemEstoqueView NÃO encontrada no DOM!");
         return;
     }
-    // A visibilidade já é controlada por handleHashChangeEstoque, mas podemos garantir:
-    // detalheView.style.display = 'block'; 
 
     const tituloEl = document.getElementById('detalheItemTitulo');
     const skuEl = document.getElementById('detalheItemSKU'); 
     const skuSpan = skuEl ? skuEl.querySelector('span') : null; 
     const saldoEl = document.getElementById('detalheItemSaldoAtual');
     const thumbnailEl = document.getElementById('detalheItemThumbnail');
-
-    // Log para verificar se os elementos do DOM foram encontrados
-    // console.log("Elementos DOM para detalhe:", { tituloEl, skuEl, skuSpan, saldoEl, thumbnailEl });
 
     if (tituloEl) {
         tituloEl.textContent = `${item.produto_nome} ${item.variante_nome && item.variante_nome !== '-' ? `(${item.variante_nome})` : '(Padrão)'}`;
@@ -1179,9 +1167,6 @@ const btnAbrirModalAjusteEl = document.getElementById('btnAbrirModalAjuste');
 if (btnAbrirModalAjusteEl) {
     btnAbrirModalAjusteEl.addEventListener('click', () => {
         if (itemEstoqueEmDetalhe && permissoesGlobaisEstoque.includes('ajustar-saldo')) {
-            // A função handleAjustarEstoqueClick espera o item global itemEstoqueEmEdicao
-            // e depois muda o hash para #editar-estoque.
-            // Precisamos passar o item correto para ela.
             handleAjustarEstoqueClick(itemEstoqueEmDetalhe);
         } else if (!permissoesGlobaisEstoque.includes('ajustar-saldo')) {
             mostrarPopupEstoque("Você não tem permissão para ajustar o estoque.", "aviso");
@@ -1287,9 +1272,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
         console.error('[Estoque DOMContentLoaded] Erro na autenticação ou inicialização:', error);
         mostrarPopupEstoque('Erro crítico ao carregar a página de estoque. Tente recarregar.', 'erro');
-        // Opcionalmente redirecionar para acesso negado se o erro for de autenticação
-        // if (error.message.toLowerCase().includes('token') || error.status === 401 || error.status === 403) {
-        //     window.location.href = '/admin/acesso-negado.html';
-        // }
     }
 });

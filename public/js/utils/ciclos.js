@@ -215,8 +215,6 @@ export function getCicloAtual() {
     return null; // Caso não encontre a semana atual
 }
 
-// --- NOVA FUNÇÃO ADICIONADA ---
-// Esta função retorna o OBJETO COMPLETO do ciclo que está ativo na data de referência.
 export function getObjetoCicloCompletoAtual(dataReferencia = new Date()) {
     const hojeNormalizado = new Date(dataReferencia.getFullYear(), dataReferencia.getMonth(), dataReferencia.getDate());
 
@@ -239,4 +237,3 @@ export function getObjetoCicloCompletoAtual(dataReferencia = new Date()) {
     }
     return null; // Nenhum ciclo atual encontrado
 }
-// --- FIM DA NOVA FUNÇÃO ---
