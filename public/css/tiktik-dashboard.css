@@ -324,7 +324,45 @@ body.dt-body.autenticado {
 .dt-card-assinatura .dt-assinatura-descricao { font-size: 0.95rem; color: var(--dt-cor-cinza-texto-secundario); margin-bottom: 15px; line-height: 1.5; }
 .dt-card-assinatura .dt-btn { width: 100%; }
 
+.dt-filtro-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: relative; /* Para o ícone do calendário, se desejar */
+}
 
+.dt-input.dt-datepicker-display { /* Estilo para o novo span de exibição */
+    background-color: var(--dt-cor-branco); /* Aparência de input */
+    border: 1px solid var(--dt-cor-cinza-borda);
+    border-radius: var(--dt-raio-borda-input);
+    padding: var(--dt-padding-input);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--dt-cor-texto-principal);
+    cursor: pointer; /* Indica que é clicável para abrir o calendário */
+    min-height: calc(1.5em + (var(--dt-padding-input, 10px) * 2) + 2px); /* Altura similar a um input */
+    display: flex;
+    align-items: center;
+}
+
+.dt-filtro-item .fa-calendar-alt {
+    position: absolute;
+    right: 10px;
+    top: 50%; /* Ajustar para alinhar com o meio do span/input de texto */
+    transform: translateY(-50%); /* Ajuste fino do alinhamento vertical do ícone */
+    color: var(--dt-cor-cinza-texto-secundario);
+    pointer-events: none; /* Para que o clique vá para o span/input */
+}
+/* Você precisaria adicionar <i class="fas fa-calendar-alt"></i> no HTML dentro de .dt-filtro-item se quiser o ícone */
+
+
+.dt-datepicker-oculto {
+    position: absolute !important; /* Tira do fluxo normal */
+    width: 1px !important;        /* Dimensões mínimas, mas existentes */
+    height: 1px !important;
+    opacity: 0 !important;        /* Torna invisível */
+    pointer-events: none !important; /* Não interage com o mouse */
+}
 
 /* Modal de Assinatura Tiktik */
 #assinaturaTiktikModal { /* Este é o ID que o JS usa para o container principal do modal */

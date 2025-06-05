@@ -948,14 +948,19 @@ function gerarIdUnico() {
 function atualizarDetalhamentoProcessos(producoesDaCostureira, produtos) {
     const filtroDiaTexto = document.getElementById('filtroDia');
     const filtroSemanaTexto = document.getElementById('filtroSemana');
-    const totalProcessosEl = document.getElementById('totalProcessos');
-    const listaProcessos = document.getElementById('listaProcessos');
+    // MUDEI O NOME DA VARIÁVEL E O ID NO HTML SE VOCÊ QUISER SER CONSISTENTE
+    // const totalProcessosEl = document.getElementById('totalProcessos');
+    const totalQuantidadeEl = document.getElementById('totalQuantidadeDetalhada'); // SUGESTÃO DE NOVO ID
+    const listaProcessosEl = document.getElementById('listaProcessos'); // MANTÉM O NOME listaProcessosEl
     const btnAnterior = document.getElementById('btnAnterior');
     const btnProximo = document.getElementById('btnProximo');
     const paginacaoNumeros = document.getElementById('paginacaoNumeros');
 
-    if (!filtroDiaTexto || !filtroSemanaTexto || !totalProcessosEl || !listaProcessos || !btnAnterior || !btnProximo || !paginacaoNumeros) {
-        console.error('Um ou mais elementos necessários para o detalhamento de processos não foram encontrados no DOM.');
+    // Verifique se o novo ID totalQuantidadeDetalhada existe no seu HTML, 
+    // ou mantenha totalProcessosEl e apenas mude o texto.
+    if (!filtroDiaTexto || !filtroSemanaTexto || !totalQuantidadeEl || !listaProcessosEl || !btnAnterior || !btnProximo || !paginacaoNumeros) {
+        console.error('Um ou mais elementos necessários para o detalhamento de processos (costureira) não foram encontrados no DOM.');
+        if(listaProcessosEl) listaProcessosEl.innerHTML = '<li>Erro ao carregar estrutura do detalhamento.</li>';
         return;
     }
 
@@ -984,17 +989,8 @@ function atualizarDetalhamentoProcessos(producoesDaCostureira, produtos) {
         }
     }
 
-    function calcularTotalPontos(producoesFiltradas) {
-        return producoesFiltradas.reduce((total, p) => {
-            let pontosParaEsteItem = 0;
-            if (p.pontos_gerados !== undefined && p.pontos_gerados !== null) {
-                const pontos = parseFloat(p.pontos_gerados);
-                pontosParaEsteItem = !isNaN(pontos) ? pontos : (p.quantidade || 0);
-            } else {
-                pontosParaEsteItem = p.quantidade || 0;
-            }
-            return total + pontosParaEsteItem;
-        }, 0);
+    function calcularTotalQuantidade(producoesFiltradas) {
+        return producoesFiltradas.reduce((total, p) => total + (p.quantidade || 0), 0);
     }
 
     function renderizarPaginacao(producoesFiltradas) {
@@ -1101,25 +1097,28 @@ function atualizarDetalhamentoProcessos(producoesDaCostureira, produtos) {
         const fim = inicio + itensPorPagina;
         const processosParaExibir = producoesFiltradas.slice(inicio, fim);
 
-        listaProcessos.innerHTML = processosParaExibir.length > 0
+        listaProcessosEl.innerHTML = processosParaExibir.length > 0
             ? processosParaExibir.map(p => {
                 const variacao = p.variacao || 'N/A';
                 const statusAssinatura = p.assinada ? 'Assinado' : 'Pendente';
+                // ** MUDANÇA AQUI: EXIBIR QUANTIDADE EM VEZ DE PONTOS **
                 return `
                     <div class="dc-processo-item">
-                        <p><strong>Produto:</strong> ${p.produto} [${variacao}]</p>
+                        <p><strong>Produto:</strong> ${p.produto} ${variacao !== 'N/A' ? `[${variacao}]` : ''}</p>
                         <p><strong>Processo:</strong> ${p.processo}</p>
-                        <p><strong>Pontos:</strong> ${p.pontos_gerados !== undefined && p.pontos_gerados !== null ? parseFloat(p.pontos_gerados).toFixed(2) : (p.quantidade || 0)}</p>
-                        <p><strong>Hora:</strong> ${new Date(p.data).toLocaleTimeString('pt-BR')}</p>
+                        <p><strong>Quantidade:</strong> ${p.quantidade || 0}</p>
+                        <p><strong>Hora:</strong> ${new Date(p.data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
                         <p><strong>Status:</strong> ${statusAssinatura}</p>
                     </div>
                 `;
             }).join('')
             : '<li>Nenhuma produção encontrada para o período selecionado.</li>';
 
-        const totalPontosCalculados = calcularTotalPontos(producoesFiltradas);
-        totalProcessosEl.textContent = `TOTAL DE PONTOS: ${Math.round(totalPontosCalculados)}`;
-        renderizarPaginacao(producoesFiltradas);
+        // ATUALIZAR PARA USAR A NOVA FUNÇÃO E TEXTO
+        const totalQuantidadeCalculada = calcularTotalQuantidade(producoesFiltradas);
+        totalQuantidadeEl.textContent = `TOTAL DE PROCESSOS (QTD): ${totalQuantidadeCalculada}`; // Texto atualizado
+        
+        renderizarPaginacao(producoesFiltradas); // Esta já está correta
     }
 
     // ** ONCLICK LISTENERS PARA btnAnterior e btnProximo **
@@ -1134,16 +1133,11 @@ function atualizarDetalhamentoProcessos(producoesDaCostureira, produtos) {
 
     // Lógica para definir qual filtro de texto está ativo (dia/semana)
     if (filtroDiaTexto && filtroSemanaTexto) {
-        if (filtroAtivo === 'dia') {
-            filtroDiaTexto.classList.add('active');
-            filtroSemanaTexto.classList.remove('active');
-        } else {
-            filtroSemanaTexto.classList.add('active');
-            filtroDiaTexto.classList.remove('active');
-        }
+        filtroDiaTexto.classList.toggle('active', filtroAtivo === 'dia');
+        filtroSemanaTexto.classList.toggle('active', filtroAtivo === 'semana');
     }
     
-    renderizarProcessos(); // Chamada inicial para renderizar com os dados e filtros atuais
+    renderizarProcessos(); // Chamada inicial para renderizar
 }
 
 // public/js/costureira-dashboard.js

@@ -56,12 +56,9 @@ router.use(async (req, res, next) => {
 // GET /api/estoque/saldo
 router.get('/saldo', async (req, res) => {
     const { usuarioLogado } = req;
-    let dbClient; // Variável declarada
+    let dbClient;
     try {
-        // === VERIFIQUE SE ESTA LINHA ESTÁ PRESENTE E CORRETA ===
-        dbClient = await pool.connect(); 
-        // ======================================================
-
+        dbClient = await pool.connect();
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
 
         if (!permissoesCompletas.includes('acesso-estoque')) {
@@ -70,10 +67,19 @@ router.get('/saldo', async (req, res) => {
 
         const { produto_nome, variante_nome } = req.query;
         
+        // VAMOS MODIFICAR A QUERY AQUI
         let queryText = `
+            WITH UltimosMovimentos AS (
+                SELECT 
+                    produto_nome,
+                    COALESCE(variante_nome, '-') AS variante_nome_chave, -- Para agrupar NULLs consistentemente
+                    MAX(data_movimento) AS ultima_data_movimento
+                FROM estoque_movimentos
+                GROUP BY produto_nome, COALESCE(variante_nome, '-')
+            )
             SELECT 
                 em.produto_nome, 
-                COALESCE(em.variante_nome, '-') AS variante_nome,
+                COALESCE(em.variante_nome, '-') AS variante_nome, 
                 COALESCE(
                     (SELECT g.sku
                      FROM produtos p,
@@ -88,8 +94,12 @@ router.get('/saldo', async (req, res) => {
                     WHEN em.tipo_movimento LIKE 'ENTRADA%' OR em.tipo_movimento = 'AJUSTE_BALANCO_POSITIVO' THEN em.quantidade
                     WHEN em.tipo_movimento LIKE 'SAIDA%' OR em.tipo_movimento = 'AJUSTE_BALANCO_NEGATIVO' THEN -ABS(em.quantidade) 
                     ELSE 0 
-                END) AS saldo_atual
+                END) AS saldo_atual,
+                um.ultima_data_movimento -- Incluímos a data do último movimento para ordenação
             FROM estoque_movimentos em
+            JOIN UltimosMovimentos um 
+              ON em.produto_nome = um.produto_nome 
+             AND COALESCE(em.variante_nome, '-') = um.variante_nome_chave
         `; 
         
         const queryParams = [];
@@ -104,29 +114,38 @@ router.get('/saldo', async (req, res) => {
             whereClauses.push(`em.variante_nome ILIKE $${paramIndex++}`);
             queryParams.push(`%${variante_nome}%`);
         } else if (variante_nome === '-') {
-            whereClauses.push(`em.variante_nome IS NULL`);
+            // Se variante_nome for explicitamente '-', filtramos por NULL ou '-'
+            whereClauses.push(`(em.variante_nome IS NULL OR em.variante_nome = '-')`);
         }
 
         if (whereClauses.length > 0) {
             queryText += ' WHERE ' + whereClauses.join(' AND ');
         }
-        queryText += ' GROUP BY em.produto_nome, em.variante_nome, produto_ref_id ORDER BY em.produto_nome, em.variante_nome';
 
-        // AQUI A VARIÁVEL dbClient É USADA:
+        // Agrupamento
+        queryText += ` 
+            GROUP BY 
+                em.produto_nome, 
+                em.variante_nome, 
+                um.ultima_data_movimento, -- Incluído no GROUP BY
+                produto_ref_id -- produto_ref_id já é calculado de forma agregada/determinística por item
+        `;
+        
+        // NOVA ORDEM: Primeiro pelo último movimento (mais recente primeiro), depois por nome
+        queryText += ' ORDER BY um.ultima_data_movimento DESC, em.produto_nome ASC, em.variante_nome ASC';
+
         const result = await dbClient.query(queryText, queryParams); 
         res.status(200).json(result.rows);
 
     } catch (error) {
         console.error('[router/estoque GET /saldo] Erro:', error.message, error.stack ? error.stack.substring(0,300):"");
-        // Modificado para retornar o details do erro original se for 'dbClient is not defined'
         const details = error.message === 'dbClient is not defined' ? error.message : (error.detail || error.message);
         res.status(500).json({ error: 'Erro ao buscar saldo do estoque.', details: details });
     } finally {
-        if (dbClient) { // Se dbClient foi definido (conectado), então libera
-            dbClient.release();
-        }
+        if (dbClient) dbClient.release();
     }
 });
+
 
 // POST /api/estoque/entrada-producao
 router.post('/entrada-producao', async (req, res) => {

@@ -519,14 +519,23 @@ async function obterSaldoEstoqueAtualAPI() {
 }
 
 async function carregarTabelaEstoque(searchTerm = '', page = 1) {
-    console.log('[Estoque carregarTabelaEstoque] Busca:', searchTerm, 
-                'Página:', page, 
-                'Filtro Alerta Ativo:', filtroAlertaAtivo);
-    currentPageEstoqueTabela = page; 
+    console.log(`[carregarTabelaEstoque] Iniciando. Search: '${searchTerm}', Page: ${page}, Filtro Alerta Ativo: ${filtroAlertaAtivo}`);
+    
+    if (searchTerm && filtroAlertaAtivo) {
+        filtroAlertaAtivo = null;
+    }
+    if (filtroAlertaAtivo && searchTerm) {
+        const searchInput = document.getElementById('searchEstoque');
+        if (searchInput) searchInput.value = '';
+        searchTerm = '';
+    }
+    currentPageEstoqueTabela = parseInt(page) || 1;
 
     const tbody = document.getElementById('estoqueTableBody');
-    if (!tbody) { console.error("tbody não encontrado"); return; }
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;"><div class="es-spinner">Carregando...</div></td></tr>`;
+    const paginacaoContainer = document.getElementById('estoquePaginacaoContainer');
+    if (!tbody) { console.error("[carregarTabelaEstoque] #estoqueTableBody não encontrado!"); return; }
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;"><div class="es-spinner"></div> Carregando...</td></tr>`;
+    if (paginacaoContainer) paginacaoContainer.style.display = 'none';
 
     const contadorUrgenteEl = document.getElementById('contadorUrgente');
     const contadorBaixoEl = document.getElementById('contadorBaixo');
@@ -534,110 +543,153 @@ async function carregarTabelaEstoque(searchTerm = '', page = 1) {
     if (contadorBaixoEl) contadorBaixoEl.textContent = '-';
 
     try {
-        if (saldosEstoqueGlobaisCompletos.length === 0 && !searchTerm && page === 1 && !filtroAlertaAtivo) {
-            await obterSaldoEstoqueAtualAPI(); 
+        let dadosDeSaldoParaProcessar;
+        if (saldosEstoqueGlobaisCompletos.length === 0 || filtroAlertaAtivo) {
+            console.log("[carregarTabelaEstoque] Cache de saldos vazio ou filtro de alerta. Buscando da API...");
+            dadosDeSaldoParaProcessar = await obterSaldoEstoqueAtualAPI(); 
+        } else {
+            console.log("[carregarTabelaEstoque] Usando cache de saldos.");
+            dadosDeSaldoParaProcessar = [...saldosEstoqueGlobaisCompletos];
+        }
+
+        if (!Array.isArray(dadosDeSaldoParaProcessar)) {
+            console.error("[carregarTabelaEstoque] dadosDeSaldoParaProcessar não é array:", dadosDeSaldoParaProcessar);
+            throw new Error("Dados de saldo inválidos.");
         }
         
-        let todosOsProdutosDef, niveisDeAlertaConfigurados;
+        let todosOsProdutosDef = [];
+        let niveisDeAlertaConfiguradosApi = []; // Renomeado para evitar confusão com niveisEstoqueAlertaCache
+
         try {
-            [todosOsProdutosDef, niveisDeAlertaConfigurados] = await Promise.all([
+            [todosOsProdutosDef, niveisDeAlertaConfiguradosApi] = await Promise.all([
                 obterProdutos(), 
-                // Se o cache de níveis já foi carregado E o usuário tem permissão para vê-los, usa o cache.
-                // Caso contrário, tenta buscar. A API /niveis-estoque já tem verificação de permissão.
                 (niveisEstoqueAlertaCache.length > 0 && permissoesGlobaisEstoque.includes('gerenciar-niveis-alerta-estoque')) 
-                    ? Promise.resolve(niveisEstoqueAlertaCache) 
+                    ? Promise.resolve([...niveisEstoqueAlertaCache]) // Retorna cópia do cache
                     : fetchEstoqueAPI('/niveis-estoque') 
             ]);
             
-            // Atualiza o cache apenas se buscou e teve sucesso
-            if (!(niveisEstoqueAlertaCache.length > 0 && permissoesGlobaisEstoque.includes('gerenciar-niveis-alerta-estoque')) && niveisDeAlertaConfigurados) {
-                 niveisEstoqueAlertaCache = niveisDeAlertaConfigurados || [];
+            if (!(niveisEstoqueAlertaCache.length > 0 && permissoesGlobaisEstoque.includes('gerenciar-niveis-alerta-estoque')) && Array.isArray(niveisDeAlertaConfiguradosApi)) {
+                 niveisEstoqueAlertaCache = niveisDeAlertaConfiguradosApi;
+            } else if (!Array.isArray(niveisDeAlertaConfiguradosApi)){
+                console.warn("API de níveis de alerta não retornou um array:", niveisDeAlertaConfiguradosApi);
+                // Não sobrescreve o cache se a chamada à API falhou em retornar um array e o cache já tinha algo
+                if (niveisEstoqueAlertaCache.length === 0) niveisEstoqueAlertaCache = [];
             }
-
         } catch (error) {
-            // === TRATAMENTO DO ERRO DE PERMISSÃO AQUI ===
             if (error.status === 403 && error.message && error.message.toLowerCase().includes('níveis de alerta')) {
-                mostrarPopupEstoque('Você não tem permissão para visualizar/gerenciar os níveis de alerta de estoque. Os cards de alerta podem não funcionar corretamente.', 'aviso', 6000);
-                // Define niveisEstoqueAlertaCache como vazio para que os cálculos de alerta não quebrem
+                mostrarPopupEstoque('Permissão negada para níveis de alerta. Cards de alerta podem não funcionar.', 'aviso', 6000);
                 niveisEstoqueAlertaCache = []; 
-                // Busca apenas os produtos para popular a tabela, sem os níveis
-                todosOsProdutosDef = await obterProdutos();
+                todosOsProdutosDef = await obterProdutos(); // Tenta carregar produtos mesmo assim
             } else {
-                // Outro erro ao buscar produtos ou níveis, relança para o catch principal
-                throw error; 
+                console.error("Erro ao buscar produtos ou níveis de alerta:", error);
+                // Não relança o erro aqui para permitir que a tabela tente renderizar com o que tem
+                // Mas um popup pode ser útil
+                mostrarPopupEstoque("Falha ao carregar dados auxiliares (produtos/níveis).", "erro");
             }
-            // ==========================================
         }
 
+         todosOsProdutosDef = Array.isArray(todosOsProdutosDef) ? todosOsProdutosDef : [];
 
+        // **** DECLARAÇÃO CORRETA DE niveisAlertaValidos ****
+        const niveisAlertaValidos = Array.isArray(niveisEstoqueAlertaCache) ? niveisEstoqueAlertaCache : [];
+        // ***************************************************
+
+        // Calcula contadores de alerta
         let countUrgente = 0;
         let countBaixo = 0;
-        // Só tenta calcular os contadores se o usuário tiver permissão para ver os níveis.
-        // Se não tiver, os contadores permanecerão '-' ou 0.
-        if (permissoesGlobaisEstoque.includes('gerenciar-niveis-alerta-estoque') || niveisEstoqueAlertaCache.length > 0) {
-            saldosEstoqueGlobaisCompletos.forEach(item => {
+        if (permissoesGlobaisEstoque.includes('gerenciar-niveis-alerta-estoque') || niveisAlertaValidos.length > 0) {
+            dadosDeSaldoParaProcessar.forEach(item => { // <<<<<< Linha 610 no seu log original
                 const produtoRefIdParaAlerta = item.produto_ref_id;
                 if (!produtoRefIdParaAlerta) return; 
-                const configNivel = niveisEstoqueAlertaCache.find(n => n.produto_ref_id === produtoRefIdParaAlerta && n.ativo);
-                if (configNivel) {
-                    if (item.saldo_atual <= configNivel.nivel_reposicao_urgente) countUrgente++;
-                    else if (item.saldo_atual <= configNivel.nivel_estoque_baixo) countBaixo++;
+                
+                // Usa niveisAlertaValidos AQUI <<<<<< Linha 614 no seu log original
+                const configNivel = niveisAlertaValidos.find(n => n.produto_ref_id === produtoRefIdParaAlerta && n.ativo);
+                
+                if (configNivel && configNivel.nivel_reposicao_urgente !== null && configNivel.nivel_estoque_baixo !== null) {
+                    const saldoAtualNum = parseFloat(item.saldo_atual);
+                    const nivelUrgenteNum = parseFloat(configNivel.nivel_reposicao_urgente);
+                    const nivelBaixoNum = parseFloat(configNivel.nivel_estoque_baixo);
+
+                    if (!isNaN(saldoAtualNum) && !isNaN(nivelUrgenteNum) && saldoAtualNum <= nivelUrgenteNum) {
+                        countUrgente++;
+                    } else if (!isNaN(saldoAtualNum) && !isNaN(nivelBaixoNum) && saldoAtualNum <= nivelBaixoNum) {
+                        countBaixo++;
+                    }
                 }
             });
         }
         if (contadorUrgenteEl) contadorUrgenteEl.textContent = countUrgente;
         if (contadorBaixoEl) contadorBaixoEl.textContent = countBaixo;
 
-        let itensParaExibirNaTabela = [...saldosEstoqueGlobaisCompletos];
-        if (filtroAlertaAtivo && (permissoesGlobaisEstoque.includes('gerenciar-niveis-alerta-estoque') || niveisEstoqueAlertaCache.length > 0)) {
-            console.log(`Aplicando filtro de alerta '${filtroAlertaAtivo}' à tabela.`);
-            itensParaExibirNaTabela = itensParaExibirNaTabela.filter(item => {
+        // Aplica filtros LOCAIS
+        let itensFiltradosLocalmente = [...dadosDeSaldoParaProcessar];
+        if (filtroAlertaAtivo && (permissoesGlobaisEstoque.includes('gerenciar-niveis-alerta-estoque') || niveisAlertaValidos.length > 0)) {
+            console.log(`Aplicando filtro de alerta LOCAL: '${filtroAlertaAtivo}'`);
+            itensFiltradosLocalmente = itensFiltradosLocalmente.filter(item => {
                 const produtoRefIdParaAlerta = item.produto_ref_id;
                 if (!produtoRefIdParaAlerta) return false;
-                const configNivel = niveisEstoqueAlertaCache.find(n => n.produto_ref_id === produtoRefIdParaAlerta && n.ativo);
-                if (!configNivel) return false; 
-                if (filtroAlertaAtivo === 'urgente') return item.saldo_atual <= configNivel.nivel_reposicao_urgente;
-                if (filtroAlertaAtivo === 'baixo') return item.saldo_atual <= configNivel.nivel_estoque_baixo && item.saldo_atual > configNivel.nivel_reposicao_urgente;
-                return false;
+                // Usa niveisAlertaValidos AQUI
+                const configNivel = niveisAlertaValidos.find(n => n.produto_ref_id === produtoRefIdParaAlerta && n.ativo);
+                if (!configNivel || configNivel.nivel_reposicao_urgente === null || configNivel.nivel_estoque_baixo === null) return false;
+
+                const saldoAtualNum = parseFloat(item.saldo_atual);
+                const nivelUrgenteNum = parseFloat(configNivel.nivel_reposicao_urgente);
+                const nivelBaixoNum = parseFloat(configNivel.nivel_estoque_baixo);
+
+                if (isNaN(saldoAtualNum) || isNaN(nivelUrgenteNum) || isNaN(nivelBaixoNum)) return false;
+
+                if (filtroAlertaAtivo === 'urgente') {
+                    return saldoAtualNum <= nivelUrgenteNum;
+                }
+                if (filtroAlertaAtivo === 'baixo') {
+                    // Item está em estoque baixo se <= nivelBaixo E > nivelUrgente
+                    return saldoAtualNum <= nivelBaixoNum && saldoAtualNum > nivelUrgenteNum;
+                }
+                return false; // Caso de filtroAlertaAtivo desconhecido
             });
         }
 
         if (searchTerm) {
-            console.log(`Aplicando filtro de busca textual: '${searchTerm}'`);
-            itensParaExibirNaTabela = itensParaExibirNaTabela.filter(item =>
-                item.produto_nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (item.variante_nome && item.variante_nome !== '-' && item.variante_nome.toLowerCase().includes(searchTerm.toLowerCase()))
+            console.log(`Aplicando filtro de busca textual LOCAL: '${searchTerm}'`);
+            const termoBuscaLower = searchTerm.toLowerCase();
+            itensFiltradosLocalmente = itensFiltradosLocalmente.filter(item =>
+                item.produto_nome.toLowerCase().includes(termoBuscaLower) ||
+                (item.variante_nome && item.variante_nome !== '-' && item.variante_nome.toLowerCase().includes(termoBuscaLower))
             );
         }
         
-        itensParaExibirNaTabela.sort((a, b) => a.produto_nome.localeCompare(b.produto_nome) || (a.variante_nome || '').localeCompare(b.variante_nome || ''));
+        // A API já retorna ordenado por ultima_data_movimento DESC.
+        // Se um filtro de busca textual foi aplicado, a ordenação original da API (que considera todos os itens)
+        // ainda é a base, e o filtro textual apenas reduz o conjunto.
+        // Se precisasse reordenar após o filtro textual local, seria aqui.
+        // Por agora, a ordem da API é mantida para o conjunto filtrado.
         
-        const totalItemsParaPaginar = itensParaExibirNaTabela.length;
-        const totalPages = Math.ceil(totalItemsParaPaginar / itemsPerPageEstoqueTabela);
-        currentPageEstoqueTabela = Math.max(1, Math.min(page, totalPages));
+        const totalItemsParaPaginar = itensFiltradosLocalmente.length;
+        const totalPages = Math.ceil(totalItemsParaPaginar / itemsPerPageEstoqueTabela) || 1; // Pelo menos 1 página
+        currentPageEstoqueTabela = Math.max(1, Math.min(currentPageEstoqueTabela, totalPages)); // Ajusta currentPage
 
         const startIndex = (currentPageEstoqueTabela - 1) * itemsPerPageEstoqueTabela;
         const endIndex = startIndex + itemsPerPageEstoqueTabela;
-        const itensPaginados = itensParaExibirNaTabela.slice(startIndex, endIndex);
+        const itensPaginados = itensFiltradosLocalmente.slice(startIndex, endIndex);
            
         renderizarTabelaEstoque(itensPaginados, todosOsProdutosDef || []);
-        renderizarPaginacaoEstoque(totalPages, searchTerm);
+        renderizarPaginacaoEstoque(totalPages, searchTerm); // Passa o searchTerm para manter no contexto da paginacão
 
         const btnMostrarTodosEl = document.getElementById('btnMostrarTodosEstoque');
         if (btnMostrarTodosEl) {
             btnMostrarTodosEl.style.display = (filtroAlertaAtivo || searchTerm) ? 'inline-flex' : 'none';
         }
-
-
     } catch (error) { 
-        console.error("Erro em carregarTabelaEstoque:", error);
+        console.error("Erro em carregarTabelaEstoque:", error.message, error.stack); // Adicionado stack
         if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:red;">Erro ao carregar estoque.</td></tr>`;
-        // Se o erro de permissão não foi pego no try/catch interno, pode ser pego aqui.
         if (!(error.status === 403 && error.message && error.message.toLowerCase().includes('níveis de alerta'))) {
             mostrarPopupEstoque("Erro inesperado ao carregar dados do estoque.", "erro");
         }
     }
+    console.log(`[carregarTabelaEstoque] FINALIZANDO. Tabela renderizada para página: ${currentPageEstoqueTabela}`);
 }
+
+
 
 function renderizarTabelaEstoque(itensDeEstoque, produtosDefinicoes, isFilteredByAlert = false) {
     const tbody = document.getElementById('estoqueTableBody');
@@ -778,43 +830,63 @@ async function filtrarEstoquePorAlerta(tipoAlerta) {
 // --- LÓGICA DE EDIÇÃO/MOVIMENTAÇÃO DE ESTOQUE ---
 function handleAjustarEstoqueClick(item) {
     console.log(`[handleAjustarEstoqueClick] Item:`, item);
-    itemEstoqueEmEdicao = { ...item }; // Copia o item para edição
+    itemEstoqueEmEdicao = { ...item };
 
     document.getElementById('editEstoqueTitle').textContent = `Ajustar Estoque: ${item.produto_nome} ${item.variante_nome && item.variante_nome !== '-' ? `(${item.variante_nome})` : ''}`;
     document.getElementById('produtoNomeEstoque').value = item.produto_nome;
-    document.getElementById('varianteNomeEstoque').value = item.variante_nome || '-'; // Mostra '-' se for null/vazio
-    document.getElementById('saldoAtualDisplay').textContent = item.saldo_atual; 
+    document.getElementById('varianteNomeEstoque').value = item.variante_nome || '-';
+    document.getElementById('saldoAtualDisplay').textContent = item.saldo_atual;
     
-    const tipoMovSelect = document.getElementById('tipoMovimentoEstoque');
     const qtdInput = document.getElementById('quantidadeMovimentoEstoque');
     const qtdLabel = document.querySelector('label[for="quantidadeMovimentoEstoque"]');
-    
-    tipoMovSelect.value = 'ENTRADA_MANUAL'; // Default ao abrir
-    qtdInput.value = '';
-    document.getElementById('observacaoMovimentoEstoque').value = '';
-    
-    const updateLabelAndInput = () => {
-        if (!qtdLabel || !qtdInput) return;
-        if (tipoMovSelect.value === 'BALANCO') {
+    const inputTipoOperacaoOculto = document.getElementById('tipoMovimentoEstoqueSelecionado');
+    const containerBotoesTipoOp = document.getElementById('botoesTipoOperacaoContainer');
+
+    // Função para atualizar label e input de quantidade E o estado dos botões
+    const atualizarCamposPorTipoOperacao = (tipoSelecionado) => {
+        if (!qtdLabel || !qtdInput || !inputTipoOperacaoOculto || !containerBotoesTipoOp) return;
+
+        inputTipoOperacaoOculto.value = tipoSelecionado;
+
+        containerBotoesTipoOp.querySelectorAll('.es-btn-tipo-op').forEach(btn => {
+            btn.classList.remove('ativo'); // Remove 'ativo' de todos primeiro
+            if (btn.dataset.tipo === tipoSelecionado) {
+                btn.classList.add('ativo'); // Adiciona 'ativo' apenas ao botão selecionado
+            }
+        });
+
+        if (tipoSelecionado === 'BALANCO') {
             qtdLabel.textContent = 'Ajustar Saldo Para (Nova Quantidade Total):';
-            qtdInput.placeholder = `Ex: ${itemEstoqueEmEdicao.saldo_atual}`; // Sugere o saldo atual
-            qtdInput.value = itemEstoqueEmEdicao.saldo_atual; // Preenche com o saldo atual para balanço
-            qtdInput.min = "0"; 
+            qtdInput.placeholder = `Ex: ${itemEstoqueEmEdicao.saldo_atual}`;
+            qtdInput.value = itemEstoqueEmEdicao.saldo_atual; // Preenche com o saldo atual
+            qtdInput.min = "0";
         } else {
             qtdLabel.textContent = 'Quantidade a Movimentar:';
             qtdInput.placeholder = 'Ex: 10';
             qtdInput.value = ''; // Limpa para entrada/saída
-            qtdInput.min = "1"; 
+            qtdInput.min = "1";
         }
     };
 
-    if (tipoMovSelect._changeListener) {
-        tipoMovSelect.removeEventListener('change', tipoMovSelect._changeListener);
+    // Adiciona listeners aos botões de tipo de operação
+    if (containerBotoesTipoOp) {
+        containerBotoesTipoOp.querySelectorAll('.es-btn-tipo-op').forEach(btn => {
+            // Para evitar múltiplos listeners se handleAjustarEstoqueClick for chamada várias vezes
+            // para o mesmo item sem a view ser recriada, é bom ter uma forma de limpar.
+            // No entanto, como a view #editEstoqueView é mostrada/escondida, e não recriada
+            // a cada clique, a clonagem para remover listeners é uma boa prática.
+            const newBtn = btn.cloneNode(true);
+            btn.parentNode.replaceChild(newBtn, btn);
+            
+            newBtn.addEventListener('click', () => {
+                atualizarCamposPorTipoOperacao(newBtn.dataset.tipo);
+            });
+        });
     }
-    tipoMovSelect.addEventListener('change', updateLabelAndInput);
-    tipoMovSelect._changeListener = updateLabelAndInput;
-    updateLabelAndInput(); 
-
+    // Define o estado inicial (ex: Entrada)
+    atualizarCamposPorTipoOperacao('ENTRADA_MANUAL'); 
+    
+    document.getElementById('observacaoMovimentoEstoque').value = '';
     window.location.hash = '#editar-estoque';
 }
 
@@ -824,7 +896,25 @@ async function salvarMovimentoManualEstoque() {
         return;
     }
 
-    const tipoOperacao = document.getElementById('tipoMovimentoEstoque').value;
+    // --- DEBUGGING LOGS ---
+    const inputOcultoElement = document.getElementById('tipoMovimentoEstoqueSelecionado');
+    console.log("[salvarMovimentoManualEstoque] Tentando obter input oculto. Elemento:", inputOcultoElement);
+
+    if (!inputOcultoElement) {
+        console.error("[salvarMovimentoManualEstoque] ERRO CRÍTICO: Elemento #tipoMovimentoEstoqueSelecionado NÃO encontrado no DOM!");
+        // Verificar se a view de edição está visível
+        const editView = document.getElementById('editEstoqueView');
+        console.log("[salvarMovimentoManualEstoque] View de edição (#editEstoqueView) está visível?", editView ? editView.style.display : "Não encontrada");
+        // Listar todos os inputs para ver se há algo estranho
+        const allInputs = document.querySelectorAll('input');
+        console.log("[salvarMovimentoManualEstoque] Todos os inputs na página:", allInputs);
+        mostrarPopupEstoque('Erro interno: Não foi possível determinar o tipo de operação. Contate o suporte.', 'erro');
+        return; // Interrompe a execução aqui se o elemento não for encontrado
+    }
+    console.log("[salvarMovimentoManualEstoque] Valor do input oculto:", inputOcultoElement.value);
+    // --- FIM DEBUGGING LOGS ---
+
+    const tipoOperacao = inputOcultoElement.value; // Agora usa a variável que já verificamos
     const quantidadeStr = document.getElementById('quantidadeMovimentoEstoque').value;
     const observacao = document.getElementById('observacaoMovimentoEstoque').value;
 
@@ -850,15 +940,15 @@ async function salvarMovimentoManualEstoque() {
     const payload = {
         produto_nome: itemEstoqueEmEdicao.produto_nome,
         variante_nome: (itemEstoqueEmEdicao.variante_nome === '-' || !itemEstoqueEmEdicao.variante_nome) ? null : itemEstoqueEmEdicao.variante_nome,
-        quantidade_movimentada: quantidade,
+        quantidade_movimentada: parseInt(quantidadeStr), // Garanta que está como número
         tipo_operacao: tipoOperacao,
         observacao: observacao
     };
 
-    console.log('[salvarMovimentoManualEstoque] Enviando Payload:', payload);
     const salvarBtn = document.getElementById('salvarEstoqueBtn');
+    const originalSalvarBtnText = salvarBtn.textContent;
     salvarBtn.disabled = true;
-    salvarBtn.textContent = 'Salvando...'; // Mais simples que innerHTML com ícone aqui
+    salvarBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
 
     try {
         const resultado = await fetchEstoqueAPI('/estoque/movimento-manual', {
@@ -867,18 +957,28 @@ async function salvarMovimentoManualEstoque() {
         });
         mostrarPopupEstoque(resultado.message || 'Movimento de estoque salvo com sucesso!', 'sucesso');
         
-        // === INVALIDAR DADOS LOCAIS PARA FORÇAR RECARGA ===
+        // === INVALIDAR CACHES PARA FORÇAR RECARGA NA PRÓXIMA VISUALIZAÇÃO ===
         saldosEstoqueGlobaisCompletos = []; // Limpa o cache de saldos
-        niveisEstoqueAlertaCache = []; // Limpa o cache de níveis também, pois podem ter mudado o status de alerta
-        // =================================================
+        niveisEstoqueAlertaCache = [];    // Limpa o cache de níveis (o saldo pode ter mudado o status de alerta)
+        // Se você tiver um cache de produtos em `obterProdutos` que também precisa ser invalidado:
+        // invalidateCache('produtos'); // Assumindo que sua função invalidateCache de storage.js funciona assim
 
-        window.location.hash = '';
+        // Redefinir filtros para a próxima vez que a tabela principal for carregada
+        filtroAlertaAtivo = null;
+        const searchInput = document.getElementById('searchEstoque');
+        if(searchInput) searchInput.value = '';
+        currentPageEstoqueTabela = 1; // Voltar para a primeira página
+        console.log("[salvarMovimentoManualEstoque] Estado resetado. currentPageEstoqueTabela:", currentPageEstoqueTabela, "Search:", searchInput ? searchInput.value : "N/A");
+        window.location.hash = '#'; // Mudar para '#' ou '' para acionar handleHashChangeEstoque
+                                   // Usar '#' pode ser melhor para garantir que o evento 'hashchange' dispare
+                                   // mesmo se já estiver em ''. Se '#' não funcionar, tente ''.
+
     } catch (error) {
         console.error('[salvarMovimentoManualEstoque] Erro ao salvar:', error);
         mostrarPopupEstoque(error.data?.details || error.message || 'Erro desconhecido ao salvar movimento.', 'erro');
     } finally {
         salvarBtn.disabled = false;
-        salvarBtn.textContent = 'Salvar Movimento';
+        salvarBtn.innerHTML = originalSalvarBtnText;
     }
 }
 
@@ -888,45 +988,71 @@ function handleHashChangeEstoque() {
     const detalheView = document.getElementById('detalheItemEstoqueView'); 
 
     if (!mainView || !editView || !detalheView) { 
-        console.error("[handleHashChangeEstoque] Uma ou mais views principais não encontradas.");
+        console.error("[handleHashChangeEstoque] Uma ou mais views principais não encontradas no DOM.");
         return;
     }
 
-    // Esconde todas as views
-    mainView.style.display = 'none';
-    mainView.classList.add('hidden'); // Adiciona hidden para garantir se o CSS usa
-
-    editView.style.display = 'none';
-    editView.classList.add('hidden');
-
-    detalheView.style.display = 'none';
-    detalheView.classList.add('hidden');
+    // Oculta todas as views e remove a classe 'hidden' para controle via style.display
+    mainView.style.display = 'none'; mainView.classList.remove('hidden');
+    editView.style.display = 'none'; editView.classList.remove('hidden');
+    detalheView.style.display = 'none'; detalheView.classList.remove('hidden');
 
     const hash = window.location.hash;
+    const cleanHash = (hash === '#') ? '' : hash; // Trata '#' como a view principal
+    console.log(`[handleHashChangeEstoque] Hash: '${hash}', Clean Hash: '${cleanHash}'`);
 
-    if (hash === '#editar-estoque') {
-        if (!itemEstoqueEmEdicao) {
+    if (cleanHash === '#editar-estoque') {
+        if (!itemEstoqueEmEdicao) { // Se não há item em edição, volta para a lista
+            console.warn("[handleHashChangeEstoque] Tentativa de ir para #editar-estoque sem itemEmEdicao. Redirecionando.");
             window.location.hash = ''; 
             return;
         }
         editView.style.display = 'block'; 
-        editView.classList.remove('hidden'); // Remove hidden
-    } else if (hash === '#detalhe-item-estoque') { 
-        if (!itemEstoqueEmDetalhe) {
-            window.location.hash = '';
+        document.getElementById('quantidadeMovimentoEstoque')?.focus();
+    } else if (cleanHash === '#detalhe-item-estoque') { 
+        if (!itemEstoqueEmDetalhe) { // Se não há item para detalhe, volta para a lista
+            console.warn("[handleHashChangeEstoque] Tentativa de ir para #detalhe-item-estoque sem itemEmDetalhe. Redirecionando.");
+            window.location.hash = ''; 
             return;
         }
         detalheView.style.display = 'block';
-        detalheView.classList.remove('hidden'); // Remove hidden
-        carregarDetalhesEHistoricoItem(itemEstoqueEmDetalhe); 
-    } else { 
-        mainView.style.display = 'block';
-        mainView.classList.remove('hidden'); // Remove hidden
         
-        // Se for a visualização principal, recarrega a tabela (se necessário)
-        if (mainView.style.display === 'block' && !filtroAlertaAtivo) {
-             carregarTabelaEstoque(document.getElementById('searchEstoque')?.value || '', currentPageEstoqueTabela);
-        }
+        const tbodyHistorico = document.getElementById('historicoMovimentacoesTableBody');
+        const paginacaoHistorico = document.getElementById('paginacaoHistoricoMovimentacoes');
+        if(tbodyHistorico) tbodyHistorico.innerHTML = `<tr><td colspan="5" style="text-align:center;"><div class="es-spinner"></div> Carregando histórico...</td></tr>`;
+        if(paginacaoHistorico) paginacaoHistorico.style.display = 'none';
+        
+        carregarDetalhesEHistoricoItem(itemEstoqueEmDetalhe).catch(err => {
+            console.error("Erro ao carregar detalhes do item:", err);
+            mostrarPopupEstoque("Falha ao carregar detalhes do item.", "erro");
+        }); 
+    } else { // View Principal (hash é '', '#' ou não reconhecido)
+        mainView.style.display = 'block';
+        
+        // Quando voltamos para a view principal, os valores de filtro e página já devem ter sido
+        // resetados por `salvarMovimentoManualEstoque` se a navegação veio de lá.
+        // Se a navegação for F5 ou link direto, eles terão seus valores padrão globais.
+        const searchTermAtual = document.getElementById('searchEstoque')?.value || '';
+        
+        console.log(`[handleHashChangeEstoque] Exibindo Main View. Search: '${searchTermAtual}', Página: ${currentPageEstoqueTabela}, Filtro Alerta: ${filtroAlertaAtivo}`);
+        
+        const tbodyEstoque = document.getElementById('estoqueTableBody');
+        const paginacaoEstoque = document.getElementById('estoquePaginacaoContainer');
+        if (tbodyEstoque) tbodyEstoque.innerHTML = `<tr><td colspan="4" style="text-align:center;"><div class="es-spinner"></div> Atualizando lista de estoque...</td></tr>`;
+        if (paginacaoEstoque) paginacaoEstoque.style.display = 'none';
+
+        // `carregarTabelaEstoque` usará `currentPageEstoqueTabela` (que deve ser 1 se veio de um save)
+        // e `searchTermAtual` (que deve ser '' se veio de um save).
+        // `filtroAlertaAtivo` também deve ser null se veio de um save.
+        carregarTabelaEstoque(searchTermAtual, currentPageEstoqueTabela)
+            .then(() => {
+                console.log(`[handleHashChangeEstoque] Tabela de estoque recarregada para página: ${currentPageEstoqueTabela}`);
+            })
+            .catch(err => {
+                console.error("Erro ao recarregar tabela de estoque via handleHashChange:", err);
+                mostrarPopupEstoque("Falha ao atualizar tabela de estoque.", "erro");
+                if (tbodyEstoque) tbodyEstoque.innerHTML = `<tr><td colspan="4" style="text-align:center; color:red;">Erro ao carregar dados.</td></tr>`;
+            });
     }
 }
 

@@ -27,13 +27,13 @@
                 <h2 class="es-titulo-secao" style="text-align:left; border-bottom:none; margin-bottom:15px;">Alertas de Estoque</h2>
                 <div class="es-alerta-cards-container">
                     <div class="es-alerta-card urgente" id="cardReposicaoUrgente">
-                        <i class="fas fa-exclamation-triangle" style="position:absolute; top:10px; left:10px; color: var(--es-cor-vermelho-urgente); font-size: 1.2em;"></i>
+                        <i class="fas fa-exclamation-triangle es-alerta-icone"></i>
                         <h3>Reposição Urgente</h3>
                         <span class="es-alerta-card-contador" id="contadorUrgente">0</span>
                         <p class="es-alerta-card-descricao">Itens que atingiram o nível crítico.</p>
                     </div>
                     <div class="es-alerta-card baixo" id="cardEstoqueBaixo">
-                         <i class="fas fa-exclamation-circle" style="position:absolute; top:10px; left:10px; color: var(--es-cor-laranja-aviso); font-size: 1.2em;"></i>
+                         <i class="fas fa-exclamation-circle es-alerta-icone"></i>
                         <h3>Estoque Baixo</h3>
                         <span class="es-alerta-card-contador" id="contadorBaixo">0</span>
                         <p class="es-alerta-card-descricao">Itens próximos do nível crítico.</p>
@@ -92,14 +92,25 @@
                     <span id="saldoAtualDisplay" class="saldo-display-estoque">0</span>
                 </div>
                 <hr style="margin: 20px 0; border-color: var(--es-cor-cinza-borda);">
-                <div class="es-form-grupo">
-                    <label for="tipoMovimentoEstoque">Tipo de Operação:</label>
-                    <select id="tipoMovimentoEstoque" class="es-select">
-                        <option value="ENTRADA_MANUAL">Entrada Manual Avulsa</option>
-                        <option value="SAIDA_MANUAL">Saída Manual Avulsa</option>
-                        <option value="BALANCO">Balanço (Ajustar Saldo Para)</option>
-                    </select>
-                </div>
+                
+                <!-- BOTÕES PARA TIPO DE OPERAÇÃO -->
+<div class="es-form-grupo">
+    <label>Tipo de Operação:</label>
+    <div class="es-botoes-tipo-operacao" id="botoesTipoOperacaoContainer">
+        <button type="button" class="es-btn es-btn-tipo-op" data-tipo="ENTRADA_MANUAL">
+            <i class="fas fa-plus-circle"></i> Entrada
+        </button>
+        <button type="button" class="es-btn es-btn-tipo-op" data-tipo="SAIDA_MANUAL">
+            <i class="fas fa-minus-circle"></i> Saída
+        </button>
+        <button type="button" class="es-btn es-btn-tipo-op" data-tipo="BALANCO">
+            <i class="fas fa-balance-scale"></i> Balanço
+        </button>
+    </div>
+    <!-- Manteremos um input oculto para armazenar o valor do tipo de operação selecionado -->
+    <input type="hidden" id="tipoMovimentoEstoqueSelecionado" value="ENTRADA_MANUAL">
+</div>
+
                 <div class="es-form-grupo">
                     <label for="quantidadeMovimentoEstoque">Quantidade a Movimentar / Novo Saldo:</label>
                     <input type="number" id="quantidadeMovimentoEstoque" class="es-input" min="0" placeholder="0">

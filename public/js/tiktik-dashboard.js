@@ -110,11 +110,9 @@ async function obterArrematesDoUsuarioApi() {
 async function obterDadosProducaoCombinados(forceRefresh = false) {
     if (!forceRefresh && dadosProducaoCombinadosCache.length > 0 && 
         dadosProducaoCombinadosCache.every(item => item.assinada !== undefined && item.pontos_gerados !== undefined)) {
-        console.log('[obterDadosProducaoCombinados] Usando cache completo.');
         return dadosProducaoCombinadosCache;
     }
 
-    console.log('[obterDadosProducaoCombinados] Buscando ou reprocessando dados...');
     let producoesOPApi = [];
     let arrematesApi = [];
 
@@ -166,7 +164,6 @@ async function obterDadosProducaoCombinados(forceRefresh = false) {
     
     dadosCombinados.sort((a, b) => b.data.getTime() - a.data.getTime());
     dadosProducaoCombinadosCache = dadosCombinados;
-    console.log('[obterDadosProducaoCombinados] Dados combinados finais (com pontos do DB):', dadosProducaoCombinadosCache);
     return dadosProducaoCombinadosCache;
 }
 
@@ -217,15 +214,12 @@ function carregarMetasSelectTiktik(metaAtualObj) {
     const metaSelect = document.getElementById('metaSelectTiktik'); // Use o ID correto aqui
     
     if (!metaSelect) {
-        console.error("[carregarMetasSelectTiktik] ERRO: Elemento metaSelectTiktik não encontrado!");
         return;
     }
-    console.log("[carregarMetasSelectTiktik] Iniciando. metaAtualObj:", metaAtualObj);
 
     if (!metas || metas.length === 0) {
         metaSelect.innerHTML = '<option value="">Nenhuma meta disponível</option>';
         metaSelect.disabled = true;
-        console.log("[carregarMetasSelectTiktik] Nenhuma meta, select desabilitado.");
         return;
     }
 
@@ -236,7 +230,6 @@ function carregarMetasSelectTiktik(metaAtualObj) {
                            m.valor === metaAtualObj.valor &&
                            m.descricao === metaAtualObj.descricao;
         if (isSelected) {
-            console.log("[carregarMetasSelectTiktik] Meta selecionada (para 'selected' no HTML):", m);
         }
         return `<option value="${index}" ${isSelected ? 'selected' : ''}>${textoOpcao}</option>`;
     }).join('');
@@ -252,7 +245,6 @@ function carregarMetasSelectTiktik(metaAtualObj) {
     // Tentar atualizar o botão AQUI também, como um teste
     const editarMetaBtnElProvisorio = document.getElementById('editarMetaBtnTiktik');
     if (editarMetaBtnElProvisorio && metaSelect.disabled && metaSelect.options.length > 0 && metaSelect.value !== "") {
-        console.log("[carregarMetasSelectTiktik] Tentando setar botão para 'Editar Meta' DE DENTRO DESTA FUNÇÃO.");
         editarMetaBtnElProvisorio.innerHTML = '<i class="fas fa-edit"></i> Editar Meta';
     }
 }
@@ -890,15 +882,15 @@ function normalizarDataParaComparacao(data) {
 function atualizarDetalhamentoProducaoTiktik(dadosCombinados) {
     const filtroDiaTextoEl = document.getElementById('filtroDiaTiktik');
     const filtroSemanaTextoEl = document.getElementById('filtroSemanaTiktik');
-    const totalPontosEl = document.getElementById('totalItensTiktik'); // ID do HTML
-    const listaAtividadesEl = document.getElementById('listaProducaoTiktik'); // ID do HTML
+    // O ID no HTML é 'totalItensTiktik'. Vamos manter o ID e apenas mudar o texto que ele exibe.
+    const totalAtividadesEl = document.getElementById('totalItensTiktik'); 
+    const listaAtividadesEl = document.getElementById('listaProducaoTiktik'); 
     const btnAnteriorEl = document.getElementById('btnAnteriorTiktik');
     const btnProximoEl = document.getElementById('btnProximoTiktik');
     const paginacaoNumerosEl = document.getElementById('paginacaoNumerosTiktik');
 
-    if (!filtroDiaTextoEl || !filtroSemanaTextoEl || !totalPontosEl || !listaAtividadesEl || !btnAnteriorEl || !btnProximoEl || !paginacaoNumerosEl) {
-        console.error('Um ou mais elementos do detalhamento Tiktik não foram encontrados no DOM.');
-        // Poderia mostrar um erro na UI aqui se a listaAtividadesEl existir
+    if (!filtroDiaTextoEl || !filtroSemanaTextoEl || !totalAtividadesEl || !listaAtividadesEl || !btnAnteriorEl || !btnProximoEl || !paginacaoNumerosEl) {
+        console.error('Um ou mais elementos do detalhamento Tiktik (atividades) não foram encontrados no DOM.');
         if(listaAtividadesEl) listaAtividadesEl.innerHTML = '<li>Erro ao carregar estrutura do detalhamento.</li>';
         return;
     }
@@ -922,8 +914,12 @@ function atualizarDetalhamentoProducaoTiktik(dadosCombinados) {
         }
     }
 
-    function calcularTotalPontosFiltrados(itensFiltrados) {
-        return itensFiltrados.reduce((total, item) => total + (item.pontos_gerados || 0), 0);
+    function calcularTotalQuantidadeAtividades(itensFiltrados) {
+        return itensFiltrados.reduce((total, item) => {
+            // 'item.quantidade' existe em ambos os tipos de objetos em dadosCombinados
+            // (seja de producoesOP.quantidade ou arrematesApi.quantidade_arrematada)
+            return total + (item.quantidade || 0); 
+        }, 0);
     }
 
     function renderizarPaginacaoDetalhes(itensFiltrados) {
@@ -1005,20 +1001,31 @@ function atualizarDetalhamentoProducaoTiktik(dadosCombinados) {
         const itensParaExibir = itensFiltrados.slice(inicio, fim);
 
         listaAtividadesEl.innerHTML = itensParaExibir.length > 0
-            ? itensParaExibir.map(item => `
-                <div class="dt-atividade-item">
-                    <p><strong>Produto:</strong> ${item.produto} ${item.variacao ? `[${item.variacao}]` : ''}</p>
-                    <p><strong>Tipo:</strong> ${item.tipoOrigem === 'OP' ? `Prod. OP ${item.opNumero || ''} (${item.processo || 'N/A'})` : `Arremate OP ${item.opNumero || 'N/A'}`}</p>
-                    <p><strong>Pontos:</strong> ${(item.pontos_gerados || 0).toFixed(2)}</p>
-                    <p><strong>Hora:</strong> ${item.data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
-                    ${item.assinada !== undefined ? `<p><strong>Status:</strong> ${item.assinada ? 'Assinado' : 'Pendente'}</p>` : ''}
-                </div>
-            `).join('')
+            ? itensParaExibir.map(item => {
+                // ** MUDANÇA AQUI: EXIBIR QUANTIDADE EM VEZ DE PONTOS DIRETAMENTE NA LISTA **
+                // Os pontos ainda estão em item.pontos_gerados se você precisar deles para outra coisa
+                const tipoLabel = item.tipoOrigem === 'OP' 
+                    ? `OP ${item.opNumero || ''} (${item.processo || 'N/A'})` 
+                    : `Arremate OP ${item.opNumero || 'N/A'}`;
+                const dataFormatada = item.data ? new Date(item.data).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : 'Data Inválida';
+                
+                return `
+                    <div class="dt-atividade-item">
+                        <p><strong>Produto:</strong> ${item.produto} ${item.variacao ? `[${item.variacao}]` : ''}</p>
+                        <p><strong>Tipo/Processo:</strong> ${tipoLabel}</p>
+                        <p><strong>Quantidade:</strong> ${item.quantidade || 0}</p>
+                        <p><strong>Hora:</strong> ${dataFormatada}</p>
+                        ${item.assinada !== undefined ? `<p><strong>Status Assinatura:</strong> ${item.assinada ? 'Assinado' : 'Pendente'}</p>` : ''}
+                    </div>
+                `;
+            }).join('')
             : '<li>Nenhuma atividade encontrada para o período selecionado.</li>';
 
-        const totalPontos = calcularTotalPontosFiltrados(itensFiltrados);
-        totalPontosEl.textContent = `TOTAL DE PONTOS: ${Math.round(totalPontos)}`;
-        renderizarPaginacaoDetalhes(itensFiltrados);
+        // ATUALIZAR PARA USAR A NOVA FUNÇÃO E TEXTO
+        const totalQuantidadeCalculada = calcularTotalQuantidadeAtividades(itensFiltrados);
+        totalAtividadesEl.textContent = `TOTAL DE ATIVIDADES (QTD): ${totalQuantidadeCalculada}`; // Texto atualizado
+        
+        renderizarPaginacaoDetalhes(itensFiltrados); // Esta já está correta
     }
     
     // Atualiza classes 'active' dos filtros de texto
@@ -1026,8 +1033,8 @@ function atualizarDetalhamentoProducaoTiktik(dadosCombinados) {
         filtroDiaTextoEl.classList.toggle('active', filtroAtivo === 'dia');
         filtroSemanaTextoEl.classList.toggle('active', filtroAtivo === 'semana');
     }
-
-    renderizarItensDetalhados();
+    
+    renderizarItensDetalhados(); // Chamada inicial para renderizar
 }
 
 
@@ -1041,122 +1048,142 @@ async function verificarAutenticacaoTiktik() {
     return auth.usuario;
 }
 
-function atualizarTextoDatepickerSemanaTiktik() {
-    const inputSemana = $("#datepickerSemanaTiktik");
-    if (!inputSemana.length) return;
-    const dataBase = new Date(dataSelecionadaSemana.getTime());
-    dataBase.setDate(dataBase.getDate() - dataBase.getDay());
-    const inicioSemana = new Date(dataBase.getTime());
-    const fimSemana = new Date(inicioSemana.getTime());
-    fimSemana.setDate(inicioSemana.getDate() + 6);
-    inputSemana.val(`${inicioSemana.toLocaleDateString('pt-BR')} - ${fimSemana.toLocaleDateString('pt-BR')}`);
+function atualizarTextoDatepickerSemanaTiktik(forcarAtualizacaoDisplay = true) {
+    const displaySemana = document.getElementById('datepickerSemanaTiktikDisplay'); // Alvo agora é o SPAN
+    if (!displaySemana) {
+        console.warn("Elemento #datepickerSemanaTiktikDisplay não encontrado.");
+        return;
+    }
+
+    const dataBaseParaCalculo = new Date(dataSelecionadaSemana.getTime()); 
+    const diaDaSemana = dataBaseParaCalculo.getDay();
+    dataBaseParaCalculo.setDate(dataBaseParaCalculo.getDate() - diaDaSemana);
+    const inicioSemanaDisplay = new Date(dataBaseParaCalculo.getTime());
+    inicioSemanaDisplay.setHours(0, 0, 0, 0);
+    const fimSemanaDisplay = new Date(inicioSemanaDisplay.getTime());
+    fimSemanaDisplay.setDate(inicioSemanaDisplay.getDate() + 6);
+    fimSemanaDisplay.setHours(23, 59, 59, 999);
+
+    const textoIntervalo = `${inicioSemanaDisplay.toLocaleDateString('pt-BR')} - ${fimSemanaDisplay.toLocaleDateString('pt-BR')}`;
+
+    if (forcarAtualizacaoDisplay) {
+        displaySemana.textContent = textoIntervalo; // ATUALIZA O TEXTCONTENT DO SPAN
+        console.log("[atualizarTextoDatepickerSemanaTiktik] Display atualizado para:", textoIntervalo);
+    }
+    // O input oculto #datepickerSemanaTiktik será atualizado pelo próprio datepicker quando uma data for selecionada.
 }
 
-
+// --- EVENT LISTENER PRINCIPAL ---
 document.addEventListener('DOMContentLoaded', async () => {
-    usuarioLogado = await verificarAutenticacaoTiktik();
+    usuarioLogado = await verificarAutenticacaoTiktik(); // Assume que esta função está definida
     if (!usuarioLogado) {
         document.body.classList.remove('dt-body');
         document.body.innerHTML = '<p style="text-align:center; padding:20px;font-size:1.2em;color:var(--dt-cor-perigo);">Falha na autenticação. Redirecionando...</p>';
+        // A função verificarAutenticacaoTiktik já deve redirecionar, mas isso evita erros de JS
         return;
     }
     document.body.classList.add('autenticado');
 
+    // Referências a elementos do DOM (obter uma vez para performance)
     const listaAtividadesEl = document.getElementById('listaProducaoTiktik');
     const btnAnteriorPaginacao = document.getElementById('btnAnteriorTiktik');
     const btnProximoPaginacao = document.getElementById('btnProximoTiktik');
     const filtroDiaTextoEl = document.getElementById('filtroDiaTiktik');
     const filtroSemanaTextoEl = document.getElementById('filtroSemanaTiktik');
+    
+    // jQuery objects para datepickers
     const datepickerDiaEl = $("#datepickerDiaTiktik");
-    const datepickerSemanaEl = $("#datepickerSemanaTiktik");
+    const datepickerSemanaInputOculto = $("#datepickerSemanaTiktik"); // O input real (oculto)
+    
+    // Elemento de display para a data da semana
+    const datepickerSemanaDisplayEl = document.getElementById('datepickerSemanaTiktikDisplay'); 
+
     const metaSelectEl = document.getElementById('metaSelectTiktik');
     const editarMetaBtnEl = document.getElementById('editarMetaBtnTiktik');
     const fecharPopupSemAssinaturasBtn = document.getElementById('fecharPopupSemAssinaturasTiktik');
     const logoutBtnEl = document.getElementById('logoutBtn');
     const btnConferirAssinaturasEl = document.getElementById('btnConferirAssinaturasTiktik');
 
+    // --- Funções de Spinner (certifique-se que estão definidas acima ou importadas) ---
     function mostrarSpinnerGeral(mensagem = "Carregando...") {
         let spinnerOverlay = document.getElementById('dt-fullpage-spinner-overlay');
         if (!spinnerOverlay) {
             spinnerOverlay = document.createElement('div');
             spinnerOverlay.id = 'dt-fullpage-spinner-overlay';
-            spinnerOverlay.style.position = 'fixed';
-            spinnerOverlay.style.top = '0';
-            spinnerOverlay.style.left = '0';
-            spinnerOverlay.style.width = '100%';
-            spinnerOverlay.style.height = '100%';
-            spinnerOverlay.style.backgroundColor = 'rgba(255,255,255,0.7)';
-            spinnerOverlay.style.zIndex = '20000';
-            spinnerOverlay.style.display = 'flex';
-            spinnerOverlay.style.justifyContent = 'center';
-            spinnerOverlay.style.alignItems = 'center';
-            spinnerOverlay.innerHTML = `<div class="dt-spinner-container" style="flex-direction:column; gap:10px;">
-                                           <div class="dt-spinner" style="width:40px; height:40px; border-width:4px; margin-right:0;"></div>
-                                           <p style="color:var(--dt-cor-texto-principal); font-weight:500;">${mensagem}</p>
-                                       </div>`;
+            spinnerOverlay.style.position = 'fixed'; spinnerOverlay.style.top = '0'; spinnerOverlay.style.left = '0';
+            spinnerOverlay.style.width = '100%'; spinnerOverlay.style.height = '100%';
+            spinnerOverlay.style.backgroundColor = 'rgba(255,255,255,0.75)'; spinnerOverlay.style.zIndex = '20000';
+            spinnerOverlay.style.display = 'flex'; spinnerOverlay.style.justifyContent = 'center'; spinnerOverlay.style.alignItems = 'center';
+            spinnerOverlay.innerHTML = `<div class="dt-spinner-container" style="flex-direction:column; gap:10px;"><div class="dt-spinner" style="width:40px; height:40px; border-width:4px; margin-right:0;"></div><p style="color:var(--dt-cor-texto-principal); font-weight:500;">${mensagem}</p></div>`;
             document.body.appendChild(spinnerOverlay);
         }
-        spinnerOverlay.querySelector('p').textContent = mensagem; // Atualiza a mensagem
+        spinnerOverlay.querySelector('p').textContent = mensagem;
         spinnerOverlay.style.display = 'flex';
     }
     function esconderSpinnerGeral() {
         const spinnerOverlay = document.getElementById('dt-fullpage-spinner-overlay');
-        if (spinnerOverlay) {
-            spinnerOverlay.style.display = 'none';
+        if (spinnerOverlay) spinnerOverlay.style.display = 'none';
+    }
+     function mostrarSpinnerDetalhesAtividades() {
+        const listaAtividadesEl = document.getElementById('listaProducaoTiktik');
+        if (listaAtividadesEl) {
+            listaAtividadesEl.innerHTML = `<div class="dt-spinner-container"><div class="dt-spinner"></div>Carregando atividades...</div>`;
         }
-    }
-    
-   function mostrarSpinnerDetalhesAtividades() {
-    const listaAtividadesEl = document.getElementById('listaProducaoTiktik');
-    if (listaAtividadesEl) {
-        listaAtividadesEl.innerHTML = `<div class="dt-spinner-container"><div class="dt-spinner"></div>Carregando atividades...</div>`;
-    }
 
-    const btnAnteriorPaginacao = document.getElementById('btnAnteriorTiktik');
-    const btnProximoPaginacao = document.getElementById('btnProximoTiktik');
-    const filtroDiaTextoEl = document.getElementById('filtroDiaTiktik');
-    const filtroSemanaTextoEl = document.getElementById('filtroSemanaTiktik');
-    const datepickerDiaEl = $("#datepickerDiaTiktik");
-    const datepickerSemanaEl = $("#datepickerSemanaTiktik");
-    const paginacaoContainerEl = document.getElementById('paginacaoContainerTiktik');
+        const btnAnteriorPaginacao = document.getElementById('btnAnteriorTiktik');
+        const btnProximoPaginacao = document.getElementById('btnProximoTiktik');
+        const filtroDiaTextoEl = document.getElementById('filtroDiaTiktik');
+        const filtroSemanaTextoEl = document.getElementById('filtroSemanaTiktik');
+        const datepickerDiaEl = $("#datepickerDiaTiktik"); // jQuery object
+        const datepickerSemanaInputOculto = $("#datepickerSemanaTiktik"); // jQuery object
+        const datepickerSemanaDisplayEl = document.getElementById('datepickerSemanaTiktikDisplay');
+        const paginacaoContainerEl = document.getElementById('paginacaoContainerTiktik');
 
-    if (paginacaoContainerEl) {
-        paginacaoContainerEl.style.setProperty('visibility', 'hidden', 'important');
+        if (paginacaoContainerEl) { // VERIFICA PRIMEIRO
+            paginacaoContainerEl.style.setProperty('visibility', 'hidden', 'important'); // DEPOIS ATRIBUI
+        }
+        if (btnAnteriorPaginacao) { btnAnteriorPaginacao.style.pointerEvents = 'none'; btnAnteriorPaginacao.style.opacity = '0.7'; }
+        if (btnProximoPaginacao) { btnProximoPaginacao.style.pointerEvents = 'none'; btnProximoPaginacao.style.opacity = '0.7'; }
+        if (filtroDiaTextoEl) { filtroDiaTextoEl.style.pointerEvents = 'none'; filtroDiaTextoEl.style.opacity = '0.7'; }
+        if (filtroSemanaTextoEl) { filtroSemanaTextoEl.style.pointerEvents = 'none'; filtroSemanaTextoEl.style.opacity = '0.7'; }
+        if (datepickerSemanaDisplayEl) { datepickerSemanaDisplayEl.style.pointerEvents = 'none'; datepickerSemanaDisplayEl.style.opacity = '0.7';}
+        
+        if (datepickerDiaEl.length) datepickerDiaEl.datepicker("option", "disabled", true);
+        if (datepickerSemanaInputOculto.length) datepickerSemanaInputOculto.datepicker("option", "disabled", true);
     }
-    if (btnAnteriorPaginacao) { btnAnteriorPaginacao.style.pointerEvents = 'none'; btnAnteriorPaginacao.style.opacity = '0.7'; }
-    if (btnProximoPaginacao) { btnProximoPaginacao.style.pointerEvents = 'none'; btnProximoPaginacao.style.opacity = '0.7'; }
-    if (filtroDiaTextoEl) { filtroDiaTextoEl.style.pointerEvents = 'none'; filtroDiaTextoEl.style.opacity = '0.7'; }
-    if (filtroSemanaTextoEl) { filtroSemanaTextoEl.style.pointerEvents = 'none'; filtroSemanaTextoEl.style.opacity = '0.7'; }
-    
-    if (datepickerDiaEl.length) datepickerDiaEl.datepicker("option", "disabled", true);
-    if (datepickerSemanaEl.length) datepickerSemanaEl.datepicker("option", "disabled", true);
-}
 
     function esconderSpinnerDetalhesAtividades() {
-    const btnAnteriorPaginacao = document.getElementById('btnAnteriorTiktik');
-    const btnProximoPaginacao = document.getElementById('btnProximoTiktik');
-    const filtroDiaTextoEl = document.getElementById('filtroDiaTiktik');
-    const filtroSemanaTextoEl = document.getElementById('filtroSemanaTiktik');
-    const datepickerDiaEl = $("#datepickerDiaTiktik");
-    const datepickerSemanaEl = $("#datepickerSemanaTiktik");
-    const paginacaoContainerEl = document.getElementById('paginacaoContainerTiktik');
+        const btnAnteriorPaginacao = document.getElementById('btnAnteriorTiktik');
+        const btnProximoPaginacao = document.getElementById('btnProximoTiktik');
+        const filtroDiaTextoEl = document.getElementById('filtroDiaTiktik');
+        const filtroSemanaTextoEl = document.getElementById('filtroSemanaTiktik');
+        const datepickerDiaEl = $("#datepickerDiaTiktik"); // jQuery object
+        const datepickerSemanaInputOculto = $("#datepickerSemanaTiktik"); // jQuery object
+        const datepickerSemanaDisplayEl = document.getElementById('datepickerSemanaTiktikDisplay');
+        const paginacaoContainerEl = document.getElementById('paginacaoContainerTiktik');
 
-    if (paginacaoContainerEl) {
-        paginacaoContainerEl.style.visibility = 'visible';
+        if (paginacaoContainerEl) { // VERIFICA PRIMEIRO
+            paginacaoContainerEl.style.visibility = 'visible'; // DEPOIS ATRIBUI
+        }
+        if (btnAnteriorPaginacao) { btnAnteriorPaginacao.style.pointerEvents = 'auto'; btnAnteriorPaginacao.style.opacity = '1'; }
+        if (btnProximoPaginacao) { btnProximoPaginacao.style.pointerEvents = 'auto'; btnProximoPaginacao.style.opacity = '1'; }
+        if (filtroDiaTextoEl) { filtroDiaTextoEl.style.pointerEvents = 'auto'; filtroDiaTextoEl.style.opacity = '1'; }
+        if (filtroSemanaTextoEl) { filtroSemanaTextoEl.style.pointerEvents = 'auto'; filtroSemanaTextoEl.style.opacity = '1'; }
+        if (datepickerSemanaDisplayEl) { datepickerSemanaDisplayEl.style.pointerEvents = 'auto'; datepickerSemanaDisplayEl.style.opacity = '1';}
+
+        if (datepickerDiaEl.length) datepickerDiaEl.datepicker("option", "disabled", false);
+        if (datepickerSemanaInputOculto.length) datepickerSemanaInputOculto.datepicker("option", "disabled", false);
     }
-    if (btnAnteriorPaginacao) { btnAnteriorPaginacao.style.pointerEvents = 'auto'; btnAnteriorPaginacao.style.opacity = '1'; }
-    if (btnProximoPaginacao) { btnProximoPaginacao.style.pointerEvents = 'auto'; btnProximoPaginacao.style.opacity = '1'; }
-    if (filtroDiaTextoEl) { filtroDiaTextoEl.style.pointerEvents = 'auto'; filtroDiaTextoEl.style.opacity = '1'; }
-    if (filtroSemanaTextoEl) { filtroSemanaTextoEl.style.pointerEvents = 'auto'; filtroSemanaTextoEl.style.opacity = '1'; }
+    // --- Fim Funções de Spinner ---
 
-    if (datepickerDiaEl.length) datepickerDiaEl.datepicker("option", "disabled", false);
-    if (datepickerSemanaEl.length) datepickerSemanaEl.datepicker("option", "disabled", false);
-}
-
+    // Wrapper para atualizar o detalhamento com spinner
     const atualizarDetalhesComSpinner = async () => {
         mostrarSpinnerDetalhesAtividades();
         try {
-            atualizarDetalhamentoProducaoTiktik(dadosProducaoCombinadosCache);
+            // dadosProducaoCombinadosCache é atualizado por obterDadosProducaoCombinados,
+            // que é chamado por atualizarDashboard ou pelos botões de assinatura/refresh.
+            // Para filtros/paginação, usamos o cache existente.
+            atualizarDetalhamentoProducaoTiktik(dadosProducaoCombinadosCache); 
         } catch (error) {
             console.error("Erro ao atualizar detalhamento Tiktik:", error);
             mostrarPopupDT("Falha ao carregar detalhes das atividades.", "erro");
@@ -1165,114 +1192,126 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
     
+    // Tradução do Datepicker
     if ($.datepicker && $.datepicker.regional['pt-BR']) {
         $.datepicker.setDefaults($.datepicker.regional['pt-BR']);
     } else {
         console.warn("Localização pt-BR do jQuery UI Datepicker não carregada. Usando fallback manual.");
-        $.datepicker.setDefaults({
-            monthNames: ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'],
-            monthNamesShort: ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'],
-            dayNames: ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'],
-            dayNamesShort: ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'],
-            dayNamesMin: ['D','S','T','Q','Q','S','S'],
-            dateFormat: 'dd/mm/yy', firstDay: 0, isRTL: false, showMonthAfterYear: false, yearSuffix: ''
-        });
+        $.datepicker.setDefaults({ /* ... seu fallback de tradução ... */ });
     }
 
+    // --- INICIALIZAÇÃO DO DASHBOARD ---
     mostrarSpinnerGeral("Carregando Dashboard Tiktik...");
-
     try {
         await atualizarDashboard(true); // Carga inicial de todos os dados e cards
 
-       // **** AJUSTE PARA O ESTADO INICIAL DO BOTÃO DE META (REVISADO) ****
-        console.log("[DOMContentLoaded] Iniciando sincronização do botão de meta.");
+        // Sincronizar estado inicial do botão de meta
         if (metaSelectEl && editarMetaBtnEl) {
-            console.log("[DOMContentLoaded] Estado do metaSelectEl ANTES da sincronização: Disabled:", metaSelectEl.disabled, "Value:", metaSelectEl.value, "Options:", metaSelectEl.options.length);
-
-            // A função carregarMetasSelectTiktik é chamada por atualizarCardMetaTiktik,
-            // que é chamada por atualizarDashboard.
-            // Ela DEVE ter desabilitado o select se metas foram carregadas.
             if (metaSelectEl.disabled && metaSelectEl.options.length > 0 && metaSelectEl.value !== "") {
-                console.log("[DOMContentLoaded] Condição para 'Editar Meta' ATENDIDA. Alterando botão.");
                 editarMetaBtnEl.innerHTML = '<i class="fas fa-edit"></i> Editar Meta';
-            } else if (!metaSelectEl.disabled && metaSelectEl.options.length > 0 && metaSelectEl.value !== "") {
-                // Se o select foi carregado com uma meta mas, por algum motivo, NÃO está desabilitado,
-                // talvez o botão devesse ser "Confirmar Meta" ou algo que force uma ação.
-                // Ou forçar a desabilitação e o botão para "Editar".
-                console.warn("[DOMContentLoaded] metaSelectEl carregado com valor mas NÃO está desabilitado. Forçando 'Editar Meta' e desabilitando select.");
-                metaSelectEl.disabled = true; // Força desabilitar
-                editarMetaBtnEl.innerHTML = '<i class="fas fa-edit"></i> Editar Meta';
-            } else if (metaSelectEl.options.length === 0 || metaSelectEl.value === "") {
-                console.log("[DOMContentLoaded] Nenhuma meta carregada ou selecionada no select. Botão deve ser 'Confirmar Meta' ou texto padrão.");
-                // Se não há metas, o select estará desabilitado por carregarMetasSelectTiktik.
-                // O botão deve indicar que precisa de uma ação ou que não há o que editar.
-                // Manter o texto padrão do botão ou "Confirmar Meta" se o select estiver vazio/editável.
-                // A lógica do listener de clique do botão já trata o caso de não haver valor selecionado.
-                // Se o select está vazio e desabilitado (por não ter metas), o botão "Editar Meta" não faria sentido.
-                // Se você quiser um texto diferente para "nenhuma meta", adicione aqui.
-                // Por ora, se não cair no if acima, o texto do botão permanecerá o que estiver no HTML ou
-                // o que o listener de clique definir.
             }
-             console.log("[DOMContentLoaded] Estado FINAL do editarMetaBtnEl.innerHTML:", editarMetaBtnEl.innerHTML);
-        } else {
-            console.warn("[DOMContentLoaded] metaSelectEl ou editarMetaBtnEl não encontrado para sincronização.");
         }
-        // **** FIM DO AJUSTE ****
 
-        // Configuração dos Datepickers
+        // Configuração do Datepicker do DIA
         if (datepickerDiaEl.length) {
             datepickerDiaEl.datepicker({
-                dateFormat: 'dd/mm/yy', defaultDate: dataSelecionadaDia,
-                onSelect: async function() { // Removido dateText se não usado
-                    dataSelecionadaDia = datepickerDiaEl.datepicker('getDate'); // Pega a data diretamente
-                    paginaAtualDetalhes = 1; filtroAtivo = 'dia';
+                dateFormat: 'dd/mm/yy', 
+                defaultDate: dataSelecionadaDia,
+                onSelect: async function() { 
+                    dataSelecionadaDia = datepickerDiaEl.datepicker('getDate');
+                    paginaAtualDetalhes = 1; 
+                    filtroAtivo = 'dia';
+                    if (filtroDiaTextoEl) filtroDiaTextoEl.classList.add('active');
+                    if (filtroSemanaTextoEl) filtroSemanaTextoEl.classList.remove('active');
                     await atualizarDetalhesComSpinner();
                     listaAtividadesEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
             }).datepicker('setDate', dataSelecionadaDia);
         }
 
-        if (datepickerSemanaEl.length) {
-            datepickerSemanaEl.datepicker({
+        // Configuração do Datepicker da SEMANA (associado ao input oculto)
+        if (datepickerSemanaInputOculto.length) {
+            datepickerSemanaInputOculto.datepicker({
                 dateFormat: 'dd/mm/yy',
-                onSelect: async function() { // Removido dateText se não usado
-                    dataSelecionadaSemana = datepickerSemanaEl.datepicker('getDate'); 
-                    atualizarTextoDatepickerSemanaTiktik();
-                    paginaAtualDetalhes = 1; filtroAtivo = 'semana';
+                onSelect: async function() {
+                    dataSelecionadaSemana = datepickerSemanaInputOculto.datepicker('getDate'); 
+                    atualizarTextoDatepickerSemanaTiktik(true); // Atualiza o SPAN visível
+                                                          
+                    paginaAtualDetalhes = 1; 
+                    filtroAtivo = 'semana';
+                    if (filtroSemanaTextoEl) filtroSemanaTextoEl.classList.add('active');
+                    if (filtroDiaTextoEl) filtroDiaTextoEl.classList.remove('active');
+
                     await atualizarDetalhesComSpinner();
                     listaAtividadesEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
             });
-            dataSelecionadaSemana = new Date(); // Define para hoje na inicialização
-            atualizarTextoDatepickerSemanaTiktik(); // Atualiza o display do input
+            // Define a data inicial e atualiza o display na carga da página
+            dataSelecionadaSemana = new Date(); 
+            dataSelecionadaSemana.setHours(0,0,0,0); 
+            datepickerSemanaInputOculto.datepicker('setDate', dataSelecionadaSemana); 
+            atualizarTextoDatepickerSemanaTiktik(true); 
         }
 
-        // Listeners para os TEXTOS "Filtrar por Dia" e "Filtrar por Semana"
-        if (filtroDiaTextoEl) {
-            filtroDiaTextoEl.addEventListener('click', async () => {
-                const dataAtualPicker = datepickerDiaEl.datepicker('getDate');
-                if (filtroAtivo === 'dia' && dataAtualPicker && dataSelecionadaDia && dataAtualPicker.getTime() === dataSelecionadaDia.getTime()) return;
-                
-                paginaAtualDetalhes = 1; filtroAtivo = 'dia';
-                const dataDoPicker = datepickerDiaEl.datepicker('getDate');
-                if (dataDoPicker) dataSelecionadaDia = dataDoPicker;
-                else datepickerDiaEl.datepicker('setDate', dataSelecionadaDia); // Seta se estiver vazio
-                
-                await atualizarDetalhesComSpinner();
-                listaAtividadesEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Listener para o SPAN de display da semana (ABRE o calendário)
+        if (datepickerSemanaDisplayEl) {
+            datepickerSemanaDisplayEl.addEventListener('click', () => {
+                if (datepickerSemanaInputOculto.length) {
+                    datepickerSemanaInputOculto.datepicker('show');
+                }
             });
         }
 
+        // Listener para o TEXTO "Filtrar por Semana"
         if (filtroSemanaTextoEl) {
             filtroSemanaTextoEl.addEventListener('click', async () => {
-                paginaAtualDetalhes = 1; filtroAtivo = 'semana';
-                // dataSelecionadaSemana já deve ter um valor (do onSelect ou da inicialização)
-                atualizarTextoDatepickerSemanaTiktik(); 
+                // Verifica se já está ativo e se a data de referência não mudou (evita recarga desnecessária)
+                const dataAtualDoPickerOculto = datepickerSemanaInputOculto.datepicker('getDate');
+                if (filtroAtivo === 'semana' && dataAtualDoPickerOculto && dataSelecionadaSemana && dataAtualDoPickerOculto.getTime() === dataSelecionadaSemana.getTime()){
+                     console.log("Filtro Semana já ativo com a mesma data de referência.");
+                     // Opcional: abrir o datepicker se o usuário clicar no texto mesmo assim
+                     // if (datepickerSemanaInputOculto.length) datepickerSemanaInputOculto.datepicker('show');
+                     return;
+                }
+                paginaAtualDetalhes = 1;
+                filtroAtivo = 'semana';
+                // dataSelecionadaSemana já deve ter o valor correto (última seleção ou hoje)
+                atualizarTextoDatepickerSemanaTiktik(true); 
+                if (filtroSemanaTextoEl) filtroSemanaTextoEl.classList.add('active');
+                if (filtroDiaTextoEl) filtroDiaTextoEl.classList.remove('active');
                 await atualizarDetalhesComSpinner();
                 listaAtividadesEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             });
         }
 
+        // Listener para o TEXTO "Filtrar por Dia"
+        if (filtroDiaTextoEl && datepickerDiaEl.length) {
+            filtroDiaTextoEl.addEventListener('click', async () => {
+                const dataAtualPicker = datepickerDiaEl.datepicker('getDate');
+                if (filtroAtivo === 'dia' && dataAtualPicker && dataSelecionadaDia && dataAtualPicker.getTime() === dataSelecionadaDia.getTime()){
+                    // Se filtro já é dia e a data é a mesma, apenas abre o picker
+                    datepickerDiaEl.datepicker('show');
+                    return;
+                }
+                
+                paginaAtualDetalhes = 1; 
+                filtroAtivo = 'dia';
+                const dataDoPicker = datepickerDiaEl.datepicker('getDate');
+                if (dataDoPicker) {
+                    dataSelecionadaDia = dataDoPicker;
+                } else {
+                    datepickerDiaEl.datepicker('setDate', dataSelecionadaDia); // Seta data se estiver vazio
+                }
+                if (filtroDiaTextoEl) filtroDiaTextoEl.classList.add('active');
+                if (filtroSemanaTextoEl) filtroSemanaTextoEl.classList.remove('active');
+                
+                await atualizarDetalhesComSpinner();
+                listaAtividadesEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                // Abre o datepicker após definir o filtro, para o usuário confirmar/mudar se quiser
+                datepickerDiaEl.datepicker('show'); 
+            });
+        }
+        
         // Listeners para os botões de paginação Anterior/Próximo
         if (btnAnteriorPaginacao) {
             btnAnteriorPaginacao.addEventListener('click', () => {
@@ -1291,7 +1330,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-        // Listener para o botão Editar/Confirmar Meta (FLUXO B - Salva apenas no clique de "Confirmar")
+        // Listener para o botão Editar/Confirmar Meta
         if (editarMetaBtnEl && metaSelectEl) {
             editarMetaBtnEl.addEventListener('click', async () => { 
                 if (metaSelectEl.disabled) {
@@ -1306,7 +1345,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (!isNaN(indiceSelecionado) && todasMetas[indiceSelecionado]) {
                         metaParaSalvarEExibir = todasMetas[indiceSelecionado];
                     } else if (todasMetas.length > 0) { 
-                        console.warn("Nenhuma meta válida selecionada, usando primeira meta como padrão.");
+                        console.warn("Nenhuma meta válida selecionada no select ou índice inválido, usando primeira meta como padrão.");
                         metaParaSalvarEExibir = todasMetas[0];
                         metaSelectEl.value = "0"; 
                     } else {
@@ -1316,13 +1355,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     
                     metaSelectEl.disabled = true; 
                     editarMetaBtnEl.innerHTML = '<i class="fas fa-edit"></i> Editar Meta'; 
-                    
-                    const metaSelecionadaTexto = metaParaSalvarEExibir.descricao ? 
-                        `${metaParaSalvarEExibir.descricao}: ${metaParaSalvarEExibir.pontos} Pontos (R$ ${metaParaSalvarEExibir.valor.toFixed(2)})` : 
-                        `${metaParaSalvarEExibir.pontos} Pontos (R$ ${metaParaSalvarEExibir.valor.toFixed(2)})`;
-
+                    const metaSelecionadaTexto = metaParaSalvarEExibir.descricao ? `${metaParaSalvarEExibir.descricao}: ${metaParaSalvarEExibir.pontos} Pontos (R$ ${metaParaSalvarEExibir.valor.toFixed(2)})` : `${metaParaSalvarEExibir.pontos} Pontos (R$ ${metaParaSalvarEExibir.valor.toFixed(2)})`;
                     salvarMetaSelecionadaTiktik(metaParaSalvarEExibir); 
-                    
                     try {
                         atualizarCardMetaTiktik(dadosProducaoCombinadosCache); 
                     } catch (error) {
@@ -1333,23 +1367,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             });
         }
-        // O listener para 'change' do metaSelectEl FOI REMOVIDO para implementar o Fluxo B.
 
+        // Listener para fechar o popup de "Sem Assinaturas Pendentes"
         if (fecharPopupSemAssinaturasBtn) {
             fecharPopupSemAssinaturasBtn.addEventListener('click', () => {
                 document.getElementById('popupSemAssinaturasTiktik')?.classList.remove('ativo');
             });
         }
 
+        // Listener para o botão de Logout
         if (logoutBtnEl) logoutBtnEl.addEventListener('click', logout);
 
+        // Listener para o botão de Conferir Assinaturas Tiktik
         if(btnConferirAssinaturasEl) {
             btnConferirAssinaturasEl.addEventListener('click', async () => {
-                mostrarSpinnerGeral("Verificando pendências...");
+                mostrarSpinnerGeral("Verificando pendências de assinatura...");
                 try {
                     const dadosRecentes = await obterDadosProducaoCombinados(true); 
                     atualizarCardAssinaturaTiktik(dadosRecentes); 
                 } catch (error) {
+                    console.error("Erro ao buscar dados para assinatura Tiktik:", error)
                     mostrarPopupDT("Erro ao buscar dados para assinatura.", "erro");
                 } finally {
                     esconderSpinnerGeral();
@@ -1359,8 +1396,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     } catch (e) {
         console.error("Erro crítico na inicialização da Dashboard Tiktik:", e);
-        mostrarPopupDT("Erro grave ao carregar o dashboard. Tente novamente mais tarde.", "erro");
+        mostrarPopupDT("Erro grave ao carregar o dashboard. Tente novamente mais tarde.", "erro", 0); // Popup persistente
     } finally {
-        esconderSpinnerGeral();
+        esconderSpinnerGeral(); // Garante que o spinner de página inteira seja sempre escondido
     }
 });

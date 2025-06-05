@@ -78,19 +78,23 @@
 
             <!-- Card Detalhamento de Atividades -->
             <div class="dt-card dt-card-detalhamento dt-card-full-width">
-                <h2 class="dt-card-titulo">Detalhamento de Pontos</h2>
+                <h2 class="dt-card-titulo">Detalhamento de Produção</h2>
                 <div class="dt-filtros-container dt-filtros-grid">
-                    <div class="dt-filtro-item">
-                        <span id="filtroDiaTiktik" class="dt-filtro-texto active">Filtrar por Dia</span>
-                        <input type="text" id="datepickerDiaTiktik" class="dt-input dt-datepicker" placeholder="Selecione o dia">
-                    </div>
-                    <div class="dt-filtro-item">
-                        <span id="filtroSemanaTiktik" class="dt-filtro-texto">Filtrar por Semana</span>
-                        <input type="text" id="datepickerSemanaTiktik" class="dt-input dt-datepicker" placeholder="Selecione a semana">
-                    </div>
-                </div>
-                <p id="totalItensTiktik" class="dt-total-processos">TOTAL DE PONTOS: 0</p> <!-- Mudará para PONTOS -->
-                <div class="dt-processos-wrapper"> <!-- Renomear para dt-atividades-wrapper se preferir -->
+    <div class="dt-filtro-item">
+        <span id="filtroDiaTiktik" class="dt-filtro-texto active">Filtrar por Dia</span>
+        <input type="text" id="datepickerDiaTiktik" class="dt-input dt-datepicker" placeholder="Selecione o dia">
+    </div>
+    <div class="dt-filtro-item">
+        <span id="filtroSemanaTiktik" class="dt-filtro-texto">Filtrar por Semana</span>
+        <!-- NOVO ELEMENTO PARA EXIBIR O INTERVALO -->
+        <span id="datepickerSemanaTiktikDisplay" class="dt-input dt-datepicker-display">Selecione a semana</span>
+        <!-- INPUT REAL DO DATEPICKER (PODE SER ESCONDIDO) -->
+        <input type="text" id="datepickerSemanaTiktik" class="dt-datepicker-oculto"> 
+    </div>
+</div>
+
+
+            <p id="totalItensTiktik" class="dt-total-processos">TOTAL DE PRODUCÃO: 0</p>                <div class="dt-processos-wrapper"> <!-- Renomear para dt-atividades-wrapper se preferir -->
                     <ul id="listaProducaoTiktik" class="dt-processos-lista"></ul> <!-- Renomear para dt-atividades-lista -->
                 </div>
                 <div id="paginacaoContainerTiktik" class="dt-paginacao">

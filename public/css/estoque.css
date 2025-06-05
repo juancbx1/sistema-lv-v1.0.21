@@ -65,12 +65,11 @@ body.autenticado { visibility: visible; }
 /* Cards de Alerta de Estoque */
 .es-alerta-cards-container {
     display: flex;
+    flex-direction: column;
     gap: 20px;
     margin-bottom: 20px;
-    flex-wrap: wrap; /* Para quebrar em telas menores */
 }
 .es-alerta-card {
-    flex: 1 1 calc(50% - 10px); /* Tenta fazer 2 por linha */
     background-color: var(--es-cor-branco);
     border-radius: var(--es-raio-borda-card);
     padding: 20px;
@@ -79,6 +78,10 @@ body.autenticado { visibility: visible; }
     cursor: pointer;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     border-left: 5px solid transparent; /* Borda lateral para cor */
+     width: 100%;
+    position: relative;
+    padding-top: 40px;
+
 }
 .es-alerta-card:hover {
     transform: translateY(-3px);
@@ -111,6 +114,21 @@ body.autenticado { visibility: visible; }
     border-left-color: var(--es-cor-laranja-aviso);
 }
 .es-alerta-card.baixo .es-alerta-card-contador {
+    color: var(--es-cor-laranja-aviso);
+}
+
+.es-alerta-card .es-alerta-icone { /* Nova classe para o ícone */
+    position: absolute;
+    top: 15px; /* Distância do topo do card */
+    left: 15px; /* Distância da esquerda do card */
+    font-size: 1.5em; /* Tamanho do ícone */
+    /* A cor já está sendo definida inline, mas poderia ser por classe aqui */
+}
+
+.es-alerta-card.urgente .es-alerta-icone {
+    color: var(--es-cor-vermelho-urgente);
+}
+.es-alerta-card.baixo .es-alerta-icone {
     color: var(--es-cor-laranja-aviso);
 }
 
@@ -225,6 +243,64 @@ body.autenticado { visibility: visible; }
      font-size: 0.9rem;
 }
 
+/* Botões para Tipo de Operação na Edição de Estoque */
+.es-botoes-tipo-operacao {
+    display: flex;
+    gap: 10px;
+    margin-top: 5px;
+    flex-wrap: wrap;
+}
+
+.es-btn-tipo-op {
+    flex-grow: 1;
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    border: 1px solid var(--es-cor-cinza-borda); /* Borda padrão para todos */
+    background-color: var(--es-cor-branco); /* Fundo branco para estado "inativo" */
+    color: var(--es-cor-texto-principal);   /* Texto escuro para estado "inativo" */
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.es-btn-tipo-op:hover:not(.ativo):not(:disabled) {
+    background-color: var(--es-cor-cinza-hover-item);
+    border-color: var(--es-cor-cinza-medio-texto); /* Borda um pouco mais escura no hover */
+}
+
+/* Estilos para o botão ATIVO - estes devem sobrescrever o estado "inativo" */
+.es-btn-tipo-op.ativo {
+    /* Opcional: um leve brilho ou borda mais grossa para destacar que está ativo */
+    box-shadow: 0 0 0 2px rgba(var(--es-cor-azul-primario-rgb, 52, 152, 219), 0.5); /* Usando azul primário para o brilho */
+    /* A cor de fundo e texto virá das classes específicas abaixo */
+}
+
+/* Cores específicas para cada tipo de botão (seja ele ativo ou não inicialmente, mas a classe .ativo controla o destaque visual) */
+.es-btn-tipo-op[data-tipo="ENTRADA_MANUAL"] {
+    /* Cor padrão para o botão de entrada (pode ser verde claro se não ativo) */
+}
+.es-btn-tipo-op[data-tipo="ENTRADA_MANUAL"].ativo {
+    background-color: var(--es-cor-verde-sucesso, #27ae60);
+    color: var(--es-cor-branco, #fff);
+    border-color: var(--es-cor-verde-sucesso, #27ae60); /* Borda da mesma cor do fundo */
+}
+
+.es-btn-tipo-op[data-tipo="SAIDA_MANUAL"] {
+    /* Cor padrão para o botão de saída (pode ser vermelho claro se não ativo) */
+}
+.es-btn-tipo-op[data-tipo="SAIDA_MANUAL"].ativo {
+    background-color: var(--es-cor-vermelho-perigo, #e74c3c);
+    color: var(--es-cor-branco, #fff);
+    border-color: var(--es-cor-vermelho-perigo, #e74c3c);
+}
+
+.es-btn-tipo-op[data-tipo="BALANCO"] {
+    /* Cor padrão para o botão de balanço (pode ser azul claro se não ativo) */
+}
+.es-btn-tipo-op[data-tipo="BALANCO"].ativo {
+    background-color: var(--es-cor-azul-primario, #3498db);
+    color: var(--es-cor-branco, #fff);
+    border-color: var(--es-cor-azul-primario, #3498db);
+}
+
 
 /* View de Edição/Ajuste de Estoque */
 #editEstoqueView { /* Oculto por padrão, JS controla */
@@ -250,15 +326,28 @@ body.autenticado { visibility: visible; }
     display: block;
 }
 .es-form-botoes { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;}
+
 .es-btn {
-    padding: 10px 20px; border-radius: var(--es-raio-borda-botao); border: none;
-    cursor: pointer; font-size: 0.95rem; color: var(--es-cor-branco);
-    display: inline-flex; align-items: center; gap: 6px; font-weight:500;
+    padding: 10px 20px; 
+    border-radius: var(--es-raio-borda-botao); 
+    border: none;
+    cursor: pointer; 
+    font-size: 0.95rem; 
+    color: var(--es-cor-branco);
+    background: #d1d1d1;
+    display: inline-flex; 
+    align-items: center; 
+    gap: 6px; 
+    font-weight:500;
 }
 .es-btn-primario { background-color: var(--es-cor-azul-primario); }
 .es-btn-primario:hover { background-color: var(--es-cor-azul-hover); }
-.es-btn-secundario { background-color: #6c757d; } /* Cinza */
-.es-btn-secundario:hover { background-color: #5a6268; }
+.es-btn-secundario { 
+    background-color: #314b63;; 
+    }
+
+.es-btn-secundario:hover { 
+    background-color: #5a6268; }
 .es-btn-perigo { background-color: var(--es-cor-vermelho-perigo); }
 .es-btn-perigo:hover { background-color: var(--es-cor-vermelho-hover); }
 
@@ -527,8 +616,27 @@ body.autenticado { visibility: visible; }
     .es-card { padding: 15px; }
     .es-titulo-secao { font-size: 1.3rem; text-align:center; }
     .es-input-busca { max-width: 100%; margin-bottom: 15px; }
-    .es-alerta-cards-container { flex-direction: column; }
-    .es-alerta-card { flex-basis: 100%; }
+    .es-alerta-card {
+        padding-left: 20px; /* Mais padding à esquerda para o texto não sobrepor o ícone */
+        padding-top: 15px;  /* Padding superior normal */
+        text-align: left; /* Alinha o texto à esquerda */
+    }
+    .es-alerta-card .es-alerta-icone {
+        font-size: 1.3em;
+        top: 15px; /* Posição no mobile */
+        left: 20px; /* Posição no mobile */
+    }
+    .es-alerta-card h3 {
+        /*  Se o ícone estiver à esquerda e o título ao lado:
+            margin-left: 30px; /* Espaço para o ícone */
+        /*  Ou manter centralizado se o ícone estiver acima */
+        text-align: center; /* Se o ícone estiver acima do título */
+        margin-top: 25px; /* Espaço abaixo do ícone */
+    }
+     .es-alerta-card .es-alerta-card-contador,
+     .es-alerta-card .es-alerta-card-descricao {
+        text-align: center; /* Se o ícone estiver acima */
+     }
     .es-tabela-estilizada th, .es-tabela-estilizada td { font-size: 0.85rem; padding: 8px 10px; }
     .es-tabela-estilizada .thumbnail { width: 35px; height: 35px;}
     #editEstoqueView { padding-top: 55px; }
@@ -555,12 +663,27 @@ body.autenticado { visibility: visible; }
     .es-container-principal { padding: 20px; }
     .es-cabecalho-pagina h1 { font-size: 1.4rem; }
     .es-titulo-secao { font-size: 1.2rem; }
-    .es-alerta-card h3 { font-size: 1rem; }
-    .es-alerta-card .es-alerta-card-contador { font-size: 1.8rem; }
+    
+    .es-alerta-card .es-alerta-icone {
+        left: 15px;
+    }
+
     .es-tabela-estilizada th, .es-tabela-estilizada td { font-size: 0.75rem; padding: 6px 8px; }
     .es-form-grupo label { font-size: 0.85rem; }
     .es-input, .es-select { font-size: 0.9rem; }
     .es-btn { font-size: 0.9rem; padding: 8px 15px; }
+    .es-botoes-tipo-operacao {
+        /* Se quiser forçar uma única linha mesmo que aperte, pode tentar: */
+        /* flex-wrap: nowrap; */
+        /* Mas isso pode fazer o texto vazar se for muito. Teste. */
+    }
+    .es-btn-tipo-op {
+        font-size: 0.85rem; /* Texto um pouco menor nos botões */
+        padding: 7px 10px;
+    }
+    .es-btn-tipo-op i {
+        margin-right: 5px; /* Menos espaço para o ícone */
+    }
 }
 
 @media (max-width: 414px) { 
@@ -586,24 +709,6 @@ body.autenticado { visibility: visible; }
         font-size: 0.85rem;
     }
 
-    /* Cards de Alerta */
-    .es-alerta-card {
-        padding: 15px;
-    }
-    .es-alerta-card h3 {
-        font-size: 0.9rem;
-    }
-    .es-alerta-card .es-alerta-card-contador {
-        font-size: 1.6rem;
-    }
-    .es-alerta-card .es-alerta-card-descricao {
-        font-size: 0.75rem;
-    }
-    .es-alerta-card i { /* Ícones dos cards de alerta */
-        font-size: 1em;
-        top: 8px;
-        left: 8px;
-    }
 
 
     /* Tabela de Estoque */
