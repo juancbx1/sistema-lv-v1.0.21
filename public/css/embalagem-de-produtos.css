@@ -610,6 +610,7 @@ body.autenticado {
     var(--ep-cor-azul-primario);
     border-radius: 50%; 
     animation: ep-spin 1s linear infinite;
+    vertical-align: middle;
 }
 @keyframes ep-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 

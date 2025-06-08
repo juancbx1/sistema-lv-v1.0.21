@@ -270,7 +270,6 @@ function mostrarPopupMensagem(mensagem, tipo = 'erro', duracao = 5000, permitirH
 }
 
 function generateUniqueId() { let id; do { id = `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`; } while (usedIds.has(id)); usedIds.add(id); return id; }
-function generateUniquePN() {return Math.floor(1000 + Math.random() * 9000).toString();}
 function limparCacheOrdens() { ordensCacheMap.clear(); console.log('[Cache] OPs limpo.');}
 function limparCacheProdutosStorage() { invalidateProdutosStorageCache('produtosCadastrados'); console.log('[Cache] Produtos (localStorage) invalidado.'); }
 function limparCacheCortes() { cortesCache = {}; console.log('[Cache] Cortes (memória) limpo.');}
@@ -449,13 +448,29 @@ async function verificarCorteEAtualizarFormOP() {
 
         if (estoque) {
             corteDeEstoqueSelecionadoId = estoque.id;
-            if (infoCorte) infoCorte.innerHTML = `<p style="color:green;font-weight:bold;"><i class="fas fa-check-circle"></i> Corte em estoque! (PN: ${estoque.pn||'N/A'}, Qtd: ${estoque.quantidade})</p><p>Qtd da OP definida.</p>`;
+            // Renomeando PN para PC na mensagem
+            if (infoCorte) infoCorte.innerHTML = `<p style="color:green;font-weight:bold;"><i class="fas fa-check-circle"></i> Corte em estoque! (PC: ${estoque.pn||'N/A'}, Qtd: ${estoque.quantidade})</p><p>Qtd da OP definida.</p>`;
             if (qtdIn) { qtdIn.value = estoque.quantidade; qtdIn.disabled = true; qtdIn.style.backgroundColor = '#e9ecef'; }
         } else {
-            const pn = generateUniquePN();
-            if (infoCorte) { infoCorte.innerHTML = `<p style="color:orange;font-weight:bold;"><i class="fas fa-exclamation-triangle"></i> Nenhum corte em estoque.</p><p>Novo pedido (PN: ${pn}) será gerado.</p>`; infoCorte.dataset.pnGerado = pn; }
+            // ----> AQUI ESTÁ A MUDANÇA PRINCIPAL <----
+            const token = localStorage.getItem('token');
+            const response = await fetch('/api/cortes/next-pc-number', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) throw new Error('Falha ao buscar próximo número de PC.');
+            const data = await response.json();
+            const proximoPC = data.nextPC;
+            
+            // Renomeando PN para PC e usando o número sequencial
+            if (infoCorte) { 
+            // Mensagem para o usuário continua usando "PC" para clareza
+            infoCorte.innerHTML = `<p style="color:orange;font-weight:bold;"><i class="fas fa-exclamation-triangle"></i> Nenhum corte em estoque.</p><p>Novo Pedido de Corte (PC: ${proximoPC}) será gerado.</p>`; 
+            // Salvamos o número puro no dataset
+            infoCorte.dataset.pcGerado = proximoPC;
+            }
             if (qtdIn) { qtdIn.value = ''; qtdIn.disabled = false; qtdIn.style.backgroundColor = ''; qtdIn.placeholder = 'Qtd'; }
         }
+
 
         // AGORA, TORNE OS PARENTES VISÍVEIS ANTES DE ATUALIZAR OS VALORES
         camposDep.forEach(el => {
@@ -520,6 +535,12 @@ async function salvarCorte() {
     const quantidadeInput = document.getElementById('quantidadeCorte');
     const dataCorteInput = document.getElementById('dataCorte');
     const cortadorInput = document.getElementById('cortadorCorte');
+
+       // ==========================================================
+    // >> CORREÇÃO AQUI: PEGAMOS O pcNumber JUNTO COM OS OUTROS <<
+    // ==========================================================
+    const pcNumberInput = document.getElementById('pcNumberCorte');
+    const pcNumber = pcNumberInput ? pcNumberInput.value : null;
     
     // Checagem de permissão no frontend
     if (!permissoes.includes('registrar-corte')) {
@@ -535,6 +556,9 @@ async function salvarCorte() {
 
     let erros = [];
 
+    if (!pcNumber) {
+        erros.push("Não foi possível obter um número de PC. Tente recarregar a página.");
+    }
     if (!produtoNome) {
         erros.push("Produto não selecionado");
     }
@@ -582,6 +606,7 @@ async function salvarCorte() {
         quantidade,
         data: dataCorte,
         cortador,
+        pn: pcNumber, // << USA A VARIÁVEL pcNumber CORRETAMENTE
         status: 'cortados',
         op: null
     };
@@ -605,7 +630,7 @@ async function salvarCorte() {
         }
         
         const savedCorte = await response.json();
-        mostrarPopupMensagem(`Corte para estoque (PN: ${savedCorte.pn}) salvo!`, 'sucesso');
+        mostrarPopupMensagem(`Corte para estoque (PC: ${savedCorte.pn}) salvo!`, 'sucesso');
         limparCacheCortes(); 
         limparFormularioCorte();
         window.location.hash = '#cortes-em-estoque';
@@ -620,10 +645,10 @@ async function salvarCorte() {
 }
 
 async function atualizarCorte(id, novoStatus, cortadorNome, opNumeroParaAssociar = null) {
-    console.log(`[atualizarCorte] Iniciando. ID: ${id}, NovoStatus: ${novoStatus}, Cortador: ${cortadorNome}, OP Ass.: ${opNumeroParaAssociar}`);
+    console.log(`[atualizarCorte] Iniciando. ID: ${id}, NovoStatus: ${novoStatus}, OP Ass.: ${opNumeroParaAssociar}`);
     const token = localStorage.getItem('token');
     try {
-        const payload = { id, status: novoStatus, cortador: cortadorNome };
+        const payload = { id: id, status: novoStatus, cortador: cortadorNome };
         if (opNumeroParaAssociar !== null) {
             payload.op = opNumeroParaAssociar;
         }
@@ -719,32 +744,26 @@ async function atualizarCorte(id, novoStatus, cortadorNome, opNumeroParaAssociar
     }
 }
 
-async function excluirCorte(id) { // Removido 'status' do parâmetro
-    console.log('[excluirCorte] Tentando excluir corte com ID:', id);
+async function excluirCorte(id) {
+    console.log(`[excluirCorte] Solicitando exclusão (soft delete) para o corte ID: ${id}`);
     const token = localStorage.getItem('token');
 
     const response = await fetch('/api/cortes', {
         method: 'DELETE',
         headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ id })
+        body: JSON.stringify({ id: id }) // Enviando o ID no corpo da requisição
     });
 
     if (!response.ok) {
-        const text = await response.text();
-        console.error('[excluirCorte] Resposta do servidor:', text);
-        let errorMsg = `Erro ao excluir corte: Status ${response.status}`;
-        try {
-            const errorJson = JSON.parse(text);
-            errorMsg = errorJson.error || errorMsg;
-        } catch (e) { /* ignore */ }
-        throw new Error(errorMsg);
+        const errorData = await response.json().catch(() => ({ error: `Erro HTTP ${response.status}` }));
+        console.error(`[excluirCorte] Falha na API ao excluir corte ID ${id}:`, errorData);
+        throw new Error(errorData.error || 'Erro desconhecido ao excluir corte.');
     }
 
-    limparCacheCortes();
-    console.log('[excluirCorte] Corte excluído com sucesso');
+    console.log(`[excluirCorte] Corte ID ${id} marcado como excluído com sucesso pela API.`);
     return await response.json();
 }
 
@@ -756,7 +775,6 @@ function handleOPTableClick(event) {
 
     const editId = tr.dataset.editId;
 
-    console.log(`[handleOPTableClick] Linha clicada. Edit ID: ${editId}. Redirecionando...`);
     window.location.hash = `#editar/${editId}`;
 }
 
@@ -787,7 +805,7 @@ async function loadCortesPendentesViewContent(forceRefreshData = false) {
                     <thead>
                         <tr>
                             <th style="width: 5%;"><input type="checkbox" id="selecionarTodosPendentes" title="Selecionar Todos"></th>
-                            <th style="width: 15%;">PN</th>
+                            <th style="width: 15%;">PC</th>
                             <th style="width: 30%;">Produto</th>
                             <th style="width: 25%;">Variação</th>
                             <th style="width: 10%;">Qtd</th>
@@ -893,7 +911,7 @@ async function loadCortesEmEstoqueViewContent(forceRefreshData = false) {
                     <thead>
                         <tr>
                             <th style="width: 5%;"><input type="checkbox" id="selecionarTodosEstoque" title="Selecionar Todos"></th>
-                            <th style="width: 15%;">PN</th>
+                            <th style="width: 15%;">PC</th>
                             <th style="width: 30%;">Produto</th>
                             <th style="width: 25%;">Variação</th>
                             <th style="width: 10%;">Qtd</th>
@@ -1036,7 +1054,7 @@ async function handleExcluirCortes(tbodyId, tipoCorte, callbackReloadView) {
         return;
     }
 
-    if (confirm(`Tem certeza que deseja excluir os ${checkboxes.length} corte${checkboxes.length > 1 ? 's' : ''} selecionado${checkboxes.length > 1 ? 's' : ''}?`)) {
+    if (confirm(`Tem certeza que deseja excluir os ${checkboxes.length} corte${checkboxes.length > 1 ? 's' : ''} selecionado${checkboxes.length > 1 ? 's' : ''}? Esta ação também cancelará qualquer OP associada.`)) {
         const btnExcluir = tipoCorte === 'pendente' 
             ? document.getElementById('btnExcluirCortesPendentes') 
             : document.getElementById('btnExcluirCortesEstoque');
@@ -1052,8 +1070,9 @@ async function handleExcluirCortes(tbodyId, tipoCorte, callbackReloadView) {
             for (const cb of checkboxes) {
                 try {
                     const corteId = cb.dataset.id;
-                    const corteStatus = cb.dataset.status; // Pega o status do data-status do checkbox
-                    await excluirCorte(corteId, corteStatus);
+                    // A função excluirCorte no frontend deve chamar a API DELETE
+                    // E a API DELETE no backend fará todo o trabalho pesado.
+                    await excluirCorte(corteId);
                 } catch (errorIndividual) {
                     console.error(`Erro ao excluir corte ID ${cb.dataset.id}:`, errorIndividual);
                     algumErro = true;
@@ -1067,7 +1086,8 @@ async function handleExcluirCortes(tbodyId, tipoCorte, callbackReloadView) {
                 mostrarPopupMensagem('Alguns cortes não puderam ser excluídos. Verifique o console.', 'aviso');
             }
             
-            limparCacheCortes(); 
+            limparCacheCortes();
+            limparCacheOrdens();
             await callbackReloadView(true); 
 
         } catch (errorGeral) {
@@ -1119,15 +1139,23 @@ async function toggleView() {
     if (hash.startsWith('#editar/')) {
         console.log('[toggleView] Preparando para exibir tela de edição. Resetando campos da UI...');
         if (opNumeroTitle) opNumeroTitle.textContent = 'Carregando OP...';
-        if (editProdutoOPInput) editProdutoOPInput.value = '';
-        if (editVarianteContainer) editVarianteContainer.style.display = 'none';
-        if (editVarianteInput) editVarianteInput.value = '';
-        if (editQuantidadeOPInput) editQuantidadeOPInput.value = '';
-        if (editDataEntregaOPInput) editDataEntregaOPInput.value = '';
-        if (etapasContainer) etapasContainer.innerHTML = '<div class="spinner">Carregando etapas...</div>';
-        
-        if (btnFinalizarOP) btnFinalizarOP.disabled = true;
-        if (btnCancelarOPNaEdicao) btnCancelarOPNaEdicao.disabled = true;
+    if (editProdutoOPInput) editProdutoOPInput.value = '';
+    if (editVarianteContainer) editVarianteContainer.style.display = 'none';
+    if (editVarianteInput) editVarianteInput.value = '';
+    if (editQuantidadeOPInput) editQuantidadeOPInput.value = '';
+    if (editDataEntregaOPInput) editDataEntregaOPInput.value = '';
+    if (etapasContainer) etapasContainer.innerHTML = '<div class="spinner">Carregando etapas...</div>';
+    
+    // Limpa também o accordion da OP Filha
+    const opFilhaAccordion = document.getElementById('opFilhaAccordion');
+    if (opFilhaAccordion) {
+        opFilhaAccordion.style.display = 'none';
+        const feedbackDiv = document.getElementById('opFilhaFeedback');
+        if (feedbackDiv) feedbackDiv.style.display = 'none';
+    }
+
+    if (btnFinalizarOP) btnFinalizarOP.disabled = true;
+    if (btnCancelarOPNaEdicao) btnCancelarOPNaEdicao.disabled = true;
     }
 
     if (hash.startsWith('#editar/') && permissoes.includes('editar-op')) {
@@ -1141,7 +1169,6 @@ async function toggleView() {
                 return;
             }
             try {
-                console.log(`[toggleView #editar] Buscando dados para OP com ID: ${editIdFromHash}`);
                 // Usa a nova API para buscar UMA OP
                 const token = localStorage.getItem('token');
                 const response = await fetch(`/api/ordens-de-producao/${encodeURIComponent(editIdFromHash)}`, {
@@ -1173,17 +1200,14 @@ async function toggleView() {
                             ? new Date(opParaEditar.data_entrega).toISOString().split('T')[0] 
                             : '';
                     }
-                    
                     console.log(`[toggleView #editar] Carregando etapas para OP: ${opParaEditar.numero}`);
                     await loadEtapasEdit(opParaEditar, false);
-
                 } else {
                     mostrarPopupMensagem('Ordem de Produção para edição não encontrada.', 'erro');
                     if (opNumeroTitle) opNumeroTitle.textContent = 'OP não encontrada';
                     if (etapasContainer) etapasContainer.innerHTML = '<p style="color:red; text-align:center;">OP não encontrada.</p>';
                 }
             } catch (error) {
-                console.error('[toggleView #editar] Erro ao carregar OP para edição:', error);
                 mostrarPopupMensagem(`Erro ao carregar OP: ${error.message.substring(0,100)}`, 'erro');
                 if (opNumeroTitle) opNumeroTitle.textContent = 'Erro ao carregar OP';
                 if (etapasContainer) etapasContainer.innerHTML = `<p style="color:red; text-align:center;">Erro ao carregar OP: ${error.message.substring(0,100)}</p>`;
@@ -1638,6 +1662,7 @@ async function loadEtapasEdit(op, skipReload = false) {
     etapasContainer.innerHTML = '<div class="spinner">Carregando etapas...</div>';
 
     try {
+        // --- BUSCA DE DADOS (Esta parte continua igual) ---
         const [produtos, usuarios, lancamentosDb, cortesPendentes, cortesCortados, cortesVerificados, cortesUsados] = await Promise.all([
             obterProdutosDoStorage(),
             obterUsuarios(),
@@ -1803,7 +1828,7 @@ async function loadEtapasEdit(op, skipReload = false) {
                     if (cortePendenteAssociado) {
                         const link = document.createElement('a');
                         link.href = `#cortes-pendentes`;
-                        link.textContent = `Ver Detalhes do Corte (PN: ${cortePendenteAssociado.pn})`;
+                        link.textContent = `Ver Detalhes do Corte (PC: ${cortePendenteAssociado.pn})`;
                         link.className = 'link-corte-pendente-etapa';
                         linkDiv.appendChild(link);
                     } else {
@@ -1842,6 +1867,69 @@ async function loadEtapasEdit(op, skipReload = false) {
         await atualizarVisualEtapas(op, true);
         await updateFinalizarButtonState(op);
 
+
+     // ==========================================================
+        // >> CORREÇÃO: LÓGICA DO ACCORDION E BLOQUEIO <<
+        // ==========================================================
+        const opFilhaAccordion = document.getElementById('opFilhaAccordion');
+        if (opFilhaAccordion) {
+            const opFilhaVarianteInfo = document.getElementById('opFilhaVarianteInfo');
+            const opFilhaFeedback = document.getElementById('opFilhaFeedback');
+            const opFilhaConteudo = opFilhaAccordion.querySelector('.op-accordion-conteudo');
+            const opFilhaQtdInput = document.getElementById('quantidadeOpFilha');
+            const btnCriar = document.getElementById('btnCriarOpFilha');
+
+            // 1. Reseta a aparência do accordion sempre que uma nova OP é carregada
+            opFilhaAccordion.classList.remove('active');
+            if (opFilhaConteudo) opFilhaConteudo.style.maxHeight = null;
+            if (opFilhaFeedback) opFilhaFeedback.style.display = 'none';
+            if (opFilhaQtdInput) opFilhaQtdInput.value = '';
+            
+            // 2. Verifica se deve mostrar o accordion (apenas para o produto certo)
+            if (op.produto === 'Scrunchie (Padrão)') {
+                opFilhaAccordion.style.display = 'block';
+                if (opFilhaVarianteInfo) opFilhaVarianteInfo.textContent = op.variante || 'Não definida';
+
+                // 3. FAZ A VERIFICAÇÃO NA API para ver se a filha já existe
+                const token = localStorage.getItem('token');
+                const response = await fetch(`/api/ordens-de-producao/check-op-filha/${op.numero}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                
+                // 4. BLOQUEIA A UI se a filha já existe
+                if (data.existe) {
+                    if (opFilhaQtdInput) opFilhaQtdInput.disabled = true;
+                    if (btnCriar) {
+                        btnCriar.disabled = true;
+                        btnCriar.innerHTML = '<i class="fas fa-check"></i> OP Filha já criada';
+                    }
+                    if (opFilhaFeedback) {
+                        opFilhaFeedback.className = 'op-filha-feedback';
+                        opFilhaFeedback.style.backgroundColor = '#e9ecef';
+                        opFilhaFeedback.style.border = '1px solid #ced4da';
+                        opFilhaFeedback.innerHTML = `<p>Uma OP filha já foi gerada a partir desta OP. Não é possível criar outra.</p>`;
+                        opFilhaFeedback.style.display = 'block';
+                    }
+                    // Força a abertura do accordion para mostrar a mensagem
+                    if (!opFilhaAccordion.classList.contains('active')) {
+                        opFilhaAccordion.classList.add('active');
+                        if (opFilhaConteudo) opFilhaConteudo.style.maxHeight = (opFilhaConteudo.scrollHeight + 40) + "px";
+                    }
+                } else {
+                    // GARANTE QUE ESTÁ DESBLOQUEADO se a filha não existe
+                    if (opFilhaQtdInput) opFilhaQtdInput.disabled = false;
+                    if (btnCriar) {
+                        btnCriar.disabled = false;
+                        btnCriar.innerHTML = '<i class="fas fa-plus-circle"></i> Criar OP Filha';
+                    }
+                }
+            } else {
+                // Esconde o accordion para outros produtos
+                opFilhaAccordion.style.display = 'none';
+            }
+        }
+        
     } catch (e) {
         console.error('[loadEtapasEdit] Erro fatal ao carregar etapas:', e.message, e.stack);
         etapasContainer.innerHTML = `<p style="color:red; text-align:center; padding:10px;">Erro crítico ao carregar etapas: ${e.message.substring(0, 150)}. Tente recarregar a OP.</p>`;
@@ -2349,26 +2437,35 @@ function mostrarPopupEtapasFuturas(op, etapaIndexAtual, etapasFuturasParaLancar,
 
 async function determinarEtapaAtual(op) {
     if (!op || !op.etapas || !Array.isArray(op.etapas) || op.etapas.length === 0) {
-        console.warn('[determinarEtapaAtual] OP inválida ou sem etapas, retornando 0.');
         return 0; 
     }
+
+    // ==========================================================
+    // >> NOVA REGRA DE BLOQUEIO DO CORTE <<
+    // ==========================================================
+    const etapaCorteIndex = op.etapas.findIndex(e => e.processo?.toLowerCase() === 'corte');
+
+    // Se existe uma etapa de corte e ela NÃO foi lançada...
+    if (etapaCorteIndex !== -1 && !op.etapas[etapaCorteIndex].lancado) {
+        console.log(`[determinarEtapaAtual] Bloqueado na etapa de Corte (índice ${etapaCorteIndex}).`);
+        // ...a etapa atual é a própria etapa de corte. Nenhuma outra pode ser a atual.
+        return etapaCorteIndex;
+    }
+    // ==========================================================
+
+    // Se passou pela regra do corte, a lógica original continua
     for (let i = 0; i < op.etapas.length; i++) {
         const etapa = op.etapas[i];
-        if (!etapa) {
-            console.warn(`[determinarEtapaAtual] Etapa no índice ${i} é indefinida.`, op.etapas);
-            continue;
-        }
-        if (!etapa.lancado) { // Se a etapa não está lançada, ela é a atual
+        if (!etapa) continue;
+        if (!etapa.lancado) {
             return i;
         }
     }
-    console.log(`[determinarEtapaAtual] Todas as ${op.etapas.length} etapas parecem completas.`);
+    
     return op.etapas.length;
 }
 
 async function atualizarVisualEtapas(op, isFirstRender = false) {
-    console.log(`[ATUALIZAR_VISUAL_START] Chamada para OP ${op.numero}. isFirstRender: ${isFirstRender}.`);
-
     const etapasRows = document.querySelectorAll('#opEditView .etapa-row');
     const etapaAtualIndex = await determinarEtapaAtual(op);
 
@@ -2429,7 +2526,6 @@ async function atualizarVisualEtapas(op, isFirstRender = false) {
             if (document.activeElement !== quantidadeInput || isFirstRender) {
                 quantidadeInput.value = etapa.quantidade > 0 ? etapa.quantidade : '';
             } else {
-                // console.log(`[ATUALIZAR_VISUAL_LOOP] Input ${etapa.processo} (idx ${i}) está com foco. NÃO MUDANDO O VALOR.`);
             }
 
             quantidadeInput.disabled = isDisabledGeral || concluida || !isEtapaEditavelNestaLinha || !userSelect?.value;
@@ -2450,7 +2546,6 @@ async function atualizarVisualEtapas(op, isFirstRender = false) {
         }
     }
     await updateFinalizarButtonState(op);
-    console.log(`[ATUALIZAR_VISUAL_END] Finalizado para OP ${op.numero}.`);
 }
 
 async function updateFinalizarButtonState(op) {
@@ -2493,7 +2588,6 @@ async function updateFinalizarButtonState(op) {
             finalizarBtn.disabled = true;
         }
     }
-    console.log(`[updateFinalizarButtonState] Botão Finalizar: Texto='${finalizarBtn.textContent}', Disabled=${finalizarBtn.disabled}`);
 }
 
 async function verificarEtapasEStatus(op) {
@@ -2610,7 +2704,7 @@ async function loadVariantesCorte(produtoNome) {
     }
 }
 
-function limparFormularioCorte() {
+async function limparFormularioCorte() { // Adicionamos 'async'
     const produtoCorte = document.getElementById('produtoCorte');
     const quantidadeCorte = document.getElementById('quantidadeCorte');
     const cortadorCorte = document.getElementById('cortadorCorte');
@@ -2619,7 +2713,8 @@ function limparFormularioCorte() {
 
     if (produtoCorte) produtoCorte.value = '';
     if (quantidadeCorte) quantidadeCorte.value = '';
-
+    
+    // Mantém a lógica do cortador
     if (cortadorCorte && usuarioLogado) {
         cortadorCorte.value = usuarioLogado.nome;
     } else if (cortadorCorte) {
@@ -2631,7 +2726,32 @@ function limparFormularioCorte() {
         variantesContainer.style.display = 'none';
     }
     setCurrentDateForCorte();
+
+    // =========================================================
+    // >> NOVA LÓGICA PARA BUSCAR O NÚMERO DO PC <<
+    // =========================================================
+    // Adiciona um campo invisível no HTML para guardar o número
+    let pcNumberInput = document.getElementById('pcNumberCorte');
+    if (!pcNumberInput) {
+        pcNumberInput = document.createElement('input');
+        pcNumberInput.type = 'hidden';
+        pcNumberInput.id = 'pcNumberCorte';
+        document.getElementById('formCorteEstoque').appendChild(pcNumberInput);
+    }
+    
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('/api/cortes/next-pc-number', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (!response.ok) throw new Error('Falha ao buscar PC.');
+        const data = await response.json();
+        pcNumberInput.value = data.nextPC;
+        console.log(`[limparFormularioCorte] Próximo PC para estoque definido: ${data.nextPC}`);
+    } catch (error) {
+        console.error('Erro ao buscar próximo PC para estoque:', error);
+        pcNumberInput.value = ''; // Limpa em caso de erro
+    }
 }
+
 
 function setCurrentDateForCorte() {
   const dataCorte = document.getElementById('dataCorte');
@@ -2707,9 +2827,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.body.classList.add('autenticado');
 
     try {
-        await obterProdutosDoStorage();
+        console.log('[DOMContentLoaded] Forçando a atualização da lista de produtos do servidor...');
+        await obterProdutosDoStorage(true); 
+        console.log('[DOMContentLoaded] Lista de produtos atualizada.');
+
     } catch (error) {
-        mostrarPopupMensagem(`Alerta: Falha ao pré-carregar dados de produtos: ${error.message.substring(0,100)}. Algumas funcionalidades podem demorar mais na primeira vez.`, 'aviso', 7000);
+        mostrarPopupMensagem(`Alerta: Falha ao carregar dados de produtos: ${error.message.substring(0,100)}. A página pode não funcionar corretamente.`, 'erro', 7000);
     }
 
     const statusFilterContainer = document.getElementById('statusFilter');
@@ -2821,6 +2944,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             const dataEntrega = document.getElementById('dataEntregaOP').value;
             const observacoes = document.getElementById('observacoesOP').value.trim();
             const infoCorteContainer = document.getElementById('infoCorteContainer');
+            // Antes era `dataset.pnGerado`, agora é `dataset.pcGerado`
+            const pcGeradoParaNovoCorte = infoCorteContainer ? infoCorteContainer.dataset.pcGerado : null;
             
             let produtoObj;
             try {
@@ -2890,7 +3015,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 novaOP.status = 'produzindo';
             }
 
-            try {
+                try {
                 const savedOP = await salvarOrdemDeProducao(novaOP);
                 console.log('[opForm.submit] Ordem de Produção salva:', savedOP);
 
@@ -2900,23 +3025,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                 let tipoPopup = 'sucesso';
 
                 if (corteDeEstoqueSelecionadoId) {
+                    console.log(`[opForm submit] Vinculando corte de estoque ID ${corteDeEstoqueSelecionadoId} à OP ${savedOP.numero}...`);
                     await atualizarCorte(corteDeEstoqueSelecionadoId, 'usado', usuarioLogado?.nome || 'Sistema', savedOP.numero);
                     msgSucesso += "<br>Corte de estoque foi utilizado.";
                     console.log(`[opForm.submit] Corte de estoque ID ${corteDeEstoqueSelecionadoId} marcado como usado para OP ${savedOP.numero}.`);
-                } else if (pnGeradoParaNovoCorte) {
-                    const corteData = {
-                        produto: produtoNome,
-                        variante: varianteValor || null,
-                        quantidade: quantidade,
-                        data: new Date().toISOString().split('T')[0],
-                        pn: pnGeradoParaNovoCorte,
-                        status: 'pendente',
-                        op: savedOP.numero,
-                        cortador: null
-                    };
-                    const token = localStorage.getItem('token');
+                } if (pcGeradoParaNovoCorte) {
+                const corteData = {
+                produto: produtoNome,
+                variante: varianteValor || null,
+                quantidade: quantidade,
+                data: new Date().toISOString().split('T')[0],
+                pn: pcGeradoParaNovoCorte, // <-- AQUI! Passando o valor "PC-10001"
+                status: 'pendente',
+                op: savedOP.numero,
+                cortador: null
+            };
+            const token = localStorage.getItem('token');
 
-                    console.log('[opForm.submit] Tentando criar corte pendente com dados:', corteData);
+            console.log('[opForm.submit] Tentando criar corte pendente com dados:', corteData);
 
                     const resCorte = await fetch('/api/cortes', {
                         method: 'POST',
@@ -2932,28 +3058,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                         const errorData = await resCorte.json().catch(() => ({
                             error: `Erro HTTP ${errorStatus}. Não foi possível ler detalhes do erro.`
                         }));
-                        console.error(`[opForm.submit] Falha ao criar corte pendente (PN: ${pnGeradoParaNovoCorte}). Status: ${errorStatus}`, errorData);
+                        console.error(`[opForm.submit] Falha ao criar corte pendente (PC: ${pnGeradoParaNovoCorte}). Status: ${errorStatus}`, errorData);
                         
-                        msgSucesso = `OP <strong>#${novaOP.numero}</strong> salva! <br><strong style="color:orange; font-weight:bold;">ATENÇÃO:</strong> Falha ao gerar o pedido de corte automático (PN: ${pnGeradoParaNovoCorte}). <br>Erro: ${errorData.error}. <br><a href="#cortes-pendentes" style="color:#0056b3;text-decoration:underline;font-weight:bold;">Verificar Cortes Pendentes</a> ou crie o corte manualmente.`;
-                        tipoPopup = 'aviso';
+                        msgSucesso = `OP <strong>#${novaOP.numero}</strong> salva! <br><strong style="color:orange; font-weight:bold;">ATENÇÃO:</strong> Falha ao gerar o pedido de corte automático (PC: ${pcGeradoParaNovoCorte}). <br>...`;                        tipoPopup = 'aviso';
                         durPopup = 0;
                     } else {
                         const savedCorteResponse = await resCorte.json();
-                        console.log(`[opForm.submit] Pedido de corte (PN: ${savedCorteResponse.pn || pnGeradoParaNovoCorte}) para OP #${savedOP.numero} gerado com sucesso.`);
-                        msgSucesso += `<br>Pedido de corte gerado. <a href="#cortes-pendentes" style="color:#0056b3;text-decoration:underline;font-weight:bold;">Ver Corte Pendente (PN: ${pnGeradoParaNovoCorte})</a>`;
+                        console.log(`[opForm.submit] Pedido de corte (PC: ${pcGeradoParaNovoCorte}) para OP #${savedOP.numero} gerado com sucesso.`);
+                        msgSucesso += `<br>Pedido de corte gerado. <a href="#cortes-pendentes" style="color:#0056b3;text-decoration:underline;font-weight:bold;">Ver Corte Pendente (PC: ${pcGeradoParaNovoCorte})</a>`;
                         durPopup = 0;
                     }
                 }
 
                 mostrarPopupMensagem(msgSucesso, tipoPopup, durPopup, htmlPop);
 
-                console.log('[opForm submit] Limpando cache de OPs e Cortes.');
                 limparCacheOrdens();
-                if (pnGeradoParaNovoCorte || corteDeEstoqueSelecionadoId) {
-                    limparCacheCortes();
+                if (pcGeradoParaNovoCorte || corteDeEstoqueSelecionadoId) {
+                limparCacheCortes();
                 }
 
-                if (infoCorteContainer) delete infoCorteContainer.dataset.pnGerado;
+                if (infoCorteContainer) delete infoCorteContainer.dataset.pcGerado;
                 corteDeEstoqueSelecionadoId = null;
 
                 if (durPopup > 0) {
@@ -3125,17 +3249,32 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
 
                     const todasEtapasCompletas = await verificarEtapasEStatus(op);
-                    
-                    if (!todasEtapasCompletas) {
-                         mostrarPopupMensagem('Ainda há etapas pendentes ou não lançadas. Verifique todas as etapas antes de finalizar.', 'aviso', 7000);
-                    } else {
-                        op.status = 'finalizado';
-                        op.data_final = new Date().toISOString();
-                        
-                        await window.saveOPChanges(op);
-                        
-                        mostrarPopupMensagem(`OP #${op.numero} finalizada com sucesso!`, 'sucesso');
-                        limparCacheOrdens();
+                    if (todasEtapasCompletas) {
+                op.status = 'finalizado';
+                op.data_final = new Date().toISOString();
+                
+                // A variável 'opSalva' agora contém a resposta completa da API
+                const opSalva = await window.saveOPChanges(op);
+                
+                // ===============================================
+                // >> LÓGICA DE MENSAGEM ESPECÍFICA <<
+                // ===============================================
+                let msgSucesso;
+                
+                // Verifica se a resposta da API incluiu filhas finalizadas
+                if (opSalva.finalizedChildren && opSalva.finalizedChildren.length > 0) {
+                    // Caso B: Mãe + Filha(s)
+                    const filhasNumeros = opSalva.finalizedChildren.join(', ');
+                    msgSucesso = `OP Mãe <strong>#${op.numero}</strong> e a(s) OP(s) Filha(s) <strong>#${filhasNumeros}</strong> foram finalizadas com sucesso!`;
+                } else {
+                    // Caso A: Apenas a Mãe
+                    msgSucesso = `OP <strong>#${op.numero}</strong> finalizada com sucesso!`;
+                }
+
+                mostrarPopupMensagem(msgSucesso, 'sucesso', 7000, true);
+                // ===============================================
+
+                limparCacheOrdens();
                         
                         btnFinalizarOP.textContent = 'OP Finalizada!';
                         btnFinalizarOP.disabled = true;
@@ -3147,7 +3286,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                         }, 2000);
                         return;
                     }
-                } else {
+                } 
+                
+                else {
                     mostrarPopupMensagem('OP não encontrada para finalizar.', 'erro');
                 }
             } catch (e) {
@@ -3192,5 +3333,214 @@ document.addEventListener('DOMContentLoaded', async () => {
             window.location.href = '/login.html';
         });
     }
+
+    //OP FILHA DAS SCRUNCHIES PADRAO (FILHAS = SCRUNCHIE FINA)
+
+const btnCriarOpFilha = document.getElementById('btnCriarOpFilha');
+if (btnCriarOpFilha) {
+    btnCriarOpFilha.addEventListener('click', async () => {
+        const opMaeEditId = window.location.hash.split('/')[1];
+        if (!opMaeEditId) {
+            mostrarPopupMensagem('Erro: Não foi possível identificar a OP "mãe".', 'erro');
+            return;
+        }
+
+        const quantidadeFilha = parseInt(document.getElementById('quantidadeOpFilha').value);
+        if (!quantidadeFilha || quantidadeFilha <= 0) {
+            mostrarPopupMensagem('Por favor, insira uma quantidade válida para a OP filha.', 'aviso');
+            return;
+        }
+
+        if (btnCriarOpFilha.disabled) return;
+
+        const btnOriginal = btnCriarOpFilha;
+        btnOriginal.disabled = true;
+        btnOriginal.innerHTML = '<div class="spinner-btn-interno"></div> Verificando...';
+
+        try {
+            const token = localStorage.getItem('token');
+            
+            // --- ETAPA 0: BUSCAR OP MÃE E FAZER A VERIFICAÇÃO ---
+            const responseMae = await fetch(`/api/ordens-de-producao/${opMaeEditId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!responseMae.ok) throw new Error('Falha ao carregar dados da OP mãe para verificação.');
+            const opMae = await responseMae.json(); // opMae é declarada e atribuída aqui.
+            
+            const responseCheck = await fetch(`/api/ordens-de-producao/check-op-filha/${opMae.numero}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const dataCheck = await responseCheck.json();
+            
+            if (dataCheck.existe) {
+                mostrarPopupMensagem('Ação bloqueada: Uma OP filha já existe para esta OP mãe.', 'aviso');
+                await loadEtapasEdit(opMae, true); 
+                return;
+            }
+
+            btnOriginal.innerHTML = '<div class="spinner-btn-interno"></div> Processando...';
+
+            // --- ETAPA 1: BUSCAR DADOS ADICIONAIS ---
+            // Agora `opMae` existe e `opMae.numero` é válido.
+            const lancamentosMae = await obterLancamentos(opMae.numero, true);
+            const proximoNumeroOp = await getNextOPNumber();
+            const todosProdutos = await obterProdutosDoStorage();
+            const produtoFilho = todosProdutos.find(p => p.nome === 'Scrunchie (Fina)');
+            if (!produtoFilho) throw new Error('Produto "Scrunchie (Fina)" não encontrado.');
+
+            // --- ETAPA 2: CRIAR A OP FILHA (ESTRUTURA) ---
+            console.log(`[OP Filha] Criando a estrutura da OP Filha #${proximoNumeroOp}`);
+            const novaOpFilha = {
+                numero: proximoNumeroOp,
+                produto: produtoFilho.nome,
+                variante: opMae.variante,
+                quantidade: quantidadeFilha,
+                data_entrega: opMae.data_entrega,
+                observacoes: `OP gerada em conjunto com a OP mãe #${opMae.numero}`,
+                status: 'em-aberto', // Começa em aberto, vamos atualizar depois
+                edit_id: generateUniqueId(),
+                etapas: produtoFilho.etapas.map(eInfo => ({
+                    processo: typeof eInfo === 'object' ? eInfo.processo : eInfo,
+                    usuario: '',
+                    quantidade: 0,
+                    lancado: false,
+                    ultimoLancamentoId: null
+                }))
+            };
+            const opFilhaSalva = await salvarOrdemDeProducao(novaOpFilha);
+
+            // --- ETAPA 3: REPLICAR OS LANÇAMENTOS DE PRODUÇÃO ---
+            console.log(`[OP Filha] Replicando ${lancamentosMae.length} lançamentos da OP Mãe para a OP Filha...`);
+            let etapasLancadasNaFilha = 0;
+            for (const lancamento of lancamentosMae) {
+                // Não replicamos o corte, pois a OP filha não precisa de um novo corte físico.
+                if (lancamento.processo.toLowerCase() === 'corte') {
+                    continue;
+                }
+                
+                const dadosProducaoFilha = {
+                    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, // Novo ID único
+                    opNumero: opFilhaSalva.numero, // OP da filha
+                    etapaIndex: lancamento.etapa_index,
+                    processo: lancamento.processo,
+                    produto: opFilhaSalva.produto, // Produto da filha
+                    variacao: opFilhaSalva.variante,
+                    maquina: lancamento.maquina,
+                    quantidade: quantidadeFilha, // Quantidade da filha!
+                    funcionario: lancamento.funcionario,
+                    data: new Date().toISOString(),
+                    lancadoPor: usuarioLogado?.nome || 'Sistema'
+                };
+
+                // Enviando o lançamento para a API de produções
+                const responseProd = await fetch('/api/producoes', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dadosProducaoFilha)
+                });
+
+                if (!responseProd.ok) {
+                    console.warn(`[OP Filha] Falha ao replicar lançamento para a etapa "${lancamento.processo}". Continuando...`);
+                    // Decide se quer parar ou continuar. Por enquanto, vamos continuar.
+                } else {
+                    console.log(`[OP Filha] Lançamento da etapa "${lancamento.processo}" replicado com sucesso.`);
+                    etapasLancadasNaFilha++;
+                    
+                    // Atualiza a etapa correspondente no objeto da OP filha em memória
+                    const etapaNaFilha = opFilhaSalva.etapas[lancamento.etapa_index];
+                    if (etapaNaFilha) {
+                        etapaNaFilha.lancado = true;
+                        etapaNaFilha.usuario = dadosProducaoFilha.funcionario;
+                        etapaNaFilha.quantidade = dadosProducaoFilha.quantidade;
+                        etapaNaFilha.ultimoLancamentoId = dadosProducaoFilha.id;
+                    }
+                }
+            }
+
+            // --- ETAPA 4: ATUALIZAR O STATUS FINAL DA OP FILHA ---
+            if (etapasLancadasNaFilha > 0) {
+                console.log('[OP Filha] Como houve lançamentos, atualizando status da OP Filha para "produzindo".');
+                opFilhaSalva.status = 'produzindo';
+                
+                // Salva a OP Filha novamente, agora com as etapas atualizadas e o status correto
+                await window.saveOPChanges(opFilhaSalva);
+            }
+
+        
+            // --- ETAPA 5: FEEDBACK VISUAL DETALHADO ---
+limparCacheOrdens();
+
+const feedbackDiv = document.getElementById('opFilhaFeedback');
+feedbackDiv.className = 'op-filha-feedback sucesso';
+
+// Monta a mensagem de feedback
+let feedbackHTML = `<p><strong>Sucesso!</strong> OP Filha <strong>#${opFilhaSalva.numero}</strong> foi criada.</p>`;
+
+if (etapasLancadasNaFilha > 0) {
+    feedbackHTML += `<p>As seguintes etapas foram lançadas em conjunto:</p><ul class="remover-bullets">`;
+    // Percorre novamente os lançamentos da mãe para listar os processos replicados
+    for (const lancamento of lancamentosMae) {
+        if (lancamento.processo.toLowerCase() !== 'corte') {
+            feedbackHTML += `<li class="remover-bullets"><i class="fas fa-check-circle" style="color: green;"></i> ${lancamento.processo}</li>`;
+        }
+    }
+    feedbackHTML += `</ul>`;
+} else {
+    feedbackHTML += `<p>Nenhuma etapa da OP mãe havia sido lançada, então a OP filha aguarda o início da produção.</p>`;
+}
+
+feedbackDiv.innerHTML = feedbackHTML;
+feedbackDiv.style.display = 'block';
+
+// Reajusta a altura do contêiner do accordion para incluir o novo feedback
+const accordionContent = feedbackDiv.closest('.op-accordion-conteudo');
+if (accordionContent) {
+    accordionContent.style.maxHeight = (accordionContent.scrollHeight + 40) + "px";
+}
+
+// Limpa o campo de quantidade
+document.getElementById('quantidadeOpFilha').value = '';
+            await loadEtapasEdit(opMae, true);
+
+         } catch (error) {
+            console.error('Erro ao criar e processar OP filha:', error);
+            mostrarPopupMensagem(`Erro ao criar OP filha: ${error.message}`, 'erro');
+            // Se der erro, reabilita o botão para o usuário poder tentar de novo.
+            btnOriginal.disabled = false;
+            btnOriginal.innerHTML = '<i class="fas fa-plus-circle"></i> Criar OP Filha';
+        } 
+        // O bloco 'finally' não é mais necessário para reabilitar o botão,
+        // pois o loadEtapasEdit no final do try ou o catch já cuidam disso.
+    });
+}
+
+        // ========================================================
+// NOVA LÓGICA DO ACCORDION USANDO DELEGAÇÃO DE EVENTOS
+// ========================================================
+const opEditView = document.getElementById('opEditView');
+
+if (opEditView) {
+    opEditView.addEventListener('click', function(event) {
+        // 1. Encontra o cabeçalho do accordion mais próximo do local onde o usuário clicou.
+        const accordionHeader = event.target.closest('.op-accordion-cabecalho');
+
+        // 2. Se o clique não foi no cabeçalho (ou dentro dele), não faz nada.
+        if (!accordionHeader) {
+            return;
+        }
+
+        // 3. Se foi, executa a lógica de abrir/fechar.
+        console.log('Clique no cabeçalho do accordion detectado!'); // Para depuração
+        const accordion = accordionHeader.parentElement;
+        accordion.classList.toggle('active');
+
+        const content = accordionHeader.nextElementSibling;
+        if (content.style.maxHeight) {
+            content.style.maxHeight = null;
+        } else {
+            // +40 é uma folga para o padding que será adicionado
+            content.style.maxHeight = (content.scrollHeight + 40) + "px";
+        }
+    });
+}
+// ========================================================
 
 });

@@ -198,6 +198,7 @@
     </div>
 </div>
 
+
         <div class="op-form-grupo">
             <h3 class="op-subtitulo-secao">Etapas de Produção</h3> <!-- Subtítulo para etapas -->
             <div id="etapasContainer" class="op-etapas-container-wrapper">
@@ -205,6 +206,47 @@
                 <div class="spinner">Carregando etapas...</div>
             </div>
         </div>
+
+ <!-- ========= INÍCIO DA NOVA SEÇÃO OP FILHA (ACCORDION) ========= -->
+<div id="opFilhaAccordion" class="op-accordion" style="display: none;">
+    <!-- CABEÇALHO CLICÁVEL -->
+    <div class="op-accordion-cabecalho">
+        <span class="op-accordion-titulo">
+            <i class="fas fa-sitemap"></i>
+            Produção Conjunta
+        </span>
+        <i class="fas fa-chevron-down op-accordion-icone"></i>
+    </div>
+
+    <!-- CONTEÚDO QUE ABRE E FECHA -->
+    <div class="op-accordion-conteudo">
+        <p style="font-size: 0.9em; margin-bottom: 15px;">
+            Opcional: Crie uma OP para <strong>Scrunchie (Fina)</strong> que será produzida em conjunto com esta.
+        </p>
+        <p style="font-size: 0.95em; margin-bottom: 20px;">
+            A variação utilizada será a mesma da OP atual: <strong id="opFilhaVarianteInfo" style="color: var(--op-cor-azul-claro);">Carregando...</strong>
+        </p>
+
+        <div class="op-form-linha">
+            <div class="op-form-grupo">
+                <label for="quantidadeOpFilha">Quantidade de "Scrunchie (Fina)"</label>
+                <input type="number" id="quantidadeOpFilha" class="op-input" min="1" placeholder="Ex: 20" style="max-width: 200px;">
+            </div>
+            <div class="op-form-botoes" style="align-self: flex-end;">
+                <button id="btnCriarOpFilha" class="op-botao op-botao-principal">
+                    <i class="fas fa-plus-circle"></i> Criar OP Filha
+                </button>
+            </div>
+        </div>
+
+        <!-- ÁREA DE FEEDBACK -->
+        <div id="opFilhaFeedback" class="op-filha-feedback">
+            <!-- Mensagens de sucesso serão inseridas aqui pelo JS -->
+        </div>
+    </div>
+</div>
+<!-- ========= FIM DA NOVA SEÇÃO OP FILHA (ACCORDION) ========= -->
+ 
 
         <div class="op-form-botoes">
             <button id="finalizarOP" class="op-botao op-botao-sucesso">
@@ -256,6 +298,8 @@
             <!-- Adiciona classe específica: op-input-quantidade-corte -->
             <input type="number" id="quantidadeCorte" class="op-input op-input-quantidade-corte" min="1" required placeholder="Ex: 50">
         </div>
+
+        
         
         <div class="op-form-botoes" style="margin-top: 25px;">
             <button type="button" class="op-botao op-botao-principal" id="btnCortar"> 

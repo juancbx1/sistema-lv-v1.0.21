@@ -1,771 +1,561 @@
-import { verificarAutenticacao, logout } from '/js/utils/auth.js';
+import { verificarAutenticacao } from '/js/utils/auth.js';
 
-(async () => {
-  // Verificar autenticação de forma assíncrona
-  const auth = await verificarAutenticacao('gerenciar-producao.html', ['acesso-gerenciar-producao']);
-  if (!auth) {
-    console.error('[admin-gerenciar-producao] Autenticação falhou. Usuário logado:', localStorage.getItem('usuarioLogado'));
-    return; // O redirecionamento já é tratado pela função verificarAutenticacao
-  }
+// --- Variáveis Globais para controle e cache de dados ---
+let allProducoes = [];
+let allOrdens = [];
+let allUsuarios = [];
+let permissoes = [];
+let usuarioLogado = null;
 
-  let permissoes = auth.permissoes || [];
-  let usuarioLogado = auth.usuario;
+let currentPage = 1;
+const registrosPorPagina = 10;
 
-  let currentPage = 1;
-  const registrosPorPagina = 10;
+/**
+ * Exibe um popup customizado na tela.
+ * @param {string} mensagem - O texto a ser exibido.
+ * @param {string} tipo - 'sucesso', 'erro', ou 'aviso' para estilização.
+ * @param {number} duracao - Tempo em milissegundos para o popup fechar sozinho. Se 0, não fecha.
+ */
+function mostrarPopup(mensagem, tipo = 'aviso', duracao = 5000) {
+    // Remove qualquer popup antigo para não acumular
+    const popupAntigo = document.querySelector('.popup-mensagem');
+    const overlayAntigo = document.querySelector('.popup-overlay');
+    if (popupAntigo) popupAntigo.remove();
+    if (overlayAntigo) overlayAntigo.remove();
 
-  async function carregarProducoesDoBackend() {
+    // Cria o overlay (fundo escurecido)
+    const overlay = document.createElement('div');
+    overlay.className = 'popup-overlay';
+    
+    // Cria o contêiner do popup
+    const popup = document.createElement('div');
+    popup.className = `popup-mensagem popup-${tipo}`;
+
+    // Cria o parágrafo da mensagem
+    const p = document.createElement('p');
+    p.innerHTML = mensagem; // Usamos innerHTML para permitir tags como <strong>
+    popup.appendChild(p);
+
+    // Cria o botão de fechar
+    const fecharBtn = document.createElement('button');
+    fecharBtn.textContent = 'OK';
+    
+    const fecharPopup = () => {
+        if (document.body.contains(popup)) document.body.removeChild(popup);
+        if (document.body.contains(overlay)) document.body.removeChild(overlay);
+    };
+
+    fecharBtn.onclick = fecharPopup;
+    popup.appendChild(fecharBtn);
+
+    // Adiciona tudo ao corpo da página
+    document.body.appendChild(overlay);
+    document.body.appendChild(popup);
+
+    // Lógica para fechar sozinho após um tempo
+    if (duracao > 0) {
+        setTimeout(fecharPopup, duracao);
+    }
+}
+
+// --- FUNÇÕES DE CARREGAMENTO DE DADOS (APENAS 1 VEZ) ---
+
+/**
+ * Busca todos os dados essenciais do backend de uma só vez para otimizar a performance.
+ * Roda apenas uma vez no carregamento da página.
+ */
+async function carregarDadosIniciais() {
     try {
-      const token = localStorage.getItem('token');
-  
-      // Buscar as produções
-      const responseProducoes = await fetch('/api/producoes', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-  
-      if (!responseProducoes.ok) {
-        throw new Error(`Erro ao buscar produções: ${responseProducoes.statusText}`);
-      }
-  
-      const producoes = await responseProducoes.json();
-  
-      // Buscar as ordens de produção
-      const responseOrdens = await fetch('/api/ordens-de-producao?all=true', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-  
-      if (!responseOrdens.ok) {
-        throw new Error(`Erro ao buscar ordens de produção: ${responseOrdens.statusText}`);
-      }
-  
-      const ordensData = await responseOrdens.json();
-      const ordens = ordensData.rows && Array.isArray(ordensData.rows) ? ordensData.rows : [];
-      console.log('[carregarProducoesDoBackend] Ordens carregadas:', ordens.map(o => ({ numero: o.numero, status: o.status })));
-  
-      // Mapear as produções e adicionar a variação
-      return producoes.map(p => {
-        const opNumeroNormalizado = String(p.op_numero).trim();
-        const ordem = ordens.find(o => String(o.numero).trim() === opNumeroNormalizado);
-        let variacao;
-  
-        if (ordem) {
-          variacao = ordem.variante !== undefined && ordem.variante !== null && ordem.variante !== '' ? ordem.variante : 'Não especificado';
-        } else {
-          // Usar p.variacao como fallback, já que a OP pode estar finalizada
-          variacao = p.variacao || 'Sem variante';
-        }
-  
-        return {
-          id: p.id,
-          opNumero: p.op_numero,
-          etapaIndex: p.etapa_index,
-          processo: p.processo,
-          produto: p.produto,
-          variacao: variacao,
-          maquina: p.maquina,
-          quantidade: p.quantidade,
-          funcionario: p.funcionario,
-          data: p.data,
-          dataHoraFormatada: new Date(p.data).toLocaleString('pt-BR'),
-          assinada: p.assinada || false,
-          lancadoPor: p.lancado_por,
-          edicoes: p.edicoes || 0,
+        const token = localStorage.getItem('token');
+        const headers = {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
         };
-      });
+
+        console.log('[carregarDadosIniciais] Buscando todos os dados necessários...');
+        
+        const [resProducoes, resOrdens, resUsuarios, resProdutos] = await Promise.all([
+            fetch('/api/producoes', { headers }),
+            fetch('/api/ordens-de-producao?all=true&noStatusFilter=true', { headers }),
+            fetch('/api/usuarios', { headers }),
+            fetch('/api/produtos', { headers })
+        ]);
+
+        if (!resProducoes.ok) throw new Error(`Falha ao buscar produções`);
+        if (!resOrdens.ok) throw new Error(`Falha ao buscar OPs`);
+        if (!resUsuarios.ok) throw new Error(`Falha ao buscar usuários`);
+        if (!resProdutos.ok) throw new Error(`Falha ao buscar produtos`);
+
+        const producoesData = await resProducoes.json();
+        const ordensData = await resOrdens.json();
+        const usuariosData = await resUsuarios.json();
+        const produtosData = await resProdutos.json();
+
+        allOrdens = ordensData.rows || [];
+        allUsuarios = usuariosData || [];
+        
+        // Processa as produções para adicionar as informações extras
+        allProducoes = producoesData.map(p => {
+            const ordem = allOrdens.find(o => String(o.numero).trim() === String(p.op_numero).trim());
+            
+            let feitoPor = 'desconhecido';
+            const produtoConfig = produtosData.find(prod => prod.nome === p.produto);
+            
+            if (produtoConfig && Array.isArray(produtoConfig.etapas)) {
+                // ==========================================================
+                // >> CORREÇÃO: Encontrar a etapa pelo NOME DO PROCESSO <<
+                // ==========================================================
+                // Em vez de usar o índice, usamos o nome do processo, que é mais seguro.
+                const etapaConfig = produtoConfig.etapas.find(etapa => 
+                    (typeof etapa === 'object' ? etapa.processo : etapa) === p.processo
+                );
+                // ==========================================================
+
+                if (etapaConfig && typeof etapaConfig === 'object' && etapaConfig.feitoPor) {
+                    feitoPor = etapaConfig.feitoPor;
+                }
+            }
+
+            return {
+                ...p,
+                variacao: ordem ? (ordem.variante || 'Não especificado') : (p.variacao || 'Sem variante'),
+                dataHoraFormatada: new Date(p.data).toLocaleString('pt-BR'),
+                feitoPor: feitoPor,
+            };
+        });
+
+        console.log(`[carregarDadosIniciais] Dados carregados e processados.`);
+        
+        popularFiltroFuncionarios();
+        popularFiltroProdutos(produtosData);
+
     } catch (error) {
-      console.error('[carregarProducoesDoBackend] Erro:', error);
-      return [];
-    }
-  }
-
-  async function carregarFiltroFuncionarios() {
-    const selectFuncionario = document.getElementById('filtroCostureira');
-    if (!selectFuncionario) {
-      console.error('[carregarFiltroFuncionarios] Elemento #filtroCostureira não encontrado no DOM');
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/usuarios', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erro ao buscar usuários: ${response.statusText}`);
-      }
-
-      const usuarios = await response.json();
-
-      const funcionarios = usuarios.filter(u => {
-        const tipos = u.tipos && Array.isArray(u.tipos) ? u.tipos : (u.tipo ? [u.tipo] : []);
-        return tipos.includes('costureira') || tipos.includes('tiktik');
-      });
-
-      selectFuncionario.innerHTML = '<option value="">Todos</option>';
-      funcionarios.forEach(f => {
-        const tipos = f.tipos && Array.isArray(f.tipos) ? f.tipos : (f.tipo ? [f.tipo] : []);
-        const tipoLabel = tipos.includes('costureira') ? 'Costureira' : 'TikTik';
-        const option = document.createElement('option');
-        option.value = f.nome;
-        option.textContent = `${f.nome} (${tipoLabel}, Nível ${f.nivel || 1})`;
-        selectFuncionario.appendChild(option);
-      });
-    } catch (error) {
-      console.error('[carregarFiltroFuncionarios] Erro ao carregar usuários:', error);
-      selectFuncionario.innerHTML = '<option value="">Erro ao carregar</option>';
-    }
-  }
-
-  async function carregarFiltroProdutos() {
-    const selectProduto = document.getElementById('filtroProduto');
-    if (!selectProduto) {
-      console.error('[carregarFiltroProdutos] Elemento #filtroProduto não encontrado no DOM');
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/produtos', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erro ao buscar produtos: ${response.statusText}`);
-      }
-
-      const produtos = await response.json();
-      console.log('[carregarFiltroProdutos] Produtos carregados:', produtos);
-
-      selectProduto.innerHTML = '<option value="">Todos</option>';
-      produtos.forEach(p => {
-        const option = document.createElement('option');
-        option.value = p.nome;
-        option.textContent = p.nome;
-        selectProduto.appendChild(option);
-      });
-    } catch (error) {
-      console.error('[carregarFiltroProdutos] Erro ao carregar produtos:', error);
-      selectProduto.innerHTML = '<option value="">Erro ao carregar</option>';
-    }
-  }
+        console.error('[carregarDadosIniciais] Erro fatal ao carregar dados:', error);
+        mostrarPopup('Erro ao carregar dados da produção. A página pode não funcionar corretamente.', 'erro');    }
+}
 
 
-  
-  async function aplicarFiltros(page = 1, dataInicial = null) {
+/** Popula o filtro de funcionários com base nos dados já carregados em `allUsuarios`. */
+function popularFiltroFuncionarios() {
+    const select = document.getElementById('filtroCostureira');
+    if (!select) return;
+
+    const funcionarios = allUsuarios.filter(u => u.tipos?.includes('costureira') || u.tipos?.includes('tiktik'));
+    
+    select.innerHTML = '<option value="">Todos</option>';
+    funcionarios.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(f => {
+        const option = new Option(f.nome, f.nome);
+        select.appendChild(option);
+    });
+}
+
+/** Popula o filtro de produtos com a lista de produtos recebida. */
+function popularFiltroProdutos(produtos) {
+    const select = document.getElementById('filtroProduto');
+    if (!select) return;
+
+    select.innerHTML = '<option value="">Todos</option>';
+    produtos.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(p => {
+        const option = new Option(p.nome, p.nome);
+        select.appendChild(option);
+    });
+}
+
+
+// --- FUNÇÕES DE RENDERIZAÇÃO E FILTRO ---
+
+/** Filtra e renderiza os dados que já estão em memória. */
+function aplicarFiltros(page = 1) {
     currentPage = page;
-    const producoes = await carregarProducoesDoBackend();
-
-    // Buscar usuários da API
-    let usuarios = [];
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/usuarios', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erro ao buscar usuários: ${response.statusText}`);
-      }
-
-      usuarios = await response.json();
-    } catch (error) {
-      console.error('[aplicarFiltros] Erro ao carregar usuários:', error);
-    }
 
     const filtroFuncionario = document.getElementById('filtroCostureira')?.value || '';
-    const filtroData = dataInicial !== null ? dataInicial : (document.getElementById('filtroData')?.value || '');
+    const filtroData = document.getElementById('filtroData')?.value || '';
     const filtroMaquina = document.getElementById('filtroMaquina')?.value || '';
     const filtroProcesso = document.getElementById('filtroProcesso')?.value || '';
     const filtroProduto = document.getElementById('filtroProduto')?.value || '';
     const filtroAssinatura = document.getElementById('filtroAssinatura')?.value || '';
 
-    let filteredProducoes = producoes.filter(p => {
-      let dataProducao;
-      try {
-        const dataRegistro = new Date(p.data);
-        if (isNaN(dataRegistro.getTime())) {
-          console.warn('[aplicarFiltros] Data inválida no registro:', p.id, p.data);
-          return false;
-        }
-
-        const ano = dataRegistro.getFullYear();
-        const mes = String(dataRegistro.getMonth() + 1).padStart(2, '0');
-        const dia = String(dataRegistro.getDate()).padStart(2, '0');
-        dataProducao = `${ano}-${mes}-${dia}`;
-      } catch (e) {
-        console.error('[aplicarFiltros] Erro ao processar data do registro:', p.id, p.data, e);
-        return false;
-      }
-
-      const matchesData = !filtroData || dataProducao === filtroData;
-      const matchesMaquina = !filtroMaquina || p.maquina === filtroMaquina;
-      const matchesProcesso = !filtroProcesso || p.processo === filtroProcesso;
-      const matchesProduto = !filtroProduto || p.produto === filtroProduto;
-      const matchesAssinatura = 
-        filtroAssinatura === '' || 
-        (filtroAssinatura === 'sim' && p.assinada === true) || 
-        (filtroAssinatura === 'nao' && !p.assinada);
-      const matchesFuncionario = !filtroFuncionario || p.funcionario === filtroFuncionario;
-
-      return matchesFuncionario && matchesData && matchesMaquina && matchesProcesso && matchesProduto && matchesAssinatura;
+    const filteredProducoes = allProducoes.filter(p => {
+        const dataProducao = p.data.substring(0, 10);
+        const matchesData = !filtroData || dataProducao === filtroData;
+        const matchesFuncionario = !filtroFuncionario || p.funcionario === filtroFuncionario;
+        const matchesMaquina = !filtroMaquina || p.maquina === filtroMaquina;
+        const matchesProcesso = !filtroProcesso || p.processo === filtroProcesso;
+        const matchesProduto = !filtroProduto || p.produto === filtroProduto;
+        const matchesAssinatura = filtroAssinatura === '' || (filtroAssinatura === 'sim' && p.assinada) || (filtroAssinatura === 'nao' && !p.assinada);
+        
+        return matchesData && matchesFuncionario && matchesMaquina && matchesProcesso && matchesProduto && matchesAssinatura;
     });
 
     filteredProducoes.sort((a, b) => new Date(b.data) - new Date(a.data));
 
-    const totalRegistros = filteredProducoes.length;
+    renderizarTabela(filteredProducoes);
+}
+
+/** Renderiza a tabela e a paginação com base nos dados filtrados. */
+function renderizarTabela(producoesFiltradas) {
+    const corpoTabela = document.getElementById('corpoTabelaProducoes');
+    const paginacaoContainer = document.getElementById('paginacao');
+    const tabelaContainer = document.getElementById('tabelaProducoes');
+    const noRecordsMessage = document.getElementById('noRecordsMessage');
+
+    if (!corpoTabela || !tabelaContainer || !noRecordsMessage) return;
+
+    document.querySelectorAll('.edit-mode').forEach(row => desativarModoEdicao(row));
+
+    if (producoesFiltradas.length === 0) {
+        tabelaContainer.style.display = 'none';
+        if (paginacaoContainer) paginacaoContainer.innerHTML = '';
+        noRecordsMessage.style.display = 'block';
+        return;
+    }
+
+    tabelaContainer.style.display = 'table';
+    noRecordsMessage.style.display = 'none';
+
+    const totalRegistros = producoesFiltradas.length;
     const totalPaginas = Math.ceil(totalRegistros / registrosPorPagina);
     const inicio = (currentPage - 1) * registrosPorPagina;
     const fim = inicio + registrosPorPagina;
-    const producoesPagina = filteredProducoes.slice(inicio, fim);
-    const corpoTabela = document.getElementById('corpoTabelaProducoes');
+    const producoesPagina = producoesFiltradas.slice(inicio, fim);
+
+    corpoTabela.innerHTML = '';
+    producoesPagina.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.dataset.id = p.id;
+        tr.dataset.opNumero = p.op_numero;
+
+        tr.innerHTML = `
+            <td data-label="Feito Por:" data-field="funcionario">${p.funcionario}</td>
+            <td data-label="Produto">${p.produto}</td>
+            <td data-label="Variação">${p.variacao}</td>
+            <td data-label="Proc./Máq.">${p.processo} / ${p.maquina}</td>
+            <td data-label="OP">${p.op_numero || '-'}</td>
+            <td data-label="Qtde" data-field="quantidade">${p.quantidade}</td>
+            <td data-label="Data/Hora">${p.dataHoraFormatada} ${p.edicoes > 0 ? `<span class="edicao-info">(E${p.edicoes}x)</span>`: ''}</td>
+            <td data-label="Assinou?">${p.assinada ? 'Sim' : 'Não'}</td>
+            <td data-label="Por">${p.lancado_por || 'Desconhecido'}</td>
+            <td data-label="Ação">
+                <div class="botoes-acao">
+                    ${permissoes.includes('editar-registro-producao') ? '<button class="btn-editar-registro">Editar</button>' : ''}
+                    ${permissoes.includes('excluir-registro-producao') ? '<button class="btn-excluir-registro">Excluir</button>' : ''}
+                </div>
+            </td>
+        `;
+        corpoTabela.appendChild(tr);
+    });
+
+    renderizarPaginacao(totalPaginas);
+}
+
+/** Renderiza os botões de paginação. */
+function renderizarPaginacao(totalPaginas) {
     const paginacao = document.getElementById('paginacao');
-    const tabelaProducoes = document.getElementById('tabelaProducoes');
-    const noRecordsMessage = document.getElementById('noRecordsMessage');
-    const currentFilterDate = document.getElementById('currentFilterDate');
+    if (!paginacao) return;
+    paginacao.innerHTML = '';
 
-    if (corpoTabela && paginacao && tabelaProducoes && noRecordsMessage && currentFilterDate) {
-      corpoTabela.innerHTML = ''; // Limpar a tabela
+    if (totalPaginas <= 1) return;
 
-      if (totalRegistros === 0) {
-        tabelaProducoes.style.display = 'none';
-        paginacao.style.display = 'none';
-        noRecordsMessage.style.display = 'block';
-        const dataExibida = filtroData || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
-        currentFilterDate.textContent = dataExibida.split('-').reverse().join('/'); // Converter YYYY-MM-DD para DD/MM/YYYY
-      } else {
-        tabelaProducoes.style.display = 'table';
-        paginacao.style.display = 'flex';
-        noRecordsMessage.style.display = 'none';
+    const criarBotao = (texto, pagina, desabilitado = false, ativo = false) => {
+        const btn = document.createElement('button');
+        btn.textContent = texto;
+        btn.disabled = desabilitado;
+        if (ativo) btn.classList.add('active');
+        btn.addEventListener('click', () => aplicarFiltros(pagina));
+        return btn;
+    };
 
-        producoesPagina.forEach((p) => {
-          const usuario = usuarios.find(u => u.nome === p.funcionario);
-          const foiAssinado = p.assinada ? 'Sim' : 'Não';
-          const edicoesTexto = p.edicoes > 0 ? `(E ${p.edicoes}x)` : '';
-          const [data, hora] = p.dataHoraFormatada.split(', ');
-      
-          const tr = document.createElement('tr');
-          tr.dataset.id = p.id; // Mantemos o ID no dataset para ações como editar/excluir
-      
-          // Funcionário
-          const tdFuncionario = document.createElement('td');
-          tdFuncionario.setAttribute('data-label', 'Funcionário');
-          if (usuario) {
-              tdFuncionario.textContent = usuario.nome;
-          } else {
-              const funcionarioText = document.createTextNode(p.funcionario + ' ');
-              tdFuncionario.appendChild(funcionarioText);
-              const spanDeletado = document.createElement('span');
-              spanDeletado.className = 'deletado';
-              spanDeletado.textContent = '(usuário deletado do sistema)';
-              tdFuncionario.appendChild(spanDeletado);
-          }
-          tr.appendChild(tdFuncionario);
-      
-          // Produto
-          const tdProduto = document.createElement('td');
-          tdProduto.setAttribute('data-label', 'Produto');
-          tdProduto.textContent = p.produto;
-          tr.appendChild(tdProduto);
-      
-          // Variação
-          const tdVariacao = document.createElement('td');
-          tdVariacao.setAttribute('data-label', 'Variação');
-          tdVariacao.textContent = p.variacao;
-          tr.appendChild(tdVariacao);
-      
-          // Proc./Máq.
-          const tdProcMaq = document.createElement('td');
-          tdProcMaq.setAttribute('data-label', 'Proc./Máq.');
-          tdProcMaq.textContent = `${p.processo} / ${p.maquina}`;
-          tr.appendChild(tdProcMaq);
-      
-          // OP
-          const tdOp = document.createElement('td');
-          tdOp.setAttribute('data-label', 'OP');
-          tdOp.textContent = p.opNumero || '-';
-          tr.appendChild(tdOp);
-      
-          // Qtde
-          const tdQtde = document.createElement('td');
-          tdQtde.setAttribute('data-label', 'Qtde');
-          tdQtde.textContent = p.quantidade;
-          tr.appendChild(tdQtde);
-      
-          // Data/Hora
-          const tdDataHora = document.createElement('td');
-          tdDataHora.setAttribute('data-label', 'Data/Hora');
-          const dataText = document.createTextNode(`${data}, ${hora} `);
-          tdDataHora.appendChild(dataText);
-          if (edicoesTexto) {
-              const edicoesSpan = document.createElement('span');
-              edicoesSpan.textContent = edicoesTexto;
-              tdDataHora.appendChild(edicoesSpan);
-          }
-          tr.appendChild(tdDataHora);
-      
-          // Assinou?
-          const tdAssinou = document.createElement('td');
-          tdAssinou.setAttribute('data-label', 'Assinou?');
-          tdAssinou.textContent = foiAssinado;
-          tr.appendChild(tdAssinou);
-      
-          // Por
-          const tdPor = document.createElement('td');
-          tdPor.setAttribute('data-label', 'Por');
-          tdPor.textContent = p.lancadoPor || 'Desconhecido';
-          tr.appendChild(tdPor);
-      
-          // Ação
-          const tdAcao = document.createElement('td');
-          tdAcao.setAttribute('data-label', 'Ação');
-          const divBotoes = document.createElement('div');
-          divBotoes.className = 'botoes-acao';
-      
-          if (permissoes.includes('editar-registro-producao')) {
-              const btnEditar = document.createElement('button');
-              btnEditar.className = 'btn-editar-registro';
-              btnEditar.textContent = 'Editar';
-              divBotoes.appendChild(btnEditar);
-          }
-          if (permissoes.includes('excluir-registro-producao')) {
-              const btnExcluir = document.createElement('button');
-              btnExcluir.className = 'btn-excluir-registro';
-              btnExcluir.textContent = 'Excluir';
-              divBotoes.appendChild(btnExcluir);
-          }
-      
-          tdAcao.appendChild(divBotoes);
-          tr.appendChild(tdAcao);
-      
-          corpoTabela.appendChild(tr);
-      });
+    paginacao.appendChild(criarBotao('Anterior', currentPage - 1, currentPage === 1));
 
-        document.querySelectorAll('.btn-excluir-registro').forEach(btn => {
-          btn.addEventListener('click', () => {
-            const id = btn.closest('tr').dataset.id;
-            excluirRegistro(id);
-          });
-        });
-
-        document.querySelectorAll('.btn-editar-registro').forEach(btn => {
-          btn.addEventListener('click', () => {
-            const id = btn.closest('tr').dataset.id;
-            editarRegistro(id);
-          });
-        });
-
-        atualizarPaginacao(totalPaginas);
-      }
-    } else {
-      console.error('[aplicarFiltros] Elementos necessários não encontrados no DOM');
+    for (let i = 1; i <= totalPaginas; i++) {
+        paginacao.appendChild(criarBotao(i, i, false, i === currentPage));
     }
-  }
 
-  async function excluirRegistro(id) {
-    if (!permissoes.includes('excluir-registro-producao')) {
-        alert('Você não tem permissão para excluir registros.');
+    paginacao.appendChild(criarBotao('Próximo', currentPage + 1, currentPage === totalPaginas));
+}
+
+
+// --- LÓGICA DE AÇÕES (EDITAR, SALVAR, CANCELAR, EXCLUIR) ---
+
+/** Ativa o modo de edição para uma linha da tabela. */
+function ativarModoEdicao(tr) {
+    // Desativa a edição em qualquer outra linha primeiro
+    document.querySelectorAll('.edit-mode').forEach(row => {
+        if (row !== tr) desativarModoEdicao(row);
+    });
+
+    tr.classList.add('edit-mode');
+
+    const id = tr.dataset.id;
+    const producao = allProducoes.find(p => p.id === id);
+    if (!producao) {
+        console.error(`Não foi possível encontrar os dados para a produção com ID: ${id}`);
         return;
     }
-    const confirmacao = confirm("Tem certeza que deseja excluir o registro?");
-    if (!confirmacao) return;
+    
+    // --- CÉLULA DO FUNCIONÁRIO (COM FILTRO) ---
+    const tdFuncionario = tr.querySelector('[data-field="funcionario"]');
+    const nomeAtual = tdFuncionario.textContent;
+    tdFuncionario.innerHTML = '';
+    const selectFuncionario = document.createElement('select');
+
+    const tipoUsuarioDaEtapa = producao.feitoPor;
+
+    allUsuarios
+        .filter(u => u.tipos?.includes(tipoUsuarioDaEtapa))
+        .sort((a, b) => a.nome.localeCompare(b.nome))
+        .forEach(u => {
+            const option = new Option(u.nome, u.nome);
+            selectFuncionario.appendChild(option);
+        });
+    
+    selectFuncionario.value = nomeAtual;
+    tdFuncionario.appendChild(selectFuncionario);
+
+    // --- CÉLULA DA QUANTIDADE ---
+    const tdQuantidade = tr.querySelector('[data-field="quantidade"]');
+    const qtdAtual = tdQuantidade.textContent;
+    tdQuantidade.innerHTML = `<input type="number" value="${qtdAtual}" min="1" class="edit-input-qtd"/>`;
+
+    // --- CÉLULA DE AÇÕES ---
+    const tdAcao = tr.querySelector('[data-label="Ação"]');
+    tdAcao.innerHTML = `
+        <div class="botoes-acao">
+            <button class="btn-salvar-edicao">Salvar</button>
+            <button class="btn-cancelar-edicao">Cancelar</button>
+        </div>
+    `;
+}
+
+
+
+/** Desativa o modo de edição, restaurando a visualização original da linha. */
+function desativarModoEdicao(tr, dadosNovos = null) {
+    tr.classList.remove('edit-mode');
+    const id = tr.dataset.id;
+    
+    // Se recebemos dados novos (após salvar), usamos eles.
+    // Senão, buscamos os dados originais no nosso array em memória.
+    const producao = dadosNovos || allProducoes.find(p => p.id === id);
+    if (!producao) {
+        console.error(`Produção com ID ${id} não encontrada para restaurar a linha.`);
+        tr.remove(); // Remove a linha se os dados sumiram por algum motivo
+        return;
+    }
+
+    // Restaura as células de dados para texto simples
+    tr.querySelector('[data-field="funcionario"]').textContent = producao.funcionario;
+    tr.querySelector('[data-field="quantidade"]').textContent = producao.quantidade;
+
+    // Restaura os botões de ação originais
+    const tdAcao = tr.querySelector('[data-label="Ação"]');
+    if (tdAcao) {
+        tdAcao.innerHTML = `
+            <div class="botoes-acao">
+                ${permissoes.includes('editar-registro-producao') ? '<button class="btn-editar-registro">Editar</button>' : ''}
+                ${permissoes.includes('excluir-registro-producao') ? '<button class="btn-excluir-registro">Excluir</button>' : ''}
+            </div>
+        `;
+    }
+}
+
+/** Salva as alterações feitas no modo de edição. */
+async function salvarEdicao(tr) {
+    const id = tr.dataset.id;
+    const producaoOriginal = allProducoes.find(p => p.id === id);
+
+    const novoFuncionario = tr.querySelector('select').value;
+    const novaQuantidade = parseInt(tr.querySelector('input[type="number"]').value);
+
+    if (isNaN(novaQuantidade) || novaQuantidade <= 0) {
+        mostrarPopup('A quantidade deve ser um número positivo.', 'aviso');
+        return;
+    }
+
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('/api/producoes', {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id,
+                quantidade: novaQuantidade,
+                funcionario: novoFuncionario,
+                edicoes: (producaoOriginal.edicoes || 0) + 1,
+            }),
+        });
+
+        if (!response.ok) throw new Error('Falha ao salvar alterações na API.');
+        
+        const producaoAtualizada = await response.json();
+
+        const index = allProducoes.findIndex(p => p.id === id);
+        if (index !== -1) {
+            // ==========================================================
+            // >> CORREÇÃO AQUI <<
+            // ==========================================================
+            // Mantemos todas as propriedades que já tínhamos calculado no frontend
+            // (como 'variacao' e 'feitoPor') e sobrescrevemos apenas as que
+            // a API retornou (como 'quantidade', 'funcionario', 'edicoes').
+            allProducoes[index] = {
+                ...allProducoes[index], // <-- Mantém o objeto antigo como base
+                ...producaoAtualizada,  // <-- Sobrescreve com os dados novos da API
+                // Recalculamos a data formatada pois a API não retorna isso
+                dataHoraFormatada: new Date(producaoAtualizada.data).toLocaleString('pt-BR'),
+            };
+        }
+
+        await verificarEAtualizarStatusOP(producaoAtualizada.op_numero);
+        
+        mostrarPopup('Alterações salvas com sucesso!', 'sucesso');
+         // ==========================================================
+        // >> Passar os dados atualizados <<
+        // ==========================================================
+        desativarModoEdicao(tr, allProducoes[index]); // Passamos o objeto totalmente atualizado
+
+
+    } catch (error) {
+        console.error('Erro ao salvar edição:', error);
+        mostrarPopup('Não foi possível salvar as alterações.', 'erro');
+        desativarModoEdicao(tr);
+    }
+}
+
+/** Exclui um registro de produção. */
+async function excluirRegistro(id) {
+    if (!confirm("Tem certeza que deseja excluir este registro de produção?")) return;
 
     try {
         const token = localStorage.getItem('token');
         const response = await fetch('/api/producoes', {
             method: 'DELETE',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ id }),
         });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(`Erro ao excluir produção: ${errorData.error || response.statusText}`);
-        }
+        
+        if (!response.ok) throw new Error('Falha ao excluir o registro na API.');
 
         const producaoExcluida = await response.json();
-        console.log('[excluirRegistro] Registro excluído do backend:', producaoExcluida);
-
-        // Buscar todas as ordens de produção com all=true e noStatusFilter=true
-        const ordensDeProducaoResponse = await fetch('/api/ordens-de-producao?all=true&noStatusFilter=true', {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-        });
-
-        if (!ordensDeProducaoResponse.ok) {
-            throw new Error('Erro ao buscar ordens de produção');
-        }
-
-        // Extrair o array de ordens da propriedade 'rows' do retorno
-        const ordensDeProducaoData = await ordensDeProducaoResponse.json();
-        const ordensDeProducao = ordensDeProducaoData.rows || []; // Garante que é um array
-
-        if (ordensDeProducao.length === 0) {
-            console.warn('[excluirRegistro] Nenhuma ordem de produção encontrada.');
-            aplicarFiltros(currentPage);
-            alert('Registro excluído com sucesso, mas nenhuma OP foi encontrada no backend.');
-            return;
-        }
-
-        // Busca mais robusta pela OP
-        const opNumeroNormalizado = String(producaoExcluida.op_numero || '').trim();
-        const op = ordensDeProducao.find(o => {
-            const numeroNormalizado = String(o.numero || '').trim();
-            return numeroNormalizado === opNumeroNormalizado;
-        });
-
-        if (!op) {
-            console.warn('[excluirRegistro] OP não encontrada para opNumero:', opNumeroNormalizado, '- Verifique se a OP ainda existe ou se os dados estão consistentes.');
-            aplicarFiltros(currentPage);
-            alert('Registro excluído com sucesso, mas a OP correspondente não foi encontrada. Verifique os dados no backend.');
-            return;
-        }
-
-        // Restante do código permanece igual...
-        const etapa = op.etapas.find(e => e.ultimoLancamentoId === String(id));
-        if (etapa) {
-            etapa.quantidade = '';
-            etapa.lancado = false;
-            etapa.ultimoLancamentoId = null;
-            delete etapa.editadoPorAdmin;
-
-            // Recalcular o status da OP
-            let todasEtapasCompletas = true;
-            for (const etapa of op.etapas) {
-                const tipoUsuario = await getTipoUsuarioPorProcesso(etapa.processo, op.produto);
-                const exigeQuantidade = tipoUsuario === 'costureira' || tipoUsuario === 'tiktik';
-                const etapaCompleta = etapa.usuario && (!exigeQuantidade || (etapa.lancado && etapa.quantidade > 0));
-                if (!etapaCompleta) {
-                    todasEtapasCompletas = false;
-                    break;
-                }
-            }
-
-            if (op.status === 'finalizado' && !todasEtapasCompletas) {
-                op.status = 'produzindo';
-                console.log(`[excluirRegistro] OP ${op.numero} voltou para o status "produzindo" devido a exclusão de registro.`);
-            } else if (!op.etapas.some(e => e.usuario || e.quantidade)) {
-                op.status = 'em-aberto';
-                console.log(`[excluirRegistro] OP ${op.numero} voltou para o status "em-aberto" porque não há etapas iniciadas.`);
-            }
-
-            const updateOpResponse = await fetch('/api/ordens-de-producao', {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(op),
-            });
-
-            if (!updateOpResponse.ok) {
-                throw new Error('Erro ao atualizar ordem de produção');
-            }
-        }
-
+        
+        allProducoes = allProducoes.filter(p => p.id !== id);
+        
+        await verificarEAtualizarStatusOP(producaoExcluida.op_numero);
+        
+        mostrarPopup('Registro excluído com sucesso!', 'sucesso');
         aplicarFiltros(currentPage);
-        alert('Registro excluído com sucesso!');
+
     } catch (error) {
-        console.error('[excluirRegistro] Erro:', error);
-        alert('Erro ao excluir registro: ' + error.message);
+        console.error('Erro ao excluir registro:', error);
+        mostrarPopup('Não foi possível excluir o registro.', 'erro');
     }
 }
 
-async function editarRegistro(id) {
-  if (!permissoes.includes('editar-registro-producao')) {
-      alert('Você não tem permissão para editar registros.');
-      return;
-  }
+/** Função auxiliar para reverter status da OP. */
+async function verificarEAtualizarStatusOP(opNumero) {
+    if (!opNumero) return;
 
-  const producoes = await carregarProducoesDoBackend();
-  const producao = producoes.find(p => p.id === id);
-  if (!producao) return;
+    const op = allOrdens.find(o => String(o.numero).trim() === String(opNumero).trim());
+    if (!op || op.status !== 'finalizado') return;
 
-  const novaQuantidade = prompt('Digite a nova quantidade:', producao.quantidade);
-  if (novaQuantidade === null) return;
-  const quantidadeAtualizada = parseInt(novaQuantidade);
+    const producoesDaOP = allProducoes.filter(p => String(p.op_numero).trim() === String(opNumero).trim());
+    const etapasLancadasIndices = new Set(producoesDaOP.map(p => p.etapa_index));
 
-  if (isNaN(quantidadeAtualizada) || quantidadeAtualizada <= 0) {
-      alert('Quantidade inválida. A edição foi cancelada.');
-      return;
-  }
+    if (etapasLancadasIndices.size < op.etapas.length) {
+        console.log(`[StatusCheck] OP #${opNumero} não está mais completa. Revertendo para 'produzindo'.`);
+        op.status = 'produzindo';
+        
+        const token = localStorage.getItem('token');
+        await fetch('/api/ordens-de-producao', {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(op),
+        });
 
-  if (quantidadeAtualizada === producao.quantidade) {
-      alert('A quantidade informada é a mesma já registrada. Não é possível realizar a edição.');
-      return;
-  }
-
-  try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/producoes', {
-          method: 'PUT',
-          headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-              id,
-              quantidade: quantidadeAtualizada,
-              edicoes: (producao.edicoes || 0) + 1,
-              editadoPorAdmin: usuarioLogado?.nome || 'Sistema',
-          }),
-      });
-
-      if (!response.ok) {
-          throw new Error(`Erro ao editar produção: ${response.statusText}`);
-      }
-
-      const updatedProducao = await response.json();
-      console.log('[editarRegistro] Produção editada no backend:', updatedProducao);
-
-      // Buscar todas as ordens de produção com all=true e noStatusFilter=true
-      const ordensDeProducaoResponse = await fetch('/api/ordens-de-producao?all=true&noStatusFilter=true', {
-          method: 'GET',
-          headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-          },
-      });
-
-      if (!ordensDeProducaoResponse.ok) {
-          throw new Error('Erro ao buscar ordens de produção');
-      }
-
-      // Extrair o array de ordens da propriedade 'rows' do retorno
-      const ordensDeProducaoData = await ordensDeProducaoResponse.json();
-      const ordensDeProducao = ordensDeProducaoData.rows || []; // Garante que é um array
-
-      if (ordensDeProducao.length === 0) {
-          console.warn('[editarRegistro] Nenhuma ordem de produção encontrada.');
-          aplicarFiltros(currentPage);
-          alert('Registro editado com sucesso, mas nenhuma OP foi encontrada no backend.');
-          return;
-      }
-
-      // Busca mais robusta pela OP
-      const opNumeroNormalizado = String(updatedProducao.op_numero || '').trim();
-      const op = ordensDeProducao.find(o => {
-          const numeroNormalizado = String(o.numero || '').trim();
-          return numeroNormalizado === opNumeroNormalizado;
-      });
-
-      if (!op) {
-          console.warn('[editarRegistro] OP não encontrada para opNumero:', opNumeroNormalizado, '- Verifique se a OP ainda existe ou se os dados estão consistentes.');
-          aplicarFiltros(currentPage);
-          alert('Registro editado com sucesso, mas a OP correspondente não foi encontrada. Verifique os dados no backend.');
-          return;
-      }
-
-      // Atualizar a OP correspondente
-      const etapa = op.etapas.find(e => e.ultimoLancamentoId === id);
-      if (etapa) {
-          etapa.quantidade = quantidadeAtualizada;
-          etapa.editadoPorAdmin = usuarioLogado?.nome || 'Sistema';
-
-          // Recalcular o status da OP (caso necessário)
-          let todasEtapasCompletas = true;
-          for (const etapa of op.etapas) {
-              const tipoUsuario = await getTipoUsuarioPorProcesso(etapa.processo, op.produto);
-              const exigeQuantidade = tipoUsuario === 'costureira' || tipoUsuario === 'tiktik';
-              const etapaCompleta = etapa.usuario && (!exigeQuantidade || (etapa.lancado && etapa.quantidade > 0));
-              if (!etapaCompleta) {
-                  todasEtapasCompletas = false;
-                  break;
-              }
-          }
-
-          if (op.status === 'finalizado' && !todasEtapasCompletas) {
-              op.status = 'produzindo';
-              console.log(`[editarRegistro] OP ${op.numero} voltou para o status "produzindo" devido a edição de registro.`);
-          }
-
-          await fetch('/api/ordens-de-producao', {
-              method: 'PUT',
-              headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-              },
-              body: JSON.stringify(op),
-          });
-      }
-
-      aplicarFiltros(currentPage);
-      alert(`Quantidade editada com sucesso para ${quantidadeAtualizada}!`);
-  } catch (error) {
-      console.error('[editarRegistro] Erro:', error);
-      alert('Erro ao editar registro: ' + error.message);
-  }
+        const opIndex = allOrdens.findIndex(o => o.id === op.id);
+        if (opIndex !== -1) allOrdens[opIndex].status = 'produzindo';
+    }
 }
 
-  async function getTipoUsuarioPorProcesso(processo, produtoNome) {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/produtos', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
 
-      if (!response.ok) {
-        throw new Error(`Erro ao buscar produtos: ${response.statusText}`);
-      }
+// --- INICIALIZAÇÃO E EVENT LISTENERS GLOBAIS ---
 
-      const produtos = await response.json();
-      const produto = produtos.find(p => p.nome === produtoNome);
-      if (produto && produto.etapas) {
-        const etapa = produto.etapas.find(e => e.processo === processo);
-        return etapa ? etapa.feitoPor : '';
-      }
-      return '';
-    } catch (error) {
-      console.error('[getTipoUsuarioPorProcesso] Erro ao buscar tipo de usuário:', error);
-      return '';
-    }
-  }
+/** Configura um único event listener na tabela para lidar com todos os cliques. */
+function setupEventListeners() {
+    const corpoTabela = document.getElementById('corpoTabelaProducoes');
+    
+    if (corpoTabela) {
+        // Um único listener para a tabela inteira!
+        corpoTabela.addEventListener('click', (event) => {
+            const target = event.target; // O elemento exato que foi clicado
+            const tr = target.closest('tr'); // A linha (tr) mais próxima do clique
+            
+            // Se o clique foi fora de uma linha, não faz nada
+            if (!tr) return;
 
-  function atualizarPaginacao(totalPaginas) {
-    const paginacao = document.getElementById('paginacao');
-    if (!paginacao) {
-      console.error('[atualizarPaginacao] Elemento #paginacao não encontrado no DOM');
-      return;
-    }
-    paginacao.innerHTML = '';
-
-    const btnAnterior = document.createElement('button');
-    btnAnterior.textContent = 'Anterior';
-    btnAnterior.disabled = currentPage === 1;
-    btnAnterior.onclick = () => aplicarFiltros(currentPage - 1);
-    paginacao.appendChild(btnAnterior);
-
-    const maxPagesToShow = 5;
-    const pagesBeforeAfter = 2;
-
-    if (totalPaginas <= maxPagesToShow) {
-      for (let i = 1; i <= totalPaginas; i++) {
-        const button = document.createElement('button');
-        button.textContent = i;
-        button.className = i === currentPage ? 'active' : '';
-        button.onclick = () => aplicarFiltros(i);
-        paginacao.appendChild(button);
-      }
-    } else {
-      const firstPage = document.createElement('button');
-      firstPage.textContent = '1';
-      firstPage.className = currentPage === 1 ? 'active' : '';
-      firstPage.onclick = () => aplicarFiltros(1);
-      paginacao.appendChild(firstPage);
-
-      if (currentPage > pagesBeforeAfter + 2) {
-        const ellipsis = document.createElement('span');
-        ellipsis.textContent = '...';
-        ellipsis.style.padding = '0 5px';
-        paginacao.appendChild(ellipsis);
-      }
-
-      const startPage = Math.max(2, currentPage - pagesBeforeAfter);
-      const endPage = Math.min(totalPaginas - 1, currentPage + pagesBeforeAfter);
-
-      for (let i = startPage; i <= endPage; i++) {
-        const button = document.createElement('button');
-        button.textContent = i;
-        button.className = i === currentPage ? 'active' : '';
-        button.onclick = () => aplicarFiltros(i);
-        paginacao.appendChild(button);
-      }
-
-      if (currentPage < totalPaginas - pagesBeforeAfter - 1) {
-        const ellipsis = document.createElement('span');
-        ellipsis.textContent = '...';
-        ellipsis.style.padding = '0 5px';
-        paginacao.appendChild(ellipsis);
-      }
-
-      if (totalPaginas > 1) {
-        const lastPage = document.createElement('button');
-        lastPage.textContent = totalPaginas;
-        lastPage.className = currentPage === totalPaginas ? 'active' : '';
-        lastPage.onclick = () => aplicarFiltros(totalPaginas);
-        paginacao.appendChild(lastPage);
-      }
+            // Verifica qual botão foi clicado pela sua classe
+            if (target.classList.contains('btn-editar-registro')) {
+                console.log('Botão Editar clicado');
+                ativarModoEdicao(tr);
+            } 
+            else if (target.classList.contains('btn-excluir-registro')) {
+                console.log('Botão Excluir clicado');
+                excluirRegistro(tr.dataset.id);
+            } 
+            else if (target.classList.contains('btn-salvar-edicao')) {
+                console.log('Botão Salvar clicado');
+                salvarEdicao(tr);
+            } 
+            else if (target.classList.contains('btn-cancelar-edicao')) {
+                console.log('Botão Cancelar clicado');
+                desativarModoEdicao(tr);
+            }
+        });
     }
 
-    const btnProximo = document.createElement('button');
-    btnProximo.textContent = 'Próximo';
-    btnProximo.disabled = currentPage === totalPaginas;
-    btnProximo.onclick = () => aplicarFiltros(currentPage + 1);
-    paginacao.appendChild(btnProximo);
-  }
-
-  function limparFiltros() {
-    const filtroFuncionario = document.getElementById('filtroCostureira');
-    const filtroData = document.getElementById('filtroData');
-    const filtroMaquina = document.getElementById('filtroMaquina');
-    const filtroProcesso = document.getElementById('filtroProcesso');
-    const filtroProduto = document.getElementById('filtroProduto');
-    const filtroAssinatura = document.getElementById('filtroAssinatura');
-
-    if (filtroFuncionario) filtroFuncionario.selectedIndex = 0;
-    if (filtroData) filtroData.value = '';
-    if (filtroMaquina) filtroMaquina.value = '';
-    if (filtroProcesso) filtroProcesso.value = '';
-    if (filtroProduto) filtroProduto.selectedIndex = 0;
-    if (filtroAssinatura) filtroAssinatura.selectedIndex = 0;
-
-    aplicarFiltros(1);
-  }
-
-  function inicializar() {
-    const hoje = new Date();
-    const ano = hoje.getFullYear();
-    const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-    const dia = String(hoje.getDate()).padStart(2, '0');
-    const dataLocal = `${ano}-${mes}-${dia}`; // Formato YYYY-MM-DD
-    const filtroDataElement = document.getElementById('filtroData');
-    if (filtroDataElement) {
-      filtroDataElement.value = dataLocal; // Definir a data atual como padrão
-    } else {
-    }
-
-    carregarFiltroFuncionarios();
-    carregarFiltroProdutos();
-    aplicarFiltros(1, dataLocal);
-
+    // Os listeners para os filtros continuam os mesmos
     document.getElementById('filtroCostureira')?.addEventListener('change', () => aplicarFiltros(1));
     document.getElementById('filtroData')?.addEventListener('change', () => aplicarFiltros(1));
     document.getElementById('filtroMaquina')?.addEventListener('change', () => aplicarFiltros(1));
     document.getElementById('filtroProcesso')?.addEventListener('change', () => aplicarFiltros(1));
     document.getElementById('filtroProduto')?.addEventListener('change', () => aplicarFiltros(1));
     document.getElementById('filtroAssinatura')?.addEventListener('change', () => aplicarFiltros(1));
-    document.getElementById('limparFiltros')?.addEventListener('click', limparFiltros);
-  }
+    document.getElementById('limparFiltros')?.addEventListener('click', () => {
+        document.getElementById('filtroCostureira').value = '';
+        document.getElementById('filtroData').value = new Date().toISOString().substring(0, 10); // Volta para data de hoje
+        document.getElementById('filtroMaquina').value = '';
+        document.getElementById('filtroProcesso').value = '';
+        document.getElementById('filtroProduto').value = '';
+        document.getElementById('filtroAssinatura').value = '';
+        aplicarFiltros(1);
+    });
+}
 
-  inicializar();
-})(); 
+/** Função principal que inicializa a página. */
+async function inicializar() {
+    const auth = await verificarAutenticacao('gerenciar-producao.html', ['acesso-gerenciar-producao']);
+    if (!auth) return;
+    permissoes = auth.permissoes || [];
+    usuarioLogado = auth.usuario;
+
+    document.getElementById('filtroData').value = new Date().toISOString().substring(0, 10);
+
+     const corpoTabela = document.getElementById('corpoTabelaProducoes');
+    if (corpoTabela) {
+        corpoTabela.innerHTML = `
+            <tr>
+                <td colspan="10" class="loading-cell">
+                    <div class="spinner">Carregando todos os dados, por favor aguarde...</div>
+                </td>
+            </tr>
+        `;
+    }
+    
+    await carregarDadosIniciais();
+
+    aplicarFiltros(1);
+
+    setupEventListeners();
+}
+
+// Inicia a aplicação quando o DOM estiver pronto
+document.addEventListener('DOMContentLoaded', inicializar);

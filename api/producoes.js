@@ -207,7 +207,7 @@ router.put('/', async (req, res) => {
         dbClient = await pool.connect();
         const permissoesCompletasDoUsuarioLogado = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
         
-        const { id, quantidade, edicoes, assinada } = req.body; // Desestruturação
+        const { id, quantidade, edicoes, assinada, funcionario } = req.body; // Desestruturação
 
         // ***** NOVOS LOGS DETALHADOS *****
         console.log(`[API Producoes PUT] req.body recebido:`, JSON.stringify(req.body));
@@ -268,12 +268,18 @@ router.put('/', async (req, res) => {
             }
             if (edicoes !== undefined) {
                 updateFields.push(`edicoes = $${paramIndex++}`);
-                updateValues.push(edicoes);
+                updateValues.push(JSON.stringify(edicoes)); // Lembre de converter para JSON se for um objeto/array
             }
             if (assinada !== undefined) {
                 updateFields.push(`assinada = $${paramIndex++}`);
                 updateValues.push(assinada);
             }
+            
+            if (funcionario !== undefined && funcionario.trim() !== '') {
+                updateFields.push(`funcionario = $${paramIndex++}`);
+                updateValues.push(funcionario);
+            }
+
         } else if (acaoPermitida === 'apenas_assinar') {
             if (assinada === true) { // Garante que está realmente assinando
                 updateFields.push(`assinada = $${paramIndex++}`);
@@ -284,14 +290,15 @@ router.put('/', async (req, res) => {
             }
         }
 
-        if (updateFields.length === 0) {
-            return res.status(400).json({ error: "Nenhum campo válido para atualização determinado." });
+         if (updateFields.length === 0) {
+            return res.status(400).json({ error: "Nenhum campo válido para atualização." });
         }
         
         updateValues.push(id); 
         const queryUpdate = `UPDATE producoes SET ${updateFields.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
         
         const result = await dbClient.query(queryUpdate, updateValues);
+        
         if (result.rows.length === 0) {
             return res.status(404).json({ error: "Produção não encontrada após verificações (não deveria acontecer)." });
         }

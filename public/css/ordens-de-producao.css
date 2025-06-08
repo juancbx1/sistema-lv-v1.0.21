@@ -82,6 +82,11 @@ body.autenticado {
     font-weight: 600;
 }
 
+.remover-bullets{
+list-style-type: none
+
+}
+
 .op-titulo-secao { /* Para <h2> ou <h3> dentro dos cards */
     font-size: 1.5rem;
     color: var(--op-cor-azul-escuro);
@@ -726,6 +731,85 @@ body.autenticado {
     width: 120px !important; 
     max-width: 120px;
     flex-grow: 0;
+}
+
+/* ==========================================================================
+   # ESTILOS PARA O ACCORDION DE PRODUÇÃO CONJUNTA
+   ========================================================================== */
+.op-accordion {
+    border: 1px solid #e0e0e0;
+    border-radius: var(--op-raio-borda-card);
+    margin-top: 25px;
+    background-color: #fcfcfc;
+    overflow: hidden; /* Importante para o efeito de abrir/fechar */
+    transition: all 0.3s ease-in-out;
+}
+
+.op-accordion-cabecalho {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    cursor: pointer;
+    background-color: #f5f7fa;
+    transition: background-color 0.2s ease;
+}
+
+.op-accordion-cabecalho:hover {
+    background-color: #e9eef3;
+}
+
+.op-accordion-titulo {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--op-cor-azul-escuro);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.op-accordion-icone {
+    font-size: 1rem;
+    transition: transform 0.3s ease-in-out;
+}
+
+/* Rotação do ícone quando o accordion está ativo */
+.op-accordion.active .op-accordion-icone {
+    transform: rotate(180deg);
+}
+
+.op-accordion-conteudo {
+    max-height: 0; /* Começa fechado */
+    overflow: hidden;
+    transition: max-height 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), padding 0.3s ease; /* Efeito de "bounce" */
+    padding: 0 20px; /* Padding será aplicado quando abrir */
+}
+
+/* Quando o accordion está ativo, o conteúdo se expande */
+.op-accordion.active .op-accordion-conteudo {
+    max-height: 500px; /* Um valor alto o suficiente para caber o conteúdo */
+    padding: 20px;
+}
+
+/* Área de feedback dentro do accordion */
+.op-filha-feedback {
+    margin-top: 20px;
+    padding: 15px;
+    border-radius: var(--op-raio-borda-input);
+    font-size: 0.9rem;
+    display: none; /* Começa escondido */
+}
+.op-filha-feedback.sucesso {
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+.op-filha-feedback p {
+    margin: 0;
+    line-height: 1.5;
+}
+.op-filha-feedback strong {
+    font-weight: 600;
 }
 
 /* ==========================================================================

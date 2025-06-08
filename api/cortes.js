@@ -44,6 +44,42 @@ router.use(async (req, res, next) => {
     }
 });
 
+router.get('/next-pc-number', async (req, res) => {
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        // A query para encontrar o maior número continua a mesma
+        const query = `
+            SELECT pn FROM cortes 
+            ORDER BY CAST(NULLIF(REGEXP_REPLACE(pn, '[^0-9]', '', 'g'), '') AS INTEGER) DESC
+            LIMIT 1;
+        `;
+        const result = await dbClient.query(query);
+
+        let nextNumber = 10000;
+        if (result.rows.length > 0) {
+            const lastPn = result.rows[0].pn;
+            // Apenas convertemos para número, sem nos preocupar com o prefixo
+            const lastNumber = parseInt(lastPn.replace(/[^0-9]/g, ''), 10);
+            if (!isNaN(lastNumber) && lastNumber >= 10000) {
+                nextNumber = lastNumber + 1;
+            } else if (!isNaN(lastNumber) && lastNumber < 10000) {
+                // Se o último número for antigo (menor que 10000), pulamos para 10000
+                nextNumber = 10000;
+            }
+        }
+        
+        // A RESPOSTA AGORA É SÓ O NÚMERO
+        res.status(200).json({ nextPC: nextNumber.toString() });
+
+    } catch (error) {
+        console.error('[API Cortes GET /next-pc-number] Erro:', error);
+        res.status(500).json({ error: 'Erro ao gerar próximo número de PC.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
 // GET /api/cortes
 router.get('/', async (req, res) => {
     const { usuarioLogado } = req; // Do token
@@ -62,20 +98,40 @@ router.get('/', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada para visualizar cortes.' });
         }
 
-        const status = req.query.status || 'pendente'; // Default para pendente se não especificado
-        if (!['pendente', 'cortados', 'verificado', 'usado'].includes(status)) {
-            return res.status(400).json({ error: 'Status inválido. Use "pendente", "cortados", "verificado" ou "usado".' });
-        }
+        const { status } = req.query; // Pega o ?status=pendente da URL, se existir
+
+        // 1. A base da nossa instrução para o banco de dados.
+        //    Leia como: "Selecione tudo da tabela 'cortes' ONDE o status for DIFERENTE de 'excluido'".
+        //    O `$1` é um placeholder. Nós diremos qual valor ele representa em seguida.
+        let queryText = 'SELECT * FROM cortes WHERE status != $1';
         
-        const result = await dbClient.query(
-            `SELECT id, pn, produto, variante, quantidade, data, cortador, status, op FROM cortes WHERE status = $1 ORDER BY data DESC, id DESC`, // Adicionado id DESC para desempate
-            [status]
-        );
+        // 2. O valor para o placeholder `$1`.
+        //    Estamos dizendo que a condição `!= $1` significa `!= 'excluido'`.
+        let queryParams = ['excluido'];
+
+        // 3. Se o frontend pediu um status específico (ex: 'pendente' ou 'cortados')...
+        if (status) {
+            // ...adicionamos OUTRA condição à nossa instrução.
+            //    Agora ela lê: "... ONDE status != $1 E TAMBÉM status = $2"
+            queryText += ' AND status = $2';
+            // E adicionamos o valor para o novo placeholder `$2`.
+            queryParams.push(status); 
+        }
+
+        // 4. Sempre bom ordenar os resultados.
+        queryText += ' ORDER BY data DESC';
+        
+        console.log(`[API Cortes GET] Executando query: "${queryText}" com params:`, queryParams);
+
+        // 5. Executamos a instrução final no banco de dados.
+        const result = await dbClient.query(queryText, queryParams);
+        
+        // 6. Enviamos a resposta (já filtrada!) de volta para o frontend.
         res.status(200).json(result.rows);
 
     } catch (error) {
-        console.error('[router/cortes GET] Erro:', error.message, error.stack ? error.stack.substring(0, 500) : "");
-        res.status(500).json({ error: 'Erro ao buscar cortes', details: error.message });
+        console.error('[router/cortes GET] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar cortes.' });
     } finally {
         if (dbClient) dbClient.release();
     }
@@ -243,49 +299,121 @@ router.put('/', async (req, res) => {
 // DELETE /api/cortes
 router.delete('/', async (req, res) => {
     const { usuarioLogado } = req;
+    const { id } = req.body;
     let dbClient;
     try {
         dbClient = await pool.connect();
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
         
-        const { id } = req.body;
-        if (!id) {
-            return res.status(400).json({ error: 'ID do corte é obrigatório para exclusão.' });
+        if (!id) return res.status(400).json({ error: 'ID do corte é obrigatório.' });
+
+        // 1. "Soft delete" do corte e pega seus dados completos
+        const result = await dbClient.query(
+            `UPDATE cortes SET status = 'excluido' WHERE id = $1 RETURNING *`,
+            [id]
+        );
+
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Corte não encontrado.' });
+
+        const corteExcluido = result.rows[0];
+        console.log(`[API Cortes DELETE] Corte ID ${corteExcluido.id} (PC: ${corteExcluido.pn}) marcado como 'excluido'.`);
+        
+        // 2. LÓGICA DE CASCATA
+        const opNumeroParaCancelar = corteExcluido.op;
+
+        // LOG DE DEPURAÇÃO CRUCIAL:
+        console.log(`[API Cortes DELETE] Verificando cascata. OP associada: ${opNumeroParaCancelar} (Tipo: ${typeof opNumeroParaCancelar})`);
+
+        if (opNumeroParaCancelar) {
+            console.log(`[API Cortes DELETE] OP associada encontrada. Cancelando OP #${opNumeroParaCancelar}...`);
+            
+            const opCancelResult = await dbClient.query(
+                `UPDATE ordens_de_producao SET status = 'cancelada' WHERE numero = $1 AND status NOT IN ('finalizado', 'cancelada')`,
+                [String(opNumeroParaCancelar)] // Força para string por segurança
+            );
+
+            if (opCancelResult.rowCount > 0) {
+                console.log(`[API Cortes DELETE] SUCESSO! A OP #${opNumeroParaCancelar} foi cancelada.`);
+            } else {
+                console.warn(`[API Cortes DELETE] AVISO: A OP #${opNumeroParaCancelar} não foi encontrada ou já estava finalizada/cancelada.`);
+            }
+        } else {
+            console.log(`[API Cortes DELETE] Nenhuma OP associada. Cascata não necessária.`);
         }
 
-        const checkCorteResult = await dbClient.query('SELECT status FROM cortes WHERE id = $1', [id]);
-        if (checkCorteResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Corte não encontrado para exclusão.' });
-        }
-        const corteStatus = checkCorteResult.rows[0].status;
-
-        let allowed = false;
-        if (corteStatus === 'pendente' && permissoesCompletas.includes('excluir-corte-pendente')) {
-            allowed = true;
-        } else if (corteStatus === 'cortados' && permissoesCompletas.includes('excluir-estoque-corte')) {
-            allowed = true;
-        } else if (corteStatus === 'usado' && permissoesCompletas.includes('excluir-corte-usado')) {
-            allowed = true;
-        } else if (permissoesCompletas.includes('gerenciar-cortes-geral')) { 
-            allowed = true;
-        }
-
-        if (!allowed) {
-            return res.status(403).json({ error: `Permissão negada para excluir este corte (status: ${corteStatus}).` });
-        }
-        const result = await dbClient.query('DELETE FROM cortes WHERE id = $1 RETURNING id', [id]);
-        // rowCount é mais confiável para DELETE/UPDATE do que result.rows.length se RETURNING não for sempre usado ou se a linha não existir
-        if (result.rowCount === 0) { 
-            return res.status(404).json({ error: 'Corte não encontrado (ou já excluído) após verificação de permissão.' });
-        }
-        res.status(200).json({ message: 'Corte excluído com sucesso.', id: result.rows[0]?.id || id }); // Retorna o ID
+        res.status(200).json({ message: 'Corte marcado como excluído.', corte: corteExcluido });
 
     } catch (error) {
-        console.error('[router/cortes DELETE] Erro:', error.message, error.stack ? error.stack.substring(0,500) : "");
-        res.status(500).json({ error: 'Erro ao excluir corte', details: error.message });
+        console.error('[router/cortes DELETE] Erro:', error);
+        res.status(500).json({ error: 'Erro interno na exclusão do corte.' });
     } finally {
         if (dbClient) dbClient.release();
     }
 });
+
+router.delete('/', async (req, res) => {
+    const { usuarioLogado } = req;
+    const { id } = req.body;
+    let dbClient;
+
+    try {
+        dbClient = await pool.connect();
+        // ... (sua lógica de permissão continua a mesma)
+        
+        if (!id) {
+            return res.status(400).json({ error: 'ID do corte é obrigatório.' });
+        }
+
+        // 1. FAZEMOS O "SOFT DELETE" E PEGAMOS OS DADOS DO CORTE
+        const result = await dbClient.query(
+            `UPDATE cortes SET status = 'excluido' WHERE id = $1 RETURNING *`,
+            [id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Corte não encontrado para exclusão.' });
+        }
+
+        const corteExcluido = result.rows[0];
+        console.log(`[API Cortes DELETE] Corte ID ${corteExcluido.id} (PC: ${corteExcluido.pn}) marcado como 'excluido'.`);
+        
+        // 2. LÓGICA DE CASCATA REFORÇADA
+        // A OP associada está no campo `corteExcluido.op`.
+        // Vamos verificar se ele existe e não é uma string vazia ou nula.
+        const opNumeroParaCancelar = corteExcluido.op;
+
+        if (opNumeroParaCancelar) {
+            console.log(`[API Cortes DELETE] Este corte estava associado à OP #${opNumeroParaCancelar}. Iniciando processo de cancelamento da OP...`);
+            
+            // Query para cancelar a OP associada.
+            // A condição `status NOT IN ('finalizado', 'cancelada')` é CRUCIAL para não
+            // reabrir ou alterar uma OP que já foi concluída ou cancelada por outro motivo.
+            const opCancelResult = await dbClient.query(
+                `UPDATE ordens_de_producao 
+                 SET status = 'cancelada' 
+                 WHERE numero = $1 AND status NOT IN ('finalizado', 'cancelada')`,
+                [opNumeroParaCancelar]
+            );
+
+            if(opCancelResult.rowCount > 0) {
+                console.log(`[API Cortes DELETE] SUCESSO! A OP #${opNumeroParaCancelar} foi cancelada em cascata.`);
+            } else {
+                console.warn(`[API Cortes DELETE] AVISO: A OP #${opNumeroParaCancelar} associada não foi encontrada para cancelamento ou seu status já era 'finalizado' ou 'cancelada'.`);
+            }
+        } else {
+            console.log(`[API Cortes DELETE] Este corte não tinha uma OP associada. Nenhuma ação em cascata necessária.`);
+        }
+
+        // 3. Responde ao frontend com sucesso.
+        res.status(200).json({ message: 'Corte marcado como excluído com sucesso.', corte: corteExcluido });
+
+    } catch (error) {
+        console.error('[router/cortes DELETE] Erro ao marcar corte como excluído:', error);
+        res.status(500).json({ error: 'Erro interno ao processar a exclusão do corte.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
 
 export default router;

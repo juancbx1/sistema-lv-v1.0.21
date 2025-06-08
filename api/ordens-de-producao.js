@@ -228,6 +228,46 @@ router.post('/', async (req, res) => {
     }
 });
 
+//GET /api/ordens-de-producao/check-op-filha/:numeroMae
+router.get('/check-op-filha/:numeroMae', async (req, res) => {
+    const { usuarioLogado } = req; // <<< Verifique se o middleware está passando isso
+    const { numeroMae } = req.params;
+    let dbClient;
+
+    try {
+        dbClient = await pool.connect();
+        
+        // Verificação de permissão (opcional, mas bom ter)
+        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
+        if (!permissoesCompletas.includes('acesso-ordens-de-producao')) {
+            return res.status(403).json({ error: 'Permissão negada.' });
+        }
+        
+        const textoBusca = `OP gerada em conjunto com a OP mãe #${numeroMae}`;
+
+        const query = `
+            SELECT EXISTS (
+                SELECT 1 
+                FROM ordens_de_producao 
+                WHERE observacoes = $1 AND status NOT IN ('cancelada', 'excluido')
+            ) as "filhaExiste";
+        `;
+        
+        const result = await dbClient.query(query, [textoBusca]);
+        const { filhaExiste } = result.rows[0];
+
+        res.status(200).json({ existe: filhaExiste });
+
+    } catch (error) {
+        console.error(`[API check-op-filha] Erro ao verificar OP filha para mãe #${numeroMae}:`, error);
+        // Não retorne o erro HTML, retorne um JSON de erro
+        res.status(500).json({ error: 'Erro ao verificar OP filha.', existe: true });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+
 // PUT /api/ordens-de-producao/ (Atualizar OP existente)
 router.put('/', async (req, res) => {
     const { usuarioLogado } = req;
@@ -236,39 +276,58 @@ router.put('/', async (req, res) => {
         dbClient = await pool.connect();
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
         
-        const { edit_id, numero, produto, variante, quantidade, data_entrega, observacoes, status, etapas, data_final } = req.body;
+        const opData = req.body;
+        const { edit_id, numero, status } = opData;
 
         if (!edit_id) {
             return res.status(400).json({ error: 'O campo "edit_id" é obrigatório para atualização.' });
         }
 
+        // --- LÓGICA DE PERMISSÃO CORRIGIDA ---
         let permissaoConcedida = false;
-        // Lógica de permissão para diferentes ações
         if (status === 'cancelada' && permissoesCompletas.includes('cancelar-op')) {
             permissaoConcedida = true;
         } else if (status === 'finalizado' && permissoesCompletas.includes('finalizar-op')) {
             permissaoConcedida = true;
-        } else if (permissoesCompletas.includes('editar-op')) { 
-            // Se não for cancelar nem finalizar, precisa de 'editar-op' para qualquer outra mudança
+        } else if (permissoesCompletas.includes('editar-op')) {
+            // Permissão genérica para qualquer outra mudança que não seja cancelar/finalizar
             permissaoConcedida = true;
         }
-
 
         if (!permissaoConcedida) {
             return res.status(403).json({ error: 'Permissão negada para realizar esta alteração na Ordem de Produção.' });
         }
-        
-        // Validações dos campos que podem ser atualizados
-        if (numero === undefined || produto === undefined || quantidade === undefined || data_entrega === undefined || status === undefined) {
-            // return res.status(400).json({ error: 'Campos numero, produto, quantidade, data_entrega e status são esperados.' });
-            // Relaxando essa validação, pois o frontend pode enviar apenas os campos que mudaram.
-            // O UPDATE abaixo usará COALESCE ou lógica similar se alguns campos não forem enviados.
-        }
-        if (quantidade !== undefined && (typeof quantidade !== 'number' || quantidade <= 0)) {
-            // return res.status(400).json({ error: 'Se fornecida, a quantidade deve ser um número positivo.' });
-            // A validação de quantidade já existe no frontend para o form, e o saveOPChanges envia a quantidade atual
-        }
 
+        // --- LÓGICA DE CASCATA (CANCELAR OU FINALIZAR) ---
+        let finalizedChildrenNumbers = [];
+
+        if (status === 'cancelada') {
+            console.log(`[API OPs PUT] OP #${numero} está sendo cancelada. Marcando corte associado como 'excluido'...`);
+            // Procura o corte associado pelo número da OP e muda seu status.
+            await dbClient.query(
+                `UPDATE cortes SET status = 'excluido' WHERE op = $1`,
+                [numero]
+            );
+        } else if (status === 'finalizado') {
+            console.log(`[API OPs PUT] OP Mãe #${numero} está sendo finalizada. Verificando por OPs filhas...`);
+            const textoBusca = `OP gerada em conjunto com a OP mãe #${numero}`;
+            const filhasResult = await dbClient.query(
+                `UPDATE ordens_de_producao 
+                 SET status = 'finalizado', data_final = CURRENT_TIMESTAMP
+                 WHERE observacoes = $1 AND status != 'finalizado'
+                 RETURNING numero`,
+                [textoBusca]
+            );
+
+            if (filhasResult.rowCount > 0) {
+                finalizedChildrenNumbers = filhasResult.rows.map(r => r.numero);
+                console.log(`[API OPs PUT] Sucesso! OPs filhas finalizadas: ${finalizedChildrenNumbers.join(', ')}`);
+            } else {
+                console.log(`[API OPs PUT] Nenhuma OP filha encontrada para a OP #${numero}.`);
+            }
+        }
+        
+        // --- EXECUÇÃO DO UPDATE PRINCIPAL ---
         const result = await dbClient.query(
             `UPDATE ordens_de_producao
              SET numero = $1, 
@@ -283,15 +342,15 @@ router.put('/', async (req, res) => {
                  data_atualizacao = CURRENT_TIMESTAMP
              WHERE edit_id = $10 RETURNING *`,
             [
-                numero, 
-                produto, 
-                variante || null, 
-                quantidade, 
-                data_entrega, 
-                observacoes || '', 
-                status, 
-                JSON.stringify(etapas || []), 
-                data_final || null, 
+                opData.numero, 
+                opData.produto, 
+                opData.variante || null, 
+                opData.quantidade, 
+                opData.data_entrega, 
+                opData.observacoes || '', 
+                opData.status, 
+                JSON.stringify(opData.etapas || []), 
+                opData.data_final || null, 
                 edit_id
             ]
         );
@@ -299,7 +358,14 @@ router.put('/', async (req, res) => {
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Ordem de Produção não encontrada para atualização.' });
         }
-        res.status(200).json(result.rows[0]);
+
+        const opAtualizada = result.rows[0];
+
+        // Adiciona a informação das filhas finalizadas à resposta
+        res.status(200).json({
+            ...opAtualizada,
+            finalizedChildren: finalizedChildrenNumbers 
+        });
 
     } catch (error) {
         console.error('[router/ordens-de-producao PUT] Erro:', error.message, error.stack? error.stack.substring(0,500):"");

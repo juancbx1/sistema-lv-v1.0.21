@@ -1,9 +1,9 @@
 // public/js/utils/metas-tiktik.js
 export const METAS_TIKTIK_CONFIG = [
-    { pontos: 4000, valor: 40, descricao: "Meta Bronze" }, // Adicionei descrição para clareza
-    { pontos: 4700, valor: 50, descricao: "Meta Prata" },
-    { pontos: 5400, valor: 70, descricao: "Meta Ouro" },
-    { pontos: 6400, valor: 110, descricao: "Meta Diamante" }
+    { pontos: 3700, valor: 40, descricao: "Meta Bronze" }, 
+    { pontos: 3925, valor: 50, descricao: "Meta Prata" },
+    { pontos: 4300, valor: 70, descricao: "Meta Ouro" },
+    { pontos: 4900, valor: 110, descricao: "Meta Diamante" }
 ]; // Seus valores de meta
 
 export function obterMetasTiktik() {
