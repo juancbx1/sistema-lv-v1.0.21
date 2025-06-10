@@ -96,6 +96,9 @@ body.autenticado {
 }
 
 .oa-cabecalho-pagina {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 25px;
     padding-bottom: 15px;
     border-bottom: 2px solid var(--oa-cor-azul-primario);
@@ -522,6 +525,115 @@ body.autenticado {
 
 .hidden { display: none !important; }
 
+/* Botão secundário para ações como histórico */
+.oa-btn-secundario {
+    background-color: #7f8c8d; /* Cinza do seu tema */
+    color: var(--oa-cor-branco);
+}
+.oa-btn-secundario:hover:not(:disabled) {
+    background-color: #6c7778;
+}
+
+/* ======================================= */
+/* >> ESTILOS PARA O MODAL DE HISTÓRICO << */
+/* ======================================= */
+
+/* Container geral do modal (para controlar visibilidade) */
+.hidden {
+    display: none;
+}
+
+/* Overlay (fundo escuro) */
+.oa-popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+}
+
+/* O modal em si */
+.oa-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: var(--oa-cor-branco);
+    border-radius: var(--oa-raio-borda-container);
+    box-shadow: var(--oa-sombra-padrao);
+    width: 90%;
+    max-width: 800px; /* Um pouco maior para a tabela */
+    z-index: 1001;
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh; /* Para não ocupar a tela inteira em altura */
+}
+
+.oa-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--oa-cor-cinza-borda);
+}
+
+.oa-modal-titulo {
+    font-size: 1.2rem;
+    color: var(--oa-cor-azul-escuro);
+    font-weight: 600;
+}
+
+.oa-modal-fechar-btn {
+    background: none;
+    border: none;
+    font-size: 1.8rem;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--oa-cor-cinza-texto-secundario);
+    transition: color 0.2s ease;
+}
+.oa-modal-fechar-btn:hover {
+    color: var(--oa-cor-vermelho-perigo);
+}
+
+.oa-modal-body {
+    padding: 20px;
+    overflow-y: auto; /* Scroll se o conteúdo for muito grande */
+}
+
+/* Tabela dentro do modal */
+.oa-tabela-wrapper {
+    width: 100%;
+    overflow-x: auto;
+}
+.oa-tabela-historico {
+    width: 100%;
+    border-collapse: collapse;
+}
+.oa-tabela-historico th,
+.oa-tabela-historico td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 0.9rem;
+}
+.oa-tabela-historico th {
+    background-color: var(--oa-cor-cinza-fundo-alternativo);
+    font-weight: 500;
+    color: var(--oa-cor-azul-subtitulo);
+}
+.oa-tabela-historico tbody tr:hover {
+    background-color: #f5faff;
+}
+
+.oa-modal-footer {
+    padding: 15px 20px;
+    border-top: 1px solid var(--oa-cor-cinza-borda);
+    background-color: var(--oa-cor-cinza-fundo-alternativo);
+}
+
 /*------------------------------------*\
     #RESPONSIVIDADE
 \*------------------------------------*/
@@ -599,11 +711,35 @@ body.autenticado {
         width: 100%; /* Ocupa o espaço do seu grupo */
         max-width: 120px; /* Mas não mais que isso */
     }
+
+    .oa-botoes-cabecalho span {
+        display: none; /* Esconde o texto no mobile */
+    }
+    .oa-btn-secundario {
+        border-radius: 50%; /* Faz o botão ficar redondo */
+        width: 44px;
+        height: 44px;
+        padding: 0;
+    }
+    .oa-btn-secundario i {
+        font-size: 1.2rem;
+        margin: 0;
+    }
 }
 
 @media (max-width: 480px) { /* Smartphones médios e menores */
     .oa-container-principal { padding: 20px; }
-    .oa-cabecalho-pagina h1 { font-size: 1.5rem; }
+    .oa-cabecalho-pagina {
+        gap: 15px; /* Adiciona um espaço entre eles */
+        align-items: center; /* Centraliza tudo */
+        text-align: center;
+    }
+
+    .oa-cabecalho-pagina h1 {
+        font-size: 1.6rem;
+        margin-left:40px;
+
+    }
     .oa-titulo-secao { font-size: 1.2rem; }
     .oa-card { padding: 15px; }
     .oa-input, .oa-select { font-size: 0.9rem; padding: 15px 12px; }
@@ -666,6 +802,12 @@ body.autenticado {
     .oa-input-qtde-arrematar {
         width: 80%;
 
+    }
+    .oa-tabela-historico th, .oa-tabela-historico td {
+    padding: 4px 6px;
+    text-align: left;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 0.65rem;
     }
 }
 

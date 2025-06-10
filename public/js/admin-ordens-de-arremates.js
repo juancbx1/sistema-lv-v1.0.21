@@ -20,6 +20,10 @@
 
         const lancamentosArremateEmAndamento = new Set(); // Para evitar duplo clique
 
+        let historicoDeArrematesCache = [];
+        let currentPageHistorico = 1;
+        const itemsPerPageHistorico = 12;
+
         // --- Funções de Fetch (similares às de admin-ordens-de-producao.js e embalagem) ---
         async function fetchFromAPI(endpoint, options = {}) {
             const token = localStorage.getItem('token');
@@ -45,6 +49,105 @@
             }
             return response.status === 204 ? null : response.json();
         }
+
+        async function buscarHistoricoDeArremates() {
+    try {
+        // Criaremos esta nova rota na API
+        const historico = await fetchFromAPI('/arremates/historico'); 
+        historicoDeArrematesCache = Array.isArray(historico) ? historico : [];
+        console.log(`[buscarHistoricoDeArremates] Histórico carregado: ${historicoDeArrematesCache.length} registros.`);
+    } catch (error) {
+        console.error('[buscarHistoricoDeArremates] Erro:', error);
+        mostrarPopupMensagem('Erro ao buscar o histórico de arremates.', 'erro');
+        historicoDeArrematesCache = [];
+    }
+}   
+
+function renderizarHistoricoModal(page = 1) {
+    currentPageHistorico = page;
+    const corpoTabela = document.getElementById('historicoTabelaCorpo');
+    const paginacaoContainer = document.getElementById('historicoPaginacao');
+    if (!corpoTabela || !paginacaoContainer) return;
+
+    if (historicoDeArrematesCache.length === 0) {
+        corpoTabela.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;">Nenhum lançamento nos últimos 7 dias.</td></tr>';
+        paginacaoContainer.innerHTML = '';
+        return;
+    }
+
+    // Lógica de paginação dos dados
+    const totalItems = historicoDeArrematesCache.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPageHistorico);
+    const startIndex = (currentPageHistorico - 1) * itemsPerPageHistorico;
+    const paginatedItems = historicoDeArrematesCache.slice(startIndex, startIndex + itemsPerPageHistorico);
+
+    // Renderiza as linhas da tabela
+    corpoTabela.innerHTML = '';
+    paginatedItems.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${item.produto}${item.variante ? ` | ${item.variante}` : ''}</td>
+            <td>${item.quantidade_arrematada}</td>
+            <td>${item.usuario_tiktik}</td>
+            <td>${item.lancado_por || 'N/A'}</td>
+            <td>${new Date(item.data_lancamento).toLocaleString('pt-BR')}</td>
+            <td>${item.op_numero}</td>
+        `;
+        corpoTabela.appendChild(tr);
+    });
+
+    // ==========================================================
+    // >> LÓGICA DE PAGINAÇÃO COMPLETA E CORRIGIDA <<
+    // ==========================================================
+    paginacaoContainer.innerHTML = ''; // Limpa a paginação anterior
+    if (totalPages > 1) {
+        // Função auxiliar para criar botões
+        const criarBotao = (texto, paginaAlvo, desabilitado = false, ativo = false) => {
+            const btn = document.createElement('button');
+            btn.textContent = texto;
+            btn.className = 'pagination-btn'; // Use uma classe consistente
+            if (ativo) btn.classList.add('active');
+            btn.disabled = desabilitado;
+            btn.addEventListener('click', () => renderizarHistoricoModal(paginaAlvo));
+            return btn;
+        };
+
+        // Botão "Anterior"
+        paginacaoContainer.appendChild(
+            criarBotao('Anterior', currentPageHistorico - 1, currentPageHistorico === 1)
+        );
+
+        // Span com "Página X de Y"
+        const pageInfo = document.createElement('span');
+        pageInfo.className = 'pagination-current';
+        pageInfo.textContent = `Pág. ${currentPageHistorico} de ${totalPages}`;
+        paginacaoContainer.appendChild(pageInfo);
+
+        // Botão "Próximo"
+        paginacaoContainer.appendChild(
+            criarBotao('Próximo', currentPageHistorico + 1, currentPageHistorico === totalPages)
+        );
+    }
+}
+
+async function abrirModalHistorico() {
+    const modalContainer = document.getElementById('historicoModalContainer');
+    if (!modalContainer) return;
+
+    // Mostra o spinner dentro do modal enquanto busca os dados
+    document.getElementById('historicoTabelaCorpo').innerHTML = '<tr><td colspan="6"><div class="spinner">Buscando histórico...</div></td></tr>';
+    modalContainer.classList.remove('hidden');
+
+    await buscarHistoricoDeArremates();
+    renderizarHistoricoModal(1);
+}
+
+function fecharModalHistorico() {
+    const modalContainer = document.getElementById('historicoModalContainer');
+    if (modalContainer) {
+        modalContainer.classList.add('hidden');
+    }
+}
 
         async function buscarOpsFinalizadasCompletas() {
             // Chama a API /api/ops-para-embalagem (que lista OPs com status 'finalizado')
@@ -549,4 +652,8 @@
                 window.location.hash = ''; // Limpa o hash para voltar à lista
             });
             document.getElementById('btnLancarArremateAgregado')?.addEventListener('click', lancarArremateAgregado);
+            document.getElementById('btnAbrirHistorico')?.addEventListener('click', abrirModalHistorico);
+            document.getElementById('btnFecharHistorico')?.addEventListener('click', fecharModalHistorico);
+            // Fechar ao clicar no overlay também
+            document.querySelector('#historicoModalContainer .oa-popup-overlay')?.addEventListener('click', fecharModalHistorico);
         });

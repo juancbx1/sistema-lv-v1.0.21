@@ -112,13 +112,27 @@ router.post('/', async (req, res) => {
         const pontosGerados = quantidadeNum * valorPontoAplicado;
         // --- FIM DO CÁLCULO DE PONTOS ---
 
+        // PEGA O NOME DO USUÁRIO LOGADO DO TOKEN
+        const nomeDoLancador = usuarioLogado.nome || 'Sistema'; // Fallback para "Sistema"
+
         const result = await dbClient.query(
-            `INSERT INTO arremates 
-                (op_numero, op_edit_id, produto, variante, quantidade_arrematada, usuario_tiktik, data_lancamento, valor_ponto_aplicado, pontos_gerados, assinada)
-             VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, $8, FALSE)
-             RETURNING *`,
-            [op_numero, op_edit_id || null, produto, variante || null, quantidadeNum, usuario_tiktik, valorPontoAplicado, pontosGerados]
-        );
+        `INSERT INTO arremates 
+        (op_numero, op_edit_id, produto, variante, quantidade_arrematada, usuario_tiktik, lancado_por, data_lancamento, valor_ponto_aplicado, pontos_gerados, assinada)
+        VALUES 
+        ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, $9, FALSE)
+         RETURNING *`, // << VÍRGULA AQUI, APÓS A QUERY
+        [ // << INÍCIO DO ARRAY DE PARÂMETROS
+        op_numero,
+        op_edit_id || null,
+        produto,
+        variante || null,
+        quantidadeNum,
+        usuario_tiktik,
+        nomeDoLancador,       // $7
+        valorPontoAplicado,   // $8
+        pontosGerados         // $9
+        ] 
+    );
 
         if (result.rows.length === 0) {
             throw new Error('Falha ao inserir o registro de arremate, nenhum dado retornado.');
@@ -186,6 +200,29 @@ router.get('/', async (req, res) => {
         console.error('[router/arremates GET] Erro na rota:', error.message, error.stack ? error.stack.substring(0,500) : '');
         const statusCode = error.statusCode || 500;
         res.status(statusCode).json({ error: error.message || 'Erro interno ao buscar arremates.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// NOVA ROTA: GET /api/arremates/historico
+router.get('/historico', async (req, res) => {
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        // Não precisa de verificação de permissão complexa, pois já está no middleware.
+        // A query busca os últimos 7 dias.
+        const query = `
+            SELECT * FROM arremates
+            WHERE data_lancamento >= NOW() - INTERVAL '7 days'
+            ORDER BY data_lancamento DESC;
+        `;
+        const result = await dbClient.query(query);
+        res.status(200).json(result.rows);
+
+    } catch (error) {
+        console.error('[API /arremates/historico] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar histórico de arremates.' });
     } finally {
         if (dbClient) dbClient.release();
     }

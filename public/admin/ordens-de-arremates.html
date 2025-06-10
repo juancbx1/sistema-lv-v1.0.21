@@ -15,9 +15,17 @@
     </div>
 
     <main class="oa-container-principal"> 
+        <!-- Seção Principal da Lista de Arremates -->
         <section class="oa-card" id="arrematesListView">
             <div class="oa-cabecalho-pagina">
                 <h1>Ordens de Arremate</h1>
+                <!-- Botão do Histórico movido para o cabeçalho principal -->
+                <div class="oa-botoes-cabecalho">
+                    <button id="btnAbrirHistorico" class="oa-btn oa-btn-secundario">
+                        <i class="fas fa-history"></i>
+                        <span>Histórico de Lançamentos</span>
+                    </button>
+                </div>
             </div>
 
             <div class="oa-card" style="margin-bottom: 30px;"> 
@@ -29,9 +37,11 @@
 
             <div class="oa-card" id="arrematesCardContainerWrapper">
                 <div id="arremateCardsContainer" class="oa-arremate-card-container">
+                    <!-- Cards de arremate serão inseridos aqui pelo JS -->
                     <div class="spinner">Carregando produtos para arremate...</div>
                 </div>
                 <div id="arrematePaginationContainer" class="oa-paginacao-container" style="display: none;">
+                    <!-- Paginação dos cards será inserida aqui pelo JS -->
                 </div>
             </div>
         </section>
@@ -43,8 +53,10 @@
             <h2 class="oa-titulo-secao" id="arremateDetalheTitulo">Lançar Arremate para: Produto (Variante)</h2>
 
             <div class="oa-form-estilizado" id="formArremateDetalhe">
+                <!-- Cabeçalho com imagem e informações do produto -->
                 <div style="text-align: center; margin-bottom: 20px;">
                     <div class="ep-thumbnail-detalhe" id="arremateDetalheThumbnail" style="margin: 0 auto 10px auto; width: 100px; height: 100px;">
+                        <!-- Imagem inserida pelo JS -->
                     </div>
                     <p style="font-size: 1.2em; font-weight: bold; color: var(--oa-cor-azul-escuro);"><span id="arremateProdutoNomeDetalhe"></span> <span id="arremateVarianteNomeDetalhe" style="font-weight: normal; color: var(--oa-cor-cinza-texto-secundario);"></span></p>
                     <p class="ep-qtd-disponivel-destaque-small" style="margin-top:5px; display:inline-block; background-color: var(--oa-cor-laranja-aviso); color: var(--oa-cor-branco);">
@@ -52,7 +64,8 @@
                     </p>
                 </div>
 
-               <div class="oa-form-linha-flex"> 
+                <!-- Formulário de lançamento -->
+                <div class="oa-form-linha-flex"> 
                     <div class="oa-form-grupo">
                         <label for="selectUsuarioArremate">Feito Por:</label>
                         <select id="selectUsuarioArremate" class="oa-select" required>
@@ -66,11 +79,13 @@
                     </div>
                 </div>
                 
+                <!-- Lista de OPs de Origem -->
                 <h3 class="oa-subtitulo-secao" style="font-size: 1.1rem; margin-top: 25px;">OPs de Origem com Saldo:</h3>
                 <div id="arremateOpsOrigemContainer" class="oa-tabela-wrapper" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--oa-cor-cinza-borda); border-radius: var(--oa-raio-borda-input); padding:10px; background-color: var(--oa-cor-cinza-fundo-alternativo);">
                     <p style="text-align:center; color: var(--oa-cor-cinza-texto-secundario); font-style: italic;">Detalhes das OPs de origem aparecerão aqui.</p>
                 </div>
 
+                <!-- Botão de Ação -->
                 <div class="oa-form-botoes" style="margin-top: 30px;">
                     <button type="button" id="btnLancarArremateAgregado" class="oa-btn oa-btn-sucesso">
                         <i class="fas fa-check"></i> Lançar Arremate
@@ -78,8 +93,44 @@
                 </div>
             </div>
         </section>
+
+        <!-- Estrutura do Modal de Histórico (inicialmente oculta) -->
+        <div id="historicoModalContainer" class="hidden">
+            <div class="oa-popup-overlay"></div>
+            <div class="oa-modal">
+                <div class="oa-modal-header">
+                    <h3 class="oa-modal-titulo">Histórico de Arremates (Últimos 7 dias)</h3>
+                    <button id="btnFecharHistorico" class="oa-modal-fechar-btn">×</button>
+                </div>
+                <div class="oa-modal-body">
+                    <div class="oa-tabela-wrapper">
+                        <table class="oa-tabela-historico">
+                            <thead>
+                                <tr>
+                                    <th>Produto | Variação</th>
+                                    <th>Qtde</th>
+                                    <th>Feito por (Tiktik)</th>
+                                    <th>Lançado por</th>
+                                    <th>Data & Hora</th>
+                                    <th>OP Origem</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historicoTabelaCorpo">
+                                <!-- Linhas do histórico serão inseridas aqui pelo JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="oa-modal-footer">
+                    <div id="historicoPaginacao" class="oa-paginacao-container">
+                        <!-- Paginação do histórico será inserida aqui pelo JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
     </main>
 
+    <!-- Scripts -->
     <script src="/js/admin-ordens-de-arremates.js" type="module"></script>
     <script src="/js/carregar-menu-lateral.js" type="module"></script>
 </body>
