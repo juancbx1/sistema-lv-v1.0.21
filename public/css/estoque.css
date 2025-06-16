@@ -601,6 +601,203 @@ body.autenticado { visibility: visible; }
     background-color: #fff0f0 !important; /* Para destacar a célula também */
 }
 
+/* ==========================================================================
+   ### ESTILOS PARA NOVA VIEW DE MOVIMENTAÇÃO DE ESTOQUE ###
+   ========================================================================== */
+
+#editarEstoqueMovimentoView {
+    position: relative;
+    padding-top: 50px;
+}
+
+.movimento-header {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 20px;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.movimento-thumbnail {
+    width: 90px;
+    height: 90px;
+    border-radius: var(--es-raio-borda-card);
+    overflow: hidden;
+    background-color: var(--es-cor-cinza-fundo-input);
+    border: 1px solid var(--es-cor-cinza-borda);
+}
+
+.movimento-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.movimento-info h2 {
+    font-size: 1.6rem;
+    color: var(--es-cor-azul-escuro);
+    margin: 0 0 5px 0;
+    font-weight: 600;
+}
+
+.movimento-info p {
+    font-size: 0.95rem;
+    color: #6c757d;
+    margin-bottom: 15px;
+}
+
+.btn-historico {
+    padding: 8px 15px !important;
+    font-size: 0.85rem !important;
+}
+
+.movimento-saldo {
+    text-align: center;
+    background-color: var(--es-cor-fundo-pagina);
+    padding: 15px 25px;
+    border-radius: var(--es-raio-borda-card);
+    border: 1px solid var(--es-cor-cinza-borda);
+}
+
+.movimento-saldo label {
+    display: block;
+    font-size: 0.8rem;
+    color: #6c757d;
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+}
+
+.movimento-saldo span {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--es-cor-azul-primario);
+}
+
+.movimento-divisor {
+    border: 0;
+    height: 1px;
+    background-color: var(--es-cor-cinza-borda);
+    margin: 25px 0;
+}
+
+.movimento-form {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.movimento-titulo-secao {
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--es-cor-texto-principal);
+    margin-bottom: 15px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.movimento-tipo-operacao-container {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-bottom: 25px;
+}
+
+.movimento-op-btn {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 2px solid var(--es-cor-cinza-borda);
+    background-color: var(--es-cor-branco);
+    color: var(--es-cor-texto-principal);
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.movimento-op-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--es-sombra-padrao);
+}
+
+.movimento-op-btn.ativo {
+    color: var(--es-cor-branco);
+    border-width: 3px;
+    transform: scale(1.1);
+}
+
+.movimento-op-btn[data-tipo="ENTRADA_MANUAL"].ativo {
+    background-color: var(--es-cor-verde-sucesso);
+    border-color: #1e8a4c;
+}
+
+.movimento-op-btn[data-tipo="SAIDA_MANUAL"].ativo {
+    background-color: var(--es-cor-vermelho-perigo);
+    border-color: #c0392b;
+}
+
+.movimento-op-btn[data-tipo="BALANCO"].ativo {
+    background-color: var(--es-cor-azul-primario);
+    border-color: var(--es-cor-azul-hover);
+}
+
+/* Ajuste para o botão de arquivar */
+.es-form-botoes {
+    display: flex;
+    justify-content: flex-end; /* Mantém o padrão de alinhar à direita */
+    gap: 10px;
+    margin-top: 20px;
+}
+
+/* ==========================================================================
+   ### BOTÃO DE AÇÃO DISCRETO (ÍCONE) ###
+   ========================================================================== */
+
+.es-btn-icon-danger {
+    background-color: transparent;
+    color: #7f8c8d; /* Cinza discreto */
+    border: 1px solid #dcdfe4;
+    width: 40px; /* Tamanho fixo para um ícone */
+    height: 40px;
+    padding: 0;
+    font-size: 1.1rem;
+    line-height: 40px; /* Centraliza o ícone verticalmente */
+    text-align: center;
+    border-radius: 50%; /* Deixa ele redondo */
+    transition: all 0.2s ease-in-out;
+}
+
+.es-btn-icon-danger:hover:not(:disabled) {
+    background-color: #e74c3c; /* Fica vermelho no hover */
+    color: #fff;
+    border-color: #c0392b;
+    transform: scale(1.1);
+}
+
+.es-btn-icon-danger:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: transparent !important; /* Garante que não fique vermelho quando desabilitado */
+}
+
+/* Estilos para botões do popup de confirmação */
+.es-popup-mensagem .es-btn-confirmar {
+    background-color: var(--es-cor-vermelho-perigo) !important;
+}
+.es-popup-mensagem .es-btn-confirmar:hover {
+    background-color: #c0392b !important;
+}
+
+.es-popup-mensagem .es-btn-cancelar {
+    background-color: #7f8c8d !important;
+}
+.es-popup-mensagem .es-btn-cancelar:hover {
+    background-color: #6c7a7b !important;
+}
+
 
 /* Responsividade */
 
@@ -656,6 +853,26 @@ body.autenticado { visibility: visible; }
     }
     #detalheItemEstoqueView {
          padding-top: 60px; /* Mais espaço para o X no mobile */
+    }
+
+    .movimento-header {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+    .movimento-thumbnail {
+        margin: 0 auto 15px auto;
+    }
+    .movimento-saldo {
+        margin-top: 15px;
+        max-width: 250px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .movimento-info h2 {
+        font-size: 1.4rem;
+    }
+    .movimento-saldo span {
+        font-size: 2rem;
     }
 
 }

@@ -14,24 +14,25 @@
         <i class="fas fa-times"></i>
     </div>
     <div id="mensagemPermissao" class="alert alert-error" style="display: none;"></div>
-    <div class="container-produto">
-        <section class="lista-produtos" id="productListView" aria-label="Lista de produtos">
-            <div class="card-header-filter">
-                <div class="cabecalho-lista-produto">
+    <div class="cp-main-wrapper">
+        <!-- VIEW DA LISTA DE PRODUTOS -->
+        <section id="productListView" aria-label="Lista de produtos">
+            <div class="cp-card">
+                <div class="cp-card-header">
                     <h2>Produtos Cadastrados</h2>
-                    <input type="text" id="searchProduct" class="busca-produto" placeholder="Buscar por nome..." aria-label="Buscar produtos">
+                    <input type="text" id="searchProduct" class="cp-input" placeholder="Buscar por nome..." aria-label="Buscar produtos">
                 </div>
-                <div class="filtro-tipo-produto" id="typeFilter" role="tablist">
+                <div class="cp-type-filter" id="typeFilter" role="tablist">
                     <button class="cp-type-btn active" data-type="todos" role="tab" aria-selected="true">Todos</button>
                     <button class="cp-type-btn" data-type="simples" role="tab" aria-selected="false">Simples</button>
                     <button class="cp-type-btn" data-type="variacoes" role="tab" aria-selected="false">Variações</button>
                     <button class="cp-type-btn" data-type="kits" role="tab" aria-selected="false">Kits</button>
                 </div>
-                <button id="btnAdicionarNovoProduto" class="cp-botao cp-botao-acao">
+                <button id="btnAdicionarNovoProduto" class="cp-btn cp-btn-primary">
                     <i class="fas fa-plus"></i> Adicionar Novo Produto
                 </button>
             </div>
-            <table class="tabela-lista-produtos" aria-label="Tabela de produtos">
+            <table class="cp-table" aria-label="Tabela de produtos">
                 <thead>
                     <tr>
                         <th scope="col"></th>
@@ -46,179 +47,175 @@
             </table>
         </section>
 
-        <section class="formulario-produto" id="productFormView" style="display: none;" aria-label="Formulário de edição de produto">
-            <button class="botao-voltar-produto" onclick="window.location.hash = ''" aria-label="Voltar à lista">Voltar</button>
+        <!-- VIEW DO FORMULÁRIO DE EDIÇÃO/CADASTRO -->
+        <section class="cp-form" id="productFormView" style="display: none;" aria-label="Formulário de edição de produto">
+            <button class="cp-btn cp-btn-back" onclick="window.location.hash = ''" aria-label="Voltar à lista">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </button>
             <h2 id="editProductName"></h2>
-            <div class="filtro-abas-produto" id="tabFilter" role="tablist">
+            <div class="cp-tab-filter" id="tabFilter" role="tablist">
                 <button class="cp-tab-btn active" data-tab="dados-gerais" onclick="switchTab('dados-gerais')" role="tab" aria-selected="true">Dados Gerais</button>
                 <button class="cp-tab-btn" data-tab="ficha-tecnica" onclick="switchTab('ficha-tecnica')" role="tab" aria-selected="false">Ficha Técnica</button>
                 <button class="cp-tab-btn" data-tab="producao" onclick="switchTab('producao')" role="tab" aria-selected="false">Produção</button>
             </div>
-            <div class="abas-conteudo">
-                <div class="conteudo-aba-produto active" id="dados-gerais" role="tabpanel">
+            
+            <div class="cp-tabs-content">
+                <!-- Aba: Dados Gerais -->
+                <div class="cp-tab-content active" id="dados-gerais" role="tabpanel">
                     <form id="productForm">
-                        <div class="grupo-form-produto">
-                    <label for="inputProductName">Nome do Produto:</label>
-                    <input type="text" id="inputProductName" class="form-control-produto" required aria-required="true">
-                </div>
-                <!-- ********************************** -->
-                        <div class="grupo-form-produto">
-                            <label for="sku">Código (SKU):</label>
-                            <input type="text" id="sku" required aria-required="true">
+                        <div class="cp-form-group">
+                            <label for="inputProductName">Nome do Produto:</label>
+                            <input type="text" id="inputProductName" class="cp-input" required aria-required="true">
                         </div>
-                        <div class="grupo-form-produto">
+                        <div class="cp-form-group">
+                            <label for="sku">Código (SKU Principal):</label>
+                            <input type="text" id="sku" class="cp-input" required aria-required="true">
+                        </div>
+                        <div class="cp-form-group">
                             <label>Tipo:</label>
-                            <div class="tipo-checkboxes">
+                            <div>
                                 <label><input type="checkbox" name="tipo" value="simples" onchange="toggleTabs()"> Simples</label>
                                 <label><input type="checkbox" name="tipo" value="variacoes" onchange="toggleTabs()"> Variações</label>
                                 <label><input type="checkbox" name="tipo" value="kits" onchange="toggleTabs()"> Kits</label>
                             </div>
                         </div>
-                        <div class="grupo-form-produto">
+                        <div class="cp-form-group">
                             <label for="gtin">GTIN/EAN:</label>
-                            <input type="text" id="gtin">
+                            <input type="text" id="gtin" class="cp-input">
                         </div>
-                        <div class="grupo-form-produto">
+                        <div class="cp-form-group">
                             <label for="unidade">Unidade:</label>
-                            <select id="unidade" required aria-required="true">
-                                <option value="">Selecione a unidade</option>
+                            <select id="unidade" class="cp-select" required aria-required="true">
                                 <option value="pç">Peça (pç)</option>
                                 <option value="m">Metro (m)</option>
                                 <option value="kg">Quilograma (kg)</option>
                             </select>
                         </div>
-                        <div class="grupo-form-produto">
+                        <div class="cp-form-group">
                             <label for="estoque">Estoque:</label>
-                            <input type="number" id="estoque" disabled aria-disabled="true">
+                            <input type="number" id="estoque" class="cp-input" disabled aria-disabled="true">
                         </div>
-                        <button type="submit" class="botao-enviar-produto">Editar Produto</button>
+                        <button type="submit" class="cp-btn cp-btn-submit"><i class="fas fa-save"></i> Salvar Produto</button>
                     </form>
                 </div>
 
-                <div class="conteudo-aba-produto" id="ficha-tecnica" role="tabpanel">
-                    <div class="grupo-form-produto">
-                        <label for="imagemProduto">Imagem do Produto:</label>
-                        <input type="file" id="imagemProduto" accept="image/*" aria-label="Carregar imagem do produto">
-                        <img id="previewImagem" style="display: none; max-width: 200px; margin-top: 1rem;" alt="Pré-visualização da imagem do produto">
-                        <button id="removeImagem" style="display: none;" class="botao-remover-produto" aria-label="Remover imagem">Remover Imagem</button>
+                <!-- Aba: Ficha Técnica -->
+                <div class="cp-tab-content" id="ficha-tecnica" role="tabpanel">
+                    <div class="cp-form-group">
+                        <label for="imagemProduto">Imagem Principal:</label>
+                        <input type="file" id="imagemProduto" accept="image/*" class="cp-input">
+                        <img id="previewImagem" style="display: none; max-width: 200px; margin-top: 1rem; border-radius: 8px;" alt="Pré-visualização da imagem">
+                        <button type="button" id="removeImagem" style="display: none;" class="cp-btn cp-btn-danger" aria-label="Remover imagem">Remover</button>
                     </div>
                 </div>
 
-                <div class="conteudo-aba-produto" id="producao" role="tabpanel">
-                    <div class="grupo-form-produto">
+                <!-- Aba: Produção -->
+                <div class="cp-tab-content" id="producao" role="tabpanel">
+                    <div class="cp-form-group">
                         <h3>Etapas de Produção</h3>
                         <table class="cp-table" aria-label="Etapas de produção">
                             <thead>
                                 <tr>
-                                    <th scope="col" style="width: 5%;"></th>
-                                    <th scope="col" style="width: 30%;">Processos</th>
-                                    <th scope="col" style="width: 25%;">Máquina</th>
-                                    <th scope="col" style="width: 25%;">Feito Por</th>
-                                    <th scope="col" style="width: 15%;">Ações</th>
+                                    <th scope="col" style="width: 5%;"></th><th scope="col">Processo</th><th scope="col">Máquina</th><th scope="col">Feito Por</th><th scope="col">Ações</th>
                                 </tr>
                             </thead>
                             <tbody id="stepsBody" draggable="true"></tbody>
                         </table>
-                        <button type="button" class="botao-adicionar-etapa" onclick="addStepRow()" aria-label="Adicionar etapa de produção">Adicionar Etapa</button>
+                        <button type="button" class="cp-btn cp-btn-add" onclick="addStepRow()"><i class="fas fa-plus"></i> Add Etapa</button>
                     </div>
-                    <div class="grupo-form-produto">
+                    <div class="cp-form-group">
                         <h3>Etapas de Arremate/Tik Tik</h3>
                         <table class="cp-table" aria-label="Etapas de arremate/tik tik">
-                            <thead>
+                           <thead>
                                 <tr>
-                                    <th scope="col" style="width: 5%;"></th>
-                                    <th scope="col" style="width: 30%;">Processos</th>
-                                    <th scope="col" style="width: 25%;">Máquina</th>
-                                    <th scope="col" style="width: 25%;">Feito Por</th>
-                                    <th scope="col" style="width: 15%;">Ações</th>
+                                    <th scope="col" style="width: 5%;"></th><th scope="col">Processo</th><th scope="col">Máquina</th><th scope="col">Feito Por</th><th scope="col">Ações</th>
                                 </tr>
                             </thead>
                             <tbody id="etapasTiktikBody" draggable="true"></tbody>
                         </table>
-                        <button type="button" class="botao-adicionar-etapa" onclick="addEtapaTiktikRow()" aria-label="Adicionar etapa de arremate/tik tik">Adicionar Etapa</button>
+                        <button type="button" class="cp-btn cp-btn-add" onclick="addEtapaTiktikRow()"><i class="fas fa-plus"></i> Add Etapa</button>
                     </div>
                 </div>
 
-                <div class="conteudo-aba-produto" id="variacoes" role="tabpanel">
-                    <div class="grupo-form-produto">
-                        <h3>Variações do Produto</h3>
-                        <div id="variacoesContainer"></div>
-                        <button class="botao-adicionar-variacao" onclick="addVariacaoRow()" aria-label="Adicionar variação">Adicionar Outra Variação</button>
-                        <button id="salvarVariacoesBtn" class="botao-salvar-variacoes" onclick="salvarVariacoes()" aria-label="Salvar variações">Salvar Variações</button>
-                    </div>
-                    <div class="grupo-form-produto" id="gradeVariacoes">
-                        <h3>Grade das Variações</h3>
-                        <p>Atribua imagens ou edite informações específicas para as variações.</p>
-                        <table class="tabela-grade-variacoes" aria-label="Grade de variações">
-                            <thead id="gradeHeader">
-                                <tr>
-                                    <th scope="col">Variação</th>
-                                    <th scope="col">Composto Por</th>
-                                    <th scope="col">Código (SKU)</th>
-                                    <th scope="col">Imagens</th>
-                                    <th scope="col">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody id="gradeBody"></tbody>
-                        </table>
-                        <button id="salvarGradeBtn" class="botao-salvar-grade" onclick="salvarGrade()" aria-label="Salvar grade">Salvar Grade</button>
-                    </div>
-                </div>
-            </div>
+                <!-- Aba: Variações -->
+<div class="cp-tab-content" id="variacoes" role="tabpanel">
+    
+    <!-- NOVO CONTAINER PARA O COMPONENTE DE VARIAÇÕES -->
+    <div class="cp-form-group">
+        <h3>Definir Variações</h3>
+        <div id="variationsComponentContainer" class="cp-variations-container">
+            <!-- As linhas de variação (chave + valores em tags) serão injetadas aqui pelo JS -->
+        </div>
+        <button type="button" class="cp-btn cp-btn-add" onclick="addVariacaoRow()" style="margin-top: 1rem;">
+            <i class="fas fa-plus"></i> Adicionar Outra Variação
+        </button>
+    </div>
 
-            <!-- Popup para Nova Variação -->
-            <div id="variacaoPopup" class="popup-produto" style="display: none;" role="dialog" aria-labelledby="novaVariacaoTitle">
-                <div class="conteudo-popup-produto">
+    <!-- A GRADE DE VARIAÇÕES PERMANECE IGUAL -->
+    <div class="cp-form-group" id="gradeVariacoes">
+        <h3>Grade de Variações</h3>
+        <p>Atribua SKUs e imagens para cada combinação. Exclua as combinações que não existem.</p>
+        <table class="cp-table" aria-label="Grade de variações">
+            <thead id="gradeHeader"></thead>
+            <tbody id="gradeBody"></tbody>
+        </table>
+        <button id="salvarGradeBtn" class="cp-btn cp-btn-success" onclick="salvarGrade()">
+            <i class="fas fa-check"></i> Salvar Grade e Variações
+        </button>
+    </div>
+
+</div>
+
+            <!-- Popups -->
+            <div id="variacaoPopup" class="cp-popup" role="dialog" aria-labelledby="novaVariacaoTitle">
+                <div class="cp-popup-content">
                     <h3 id="novaVariacaoTitle">Nova Variação</h3>
-                    <div class="grupo-form-produto">
-                        <label for="novaVariacaoDescricao">Descrição</label>
-                        <input type="text" id="novaVariacaoDescricao" class="entrada-produto" aria-label="Descrição da nova variação">
+                    <div class="cp-form-group">
+                        <label for="novaVariacaoDescricao">Descrição:</label>
+                        <input type="text" id="novaVariacaoDescricao" class="cp-input">
                     </div>
-                    <div class="botoes-popup-produto">
-                        <button class="botao-confirmar-produto" onclick="confirmarNovaVariacao()" aria-label="Confirmar nova variação">Confirmar</button>
-                        <button class="botao-cancelar-produto" onclick="fecharPopup()" aria-label="Cancelar">Cancelar</button>
+                    <div class="cp-popup-buttons">
+                        <button class="cp-btn cp-btn-secondary" onclick="fecharPopup()">Cancelar</button>
+                        <button class="cp-btn cp-btn-primary" onclick="confirmarNovaVariacao()">Confirmar</button>
                     </div>
                 </div>
             </div>
 
-            <!-- Popup para Upload de Imagem na Grade -->
-            <div id="gradeImagePopup" class="popup-produto" style="display: none;" role="dialog" aria-labelledby="gradeImageTitle">
-                <div class="conteudo-popup-produto">
+            <div id="gradeImagePopup" class="cp-popup" role="dialog" aria-labelledby="gradeImageTitle">
+                <div class="cp-popup-content">
                     <h3 id="gradeImageTitle">Imagem da Variação</h3>
-                    <div class="grupo-form-produto">
-                        <label for="gradeImageInput">Carregar Imagem</label>
-                        <input type="file" id="gradeImageInput" accept="image/*" aria-label="Carregar imagem da variação">
+                    <div class="cp-form-group">
+                        <label for="gradeImageInput">Carregar Imagem:</label>
+                        <input type="file" id="gradeImageInput" class="cp-input" accept="image/*">
                     </div>
-                    <div class="botoes-popup-produto">
-                        <button class="botao-confirmar-produto" onclick="confirmarImagemGrade()" aria-label="Confirmar imagem">Confirmar</button>
-                        <button class="botao-cancelar-produto" onclick="fecharImagemPopup()" aria-label="Cancelar">Cancelar</button>
+                    <div class="cp-popup-buttons">
+                        <button class="cp-btn cp-btn-secondary" onclick="fecharImagemPopup()">Cancelar</button>
+                        <button class="cp-btn cp-btn-primary" onclick="confirmarImagemGrade()">Confirmar</button>
                     </div>
                 </div>
             </div>
 
-            <div id="configurarVariacaoView" class="popup-produto" style="display: none;" role="dialog" aria-labelledby="configurarVariacaoTitle">
-                <div class="conteudo-popup-produto">
+            <div id="configurarVariacaoView" class="cp-popup" role="dialog" aria-labelledby="configurarVariacaoTitle">
+                <div class="cp-popup-content">
                     <h3 id="configurarVariacaoTitle"></h3>
-                    <div class="grupo-form-produto">
-                        <label for="produtoKitSelect">Produto</label>
-                        <select id="produtoKitSelect" onchange="loadVariacoesKit()" aria-label="Selecionar produto para kit">
-                            <option value="">Selecione um produto</option>
-                        </select>
+                    <div class="cp-form-group">
+                        <label for="produtoKitSelect">Produto Componente:</label>
+                        <select id="produtoKitSelect" class="cp-select" onchange="loadVariacoesKit()"></select>
                     </div>
-                    <div class="grupo-form-produto">
-                        <label for="variacaoKitSelect">Variação</label>
-                        <div class="variacao-kit-container">
-                            <select id="variacaoKitSelect" aria-label="Selecionar variação do kit"></select>
-                            <button id="addVariacaoKitBtn" class="botao-confirmar-produto" aria-label="Adicionar variação ao kit">OK</button>
+                    <div class="cp-form-group">
+                        <label for="variacaoKitSelect">Variação do Componente:</label>
+                        <div style="display: flex; gap: 10px;">
+                            <select id="variacaoKitSelect" class="cp-select" style="flex-grow: 1;"></select>
+                            <button id="addVariacaoKitBtn" class="cp-btn cp-btn-primary">Add</button>
                         </div>
                     </div>
-                    <div class="grupo-form-produto">
-                        <label>Composição</label>
-                        <div id="composicaoKitContainer" class="composicao-kit"></div>
+                    <div class="cp-form-group">
+                        <label>Composição Atual:</label>
+                        <div id="composicaoKitContainer"></div>
                     </div>
-                    <div class="botoes-popup-produto">
-                        <button id="saveKitConfigBtn" class="botao-confirmar-produto" aria-label="Configurar kit">Configurar</button>
-                        <button class="botao-cancelar-produto" onclick="window.location.hash = '#editando'" aria-label="Cancelar">Cancelar</button>
+                    <div class="cp-popup-buttons">
+                         <button class="cp-btn cp-btn-secondary" onclick="window.location.hash = '#editando'">Cancelar</button>
+                        <button id="saveKitConfigBtn" class="cp-btn cp-btn-primary">Salvar Composição</button>
                     </div>
                 </div>
             </div>

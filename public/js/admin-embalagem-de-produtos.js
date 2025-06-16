@@ -307,11 +307,11 @@ async function carregarDetalhesEmbalagemView(agregado) {
 
     embalagemAgregadoEmVisualizacao = agregado;
 
+    // --- Parte 1: Preenchimento de informações (sem alterações) ---
     document.getElementById('embalagemDetalheTitulo').textContent = `Embalar: ${agregado.produto}`;
-    document.getElementById('embalagemDetalheSubTitle').textContent = agregado.variante !== '-' ? `Variação: ${agregado.variante}` : 'Variação: Padrão';
-    
+    document.getElementById('embalagemDetalheSubTitle').textContent = agregado.variante !== '-' ? `Variação: ${agregado.variante}` : 'Padrão';
     const produtoCadEmb = todosOsProdutosCadastrados.find(p => p.nome === agregado.produto);
-    let imgDetalheEmbSrc = '/img/placeholder-image.png'; // Caminho para imagem padrão
+    let imgDetalheEmbSrc = '/img/placeholder-image.png';
     if (produtoCadEmb) {
         if (agregado.variante && agregado.variante !== '-') {
             const gradeDetEmb = produtoCadEmb.grade?.find(g => g.variacao === agregado.variante);
@@ -321,55 +321,55 @@ async function carregarDetalhesEmbalagemView(agregado) {
             imgDetalheEmbSrc = produtoCadEmb.imagem;
         }
     }
-    document.getElementById('embalagemDetalheThumbnail').innerHTML = `<img src="${imgDetalheEmbSrc}" alt="${agregado.produto}" onerror="this.onerror=null;this.src='/img/placeholder-image.png';this.style.opacity=0.5;">`;
-
-    // Aba Unidade
+    document.getElementById('embalagemDetalheThumbnail').innerHTML = `<img src="${imgDetalheEmbSrc}" alt="${agregado.produto}" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">`;
     document.getElementById('embalarProdutoNome').textContent = agregado.produto;
     document.getElementById('embalarVarianteNome').textContent = agregado.variante !== '-' ? agregado.variante : 'Padrão';
     document.getElementById('embalarQtdDisponivelUnidade').textContent = agregado.total_quantidade_disponivel_para_embalar;
-    
     const inputQtdUnidade = document.getElementById('inputQuantidadeEmbalarUnidade');
     inputQtdUnidade.value = '';
     inputQtdUnidade.max = agregado.total_quantidade_disponivel_para_embalar;
-    inputQtdUnidade.disabled = agregado.total_quantidade_disponivel_para_embalar === 0 || !permissoes.includes('lancar-embalagem');
-
     const btnEmbalarUnidade = document.getElementById('btnEmbalarEnviarEstoqueUnidade');
-    btnEmbalarUnidade.disabled = true; 
-
-    inputQtdUnidade.oninput = () => { // Arrow function para manter o `this` se necessário (aqui não é, mas boa prática)
+    btnEmbalarUnidade.disabled = true;
+    inputQtdUnidade.oninput = () => {
         const qtd = parseInt(inputQtdUnidade.value) || 0;
         const maxQtd = parseInt(inputQtdUnidade.max) || 0;
         btnEmbalarUnidade.disabled = !(qtd > 0 && qtd <= maxQtd && permissoes.includes('lancar-embalagem'));
     };
 
-    // Abas
+    // --- Parte 2: Lógica de Abas e Reset (COM ALTERAÇÕES) ---
     const kitTabButton = document.querySelector('#embalarDetalheView .ep-tabs button[data-tab="kit"]');
     const unidadeTabButton = document.querySelector('#embalarDetalheView .ep-tabs button[data-tab="unidade"]');
     const kitPanel = document.getElementById('kit-tab-nova');
     const unidadePanel = document.getElementById('unidade-tab-nova');
 
+    // **NOVO: Reset explícito do estado da aba de kits**
+    document.getElementById('kitsListNova').innerHTML = ''; // Limpa a lista de kits
+    const kitVariacoesSelect = document.getElementById('kitVariacoesNova');
+    kitVariacoesSelect.innerHTML = '<option value="">Selecione o Kit primeiro</option>'; // Define um texto inicial claro
+    kitVariacoesSelect.disabled = true; // Garante que comece desabilitado
+    document.getElementById('kitVariacaoComposicaoWrapperNova').style.display = 'none'; // Esconde o wrapper
+    document.getElementById('kitTableContainerNova').style.display = 'none'; // Esconde a tabela
+    document.getElementById('kitFooterNova').style.display = 'none'; // Esconde o rodapé
+    document.getElementById('kitErrorMessageNova').classList.add('hidden'); // Esconde mensagens de erro
+
+    // Lógica de visibilidade da aba de kits
     const temKits = await temKitsDisponiveis(agregado.produto, agregado.variante);
     const podeMontarKit = permissoes.includes('montar-kit');
-
-    if (kitTabButton) kitTabButton.style.display = (temKits && podeMontarKit) ? 'inline-flex' : 'none';
-    
-    // Força a aba "Unidade" a ser a ativa por padrão ao carregar esta view
-    unidadeTabButton.classList.add('active');
-    unidadePanel.classList.add('active'); // Adiciona 'active' para CSS
-    unidadePanel.style.display = 'block'; // Garante visibilidade
-
-    if (kitTabButton) kitTabButton.classList.remove('active');
-    if (kitPanel) {
-        kitPanel.classList.remove('active'); // Remove 'active'
-        kitPanel.style.display = 'none'; // Esconde
+    if (kitTabButton) {
+        kitTabButton.style.display = (temKits && podeMontarKit) ? 'inline-flex' : 'none';
     }
-    // Esconde o wrapper de composição do kit inicialmente
-    const kitVariacaoWrapper = document.getElementById('kitVariacaoComposicaoWrapperNova');
-    if (kitVariacaoWrapper) kitVariacaoWrapper.style.display = 'none';
-    const kitFooterEl = document.getElementById('kitFooterNova');
-    if (kitFooterEl) kitFooterEl.style.display = 'none';
-
-    console.log(`[carregarDetalhesEmbalagemView] Aba unidade ativada. Tem Kits: ${temKits}, Pode Montar: ${podeMontarKit}`);
+    
+    // Força a aba "Unidade" a ser a ativa por padrão
+    unidadeTabButton.classList.add('active');
+    unidadePanel.classList.add('active');
+    unidadePanel.style.display = 'block';
+    if (kitTabButton) {
+        kitTabButton.classList.remove('active');
+    }
+    if (kitPanel) {
+        kitPanel.classList.remove('active');
+        kitPanel.style.display = 'none';
+    }
 }
 
 
@@ -647,7 +647,9 @@ async function carregarVariacoesKitNova(nomeKit, produtoBase, varianteBase) {
 
     if (!kitVariacoesSelect || !kitTableContainer || !kitFooter || !kitErrorMessage) return;
 
+    // Estado inicial enquanto carrega
     kitVariacoesSelect.innerHTML = '<option value="">Carregando variações...</option>';
+    kitVariacoesSelect.disabled = true;
     kitTableContainer.style.display = 'none';
     kitFooter.style.display = 'none';
     kitErrorMessage.classList.add('hidden');
@@ -655,8 +657,6 @@ async function carregarVariacoesKitNova(nomeKit, produtoBase, varianteBase) {
     const kit = todosOsProdutosCadastrados.find(p => p.is_kit && p.nome === nomeKit);
     if (!kit || !kit.grade) {
         kitVariacoesSelect.innerHTML = '<option value="">Erro: Kit não encontrado</option>';
-        kitErrorMessage.textContent = 'Definição do kit não encontrada.';
-        kitErrorMessage.classList.remove('hidden');
         return;
     }
 
@@ -670,20 +670,17 @@ async function carregarVariacoesKitNova(nomeKit, produtoBase, varianteBase) {
 
     if (variacoesFiltradasDoKit.length === 0) {
         kitVariacoesSelect.innerHTML = '<option value="">Nenhuma variação deste kit utiliza o item base.</option>';
-        kitErrorMessage.textContent = 'Nenhuma variação deste kit corresponde ao item base selecionado.';
-        kitErrorMessage.classList.remove('hidden');
         return;
     }
 
+    // Popula o select com as opções corretas
     kitVariacoesSelect.innerHTML = '<option value="">Selecione a Variação do Kit</option>';
     variacoesFiltradasDoKit.forEach(grade => {
-        kitVariacoesSelect.add(new Option(grade.variacao || 'Padrão', grade.variacao)); // Armazena o valor real da variação
+        kitVariacoesSelect.add(new Option(grade.variacao || 'Padrão', grade.variacao));
     });
 
-    // Remove listener antigo para evitar duplicação
-    const newSelect = kitVariacoesSelect.cloneNode(true);
-    kitVariacoesSelect.parentNode.replaceChild(newSelect, kitVariacoesSelect);
-    newSelect.addEventListener('change', (e) => {
+    // **CORREÇÃO: Define o listener 'onchange' diretamente e reabilita o select**
+    kitVariacoesSelect.onchange = (e) => {
         const selVariacaoKit = e.target.value;
         if (selVariacaoKit) {
             kitTableContainer.style.display = 'block';
@@ -694,7 +691,9 @@ async function carregarVariacoesKitNova(nomeKit, produtoBase, varianteBase) {
             kitTableContainer.style.display = 'none';
             kitFooter.style.display = 'none';
         }
-    });
+    };
+    
+    kitVariacoesSelect.disabled = false; // Reabilita o select agora que está pronto
 }
 
 async function carregarTabelaKitNova(kitNome, variacaoKitSelecionada) {
@@ -837,8 +836,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         const auth = await verificarAutenticacao('embalagem-de-produtos.html', ['acesso-embalagem-de-produtos']);
         if (!auth) {
-            // Se verificarAutenticacao já redireciona, não precisa fazer de novo aqui
-            // Apenas um return para parar a execução
             return;
         }
         usuarioLogado = auth.usuario;
@@ -862,8 +859,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 document.querySelectorAll('#embalarDetalheView .ep-tabs .ep-tab-btn').forEach(b => b.classList.remove('active'));
                 document.querySelectorAll('#embalarDetalheView .ep-tab-panel').forEach(p => {
-                    p.classList.remove('active'); // Para CSS
-                    p.style.display = 'none';    // Para JS
+                    p.classList.remove('active');
+                    p.style.display = 'none';
                 });
 
                 tabBtn.classList.add('active');
@@ -887,10 +884,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             }, 350));
         }
 
-        const inputQtdEnviarKitsNova = document.getElementById('qtdEnviarKitsNova');
-        if(inputQtdEnviarKitsNova) {
-            inputQtdEnviarKitsNova.addEventListener('input', atualizarEstadoBotaoMontarKitNova);
-        }
+        // ADICIONAR ESTA LINHA:
+        document.getElementById('qtdEnviarKitsNova')?.addEventListener('input', atualizarEstadoBotaoMontarKitNova);
 
     } catch (error) {
         console.error("[DOMContentLoaded Embalagem] Erro crítico na inicialização:", error);

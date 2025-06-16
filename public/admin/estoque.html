@@ -16,13 +16,12 @@
 
     <main class="es-container-principal">
     
-        <!-- View Principal: Lista de Estoque -->
+        <!-- View Principal: Lista de Estoque (Permanece igual) -->
         <section class="es-card" id="mainViewEstoque">
             <div class="es-cabecalho-pagina">
                 <h1>Controle de Estoque</h1>
             </div>
 
-            <!-- Cards de Alerta de Estoque -->
             <div class="es-card" style="margin-bottom: 20px;">
                 <h2 class="es-titulo-secao" style="text-align:left; border-bottom:none; margin-bottom:15px;">Alertas de Estoque</h2>
                 <div class="es-alerta-cards-container">
@@ -40,16 +39,15 @@
                     </div>
                 </div>
                  <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
-        <button class="es-btn es-btn-secundario" id="btnMostrarTodosEstoque" style="display: none;">
-            <i class="fas fa-list"></i> Mostrar Todos os Itens
-        </button>
-        <button class="es-btn es-btn-primario" id="btnConfigurarNiveisEstoque" title="Configurar níveis de alerta">
-            <i class="fas fa-cog"></i> Configurar Níveis
-        </button>
-    </div>
-</div>
+                    <button class="es-btn es-btn-secundario" id="btnMostrarTodosEstoque" style="display: none;">
+                        <i class="fas fa-list"></i> Mostrar Todos os Itens
+                    </button>
+                    <button class="es-btn es-btn-primario" id="btnConfigurarNiveisEstoque" title="Configurar níveis de alerta">
+                        <i class="fas fa-cog"></i> Configurar Níveis
+                    </button>
+                </div>
+            </div>
             
-            <!-- Tabela de Produtos em Estoque -->
             <div class="es-card">
                  <input type="text" id="searchEstoque" class="es-input-busca" placeholder="Buscar por produto ou variação...">
                 <h2 class="es-titulo-secao" style="text-align:left;">Itens em Estoque</h2>
@@ -69,59 +67,64 @@
                     </div>
                     <div id="estoquePaginacaoContainer" class="es-paginacao-container" style="display: none; margin-top: 20px;">
                     </div>
-                </div> <!-- Fim do .es-card que contém a busca e a tabela -->
+                </div> 
         </section>
 
-        <!-- View de Edição/Ajuste de Estoque (inicialmente oculta) -->
-        <section class="es-card hidden" id="editEstoqueView">
-            <button class="botao-fechar es-btn-perigo" id="voltarBtnEstoque" title="Voltar para Lista">X</button>
+        <!-- NOVA VIEW UNIFICADA: Movimentação de Estoque -->
+        <section class="es-card hidden" id="editarEstoqueMovimentoView">
+            <button class="botao-fechar es-btn-perigo" id="voltarParaListaBtn" title="Voltar para Lista">X</button>
             
-            <h2 class="es-titulo-secao" id="editEstoqueTitle">Ajustar Estoque</h2>
-            
-            <div class="es-form-estilizado">
-                <div class="es-form-grupo">
-                    <label>Produto:</label>
-                    <input type="text" id="produtoNomeEstoque" readonly class="es-input form-control-estoque-readonly">
+            <div class="movimento-header">
+                <div class="movimento-thumbnail" id="movimentoThumbnail">
+                    <img src="/img/placeholder-image.png" alt="Imagem do produto">
                 </div>
-                <div class="es-form-grupo">
-                    <label>Variação:</label>
-                    <input type="text" id="varianteNomeEstoque" readonly class="es-input form-control-estoque-readonly">
+                <div class="movimento-info">
+                    <h2 id="movimentoItemNome">[Produto/Variação]</h2>
+                    <p id="movimentoItemSKU">SKU: XXXX-XXX</p>
+                    <button id="btnAbrirHistorico" class="es-btn es-btn-secundario btn-historico">
+                        <i class="fas fa-history"></i> Histórico de Movimento
+                    </button>
                 </div>
-                <div class="es-form-grupo">
-                    <label>Saldo Atual em Estoque:</label>
-                    <span id="saldoAtualDisplay" class="saldo-display-estoque">0</span>
+                <div class="movimento-saldo">
+                    <label>SALDO ATUAL</label>
+                    <span id="movimentoSaldoAtual">0</span>
                 </div>
-                <hr style="margin: 20px 0; border-color: var(--es-cor-cinza-borda);">
+            </div>
+
+            <hr class="movimento-divisor">
+
+            <div class="movimento-form">
+                <h3 class="movimento-titulo-secao">TIPO DE OPERAÇÃO</h3>
+                <div class="movimento-tipo-operacao-container">
+                    <button class="movimento-op-btn" data-tipo="ENTRADA_MANUAL" title="Entrada Manual">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <button class="movimento-op-btn" data-tipo="SAIDA_MANUAL" title="Saída Manual">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                    <button class="movimento-op-btn" data-tipo="BALANCO" title="Balanço (Ajustar Saldo)">
+                        <i class="fas fa-equals"></i>
+                    </button>
+                    <input type="hidden" id="tipoMovimentoSelecionado" value="">
+                </div>
                 
-                <!-- BOTÕES PARA TIPO DE OPERAÇÃO -->
-<div class="es-form-grupo">
-    <label>Tipo de Operação:</label>
-    <div class="es-botoes-tipo-operacao" id="botoesTipoOperacaoContainer">
-        <button type="button" class="es-btn es-btn-tipo-op" data-tipo="ENTRADA_MANUAL">
-            <i class="fas fa-plus-circle"></i> Entrada
-        </button>
-        <button type="button" class="es-btn es-btn-tipo-op" data-tipo="SAIDA_MANUAL">
-            <i class="fas fa-minus-circle"></i> Saída
-        </button>
-        <button type="button" class="es-btn es-btn-tipo-op" data-tipo="BALANCO">
-            <i class="fas fa-balance-scale"></i> Balanço
-        </button>
-    </div>
-    <!-- Manteremos um input oculto para armazenar o valor do tipo de operação selecionado -->
-    <input type="hidden" id="tipoMovimentoEstoqueSelecionado" value="ENTRADA_MANUAL">
-</div>
+                <div class="es-form-grupo">
+                    <label for="quantidadeMovimentar" id="labelQuantidadeMovimentar">Quantidade a movimentar:</label>
+                    <input type="number" id="quantidadeMovimentar" class="es-input" min="1" placeholder="Ex: 10">
+                </div>
 
                 <div class="es-form-grupo">
-                    <label for="quantidadeMovimentoEstoque">Quantidade a Movimentar / Novo Saldo:</label>
-                    <input type="number" id="quantidadeMovimentoEstoque" class="es-input" min="0" placeholder="0">
+                    <label for="observacaoMovimento">Observação:</label>
+                    <textarea id="observacaoMovimento" class="es-textarea" rows="3" placeholder="Opcional (Ex: Compra fornecedor X)"></textarea>
                 </div>
-                <div class="es-form-grupo">
-                    <label for="observacaoMovimentoEstoque">Observação (Opcional):</label>
-                    <textarea id="observacaoMovimentoEstoque" class="es-textarea" rows="3" placeholder="Ex: Compra fornecedor X, quebra, ajuste de inventário..."></textarea>
-                </div>
-                
+
                 <div class="es-form-botoes">
-                    <button id="salvarEstoqueBtn" class="es-btn es-btn-primario">
+                <!-- BOTÃO DE ARQUIVAR ATUALIZADO -->
+                <button id="arquivarItemBtn" class="es-btn es-btn-icon-danger" title="Arquivar Item do Estoque" style="margin-right: auto; display: none;">
+                    <i class="fas fa-archive"></i>
+                </button>
+
+                    <button id="salvarMovimentoBtn" class="es-btn es-btn-primario">
                         <i class="fas fa-save"></i> Salvar Movimento
                     </button>
                 </div>
@@ -129,85 +132,72 @@
         </section>
 
 
-          <!-- NOVA VIEW: Detalhe do Item de Estoque e Histórico -->
-        <section class="es-card" id="detalheItemEstoqueView" style="display: none;">            
-            <button class="botao-fechar es-btn-perigo" id="voltarListaDeDetalheBtn" title="Voltar para Lista Principal">X</button>
-            
-            <div class="es-detalhe-item-header">
-                <div class="es-detalhe-thumbnail" id="detalheItemThumbnail">
-                </div>
-                <div class="es-detalhe-info-principal">
-                    <h2 class="es-titulo-secao" id="detalheItemTitulo" style="margin-bottom: 5px; border-bottom: none;">Nome do Produto (Variação)</h2>
-                    <p id="detalheItemSKU" style="font-size: 0.9em; color: #777; margin-bottom: 10px;">SKU: <span></span></p>
-                    <p>Saldo Atual: <strong id="detalheItemSaldoAtual" style="font-size: 1.3em;">0</strong></p>
-                </div>
-                <button class="es-btn es-btn-primario" id="btnAbrirModalAjuste" style="margin-left: auto;">
-                    <i class="fas fa-edit"></i> Ajustar Saldo
-                </button>
-            </div>
-
-            <div class="es-card-interno" style="margin-top: 20px;">
-                <h3 class="es-subtitulo-secao" style="text-align: left;">Histórico de Movimentações</h3>
-                <div class="es-tabela-wrapper">
-                    <table class="es-tabela-estilizada" id="tabelaHistoricoMovimentacoes">
-                        <thead>
-                            <tr>
-                                <th>Data</th>
-                                <th>Tipo Movimento</th>
-                                <th>Quantidade</th>
-                                <th>Usuário</th>
-                                <th>Observação</th>
-                            </tr>
-                        </thead>
-                        <tbody id="historicoMovimentacoesTableBody">
-                        </tbody>
-                    </table>
-                </div>
-                <div id="paginacaoHistoricoMovimentacoes" class="es-paginacao-container" style="display: none; margin-top: 15px;">
-                </div>
-            </div>
-        </section>
-        
-
-        <!-- Modal para Configurar Níveis de Estoque (será adicionado na Fase 4) -->
+        <!-- Modal para Configurar Níveis de Estoque (Permanece igual) -->
         <div id="modalConfigurarNiveis" class="es-modal" style="display:none;">
-     <div class="es-modal-conteudo" style="max-width: 800px; /* Modal maior */">
-        <span class="es-modal-fechar" id="fecharModalNiveis">X</span>
-        <h3 id="modalNiveisTitulo">Configurar Níveis de Alerta de Estoque</h3>
-        
-        <div class="pr-form-grupo" style="margin-bottom: 15px;">
-             <input type="text" id="buscaProdutoNiveisModal" class="es-input" placeholder="Buscar produto/variação para configurar...">
+             <div class="es-modal-conteudo" style="max-width: 800px;">
+                <span class="es-modal-fechar" id="fecharModalNiveis">X</span>
+                <h3 id="modalNiveisTitulo">Configurar Níveis de Alerta de Estoque</h3>
+                
+                <div class="pr-form-grupo" style="margin-bottom: 15px;">
+                     <input type="text" id="buscaProdutoNiveisModal" class="es-input" placeholder="Buscar produto/variação para configurar...">
+                </div>
+
+                <form id="formModalNiveisEmLote"> 
+                    <div class="es-tabela-wrapper" style="max-height: 400px; overflow-y: auto; margin-bottom: 15px;">
+                        <table class="es-tabela-estilizada" id="tabelaConfigNiveis">
+                            <thead>
+                                <tr>
+                                    <th>Produto / Variação</th>
+                                    <th style="width: 150px;">Nível Estoque Baixo</th>
+                                    <th style="width: 150px;">Nível Rep. Urgente</th>
+                                    <th style="width: 80px;">Ativo</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyConfigNiveis">
+                            </tbody>
+                        </table>
+                    </div>
+                     <p id="niveisLoteValidationMessage" class="es-error-text hidden" style="text-align:center;"></p>
+                </form>
+                <div class="pr-form-botoes" style="justify-content: space-between;">
+                    <div></div>
+                    <div>
+                        <button type="button" class="es-btn es-btn-secundario" id="btnCancelarModalNiveis">Cancelar</button>
+                        <button type="button" class="es-btn es-btn-primario" id="btnSalvarNiveisEmLote">Salvar Alterações</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <form id="formModalNiveisEmLote"> 
-            <div class="es-tabela-wrapper" style="max-height: 400px; overflow-y: auto; margin-bottom: 15px;">
-                <table class="es-tabela-estilizada" id="tabelaConfigNiveis">
+    </main>
+    
+    <!-- NOVO: Modal para o Histórico de Movimentações -->
+    <div id="modalHistoricoMovimentacoes" class="es-modal" style="display: none;">
+        <div class="es-modal-conteudo" style="max-width: 850px;">
+            <span class="es-modal-fechar" id="fecharModalHistorico">X</span>
+            <h3>Histórico de Movimentações</h3>
+            <div class="es-tabela-wrapper" style="max-height: 50vh; overflow-y: auto;">
+                <table class="es-tabela-estilizada" id="tabelaHistoricoMovimentacoes">
                     <thead>
                         <tr>
-                            <th>Produto / Variação</th>
-                            <th style="width: 150px;">Nível Estoque Baixo</th>
-                            <th style="width: 150px;">Nível Rep. Urgente</th>
-                            <th style="width: 80px;">Ativo</th>
+                            <th>Data</th>
+                            <th>Tipo Movimento</th>
+                            <th style="text-align: right;">Quantidade</th>
+                            <th>Usuário</th>
+                            <th>Observação</th>
                         </tr>
                     </thead>
-                    <tbody id="tbodyConfigNiveis">
+                    <tbody id="historicoMovimentacoesTableBody">
+                        <!-- Conteúdo será preenchido pelo JS -->
                     </tbody>
                 </table>
             </div>
-             <p id="niveisLoteValidationMessage" class="es-error-text hidden" style="text-align:center;"></p>
-        </form>
-        <div class="pr-form-botoes" style="justify-content: space-between;">
-            <div>
-            </div>
-            <div>
-                <button type="button" class="es-btn es-btn-secundario" id="btnCancelarModalNiveis">Cancelar</button>
-                <button type="button" class="es-btn es-btn-primario" id="btnSalvarNiveisEmLote">Salvar Alterações</button>
+            <div id="paginacaoHistoricoMovimentacoes" class="es-paginacao-container" style="display: none; margin-top: 15px;">
+                <!-- Paginação será preenchida pelo JS -->
             </div>
         </div>
     </div>
-</div>
 
-    </main>
 
     <script src="/js/admin-estoque.js" type="module"></script>
     <script src="/js/carregar-menu-lateral.js" type="module"></script>

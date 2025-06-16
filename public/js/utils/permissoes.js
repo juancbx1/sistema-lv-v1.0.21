@@ -49,7 +49,9 @@ export const permissoesDisponiveis = [
     { id: 'gerenciar-niveis-alerta-estoque', label: 'Permite Gerenciar os Níveis de Estoque Baixo e Urgente' }, // para estoque.html
     { id: 'ajustar-saldo', label: 'Permite dar Entrada, Saída e Balanço' }, // para estoque.html
     { id: 'assinar-propria-producao-tiktik', label: 'Permite o Tiktik assinar a própria producao' }, // para dashboard-tiktik.html
-    { id: 'assinar-proprio-arremate', label: 'Permite o Tiktik assinar o próprio arremate' } // para dashboard-tiktik.html
+    { id: 'assinar-proprio-arremate', label: 'Permite o Tiktik assinar o próprio arremate' }, // para dashboard-tiktik.html
+    { id: 'arquivar-produto-do-estoque', label: 'Permite arquivar um produto do estoque' } // para estoque.html
+
 
 ];
 
@@ -107,7 +109,8 @@ export const permissoesPorTipo = {
         'gerenciar-precificacao',
         'acesso-precificacao',
         'gerenciar-niveis-alerta-estoque',
-        'ajustar-saldo'
+        'ajustar-saldo',
+        'arquivar-produto-do-estoque'
 
         
     ]

@@ -65,82 +65,75 @@ router.get('/saldo', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada para visualizar saldo do estoque.' });
         }
 
-        const { produto_nome, variante_nome } = req.query;
-        
-        // VAMOS MODIFICAR A QUERY AQUI
-        let queryText = `
-            WITH UltimosMovimentos AS (
-                SELECT 
+        // QUERY ATUALIZADA COM JOIN E FILTRO
+        const queryText = `
+            WITH Saldos AS (
+                SELECT
                     produto_nome,
-                    COALESCE(variante_nome, '-') AS variante_nome_chave, -- Para agrupar NULLs consistentemente
-                    MAX(data_movimento) AS ultima_data_movimento
-                FROM estoque_movimentos
-                GROUP BY produto_nome, COALESCE(variante_nome, '-')
+                    COALESCE(variante_nome, '-') AS variante_nome,
+                    COALESCE(
+                        (SELECT g.sku FROM produtos p, jsonb_to_recordset(p.grade) AS g(sku TEXT, variacao TEXT) WHERE p.nome = em.produto_nome AND ((em.variante_nome IS NULL AND (g.variacao IS NULL OR g.variacao = '-' OR g.variacao = 'Padrão')) OR (em.variante_nome IS NOT NULL AND g.variacao = em.variante_nome)) LIMIT 1),
+                        (SELECT p.sku FROM produtos p WHERE p.nome = em.produto_nome LIMIT 1),
+                        em.produto_nome || COALESCE('_VAR_' || em.variante_nome, '_BASE')
+                    ) AS produto_ref_id,
+                    SUM(CASE 
+                        WHEN tipo_movimento LIKE 'ENTRADA%' OR tipo_movimento = 'AJUSTE_BALANCO_POSITIVO' THEN quantidade
+                        WHEN tipo_movimento LIKE 'SAIDA%' OR tipo_movimento = 'AJUSTE_BALANCO_NEGATIVO' THEN -ABS(quantidade) 
+                        ELSE 0 
+                    END) AS saldo_atual,
+                    MAX(data_movimento) as ultima_data_movimento
+                FROM estoque_movimentos em
+                GROUP BY produto_nome, variante_nome
             )
-            SELECT 
-                em.produto_nome, 
-                COALESCE(em.variante_nome, '-') AS variante_nome, 
-                COALESCE(
-                    (SELECT g.sku
-                     FROM produtos p,
-                          jsonb_to_recordset(p.grade) AS g(sku TEXT, variacao TEXT)
-                     WHERE p.nome = em.produto_nome 
-                       AND ( (em.variante_nome IS NULL AND (g.variacao IS NULL OR g.variacao = '-' OR g.variacao = 'Padrão')) OR (em.variante_nome IS NOT NULL AND g.variacao = em.variante_nome) )
-                     LIMIT 1),
-                    (SELECT p.sku FROM produtos p WHERE p.nome = em.produto_nome LIMIT 1),
-                    em.produto_nome || COALESCE('_VAR_' || em.variante_nome, '_BASE')
-                ) AS produto_ref_id,
-                SUM(CASE 
-                    WHEN em.tipo_movimento LIKE 'ENTRADA%' OR em.tipo_movimento = 'AJUSTE_BALANCO_POSITIVO' THEN em.quantidade
-                    WHEN em.tipo_movimento LIKE 'SAIDA%' OR em.tipo_movimento = 'AJUSTE_BALANCO_NEGATIVO' THEN -ABS(em.quantidade) 
-                    ELSE 0 
-                END) AS saldo_atual,
-                um.ultima_data_movimento -- Incluímos a data do último movimento para ordenação
-            FROM estoque_movimentos em
-            JOIN UltimosMovimentos um 
-              ON em.produto_nome = um.produto_nome 
-             AND COALESCE(em.variante_nome, '-') = um.variante_nome_chave
-        `; 
-        
-        const queryParams = [];
-        const whereClauses = [];
-        let paramIndex = 1;
-
-        if (produto_nome) {
-            whereClauses.push(`em.produto_nome ILIKE $${paramIndex++}`);
-            queryParams.push(`%${produto_nome}%`);
-        }
-        if (variante_nome && variante_nome !== '-') {
-            whereClauses.push(`em.variante_nome ILIKE $${paramIndex++}`);
-            queryParams.push(`%${variante_nome}%`);
-        } else if (variante_nome === '-') {
-            // Se variante_nome for explicitamente '-', filtramos por NULL ou '-'
-            whereClauses.push(`(em.variante_nome IS NULL OR em.variante_nome = '-')`);
-        }
-
-        if (whereClauses.length > 0) {
-            queryText += ' WHERE ' + whereClauses.join(' AND ');
-        }
-
-        // Agrupamento
-        queryText += ` 
-            GROUP BY 
-                em.produto_nome, 
-                em.variante_nome, 
-                um.ultima_data_movimento, -- Incluído no GROUP BY
-                produto_ref_id -- produto_ref_id já é calculado de forma agregada/determinística por item
+            SELECT s.*
+            FROM Saldos s
+            LEFT JOIN estoque_itens_arquivados aia ON s.produto_ref_id = aia.produto_ref_id
+            WHERE aia.id IS NULL -- <<< A MÁGICA ACONTECE AQUI: Exclui os itens arquivados
+            ORDER BY s.ultima_data_movimento DESC, s.produto_nome ASC, s.variante_nome ASC;
         `;
-        
-        // NOVA ORDEM: Primeiro pelo último movimento (mais recente primeiro), depois por nome
-        queryText += ' ORDER BY um.ultima_data_movimento DESC, em.produto_nome ASC, em.variante_nome ASC';
 
-        const result = await dbClient.query(queryText, queryParams); 
+        const result = await dbClient.query(queryText);
         res.status(200).json(result.rows);
 
     } catch (error) {
-        console.error('[router/estoque GET /saldo] Erro:', error.message, error.stack ? error.stack.substring(0,300):"");
-        const details = error.message === 'dbClient is not defined' ? error.message : (error.detail || error.message);
-        res.status(500).json({ error: 'Erro ao buscar saldo do estoque.', details: details });
+        console.error('[router/estoque GET /saldo] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar saldo do estoque.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// NOVA ROTA: POST /api/estoque/arquivar-item
+router.post('/arquivar-item', async (req, res) => {
+    const { usuarioLogado } = req;
+    const { produto_ref_id } = req.body;
+    let dbClient;
+
+    if (!produto_ref_id) {
+        return res.status(400).json({ error: 'O ID de referência do produto (produto_ref_id) é obrigatório.' });
+    }
+
+    try {
+        dbClient = await pool.connect();
+        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
+        
+        // Use uma permissão adequada, como gerenciar-estoque
+        if (!permissoesCompletas.includes('gerenciar-estoque')) {
+            return res.status(403).json({ error: 'Permissão negada para arquivar itens do estoque.' });
+        }
+
+        const query = `
+            INSERT INTO estoque_itens_arquivados (produto_ref_id, usuario_responsavel_id)
+            VALUES ($1, $2)
+            ON CONFLICT (produto_ref_id) DO NOTHING; -- Não faz nada se o item já estiver arquivado
+        `;
+        await dbClient.query(query, [produto_ref_id, usuarioLogado.id]);
+
+        res.status(200).json({ message: `Item ${produto_ref_id} arquivado com sucesso.` });
+
+    } catch (error) {
+        console.error('[router/estoque POST /arquivar-item] Erro:', error);
+        res.status(500).json({ error: 'Erro ao arquivar o item.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }
