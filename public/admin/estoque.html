@@ -68,9 +68,9 @@
                             <th style="width: 70px;">Imagem</th>
                             <th>Produto</th>
                             <th>Variação</th>
-                            <th class="saldo-estoque" style="width: 120px; text-align:center;">Saldo Atual</th>
                             <!-- NOVA COLUNA 'IDEAL' -->
                             <th style="width: 120px; text-align:center;">Estoque Ideal</th> 
+                            <th class="saldo-estoque" style="width: 120px; text-align:center;">Saldo Atual</th>
                         </tr>
                     </thead>
                         <tbody id="estoqueTableBody">
@@ -120,6 +120,9 @@
                     <input type="hidden" id="tipoMovimentoSelecionado" value="">
                 </div>
                 
+                <!-- NOVO CONTAINER FLEX -->
+            <div class="es-form-linha-flex">
+                
                 <div class="es-form-grupo">
                     <label for="quantidadeMovimentar" id="labelQuantidadeMovimentar">Quantidade a movimentar:</label>
                     <input type="number" id="quantidadeMovimentar" class="es-input" min="1" placeholder="Ex: 10">
@@ -129,6 +132,8 @@
                     <label for="observacaoMovimento">Observação:</label>
                     <textarea id="observacaoMovimento" class="es-textarea" rows="3" placeholder="Opcional (Ex: Compra fornecedor X)"></textarea>
                 </div>
+
+            </div> <!-- Fim do container flex -->
 
                 <div class="es-form-botoes">
                 <!-- BOTÃO DE ARQUIVAR ATUALIZADO -->

@@ -517,7 +517,8 @@ function renderizarTabelaEstoque(itensDeEstoque, produtosDefinicoes, niveisDeAle
     tbody.innerHTML = '';
 
     if (itensDeEstoque.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;">Nenhum item encontrado.</td></tr>`;
+        // Colspan agora precisa ser 7 por causa da nova coluna de status
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;">Nenhum item encontrado.</td></tr>`;
         return;
     }
 
@@ -535,24 +536,32 @@ function renderizarTabelaEstoque(itensDeEstoque, produtosDefinicoes, niveisDeAle
             }
         }
 
-         // Lógica do indicador de status
         const configNivel = niveisDeAlerta.find(n => n.produto_ref_id === item.produto_ref_id && n.ativo);
         let statusClass = 'status-ok';
         if (configNivel) {
             const saldoNum = parseFloat(item.saldo_atual);
-            if (configNivel.nivel_reposicao_urgente !== null && saldoNum <= configNivel.nivel_reposicao_urgente) statusClass = 'status-urgente';
-            else if (configNivel.nivel_estoque_baixo !== null && saldoNum <= configNivel.nivel_estoque_baixo) statusClass = 'status-baixo';
+            if (configNivel.nivel_reposicao_urgente !== null && saldoNum <= configNivel.nivel_reposicao_urgente) {
+                statusClass = 'status-urgente';
+            } else if (configNivel.nivel_estoque_baixo !== null && saldoNum <= configNivel.nivel_estoque_baixo) {
+                statusClass = 'status-baixo';
+            }
         }
 
         const tr = document.createElement('tr');
         tr.dataset.itemEstoque = JSON.stringify(item);
+
+        // A MUDANÇA ESTÁ NA ORDEM DAS DUAS ÚLTIMAS CÉLULAS (<td>)
         tr.innerHTML = `
             <td class="status-cell"><div class="status-indicator ${statusClass}"></div></td>
             <td><div class="thumbnail">${imagemSrc !== '/img/placeholder-image.png' ? `<img src="${imagemSrc}" alt="${item.produto_nome}" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">` : '<span></span>'}</div></td>
             <td>${item.produto_nome}</td>
             <td>${item.variante_nome || '-'}</td>
-            <td class="saldo-estoque" style="text-align:center;">${item.saldo_atual}</td>
+            
+            <!-- ORDEM CORRIGIDA: Estoque Ideal primeiro -->
             <td style="text-align:center;">${configNivel?.nivel_estoque_ideal ?? '-'}</td>
+            
+            <!-- Saldo Atual por último, com a classe para o negrito -->
+            <td class="saldo-estoque" style="text-align:center;">${item.saldo_atual}</td>
         `;
 
         if (permissoesGlobaisEstoque.includes('gerenciar-estoque')) {

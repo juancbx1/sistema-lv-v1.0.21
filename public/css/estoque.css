@@ -822,14 +822,14 @@ body.autenticado { visibility: visible; }
 
 /* Título dinâmico para filtros de alerta */
 .es-filtro-ativo-header {
-    padding: 12px 8px; /* Um pouco menos de padding vertical */
-    margin: -10px -10px 20px -10px; /* Margens negativas para "sangrar" até as bordas do card pai, e margem inferior para separar da busca */
-    border-radius: var(--es-raio-borda-card) var(--es-raio-borda-card) 0 0; /* Arredonda apenas os cantos superiores */
+    padding: 12px 20px;
+    margin: -10px -10px 20px -10px;
+    border-radius: var(--es-raio-borda-card) var(--es-raio-borda-card) 0 0;
     text-align: center;
-    font-size: 0.9rem;
+    font-size: 1.1rem;
     font-weight: 600;
     color: #fff;
-    animation: es-fadeInPopup 0.4s ease-out;
+    animation: es-slideDownFadeIn 0.4s ease-out;
 }
 
 .es-filtro-ativo-header.urgente {
@@ -837,6 +837,17 @@ body.autenticado { visibility: visible; }
 }
 .es-filtro-ativo-header.baixo {
     background-color: var(--es-cor-laranja-aviso);
+}
+
+@keyframes es-slideDownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px); /* Começa 20px acima de sua posição final */
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0); /* Termina na sua posição normal */
+    }
 }
 
 /* Indicador de status na linha da tabela */
@@ -1119,7 +1130,8 @@ body.autenticado { visibility: visible; }
     display: flex;
     align-items: center;
     gap: 8px;
-    background-color: var(--es-cor-verde-sucesso); /* Uma cor diferente para destacar a ação primária */
+    /* MUDANÇA: Usando a cor primária azul em vez do verde */
+    background-color: var(--es-cor-azul-primario); 
     color: #fff;
     border: none;
     border-radius: var(--es-raio-borda-botao);
@@ -1128,11 +1140,13 @@ body.autenticado { visibility: visible; }
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease-in-out;
-    margin-left: auto; /* Mantém ele alinhado à direita no flex container */
+    margin-left: auto;
+    white-space: nowrap; /* Evita que o texto quebre em duas linhas */
 }
 
 .es-btn-acao-principal:hover {
-    background-color: #27ae60; /* Verde mais escuro no hover */
+    /* MUDANÇA: Usando a cor de hover primária */
+    background-color: var(--es-cor-azul-hover); 
     transform: translateY(-2px);
     box-shadow: 0 4px 10px rgba(0,0,0,0.1);
 }
@@ -1160,6 +1174,20 @@ body.autenticado { visibility: visible; }
     border-color: #b0b9c2;
 }
 
+.es-form-linha-flex {
+    display: flex;
+    gap: 20px;
+    align-items: flex-end; /* Alinha os itens na base */
+}
+
+.es-form-linha-flex .es-form-grupo {
+    flex-grow: 1; /* Faz com que ambos os grupos tentem ocupar espaço igual */
+}
+
+#quantidadeMovimentar {
+    max-width: 100px; /* Define uma largura máxima para o input de quantidade */
+    padding: 15px;
+}
 
 /* Responsividade */
 
@@ -1176,7 +1204,15 @@ body.autenticado { visibility: visible; }
         font-size: 1rem;
         margin-left: 30px;
     }
-        .es-card { padding: 15px; }
+    .es-card { 
+            padding: 10px; 
+    }
+
+    .es-form-linha-flex {
+        flex-direction: column;
+        align-items: normal;
+        gap: 5px;
+    }
     .es-titulo-secao { font-size: 1.3rem; text-align:center; }
     .es-input-busca { max-width: 100%; margin-bottom: 15px; }
     .es-alerta-card {
@@ -1245,6 +1281,16 @@ body.autenticado { visibility: visible; }
 @media (max-width: 480px) {
     .es-container-principal { padding: 20px; }
     .es-titulo-secao { font-size: 1.2rem; }
+
+    .es-btn-acao-principal {
+        padding: 8px 12px; /* Padding menor */
+        font-size: 0.85rem; /* Fonte menor */
+        gap: 5px; /* Espaço menor entre ícone e texto */
+    }
+
+    .es-cabecalho-pagina h1 {
+        font-size: 1.2rem; /* Reduz um pouco o título para dar mais espaço */
+    }
     
     .es-alerta-card .es-alerta-icone {
         left: 15px;
@@ -1271,7 +1317,7 @@ body.autenticado { visibility: visible; }
         font-size: 1.1rem; /* Títulos de seção ainda menores */
     }
     .es-card {
-        padding: 10px 12px; /* Padding menor nos cards principais */
+        padding: 6px 5px; /* Padding menor nos cards principais */
     }
     .es-input, .es-select, .es-textarea {
         font-size: 0.85rem; 
