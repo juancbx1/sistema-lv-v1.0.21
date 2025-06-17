@@ -397,4 +397,67 @@ router.post('/movimento-manual', async (req, res) => {
     }
 });
 
+//POST /api/estoque/movimento-em-lote
+router.post('/movimento-em-lote', async (req, res) => {
+    const { usuarioLogado } = req;
+    const { itens, tipo_operacao, observacao } = req.body;
+
+    if (!Array.isArray(itens) || itens.length === 0 || !tipo_operacao) {
+        return res.status(400).json({ error: 'Dados inválidos. É necessário um array de itens e um tipo de operação.' });
+    }
+    
+    // Validação mais flexível do tipo de operação
+    if (!tipo_operacao.startsWith('SAIDA_PEDIDO_')) {
+        return res.status(400).json({ error: 'Tipo de operação inválido para movimentação em lote.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
+        
+        if (!permissoesCompletas.includes('gerenciar-estoque')) {
+            return res.status(403).json({ error: 'Permissão negada para realizar esta operação.' });
+        }
+
+        await dbClient.query('BEGIN'); // Inicia a transação
+
+        for (const item of itens) {
+            if (!item.produto_nome || !item.quantidade_movimentada || item.quantidade_movimentada <= 0) {
+                // Se algum item for inválido, desfaz a transação inteira.
+                throw new Error(`Item inválido no lote: ${item.produto_nome}. Verifique os dados.`);
+            }
+
+            const varianteParaDB = (item.variante_nome === '-' || !item.variante_nome) ? null : item.variante_nome;
+            // Para saídas, a quantidade é sempre negativa
+            const quantidadeNegativa = -Math.abs(parseInt(item.quantidade_movimentada));
+
+            const query = `
+                INSERT INTO estoque_movimentos 
+                    (produto_nome, variante_nome, quantidade, tipo_movimento, usuario_responsavel, observacao, data_movimento)
+                VALUES ($1, $2, $3, $4, $5, $6, NOW());
+            `;
+            await dbClient.query(query, [
+                item.produto_nome,
+                varianteParaDB,
+                quantidadeNegativa,
+                tipo_operacao,
+                (usuarioLogado.nome || usuarioLogado.nome_usuario),
+                observacao || null
+            ]);
+        }
+
+        await dbClient.query('COMMIT'); // Confirma a transação se tudo deu certo
+
+        res.status(201).json({ message: `${itens.length} movimentações de estoque registradas com sucesso.` });
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK'); // Desfaz tudo em caso de erro
+        console.error('[router/estoque POST /movimento-em-lote] Erro:', error);
+        res.status(500).json({ error: 'Erro ao registrar movimentos em lote.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
 export default router;

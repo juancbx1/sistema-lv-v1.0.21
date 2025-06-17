@@ -307,7 +307,7 @@ async function carregarDetalhesEmbalagemView(agregado) {
 
     embalagemAgregadoEmVisualizacao = agregado;
 
-    // --- Parte 1: Preenchimento de informações (sem alterações) ---
+    // --- Preenchimento de informações (sem alterações) ---
     document.getElementById('embalagemDetalheTitulo').textContent = `Embalar: ${agregado.produto}`;
     document.getElementById('embalagemDetalheSubTitle').textContent = agregado.variante !== '-' ? `Variação: ${agregado.variante}` : 'Padrão';
     const produtoCadEmb = todosOsProdutosCadastrados.find(p => p.nome === agregado.produto);
@@ -322,44 +322,48 @@ async function carregarDetalhesEmbalagemView(agregado) {
         }
     }
     document.getElementById('embalagemDetalheThumbnail').innerHTML = `<img src="${imgDetalheEmbSrc}" alt="${agregado.produto}" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">`;
+    
+    // --- Reset da Aba Unidade (COM CORREÇÕES) ---
     document.getElementById('embalarProdutoNome').textContent = agregado.produto;
     document.getElementById('embalarVarianteNome').textContent = agregado.variante !== '-' ? agregado.variante : 'Padrão';
     document.getElementById('embalarQtdDisponivelUnidade').textContent = agregado.total_quantidade_disponivel_para_embalar;
+    
     const inputQtdUnidade = document.getElementById('inputQuantidadeEmbalarUnidade');
-    inputQtdUnidade.value = '';
-    inputQtdUnidade.max = agregado.total_quantidade_disponivel_para_embalar;
     const btnEmbalarUnidade = document.getElementById('btnEmbalarEnviarEstoqueUnidade');
-    btnEmbalarUnidade.disabled = true;
+
+    // **CORREÇÃO: Reset explícito do estado do formulário**
+    inputQtdUnidade.value = ''; // Limpa o valor
+    inputQtdUnidade.max = agregado.total_quantidade_disponivel_para_embalar;
+    inputQtdUnidade.disabled = false; // Garante que o input comece habilitado
+    btnEmbalarUnidade.disabled = true; // Botão de enviar começa desabilitado
+    btnEmbalarUnidade.innerHTML = 'Estocar Unidades'; // Garante que o texto do botão esteja resetado
+
+    // O listener `oninput` pode continuar aqui, pois é reatribuído a cada carregamento,
+    // o que é simples e funcional para este caso.
     inputQtdUnidade.oninput = () => {
         const qtd = parseInt(inputQtdUnidade.value) || 0;
         const maxQtd = parseInt(inputQtdUnidade.max) || 0;
         btnEmbalarUnidade.disabled = !(qtd > 0 && qtd <= maxQtd && permissoes.includes('lancar-embalagem'));
     };
 
-    // --- Parte 2: Lógica de Abas e Reset (COM ALTERAÇÕES) ---
+    // --- Lógica de Abas e Reset de Kit (sem alterações) ---
     const kitTabButton = document.querySelector('#embalarDetalheView .ep-tabs button[data-tab="kit"]');
     const unidadeTabButton = document.querySelector('#embalarDetalheView .ep-tabs button[data-tab="unidade"]');
     const kitPanel = document.getElementById('kit-tab-nova');
     const unidadePanel = document.getElementById('unidade-tab-nova');
-
-    // **NOVO: Reset explícito do estado da aba de kits**
-    document.getElementById('kitsListNova').innerHTML = ''; // Limpa a lista de kits
+    document.getElementById('kitsListNova').innerHTML = '';
     const kitVariacoesSelect = document.getElementById('kitVariacoesNova');
-    kitVariacoesSelect.innerHTML = '<option value="">Selecione o Kit primeiro</option>'; // Define um texto inicial claro
-    kitVariacoesSelect.disabled = true; // Garante que comece desabilitado
-    document.getElementById('kitVariacaoComposicaoWrapperNova').style.display = 'none'; // Esconde o wrapper
-    document.getElementById('kitTableContainerNova').style.display = 'none'; // Esconde a tabela
-    document.getElementById('kitFooterNova').style.display = 'none'; // Esconde o rodapé
-    document.getElementById('kitErrorMessageNova').classList.add('hidden'); // Esconde mensagens de erro
-
-    // Lógica de visibilidade da aba de kits
+    kitVariacoesSelect.innerHTML = '<option value="">Selecione o Kit primeiro</option>';
+    kitVariacoesSelect.disabled = true;
+    document.getElementById('kitVariacaoComposicaoWrapperNova').style.display = 'none';
+    document.getElementById('kitTableContainerNova').style.display = 'none';
+    document.getElementById('kitFooterNova').style.display = 'none';
+    document.getElementById('kitErrorMessageNova').classList.add('hidden');
     const temKits = await temKitsDisponiveis(agregado.produto, agregado.variante);
     const podeMontarKit = permissoes.includes('montar-kit');
     if (kitTabButton) {
         kitTabButton.style.display = (temKits && podeMontarKit) ? 'inline-flex' : 'none';
     }
-    
-    // Força a aba "Unidade" a ser a ativa por padrão
     unidadeTabButton.classList.add('active');
     unidadePanel.classList.add('active');
     unidadePanel.style.display = 'block';
@@ -392,12 +396,11 @@ async function embalarUnidade() {
     btnEmbalar.innerHTML = '<div class="spinner-btn-interno"></div> Embalando...';
     inputQtd.disabled = true;
 
-    let sucessoGeral = false;
     try {
         let quantidadeRestanteDaMeta = quantidadeEnviada;
         const arrematesOrdenados = [...embalagemAgregadoEmVisualizacao.arremates_detalhe]
             .filter(arr => arr.quantidade_disponivel_para_embalar > 0)
-            .sort((a, b) => a.id_arremate - b.id_arremate); // FIFO
+            .sort((a, b) => a.id_arremate - b.id_arremate);
 
         for (const arremate of arrematesOrdenados) {
             if (quantidadeRestanteDaMeta <= 0) break;
@@ -412,7 +415,7 @@ async function embalarUnidade() {
         }
         
         if (quantidadeRestanteDaMeta > 0) {
-            throw new Error("Não foi possível alocar a quantidade total nos arremates de origem. Saldo inconsistente.");
+            throw new Error("Não foi possível alocar a quantidade total. Saldo inconsistente.");
         }
 
         await fetchFromAPI('/estoque/entrada-producao', {
@@ -421,33 +424,30 @@ async function embalarUnidade() {
                 produto_nome: embalagemAgregadoEmVisualizacao.produto,
                 variante_nome: embalagemAgregadoEmVisualizacao.variante === '-' ? null : embalagemAgregadoEmVisualizacao.variante,
                 quantidade_entrada: quantidadeEnviada,
-                tipo_origem: "PRODUCAO_UNIDADE" // Identificador da origem
+                tipo_origem: "PRODUCAO_UNIDADE"
             })
         });
-        mostrarPopupMensagem(`${quantidadeEnviada} unidade(s) embalada(s) e enviada(s) para o estoque!`, 'sucesso');
-        sucessoGeral = true;
         
-        // Após sucesso, limpar e voltar para a lista
-        todosArrematesRegistradosCache = []; // Força recarga dos arremates na próxima vez
-        await calcularEAgruparProntosParaEmbalar(); // Recalcula os agregados globais
-        window.location.hash = ''; // Dispara handleHashChangeEmbalagem para mostrar a lista
+        mostrarPopupMensagem(`${quantidadeEnviada} unidade(s) embalada(s) com sucesso!`, 'sucesso');
+        
+        // Após sucesso, invalida os caches e volta para a lista
+        todosArrematesRegistradosCache = [];
+        await calcularEAgruparProntosParaEmbalar();
+        window.location.hash = '';
 
     } catch (error) {
         console.error('[embalarUnidade] Erro:', error);
         mostrarPopupMensagem(`Falha ao embalar unidade: ${error.message}`, 'erro');
+        // Se der erro, reabilita os campos para nova tentativa
+        inputQtd.disabled = false;
+        btnEmbalar.disabled = false;
+
     } finally {
         operacaoEmAndamento.delete('embalarUnidade');
-        if (document.body.contains(btnEmbalar)) { // Verifica se o botão ainda está no DOM
+        // CORREÇÃO: Garante que o texto do botão seja sempre restaurado,
+        // mesmo que a navegação ocorra em seguida.
+        if (document.body.contains(btnEmbalar)) {
             btnEmbalar.innerHTML = originalButtonHTML;
-             // A reabilitação do botão e input dependerá se a view será recarregada ou não
-            if (!sucessoGeral && document.body.contains(inputQtd)) {
-                inputQtd.disabled = false;
-                // Reabilita o botão se ainda houver o que embalar e tiver permissão
-                const podeEmbalar = parseInt(inputQtd.max) > 0 && permissoes.includes('lancar-embalagem');
-                btnEmbalar.disabled = !podeEmbalar || (parseInt(inputQtd.value) || 0) <=0 ;
-            } else if (sucessoGeral) {
-                // Se sucesso, a navegação para #hash='' vai recarregar a lista e a tela de detalhe não estará visível
-            }
         }
     }
 }

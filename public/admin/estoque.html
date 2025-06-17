@@ -20,8 +20,11 @@
         <section class="es-card" id="mainViewEstoque">
             <div class="es-cabecalho-pagina">
                 <h1>Controle de Estoque</h1>
+                <!-- NOVO BOTÃO PARA INICIAR SEPARAÇÃO -->
+                <button id="btnIniciarSeparacao" class="es-btn-acao-principal">
+                <i class="fas fa-box-open"></i> Nova Separação
+                </button>
             </div>
-
             <div class="es-card" style="margin-bottom: 20px;">
                 <h2 class="es-titulo-secao" style="text-align:left; border-bottom:none; margin-bottom:15px;">Alertas de Estoque</h2>
                 <div class="es-alerta-cards-container">
@@ -49,18 +52,27 @@
             </div>
             
             <div class="es-card">
+                 <!-- NOVO: Título dinâmico para filtros de alerta -->
+                <div id="filtroAtivoHeader" class="es-filtro-ativo-header" style="display: none;">
+                <h2 id="filtroAtivoTitulo"></h2>
+                </div>
+
                  <input type="text" id="searchEstoque" class="es-input-busca" placeholder="Buscar por produto ou variação...">
                 <h2 class="es-titulo-secao" style="text-align:left;">Itens em Estoque</h2>
                 <div class="es-tabela-wrapper">
                     <table class="es-tabela-estilizada" id="estoqueTable">
                         <thead>
-                            <tr>
-                                <th style="width: 70px;">Imagem</th>
-                                <th>Produto</th>
-                                <th>Variação</th>
-                                <th class="saldo-estoque" style="width: 120px; text-align:center;">Saldo Atual</th>
-                            </tr>
-                        </thead>
+                        <tr>
+                            <!-- NOVA COLUNA PARA O INDICADOR DE STATUS -->
+                            <th style="width: 20px;"></th> 
+                            <th style="width: 70px;">Imagem</th>
+                            <th>Produto</th>
+                            <th>Variação</th>
+                            <th class="saldo-estoque" style="width: 120px; text-align:center;">Saldo Atual</th>
+                            <!-- NOVA COLUNA 'IDEAL' -->
+                            <th style="width: 120px; text-align:center;">Estoque Ideal</th> 
+                        </tr>
+                    </thead>
                         <tbody id="estoqueTableBody">
                         </tbody>
                     </table>
@@ -131,11 +143,100 @@
             </div>
         </section>
 
+        <!-- VIEW 1: SEPARAÇÃO DE PEDIDOS (LISTA DE PRODUTOS BASE) -->
+        <section id="separacaoView" class="hidden">
+            <div class="es-cabecalho-pagina">
+                <h1>Separação de Pedidos</h1>
+                <button id="btnVoltarDaSeparacao" class="es-btn-voltar-centralizado">
+                     <i class="fas fa-arrow-left"></i> Voltar ao Estoque
+                </button>
+            </div>
+            
+            <div class="es-card">
+                <input type="text" id="searchSeparacaoProdutoBase" class="es-input-busca" placeholder="Buscar produto base...">
+            </div>
 
-        <!-- Modal para Configurar Níveis de Estoque (Permanece igual) -->
+            <!-- Container para a lista de produtos base -->
+            <div id="separacaoProdutosBaseContainer" class="es-produtos-base-container">
+                <!-- Itens de produto base serão inseridos aqui pelo JS -->
+            </div>
+
+            <!-- "CARRINHO" FLUTUANTE (permanece o mesmo) -->
+            <div id="carrinhoSeparacao" class="es-carrinho-flutuante hidden">
+                <span id="carrinhoContador">0 itens no carrinho</span>
+                <button id="btnVerCarrinho" class="es-btn es-btn-primario">
+                    Revisar e Finalizar <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- NOVA VIEW 2: DETALHE DA SEPARAÇÃO (VARIAÇÕES DE UM PRODUTO) -->
+        <section id="separacaoDetalheView" class="hidden">
+            <div class="es-cabecalho-pagina">
+                <h1 id="detalheSeparacaoTitulo">Separando: [Nome do Produto]</h1>
+                <button id="btnVoltarParaListaProdutos" class="es-btn-voltar-centralizado">
+                    <i class="fas fa-arrow-left"></i> Voltar para Produtos
+                </button>
+            </div>
+
+            <div class="es-card">
+                <!-- Filtros dinâmicos serão inseridos aqui -->
+                <div id="filtrosVariacaoContainer" class="es-filtros-variacao-container"></div>
+            </div>
+            
+            <!-- Container para os cards de variação -->
+            <div id="separacaoVariacoesCardsContainer" class="es-separacao-cards-container">
+                <!-- Cards de variações serão inseridos aqui pelo JS -->
+            </div>
+        </section>
+
+            <!-- NOVO: Modal para Finalizar a Separação -->
+        <div id="modalFinalizarSeparacao" class="es-modal" style="display:none;">
+            <div class="es-modal-conteudo" style="max-width: 700px;">
+    <!-- MUDANÇA 1: Adicionar classe ao botão "X" -->
+    <span class="es-modal-fechar es-btn-perigo" id="fecharModalFinalizar">X</span>
+    <h3 id="modalFinalizarTitulo">Finalizar Separação</h3>
+    
+    <div class="es-modal-body">
+        <h4>Itens a serem retirados do estoque:</h4>
+        <!-- MUDANÇA 2: Remover a thead. Vamos construir no JS. -->
+        <div class="es-tabela-wrapper" style="max-height: 250px; overflow-y: auto; margin-bottom: 20px;">
+            <table class="es-tabela-estilizada">
+                <tbody id="resumoCarrinhoBody">
+                    <!-- Itens do carrinho serão inseridos aqui pelo JS -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- NOVO: Container para os botões de canal de venda -->
+        <div class="es-form-grupo">
+            <label>Canal de Venda (Destino)</label>
+            <div id="canalVendaContainer" class="es-botoes-tipo-operacao">
+                <!-- Botões serão gerados pelo JS -->
+            </div>
+            <input type="hidden" id="canalVendaSelecionado">
+        </div>
+        
+        <div class="es-form-grupo">
+            <label for="observacaoSaida">Observação (Ex: Nº do Pedido)</label>
+            <input type="text" id="observacaoSaida" class="es-input" placeholder="Opcional">
+        </div>
+
+                <div class="es-form-botoes" style="margin-top: 25px;">
+                    <button type="button" class="es-btn es-btn-secundario" id="btnCancelarFinalizacao">Cancelar</button>
+                    <button type="button" class="es-btn es-btn-primario" id="btnConfirmarSaidaEstoque">
+                        <i class="fas fa-check-circle"></i> Confirmar Saída
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modal para Configurar Níveis de Estoque (Permanece igual) -->
         <div id="modalConfigurarNiveis" class="es-modal" style="display:none;">
              <div class="es-modal-conteudo" style="max-width: 800px;">
-                <span class="es-modal-fechar" id="fecharModalNiveis">X</span>
+                <span class="es-modal-fechar es-btn-perigo" id="fecharModalNiveis">X</span>
                 <h3 id="modalNiveisTitulo">Configurar Níveis de Alerta de Estoque</h3>
                 
                 <div class="pr-form-grupo" style="margin-bottom: 15px;">
@@ -146,12 +247,14 @@
                     <div class="es-tabela-wrapper" style="max-height: 400px; overflow-y: auto; margin-bottom: 15px;">
                         <table class="es-tabela-estilizada" id="tabelaConfigNiveis">
                             <thead>
-                                <tr>
-                                    <th>Produto / Variação</th>
-                                    <th style="width: 150px;">Nível Estoque Baixo</th>
-                                    <th style="width: 150px;">Nível Rep. Urgente</th>
-                                    <th style="width: 80px;">Ativo</th>
-                                </tr>
+                        <tr>
+                            <th>Produto / Variação</th>
+                            <th style="width: 150px;">Nível Estoque Baixo</th>
+                            <th style="width: 150px;">Nível Rep. Urgente</th>
+                            <!-- NOVA COLUNA NO MODAL -->
+                            <th style="width: 150px;">Nível Estoque Ideal</th>
+                            <th style="width: 80px;">Ativo</th>
+                        </tr>
                             </thead>
                             <tbody id="tbodyConfigNiveis">
                             </tbody>
@@ -168,8 +271,6 @@
                 </div>
             </div>
         </div>
-
-    </main>
     
     <!-- NOVO: Modal para o Histórico de Movimentações -->
     <div id="modalHistoricoMovimentacoes" class="es-modal" style="display: none;">

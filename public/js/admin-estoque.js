@@ -30,6 +30,12 @@ let modalHistoricoElement;
 let currentPageHistorico = 1;
 const itemsPerPageHistorico = 7; 
 
+
+// --- VARIÁVEIS PARA O MÓDULO DE SEPARAÇÃO ---
+let itensEmSeparacao = new Map(); // Usaremos um Map para gerenciar os itens no "carrinho"
+let produtoEmDetalheSeparacao = null;
+
+
 // --- FUNÇÃO DE POPUP DE MENSAGEM (Sem alterações) ---
 function mostrarPopupEstoque(mensagem, tipo = 'info', duracao = 4000, permitirHTML = false) { 
     const popupId = `popup-estoque-${Date.now()}`;
@@ -146,6 +152,16 @@ function debounce(func, wait) {
     };
 }
 
+// Função para gerar texto de plural de forma inteligente
+function getLabelFiltro(chave) {
+    if (chave.toLowerCase().endsWith('r')) {
+        return `Todos(as) ${chave}es`; // Ex: Cor -> Cores
+    }
+    if (chave.toLowerCase().endsWith('o')) {
+        return `Todos os ${chave}s`; // Ex: Tamanho -> Tamanhos
+    }
+    return `Todos(as) ${chave}s`; // Padrão
+}
 
 // --- FUNÇÃO PARA CHAMADAS À API (Sem alterações) ---
 async function fetchEstoqueAPI(endpoint, options = {}) {
@@ -203,70 +219,57 @@ async function fetchEstoqueAPI(endpoint, options = {}) {
 
 // --- LÓGICA DE NÍVEIS DE ALERTA (Sem alterações) ---
 async function abrirModalConfigurarNiveis() {
+    console.log(`%c[ABRINDO MODAL] - 'Configurar Níveis' foi chamada.`, 'color: #27ae60; font-weight: bold;');
+    
     if (!permissoesGlobaisEstoque.includes('gerenciar-niveis-alerta-estoque')) {
         mostrarPopupEstoque('Você não tem permissão para configurar níveis de estoque.', 'aviso');
         return;
     }
-    modalNiveisTituloElement.textContent = 'Configurar Níveis de Alerta de Estoque';
-    const validationMsgEl = document.getElementById('niveisLoteValidationMessage');
-    if(validationMsgEl) validationMsgEl.style.display = 'none';
-    
+
+    // Reseta o estado do modal antes de abrir
     const tbody = document.getElementById('tbodyConfigNiveis');
     if (!tbody) return;
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;"><div class="es-spinner">Carregando produtos...</div></td></tr>`;
-    
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;"><div class="es-spinner"></div></td></tr>`;
     document.getElementById('buscaProdutoNiveisModal').value = '';
+    
+    // Mostra o modal
     modalNiveisElement.style.display = 'flex';
 
     try {
+        // A lógica de fetch e renderização permanece a mesma
         const [todosProdutos, niveisSalvos] = await Promise.all([
             obterProdutos(),
             fetchEstoqueAPI('/niveis-estoque')
         ]);
         niveisEstoqueAlertaCache = niveisSalvos || [];
-
         todosProdutosParaConfigNiveis = [];
         todosProdutos.forEach(p => {
             if (p.grade && p.grade.length > 0) {
                 p.grade.forEach(g => {
                     const nomeVar = g.variacao || 'Padrão';
                     const skuVariacao = g.sku || `${p.sku || p.nome.toUpperCase().replace(/\W/g, '')}-${nomeVar.replace(/\W/g, '')}`;
-                    todosProdutosParaConfigNiveis.push({
-                        produto_ref_id: skuVariacao,
-                        nome_completo: `${p.nome} ${nomeVar !== 'Padrão' ? `(${nomeVar})` : ''}`,
-                        nome_base: p.nome,
-                        nome_variacao: nomeVar
-                    });
+                    todosProdutosParaConfigNiveis.push({ produto_ref_id: skuVariacao, nome_completo: `${p.nome} ${nomeVar !== 'Padrão' ? `(${nomeVar})` : ''}` });
                 });
             } else {
                  const skuBase = p.sku || p.nome.toUpperCase().replace(/\W/g, '');
-                 todosProdutosParaConfigNiveis.push({
-                    produto_ref_id: skuBase,
-                    nome_completo: `${p.nome} (Padrão)`,
-                    nome_base: p.nome,
-                    nome_variacao: 'Padrão'
-                });
+                 todosProdutosParaConfigNiveis.push({ produto_ref_id: skuBase, nome_completo: `${p.nome} (Padrão)` });
             }
         });
         todosProdutosParaConfigNiveis.sort((a,b) => a.nome_completo.localeCompare(b.nome_completo));
         renderizarTabelaConfigNiveis(todosProdutosParaConfigNiveis);
-
     } catch (error) {
         mostrarPopupEstoque("Erro ao carregar dados para configuração de níveis.", "erro");
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:red;">Erro ao carregar.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:red;">Erro ao carregar.</td></tr>`;
     }
 }
 
 function renderizarTabelaConfigNiveis(itensParaRenderizar) {
     const tbody = document.getElementById('tbodyConfigNiveis');
-    if (!tbody) {
-        console.error("Elemento tbody #tbodyConfigNiveis não encontrado.");
-        return;
-    }
+    if (!tbody) return;
     tbody.innerHTML = ''; 
 
     if (!itensParaRenderizar || itensParaRenderizar.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;">Nenhum produto/variação para configurar (verifique a busca).</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">Nenhum produto/variação para configurar.</td></tr>`;
         return;
     }
 
@@ -274,25 +277,34 @@ function renderizarTabelaConfigNiveis(itensParaRenderizar) {
         const configExistente = niveisEstoqueAlertaCache.find(n => n.produto_ref_id === item.produto_ref_id);
         const tr = tbody.insertRow();
         tr.dataset.produtoRefId = item.produto_ref_id; 
+
         const nivelBaixoOriginal = configExistente?.nivel_estoque_baixo ?? '';
         const nivelUrgenteOriginal = configExistente?.nivel_reposicao_urgente ?? '';
+        const nivelIdealOriginal = configExistente?.nivel_estoque_ideal ?? ''; // NOVO
         const ativoOriginal = configExistente?.ativo !== false;
 
         tr.innerHTML = `
             <td data-label="Produto/Variação">${item.nome_completo}</td>
-            <td data-label="Nível Estoque Baixo"><input type="number" class="es-input input-nivel-baixo" value="${nivelBaixoOriginal}" placeholder="0" min="0" data-original-value="${nivelBaixoOriginal}"></td>
-            <td data-label="Nível Rep. Urgente"><input type="number" class="es-input input-nivel-urgente" value="${nivelUrgenteOriginal}" placeholder="0" min="0" data-original-value="${nivelUrgenteOriginal}"></td>
-            <td data-label="Ativo" style="text-align:center;"><input type="checkbox" class="input-nivel-ativo" ${ativoOriginal ? 'checked' : ''} data-original-value="${ativoOriginal}"></td>
+            <td data-label="Nível Estoque Baixo">
+                <input type="number" class="es-input input-nivel-baixo" value="${nivelBaixoOriginal}" placeholder="0" min="0" data-original-value="${nivelBaixoOriginal}">
+            </td>
+            <td data-label="Nível Rep. Urgente">
+                <input type="number" class="es-input input-nivel-urgente" value="${nivelUrgenteOriginal}" placeholder="0" min="0" data-original-value="${nivelUrgenteOriginal}">
+            </td>
+            <!-- NOVO INPUT PARA ESTOQUE IDEAL -->
+            <td data-label="Nível Estoque Ideal">
+                <input type="number" class="es-input input-nivel-ideal" value="${nivelIdealOriginal}" placeholder="0" min="0" data-original-value="${nivelIdealOriginal}">
+            </td>
+            <td data-label="Ativo" style="text-align:center;">
+                <input type="checkbox" class="input-nivel-ativo" ${ativoOriginal ? 'checked' : ''} data-original-value="${ativoOriginal}">
+            </td>
         `;
     });
 }
 
 async function salvarNiveisEmLote() {
     const validationMsgEl = document.getElementById('niveisLoteValidationMessage');
-    if (validationMsgEl) {
-        validationMsgEl.textContent = '';
-        validationMsgEl.style.display = 'none';
-    }
+    if (validationMsgEl) { validationMsgEl.textContent = ''; validationMsgEl.style.display = 'none'; }
 
     const configsParaSalvar = [];
     const linhasTabela = document.querySelectorAll('#tbodyConfigNiveis tr');
@@ -303,60 +315,46 @@ async function salvarNiveisEmLote() {
         tr.classList.remove('linha-erro-validacao');
         const inputBaixoEl = tr.querySelector('.input-nivel-baixo');
         const inputUrgenteEl = tr.querySelector('.input-nivel-urgente');
+        const inputIdealEl = tr.querySelector('.input-nivel-ideal'); // NOVO
         const inputAtivoEl = tr.querySelector('.input-nivel-ativo');
-        if (!inputBaixoEl || !inputUrgenteEl || !inputAtivoEl) return;
+        if (!inputBaixoEl || !inputUrgenteEl || !inputIdealEl || !inputAtivoEl) return;
 
         const produtoRefId = tr.dataset.produtoRefId;
         const nomeCompletoProduto = tr.cells[0].textContent;
+        
         const valBaixoStr = inputBaixoEl.value.trim();
         const valUrgenteStr = inputUrgenteEl.value.trim();
+        const valIdealStr = inputIdealEl.value.trim(); // NOVO
         const ativo = inputAtivoEl.checked;
+
         const originalBaixo = inputBaixoEl.dataset.originalValue;
         const originalUrgente = inputUrgenteEl.dataset.originalValue;
+        const originalIdeal = inputIdealEl.dataset.originalValue; // NOVO
         const originalAtivo = inputAtivoEl.dataset.originalValue === 'true';
-        
-        const precisaSalvar = valBaixoStr !== originalBaixo || valUrgenteStr !== originalUrgente || ativo !== originalAtivo ||
-                              (!originalBaixo && valBaixoStr) || (!originalUrgente && valUrgenteStr);
+
+        const precisaSalvar = valBaixoStr !== originalBaixo || valUrgenteStr !== originalUrgente || valIdealStr !== originalIdeal || ativo !== originalAtivo;
 
         if (precisaSalvar) {
-            let nivelBaixo = null;
-            let nivelUrgente = null;
+            let nivelBaixo = null, nivelUrgente = null, nivelIdeal = null; // NOVO
             let linhaValida = true;
 
-            if (valBaixoStr !== '') {
-                nivelBaixo = parseInt(valBaixoStr);
-                if (isNaN(nivelBaixo) || nivelBaixo < 0) {
-                    errosDeValidacao.push(`"${nomeCompletoProduto}": Nível Baixo inválido.`);
-                    linhaValida = false;
-                }
-            }
+            if (valBaixoStr !== '') nivelBaixo = parseInt(valBaixoStr);
+            if (valUrgenteStr !== '') nivelUrgente = parseInt(valUrgenteStr);
+            if (valIdealStr !== '') nivelIdeal = parseInt(valIdealStr); // NOVO
 
-            if (valUrgenteStr !== '') {
-                nivelUrgente = parseInt(valUrgenteStr);
-                if (isNaN(nivelUrgente) || nivelUrgente < 0) {
-                    errosDeValidacao.push(`"${nomeCompletoProduto}": Nível Urgente inválido.`);
-                    linhaValida = false;
-                }
-            }
-            
-            if (nivelBaixo !== null && nivelUrgente !== null) {
-                if (nivelUrgente > nivelBaixo) {
-                    errosDeValidacao.push(`"${nomeCompletoProduto}": Rep. Urgente (${nivelUrgente}) não pode ser > Estoque Baixo (${nivelBaixo}).`);
-                    linhaValida = false;
-                }
-            } 
-            else if ((nivelBaixo !== null && nivelUrgente === null) || (nivelBaixo === null && nivelUrgente !== null)) {
-                if (ativo && (valBaixoStr === '' || valUrgenteStr === '')) {
-                    errosDeValidacao.push(`"${nomeCompletoProduto}": Se um nível é definido, o outro também deve ser (ou desative).`);
-                    linhaValida = false;
-                }
-            }
+            // Validações
+            if (valIdealStr !== '' && (isNaN(nivelIdeal) || nivelIdeal < 0)) { errosDeValidacao.push(`"${nomeCompletoProduto}": Nível Ideal inválido.`); linhaValida = false; }
+            if (valBaixoStr !== '' && (isNaN(nivelBaixo) || nivelBaixo < 0)) { errosDeValidacao.push(`"${nomeCompletoProduto}": Nível Baixo inválido.`); linhaValida = false; }
+            if (valUrgenteStr !== '' && (isNaN(nivelUrgente) || nivelUrgente < 0)) { errosDeValidacao.push(`"${nomeCompletoProduto}": Nível Urgente inválido.`); linhaValida = false; }
+            if (nivelUrgente !== null && nivelBaixo !== null && nivelUrgente > nivelBaixo) { errosDeValidacao.push(`"${nomeCompletoProduto}": Urgente > Baixo.`); linhaValida = false; }
+            if (nivelBaixo !== null && nivelIdeal !== null && nivelBaixo > nivelIdeal) { errosDeValidacao.push(`"${nomeCompletoProduto}": Baixo > Ideal.`); linhaValida = false; }
 
             if (linhaValida) {
                 configsParaSalvar.push({
                     produto_ref_id: produtoRefId,
                     nivel_estoque_baixo: nivelBaixo,
                     nivel_reposicao_urgente: nivelUrgente,
+                    nivel_estoque_ideal: nivelIdeal, // NOVO
                     ativo: ativo
                 });
             } else {
@@ -371,7 +369,7 @@ async function salvarNiveisEmLote() {
             validationMsgEl.innerHTML = `Corrija os erros:<br>${errosDeValidacao.join('<br>')}`;
             validationMsgEl.style.display = 'block';
         }
-        mostrarPopupEstoque('Existem erros na configuração dos níveis. Verifique os campos destacados.', 'erro');
+        mostrarPopupEstoque('Existem erros de validação.', 'erro');
         return;
     }
 
@@ -387,32 +385,24 @@ async function salvarNiveisEmLote() {
 
     try {
         await fetchEstoqueAPI('/niveis-estoque/batch', { method: 'POST', body: JSON.stringify({ configs: configsParaSalvar }) });
-        mostrarPopupEstoque(`${configsParaSalvar.length} configuração(ões) de nível salvas/atualizadas com sucesso!`, 'sucesso');
+        mostrarPopupEstoque('Configurações de nível salvas com sucesso!', 'sucesso');
         
+        // Atualiza cache local
         configsParaSalvar.forEach(savedConfig => {
             const index = niveisEstoqueAlertaCache.findIndex(c => c.produto_ref_id === savedConfig.produto_ref_id);
-            if (index > -1) {
-                if (savedConfig.nivel_estoque_baixo === null && savedConfig.nivel_reposicao_urgente === null && !savedConfig.ativo) {
-                    niveisEstoqueAlertaCache.splice(index, 1);
-                } else {
-                    niveisEstoqueAlertaCache[index] = { ...niveisEstoqueAlertaCache[index], ...savedConfig };
-                }
-            } else if (savedConfig.ativo && (savedConfig.nivel_estoque_baixo !== null || savedConfig.nivel_reposicao_urgente !== null)) {
-                niveisEstoqueAlertaCache.push(savedConfig);
-            }
+            if (index > -1) niveisEstoqueAlertaCache[index] = { ...niveisEstoqueAlertaCache[index], ...savedConfig };
+            else niveisEstoqueAlertaCache.push(savedConfig);
         });
 
         fecharModalNiveis();
         await carregarTabelaEstoque(document.getElementById('searchEstoque')?.value || '');
     } catch (error) {
-        mostrarPopupEstoque(`Erro ao salvar níveis em lote: ${error.message}`, 'erro');
+        mostrarPopupEstoque(`Erro ao salvar: ${error.data?.details || error.message}`, 'erro');
     } finally {
-        if (btnSalvarLoteEl) {
-            btnSalvarLoteEl.disabled = false;
-            btnSalvarLoteEl.innerHTML = originalText;
-        }
+        if (btnSalvarLoteEl) { btnSalvarLoteEl.disabled = false; btnSalvarLoteEl.innerHTML = originalText; }
     }
 }
+
 
 function fecharModalNiveis() {
      if (modalNiveisElement) modalNiveisElement.style.display = 'none';
@@ -442,123 +432,73 @@ async function obterSaldoEstoqueAtualAPI() {
 }
 
 async function carregarTabelaEstoque(searchTerm = '', page = 1) {
-    console.log(`[carregarTabelaEstoque] Iniciando. Search: '${searchTerm}', Page: ${page}, Filtro Alerta Ativo: ${filtroAlertaAtivo}`);
-    
-    if (searchTerm && filtroAlertaAtivo) filtroAlertaAtivo = null;
-    if (filtroAlertaAtivo && searchTerm) {
-        const searchInput = document.getElementById('searchEstoque');
-        if (searchInput) searchInput.value = '';
-        searchTerm = '';
+    if (searchTerm && filtroAlertaAtivo) {
+        filtroAlertaAtivo = null;
+        document.getElementById('filtroAtivoHeader').style.display = 'none';
+        document.querySelectorAll('.es-alerta-card').forEach(c => c.classList.remove('filtro-ativo'));
     }
+    
     currentPageEstoqueTabela = parseInt(page) || 1;
-
     const tbody = document.getElementById('estoqueTableBody');
-    const paginacaoContainer = document.getElementById('estoquePaginacaoContainer');
-    if (!tbody) { console.error("[carregarTabelaEstoque] #estoqueTableBody não encontrado!"); return; }
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;"><div class="es-spinner"></div> Carregando...</td></tr>`;
-    if (paginacaoContainer) paginacaoContainer.style.display = 'none';
-
-    const contadorUrgenteEl = document.getElementById('contadorUrgente');
-    const contadorBaixoEl = document.getElementById('contadorBaixo');
-    if (contadorUrgenteEl) contadorUrgenteEl.textContent = '-';
-    if (contadorBaixoEl) contadorBaixoEl.textContent = '-';
-
+    if (!tbody) return;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;"><div class="es-spinner"></div> Carregando...</td></tr>`;
+    
     try {
-        let dadosDeSaldoParaProcessar;
+        let dadosDeSaldo;
         if (saldosEstoqueGlobaisCompletos.length === 0 || filtroAlertaAtivo) {
-            dadosDeSaldoParaProcessar = await obterSaldoEstoqueAtualAPI(); 
+            dadosDeSaldo = await obterSaldoEstoqueAtualAPI(); 
         } else {
-            dadosDeSaldoParaProcessar = [...saldosEstoqueGlobaisCompletos];
+            dadosDeSaldo = [...saldosEstoqueGlobaisCompletos];
         }
 
-        if (!Array.isArray(dadosDeSaldoParaProcessar)) {
-            throw new Error("Dados de saldo inválidos.");
-        }
+        const [todosProdutosDef, niveisDeAlertaApi] = await Promise.all([
+            obterProdutos(), 
+            niveisEstoqueAlertaCache.length > 0 ? Promise.resolve([...niveisEstoqueAlertaCache]) : fetchEstoqueAPI('/niveis-estoque')
+        ]);
         
-        let todosOsProdutosDef = [];
-        let niveisDeAlertaConfiguradosApi = [];
-        try {
-            [todosOsProdutosDef, niveisDeAlertaConfiguradosApi] = await Promise.all([
-                obterProdutos(), 
-                (niveisEstoqueAlertaCache.length > 0 && permissoesGlobaisEstoque.includes('gerenciar-niveis-alerta-estoque')) 
-                    ? Promise.resolve([...niveisEstoqueAlertaCache])
-                    : fetchEstoqueAPI('/niveis-estoque') 
-            ]);
-            
-            if (!(niveisEstoqueAlertaCache.length > 0 && permissoesGlobaisEstoque.includes('gerenciar-niveis-alerta-estoque')) && Array.isArray(niveisDeAlertaConfiguradosApi)) {
-                 niveisEstoqueAlertaCache = niveisDeAlertaConfiguradosApi;
-            } else if (!Array.isArray(niveisDeAlertaConfiguradosApi)){
-                if (niveisEstoqueAlertaCache.length === 0) niveisEstoqueAlertaCache = [];
+        if (niveisEstoqueAlertaCache.length === 0) niveisEstoqueAlertaCache = Array.isArray(niveisDeAlertaApi) ? niveisDeAlertaApi : [];
+        
+        const niveisAlertaValidos = niveisEstoqueAlertaCache;
+
+        // Calcula contadores de alerta
+        let countUrgente = 0, countBaixo = 0;
+        dadosDeSaldo.forEach(item => {
+            const configNivel = niveisAlertaValidos.find(n => n.produto_ref_id === item.produto_ref_id && n.ativo);
+            if (configNivel) {
+                const saldoNum = parseFloat(item.saldo_atual);
+                if (configNivel.nivel_reposicao_urgente !== null && saldoNum <= configNivel.nivel_reposicao_urgente) countUrgente++;
+                else if (configNivel.nivel_estoque_baixo !== null && saldoNum <= configNivel.nivel_estoque_baixo) countBaixo++;
             }
-        } catch (error) {
-            if (error.status === 403 && error.message && error.message.toLowerCase().includes('níveis de alerta')) {
-                mostrarPopupEstoque('Permissão negada para níveis de alerta. Cards de alerta podem não funcionar.', 'aviso', 6000);
-                niveisEstoqueAlertaCache = []; 
-                todosOsProdutosDef = await obterProdutos();
-            } else {
-                mostrarPopupEstoque("Falha ao carregar dados auxiliares (produtos/níveis).", "erro");
-            }
-        }
+        });
+        document.getElementById('contadorUrgente').textContent = countUrgente;
+        document.getElementById('contadorBaixo').textContent = countBaixo;
 
-         todosOsProdutosDef = Array.isArray(todosOsProdutosDef) ? todosOsProdutosDef : [];
-        const niveisAlertaValidos = Array.isArray(niveisEstoqueAlertaCache) ? niveisEstoqueAlertaCache : [];
-
-        let countUrgente = 0;
-        let countBaixo = 0;
-        if (permissoesGlobaisEstoque.includes('gerenciar-niveis-alerta-estoque') || niveisAlertaValidos.length > 0) {
-            dadosDeSaldoParaProcessar.forEach(item => {
-                const produtoRefIdParaAlerta = item.produto_ref_id;
-                if (!produtoRefIdParaAlerta) return; 
-                const configNivel = niveisAlertaValidos.find(n => n.produto_ref_id === produtoRefIdParaAlerta && n.ativo);
-                if (configNivel && configNivel.nivel_reposicao_urgente !== null && configNivel.nivel_estoque_baixo !== null) {
-                    const saldoAtualNum = parseFloat(item.saldo_atual);
-                    const nivelUrgenteNum = parseFloat(configNivel.nivel_reposicao_urgente);
-                    const nivelBaixoNum = parseFloat(configNivel.nivel_estoque_baixo);
-                    if (!isNaN(saldoAtualNum) && !isNaN(nivelUrgenteNum) && saldoAtualNum <= nivelUrgenteNum) {
-                        countUrgente++;
-                    } else if (!isNaN(saldoAtualNum) && !isNaN(nivelBaixoNum) && saldoAtualNum <= nivelBaixoNum) {
-                        countBaixo++;
-                    }
-                }
-            });
-        }
-        if (contadorUrgenteEl) contadorUrgenteEl.textContent = countUrgente;
-        if (contadorBaixoEl) contadorBaixoEl.textContent = countBaixo;
-
-        let itensFiltradosLocalmente = [...dadosDeSaldoParaProcessar];
-        if (filtroAlertaAtivo && (permissoesGlobaisEstoque.includes('gerenciar-niveis-alerta-estoque') || niveisAlertaValidos.length > 0)) {
-            itensFiltradosLocalmente = itensFiltradosLocalmente.filter(item => {
-                const produtoRefIdParaAlerta = item.produto_ref_id;
-                if (!produtoRefIdParaAlerta) return false;
-                const configNivel = niveisAlertaValidos.find(n => n.produto_ref_id === produtoRefIdParaAlerta && n.ativo);
-                if (!configNivel || configNivel.nivel_reposicao_urgente === null || configNivel.nivel_estoque_baixo === null) return false;
-                const saldoAtualNum = parseFloat(item.saldo_atual);
-                const nivelUrgenteNum = parseFloat(configNivel.nivel_reposicao_urgente);
-                const nivelBaixoNum = parseFloat(configNivel.nivel_estoque_baixo);
-                if (isNaN(saldoAtualNum) || isNaN(nivelUrgenteNum) || isNaN(nivelBaixoNum)) return false;
-                if (filtroAlertaAtivo === 'urgente') return saldoAtualNum <= nivelUrgenteNum;
-                if (filtroAlertaAtivo === 'baixo') return saldoAtualNum <= nivelBaixoNum && saldoAtualNum > nivelUrgenteNum;
+        let itensFiltrados = [...dadosDeSaldo];
+        if (filtroAlertaAtivo) {
+            itensFiltrados = itensFiltrados.filter(item => {
+                const configNivel = niveisAlertaValidos.find(n => n.produto_ref_id === item.produto_ref_id && n.ativo);
+                if (!configNivel) return false;
+                const saldoNum = parseFloat(item.saldo_atual);
+                if (filtroAlertaAtivo === 'urgente') return configNivel.nivel_reposicao_urgente !== null && saldoNum <= configNivel.nivel_reposicao_urgente;
+                if (filtroAlertaAtivo === 'baixo') return configNivel.nivel_estoque_baixo !== null && saldoNum <= configNivel.nivel_estoque_baixo && (configNivel.nivel_reposicao_urgente === null || saldoNum > configNivel.nivel_reposicao_urgente);
                 return false;
             });
         }
 
         if (searchTerm) {
-            const termoBuscaLower = searchTerm.toLowerCase();
-            itensFiltradosLocalmente = itensFiltradosLocalmente.filter(item =>
-                item.produto_nome.toLowerCase().includes(termoBuscaLower) ||
-                (item.variante_nome && item.variante_nome !== '-' && item.variante_nome.toLowerCase().includes(termoBuscaLower))
+            const termo = searchTerm.toLowerCase();
+            itensFiltrados = itensFiltrados.filter(item =>
+                item.produto_nome.toLowerCase().includes(termo) ||
+                (item.variante_nome && item.variante_nome !== '-' && item.variante_nome.toLowerCase().includes(termo))
             );
         }
         
-        const totalItemsParaPaginar = itensFiltradosLocalmente.length;
-        const totalPages = Math.ceil(totalItemsParaPaginar / itemsPerPageEstoqueTabela) || 1;
-        currentPageEstoqueTabela = Math.max(1, Math.min(currentPageEstoqueTabela, totalPages));
-
-        const startIndex = (currentPageEstoqueTabela - 1) * itemsPerPageEstoqueTabela;
-        const endIndex = startIndex + itemsPerPageEstoqueTabela;
-        const itensPaginados = itensFiltradosLocalmente.slice(startIndex, endIndex);
+        const totalItems = itensFiltrados.length;
+        const totalPages = Math.ceil(totalItems / itemsPerPageEstoqueTabela) || 1;
+        currentPageEstoqueTabela = Math.min(currentPageEstoqueTabela, totalPages);
+        const itensPaginados = itensFiltrados.slice((currentPageEstoqueTabela - 1) * itemsPerPageEstoqueTabela, currentPageEstoqueTabela * itemsPerPageEstoqueTabela);
            
-        renderizarTabelaEstoque(itensPaginados, todosOsProdutosDef || []);
+        renderizarTabelaEstoque(itensPaginados, todosProdutosDef, niveisAlertaValidos);
         renderizarPaginacaoEstoque(totalPages, searchTerm);
 
         const btnMostrarTodosEl = document.getElementById('btnMostrarTodosEstoque');
@@ -566,23 +506,18 @@ async function carregarTabelaEstoque(searchTerm = '', page = 1) {
             btnMostrarTodosEl.style.display = (filtroAlertaAtivo || searchTerm) ? 'inline-flex' : 'none';
         }
     } catch (error) { 
-        console.error("Erro em carregarTabelaEstoque:", error.message, error.stack);
-        if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:red;">Erro ao carregar estoque.</td></tr>`;
-        if (!(error.status === 403 && error.message && error.message.toLowerCase().includes('níveis de alerta'))) {
-            mostrarPopupEstoque("Erro inesperado ao carregar dados do estoque.", "erro");
-        }
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:red;">Erro ao carregar estoque.</td></tr>`;
+        mostrarPopupEstoque("Erro inesperado ao carregar dados do estoque.", "erro");
     }
 }
 
-function renderizarTabelaEstoque(itensDeEstoque, produtosDefinicoes) {
+function renderizarTabelaEstoque(itensDeEstoque, produtosDefinicoes, niveisDeAlerta) {
     const tbody = document.getElementById('estoqueTableBody');
     if (!tbody) return;
     tbody.innerHTML = '';
 
     if (itensDeEstoque.length === 0) {
-        const searchVal = document.getElementById('searchEstoque')?.value;
-        const msg = searchVal ? 'Nenhum item encontrado para esta busca.' : 'Tudo OK por aqui!';
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;">Nenhum item encontrado.</td></tr>`;
         return;
     }
 
@@ -590,7 +525,7 @@ function renderizarTabelaEstoque(itensDeEstoque, produtosDefinicoes) {
     itensDeEstoque.forEach(item => {
         const produtoDef = produtosDefinicoes.find(p => p.nome === item.produto_nome);
         let imagemSrc = '/img/placeholder-image.png';
-        if (produtoDef) { 
+        if (produtoDef) {
             if (item.variante_nome && item.variante_nome !== '-') {
                 const gradeItem = produtoDef.grade?.find(g => g.variacao === item.variante_nome);
                 if (gradeItem?.imagem) imagemSrc = gradeItem.imagem;
@@ -600,25 +535,31 @@ function renderizarTabelaEstoque(itensDeEstoque, produtosDefinicoes) {
             }
         }
 
+         // Lógica do indicador de status
+        const configNivel = niveisDeAlerta.find(n => n.produto_ref_id === item.produto_ref_id && n.ativo);
+        let statusClass = 'status-ok';
+        if (configNivel) {
+            const saldoNum = parseFloat(item.saldo_atual);
+            if (configNivel.nivel_reposicao_urgente !== null && saldoNum <= configNivel.nivel_reposicao_urgente) statusClass = 'status-urgente';
+            else if (configNivel.nivel_estoque_baixo !== null && saldoNum <= configNivel.nivel_estoque_baixo) statusClass = 'status-baixo';
+        }
+
         const tr = document.createElement('tr');
-        tr.dataset.itemEstoque = JSON.stringify(item); 
+        tr.dataset.itemEstoque = JSON.stringify(item);
         tr.innerHTML = `
-            <td><div class="thumbnail">${imagemSrc !== '/img/placeholder-image.png' ? `<img src="${imagemSrc}" alt="${item.produto_nome}" onerror="this.onerror=null;this.src='/img/placeholder-image.png';this.style.opacity=0.5;">` : '<span></span>'}</div></td>
+            <td class="status-cell"><div class="status-indicator ${statusClass}"></div></td>
+            <td><div class="thumbnail">${imagemSrc !== '/img/placeholder-image.png' ? `<img src="${imagemSrc}" alt="${item.produto_nome}" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">` : '<span></span>'}</div></td>
             <td>${item.produto_nome}</td>
             <td>${item.variante_nome || '-'}</td>
             <td class="saldo-estoque" style="text-align:center;">${item.saldo_atual}</td>
+            <td style="text-align:center;">${configNivel?.nivel_estoque_ideal ?? '-'}</td>
         `;
 
         if (permissoesGlobaisEstoque.includes('gerenciar-estoque')) {
             tr.style.cursor = 'pointer';
             tr.addEventListener('click', (event) => {
-                const itemClicadoString = event.currentTarget.dataset.itemEstoque;
-                if (itemClicadoString) {
-                    const itemClicado = JSON.parse(itemClicadoString);
-                    // ANTES: mostrarDetalheItemEstoque(itemClicado);
-                    // AGORA:
-                    abrirViewMovimento(itemClicado); // << NOVO: Chama a função para abrir a view unificada
-                }
+                const itemClicado = JSON.parse(event.currentTarget.dataset.itemEstoque);
+                abrirViewMovimento(itemClicado);
             });
         }
         fragment.appendChild(tr);
@@ -656,7 +597,26 @@ async function filtrarEstoquePorAlerta(tipoAlerta) {
     const searchInput = document.getElementById('searchEstoque');
     if(searchInput) searchInput.value = ''; 
     currentPageEstoqueTabela = 1;
+
+    // NOVO: Adiciona a lógica de feedback visual
+    const headerFiltro = document.getElementById('filtroAtivoHeader');
+    const tituloFiltro = document.getElementById('filtroAtivoTitulo');
+    document.querySelectorAll('.es-alerta-card').forEach(c => c.classList.remove('filtro-ativo'));
+
+    if (tipoAlerta === 'urgente') {
+        headerFiltro.className = 'es-filtro-ativo-header urgente';
+        tituloFiltro.textContent = 'Mostrando Itens com Reposição Urgente';
+        headerFiltro.style.display = 'block';
+        document.getElementById('cardReposicaoUrgente')?.classList.add('filtro-ativo');
+    } else if (tipoAlerta === 'baixo') {
+        headerFiltro.className = 'es-filtro-ativo-header baixo';
+        tituloFiltro.textContent = 'Mostrando Itens com Estoque Baixo';
+        headerFiltro.style.display = 'block';
+        document.getElementById('cardEstoqueBaixo')?.classList.add('filtro-ativo');
+    }
+
     await carregarTabelaEstoque('', 1);
+    
     const tabelaEl = document.getElementById('estoqueTable');
     if(tabelaEl) tabelaEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -881,19 +841,20 @@ async function salvarMovimentoManualEstoque() {
 }
 
 // --- LÓGICA DE ROTEAMENTO (HASHCHANGE) ---
-// Totalmente refatorado para a nova estrutura
 function handleHashChangeEstoque() {
     const mainView = document.getElementById('mainViewEstoque');
     const movimentoView = document.getElementById('editarEstoqueMovimentoView');
+    const separacaoView = document.getElementById('separacaoView'); 
 
-    if (!mainView || !movimentoView) {
+    if (!mainView || !movimentoView || !separacaoView) {
         console.error("[handleHashChangeEstoque] Uma ou mais views não encontradas.");
         return;
     }
 
-    // Oculta todas as views principais
+    // Oculta todas as views principais, incluindo a nova
     mainView.style.display = 'none'; mainView.classList.remove('hidden');
     movimentoView.style.display = 'none'; movimentoView.classList.remove('hidden');
+    separacaoView.style.display = 'none'; separacaoView.classList.remove('hidden');
 
     const hash = window.location.hash;
 
@@ -1025,6 +986,432 @@ function renderizarPaginacaoHistorico(totalPages, produtoNome, varianteNome) {
     });
 }
 
+// =========================================================================
+// ### INÍCIO - MÓDULO DE SEPARAÇÃO DE PEDIDOS (PICKING) ###
+// =========================================================================
+
+function mostrarViewSeparacao() {
+    document.getElementById('mainViewEstoque').style.display = 'none';
+    document.getElementById('editarEstoqueMovimentoView').style.display = 'none';
+    document.getElementById('separacaoDetalheView').style.display = 'none'; // Esconde a nova tela de detalhe
+    
+    const separacaoView = document.getElementById('separacaoView');
+    separacaoView.classList.remove('hidden');
+    separacaoView.style.display = 'block';
+
+    // Limpa a busca e renderiza os produtos base
+    document.getElementById('searchSeparacaoProdutoBase').value = '';
+    renderizarProdutosBase();
+}
+
+function renderizarProdutosBase() {
+    const container = document.getElementById('separacaoProdutosBaseContainer');
+    const termoBusca = document.getElementById('searchSeparacaoProdutoBase').value.toLowerCase();
+    container.innerHTML = '';
+
+    // Lógica para agrupar produtos (sem alteração)
+    const produtosBase = saldosEstoqueGlobaisCompletos.reduce((acc, item) => {
+        if (!acc[item.produto_nome]) {
+            acc[item.produto_nome] = { produto_nome: item.produto_nome, variacoesComEstoque: 0, imagem: null };
+        }
+        acc[item.produto_nome].variacoesComEstoque++;
+        if (!acc[item.produto_nome].imagem) {
+            const produtoDef = todosOsProdutosCadastrados.find(p => p.nome === item.produto_nome);
+            if (produtoDef) {
+                acc[item.produto_nome].imagem = produtoDef.imagem || (produtoDef.grade && produtoDef.grade[0]?.imagem) || '/img/placeholder-image.png';
+            }
+        }
+        return acc;
+    }, {});
+
+    let listaProdutosBase = Object.values(produtosBase);
+    if (termoBusca) {
+        listaProdutosBase = listaProdutosBase.filter(p => p.produto_nome.toLowerCase().includes(termoBusca));
+    }
+    if (listaProdutosBase.length === 0) {
+        container.innerHTML = '<p style="text-align: center; grid-column: 1 / -1;">Nenhum produto encontrado.</p>';
+        return;
+    }
+
+    listaProdutosBase.forEach(produto => {
+        const card = document.createElement('div');
+        card.className = 'es-produto-base-card';
+        // Usando data-attributes para passar a informação
+        card.dataset.nomeProduto = produto.produto_nome;
+        card.innerHTML = `
+            <img src="${produto.imagem || '/img/placeholder-image.png'}" alt="${produto.produto_nome}" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">
+            <div class="es-produto-base-card-info">
+                <h3>${produto.produto_nome}</h3>
+                <p>${produto.variacoesComEstoque} variações com estoque</p>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+
+    // Removendo o listener antigo do container se existir
+    const novoContainer = container.cloneNode(true);
+    container.parentNode.replaceChild(novoContainer, container);
+    
+    // Adicionando um ÚNICO listener ao container pai (Delegação de Eventos)
+    novoContainer.addEventListener('click', function(event) {
+        // Encontra o card mais próximo que foi clicado
+        const cardClicado = event.target.closest('.es-produto-base-card');
+        if (cardClicado) {
+            const nomeProduto = cardClicado.dataset.nomeProduto;
+            if (nomeProduto) {
+                console.log(`Card clicado: ${nomeProduto}`);
+                mostrarViewDetalheSeparacao(nomeProduto);
+            }
+        }
+    });
+}
+
+function mostrarViewDetalheSeparacao(nomeProduto) {
+    produtoEmDetalheSeparacao = nomeProduto;
+
+    document.getElementById('separacaoView').style.display = 'none';
+    const detalheView = document.getElementById('separacaoDetalheView');
+    detalheView.classList.remove('hidden');
+    detalheView.style.display = 'block';
+
+    document.getElementById('detalheSeparacaoTitulo').textContent = `Separando: ${nomeProduto}`;
+    
+    // Carrega os filtros e os cards de variação para este produto
+    renderizarFiltrosDeVariacao(nomeProduto);
+    renderizarCardsDeVariacao(nomeProduto);
+}
+
+
+function voltarParaListaProdutos() {
+    produtoEmDetalheSeparacao = null;
+    document.getElementById('separacaoDetalheView').style.display = 'none';
+    document.getElementById('separacaoView').style.display = 'block';
+    // Não precisa recarregar, pois a lista de produtos base não mudou
+}
+
+function voltarParaEstoquePrincipal() {
+    if (itensEmSeparacao.size > 0) {
+        mostrarPopupConfirmacao('Você tem itens no carrinho de separação.<br>Deseja descartá-los e voltar?', 'aviso')
+            .then(confirmado => {
+                if (confirmado) {
+                    itensEmSeparacao.clear();
+                    atualizarCarrinhoFlutuante(); // Garante que a UI do carrinho seja atualizada
+                    document.getElementById('mainViewEstoque').style.display = 'block';
+                    document.getElementById('separacaoView').style.display = 'none';
+                    document.getElementById('separacaoDetalheView').style.display = 'none';
+                }
+            });
+    } else {
+        document.getElementById('mainViewEstoque').style.display = 'block';
+        document.getElementById('separacaoView').style.display = 'none';
+        document.getElementById('separacaoDetalheView').style.display = 'none';
+    }
+}
+
+
+function renderizarCardsDeVariacao() {
+    const container = document.getElementById('separacaoVariacoesCardsContainer');
+    const nomeProduto = produtoEmDetalheSeparacao;
+
+    // Garante que temos um produto selecionado para detalhar
+    if (!nomeProduto) {
+        container.innerHTML = '<p style="text-align: center; grid-column: 1 / -1;">Nenhum produto selecionado para detalhar.</p>';
+        return;
+    }
+    
+    container.innerHTML = ''; // Limpa o container antes de renderizar
+    
+    // Pega os valores dos filtros dinâmicos que o usuário selecionou
+    const filtrosSelecionados = {};
+    const produtoDefFiltro = todosOsProdutosCadastrados.find(p => p.nome === nomeProduto);
+    if(produtoDefFiltro && produtoDefFiltro.variacoes) {
+        produtoDefFiltro.variacoes.forEach(variacaoDef => {
+            const selectFiltro = document.getElementById(`filtro-${variacaoDef.chave}`);
+            if (selectFiltro && selectFiltro.value) {
+                // Armazena o índice e o valor do filtro
+                const index = produtoDefFiltro.variacoes.findIndex(v => v.chave === variacaoDef.chave);
+                filtrosSelecionados[index] = selectFiltro.value;
+            }
+        });
+    }
+
+    // 1. Pega todas as variações com saldo em estoque que pertencem ao produto principal
+    let variacoesDoProduto = saldosEstoqueGlobaisCompletos.filter(item => item.produto_nome === nomeProduto);
+    
+    // 2. Aplica os filtros selecionados pelo usuário
+    if (Object.keys(filtrosSelecionados).length > 0) {
+        variacoesDoProduto = variacoesDoProduto.filter(item => {
+            const partesVariacao = item.variante_nome.split(' | ').map(p => p.trim());
+            // Verifica se o item corresponde a TODOS os filtros ativos
+            return Object.entries(filtrosSelecionados).every(([indexFiltro, valorFiltro]) => {
+                return partesVariacao[parseInt(indexFiltro)] === valorFiltro;
+            });
+        });
+    }
+    
+    if (variacoesDoProduto.length === 0) {
+        container.innerHTML = '<p style="text-align: center; grid-column: 1 / -1;">Nenhuma variação encontrada com os filtros selecionados.</p>';
+        return;
+    }
+
+    // 3. Renderiza os cards para os itens que passaram pelos filtros
+    variacoesDoProduto.forEach(item => {
+        const produtoDef = todosOsProdutosCadastrados.find(p => p.nome === item.produto_nome);
+        let imagemSrc = '/img/placeholder-image.png';
+        if (produtoDef && item.variante_nome && item.variante_nome !== '-') {
+            const gradeItem = produtoDef.grade?.find(g => g.variacao === item.variante_nome);
+            imagemSrc = gradeItem?.imagem || produtoDef.imagem || '/img/placeholder-image.png';
+        }
+
+        const card = document.createElement('div');
+        card.className = 'es-separacao-card';
+        card.dataset.produtoRefId = item.produto_ref_id;
+        
+        // Adiciona a classe 'selecionado' se o item já estiver no carrinho
+        if (itensEmSeparacao.has(item.produto_ref_id)) {
+            card.classList.add('selecionado');
+        }
+
+        card.innerHTML = `
+            <div class="es-separacao-card-header">
+                <img src="${imagemSrc}" alt="${item.variante_nome}" class="es-separacao-card-img" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">
+                <div class="es-separacao-card-info">
+                    <h3>${item.variante_nome || 'Padrão'}</h3>
+                    <p>SKU: ${item.produto_ref_id || 'N/A'}</p>
+                </div>
+            </div>
+            <div class="es-separacao-card-body">
+                <div class="es-separacao-card-saldo">Estoque: <strong>${item.saldo_atual}</strong></div>
+                <div class="es-separacao-card-controls">
+                    <button class="control-btn minus-btn">-</button>
+                    <input type="number" class="qty-input" value="${itensEmSeparacao.get(item.produto_ref_id)?.quantidade_movimentada || 0}" min="0" max="${item.saldo_atual}">
+                    <button class="control-btn plus-btn">+</button>
+                </div>
+            </div>
+        `;
+
+        const qtyInput = card.querySelector('.qty-input');
+        const plusBtn = card.querySelector('.plus-btn');
+        const minusBtn = card.querySelector('.minus-btn');
+
+        const atualizarItem = (novaQtd) => {
+            const saldoMax = parseInt(item.saldo_atual);
+            let qtdFinal = Math.max(0, Math.min(novaQtd, saldoMax));
+            qtyInput.value = qtdFinal;
+
+            if (qtdFinal > 0) {
+                itensEmSeparacao.set(item.produto_ref_id, {
+                    produto_nome: item.produto_nome,
+                    variante_nome: item.variante_nome,
+                    quantidade_movimentada: qtdFinal
+                });
+                card.classList.add('selecionado');
+            } else {
+                itensEmSeparacao.delete(item.produto_ref_id);
+                card.classList.remove('selecionado');
+            }
+            atualizarCarrinhoFlutuante();
+        };
+
+        plusBtn.addEventListener('click', () => atualizarItem(parseInt(qtyInput.value) + 1));
+        minusBtn.addEventListener('click', () => atualizarItem(parseInt(qtyInput.value) - 1));
+        qtyInput.addEventListener('change', () => atualizarItem(parseInt(qtyInput.value)));
+        qtyInput.addEventListener('keyup', (e) => { 
+            if (e.key === 'Enter') {
+                e.target.blur(); // Tira o foco para "confirmar" o valor digitado
+                atualizarItem(parseInt(qtyInput.value));
+            }
+        });
+
+        container.appendChild(card);
+    });
+}
+
+
+function renderizarFiltrosDeVariacao(nomeProduto) {
+    const container = document.getElementById('filtrosVariacaoContainer');
+    container.innerHTML = '';
+    const produtoDef = todosOsProdutosCadastrados.find(p => p.nome === nomeProduto);
+    if (!produtoDef || !produtoDef.variacoes || produtoDef.variacoes.length === 0) return;
+
+    produtoDef.variacoes.forEach(variacao => {
+        const formGrupo = document.createElement('div');
+        formGrupo.className = 'es-form-grupo';
+        const label = document.createElement('label');
+        label.textContent = variacao.chave;
+        label.htmlFor = `filtro-${variacao.chave}`;
+        const select = document.createElement('select');
+        select.className = 'es-select';
+        select.id = `filtro-${variacao.chave}`;
+        select.dataset.chave = variacao.chave;
+        
+        // MUDANÇA AQUI: Usa a nova função para o texto
+        select.innerHTML = `<option value="">${getLabelFiltro(variacao.chave)}</option>`; 
+        
+        const valoresUnicos = variacao.valores.split(',').map(v => v.trim()).filter(Boolean);
+        valoresUnicos.forEach(valor => {
+            select.innerHTML += `<option value="${valor}">${valor}</option>`;
+        });
+        select.onchange = () => renderizarCardsDeVariacao();
+        formGrupo.appendChild(label);
+        formGrupo.appendChild(select);
+        container.appendChild(formGrupo);
+    });
+}
+
+
+function atualizarCarrinhoFlutuante() {
+    const carrinho = document.getElementById('carrinhoSeparacao');
+    const contador = document.getElementById('carrinhoContador');
+    
+    if (itensEmSeparacao.size > 0) {
+        contador.textContent = `${itensEmSeparacao.size} tipo(s) de item no carrinho`;
+        carrinho.classList.remove('hidden');
+    } else {
+        carrinho.classList.add('hidden');
+    }
+}
+
+function abrirModalFinalizacao() {
+    console.log(`%c[ABRINDO MODAL] - 'Finalizar Separação' foi chamada.`, 'color: #3498db; font-weight: bold;');
+    
+    const modal = document.getElementById('modalFinalizarSeparacao');
+    const corpoTabela = document.getElementById('resumoCarrinhoBody');
+    const canalVendaContainer = document.getElementById('canalVendaContainer');
+    const canalVendaInput = document.getElementById('canalVendaSelecionado');
+    const inputObs = document.getElementById('observacaoSaida');
+    const btnConfirmar = document.getElementById('btnConfirmarSaidaEstoque');
+
+    corpoTabela.innerHTML = '';
+    canalVendaContainer.innerHTML = '';
+    canalVendaInput.value = '';
+    inputObs.value = '';
+    btnConfirmar.disabled = true;
+
+    itensEmSeparacao.forEach((item, refId) => {
+        const tr = corpoTabela.insertRow();
+        tr.innerHTML = `
+            <td colspan="3">
+                <div class="resumo-carrinho-item">
+                    <div class="info">
+                        <div class="produto-nome">${item.produto_nome}</div>
+                        <div class="variante-nome">${item.variante_nome || '-'}</div>
+                    </div>
+                    <div class="actions">
+                        <span class="quantidade">${item.quantidade_movimentada}</span>
+                        <button class="remover-item-btn" title="Remover item" data-ref-id="${refId}">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            </td>
+        `;
+    });
+
+    const canais = [
+        { id: 'SAIDA_PEDIDO_SHOPEE', label: 'Shopee' },
+        { id: 'SAIDA_PEDIDO_SHEIN', label: 'Shein' },
+        { id: 'SAIDA_PEDIDO_MERCADO_LIVRE', label: 'Mercado Livre' },
+        { id: 'SAIDA_PEDIDO_PONTO_FISICO', label: 'Ponto Físico', disabled: true }
+    ];
+
+    canais.forEach(canal => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'es-btn es-btn-tipo-op';
+        btn.dataset.valor = canal.id;
+        btn.textContent = canal.label;
+        btn.disabled = canal.disabled || false;
+
+        // CORREÇÃO: Usando addEventListener
+        btn.addEventListener('click', () => {
+            canalVendaContainer.querySelectorAll('button').forEach(b => b.classList.remove('ativo'));
+            btn.classList.add('ativo');
+            canalVendaInput.value = canal.id;
+            btnConfirmar.disabled = false;
+        });
+        canalVendaContainer.appendChild(btn);
+    });
+
+    modal.style.display = 'flex';
+}
+
+function fecharModalFinalizacao() {
+    const modal = document.getElementById('modalFinalizarSeparacao');
+    modal.style.display = 'none';
+}
+
+async function confirmarSaidaEstoque() {
+    const tipo_operacao = document.getElementById('canalVendaSelecionado').value;
+    const observacao = document.getElementById('observacaoSaida').value;
+
+    if (!tipo_operacao) {
+        mostrarPopupEstoque('Selecione um canal de venda para a saída.', 'aviso');
+        return;
+    }
+
+    const itensParaEnviar = Array.from(itensEmSeparacao.values());
+    if (itensParaEnviar.length === 0) {
+        mostrarPopupEstoque('O carrinho de separação está vazio.', 'aviso');
+        fecharModalFinalizacao();
+        return;
+    }
+    
+    const payload = { itens: itensParaEnviar, tipo_operacao, observacao };
+
+    const btnConfirmar = document.getElementById('btnConfirmarSaidaEstoque');
+    const originalBtnHTML = btnConfirmar.innerHTML;
+    btnConfirmar.disabled = true;
+    btnConfirmar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
+
+    try {
+        await fetchEstoqueAPI('/estoque/movimento-em-lote', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+
+        mostrarPopupEstoque('Saída de estoque registrada com sucesso!', 'sucesso');
+        
+        // CORREÇÃO 1: Limpa o carrinho e ATUALIZA a interface do carrinho flutuante
+        itensEmSeparacao.clear();
+        atualizarCarrinhoFlutuante(); // <<< CHAVE: Atualiza a UI do carrinho para 0
+        
+        fecharModalFinalizacao();
+        
+        saldosEstoqueGlobaisCompletos = [];
+        await carregarTabelaEstoque();
+        
+        // CORREÇÃO 2: Volta para a tela principal de estoque de forma limpa
+        document.getElementById('mainViewEstoque').style.display = 'block';
+        document.getElementById('separacaoView').style.display = 'none';
+        document.getElementById('separacaoDetalheView').style.display = 'none'; // Garante que a tela de detalhe também seja escondida
+
+    } catch (error) {
+        console.error('[confirmarSaidaEstoque] Erro:', error);
+        mostrarPopupEstoque(`Falha ao registrar saída: ${error.data?.details || error.message}`, 'erro');
+    } finally {
+        // Garante que o estado do botão seja resetado em qualquer cenário (sucesso ou falha)
+        if (btnConfirmar) {
+            btnConfirmar.disabled = false;
+            btnConfirmar.innerHTML = originalBtnHTML;
+        }
+    }
+}
+
+// FUNÇÃO para remover itens do modal
+window.removerItemDoCarrinho = function(produtoRefId) {
+    if (itensEmSeparacao.has(produtoRefId)) {
+        itensEmSeparacao.delete(produtoRefId);
+        abrirModalFinalizacao(); // Reabre/atualiza o modal com a lista nova
+        atualizarCarrinhoFlutuante(); 
+        const card = document.querySelector(`.es-separacao-card[data-produto-ref-id="${produtoRefId}"]`);
+        if (card) {
+            card.classList.remove('selecionado');
+            card.querySelector('.qty-input').value = 0;
+        }
+    }
+};
+
 
 // --- INICIALIZAÇÃO DA PÁGINA E EVENT LISTENERS ---
 
@@ -1033,12 +1420,16 @@ async function inicializarPaginaEstoque() {
     
     // Obter referências aos elementos do modal de níveis
     modalNiveisElement = document.getElementById('modalConfigurarNiveis');
-    modalNiveisTituloElement = document.getElementById('modalNiveisTitulo');
-    formModalNiveisElement = document.getElementById('formModalNiveis');
-    
-    // NOVO: Obter referência ao modal de histórico
     modalHistoricoElement = document.getElementById('modalHistoricoMovimentacoes');
+
+    // VERIFICAÇÃO DE SEGURANÇA: Garante que os modais existem no HTML
+    if (!modalNiveisElement || !modalHistoricoElement) {
+        console.error("ERRO CRÍTICO: Um ou mais elementos de modal não foram encontrados no DOM. Verifique os IDs no HTML: #modalConfigurarNiveis, #modalHistoricoMovimentacoes");
+        mostrarPopupEstoque("Erro de interface. A página não pode ser carregada corretamente.", "erro", 0);
+        return; // Interrompe a inicialização
+    }
     
+    // O resto da inicialização permanece o mesmo
     try {
         if (todosOsProdutosCadastrados.length === 0) {
             todosOsProdutosCadastrados = await obterProdutos();
@@ -1049,86 +1440,65 @@ async function inicializarPaginaEstoque() {
     }
 
     setupEventListenersEstoque();
-    handleHashChangeEstoque(); // Chama para tratar o estado inicial da URL
+    handleHashChangeEstoque();
     console.log('[Estoque inicializarPaginaEstoque] Concluído.');
 }
 
+
+
 function setupEventListenersEstoque() {
-    // --- Listeners da View Principal (sem alterações) ---
-    const searchEstoqueInput = document.getElementById('searchEstoque');
-    if (searchEstoqueInput) {
-        searchEstoqueInput.addEventListener('input', debounce(() => {
-            filtroAlertaAtivo = null;
-            currentPageEstoqueTabela = 1;
-            carregarTabelaEstoque(searchEstoqueInput.value, 1);
-        }, 350));
-    }
-    const cardUrgente = document.getElementById('cardReposicaoUrgente');
-    if (cardUrgente) cardUrgente.addEventListener('click', () => filtrarEstoquePorAlerta('urgente'));
-    const cardBaixo = document.getElementById('cardEstoqueBaixo');
-    if (cardBaixo) cardBaixo.addEventListener('click', () => filtrarEstoquePorAlerta('baixo'));
-    const btnMostrarTodosEl = document.getElementById('btnMostrarTodosEstoque');
-    if (btnMostrarTodosEl) {
-        btnMostrarTodosEl.addEventListener('click', () => {
-            filtroAlertaAtivo = null;
-            if (searchEstoqueInput) searchEstoqueInput.value = '';
-            currentPageEstoqueTabela = 1;
-            carregarTabelaEstoque('', 1);
-        });
-    }
+    console.log('[Estoque setupEventListenersEstoque] Configurando listeners...');
 
-    const btnArquivar = document.getElementById('arquivarItemBtn');
-    if (btnArquivar) {
-        btnArquivar.addEventListener('click', arquivarItemEstoque);
-    }
+    // Listener para o corpo do documento para tratar cliques em botões dinâmicos de forma segura
+    document.getElementById('modalFinalizarSeparacao')?.addEventListener('click', function(event) {
+        const removerBtn = event.target.closest('.remover-item-btn');
+        if (removerBtn) {
+            event.stopPropagation(); // Impede que o clique se propague
+            const refId = removerBtn.dataset.refId;
+            if (refId) {
+                removerItemDoCarrinho(refId);
+            }
+        }
+    });
 
-    // --- Listeners do Modal de Configuração de Níveis (sem alterações) ---
-    const btnConfigNiveis = document.getElementById('btnConfigurarNiveisEstoque');
-    if (btnConfigNiveis) btnConfigNiveis.addEventListener('click', abrirModalConfigurarNiveis);
-    const btnFecharModalNiveis = document.getElementById('fecharModalNiveis');
-    if (btnFecharModalNiveis) btnFecharModalNiveis.addEventListener('click', fecharModalNiveis);
-    const btnCancelarModalNiveis = document.getElementById('btnCancelarModalNiveis');
-    if (btnCancelarModalNiveis) btnCancelarModalNiveis.addEventListener('click', fecharModalNiveis);
-    const buscaNiveisModalInput = document.getElementById('buscaProdutoNiveisModal');
-    if (buscaNiveisModalInput) {
-        buscaNiveisModalInput.addEventListener('input', debounce(() => {
-            const termo = buscaNiveisModalInput.value.toLowerCase();
-            const itensFiltrados = todosProdutosParaConfigNiveis.filter(item => 
-                item.nome_completo.toLowerCase().includes(termo)
-            );
-            renderizarTabelaConfigNiveis(itensFiltrados);
-        }, 300));
-    }
-    const btnSalvarLote = document.getElementById('btnSalvarNiveisEmLote');
-    if (btnSalvarLote) btnSalvarLote.addEventListener('click', salvarNiveisEmLote);
-    
-    // --- NOVOS Listeners para a View de Movimentação e Modal de Histórico ---
-    const voltarBtn = document.getElementById('voltarParaListaBtn');
-    if (voltarBtn) {
-        voltarBtn.addEventListener('click', () => {
-            window.location.hash = ''; // Volta para a lista
-        });
-    }
-    
-    const salvarBtn = document.getElementById('salvarMovimentoBtn');
-    if (salvarBtn) {
-        salvarBtn.addEventListener('click', salvarMovimentoManualEstoque);
-    }
-    
-    const btnAbrirHistorico = document.getElementById('btnAbrirHistorico');
-    if (btnAbrirHistorico) {
-        btnAbrirHistorico.addEventListener('click', abrirModalHistorico);
-    }
-
-    const btnFecharHistorico = document.getElementById('fecharModalHistorico');
-    if (btnFecharHistorico) {
-        btnFecharHistorico.addEventListener('click', fecharModalHistorico);
-    }
-    
-    // Listener de Roteamento
+    // --- Listeners de Elementos Estáticos ---
+    // (O resto da função permanece o mesmo que a versão anterior que te passei)
+    document.getElementById('searchEstoque')?.addEventListener('input', debounce(() => {
+        filtroAlertaAtivo = null; currentPageEstoqueTabela = 1;
+        carregarTabelaEstoque(document.getElementById('searchEstoque').value, 1);
+    }, 350));
+    document.getElementById('cardReposicaoUrgente')?.addEventListener('click', () => filtrarEstoquePorAlerta('urgente'));
+    document.getElementById('cardEstoqueBaixo')?.addEventListener('click', () => filtrarEstoquePorAlerta('baixo'));
+    document.getElementById('btnMostrarTodosEstoque')?.addEventListener('click', () => {
+        filtroAlertaAtivo = null; document.getElementById('searchEstoque').value = ''; currentPageEstoqueTabela = 1;
+        document.getElementById('filtroAtivoHeader').style.display = 'none';
+        document.querySelectorAll('.es-alerta-card').forEach(c => c.classList.remove('filtro-ativo'));
+        carregarTabelaEstoque('', 1);
+    });
+    document.getElementById('btnConfigurarNiveisEstoque')?.addEventListener('click', abrirModalConfigurarNiveis);
+    document.getElementById('fecharModalNiveis')?.addEventListener('click', fecharModalNiveis);
+    document.getElementById('btnCancelarModalNiveis')?.addEventListener('click', fecharModalNiveis);
+    document.getElementById('btnSalvarNiveisEmLote')?.addEventListener('click', salvarNiveisEmLote);
+    document.getElementById('buscaProdutoNiveisModal')?.addEventListener('input', debounce(() => {
+        const termo = document.getElementById('buscaProdutoNiveisModal').value.toLowerCase();
+        const itensFiltrados = todosProdutosParaConfigNiveis.filter(item => item.nome_completo.toLowerCase().includes(termo));
+        renderizarTabelaConfigNiveis(itensFiltrados);
+    }, 300));
+    document.getElementById('voltarParaListaBtn')?.addEventListener('click', () => { window.location.hash = ''; });
+    document.getElementById('salvarMovimentoBtn')?.addEventListener('click', salvarMovimentoManualEstoque);
+    document.getElementById('btnAbrirHistorico')?.addEventListener('click', abrirModalHistorico);
+    document.getElementById('fecharModalHistorico')?.addEventListener('click', fecharModalHistorico);
+    document.getElementById('arquivarItemBtn')?.addEventListener('click', arquivarItemEstoque);
+    document.getElementById('btnIniciarSeparacao')?.addEventListener('click', mostrarViewSeparacao);
+    document.getElementById('btnVoltarDaSeparacao')?.addEventListener('click', voltarParaEstoquePrincipal);
+    document.getElementById('searchSeparacaoProdutoBase')?.addEventListener('input', debounce(renderizarProdutosBase, 350));
+    document.getElementById('btnVoltarParaListaProdutos')?.addEventListener('click', voltarParaListaProdutos);
+    document.getElementById('btnVerCarrinho')?.addEventListener('click', abrirModalFinalizacao);
+    document.getElementById('fecharModalFinalizar')?.addEventListener('click', fecharModalFinalizacao);
+    document.getElementById('btnCancelarFinalizacao')?.addEventListener('click', fecharModalFinalizacao);
+    document.getElementById('btnConfirmarSaidaEstoque')?.addEventListener('click', confirmarSaidaEstoque);
     window.addEventListener('hashchange', handleHashChangeEstoque);
-
-    console.log('[Estoque setupEventListenersEstoque] Todos os listeners configurados.');
+    console.log('[Estoque setupEventListenersEstoque] Todos os listeners foram configurados corretamente.');
 }
 
 // --- INICIALIZAÇÃO DA PÁGINA (Ponto de entrada) ---
