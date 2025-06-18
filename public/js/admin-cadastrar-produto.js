@@ -1,6 +1,5 @@
 import { verificarAutenticacao } from '/js/utils/auth.js';
 import { obterProdutos, invalidateCache } from '/js/utils/storage.js';
-import { resizeImage } from '/js/utils/image-utils.js';
 import { PRODUTOS, PRODUTOSKITS, MAQUINAS, PROCESSOS } from '/js/utils/prod-proc-maq.js';
 
 // --- Variáveis Globais ---
@@ -46,6 +45,45 @@ let currentGradeIndex = null;
 let currentKitVariationIndex = null;
 let kitComposicaoTemp = [];
 
+function mostrarPopup(mensagem, tipo = 'sucesso', duracao = 4000) {
+    // Encontra ou cria o container para os pop-ups
+    let wrapper = document.getElementById('cp-popup-wrapper');
+    if (!wrapper) {
+        wrapper = document.createElement('div');
+        wrapper.id = 'cp-popup-wrapper';
+        wrapper.className = 'cp-popup-mensagem-wrapper';
+        document.body.appendChild(wrapper);
+    }
+
+    const popup = document.createElement('div');
+    popup.className = `cp-popup-mensagem ${tipo}`;
+
+    const iconMap = {
+        sucesso: 'fa-check-circle',
+        erro: 'fa-times-circle',
+        aviso: 'fa-exclamation-triangle'
+    };
+
+    popup.innerHTML = `
+        <i class="fas ${iconMap[tipo]} icon"></i>
+        <span class="text">${mensagem}</span>
+    `;
+
+    wrapper.appendChild(popup);
+
+    // Remove o popup após a animação de saída terminar
+    setTimeout(() => {
+        popup.style.animation = 'cp-fadeOut 0.4s ease-out forwards';
+        setTimeout(() => {
+            popup.remove();
+            if (wrapper.children.length === 0) {
+                wrapper.remove();
+            }
+        }, 400);
+    }, duracao);
+}
+
+
 function deepClone(obj) {
     if (obj === null || typeof obj !== 'object') return obj;
     try {
@@ -67,11 +105,13 @@ async function inicializarPagina() {
 }
 
 function configurarEventListeners() {
+    console.log('[configurarEventListeners] Configurando listeners...');
     document.getElementById('btnAdicionarNovoProduto').addEventListener('click', handleAdicionarNovoProduto);
     elements.searchProduct.addEventListener('input', () => filterProducts());
     document.querySelectorAll('.cp-type-btn').forEach(btn => btn.addEventListener('click', () => filterProducts(btn.dataset.type)));
     elements.productForm.addEventListener('submit', handleFormSubmit);
-    elements.imagemProduto.addEventListener('change', handleImagemChange);
+    // CORREÇÃO: Passando os parâmetros corretos
+    elements.imagemProduto.addEventListener('change', (event) => handleImagemChange(event, 'principal'));
     elements.removeImagem.addEventListener('click', handleRemoveImagem);
     document.querySelectorAll('input[name="tipo"]').forEach(cb => cb.addEventListener('change', toggleTabs));
     initializeDragAndDrop();
@@ -383,15 +423,77 @@ async function salvarProdutoNoBackend() {
 }
 
 // --- Funções Utilitárias e Popups ---
-function handleImagemChange(e) {
-    const file = e.target.files[0];
+async function handleImagemChange(event, tipo, index = null) {
+    const input = event.target;
+    const file = input.files[0];
     if (!file) return;
-    resizeImage(file, base64 => {
-        elements.previewImagem.src = base64;
-        elements.previewImagem.style.display = 'block';
-        elements.removeImagem.style.display = 'inline-block';
-    });
+
+    let previewElement;
+    if (tipo === 'principal') {
+        previewElement = elements.previewImagem;
+    } else if (tipo === 'grade') {
+        const tr = elements.gradeBody.querySelector(`tr[data-index="${index}"]`);
+        previewElement = tr?.querySelector('.cp-grade-img-placeholder');
+    }
+    if (!previewElement) return;
+
+    previewElement.innerHTML = '<div class="spinner-btn-interno"></div>';
+    if (elements.removeImagem && tipo === 'principal') elements.removeImagem.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/upload', {
+            method: 'POST',
+            headers: {
+                'Content-Type': file.type,
+                'x-filename': file.name
+            },
+            body: file,
+        });
+
+        const blobData = await response.json();
+        if (!response.ok) {
+            throw new Error(blobData.error || 'Falha no upload do arquivo.');
+        }
+
+        const imageUrl = blobData.url;
+
+        // Atualiza a UI com a imagem
+        if (tipo === 'principal') {
+            previewElement.src = imageUrl;
+            previewElement.style.display = 'block';
+            previewElement.innerHTML = '';
+            if (elements.removeImagem) elements.removeImagem.style.display = 'inline-block';
+            if (editingProduct) editingProduct.imagem = imageUrl;
+        } else if (tipo === 'grade') {
+            previewElement.innerHTML = `<img src="${imageUrl}" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">`;
+            if (gradeTemp[index]) gradeTemp[index].imagem = imageUrl;
+        }
+
+        // --- MUDANÇA PRINCIPAL AQUI ---
+        // Salva automaticamente o produto no backend para persistir a URL da imagem
+        console.log("Imagem atualizada. Salvando produto para persistir a URL...");
+        await salvarProdutoNoBackend();
+        
+        // Mostra o pop-up de sucesso DEPOIS de salvar no banco
+        mostrarPopup('Imagem salva com sucesso!', 'sucesso');
+
+    } catch (error) {
+        console.error('Erro no processo de upload ou salvamento:', error);
+        mostrarPopup(`Erro: ${error.message}`, 'erro');
+
+        // Reverte a UI em caso de erro
+        if (tipo === 'principal') {
+            previewElement.style.display = 'none';
+        } else if (tipo === 'grade') {
+            previewElement.innerHTML = ''; // Remove o spinner
+        }
+    } finally {
+        input.value = '';
+    }
 }
+
+
+
 function handleRemoveImagem() {
     elements.imagemProduto.value = '';
     elements.previewImagem.src = '';
@@ -422,11 +524,16 @@ window.toggleTabs = function() {
         if (document.getElementById('variacoes').classList.contains('active')) switchTab('dados-gerais');
     }
 };
+
 window.abrirImagemPopup = function(index) {
-    currentGradeIndex = parseInt(index);
-    elements.gradeImageInput.value = '';
-    elements.gradeImagePopup.classList.add('active');
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    // O `onchange` agora chama a nova handleImagemChange
+    input.onchange = (event) => handleImagemChange(event, 'grade', index);
+    input.click(); // Abre o seletor de arquivos do sistema
 };
+
 window.fecharPopup = function() { document.querySelectorAll('.cp-popup.active').forEach(p => p.classList.remove('active')); };
 window.confirmarImagemGrade = function() {
     const file = elements.gradeImageInput.files[0];

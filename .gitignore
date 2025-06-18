@@ -8,3 +8,4 @@ test-jwt.js
 *.log
 dist
 build
+.env.development.local

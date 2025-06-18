@@ -1,4 +1,7 @@
 // server.js
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 
 // Importar todos os routers
@@ -55,6 +58,9 @@ console.log('precificacaoConfigRouter:', typeof precificacaoConfigRouter, precif
 
 import niveisEstoqueRouter from './api/niveis-estoque.js'; 
 console.log('niveisEstoqueRouter:', typeof niveisEstoqueRouter, niveisEstoqueRouter ? 'Carregado' : 'NÃO CARREGADO');
+
+import uploadRouter from './api/upload.js';
+console.log('uploadRouter:', typeof uploadRouter, uploadRouter ? 'Carregado' : 'NÃO CARREGADO');
 
 const app = express();
 console.log('Aplicação Express inicializada.');
@@ -179,6 +185,13 @@ if (niveisEstoqueRouter && typeof niveisEstoqueRouter === 'function') {
     console.log("Rota /api/niveis-estoque (Express Router) montada.");
 } else {
     console.error("ERRO FATAL: niveisEstoqueRouter não foi carregado ou não é uma função router válida!");
+}
+
+if (uploadRouter && typeof uploadRouter === 'function') {
+    app.use('/api/upload', uploadRouter);
+    console.log("Rota /api/upload (Express Router) montada.");
+} else {
+    console.error("ERRO FATAL: uploadRouter não foi carregado ou não é uma função router válida!");
 }
 
 app.get('/api/ping', (req, res) => res.status(200).json({ message: 'pong do server.js' }));

@@ -289,28 +289,18 @@ body.autenticado { visibility: visible; }
     /* A cor de fundo e texto virá das classes específicas abaixo */
 }
 
-/* Cores específicas para cada tipo de botão (seja ele ativo ou não inicialmente, mas a classe .ativo controla o destaque visual) */
-.es-btn-tipo-op[data-tipo="ENTRADA_MANUAL"] {
-    /* Cor padrão para o botão de entrada (pode ser verde claro se não ativo) */
-}
 .es-btn-tipo-op[data-tipo="ENTRADA_MANUAL"].ativo {
     background-color: var(--es-cor-verde-sucesso, #27ae60);
     color: var(--es-cor-branco, #fff);
     border-color: var(--es-cor-verde-sucesso, #27ae60); /* Borda da mesma cor do fundo */
 }
 
-.es-btn-tipo-op[data-tipo="SAIDA_MANUAL"] {
-    /* Cor padrão para o botão de saída (pode ser vermelho claro se não ativo) */
-}
 .es-btn-tipo-op[data-tipo="SAIDA_MANUAL"].ativo {
     background-color: var(--es-cor-vermelho-perigo, #e74c3c);
     color: var(--es-cor-branco, #fff);
     border-color: var(--es-cor-vermelho-perigo, #e74c3c);
 }
 
-.es-btn-tipo-op[data-tipo="BALANCO"] {
-    /* Cor padrão para o botão de balanço (pode ser azul claro se não ativo) */
-}
 .es-btn-tipo-op[data-tipo="BALANCO"].ativo {
     background-color: var(--es-cor-azul-primario, #3498db);
     color: var(--es-cor-branco, #fff);
@@ -1187,6 +1177,124 @@ body.autenticado { visibility: visible; }
 #quantidadeMovimentar {
     max-width: 100px; /* Define uma largura máxima para o input de quantidade */
     padding: 15px;
+}
+
+/* ==========================================================================
+   ### NOVO ESTILO PARA CARRINHO FLUTUANTE (FAB) ###
+   ========================================================================== */
+
+.es-fab-carrinho {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    width: 60px;
+    height: 60px;
+    background-color: var(--es-cor-azul-primario);
+    color: #fff;
+    border-radius: 50%;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem; /* Tamanho do ícone */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    cursor: pointer;
+    z-index: 100;
+    transition: transform 0.2s ease-in-out, background-color 0.2s;
+}
+
+.es-fab-carrinho:hover {
+    transform: scale(1.1);
+    background-color: var(--es-cor-azul-hover);
+}
+
+/* Badge (contador) no canto do botão */
+.es-fab-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background-color: var(--es-cor-vermelho-perigo);
+    color: #fff;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    font-size: 0.8rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #fff;
+    pointer-events: none; /* Para que o clique passe para o botão principal */
+}
+
+/* Animação para o FAB aparecer */
+.es-fab-carrinho:not(.hidden) {
+    animation: es-fab-pop-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes es-fab-pop-in {
+    from {
+        transform: scale(0);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* Utilitário para esconder/mostrar */
+.hidden {
+    display: none !important;
+}
+
+/* ==========================================================================
+   ### ESTILOS PERSONALIZADOS PARA BOTÕES DE CANAL DE VENDA ###
+   ========================================================================== */
+
+/* Estilo base para os botões de canal (garante que não tenham estilo de "Entrada/Saída") */
+#canalVendaContainer .es-btn-tipo-op {
+    background-color: #f0f2f5; /* Um cinza claro e neutro */
+    color: #5a6268;
+    border: 1px solid #dcdfe4;
+    font-weight: 500;
+}
+
+#canalVendaContainer .es-btn-tipo-op:hover:not(:disabled) {
+    background-color: #e2e6ea;
+    border-color: #b0b9c2;
+}
+
+/* Estilo para o botão ATIVO (sobrescreve o estilo base) */
+#canalVendaContainer .es-btn-tipo-op.ativo {
+    color: #fff !important; /* Garante que o texto fique branco */
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+}
+
+/* Cores específicas para cada canal quando ATIVO */
+.es-btn-tipo-op[data-valor="SAIDA_PEDIDO_SHOPEE"].ativo {
+    background-color: #ee4d2d !important; /* Laranja da Shopee */
+    border-color: #d73113 !important;
+}
+
+.es-btn-tipo-op[data-valor="SAIDA_PEDIDO_SHEIN"].ativo {
+    background-color: #000000 !important; /* Preto da Shein */
+    border-color: #333333 !important;
+}
+
+.es-btn-tipo-op[data-valor="SAIDA_PEDIDO_MERCADO_LIVRE"].ativo {
+    background-color: #ffe600 !important; /* Amarelo do Mercado Livre */
+    color: #333 !important; /* Texto escuro para melhor contraste com amarelo */
+    border-color: #e6cf00 !important;
+}
+
+/* Estilo para o botão desabilitado (Ponto Físico) */
+#canalVendaContainer .es-btn-tipo-op:disabled {
+    background-color: #e9ecef;
+    color: #adb5bd;
+    cursor: not-allowed;
+    opacity: 0.7;
 }
 
 /* Responsividade */

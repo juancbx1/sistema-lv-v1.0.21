@@ -1268,16 +1268,21 @@ function renderizarFiltrosDeVariacao(nomeProduto) {
     });
 }
 
-
 function atualizarCarrinhoFlutuante() {
-    const carrinho = document.getElementById('carrinhoSeparacao');
-    const contador = document.getElementById('carrinhoContador');
+    const carrinhoBtn = document.getElementById('carrinhoSeparacao');
+    const badge = document.getElementById('carrinhoContadorBadge');
     
-    if (itensEmSeparacao.size > 0) {
-        contador.textContent = `${itensEmSeparacao.size} tipo(s) de item no carrinho`;
-        carrinho.classList.remove('hidden');
+    if (!carrinhoBtn || !badge) return; // Verificação de segurança
+
+    const numeroDeItens = itensEmSeparacao.size;
+
+    if (numeroDeItens > 0) {
+        badge.textContent = numeroDeItens;
+        badge.classList.remove('hidden'); // Mostra o badge
+        carrinhoBtn.classList.remove('hidden'); // Mostra o botão principal
     } else {
-        carrinho.classList.add('hidden');
+        carrinhoBtn.classList.add('hidden'); // Esconde o botão principal
+        badge.classList.add('hidden'); // Garante que o badge também seja escondido
     }
 }
 
@@ -1325,22 +1330,22 @@ function abrirModalFinalizacao() {
     ];
 
     canais.forEach(canal => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'es-btn es-btn-tipo-op';
-        btn.dataset.valor = canal.id;
-        btn.textContent = canal.label;
-        btn.disabled = canal.disabled || false;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'es-btn es-btn-tipo-op'; // A classe base
+    btn.dataset.valor = canal.id; // O data-attribute que o CSS usa
+    btn.textContent = canal.label;
+    btn.disabled = canal.disabled || false;
 
-        // CORREÇÃO: Usando addEventListener
-        btn.addEventListener('click', () => {
-            canalVendaContainer.querySelectorAll('button').forEach(b => b.classList.remove('ativo'));
-            btn.classList.add('ativo');
-            canalVendaInput.value = canal.id;
-            btnConfirmar.disabled = false;
-        });
-        canalVendaContainer.appendChild(btn);
-    });
+    // A lógica de clique que adiciona/remove a classe 'ativo'
+    btn.onclick = () => {
+        canalVendaContainer.querySelectorAll('button').forEach(b => b.classList.remove('ativo'));
+        btn.classList.add('ativo');
+        canalVendaInput.value = canal.id;
+        btnConfirmar.disabled = false;
+    };
+    canalVendaContainer.appendChild(btn);
+});
 
     modal.style.display = 'flex';
 }
@@ -1502,8 +1507,7 @@ function setupEventListenersEstoque() {
     document.getElementById('btnVoltarDaSeparacao')?.addEventListener('click', voltarParaEstoquePrincipal);
     document.getElementById('searchSeparacaoProdutoBase')?.addEventListener('input', debounce(renderizarProdutosBase, 350));
     document.getElementById('btnVoltarParaListaProdutos')?.addEventListener('click', voltarParaListaProdutos);
-    document.getElementById('btnVerCarrinho')?.addEventListener('click', abrirModalFinalizacao);
-    document.getElementById('fecharModalFinalizar')?.addEventListener('click', fecharModalFinalizacao);
+    document.getElementById('carrinhoSeparacao')?.addEventListener('click', abrirModalFinalizacao);    document.getElementById('fecharModalFinalizar')?.addEventListener('click', fecharModalFinalizacao);
     document.getElementById('btnCancelarFinalizacao')?.addEventListener('click', fecharModalFinalizacao);
     document.getElementById('btnConfirmarSaidaEstoque')?.addEventListener('click', confirmarSaidaEstoque);
     window.addEventListener('hashchange', handleHashChangeEstoque);
