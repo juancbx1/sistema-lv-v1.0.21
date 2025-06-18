@@ -107,6 +107,33 @@ router.get('/', async (req, res) => {
     }
 });
 
+router.get('/por-nome', async (req, res) => {
+    const { nome } = req.query;
+
+    if (!nome) {
+        return res.status(400).json({ error: 'O parâmetro "nome" é obrigatório.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const queryText = `SELECT * FROM produtos WHERE nome = $1 LIMIT 1`;
+        const result = await dbClient.query(queryText, [nome]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Produto não encontrado.' });
+        }
+        
+        res.status(200).json(result.rows[0]);
+
+    } catch (error) {
+        console.error(`[API GET /produtos/por-nome] Erro:`, error);
+        res.status(500).json({ error: 'Erro ao buscar produto.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
 // Rota POST /api/produtos/ (Criar ou Atualizar produto - UPSERT)
 router.post('/', async (req, res) => {
     const { usuarioLogado } = req;
@@ -216,5 +243,7 @@ router.post('/', async (req, res) => {
         if (dbClient) dbClient.release();
     }
 });
+
+
 
 export default router;

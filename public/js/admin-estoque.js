@@ -733,6 +733,45 @@ function prepararViewMovimento() {
     }
 }
 
+async function estornarMovimento(movimentoId) {
+    // Usa o nosso popup de confirmação para uma melhor experiência
+    const confirmado = await mostrarPopupConfirmacao(
+        'Tem certeza que deseja estornar este movimento?<br><br>Esta ação devolverá a quantidade ao estoque e não pode ser desfeita.',
+        'aviso'
+    );
+
+    if (!confirmado) {
+        return;
+    }
+
+    try {
+        await fetchEstoqueAPI('/estoque/estornar-movimento', {
+            method: 'POST',
+            body: JSON.stringify({ id_movimento_original: movimentoId })
+        });
+
+        mostrarPopupEstoque('Estorno realizado com sucesso!', 'sucesso');
+
+        // Recarrega o histórico para refletir a mudança
+        // e atualiza o saldo na tela de detalhes
+        if (itemEstoqueSelecionado) {
+            // Atualiza o saldo localmente para feedback imediato
+            const movimentoEstornado = saldosEstoqueGlobaisCompletos.find(m => m.id === movimentoId);
+            if (movimentoEstornado) {
+                itemEstoqueSelecionado.saldo_atual += Math.abs(movimentoEstornado.quantidade);
+                document.getElementById('movimentoSaldoAtual').textContent = itemEstoqueSelecionado.saldo_atual;
+            }
+            
+            // Força recarga do cache de saldos e recarrega histórico
+            saldosEstoqueGlobaisCompletos = [];
+            carregarHistoricoMovimentacoes(itemEstoqueSelecionado.produto_nome, itemEstoqueSelecionado.variante_nome, currentPageHistorico);
+        }
+    } catch (error) {
+        console.error('Erro ao estornar movimento:', error);
+        mostrarPopupEstoque(`Falha no estorno: ${error.data?.details || error.message}`, 'erro');
+    }
+}
+
 // Função para arquivar um item de estoque (ATUALIZADA)
 async function arquivarItemEstoque() {
     if (!itemEstoqueSelecionado || !itemEstoqueSelecionado.produto_ref_id) {
@@ -954,23 +993,42 @@ function renderizarHistoricoMovimentacoes(movimentos) {
     tbody.innerHTML = '';
 
     if (!movimentos || movimentos.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Nenhuma movimentação encontrada.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Nenhuma movimentação encontrada.</td></tr>';
         return;
     }
+
+    // Adiciona uma nova coluna para Ações no cabeçalho
+    const thead = tbody.previousElementSibling;
+    if (thead && thead.rows[0].cells.length === 5) {
+        thead.rows[0].insertCell().outerHTML = '<th>Ações</th>';
+    }
+    
     movimentos.forEach(mov => {
         const tr = tbody.insertRow();
         const quantidadeClasse = mov.quantidade > 0 ? 'quantidade-entrada' : 'quantidade-saida';
-        let qtdExibida = mov.quantidade;
+        
+        let acoesHtml = '';
+        // Adiciona o botão de estorno APENAS se:
+        // 1. For um movimento de SAÍDA (quantidade < 0)
+        // 2. AINDA NÃO foi estornado (mov.estornado !== true)
+        // 3. O usuário tem permissão para gerenciar o estoque
+        if (mov.quantidade < 0 && mov.estornado !== true && permissoesGlobaisEstoque.includes('gerenciar-estoque')) {
+            acoesHtml = `<button class="es-btn-icon-estorno" title="Estornar este movimento" onclick="estornarMovimento(${mov.id})">
+                            <i class="fas fa-undo"></i>
+                         </button>`;
+        }
 
         tr.innerHTML = `
             <td>${new Date(mov.data_movimento).toLocaleString('pt-BR')}</td>
             <td>${mov.tipo_movimento.replace(/_/g, ' ')}</td>
-            <td class="${quantidadeClasse}" style="text-align:right;">${qtdExibida}</td>
+            <td class="${quantidadeClasse}" style="text-align:right;">${mov.quantidade}</td>
             <td>${mov.usuario_responsavel || '-'}</td>
             <td>${mov.observacao || '-'}</td>
+            <td style="text-align:center;">${acoesHtml}</td>
         `;
     });
 }
+
 
 function renderizarPaginacaoHistorico(totalPages, produtoNome, varianteNome) {
     const paginacaoContainer = document.getElementById('paginacaoHistoricoMovimentacoes');
@@ -1528,3 +1586,5 @@ document.addEventListener('DOMContentLoaded', async () => {
         mostrarPopupEstoque('Erro crítico ao carregar a página de estoque.', 'erro');
     }
 });
+
+window.estornarMovimento = estornarMovimento;

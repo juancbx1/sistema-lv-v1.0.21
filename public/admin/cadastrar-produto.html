@@ -49,14 +49,14 @@
 
         <!-- VIEW DO FORMULÁRIO DE EDIÇÃO/CADASTRO -->
         <section class="cp-form" id="productFormView" style="display: none;" aria-label="Formulário de edição de produto">
-            <button class="cp-btn cp-btn-back" onclick="window.location.hash = ''" aria-label="Voltar à lista">
+            <a href="#" id="btnVoltarDoForm" class="cp-btn cp-btn-back" aria-label="Voltar à lista">
                 <i class="fas fa-arrow-left"></i> Voltar
-            </button>
+            </a>
             <h2 id="editProductName"></h2>
             <div class="cp-tab-filter" id="tabFilter" role="tablist">
-                <button class="cp-tab-btn active" data-tab="dados-gerais" onclick="switchTab('dados-gerais')" role="tab" aria-selected="true">Dados Gerais</button>
-                <button class="cp-tab-btn" data-tab="ficha-tecnica" onclick="switchTab('ficha-tecnica')" role="tab" aria-selected="false">Ficha Técnica</button>
-                <button class="cp-tab-btn" data-tab="producao" onclick="switchTab('producao')" role="tab" aria-selected="false">Produção</button>
+                <button class="cp-tab-btn active" data-tab="dados-gerais" role="tab" aria-selected="true">Dados Gerais</button>
+                <button class="cp-tab-btn" data-tab="ficha-tecnica" role="tab" aria-selected="false">Ficha Técnica</button>
+                <button class="cp-tab-btn" data-tab="producao" role="tab" aria-selected="false">Produção</button>
             </div>
             
             <div class="cp-tabs-content">
@@ -121,7 +121,7 @@
                             </thead>
                             <tbody id="stepsBody" draggable="true"></tbody>
                         </table>
-                        <button type="button" class="cp-btn cp-btn-add" onclick="addStepRow()"><i class="fas fa-plus"></i> Add Etapa</button>
+                        <button type="button" class="cp-btn cp-btn-add" id="btnAddStep"><i class="fas fa-plus"></i> Add Etapa</button>
                     </div>
                     <div class="cp-form-group">
                         <h3>Etapas de Arremate/Tik Tik</h3>
@@ -133,7 +133,7 @@
                             </thead>
                             <tbody id="etapasTiktikBody" draggable="true"></tbody>
                         </table>
-                        <button type="button" class="cp-btn cp-btn-add" onclick="addEtapaTiktikRow()"><i class="fas fa-plus"></i> Add Etapa</button>
+                        <button type="button" class="cp-btn cp-btn-add" id="btnAddEtapaTiktik"><i class="fas fa-plus"></i> Add Etapa</button>
                     </div>
                 </div>
 
@@ -146,7 +146,7 @@
         <div id="variationsComponentContainer" class="cp-variations-container">
             <!-- As linhas de variação (chave + valores em tags) serão injetadas aqui pelo JS -->
         </div>
-        <button type="button" class="cp-btn cp-btn-add" onclick="addVariacaoRow()" style="margin-top: 1rem;">
+        <button type="button" class="cp-btn cp-btn-add" id="btnAddVariacao" style="margin-top: 1rem;">
             <i class="fas fa-plus"></i> Adicionar Outra Variação
         </button>
     </div>
@@ -159,7 +159,7 @@
             <thead id="gradeHeader"></thead>
             <tbody id="gradeBody"></tbody>
         </table>
-        <button id="salvarGradeBtn" class="cp-btn cp-btn-success" onclick="salvarGrade()">
+        <button id="salvarGradeBtn" class="cp-btn cp-btn-success" id="btnSalvarGrade">
             <i class="fas fa-check"></i> Salvar Grade e Variações
         </button>
     </div>
@@ -167,19 +167,7 @@
 </div>
 
             <!-- Popups -->
-            <div id="variacaoPopup" class="cp-popup" role="dialog" aria-labelledby="novaVariacaoTitle">
-                <div class="cp-popup-content">
-                    <h3 id="novaVariacaoTitle">Nova Variação</h3>
-                    <div class="cp-form-group">
-                        <label for="novaVariacaoDescricao">Descrição:</label>
-                        <input type="text" id="novaVariacaoDescricao" class="cp-input">
-                    </div>
-                    <div class="cp-popup-buttons">
-                        <button class="cp-btn cp-btn-secondary" onclick="fecharPopup()">Cancelar</button>
-                        <button class="cp-btn cp-btn-primary" onclick="confirmarNovaVariacao()">Confirmar</button>
-                    </div>
-                </div>
-            </div>
+            
 
             <div id="configurarVariacaoView" class="cp-popup" role="dialog" aria-labelledby="configurarVariacaoTitle">
                 <div class="cp-popup-content">
@@ -205,6 +193,37 @@
                     </div>
                 </div>
             </div>
+
+
+
+             <!-- NOVO MODAL DE SELEÇÃO DE IMAGEM -->
+        <div id="modalSelecionarImagem" class="cp-popup" role="dialog" aria-labelledby="modalSelecionarImagemTitle">
+            <div class="cp-popup-content" style="max-width: 600px;">
+                <h3 id="modalSelecionarImagemTitle">Selecionar Imagem para a Variação</h3>
+                
+                <div class="cp-form-grupo">
+                    <label>Fazer um novo upload:</label>
+                    <button id="btnTriggerUpload" class="cp-btn cp-btn-primary">
+                        <i class="fas fa-upload"></i> Escolher Arquivo do Computador
+                    </button>
+                    <input type="file" id="gradeImageInput" accept="image/*" style="display: none;">
+                </div>
+
+                <hr style="border: 0; height: 1px; background: #eee; margin: 20px 0;">
+
+                <div class="cp-form-grupo">
+                    <label>Ou usar uma imagem existente deste produto:</label>
+                    <div id="galeriaImagensExistentes" class="cp-galeria-imagens">
+                        <p class="cp-galeria-vazia-msg" style="display: none;">Nenhuma outra imagem foi enviada para este produto ainda.</p>
+                    </div>
+                </div>
+
+                <div class="cp-popup-buttons" style="margin-top: 30px;">
+                    <button type="button" class="cp-btn cp-btn-secondary" id="btnFecharModalSelecaoImagem">Cancelar</button>
+                </div>
+            </div>
+        </div>
+
         </section>
     </div>
     <script src="/js/admin-cadastrar-produto.js" type="module" defer></script>
