@@ -1682,6 +1682,43 @@ body.autenticado { visibility: visible; }
     background-color: #95a5a6;
 }
 
+/* ==========================================================================
+   ### BOTÕES DE REORDENAMENTO PARA FILA DE PRODUÇÃO ###
+   ========================================================================== */
+
+.fila-card-reordenar {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    margin-right: 15px; /* Espaço entre as setas e a posição */
+}
+
+.reordenar-btn {
+    background: transparent;
+    border: 1px solid #dcdfe4;
+    color: #6c757d;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.reordenar-btn:hover:not(:disabled) {
+    background-color: var(--es-cor-azul-primario);
+    border-color: var(--es-cor-azul-primario);
+    color: #fff;
+}
+
+.reordenar-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
 /* Responsividade */
 
 @media (max-width: 1024px) { /* Tablets */

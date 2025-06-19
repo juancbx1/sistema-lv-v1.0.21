@@ -676,8 +676,7 @@ async function mostrarViewFilaProducao() {
         renderizarFilaDeProducao();
         renderizarPromessasEmProducao();
 
-        // Configura o drag-and-drop e troca de abas
-        inicializarDragAndDropFila();
+        // Configura troca de abas
         mudarAbaFila('prioridades');
 
     } catch(error) {
@@ -687,6 +686,55 @@ async function mostrarViewFilaProducao() {
         // Esconde o overlay DEPOIS que tudo carregou
         if (overlay) overlay.classList.add('hidden');
     }
+}
+
+function moverItemFila(produtoRefId, direcao) {
+    const container = document.getElementById('filaProducaoContainer');
+    const cards = Array.from(container.querySelectorAll('.es-fila-card'));
+    const indexAtual = cards.findIndex(card => card.dataset.produtoRefId === produtoRefId);
+
+    if (indexAtual === -1) return;
+
+    let indexNovo = indexAtual + direcao;
+
+    // Garante que o novo índice não saia dos limites do array
+    if (indexNovo < 0 || indexNovo >= cards.length) return;
+
+    const cardAtual = cards[indexAtual];
+    const cardAlvo = cards[indexNovo];
+
+    // Troca a posição dos elementos no DOM
+    if (direcao === -1) { // Mover para cima
+        container.insertBefore(cardAtual, cardAlvo);
+    } else { // Mover para baixo
+        container.insertBefore(cardAlvo, cardAtual);
+    }
+    
+    // Marca que a ordem foi alterada para habilitar o botão de salvar
+    const btnSalvar = document.getElementById('btnSalvarPrioridades');
+    if(btnSalvar) {
+        btnSalvar.style.backgroundColor = 'var(--es-cor-verde-sucesso)';
+        btnSalvar.disabled = false;
+    }
+
+    atualizarInterfaceFila();
+}
+
+function atualizarInterfaceFila() {
+    const container = document.getElementById('filaProducaoContainer');
+    const cards = container.querySelectorAll('.es-fila-card');
+    
+    cards.forEach((card, index) => {
+        // Atualiza o número da posição
+        card.querySelector('.fila-card-posicao').textContent = `#${index + 1}`;
+
+        // Habilita/desabilita os botões de seta
+        const btnCima = card.querySelector('.reordenar-btn.up');
+        const btnBaixo = card.querySelector('.reordenar-btn.down');
+
+        if (btnCima) btnCima.disabled = (index === 0);
+        if (btnBaixo) btnBaixo.disabled = (index === cards.length - 1);
+    });
 }
 
 
@@ -700,7 +748,6 @@ function renderizarFilaDeProducao() {
     container.innerHTML = `<div class="es-spinner"></div>`;
 
     const idsEmProducao = new Set(promessasDeProducaoCache.map(p => p.produto_ref_id));
-
     const itensNaFila = niveisEstoqueAlertaCache
         .filter(config => {
             if (!config.ativo || idsEmProducao.has(config.produto_ref_id)) return false;
@@ -732,20 +779,22 @@ function renderizarFilaDeProducao() {
         const status = (config.nivel_reposicao_urgente !== null && saldoNum <= config.nivel_reposicao_urgente) ? 'urgente' : 'baixo';
         
         const card = document.createElement('div');
-        // O card em si não é mais arrastável
         card.className = `es-fila-card status-${status}`;
         card.dataset.produtoRefId = config.produto_ref_id;
 
-        const podeArrastar = permissoesGlobaisEstoque.includes('gerenciar-fila-de-producao');
+        const podeReordenar = permissoesGlobaisEstoque.includes('gerenciar-fila-de-producao');
         
-        // O "pegador" (handle) para o drag-and-drop
-        const posicaoHTML = `
-            <div class="fila-card-posicao ${podeArrastar ? 'pode-arrastar' : ''}" 
-                 ${podeArrastar ? 'draggable="true"' : ''} 
-                 title="${podeArrastar ? 'Arraste para reordenar' : ''}">
-                #${index + 1}
-            </div>
-        `;
+        // HTML para os botões de reordenamento
+        const reordenarHTML = podeReordenar
+            ? `<div class="fila-card-reordenar">
+                   <button class="reordenar-btn up" onclick="moverItemFila('${config.produto_ref_id}', -1)" title="Mover para cima">
+                       <i class="fas fa-arrow-up"></i>
+                   </button>
+                   <button class="reordenar-btn down" onclick="moverItemFila('${config.produto_ref_id}', 1)" title="Mover para baixo">
+                       <i class="fas fa-arrow-down"></i>
+                   </button>
+               </div>`
+            : '';
 
         const acaoProducaoHTML = podeArrastar
             ? `<div class="fila-card-acao-producao">
@@ -756,7 +805,8 @@ function renderizarFilaDeProducao() {
             : '';
 
         card.innerHTML = `
-            ${posicaoHTML}
+            ${reordenarHTML}
+            <div class="fila-card-posicao">#${index + 1}</div>
             <div class="fila-card-info-wrapper">
                 <img src="${imagemSrc}" class="fila-card-img" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">
                 <div class="fila-card-info">
@@ -776,6 +826,9 @@ function renderizarFilaDeProducao() {
         `;
         container.appendChild(card);
     });
+
+    // Chama a função para ajustar os botões (desabilitar primeira seta para cima, etc.)
+    atualizarInterfaceFila();
 }
 
 function mudarAbaFila(abaAtiva) {
@@ -928,107 +981,6 @@ function iniciarTimerContagemRegressiva(promessa) {
 }
 
 
-function inicializarDragAndDropFila() {
-    if (!permissoesGlobaisEstoque.includes('gerenciar-fila-de-producao')) {
-        const acoesDivP = document.querySelector('.es-fila-acoes p');
-        if (acoesDivP) acoesDivP.textContent = 'Você pode apenas visualizar a ordem da fila.';
-        return;
-    }
-
-    const container = document.getElementById('filaProducaoContainer');
-    if (!container) return;
-
-    let draggingElement = null;
-    let placeholder = document.createElement('div');
-    placeholder.className = 'fila-card-placeholder'; // Usaremos um placeholder para melhor feedback visual
-
-    // --- LÓGICA PARA MOUSE (DRAG AND DROP PADRÃO) ---
-    container.addEventListener('dragstart', e => {
-    // MUDANÇA: Verifica se o alvo é o "pegador"
-    if (e.target.classList.contains('fila-card-posicao')) {
-        // O elemento que queremos arrastar é o PAI do pegador, ou seja, o card inteiro.
-        draggingElement = e.target.closest('.es-fila-card');
-        if (draggingElement) {
-            setTimeout(() => draggingElement.classList.add('dragging'), 0);
-        }
-    }
-});
-
-
-    container.addEventListener('dragend', () => {
-        if (draggingElement) {
-            draggingElement.classList.remove('dragging');
-            draggingElement = null;
-            atualizarNumerosPosicaoFila();
-        }
-    });
-
-    container.addEventListener('dragover', e => {
-        e.preventDefault();
-        const afterElement = getDragAfterElement(container, e.clientY);
-        if (draggingElement) {
-            if (afterElement == null) {
-                container.appendChild(draggingElement);
-            } else {
-                container.insertBefore(draggingElement, afterElement);
-            }
-        }
-    });
-
-    // --- NOVA LÓGICA PARA DISPOSITIVOS DE TOQUE ---
-    let initialTouchY = 0;
-    let currentTouchY = 0;
-
-    container.addEventListener('touchstart', e => {
-        if (e.target.classList.contains('es-fila-card')) {
-            draggingElement = e.target;
-            draggingElement.classList.add('dragging'); // Aplica o estilo de arrastar
-            initialTouchY = e.touches[0].clientY;
-        }
-    }, { passive: true }); // passive: true melhora a performance de rolagem
-
-    container.addEventListener('touchmove', e => {
-        if (!draggingElement) return;
-        // Previne a rolagem da página enquanto arrasta o card
-        e.preventDefault(); 
-        
-        currentTouchY = e.touches[0].clientY;
-        const afterElement = getDragAfterElement(container, currentTouchY);
-        
-        if (afterElement == null) {
-            container.appendChild(draggingElement);
-        } else {
-            container.insertBefore(draggingElement, afterElement);
-        }
-    }, { passive: false }); // passive: false é necessário para usar preventDefault
-
-    container.addEventListener('touchend', () => {
-        if (draggingElement) {
-            draggingElement.classList.remove('dragging');
-            draggingElement = null;
-            atualizarNumerosPosicaoFila();
-        }
-    });
-}
-
-function getDragAfterElement(container, y) {
-    const draggableElements = [...container.querySelectorAll('.es-fila-card:not(.dragging)')];
-    return draggableElements.reduce((closest, child) => {
-        const box = child.getBoundingClientRect();
-        const offset = y - box.top - box.height / 2;
-        if (offset < 0 && offset > closest.offset) {
-            return { offset: offset, element: child };
-        } else { return closest; }
-    }, { offset: Number.NEGATIVE_INFINITY }).element;
-}
-
-function atualizarNumerosPosicaoFila() {
-    const cards = document.querySelectorAll('#filaProducaoContainer .es-fila-card');
-    cards.forEach((card, index) => {
-        card.querySelector('.fila-card-posicao').textContent = `#${index + 1}`;
-    });
-    document.getElementById('btnSalvarPrioridades').style.backgroundColor = 'var(--es-cor-verde-sucesso)';
-}
 
 async function salvarPrioridades() {
     const btn = document.getElementById('btnSalvarPrioridades');
@@ -2064,7 +2016,10 @@ const funcoesGlobaisEstoque = {
     estornarMovimento,
 
     //anular uma promessa
-    anularPromessa
+    anularPromessa,
+
+    moverItemFila
+
 };
 
 // Anexa todas as funções acima ao objeto window
