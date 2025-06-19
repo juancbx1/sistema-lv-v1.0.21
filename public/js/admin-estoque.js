@@ -782,31 +782,31 @@ function renderizarFilaDeProducao() {
         card.className = `es-fila-card status-${status}`;
         card.dataset.produtoRefId = config.produto_ref_id;
 
-        const podeReordenar = permissoesGlobaisEstoque.includes('gerenciar-fila-de-producao');
-        
-        // HTML para os botões de reordenamento
-        const reordenarHTML = podeReordenar
+        const podeGerenciarFila = permissoesGlobaisEstoque.includes('gerenciar-fila-de-producao');
+
+        // O 'pegador' para drag-and-drop foi movido para o wrapper de ordenação
+        const reordenarHTML = podeGerenciarFila
             ? `<div class="fila-card-reordenar">
-                   <button class="reordenar-btn up" onclick="moverItemFila('${config.produto_ref_id}', -1)" title="Mover para cima">
-                       <i class="fas fa-arrow-up"></i>
-                   </button>
-                   <button class="reordenar-btn down" onclick="moverItemFila('${config.produto_ref_id}', 1)" title="Mover para baixo">
-                       <i class="fas fa-arrow-down"></i>
-                   </button>
+                   <button class="reordenar-btn up" onclick="moverItemFila('${config.produto_ref_id}', -1)" title="Mover para cima"><i class="fas fa-arrow-up"></i></button>
+                   <button class="reordenar-btn down" onclick="moverItemFila('${config.produto_ref_id}', 1)" title="Mover para baixo"><i class="fas fa-arrow-down"></i></button>
                </div>`
             : '';
-
-        const acaoProducaoHTML = podeArrastar
+        
+        const acaoProducaoHTML = podeGerenciarFila
             ? `<div class="fila-card-acao-producao">
-                   <button class="es-btn-icon-estorno" onclick="iniciarProducao('${config.produto_ref_id}')" title="Iniciar Produção deste Item">
-                       <i class="fas fa-play-circle"></i>
-                   </button>
+                   <button class="es-btn-icon-estorno" onclick="iniciarProducao('${config.produto_ref_id}')" title="Iniciar Produção"><i class="fas fa-play-circle"></i></button>
                </div>`
             : '';
 
+        // --- ESTRUTURA HTML FINAL COM OS WRAPPERS CORRETOS ---
         card.innerHTML = `
-            ${reordenarHTML}
-            <div class="fila-card-posicao">#${index + 1}</div>
+            <!-- Novo wrapper para setas e número -->
+            <div class="fila-card-ordenacao-wrapper ${podeGerenciarFila ? 'pode-arrastar' : ''}" 
+                 ${podeGerenciarFila ? `draggable="true" title="Arraste para reordenar"` : ''}>
+                ${reordenarHTML}
+                <div class="fila-card-posicao">#${index + 1}</div>
+            </div>
+
             <div class="fila-card-info-wrapper">
                 <img src="${imagemSrc}" class="fila-card-img" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">
                 <div class="fila-card-info">
@@ -814,6 +814,7 @@ function renderizarFilaDeProducao() {
                     <p>${itemSaldo.variante_nome || 'Padrão'}</p>
                 </div>
             </div>
+
             <div class="fila-card-footer">
                 <div class="fila-card-dados-producao">
                     <span>Estoque: <strong>${saldoNum}</strong> / Ideal: <strong>${config.nivel_estoque_ideal || '-'}</strong></span>
@@ -826,8 +827,7 @@ function renderizarFilaDeProducao() {
         `;
         container.appendChild(card);
     });
-
-    // Chama a função para ajustar os botões (desabilitar primeira seta para cima, etc.)
+    
     atualizarInterfaceFila();
 }
 

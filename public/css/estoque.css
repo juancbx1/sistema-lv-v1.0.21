@@ -1873,39 +1873,49 @@ body.autenticado { visibility: visible; }
     /* --- AJUSTES PARA A FILA DE PRODUÇÃO --- */
     
     .es-fila-card {
-        flex-direction: column;
-        align-items: stretch; /* Alinha os filhos para ocupar a largura */
-        padding: 10px;
+        /* Apenas confirmando que ele usa flex-direction: row como base no mobile,
+           e flex-wrap para que os elementos possam quebrar a linha se necessário. */
+        display: flex;
+        flex-wrap: wrap;
+        flex-direction: row; /* Garante que os itens comecem lado a lado */
+        align-items: center; /* Alinha verticalmente */
+        position: relative; /* Remove o position static, se houver */
         gap: 10px;
-        position: static; /* Remove o position relative que não é mais necessário */
+    }
+
+     /* Agrupa as setas e o número da posição */
+    .fila-card-ordenacao-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-shrink: 0; /* Impede que este bloco encolha */
     }
 
     /* O wrapper do cabeçalho agora controla o número e a info */
     .es-fila-card .fila-card-info-wrapper {
-        display: flex;
-        align-items: center;
-        width: 100%;
-        gap: 10px;
-        padding-bottom: 10px;
-        border-bottom: 1px solid #f0f2f5;
+        flex-grow: 1;
+        border-bottom: none; /* Remove a linha divisória que existia */
+        padding-bottom: 0;
     }
 
     /* Estilo do número da posição */
     .fila-card-posicao {
-        font-size: 1.5rem; /* Um pouco maior */
-        font-weight: 700;
+        position: static; 
+        padding: 0;
+        margin: 0;
+        font-size: 1.5rem;
         color: #bdc3c7;
-        padding-right: 10px;
-        text-align: left;
     }
 
     /* O footer do card agora usa flex para alinhar seus filhos */
     .es-fila-card .fila-card-footer {
-        display: flex;
-        justify-content: space-between;
+        flex-basis: 100%; /* Força o footer a ir para a próxima linha */
+        flex-direction: row; /* Garante que os itens dentro dele fiquem lado a lado */
         align-items: center;
-        width: 100%;
-        gap: 10px;
+        justify-content: space-between;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #f0f2f5;
     }
 
     /* O wrapper de status/ação usa flex-direction para empilhar */
