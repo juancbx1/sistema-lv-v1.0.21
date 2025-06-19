@@ -91,70 +91,86 @@
         </section>
 
         <!-- NOVA VIEW UNIFICADA: Movimentação de Estoque -->
-        <section class="es-card hidden" id="editarEstoqueMovimentoView">
-            <button class="botao-fechar es-btn-perigo" id="voltarParaListaBtn" title="Voltar para Lista">X</button>
-            
-            <div class="movimento-header">
-                <div class="movimento-thumbnail" id="movimentoThumbnail">
-                    <img src="/img/placeholder-image.png" alt="Imagem do produto">
+      <section class="hidden" id="editarEstoqueMovimentoView">
+
+    <!-- BOTÃO 'X' AGORA FICA FORA DO GRID, NO TOPO DA SECTION -->
+    <button class="botao-fechar es-btn-perigo" id="voltarParaListaBtn" title="Voltar para Lista">X</button>
+
+    <div class="es-movimento-grid">
+
+        <!-- Coluna Esquerda: Histórico de Movimentações -->
+        <div class="es-movimento-coluna-info">
+            <div class="es-card">
+                <h3 class="es-titulo-secao">Histórico de Movimentações</h3>
+                <div id="historicoContainer" class="es-tabela-wrapper" style="max-height: 550px; overflow-y: auto;">
+                    <table class="es-tabela-estilizada" style="display: table;">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Tipo</th>
+                                <th style="text-align: right;">Qtd.</th>
+                                <th>Usuário</th>
+                                <th>Observação</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historicoMovimentacoesBody"> <!-- CORRIGIDO PARA 'Body' -->
+                            <!-- Histórico será inserido aqui -->
+                        </tbody>
+                    </table>
                 </div>
-                <div class="movimento-info">
-                    <h2 id="movimentoItemNome">[Produto/Variação]</h2>
-                    <p id="movimentoItemSKU">SKU: XXXX-XXX</p>
-                    <button id="btnAbrirHistorico" class="es-btn es-btn-secundario btn-historico">
-                        <i class="fas fa-history"></i> Histórico de Movimento
-                    </button>
-                </div>
-                <div class="movimento-saldo">
-                    <label>SALDO ATUAL</label>
-                    <span id="movimentoSaldoAtual">0</span>
-                </div>
+                <div id="paginacaoHistoricoMovimentacoes" class="es-paginacao-container" style="margin-top: 15px;"></div>
             </div>
+        </div>
 
-            <hr class="movimento-divisor">
-
-            <div class="movimento-form">
-                <h3 class="movimento-titulo-secao">TIPO DE OPERAÇÃO</h3>
-                <div class="movimento-tipo-operacao-container">
-                    <button class="movimento-op-btn" data-tipo="ENTRADA_MANUAL" title="Entrada Manual">
-                        <i class="fas fa-plus"></i>
-                    </button>
-                    <button class="movimento-op-btn" data-tipo="SAIDA_MANUAL" title="Saída Manual">
-                        <i class="fas fa-minus"></i>
-                    </button>
-                    <button class="movimento-op-btn" data-tipo="BALANCO" title="Balanço (Ajustar Saldo)">
-                        <i class="fas fa-equals"></i>
-                    </button>
-                    <input type="hidden" id="tipoMovimentoSelecionado" value="">
+        <!-- Coluna Direita: Ações (Info do Produto + Formulário) -->
+        <div class="es-movimento-coluna-acao">
+            <!-- CARD UNIFICADO DE AÇÃO -->
+            <div class="es-card">
+                <div class="movimento-header">
+                    <div class="movimento-thumbnail" id="movimentoThumbnail"></div>
+                    <div class="movimento-info">
+                        <h2 id="movimentoItemNome">[Produto/Variação]</h2>
+                        <p id="movimentoItemSKU">SKU: XXXX-XXX</p>
+                    </div>
+                    <div class="movimento-saldo">
+                        <label>SALDO ATUAL</label>
+                        <span id="movimentoSaldoAtual">0</span>
+                    </div>
                 </div>
                 
-                <!-- NOVO CONTAINER FLEX -->
-            <div class="es-form-linha-flex">
-                
-                <div class="es-form-grupo">
-                    <label for="quantidadeMovimentar" id="labelQuantidadeMovimentar">Quantidade a movimentar:</label>
-                    <input type="number" id="quantidadeMovimentar" class="es-input" min="1" placeholder="Ex: 10">
-                </div>
+                <hr class="movimento-divisor">
 
-                <div class="es-form-grupo">
-                    <label for="observacaoMovimento">Observação:</label>
-                    <textarea id="observacaoMovimento" class="es-textarea" rows="3" placeholder="Opcional (Ex: Compra fornecedor X)"></textarea>
-                </div>
-
-            </div> <!-- Fim do container flex -->
-
-                <div class="es-form-botoes">
-                <!-- BOTÃO DE ARQUIVAR ATUALIZADO -->
-                <button id="arquivarItemBtn" class="es-btn es-btn-icon-danger" title="Arquivar Item do Estoque" style="margin-right: auto; display: none;">
-                    <i class="fas fa-archive"></i>
-                </button>
-
-                    <button id="salvarMovimentoBtn" class="es-btn es-btn-primario">
-                        <i class="fas fa-save"></i> Salvar Movimento
-                    </button>
+                <div class="movimento-form">
+                    <label class="movimento-label-secao">TIPO DE OPERAÇÃO</label>
+                    <div class="movimento-tipo-operacao-container">
+                        <button class="movimento-op-btn" data-tipo="ENTRADA_MANUAL" title="Entrada Manual"><i class="fas fa-plus"></i></button>
+                        <button class="movimento-op-btn" data-tipo="SAIDA_MANUAL" title="Saída Manual"><i class="fas fa-minus"></i></button>
+                        <button class="movimento-op-btn" data-tipo="BALANCO" title="Balanço (Ajustar Saldo)"><i class="fas fa-equals"></i></button>
+                        <input type="hidden" id="tipoMovimentoSelecionado">
+                    </div>
+                    
+                    <div class="es-form-linha-flex">
+                        <div class="es-form-grupo">
+                            <label for="quantidadeMovimentar" id="labelQuantidadeMovimentar">Quantidade:</label>
+                            <input type="number" id="quantidadeMovimentar" class="es-input" min="1" placeholder="Ex: 10">
+                        </div>
+                        <div class="es-form-grupo">
+                            <label for="observacaoMovimento">Observação:</label>
+                            <textarea id="observacaoMovimento" class="es-textarea" rows="2" placeholder="Opcional"></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="es-form-botoes">
+                        <button id="arquivarItemBtn" class="es-btn-icon-danger" title="Arquivar Item" style="margin-right: auto; display: none;"><i class="fas fa-archive"></i></button>
+                        <button id="salvarMovimentoBtn" class="es-btn es-btn-primario"><i class="fas fa-save"></i> Salvar Movimento</button>
+                    </div>
                 </div>
             </div>
-        </section>
+        </div>
+        
+    </div>
+</section>
 
         <!-- VIEW 1: SEPARAÇÃO DE PEDIDOS (LISTA DE PRODUTOS BASE) -->
         <section id="separacaoView" class="hidden">
@@ -197,25 +213,51 @@
             </div>
         </section>
 
-    <section id="filaProducaoView" class="hidden">
-            <div class="es-cabecalho-pagina">
-            <h1>Fila de Produção Prioritária</h1>
+        <section id="filaProducaoView" class="hidden">
+            <div id="filaLoadingOverlay" class="es-pagina-loading-overlay">
+            <div class="es-spinner"></div>
+            </div>
+        <div class="es-cabecalho-pagina">
+            <h1>Fila de Produção</h1>
             <button id="btnVoltarDaFila" class="es-btn es-btn-secundario" style="margin-left: auto;">
                 <i class="fas fa-arrow-left"></i> Voltar ao Estoque
             </button>
         </div>
 
-        <div class="es-card es-fila-acoes">
-            <p>Arraste e solte os cards para definir a ordem de prioridade da produção.</p>
-            <button id="btnSalvarPrioridades" class="es-btn es-btn-primario hidden">
-                <i class="fas fa-save"></i> Salvar Ordem da Fila
+        <!-- NOVO: Abas para alternar entre Prioridades e Em Produção -->
+        <div class="es-tabs-container">
+            <button class="es-tab-btn active" data-tab="prioridades">
+                <i class="fas fa-list-ol"></i> Prioridades para Produzir
+            </button>
+            <button class="es-tab-btn" data-tab="em-producao">
+                <i class="fas fa-cogs"></i> Em Produção
+                <span id="contadorEmProducao" class="es-tab-badge">0</span>
             </button>
         </div>
 
-        <div id="filaProducaoContainer" class="es-fila-producao-container">
-            <!-- Cards da fila de produção serão inseridos aqui -->
+        <!-- PAINEL DA ABA 1: PRIORIDADES -->
+        <div id="tab-prioridades" class="es-tab-panel active">
+            <div class="es-card es-fila-acoes">
+                <p>Arraste e solte os cards para definir a ordem de prioridade.</p>
+                <button id="btnSalvarPrioridades" class="es-btn es-btn-primario hidden">
+                    <i class="fas fa-save"></i> Salvar Ordem da Fila
+                </button>
+            </div>
+            <div id="filaProducaoContainer" class="es-fila-producao-container">
+                <!-- Cards da fila de prioridades serão inseridos aqui -->
+            </div>
         </div>
-    </section>
+
+        <!-- PAINEL DA ABA 2: EM PRODUÇÃO -->
+        <div id="tab-em-producao" class="es-tab-panel">
+            <div class="es-card es-fila-acoes">
+                <p>Itens que foram enviados para produção e estão aguardando reposição de estoque.</p>
+            </div>
+            <div id="emProducaoContainer" class="es-fila-producao-container">
+                <!-- Cards dos itens em produção (promessas) serão inseridos aqui -->
+            </div>
+        </div>
+        </section>
 
     </main>
 
@@ -332,6 +374,11 @@
             <i class="fa-regular fa-square-plus"></i>
             <span id="carrinhoContadorBadge" class="es-fab-badge hidden">0</span>
         </button>
+
+        <!-- Botão Voltar ao Topo -->
+    <button id="btnVoltarAoTopo" class="es-fab-voltar-topo hidden" title="Voltar ao Topo">
+        <i class="fas fa-arrow-up"></i>
+    </button>
 
 
     <script src="/js/admin-estoque.js" type="module"></script>

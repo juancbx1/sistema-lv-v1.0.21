@@ -62,6 +62,9 @@ console.log('niveisEstoqueRouter:', typeof niveisEstoqueRouter, niveisEstoqueRou
 import uploadRouter from './api/upload.js';
 console.log('uploadRouter:', typeof uploadRouter, uploadRouter ? 'Carregado' : 'NÃO CARREGADO');
 
+import promessasRouter from './api/producao-promessas.js';
+console.log('promessasRouter:', typeof promessasRouter, promessasRouter ? 'Carregado' : 'NÃO CARREGADO');
+
 const app = express();
 console.log('Aplicação Express inicializada.');
 
@@ -192,6 +195,11 @@ if (uploadRouter && typeof uploadRouter === 'function') {
     console.log("Rota /api/upload (Express Router) montada.");
 } else {
     console.error("ERRO FATAL: uploadRouter não foi carregado ou não é uma função router válida!");
+}
+
+if (promessasRouter && typeof promessasRouter === 'function') {
+    app.use('/api/producao-promessas', promessasRouter);
+    console.log("Rota /api/producao-promessas montada.");
 }
 
 app.get('/api/ping', (req, res) => res.status(200).json({ message: 'pong do server.js' }));

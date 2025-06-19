@@ -35,6 +35,10 @@ const itemsPerPageHistorico = 6;
 let itensEmSeparacao = new Map(); // Usaremos um Map para gerenciar os itens no "carrinho"
 let produtoEmDetalheSeparacao = null;
 
+// --- VARIÁVEIS PARA O MÓDULO DE FILA DE PRODUCAO ---
+let promessasDeProducaoCache = [];
+
+
 
 // --- FUNÇÃO DE POPUP DE MENSAGEM (Sem alterações) ---
 function mostrarPopupEstoque(mensagem, tipo = 'info', duracao = 4000, permitirHTML = false) { 
@@ -526,7 +530,7 @@ async function carregarTabelaEstoque(searchTerm = '', page = 1) {
     }
 }
 
-// NOVA FUNÇÃO para renderizar os cards em vez da tabela
+// FUNÇÃO para renderizar os cards em vez da tabela
 function renderizarCardsConsulta(itensDeEstoque, produtosDefinicoes, niveisDeAlerta) {
     const container = document.getElementById('estoqueCardsContainer');
     if (!container) return;
@@ -542,12 +546,8 @@ function renderizarCardsConsulta(itensDeEstoque, produtosDefinicoes, niveisDeAle
         const produtoDef = produtosDefinicoes.find(p => p.nome === item.produto_nome);
         let imagemSrc = '/img/placeholder-image.png';
         if (produtoDef) {
-            if (item.variante_nome && item.variante_nome !== '-') {
-                const gradeItem = produtoDef.grade?.find(g => g.variacao === item.variante_nome);
-                imagemSrc = gradeItem?.imagem || produtoDef.imagem || '/img/placeholder-image.png';
-            } else if (produtoDef.imagem) {
-                imagemSrc = produtoDef.imagem;
-            }
+            const gradeItem = produtoDef.grade?.find(g => g.variacao === item.variante_nome);
+            imagemSrc = gradeItem?.imagem || produtoDef.imagem || '/img/placeholder-image.png';
         }
 
         const configNivel = niveisDeAlerta.find(n => n.produto_ref_id === item.produto_ref_id && n.ativo);
@@ -562,13 +562,17 @@ function renderizarCardsConsulta(itensDeEstoque, produtosDefinicoes, niveisDeAle
         card.className = `es-consulta-card ${statusClass}`;
         card.dataset.itemEstoque = JSON.stringify(item);
         
+        // --- ESTRUTURA HTML SIMPLIFICADA ---
+        // Não usamos mais o wrapper extra. O CSS vai cuidar de tudo.
         card.innerHTML = `
             <img src="${imagemSrc}" alt="${item.produto_nome}" class="es-consulta-card-img" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">
+            
             <div class="es-consulta-card-info">
                 <h3>${item.produto_nome}</h3>
                 <p>${item.variante_nome || 'Padrão'}</p>
-                <p style="margin-top: auto; font-size: 0.8rem;">SKU: ${item.produto_ref_id || 'N/A'}</p>
+                <p class="sku-info">SKU: ${item.produto_ref_id || 'N/A'}</p>
             </div>
+
             <div class="es-consulta-card-dados">
                 <div class="dado-bloco">
                     <span class="label">Ideal</span>
@@ -647,31 +651,42 @@ async function filtrarEstoquePorAlerta(tipoAlerta) {
     if(tabelaEl) tabelaEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-function mostrarViewFilaProducao() {
-    // --- VERIFICAÇÃO DE PERMISSÃO ---
-    // Adicionamos a verificação para 'acesso-estoque' como base para visualizar
-    // e 'gerenciar-fila-de-producao' para interagir.
+async function mostrarViewFilaProducao() {
     if (!permissoesGlobaisEstoque.includes('acesso-estoque')) {
         mostrarPopupEstoque('Você não tem permissão para acessar esta área.', 'aviso');
-        return; // Interrompe a execução se não tem nem o acesso básico
+        return;
     }
 
-    // O resto da função continua como antes...
+    const overlay = document.getElementById('filaLoadingOverlay');
+    // Mostra o overlay e esconde as views antigas
+    if (overlay) overlay.classList.remove('hidden');
     document.getElementById('mainViewEstoque').style.display = 'none';
     const filaView = document.getElementById('filaProducaoView');
     filaView.classList.remove('hidden');
     filaView.style.display = 'block';
 
-    const btnSalvar = document.getElementById('btnSalvarPrioridades');
-    // A visibilidade do botão de salvar continua dependendo da permissão de gerenciar
-    if (permissoesGlobaisEstoque.includes('gerenciar-fila-de-producao')) {
-        btnSalvar.classList.remove('hidden');
-    } else {
-        btnSalvar.classList.add('hidden');
-    }
+    try {
+        const btnSalvar = document.getElementById('btnSalvarPrioridades');
+        btnSalvar.classList.toggle('hidden', !permissoesGlobaisEstoque.includes('gerenciar-fila-de-producao'));
 
-    renderizarFilaDeProducao();
-    inicializarDragAndDropFila();
+        // Busca as promessas ativas do backend
+        promessasDeProducaoCache = await fetchEstoqueAPI('/producao-promessas');
+        
+        // Renderiza as duas abas
+        renderizarFilaDeProducao();
+        renderizarPromessasEmProducao();
+
+        // Configura o drag-and-drop e troca de abas
+        inicializarDragAndDropFila();
+        mudarAbaFila('prioridades');
+
+    } catch(error) {
+        console.error("Erro ao carregar fila de produção:", error);
+        mostrarPopupEstoque("Erro ao carregar a fila de produção.", "erro");
+    } finally {
+        // Esconde o overlay DEPOIS que tudo carregou
+        if (overlay) overlay.classList.add('hidden');
+    }
 }
 
 
@@ -684,8 +699,11 @@ function renderizarFilaDeProducao() {
     const container = document.getElementById('filaProducaoContainer');
     container.innerHTML = `<div class="es-spinner"></div>`;
 
+    const idsEmProducao = new Set(promessasDeProducaoCache.map(p => p.produto_ref_id));
+
     const itensNaFila = niveisEstoqueAlertaCache
         .filter(config => {
+            if (!config.ativo || idsEmProducao.has(config.produto_ref_id)) return false;
             const itemSaldo = saldosEstoqueGlobaisCompletos.find(s => s.produto_ref_id === config.produto_ref_id);
             if (!itemSaldo) return false;
             const saldoNum = parseFloat(itemSaldo.saldo_atual);
@@ -696,41 +714,219 @@ function renderizarFilaDeProducao() {
 
     container.innerHTML = '';
     if (itensNaFila.length === 0) {
-        container.innerHTML = '<p style="text-align: center;">Nenhum item na fila de produção.</p>';
+        container.innerHTML = '<p style="text-align: center;">Nenhum item na fila de prioridades.</p>';
         return;
     }
 
     itensNaFila.forEach((config, index) => {
         const itemSaldo = saldosEstoqueGlobaisCompletos.find(s => s.produto_ref_id === config.produto_ref_id);
         const produtoDef = todosOsProdutosCadastrados.find(p => p.nome === itemSaldo.produto_nome);
-        let imagemSrc = '/img/placeholder-image.png';
-        if(produtoDef) { /* ... lógica de imagem ... */ }
         
-        const saldoNum = parseFloat(itemSaldo.saldo_atual);
-        const status = saldoNum <= config.nivel_reposicao_urgente ? 'urgente' : 'baixo';
+        let imagemSrc = '/img/placeholder-image.png';
+        if (produtoDef) {
+            const gradeItem = produtoDef.grade?.find(g => g.variacao === itemSaldo.variante_nome);
+            imagemSrc = gradeItem?.imagem || produtoDef.imagem || '/img/placeholder-image.png';
+        }
 
+        const saldoNum = parseFloat(itemSaldo.saldo_atual);
+        const status = (config.nivel_reposicao_urgente !== null && saldoNum <= config.nivel_reposicao_urgente) ? 'urgente' : 'baixo';
+        
         const card = document.createElement('div');
+        // O card em si não é mais arrastável
         card.className = `es-fila-card status-${status}`;
         card.dataset.produtoRefId = config.produto_ref_id;
 
-        if (permissoesGlobaisEstoque.includes('gerenciar-fila-de-producao')) {
-            card.draggable = true;
-            card.classList.add('pode-arrastar');
-        }
+        const podeArrastar = permissoesGlobaisEstoque.includes('gerenciar-fila-de-producao');
+        
+        // O "pegador" (handle) para o drag-and-drop
+        const posicaoHTML = `
+            <div class="fila-card-posicao ${podeArrastar ? 'pode-arrastar' : ''}" 
+                 ${podeArrastar ? 'draggable="true"' : ''} 
+                 title="${podeArrastar ? 'Arraste para reordenar' : ''}">
+                #${index + 1}
+            </div>
+        `;
+
+        const acaoProducaoHTML = podeArrastar
+            ? `<div class="fila-card-acao-producao">
+                   <button class="es-btn-icon-estorno" onclick="iniciarProducao('${config.produto_ref_id}')" title="Iniciar Produção deste Item">
+                       <i class="fas fa-play-circle"></i>
+                   </button>
+               </div>`
+            : '';
 
         card.innerHTML = `
-            <div class="fila-card-posicao">#${index + 1}</div>
-            <img src="${imagemSrc}" class="fila-card-img" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">
-            <div class="fila-card-info">
-                <h3>${itemSaldo.produto_nome}</h3>
-                <p>${itemSaldo.variante_nome || 'Padrão'}</p>
-                <p style="margin-top: 5px;">Estoque: <strong>${saldoNum}</strong> / Ideal: <strong>${config.nivel_estoque_ideal || '-'}</strong></p>
+            ${posicaoHTML}
+            <div class="fila-card-info-wrapper">
+                <img src="${imagemSrc}" class="fila-card-img" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">
+                <div class="fila-card-info">
+                    <h3>${itemSaldo.produto_nome}</h3>
+                    <p>${itemSaldo.variante_nome || 'Padrão'}</p>
+                </div>
             </div>
-            <div class="fila-card-status-badge status-${status}">${status.toUpperCase()}</div>
+            <div class="fila-card-footer">
+                <div class="fila-card-dados-producao">
+                    <span>Estoque: <strong>${saldoNum}</strong> / Ideal: <strong>${config.nivel_estoque_ideal || '-'}</strong></span>
+                </div>
+                <div class="fila-card-status-acao-wrapper">
+                    <div class="fila-card-status-badge status-${status}">${status.toUpperCase()}</div>
+                    ${acaoProducaoHTML}
+                </div>
+            </div>
         `;
         container.appendChild(card);
     });
 }
+
+function mudarAbaFila(abaAtiva) {
+    document.querySelectorAll('.es-tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === abaAtiva);
+    });
+    document.querySelectorAll('.es-tab-panel').forEach(panel => {
+        panel.style.display = (panel.id === `tab-${abaAtiva}`) ? 'block' : 'none';
+    });
+}
+
+function renderizarPromessasEmProducao() {
+    const container = document.getElementById('emProducaoContainer');
+    const contadorBadge = document.getElementById('contadorEmProducao');
+    container.innerHTML = '';
+    
+    const promessasAtivas = promessasDeProducaoCache.filter(p => new Date(p.data_expiracao) > new Date());
+    
+    contadorBadge.textContent = promessasAtivas.length;
+    contadorBadge.style.display = promessasAtivas.length > 0 ? 'inline-block' : 'none';
+
+    if (promessasAtivas.length === 0) {
+        container.innerHTML = '<p style="text-align: center;">Nenhum item em produção no momento.</p>';
+        return;
+    }
+
+    promessasAtivas.sort((a,b) => new Date(a.data_expiracao) - new Date(b.data_expiracao));
+
+    promessasAtivas.forEach(promessa => {
+        const itemSaldo = saldosEstoqueGlobaisCompletos.find(s => s.produto_ref_id === promessa.produto_ref_id);
+        if (!itemSaldo) return; 
+
+        const produtoDef = todosOsProdutosCadastrados.find(p => p.nome === itemSaldo.produto_nome);
+        let imagemSrc = '/img/placeholder-image.png';
+        if (produtoDef) {
+            const gradeItem = produtoDef.grade?.find(g => g.variacao === itemSaldo.variante_nome);
+            imagemSrc = gradeItem?.imagem || produtoDef.imagem || '/img/placeholder-image.png';
+        }
+
+        const card = document.createElement('div');
+        card.className = `es-fila-card status-ok`; 
+        card.dataset.promessaId = promessa.id;
+
+        // --- MUDANÇA NA LÓGICA DO BOTÃO ---
+        // O botão agora é sempre renderizado.
+        // A lógica de permissão será tratada no clique.
+        const anularPromessaHTML = `
+            <div class="fila-card-acao-producao">
+               <button class="es-btn-icon-danger" 
+                       onclick="anularPromessa(${promessa.id}, '${itemSaldo.produto_nome.replace(/'/g, "\\'")}')" 
+                       title="Anular esta Promessa de Produção">
+                   <i class="fas fa-times-circle"></i>
+               </button>
+           </div>`;
+
+        card.innerHTML = `
+            <div class="fila-card-info-wrapper">
+                <img src="${imagemSrc}" class="fila-card-img" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">
+                <div class="fila-card-info">
+                    <h3>${itemSaldo.produto_nome}</h3>
+                    <p>${itemSaldo.variante_nome || 'Padrão'}</p>
+                </div>
+            </div>
+            <div class="fila-card-footer">
+                <div class="fila-card-dados-producao">
+                    <span>Iniciado por: <strong>${promessa.usuario_nome || 'N/A'}</strong></span>
+                    <span class="timer" id="timer-${promessa.id}">Calculando...</span>
+                </div>
+            </div>
+            ${anularPromessaHTML}
+        `;
+        container.appendChild(card);
+        iniciarTimerContagemRegressiva(promessa);
+    });
+}
+
+async function anularPromessa(promessaId, nomeProduto) {
+    // --- VERIFICAÇÃO DE PERMISSÃO NO INÍCIO ---
+    if (!permissoesGlobaisEstoque.includes('anular-promessa-producao')) {
+        mostrarPopupEstoque('Você não tem permissão para anular promessas de produção.', 'aviso');
+        return;
+    }
+
+    const confirmado = await mostrarPopupConfirmacao(
+        `Tem certeza que deseja anular a promessa de produção para <br><b>${nomeProduto}</b>?<br><br>O item voltará para a fila de prioridades.`,
+        'perigo'
+    );
+
+    if (!confirmado) return;
+
+    try {
+        await fetchEstoqueAPI(`/producao-promessas/${promessaId}`, {
+            method: 'DELETE',
+        });
+
+        promessasDeProducaoCache = promessasDeProducaoCache.filter(p => p.id !== promessaId);
+
+        renderizarFilaDeProducao();
+        renderizarPromessasEmProducao();
+
+        mostrarPopupEstoque('Promessa anulada. O item voltou para a fila de prioridades.', 'sucesso');
+    } catch (error) {
+        mostrarPopupEstoque(`Erro ao anular promessa: ${error.data?.details || error.message}`, 'erro');
+    }
+}
+
+async function iniciarProducao(produtoRefId) {
+    const item = saldosEstoqueGlobaisCompletos.find(s => s.produto_ref_id === produtoRefId);
+    const confirmado = await mostrarPopupConfirmacao(`Confirma o início da produção para <br><b>${item.produto_nome} - ${item.variante_nome || 'Padrão'}</b>?`, 'aviso');
+
+    if (!confirmado) return;
+
+    try {
+        const novaPromessa = await fetchEstoqueAPI('/producao-promessas', {
+            method: 'POST',
+            body: JSON.stringify({ produto_ref_id: produtoRefId })
+        });
+        promessasDeProducaoCache.push(novaPromessa);
+        
+        // Re-renderiza as duas abas para atualizar as listas
+        renderizarFilaDeProducao();
+        renderizarPromessasEmProducao();
+        
+        mostrarPopupEstoque('Item enviado para a fila de produção ativa!', 'sucesso');
+    } catch (error) {
+        mostrarPopupEstoque(`Erro ao iniciar produção: ${error.message}`, 'erro');
+    }
+}
+
+function iniciarTimerContagemRegressiva(promessa) {
+    const timerEl = document.getElementById(`timer-${promessa.id}`);
+    if (!timerEl) return;
+
+    const intervalId = setInterval(() => {
+        const agora = new Date();
+        const expiracao = new Date(promessa.data_expiracao);
+        const diff = expiracao - agora;
+
+        if (diff <= 0) {
+            timerEl.textContent = "Expirado! Repriorizar.";
+            timerEl.style.color = "red";
+            clearInterval(intervalId);
+            return;
+        }
+        const horas = Math.floor((diff / (1000 * 60 * 60)) % 24).toString().padStart(2, '0');
+        const minutos = Math.floor((diff / 1000 / 60) % 60).toString().padStart(2, '0');
+        const segundos = Math.floor((diff / 1000) % 60).toString().padStart(2, '0');
+        timerEl.textContent = `Expira em: ${horas}:${minutos}:${segundos}`;
+    }, 1000);
+}
+
 
 function inicializarDragAndDropFila() {
     if (!permissoesGlobaisEstoque.includes('gerenciar-fila-de-producao')) {
@@ -748,11 +944,16 @@ function inicializarDragAndDropFila() {
 
     // --- LÓGICA PARA MOUSE (DRAG AND DROP PADRÃO) ---
     container.addEventListener('dragstart', e => {
-        if (e.target.classList.contains('es-fila-card')) {
-            draggingElement = e.target;
-            setTimeout(() => e.target.classList.add('dragging'), 0);
+    // MUDANÇA: Verifica se o alvo é o "pegador"
+    if (e.target.classList.contains('fila-card-posicao')) {
+        // O elemento que queremos arrastar é o PAI do pegador, ou seja, o card inteiro.
+        draggingElement = e.target.closest('.es-fila-card');
+        if (draggingElement) {
+            setTimeout(() => draggingElement.classList.add('dragging'), 0);
         }
-    });
+    }
+});
+
 
     container.addEventListener('dragend', () => {
         if (draggingElement) {
@@ -878,16 +1079,14 @@ function abrirViewMovimento(item) {
 // NOVO: Função para preparar e popular a nova view unificada
 function prepararViewMovimento() {
     if (!itemEstoqueSelecionado) return;
-
-    // 1. Preenche informações do cabeçalho
     const item = itemEstoqueSelecionado;
+
+    // --- PREENCHE O CABEÇALHO (lado esquerdo) ---
     document.getElementById('movimentoItemNome').textContent = `${item.produto_nome} ${item.variante_nome && item.variante_nome !== '-' ? `(${item.variante_nome})` : ''}`;
     document.getElementById('movimentoSaldoAtual').textContent = item.saldo_atual;
-
     const produtoDef = todosOsProdutosCadastrados.find(p => p.nome === item.produto_nome);
     let skuParaExibir = item.produto_ref_id || 'N/A';
     let imagemSrc = '/img/placeholder-image.png';
-
     if (produtoDef) {
         if (skuParaExibir === 'N/A') {
             if (item.variante_nome && item.variante_nome !== '-' && item.variante_nome !== 'Padrão') {
@@ -908,61 +1107,45 @@ function prepararViewMovimento() {
     document.getElementById('movimentoItemSKU').textContent = `SKU: ${skuParaExibir}`;
     document.getElementById('movimentoThumbnail').innerHTML = `<img src="${imagemSrc}" alt="${item.produto_nome}" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">`;
 
-    // 2. Configura o formulário de movimento
+     // --- PREENCHE O FORMULÁRIO DE AÇÃO (lado direito) ---
     const qtdInput = document.getElementById('quantidadeMovimentar');
     const qtdLabel = document.getElementById('labelQuantidadeMovimentar');
     const inputTipoOperacaoOculto = document.getElementById('tipoMovimentoSelecionado');
     const containerBotoesTipoOp = document.querySelector('.movimento-tipo-operacao-container');
     
-    // Função interna para atualizar a UI do formulário com base no tipo de operação
     const atualizarCamposPorTipoOperacao = (tipoSelecionado) => {
-        if (!qtdLabel || !qtdInput || !inputTipoOperacaoOculto || !containerBotoesTipoOp) return;
-
+        if (!inputTipoOperacaoOculto) return;
         inputTipoOperacaoOculto.value = tipoSelecionado;
         containerBotoesTipoOp.querySelectorAll('.movimento-op-btn').forEach(btn => {
-            btn.classList.remove('ativo');
-            if (btn.dataset.tipo === tipoSelecionado) {
-                btn.classList.add('ativo');
-            }
+            btn.classList.toggle('ativo', btn.dataset.tipo === tipoSelecionado);
         });
-
         if (tipoSelecionado === 'BALANCO') {
-            qtdLabel.textContent = 'Ajustar saldo para (nova quantidade total):';
-            qtdInput.placeholder = `Ex: ${itemEstoqueSelecionado.saldo_atual}`;
-            qtdInput.value = itemEstoqueSelecionado.saldo_atual;
-            qtdInput.min = "0";
+            qtdLabel.textContent = 'Ajustar Saldo Para:';
+            qtdInput.value = item.saldo_atual;
         } else {
-            qtdLabel.textContent = 'Quantidade a movimentar:';
-            qtdInput.placeholder = 'Ex: 10';
+            qtdLabel.textContent = 'Quantidade a Movimentar:';
             qtdInput.value = '';
-            qtdInput.min = "1";
         }
     };
-
-    // Reseta listeners para evitar duplicação (clonando e substituindo)
     containerBotoesTipoOp.querySelectorAll('.movimento-op-btn').forEach(btn => {
         const newBtn = btn.cloneNode(true);
         btn.parentNode.replaceChild(newBtn, btn);
-        newBtn.addEventListener('click', () => {
-            atualizarCamposPorTipoOperacao(newBtn.dataset.tipo);
-        });
+        newBtn.addEventListener('click', () => atualizarCamposPorTipoOperacao(newBtn.dataset.tipo));
     });
-
-    // Define o estado inicial (ex: Entrada) e limpa o formulário
     atualizarCamposPorTipoOperacao('ENTRADA_MANUAL');
     document.getElementById('observacaoMovimento').value = '';
- 
-    // --- NOVO: Lógica de visibilidade do botão de arquivar ---
     const btnArquivar = document.getElementById('arquivarItemBtn');
     if (btnArquivar) {
-        // Verifica se o array de permissões globais inclui a nova permissão
-        if (permissoesGlobaisEstoque.includes('arquivar-produto-do-estoque')) {
-            btnArquivar.style.display = 'inline-flex'; // Mostra o botão
-        } else {
-            btnArquivar.style.display = 'none'; // Garante que ele esteja escondido
-        }
+        btnArquivar.style.display = permissoesGlobaisEstoque.includes('arquivar-produto-do-estoque') ? 'inline' : 'none';
     }
+
+    // --- CARREGA O HISTÓRICO DIRETAMENTE NA PÁGINA ---
+    const historicoBody = document.getElementById('historicoMovimentacoesBody');
+    if (historicoBody) historicoBody.innerHTML = '<tr><td colspan="6"><div class="es-spinner"></div></td></tr>';
+    carregarHistoricoMovimentacoes(item.produto_nome, item.variante_nome, 1);
 }
+
+
 
 async function estornarMovimento(movimentoId) {
     const confirmado = await mostrarPopupConfirmacao(
@@ -1242,19 +1425,18 @@ async function carregarHistoricoMovimentacoes(produtoNome, varianteNome, page) {
 }
 
 function renderizarHistoricoMovimentacoes(movimentos) {
-    const tbody = document.getElementById('historicoMovimentacoesTableBody');
-    if (!tbody) return;
+    // CORREÇÃO: O ID do tbody foi corrigido no HTML para 'historicoMovimentacoesBody'
+    const tbody = document.getElementById('historicoMovimentacoesBody');
+    if (!tbody) {
+        console.error("Elemento #historicoMovimentacoesBody não encontrado.");
+        return;
+    }
     tbody.innerHTML = '';
 
     if (!movimentos || movimentos.length === 0) {
+        // Agora a tabela tem 6 colunas, então o colspan deve ser 6
         tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Nenhuma movimentação encontrada.</td></tr>';
         return;
-    }
-
-    // Adiciona uma nova coluna para Ações no cabeçalho
-    const thead = tbody.previousElementSibling;
-    if (thead && thead.rows[0].cells.length === 5) {
-        thead.rows[0].insertCell().outerHTML = '<th>Ações</th>';
     }
     
     movimentos.forEach(mov => {
@@ -1262,10 +1444,6 @@ function renderizarHistoricoMovimentacoes(movimentos) {
         const quantidadeClasse = mov.quantidade > 0 ? 'quantidade-entrada' : 'quantidade-saida';
         
         let acoesHtml = '';
-        // Adiciona o botão de estorno APENAS se:
-        // 1. For um movimento de SAÍDA (quantidade < 0)
-        // 2. AINDA NÃO foi estornado (mov.estornado !== true)
-        // 3. O usuário tem permissão para gerenciar o estoque
         if (mov.quantidade < 0 && mov.estornado !== true && permissoesGlobaisEstoque.includes('gerenciar-estoque')) {
             acoesHtml = `<button class="es-btn-icon-estorno" title="Estornar este movimento" onclick="estornarMovimento(${mov.id})">
                             <i class="fas fa-undo"></i>
@@ -1810,6 +1988,10 @@ function setupEventListenersEstoque() {
     carregarTabelaEstoque('', 1);
     });
 
+    document.querySelectorAll('.es-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => mudarAbaFila(btn.dataset.tab));
+    });
+
     // Listeners para os botões da nova view
     document.getElementById('btnVoltarDaFila')?.addEventListener('click', voltarDaFilaParaEstoque);
     document.getElementById('btnSalvarPrioridades')?.addEventListener('click', salvarPrioridades);
@@ -1838,6 +2020,25 @@ function setupEventListenersEstoque() {
     document.getElementById('btnConfirmarSaidaEstoque')?.addEventListener('click', confirmarSaidaEstoque);
     window.addEventListener('hashchange', handleHashChangeEstoque);
     console.log('[Estoque setupEventListenersEstoque] Todos os listeners foram configurados corretamente.');
+            // --- LÓGICA DO BOTÃO VOLTAR AO TOPO ---
+        const btnVoltarAoTopo = document.getElementById('btnVoltarAoTopo');
+        if (btnVoltarAoTopo) {
+            // Ação de clique: rolar para o topo suavemente
+            btnVoltarAoTopo.addEventListener('click', () => {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+
+            // Mostra/esconde o botão baseado na posição da rolagem
+            window.addEventListener('scroll', () => {
+                if (window.scrollY > 300) { // Mostra o botão se o usuário rolou mais de 300px
+                    btnVoltarAoTopo.classList.remove('hidden');
+                } else {
+                    btnVoltarAoTopo.classList.add('hidden');
+                }
+            });
+        }
+
+
 }
 
 // --- INICIALIZAÇÃO DA PÁGINA (Ponto de entrada) ---
@@ -1855,4 +2056,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-window.estornarMovimento = estornarMovimento;
+const funcoesGlobaisEstoque = {
+    // Funções da Fila de Produção
+    iniciarProducao,
+
+    // Funções do Histórico de Movimentação
+    estornarMovimento,
+
+    //anular uma promessa
+    anularPromessa
+};
+
+// Anexa todas as funções acima ao objeto window
+Object.assign(window, funcoesGlobaisEstoque);

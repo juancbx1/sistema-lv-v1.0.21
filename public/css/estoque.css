@@ -469,9 +469,9 @@ body.autenticado { visibility: visible; }
     left: 0; 
     width: 100%; 
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.45); /* Fundo escurecido */
+    background-color: rgba(0, 0, 0, 0.15); 
     z-index: 10001; 
-    animation: es-fadeInOverlayPopup 0.3s ease-out; /* Animação com prefixo */
+    animation: es-fadeInOverlayPopup 0.3s ease-out;
 }
 
 /* Animações para o Popup (com prefixo es-) */
@@ -641,7 +641,32 @@ body.autenticado { visibility: visible; }
 
 #editarEstoqueMovimentoView {
     position: relative;
-    padding-top: 50px;
+    padding-top: 60px; /* Adiciona espaço no topo para o botão 'X' não sobrepor o conteúdo */
+}
+
+#historicoContainer thead {
+    display: table-header-group;
+}
+.es-movimento-grid {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr; /* Coluna da esquerda maior que a da direita */
+    gap: 25px;
+}
+
+.es-movimento-coluna-info {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.movimento-label-secao {
+    display: block;
+    text-align: center;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    margin-bottom: 15px;
 }
 
 .movimento-header {
@@ -1355,14 +1380,16 @@ body.autenticado { visibility: visible; }
 
 /* Estilo do Card Individual de Consulta */
 .es-consulta-card {
-    display: flex;
+    display: grid; /* MUDANÇA PRINCIPAL PARA GRID */
+    grid-template-columns: auto 1fr auto; /* Coluna da imagem, info (flexível), dados (auto) */
     background-color: var(--es-cor-branco);
     border-radius: var(--es-raio-borda-card);
     box-shadow: var(--es-sombra-padrao);
-    border-left: 6px solid; /* A cor será definida pela classe de status */
+    border-left: 6px solid;
     cursor: pointer;
     transition: transform 0.2s, box-shadow 0.2s;
     overflow: hidden;
+    align-items: center; /* Alinha todos os itens verticalmente */
 }
 .es-consulta-card:hover {
     transform: translateY(-4px);
@@ -1370,16 +1397,21 @@ body.autenticado { visibility: visible; }
 }
 
 /* Cores da borda de status */
-.es-consulta-card.status-ok { border-left-color: #dcdfe4; }
-.es-consulta-card.status-baixo { border-left-color: var(--es-cor-laranja-aviso); }
-.es-consulta-card.status-urgente { border-left-color: var(--es-cor-vermelho-perigo); }
+.es-consulta-card.status-ok { 
+    border-left-color: #dcdfe4; 
+}
+.es-consulta-card.status-baixo { 
+    border-left-color: var(--es-cor-laranja-aviso); 
+}
+.es-consulta-card.status-urgente { 
+    border-left-color: var(--es-cor-vermelho-perigo); 
+}
 
 /* Conteúdo do card */
 .es-consulta-card-img {
     width: 70px;
     height: 70px;
     object-fit: cover;
-    align-self: center;
     margin: 10px;
     border-radius: 4px;
     background-color: #f0f2f5;
@@ -1387,48 +1419,25 @@ body.autenticado { visibility: visible; }
 
 .es-consulta-card-info {
     padding: 15px 10px;
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
+    /* Não precisa mais de flex-direction, o grid cuida disso */
 }
-
-.es-consulta-card-info h3 {
-    font-size: 1rem;
-    color: var(--es-cor-azul-escuro);
-    margin: 0 0 5px 0;
-}
-.es-consulta-card-info p {
-    font-size: 0.85rem;
-    color: #6c757d;
-    margin: 0;
-}
+.es-consulta-card-info h3 { font-size: 1rem; color: var(--es-cor-azul-escuro); margin: 0 0 5px 0; }
+.es-consulta-card-info p { font-size: 0.85rem; color: #6c757d; margin: 0; }
 
 .es-consulta-card-dados {
     display: flex;
-    gap: 15px;
+    gap: 20px; /* Aumenta o espaço entre "Ideal" e "Saldo" */
     padding: 15px;
     background-color: #f8f9fa;
     border-left: 1px solid #eef0f3;
+    height: 100%; /* Faz a área cinza ocupar toda a altura do card */
+    align-items: center;
 }
 
-.dado-bloco {
-    text-align: center;
-}
-.dado-bloco .label {
-    font-size: 0.75rem;
-    color: #6c757d;
-    text-transform: uppercase;
-    font-weight: 600;
-}
-.dado-bloco .valor {
-    font-size: 1.5rem;
-    font-weight: 700;
-    line-height: 1.2;
-}
-
-.dado-bloco .valor.saldo-atual {
-    color: var(--es-cor-azul-primario);
-}
+.dado-bloco { text-align: center; }
+.dado-bloco .label { font-size: 0.75rem; color: #6c757d; text-transform: uppercase; font-weight: 600; }
+.dado-bloco .valor { font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
+.dado-bloco .valor.saldo-atual { color: var(--es-cor-azul-primario); }
 
 /* ==========================================================================
    ### FILA DE PRODUÇÃO PRIORITÁRIA ###
@@ -1447,15 +1456,17 @@ body.autenticado { visibility: visible; }
 }
 
 .es-fila-card {
-    display: flex;
-    align-items: center;
+    display: flex; /* Garante que os itens fiquem lado a lado */
+    align-items: center; /* Alinha verticalmente */
     background-color: var(--es-cor-branco);
     border-radius: var(--es-raio-borda-card);
     box-shadow: var(--es-sombra-padrao);
     padding: 15px;
     border-left: 6px solid;
     transition: box-shadow 0.2s;
+    gap: 15px; /* Adiciona um espaçamento geral */
 }
+
 .es-fila-card.dragging {
     opacity: 0.5;
     box-shadow: 0 10px 20px rgba(0,0,0,0.2);
@@ -1467,6 +1478,13 @@ body.autenticado { visibility: visible; }
     cursor: grabbing;
 }
 
+.es-fila-card .fila-card-info-wrapper {
+    display: flex;
+    align-items: center;
+    flex-grow: 1; /* Faz com que o grupo de info ocupe o espaço */
+    gap: 15px;
+}
+
 .fila-card-posicao {
     font-size: 1.8rem;
     font-weight: 700;
@@ -1474,6 +1492,13 @@ body.autenticado { visibility: visible; }
     margin-right: 20px;
     min-width: 40px;
     text-align: center;
+}
+/* NOVA REGRA: muda o cursor apenas no elemento arrastável */
+.fila-card-posicao.pode-arrastar {
+    cursor: grab;
+}
+.fila-card-posicao.pode-arrastar:active {
+    cursor: grabbing;
 }
 
 .fila-card-img {
@@ -1492,6 +1517,9 @@ body.autenticado { visibility: visible; }
 .fila-card-info p { margin: 0; font-size: 0.9rem; color: #777; }
 
 .fila-card-status-badge {
+    margin-left: auto; /* Empurra o badge para a extrema direita */
+    text-align: center;
+    flex-shrink: 0; /* Impede que o badge encolha */
     padding: 4px 10px;
     border-radius: 20px;
     font-size: 0.8rem;
@@ -1499,6 +1527,7 @@ body.autenticado { visibility: visible; }
     color: #fff;
     margin-left: 15px;
 }
+
 .fila-card-status-badge.status-urgente { background-color: var(--es-cor-vermelho-urgente); }
 .fila-card-status-badge.status-baixo { background-color: var(--es-cor-laranja-aviso); }
 
@@ -1530,11 +1559,143 @@ body.autenticado { visibility: visible; }
     margin: 5px 0;
 }
 
+.fila-card-dados-producao {
+    margin-left: 20px;
+    font-size: 0.9rem;
+    color: #333;
+}
+
+/* ==========================================================================
+   ### ESTILOS PARA ABAS E PROMESSAS DE PRODUÇÃO ###
+   ========================================================================== */
+
+/* Container das Abas */
+.es-tabs-container {
+    display: flex;
+    gap: 5px;
+    border-bottom: 2px solid var(--es-cor-cinza-borda);
+    margin-bottom: 20px;
+}
+
+.es-tab-btn {
+    padding: 10px 20px;
+    cursor: pointer;
+    border: none;
+    background-color: transparent;
+    border-bottom: 3px solid transparent;
+    font-size: 1rem;
+    font-weight: 500;
+    color: #6c757d;
+    transition: all 0.2s ease-in-out;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.es-tab-btn:hover {
+    color: var(--es-cor-azul-escuro);
+}
+
+.es-tab-btn.active {
+    color: var(--es-cor-azul-primario);
+    border-bottom-color: var(--es-cor-azul-primario);
+}
+
+.es-tab-badge {
+    background-color: var(--es-cor-laranja-aviso);
+    color: white;
+    font-size: 0.75rem;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-weight: 700;
+}
+
+/* Painéis das Abas */
+.es-tab-panel {
+    display: none; /* Escondido por padrão */
+}
+
+.es-tab-panel.active {
+    display: block; /* Visível quando ativo */
+}
+
+/* Botão de "Iniciar Produção" e Timer no Card */
+.fila-card-acao-producao {
+    margin-left: auto; /* Empurra o botão para a direita */
+    padding-left: 15px;
+    border-left: 1px solid #eef0f3;
+}
+
+.fila-card-dados-producao .timer {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--es-cor-vermelho-perigo);
+    margin-top: 5px;
+}
+
+.fila-card-status-acao-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto; /* Mantém na direita em telas grandes */
+}
+
+/* Ajuste no botão play para ficar mais elegante */
+.fila-card-acao-producao .es-btn-icon-estorno { /* Reutilizando a classe */
+    color: var(--es-cor-verde-sucesso);
+    font-size: 1.5rem;
+}
+.fila-card-acao-producao .es-btn-icon-estorno:hover {
+    color: #27ae60;
+}
+
+/* voltar ao topo na pagina de FILA DE producao */
+
+.es-fab-voltar-topo {
+    position: fixed;
+    bottom: 95px; /* Posição acima do botão do carrinho */
+    right: 25px;
+    width: 50px; /* Um pouco menor que o principal */
+    height: 50px;
+    background-color: #7f8c8d; /* Cor secundária/cinza */
+    color: #fff;
+    border-radius: 50%;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    z-index: 99;
+    transition: transform 0.2s, opacity 0.3s;
+    opacity: 1;
+}
+
+.es-fab-voltar-topo.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(20px);
+}
+
+.es-fab-voltar-topo:hover {
+    background-color: #95a5a6;
+}
+
 /* Responsividade */
 
 @media (max-width: 1024px) { /* Tablets */
     .es-popup-mensagem {
         max-width: 550px; /* Pode ser um pouco maior em tablets */
+    }
+
+    .fila-card-status-badge {
+    text-align: center;
+    font-size: 1rem;
+    }
+
+.es-movimento-grid {
+        grid-template-columns: 1fr; /* Uma única coluna em telas menores */
     }
 }
 
@@ -1604,38 +1765,142 @@ body.autenticado { visibility: visible; }
     }
 
 }
+
+
 @media (max-width: 480px) {
-    .es-container-principal { padding: 20px; }
-    .es-titulo-secao { font-size: 1.2rem; }
+    .es-container-principal { 
+        padding: 15px; /* Um pouco menos de padding para ganhar espaço */
+    }
+    .es-cabecalho-pagina h1 {
+        font-size: 1.2rem;
+    }
+    .es-titulo-secao { 
+        font-size: 1.2rem; 
+    }
 
     .es-btn-acao-principal {
-        padding: 8px 12px; /* Padding menor */
-        font-size: 0.85rem; /* Fonte menor */
-        gap: 5px; /* Espaço menor entre ícone e texto */
+        padding: 8px 12px;
+        font-size: 0.85rem;
+        gap: 5px;
     }
 
-    .es-cabecalho-pagina h1 {
-        font-size: 1.2rem; /* Reduz um pouco o título para dar mais espaço */
+    /* --- AJUSTES PARA OS CARDS DE CONSULTA DE ESTOQUE --- */
+
+    /* Força o container de cards a ter uma única coluna */
+    .es-cards-container-consulta {
+        grid-template-columns: 1fr;
+        gap: 15px;
     }
     
+    /* Transforma o layout interno do card */
+    .es-consulta-card {
+        display: grid;
+        grid-template-columns: auto 1fr; 
+        grid-template-rows: auto auto;
+        gap: 0 15px;
+        padding: 10px;
+        align-items: center;
+    }
+
+    /* Posiciona os elementos na grade */
+    .es-consulta-card-img {
+        grid-row: 1 / 3; /* Imagem ocupa as 2 linhas */
+        width: 70px;
+        height: 70px;
+        margin: 0;
+    }
+
+    .es-consulta-card-info {
+        grid-column: 2 / 3;
+        grid-row: 1 / 2; /* Info na primeira linha */
+        padding: 0;
+    }
+
+    .es-consulta-card-dados {
+        grid-column: 2 / 3;
+        grid-row: 2 / 3; /* Dados na segunda linha */
+        justify-content: flex-start; /* Alinha os dados à esquerda */
+        gap: 25px; /* Espaço entre Ideal e Saldo */
+        padding: 10px 0 0 0;
+        background-color: transparent;
+        border-left: none;
+        height: auto;
+        border-top: 1px solid #f0f2f5;
+        margin-top: 10px;
+    }
+    
+    .dado-bloco .valor {
+        font-size: 1.3rem;
+    }
+    
+    /* --- AJUSTES PARA A FILA DE PRODUÇÃO --- */
+    
+    .es-fila-card {
+        flex-direction: column;
+        align-items: stretch; /* Alinha os filhos para ocupar a largura */
+        padding: 10px;
+        gap: 10px;
+        position: static; /* Remove o position relative que não é mais necessário */
+    }
+
+    /* O wrapper do cabeçalho agora controla o número e a info */
+    .es-fila-card .fila-card-info-wrapper {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        gap: 10px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #f0f2f5;
+    }
+
+    /* Estilo do número da posição */
+    .fila-card-posicao {
+        font-size: 1.5rem; /* Um pouco maior */
+        font-weight: 700;
+        color: #bdc3c7;
+        padding-right: 10px;
+        text-align: left;
+    }
+
+    /* O footer do card agora usa flex para alinhar seus filhos */
+    .es-fila-card .fila-card-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        gap: 10px;
+    }
+
+    /* O wrapper de status/ação usa flex-direction para empilhar */
+    .fila-card-status-acao-wrapper {
+        display: flex;
+        align-items: flex-end; /* Alinha à direita */
+        gap: 5px;
+        margin-left: 0;
+    }
+
+    /* Inverte a ordem visual usando a propriedade 'order' */
+    .es-fila-card .fila-card-dados-producao {
+    order: 2; /* Texto na direita */
+    }
+    
+    .es-fila-card .fila-card-status-acao-wrapper {
+        order: 2; /* Botão na esquerda */
+        align-items: flex-start; /* Alinha o conteúdo dele à esquerda também */
+    }
+
+    /* Para o caso de inversão, se preferir o botão à esquerda */
+    /* .es-fila-card .fila-card-dados-producao { order: 1; } */
+    /* .es-fila-card .fila-card-status-acao-wrapper { order: 2; } */
+
+    /* --- ALERTA ICON --- */
     .es-alerta-card .es-alerta-icone {
         left: 15px;
     }
-
-    .es-tabela-estilizada th, .es-tabela-estilizada td { 
-        font-size: 0.62rem; 
-        padding: 6px 8px; 
-    }
+    
     .es-form-grupo label { font-size: 0.85rem; }
     .es-input, .es-select { font-size: 0.9rem; }
     .es-btn { font-size: 0.9rem; padding: 8px 15px; }
-    .es-btn-tipo-op {
-        font-size: 0.85rem; /* Texto um pouco menor nos botões */
-        padding: 7px 10px;
-    }
-    .es-btn-tipo-op i {
-        margin-right: 5px; /* Menos espaço para o ícone */
-    }
 }
 
 @media (max-width: 414px) { 
