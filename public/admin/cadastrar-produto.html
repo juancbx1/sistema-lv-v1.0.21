@@ -49,6 +49,11 @@
 
         <!-- VIEW DO FORMULÁRIO DE EDIÇÃO/CADASTRO -->
         <section class="cp-form" id="productFormView" style="display: none;" aria-label="Formulário de edição de produto">
+            <!-- Overlay de Carregamento -->
+            <div id="formLoadingOverlay" class="cp-form-loading-overlay hidden">
+                <div class="cp-spinner"></div>
+            </div>
+            
             <a href="#" id="btnVoltarDoForm" class="cp-btn cp-btn-back" aria-label="Voltar à lista">
                 <i class="fas fa-arrow-left"></i> Voltar
             </a>
@@ -135,6 +140,14 @@
                         </table>
                         <button type="button" class="cp-btn cp-btn-add" id="btnAddEtapaTiktik"><i class="fas fa-plus"></i> Add Etapa</button>
                     </div>
+                        
+                <!-- BOTAO SALVAR -->
+                    <div style="text-align: right; margin-top: 20px;">
+                        <button id="btnSalvarProducao" class="cp-btn cp-btn-success">
+                        <i class="fas fa-save"></i> Salvar Etapas de Produção
+                        </button>
+                    </div>
+
                 </div>
 
                 <!-- Aba: Variações -->
@@ -159,7 +172,7 @@
             <thead id="gradeHeader"></thead>
             <tbody id="gradeBody"></tbody>
         </table>
-        <button id="salvarGradeBtn" class="cp-btn cp-btn-success" id="btnSalvarGrade">
+        <button id="btnSalvarGrade" class="cp-btn cp-btn-success">
             <i class="fas fa-check"></i> Salvar Grade e Variações
         </button>
     </div>
@@ -171,6 +184,7 @@
 
             <div id="configurarVariacaoView" class="cp-popup" role="dialog" aria-labelledby="configurarVariacaoTitle">
                 <div class="cp-popup-content">
+                    <button type="button" class="cp-popup-close-btn" onclick="fecharPopupConfigurarVariacao()">X</button>
                     <h3 id="configurarVariacaoTitle"></h3>
                     <div class="cp-form-group">
                         <label for="produtoKitSelect">Produto Componente:</label>
@@ -188,8 +202,9 @@
                         <div id="composicaoKitContainer"></div>
                     </div>
                     <div class="cp-popup-buttons">
-                         <button class="cp-btn cp-btn-secondary" onclick="window.location.hash = '#editando'">Cancelar</button>
-                        <button id="saveKitConfigBtn" class="cp-btn cp-btn-primary">Salvar Composição</button>
+
+                         <button type="button" class="cp-btn cp-btn-secondary" onclick="fecharPopupConfigurarVariacao()">Cancelar</button>
+                    <button id="saveKitConfigBtn" class="cp-btn cp-btn-primary">Salvar Composição</button>
                     </div>
                 </div>
             </div>

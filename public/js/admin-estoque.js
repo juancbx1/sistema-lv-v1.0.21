@@ -10,7 +10,7 @@ let niveisEstoqueAlertaCache = [];
 let produtoSelecionadoParaConfigNiveis = null;
 let editandoNivelId = null;
 let currentPageEstoqueTabela = 1;
-const itemsPerPageEstoqueTabela = 7;
+const itemsPerPageEstoqueTabela = 6;
 let saldosEstoqueGlobaisCompletos = [];
 let filtroAlertaAtivo = null;
 let todosOsProdutosCadastrados = [];
@@ -28,7 +28,7 @@ let niveisValidationMessageElement;
 let modalHistoricoElement;
 
 let currentPageHistorico = 1;
-const itemsPerPageHistorico = 7; 
+const itemsPerPageHistorico = 6; 
 
 
 // --- VARIÁVEIS PARA O MÓDULO DE SEPARAÇÃO ---
@@ -432,6 +432,7 @@ async function obterSaldoEstoqueAtualAPI() {
 }
 
 async function carregarTabelaEstoque(searchTerm = '', page = 1) {
+    // A lógica de filtros, busca de dados e paginação permanece a mesma
     if (searchTerm && filtroAlertaAtivo) {
         filtroAlertaAtivo = null;
         document.getElementById('filtroAtivoHeader').style.display = 'none';
@@ -439,9 +440,9 @@ async function carregarTabelaEstoque(searchTerm = '', page = 1) {
     }
     
     currentPageEstoqueTabela = parseInt(page) || 1;
-    const tbody = document.getElementById('estoqueTableBody');
-    if (!tbody) return;
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;"><div class="es-spinner"></div> Carregando...</td></tr>`;
+    const container = document.getElementById('estoqueCardsContainer'); // Alvo agora é o container de cards
+    if (!container) return;
+    container.innerHTML = `<div class="es-spinner" style="grid-column: 1 / -1;"></div>`;
     
     try {
         let dadosDeSaldo;
@@ -457,10 +458,9 @@ async function carregarTabelaEstoque(searchTerm = '', page = 1) {
         ]);
         
         if (niveisEstoqueAlertaCache.length === 0) niveisEstoqueAlertaCache = Array.isArray(niveisDeAlertaApi) ? niveisDeAlertaApi : [];
-        
         const niveisAlertaValidos = niveisEstoqueAlertaCache;
 
-        // Calcula contadores de alerta
+        // ... (lógica de cálculo de contadores de alerta permanece a mesma) ...
         let countUrgente = 0, countBaixo = 0;
         dadosDeSaldo.forEach(item => {
             const configNivel = niveisAlertaValidos.find(n => n.produto_ref_id === item.produto_ref_id && n.ativo);
@@ -470,6 +470,18 @@ async function carregarTabelaEstoque(searchTerm = '', page = 1) {
                 else if (configNivel.nivel_estoque_baixo !== null && saldoNum <= configNivel.nivel_estoque_baixo) countBaixo++;
             }
         });
+
+        // --- Lógica para fazer o ícone piscar ---
+        const iconeUrgente = document.querySelector('#cardReposicaoUrgente .es-alerta-icone');
+        if (iconeUrgente) {
+            if (countUrgente > 0) {
+                iconeUrgente.classList.add('icone-piscando');
+            } else {
+                iconeUrgente.classList.remove('icone-piscando');
+            }
+        }
+        // --- Fim da lógica de icone piscando ---
+
         document.getElementById('contadorUrgente').textContent = countUrgente;
         document.getElementById('contadorBaixo').textContent = countBaixo;
 
@@ -489,7 +501,8 @@ async function carregarTabelaEstoque(searchTerm = '', page = 1) {
             const termo = searchTerm.toLowerCase();
             itensFiltrados = itensFiltrados.filter(item =>
                 item.produto_nome.toLowerCase().includes(termo) ||
-                (item.variante_nome && item.variante_nome !== '-' && item.variante_nome.toLowerCase().includes(termo))
+                (item.variante_nome && item.variante_nome !== '-' && item.variante_nome.toLowerCase().includes(termo)) ||
+                (item.produto_ref_id && item.produto_ref_id.toLowerCase().includes(termo)) // Adicionado busca por SKU
             );
         }
         
@@ -498,7 +511,9 @@ async function carregarTabelaEstoque(searchTerm = '', page = 1) {
         currentPageEstoqueTabela = Math.min(currentPageEstoqueTabela, totalPages);
         const itensPaginados = itensFiltrados.slice((currentPageEstoqueTabela - 1) * itemsPerPageEstoqueTabela, currentPageEstoqueTabela * itemsPerPageEstoqueTabela);
            
-        renderizarTabelaEstoque(itensPaginados, todosProdutosDef, niveisAlertaValidos);
+        // Chama a NOVA função de renderização
+        renderizarCardsConsulta(itensPaginados, todosProdutosDef, niveisAlertaValidos);
+        
         renderizarPaginacaoEstoque(totalPages, searchTerm);
 
         const btnMostrarTodosEl = document.getElementById('btnMostrarTodosEstoque');
@@ -506,19 +521,19 @@ async function carregarTabelaEstoque(searchTerm = '', page = 1) {
             btnMostrarTodosEl.style.display = (filtroAlertaAtivo || searchTerm) ? 'inline-flex' : 'none';
         }
     } catch (error) { 
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:red;">Erro ao carregar estoque.</td></tr>`;
+        container.innerHTML = `<p style="text-align: center; color: red; grid-column: 1 / -1;">Erro ao carregar estoque.</p>`;
         mostrarPopupEstoque("Erro inesperado ao carregar dados do estoque.", "erro");
     }
 }
 
-function renderizarTabelaEstoque(itensDeEstoque, produtosDefinicoes, niveisDeAlerta) {
-    const tbody = document.getElementById('estoqueTableBody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
+// NOVA FUNÇÃO para renderizar os cards em vez da tabela
+function renderizarCardsConsulta(itensDeEstoque, produtosDefinicoes, niveisDeAlerta) {
+    const container = document.getElementById('estoqueCardsContainer');
+    if (!container) return;
+    container.innerHTML = '';
 
     if (itensDeEstoque.length === 0) {
-        // Colspan agora precisa ser 7 por causa da nova coluna de status
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;">Nenhum item encontrado.</td></tr>`;
+        container.innerHTML = `<p style="text-align: center; grid-column: 1 / -1;">Nenhum item encontrado.</p>`;
         return;
     }
 
@@ -529,8 +544,7 @@ function renderizarTabelaEstoque(itensDeEstoque, produtosDefinicoes, niveisDeAle
         if (produtoDef) {
             if (item.variante_nome && item.variante_nome !== '-') {
                 const gradeItem = produtoDef.grade?.find(g => g.variacao === item.variante_nome);
-                if (gradeItem?.imagem) imagemSrc = gradeItem.imagem;
-                else if (produtoDef.imagem) imagemSrc = produtoDef.imagem;
+                imagemSrc = gradeItem?.imagem || produtoDef.imagem || '/img/placeholder-image.png';
             } else if (produtoDef.imagem) {
                 imagemSrc = produtoDef.imagem;
             }
@@ -540,41 +554,44 @@ function renderizarTabelaEstoque(itensDeEstoque, produtosDefinicoes, niveisDeAle
         let statusClass = 'status-ok';
         if (configNivel) {
             const saldoNum = parseFloat(item.saldo_atual);
-            if (configNivel.nivel_reposicao_urgente !== null && saldoNum <= configNivel.nivel_reposicao_urgente) {
-                statusClass = 'status-urgente';
-            } else if (configNivel.nivel_estoque_baixo !== null && saldoNum <= configNivel.nivel_estoque_baixo) {
-                statusClass = 'status-baixo';
-            }
+            if (configNivel.nivel_reposicao_urgente !== null && saldoNum <= configNivel.nivel_reposicao_urgente) statusClass = 'status-urgente';
+            else if (configNivel.nivel_estoque_baixo !== null && saldoNum <= configNivel.nivel_estoque_baixo) statusClass = 'status-baixo';
         }
 
-        const tr = document.createElement('tr');
-        tr.dataset.itemEstoque = JSON.stringify(item);
-
-        // A MUDANÇA ESTÁ NA ORDEM DAS DUAS ÚLTIMAS CÉLULAS (<td>)
-        tr.innerHTML = `
-            <td class="status-cell"><div class="status-indicator ${statusClass}"></div></td>
-            <td><div class="thumbnail">${imagemSrc !== '/img/placeholder-image.png' ? `<img src="${imagemSrc}" alt="${item.produto_nome}" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">` : '<span></span>'}</div></td>
-            <td>${item.produto_nome}</td>
-            <td>${item.variante_nome || '-'}</td>
-            
-            <!-- ORDEM CORRIGIDA: Estoque Ideal primeiro -->
-            <td style="text-align:center;">${configNivel?.nivel_estoque_ideal ?? '-'}</td>
-            
-            <!-- Saldo Atual por último, com a classe para o negrito -->
-            <td class="saldo-estoque" style="text-align:center;">${item.saldo_atual}</td>
+        const card = document.createElement('div');
+        card.className = `es-consulta-card ${statusClass}`;
+        card.dataset.itemEstoque = JSON.stringify(item);
+        
+        card.innerHTML = `
+            <img src="${imagemSrc}" alt="${item.produto_nome}" class="es-consulta-card-img" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">
+            <div class="es-consulta-card-info">
+                <h3>${item.produto_nome}</h3>
+                <p>${item.variante_nome || 'Padrão'}</p>
+                <p style="margin-top: auto; font-size: 0.8rem;">SKU: ${item.produto_ref_id || 'N/A'}</p>
+            </div>
+            <div class="es-consulta-card-dados">
+                <div class="dado-bloco">
+                    <span class="label">Ideal</span>
+                    <span class="valor">${configNivel?.nivel_estoque_ideal ?? '-'}</span>
+                </div>
+                <div class="dado-bloco">
+                    <span class="label">Saldo</span>
+                    <span class="valor saldo-atual">${item.saldo_atual}</span>
+                </div>
+            </div>
         `;
 
         if (permissoesGlobaisEstoque.includes('gerenciar-estoque')) {
-            tr.style.cursor = 'pointer';
-            tr.addEventListener('click', (event) => {
+            card.addEventListener('click', (event) => {
                 const itemClicado = JSON.parse(event.currentTarget.dataset.itemEstoque);
                 abrirViewMovimento(itemClicado);
             });
         }
-        fragment.appendChild(tr);
+        fragment.appendChild(card);
     });
-    tbody.appendChild(fragment);
+    container.appendChild(fragment);
 }
+
 
 function renderizarPaginacaoEstoque(totalPages, searchTermAtual = '') {
     const paginacaoContainer = document.getElementById('estoquePaginacaoContainer');
@@ -630,6 +647,220 @@ async function filtrarEstoquePorAlerta(tipoAlerta) {
     if(tabelaEl) tabelaEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+function mostrarViewFilaProducao() {
+    // --- VERIFICAÇÃO DE PERMISSÃO ---
+    // Adicionamos a verificação para 'acesso-estoque' como base para visualizar
+    // e 'gerenciar-fila-de-producao' para interagir.
+    if (!permissoesGlobaisEstoque.includes('acesso-estoque')) {
+        mostrarPopupEstoque('Você não tem permissão para acessar esta área.', 'aviso');
+        return; // Interrompe a execução se não tem nem o acesso básico
+    }
+
+    // O resto da função continua como antes...
+    document.getElementById('mainViewEstoque').style.display = 'none';
+    const filaView = document.getElementById('filaProducaoView');
+    filaView.classList.remove('hidden');
+    filaView.style.display = 'block';
+
+    const btnSalvar = document.getElementById('btnSalvarPrioridades');
+    // A visibilidade do botão de salvar continua dependendo da permissão de gerenciar
+    if (permissoesGlobaisEstoque.includes('gerenciar-fila-de-producao')) {
+        btnSalvar.classList.remove('hidden');
+    } else {
+        btnSalvar.classList.add('hidden');
+    }
+
+    renderizarFilaDeProducao();
+    inicializarDragAndDropFila();
+}
+
+
+function voltarDaFilaParaEstoque() {
+    document.getElementById('filaProducaoView').style.display = 'none';
+    document.getElementById('mainViewEstoque').style.display = 'block';
+}
+
+function renderizarFilaDeProducao() {
+    const container = document.getElementById('filaProducaoContainer');
+    container.innerHTML = `<div class="es-spinner"></div>`;
+
+    const itensNaFila = niveisEstoqueAlertaCache
+        .filter(config => {
+            const itemSaldo = saldosEstoqueGlobaisCompletos.find(s => s.produto_ref_id === config.produto_ref_id);
+            if (!itemSaldo) return false;
+            const saldoNum = parseFloat(itemSaldo.saldo_atual);
+            return (config.nivel_reposicao_urgente !== null && saldoNum <= config.nivel_reposicao_urgente) ||
+                   (config.nivel_estoque_baixo !== null && saldoNum <= config.nivel_estoque_baixo);
+        })
+        .sort((a, b) => (a.prioridade || 99) - (b.prioridade || 99));
+
+    container.innerHTML = '';
+    if (itensNaFila.length === 0) {
+        container.innerHTML = '<p style="text-align: center;">Nenhum item na fila de produção.</p>';
+        return;
+    }
+
+    itensNaFila.forEach((config, index) => {
+        const itemSaldo = saldosEstoqueGlobaisCompletos.find(s => s.produto_ref_id === config.produto_ref_id);
+        const produtoDef = todosOsProdutosCadastrados.find(p => p.nome === itemSaldo.produto_nome);
+        let imagemSrc = '/img/placeholder-image.png';
+        if(produtoDef) { /* ... lógica de imagem ... */ }
+        
+        const saldoNum = parseFloat(itemSaldo.saldo_atual);
+        const status = saldoNum <= config.nivel_reposicao_urgente ? 'urgente' : 'baixo';
+
+        const card = document.createElement('div');
+        card.className = `es-fila-card status-${status}`;
+        card.dataset.produtoRefId = config.produto_ref_id;
+
+        if (permissoesGlobaisEstoque.includes('gerenciar-fila-de-producao')) {
+            card.draggable = true;
+            card.classList.add('pode-arrastar');
+        }
+
+        card.innerHTML = `
+            <div class="fila-card-posicao">#${index + 1}</div>
+            <img src="${imagemSrc}" class="fila-card-img" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">
+            <div class="fila-card-info">
+                <h3>${itemSaldo.produto_nome}</h3>
+                <p>${itemSaldo.variante_nome || 'Padrão'}</p>
+                <p style="margin-top: 5px;">Estoque: <strong>${saldoNum}</strong> / Ideal: <strong>${config.nivel_estoque_ideal || '-'}</strong></p>
+            </div>
+            <div class="fila-card-status-badge status-${status}">${status.toUpperCase()}</div>
+        `;
+        container.appendChild(card);
+    });
+}
+
+function inicializarDragAndDropFila() {
+    if (!permissoesGlobaisEstoque.includes('gerenciar-fila-de-producao')) {
+        const acoesDivP = document.querySelector('.es-fila-acoes p');
+        if (acoesDivP) acoesDivP.textContent = 'Você pode apenas visualizar a ordem da fila.';
+        return;
+    }
+
+    const container = document.getElementById('filaProducaoContainer');
+    if (!container) return;
+
+    let draggingElement = null;
+    let placeholder = document.createElement('div');
+    placeholder.className = 'fila-card-placeholder'; // Usaremos um placeholder para melhor feedback visual
+
+    // --- LÓGICA PARA MOUSE (DRAG AND DROP PADRÃO) ---
+    container.addEventListener('dragstart', e => {
+        if (e.target.classList.contains('es-fila-card')) {
+            draggingElement = e.target;
+            setTimeout(() => e.target.classList.add('dragging'), 0);
+        }
+    });
+
+    container.addEventListener('dragend', () => {
+        if (draggingElement) {
+            draggingElement.classList.remove('dragging');
+            draggingElement = null;
+            atualizarNumerosPosicaoFila();
+        }
+    });
+
+    container.addEventListener('dragover', e => {
+        e.preventDefault();
+        const afterElement = getDragAfterElement(container, e.clientY);
+        if (draggingElement) {
+            if (afterElement == null) {
+                container.appendChild(draggingElement);
+            } else {
+                container.insertBefore(draggingElement, afterElement);
+            }
+        }
+    });
+
+    // --- NOVA LÓGICA PARA DISPOSITIVOS DE TOQUE ---
+    let initialTouchY = 0;
+    let currentTouchY = 0;
+
+    container.addEventListener('touchstart', e => {
+        if (e.target.classList.contains('es-fila-card')) {
+            draggingElement = e.target;
+            draggingElement.classList.add('dragging'); // Aplica o estilo de arrastar
+            initialTouchY = e.touches[0].clientY;
+        }
+    }, { passive: true }); // passive: true melhora a performance de rolagem
+
+    container.addEventListener('touchmove', e => {
+        if (!draggingElement) return;
+        // Previne a rolagem da página enquanto arrasta o card
+        e.preventDefault(); 
+        
+        currentTouchY = e.touches[0].clientY;
+        const afterElement = getDragAfterElement(container, currentTouchY);
+        
+        if (afterElement == null) {
+            container.appendChild(draggingElement);
+        } else {
+            container.insertBefore(draggingElement, afterElement);
+        }
+    }, { passive: false }); // passive: false é necessário para usar preventDefault
+
+    container.addEventListener('touchend', () => {
+        if (draggingElement) {
+            draggingElement.classList.remove('dragging');
+            draggingElement = null;
+            atualizarNumerosPosicaoFila();
+        }
+    });
+}
+
+function getDragAfterElement(container, y) {
+    const draggableElements = [...container.querySelectorAll('.es-fila-card:not(.dragging)')];
+    return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) {
+            return { offset: offset, element: child };
+        } else { return closest; }
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+function atualizarNumerosPosicaoFila() {
+    const cards = document.querySelectorAll('#filaProducaoContainer .es-fila-card');
+    cards.forEach((card, index) => {
+        card.querySelector('.fila-card-posicao').textContent = `#${index + 1}`;
+    });
+    document.getElementById('btnSalvarPrioridades').style.backgroundColor = 'var(--es-cor-verde-sucesso)';
+}
+
+async function salvarPrioridades() {
+    const btn = document.getElementById('btnSalvarPrioridades');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    
+    const cards = document.querySelectorAll('#filaProducaoContainer .es-fila-card');
+    const prioridadesPayload = Array.from(cards).map((card, index) => ({
+        produto_ref_id: card.dataset.produtoRefId,
+        prioridade: index + 1
+    }));
+
+    try {
+        await fetchEstoqueAPI('/niveis-estoque/prioridade', {
+            method: 'POST',
+            body: JSON.stringify({ prioridades: prioridadesPayload })
+        });
+
+        // Atualiza o cache local
+        prioridadesPayload.forEach(p => {
+            const configCache = niveisEstoqueAlertaCache.find(c => c.produto_ref_id === p.produto_ref_id);
+            if(configCache) configCache.prioridade = p.prioridade;
+        });
+
+        mostrarPopupEstoque('Ordem da fila salva com sucesso!', 'sucesso');
+        btn.style.backgroundColor = 'var(--es-cor-azul-primario)';
+    } catch(error) {
+        mostrarPopupEstoque('Erro ao salvar prioridades.', 'erro');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> Salvar Ordem da Fila';
+    }
+}
 
 // --- LÓGICA DA NOVA VIEW DE MOVIMENTAÇÃO DE ESTOQUE ---
 
@@ -734,38 +965,61 @@ function prepararViewMovimento() {
 }
 
 async function estornarMovimento(movimentoId) {
-    // Usa o nosso popup de confirmação para uma melhor experiência
     const confirmado = await mostrarPopupConfirmacao(
-        'Tem certeza que deseja estornar este movimento?<br><br>Esta ação devolverá a quantidade ao estoque e não pode ser desfeita.',
+        'Tem certeza que deseja estornar este movimento?<br><br>Esta ação devolverá a quantidade ao estoque.',
         'aviso'
     );
 
-    if (!confirmado) {
-        return;
-    }
+    if (!confirmado) return;
 
     try {
-        await fetchEstoqueAPI('/estoque/estornar-movimento', {
+        const response = await fetchEstoqueAPI('/estoque/estornar-movimento', {
             method: 'POST',
             body: JSON.stringify({ id_movimento_original: movimentoId })
         });
 
+        const movimentoDeEstorno = response.movimentoDeEstorno;
+        if (!movimentoDeEstorno) {
+            throw new Error("A API não retornou os dados do estorno.");
+        }
+
         mostrarPopupEstoque('Estorno realizado com sucesso!', 'sucesso');
 
-        // Recarrega o histórico para refletir a mudança
-        // e atualiza o saldo na tela de detalhes
-        if (itemEstoqueSelecionado) {
-            // Atualiza o saldo localmente para feedback imediato
-            const movimentoEstornado = saldosEstoqueGlobaisCompletos.find(m => m.id === movimentoId);
-            if (movimentoEstornado) {
-                itemEstoqueSelecionado.saldo_atual += Math.abs(movimentoEstornado.quantidade);
-                document.getElementById('movimentoSaldoAtual').textContent = itemEstoqueSelecionado.saldo_atual;
-            }
-            
-            // Força recarga do cache de saldos e recarrega histórico
+        // --- CORREÇÃO DA LÓGICA DE ATUALIZAÇÃO E PERSISTÊNCIA ---
+
+        // 1. Atualiza o saldo do item específico DENTRO do nosso cache global
+        const itemNoCache = saldosEstoqueGlobaisCompletos.find(
+            item => item.produto_ref_id === movimentoDeEstorno.produto_ref_id
+        );
+        
+        if (itemNoCache) {
+            const saldoAtualCache = parseFloat(itemNoCache.saldo_atual);
+            const quantidadeEstornada = parseFloat(movimentoDeEstorno.quantidade);
+            itemNoCache.saldo_atual = saldoAtualCache + quantidadeEstornada;
+            console.log(`Cache atualizado para ${itemNoCache.produto_ref_id}. Novo saldo em cache: ${itemNoCache.saldo_atual}`);
+        } else {
+            // Se o item não estava no cache por algum motivo (raro, mas possível),
+            // a melhor opção é limpar o cache inteiro para forçar uma recarga completa.
             saldosEstoqueGlobaisCompletos = [];
+        }
+
+        // 2. Atualiza a UI da tela de detalhes para feedback imediato
+        if (itemEstoqueSelecionado) {
+            const saldoAtualEl = document.getElementById('movimentoSaldoAtual');
+            if (saldoAtualEl) {
+                const saldoAtualNumerico = parseInt(saldoAtualEl.textContent);
+                const quantidadeEstornada = parseInt(movimentoDeEstorno.quantidade);
+                const novoSaldo = saldoAtualNumerico + quantidadeEstornada;
+                saldoAtualEl.textContent = novoSaldo;
+                itemEstoqueSelecionado.saldo_atual = novoSaldo;
+            }
+        }
+        
+        // 3. Recarrega a tabela de histórico para remover o botão de estorno
+        if (itemEstoqueSelecionado) {
             carregarHistoricoMovimentacoes(itemEstoqueSelecionado.produto_nome, itemEstoqueSelecionado.variante_nome, currentPageHistorico);
         }
+
     } catch (error) {
         console.error('Erro ao estornar movimento:', error);
         mostrarPopupEstoque(`Falha no estorno: ${error.data?.details || error.message}`, 'erro');
@@ -1172,6 +1426,8 @@ function voltarParaEstoquePrincipal() {
         document.getElementById('mainViewEstoque').style.display = 'block';
         document.getElementById('separacaoView').style.display = 'none';
         document.getElementById('separacaoDetalheView').style.display = 'none';
+        document.getElementById('carrinhoSeparacao').classList.add('hidden');
+
     }
 }
 
@@ -1179,37 +1435,27 @@ function voltarParaEstoquePrincipal() {
 function renderizarCardsDeVariacao() {
     const container = document.getElementById('separacaoVariacoesCardsContainer');
     const nomeProduto = produtoEmDetalheSeparacao;
-
-    // Garante que temos um produto selecionado para detalhar
-    if (!nomeProduto) {
-        container.innerHTML = '<p style="text-align: center; grid-column: 1 / -1;">Nenhum produto selecionado para detalhar.</p>';
-        return;
-    }
+    if (!nomeProduto) return;
     
-    container.innerHTML = ''; // Limpa o container antes de renderizar
+    container.innerHTML = '';
     
-    // Pega os valores dos filtros dinâmicos que o usuário selecionou
     const filtrosSelecionados = {};
     const produtoDefFiltro = todosOsProdutosCadastrados.find(p => p.nome === nomeProduto);
     if(produtoDefFiltro && produtoDefFiltro.variacoes) {
         produtoDefFiltro.variacoes.forEach(variacaoDef => {
             const selectFiltro = document.getElementById(`filtro-${variacaoDef.chave}`);
             if (selectFiltro && selectFiltro.value) {
-                // Armazena o índice e o valor do filtro
                 const index = produtoDefFiltro.variacoes.findIndex(v => v.chave === variacaoDef.chave);
                 filtrosSelecionados[index] = selectFiltro.value;
             }
         });
     }
 
-    // 1. Pega todas as variações com saldo em estoque que pertencem ao produto principal
     let variacoesDoProduto = saldosEstoqueGlobaisCompletos.filter(item => item.produto_nome === nomeProduto);
     
-    // 2. Aplica os filtros selecionados pelo usuário
     if (Object.keys(filtrosSelecionados).length > 0) {
         variacoesDoProduto = variacoesDoProduto.filter(item => {
             const partesVariacao = item.variante_nome.split(' | ').map(p => p.trim());
-            // Verifica se o item corresponde a TODOS os filtros ativos
             return Object.entries(filtrosSelecionados).every(([indexFiltro, valorFiltro]) => {
                 return partesVariacao[parseInt(indexFiltro)] === valorFiltro;
             });
@@ -1221,7 +1467,6 @@ function renderizarCardsDeVariacao() {
         return;
     }
 
-    // 3. Renderiza os cards para os itens que passaram pelos filtros
     variacoesDoProduto.forEach(item => {
         const produtoDef = todosOsProdutosCadastrados.find(p => p.nome === item.produto_nome);
         let imagemSrc = '/img/placeholder-image.png';
@@ -1233,12 +1478,15 @@ function renderizarCardsDeVariacao() {
         const card = document.createElement('div');
         card.className = 'es-separacao-card';
         card.dataset.produtoRefId = item.produto_ref_id;
-        
-        // Adiciona a classe 'selecionado' se o item já estiver no carrinho
-        if (itensEmSeparacao.has(item.produto_ref_id)) {
+
+        const saldoInicial = parseInt(item.saldo_atual);
+        const quantidadeNoCarrinho = itensEmSeparacao.get(item.produto_ref_id)?.quantidade_movimentada || 0;
+        const saldoProjetado = saldoInicial - quantidadeNoCarrinho;
+
+        if (quantidadeNoCarrinho > 0) {
             card.classList.add('selecionado');
         }
-
+        
         card.innerHTML = `
             <div class="es-separacao-card-header">
                 <img src="${imagemSrc}" alt="${item.variante_nome}" class="es-separacao-card-img" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">
@@ -1248,34 +1496,36 @@ function renderizarCardsDeVariacao() {
                 </div>
             </div>
             <div class="es-separacao-card-body">
-                <div class="es-separacao-card-saldo">Estoque: <strong>${item.saldo_atual}</strong></div>
+                <div class="es-separacao-card-saldo">
+                    Estoque: <strong class="saldo-display" style="color: ${quantidadeNoCarrinho > 0 ? '#e74c3c' : 'var(--es-cor-azul-primario)'};">${saldoProjetado}</strong>
+                </div>
                 <div class="es-separacao-card-controls">
                     <button class="control-btn minus-btn">-</button>
-                    <input type="number" class="qty-input" value="${itensEmSeparacao.get(item.produto_ref_id)?.quantidade_movimentada || 0}" min="0" max="${item.saldo_atual}">
+                    <input type="number" class="qty-input" value="${quantidadeNoCarrinho}" min="0" max="${saldoInicial}">
                     <button class="control-btn plus-btn">+</button>
                 </div>
             </div>
         `;
-
+        
         const qtyInput = card.querySelector('.qty-input');
         const plusBtn = card.querySelector('.plus-btn');
         const minusBtn = card.querySelector('.minus-btn');
+        const saldoDisplay = card.querySelector('.saldo-display');
 
         const atualizarItem = (novaQtd) => {
-            const saldoMax = parseInt(item.saldo_atual);
-            let qtdFinal = Math.max(0, Math.min(novaQtd, saldoMax));
+            let qtdFinal = Math.max(0, Math.min(novaQtd, saldoInicial));
             qtyInput.value = qtdFinal;
+            
+            saldoDisplay.textContent = saldoInicial - qtdFinal;
 
             if (qtdFinal > 0) {
-                itensEmSeparacao.set(item.produto_ref_id, {
-                    produto_nome: item.produto_nome,
-                    variante_nome: item.variante_nome,
-                    quantidade_movimentada: qtdFinal
-                });
+                itensEmSeparacao.set(item.produto_ref_id, { produto_nome: item.produto_nome, variante_nome: item.variante_nome, quantidade_movimentada: qtdFinal });
                 card.classList.add('selecionado');
+                saldoDisplay.style.color = '#e74c3c';
             } else {
                 itensEmSeparacao.delete(item.produto_ref_id);
                 card.classList.remove('selecionado');
+                saldoDisplay.style.color = 'var(--es-cor-azul-primario)';
             }
             atualizarCarrinhoFlutuante();
         };
@@ -1283,13 +1533,7 @@ function renderizarCardsDeVariacao() {
         plusBtn.addEventListener('click', () => atualizarItem(parseInt(qtyInput.value) + 1));
         minusBtn.addEventListener('click', () => atualizarItem(parseInt(qtyInput.value) - 1));
         qtyInput.addEventListener('change', () => atualizarItem(parseInt(qtyInput.value)));
-        qtyInput.addEventListener('keyup', (e) => { 
-            if (e.key === 'Enter') {
-                e.target.blur(); // Tira o foco para "confirmar" o valor digitado
-                atualizarItem(parseInt(qtyInput.value));
-            }
-        });
-
+        qtyInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') { e.target.blur(); } });
         container.appendChild(card);
     });
 }
@@ -1345,66 +1589,84 @@ function atualizarCarrinhoFlutuante() {
 }
 
 function abrirModalFinalizacao() {
-    console.log(`%c[ABRINDO MODAL] - 'Finalizar Separação' foi chamada.`, 'color: #3498db; font-weight: bold;');
+    console.log(`[abrirModalFinalizacao] Chamada. Itens no carrinho: ${itensEmSeparacao.size}`);
     
+    // Pega as referências dos elementos
     const modal = document.getElementById('modalFinalizarSeparacao');
-    const corpoTabela = document.getElementById('resumoCarrinhoBody');
+    const corpoTabela = document.getElementById('resumoCarrinhoBody'); 
     const canalVendaContainer = document.getElementById('canalVendaContainer');
     const canalVendaInput = document.getElementById('canalVendaSelecionado');
     const inputObs = document.getElementById('observacaoSaida');
     const btnConfirmar = document.getElementById('btnConfirmarSaidaEstoque');
 
-    corpoTabela.innerHTML = '';
+    // Validação robusta dos elementos
+    if (!modal || !corpoTabela || !canalVendaContainer || !btnConfirmar) {
+        console.error("Erro fatal: Elementos do modal de finalização não encontrados. Verifique os IDs no HTML.");
+        mostrarPopupEstoque("Erro ao abrir janela de finalização (E-01).", "erro");
+        return;
+    }
+
+    // --- Reset do estado do modal ---
+    corpoTabela.innerHTML = ''; // Limpa a tabela
     canalVendaContainer.innerHTML = '';
     canalVendaInput.value = '';
     inputObs.value = '';
     btnConfirmar.disabled = true;
 
-    itensEmSeparacao.forEach((item, refId) => {
-        const tr = corpoTabela.insertRow();
-        tr.innerHTML = `
-            <td colspan="3">
-                <div class="resumo-carrinho-item">
-                    <div class="info">
-                        <div class="produto-nome">${item.produto_nome}</div>
-                        <div class="variante-nome">${item.variante_nome || '-'}</div>
-                    </div>
-                    <div class="actions">
-                        <span class="quantidade">${item.quantidade_movimentada}</span>
-                        <button class="remover-item-btn" title="Remover item" data-ref-id="${refId}">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
-                    </div>
-                </div>
-            </td>
-        `;
-    });
+    // --- Populando a tabela de resumo ---
+    if (itensEmSeparacao.size === 0) {
+        console.log("[abrirModalFinalizacao] Carrinho vazio. Exibindo mensagem.");
+        corpoTabela.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 20px;">O carrinho de separação está vazio.</td></tr>';
+    } else {
+        console.log("[abrirModalFinalizacao] Populando tabela com itens:", itensEmSeparacao);
+        let tabelaHTML = '';
+        itensEmSeparacao.forEach((item, refId) => {
+            tabelaHTML += `
+                <tr>
+                    <td colspan="3">
+                        <div class="resumo-carrinho-item">
+                            <div class="info">
+                                <div class="produto-nome">${item.produto_nome}</div>
+                                <div class="variante-nome">${item.variante_nome || '-'}</div>
+                            </div>
+                            <div class="actions">
+                                <span class="quantidade">${item.quantidade_movimentada}</span>
+                                <button class="remover-item-btn" title="Remover item" data-ref-id="${refId}">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+        corpoTabela.innerHTML = tabelaHTML;
+    }
 
+    // --- Gerando os botões de canal de venda ---
     const canais = [
         { id: 'SAIDA_PEDIDO_SHOPEE', label: 'Shopee' },
         { id: 'SAIDA_PEDIDO_SHEIN', label: 'Shein' },
         { id: 'SAIDA_PEDIDO_MERCADO_LIVRE', label: 'Mercado Livre' },
         { id: 'SAIDA_PEDIDO_PONTO_FISICO', label: 'Ponto Físico', disabled: true }
     ];
-
     canais.forEach(canal => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'es-btn es-btn-tipo-op'; // A classe base
-    btn.dataset.valor = canal.id; // O data-attribute que o CSS usa
-    btn.textContent = canal.label;
-    btn.disabled = canal.disabled || false;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'es-btn es-btn-tipo-op';
+        btn.dataset.valor = canal.id;
+        btn.textContent = canal.label;
+        btn.disabled = canal.disabled || false;
+        btn.addEventListener('click', () => { // Usando addEventListener por segurança
+            canalVendaContainer.querySelectorAll('button').forEach(b => b.classList.remove('ativo'));
+            btn.classList.add('ativo');
+            canalVendaInput.value = canal.id;
+            btnConfirmar.disabled = itensEmSeparacao.size === 0;
+        });
+        canalVendaContainer.appendChild(btn);
+    });
 
-    // A lógica de clique que adiciona/remove a classe 'ativo'
-    btn.onclick = () => {
-        canalVendaContainer.querySelectorAll('button').forEach(b => b.classList.remove('ativo'));
-        btn.classList.add('ativo');
-        canalVendaInput.value = canal.id;
-        btnConfirmar.disabled = false;
-    };
-    canalVendaContainer.appendChild(btn);
-});
-
+    // Mostra o modal
     modal.style.display = 'flex';
 }
 
@@ -1490,32 +1752,32 @@ window.removerItemDoCarrinho = function(produtoRefId) {
 async function inicializarPaginaEstoque() {
     console.log('[Estoque inicializarPaginaEstoque]');
     
-    // Obter referências aos elementos do modal de níveis
-    modalNiveisElement = document.getElementById('modalConfigurarNiveis');
-    modalHistoricoElement = document.getElementById('modalHistoricoMovimentacoes');
+    const overlay = document.getElementById('paginaLoadingOverlay');
+    // Mostra o overlay imediatamente
+    if(overlay) overlay.classList.remove('hidden');
 
-    // VERIFICAÇÃO DE SEGURANÇA: Garante que os modais existem no HTML
-    if (!modalNiveisElement || !modalHistoricoElement) {
-        console.error("ERRO CRÍTICO: Um ou mais elementos de modal não foram encontrados no DOM. Verifique os IDs no HTML: #modalConfigurarNiveis, #modalHistoricoMovimentacoes");
-        mostrarPopupEstoque("Erro de interface. A página não pode ser carregada corretamente.", "erro", 0);
-        return; // Interrompe a inicialização
-    }
-    
-    // O resto da inicialização permanece o mesmo
+    // ... (resto da lógica de obter elementos de modal) ...
+    modalNiveisElement = document.getElementById('modalConfigurarNiveis');
+
     try {
+        // A busca de dados continua a mesma
         if (todosOsProdutosCadastrados.length === 0) {
             todosOsProdutosCadastrados = await obterProdutos();
         }
-    } catch (error) {
-        console.error("[inicializarPaginaEstoque] Erro ao carregar definições de produtos:", error);
-        mostrarPopupEstoque("Falha ao carregar dados base de produtos.", "aviso");
-    }
+        await carregarTabelaEstoque(); // Esta função agora vai popular tudo
 
+    } catch (error) {
+        console.error("[inicializarPaginaEstoque] Erro:", error);
+        mostrarPopupEstoque("Falha ao carregar dados do estoque.", "erro");
+    } finally {
+        // Esconde o overlay DEPOIS que tudo carregou
+        if(overlay) overlay.classList.add('hidden');
+    }
+    
     setupEventListenersEstoque();
-    handleHashChangeEstoque();
+    handleHashChangeEstoque(); 
     console.log('[Estoque inicializarPaginaEstoque] Concluído.');
 }
-
 
 
 function setupEventListenersEstoque() {
@@ -1539,14 +1801,20 @@ function setupEventListenersEstoque() {
         filtroAlertaAtivo = null; currentPageEstoqueTabela = 1;
         carregarTabelaEstoque(document.getElementById('searchEstoque').value, 1);
     }, 350));
-    document.getElementById('cardReposicaoUrgente')?.addEventListener('click', () => filtrarEstoquePorAlerta('urgente'));
-    document.getElementById('cardEstoqueBaixo')?.addEventListener('click', () => filtrarEstoquePorAlerta('baixo'));
+    document.getElementById('cardReposicaoUrgente')?.addEventListener('click', mostrarViewFilaProducao);
+    document.getElementById('cardEstoqueBaixo')?.addEventListener('click', mostrarViewFilaProducao);
     document.getElementById('btnMostrarTodosEstoque')?.addEventListener('click', () => {
-        filtroAlertaAtivo = null; document.getElementById('searchEstoque').value = ''; currentPageEstoqueTabela = 1;
-        document.getElementById('filtroAtivoHeader').style.display = 'none';
-        document.querySelectorAll('.es-alerta-card').forEach(c => c.classList.remove('filtro-ativo'));
-        carregarTabelaEstoque('', 1);
+    filtroAlertaAtivo = null; document.getElementById('searchEstoque').value = ''; currentPageEstoqueTabela = 1;
+    document.getElementById('filtroAtivoHeader').style.display = 'none';
+    document.querySelectorAll('.es-alerta-card').forEach(c => c.classList.remove('filtro-ativo'));
+    carregarTabelaEstoque('', 1);
     });
+
+    // Listeners para os botões da nova view
+    document.getElementById('btnVoltarDaFila')?.addEventListener('click', voltarDaFilaParaEstoque);
+    document.getElementById('btnSalvarPrioridades')?.addEventListener('click', salvarPrioridades);
+
+    document.getElementById('btnGerenciarFila')?.addEventListener('click', mostrarViewFilaProducao);
     document.getElementById('btnConfigurarNiveisEstoque')?.addEventListener('click', abrirModalConfigurarNiveis);
     document.getElementById('fecharModalNiveis')?.addEventListener('click', fecharModalNiveis);
     document.getElementById('btnCancelarModalNiveis')?.addEventListener('click', fecharModalNiveis);

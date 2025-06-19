@@ -132,4 +132,44 @@ router.post('/batch', async (req, res) => {
     }
 });
 
+// ROTA para atualizar prioridades em lote
+router.post('/prioridade', async (req, res) => {
+    // Espera um array de objetos: [{ produto_ref_id: 'SKU123', prioridade: 1 }, { produto_ref_id: 'SKU456', prioridade: 2 }, ...]
+    const { prioridades } = req.body;
+
+    if (!Array.isArray(prioridades)) {
+        return res.status(400).json({ error: 'O corpo da requisição deve conter um array "prioridades".' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        await dbClient.query('BEGIN');
+
+        // Uma forma eficiente de fazer múltiplos updates no PostgreSQL
+        const query = `
+            UPDATE produto_niveis_estoque_alerta as pnea SET
+                prioridade = c.prioridade
+            FROM (VALUES
+                ${prioridades.map((_, i) => `($${i*2 + 1}::text, $${i*2 + 2}::integer)`).join(', ')}
+            ) AS c(produto_ref_id, prioridade)
+            WHERE c.produto_ref_id = pnea.produto_ref_id;
+        `;
+
+        const values = prioridades.flatMap(p => [p.produto_ref_id, p.prioridade]);
+
+        await dbClient.query(query, values);
+        
+        await dbClient.query('COMMIT');
+        res.status(200).json({ message: 'Prioridades atualizadas com sucesso.' });
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error('[API/niveis-estoque POST /prioridade] Erro:', error);
+        res.status(500).json({ error: 'Erro ao atualizar prioridades.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
 export default router;

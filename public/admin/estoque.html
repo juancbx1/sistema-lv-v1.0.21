@@ -18,6 +18,10 @@
     
         <!-- View Principal: Lista de Estoque (Permanece igual) -->
         <section class="es-card" id="mainViewEstoque">
+            <!-- Overlay de Carregamento da Página -->
+        <div id="paginaLoadingOverlay" class="es-pagina-loading-overlay">
+            <div class="es-spinner"></div>
+        </div>
             <div class="es-cabecalho-pagina">
                 <h1>Controle de Estoque</h1>
                 <!-- NOVO BOTÃO PARA INICIAR SEPARAÇÃO -->
@@ -41,45 +45,49 @@
                         <p class="es-alerta-card-descricao">Itens próximos do nível crítico.</p>
                     </div>
                 </div>
-                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
-                    <button class="es-btn es-btn-secundario" id="btnMostrarTodosEstoque" style="display: none;">
-                        <i class="fas fa-list"></i> Mostrar Todos os Itens
-                    </button>
-                    <button class="es-btn es-btn-primario" id="btnConfigurarNiveisEstoque" title="Configurar níveis de alerta">
-                        <i class="fas fa-cog"></i> Configurar Níveis
-                    </button>
-                </div>
+
+                 <!-- Botao da FILA -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; flex-wrap: wrap; gap: 10px;">
+                
+                <button class="es-btn es-btn-secundario" id="btnMostrarTodosEstoque" style="display: none;">
+                    <i class="fas fa-list"></i> Mostrar Todos os Itens
+                </button>
+                
+                <!-- NOVO BOTÃO PARA A FILA DE PRODUÇÃO -->
+                <button class="es-btn es-btn-primario" id="btnGerenciarFila" title="Gerenciar Fila de Produção Prioritária">
+                    <i class="fas fa-stream"></i> Gerenciar Fila
+                </button>
+
+                <!-- Botão de configurar níveis agora fica mais à direita -->
+                <button class="es-btn es-btn-primario" id="btnConfigurarNiveisEstoque" title="Configurar níveis de alerta" style="margin-left: auto;">
+                    <i class="fas fa-cog"></i> Configurar Níveis
+                </button>
+            </div>
+
+
             </div>
             
             <div class="es-card">
-                 <!-- NOVO: Título dinâmico para filtros de alerta -->
-                <div id="filtroAtivoHeader" class="es-filtro-ativo-header" style="display: none;">
+    
+            <!-- Título do filtro dinâmico (permanece igual) -->
+            <div id="filtroAtivoHeader" class="es-filtro-ativo-header" style="display: none;">
                 <h2 id="filtroAtivoTitulo"></h2>
-                </div>
+            </div>
 
-                 <input type="text" id="searchEstoque" class="es-input-busca" placeholder="Buscar por produto ou variação...">
-                <h2 class="es-titulo-secao" style="text-align:left;">Itens em Estoque</h2>
-                <div class="es-tabela-wrapper">
-                    <table class="es-tabela-estilizada" id="estoqueTable">
-                        <thead>
-                        <tr>
-                            <!-- NOVA COLUNA PARA O INDICADOR DE STATUS -->
-                            <th style="width: 20px;"></th> 
-                            <th style="width: 70px;">Imagem</th>
-                            <th>Produto</th>
-                            <th>Variação</th>
-                            <!-- NOVA COLUNA 'IDEAL' -->
-                            <th style="width: 120px; text-align:center;">Estoque Ideal</th> 
-                            <th class="saldo-estoque" style="width: 120px; text-align:center;">Saldo Atual</th>
-                        </tr>
-                    </thead>
-                        <tbody id="estoqueTableBody">
-                        </tbody>
-                    </table>
-                    </div>
-                    <div id="estoquePaginacaoContainer" class="es-paginacao-container" style="display: none; margin-top: 20px;">
-                    </div>
-                </div> 
+            <!-- Barra de busca (permanece igual) -->
+            <input type="text" id="searchEstoque" class="es-input-busca" placeholder="Buscar por produto, variação ou SKU...">
+            
+            <h2 class="es-titulo-secao" style="text-align:left;">Itens em Estoque</h2>
+
+            <!-- NOVA ESTRUTURA: Container para a grade de cards -->
+            <div id="estoqueCardsContainer" class="es-cards-container-consulta">
+                <!-- Cards de consulta de estoque serão inseridos aqui pelo JS -->
+            </div>
+
+            <!-- Paginação (permanece igual, agora vai paginar os cards) -->
+            <div id="estoquePaginacaoContainer" class="es-paginacao-container" style="display: none; margin-top: 20px;">
+            </div>
+        </div>
         </section>
 
         <!-- NOVA VIEW UNIFICADA: Movimentação de Estoque -->
@@ -166,12 +174,6 @@
                 <!-- Itens de produto base serão inseridos aqui pelo JS -->
             </div>
 
-            <!-- "CARRINHO" FLUTUANTE (permanece o mesmo) -->
-        <button id="carrinhoSeparacao" class="es-fab-carrinho hidden" title="Revisar e Finalizar Separação">
-            <i class="fa-regular fa-square-plus"></i>
-            <span id="carrinhoContadorBadge" class="es-fab-badge hidden">0</span>
-        </button>
-
 
         </section>
 
@@ -195,48 +197,68 @@
             </div>
         </section>
 
-            <!-- NOVO: Modal para Finalizar a Separação -->
-        <div id="modalFinalizarSeparacao" class="es-modal" style="display:none;">
-            <div class="es-modal-conteudo" style="max-width: 700px;">
-    <!-- MUDANÇA 1: Adicionar classe ao botão "X" -->
-    <span class="es-modal-fechar es-btn-perigo" id="fecharModalFinalizar">X</span>
-    <h3 id="modalFinalizarTitulo">Finalizar Separação</h3>
-    
-    <div class="es-modal-body">
-        <h4>Itens a serem retirados do estoque:</h4>
-        <!-- MUDANÇA 2: Remover a thead. Vamos construir no JS. -->
-        <div class="es-tabela-wrapper" style="max-height: 250px; overflow-y: auto; margin-bottom: 20px;">
-            <table class="es-tabela-estilizada">
-                <tbody id="resumoCarrinhoBody">
-                    <!-- Itens do carrinho serão inseridos aqui pelo JS -->
-                </tbody>
-            </table>
+    <section id="filaProducaoView" class="hidden">
+            <div class="es-cabecalho-pagina">
+            <h1>Fila de Produção Prioritária</h1>
+            <button id="btnVoltarDaFila" class="es-btn es-btn-secundario" style="margin-left: auto;">
+                <i class="fas fa-arrow-left"></i> Voltar ao Estoque
+            </button>
         </div>
 
-        <!-- NOVO: Container para os botões de canal de venda -->
-        <div class="es-form-grupo">
-            <label>Canal de Venda (Destino)</label>
-            <div id="canalVendaContainer" class="es-botoes-tipo-operacao">
-                <!-- Botões serão gerados pelo JS -->
-            </div>
-            <input type="hidden" id="canalVendaSelecionado">
-        </div>
-        
-        <div class="es-form-grupo">
-            <label for="observacaoSaida">Observação (Ex: Nº do Pedido)</label>
-            <input type="text" id="observacaoSaida" class="es-input" placeholder="Opcional">
+        <div class="es-card es-fila-acoes">
+            <p>Arraste e solte os cards para definir a ordem de prioridade da produção.</p>
+            <button id="btnSalvarPrioridades" class="es-btn es-btn-primario hidden">
+                <i class="fas fa-save"></i> Salvar Ordem da Fila
+            </button>
         </div>
 
-                <div class="es-form-botoes" style="margin-top: 25px;">
-                    <button type="button" class="es-btn es-btn-secundario" id="btnCancelarFinalizacao">Cancelar</button>
-                    <button type="button" class="es-btn es-btn-primario" id="btnConfirmarSaidaEstoque">
-                        <i class="fas fa-check-circle"></i> Confirmar Saída
-                    </button>
-                </div>
-            </div>
+        <div id="filaProducaoContainer" class="es-fila-producao-container">
+            <!-- Cards da fila de produção serão inseridos aqui -->
         </div>
+    </section>
 
     </main>
+
+
+<div id="modalFinalizarSeparacao" class="es-modal" style="display:none;">
+    <div class="es-modal-conteudo" style="max-width: 700px;">
+        <button class="botao-fechar es-btn-perigo" id="fecharModalFinalizar" title="Fechar">X</button>
+        <h3 id="modalFinalizarTitulo">Finalizar Separação</h3>
+        
+        <div class="es-modal-body">
+            <h4>Itens a serem retirados do estoque:</h4>
+            <div class="es-tabela-wrapper" style="max-height: 250px; overflow-y: auto; margin-bottom: 20px;">
+                <table class="es-tabela-estilizada">
+                    <tbody id="resumoCarrinhoBody">
+                        <!-- Itens do carrinho serão inseridos aqui pelo JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="es-form-grupo">
+                <label>Canal de Venda (Destino)</label>
+                <div id="canalVendaContainer" class="es-botoes-tipo-operacao">
+                    <!-- Botões serão gerados pelo JS -->
+                </div>
+                <input type="hidden" id="canalVendaSelecionado">
+            </div>
+            
+            <div class="es-form-grupo">
+                <label for="observacaoSaida">Observação (Ex: Nº do Pedido)</label>
+                <input type="text" id="observacaoSaida" class="es-input" placeholder="Opcional">
+            </div>
+        </div> <!-- Fim do .es-modal-body -->
+
+        <div class="es-form-botoes" style="margin-top: 25px;">
+            <button type="button" class="es-btn es-btn-secundario" id="btnCancelarFinalizacao">Cancelar</button>
+            <button type="button" class="es-btn es-btn-primario" id="btnConfirmarSaidaEstoque">
+                <i class="fas fa-check-circle"></i> Confirmar Saída
+            </button>
+        </div>
+        
+    </div> <!-- Fim do .es-modal-conteudo -->
+</div> <!-- Fim do #modalFinalizarSeparacao -->
+        
 
     <!-- Modal para Configurar Níveis de Estoque (Permanece igual) -->
         <div id="modalConfigurarNiveis" class="es-modal" style="display:none;">
@@ -279,9 +301,10 @@
     
     <!-- NOVO: Modal para o Histórico de Movimentações -->
     <div id="modalHistoricoMovimentacoes" class="es-modal" style="display: none;">
-        <div class="es-modal-conteudo" style="max-width: 850px;">
-            <span class="es-modal-fechar" id="fecharModalHistorico">X</span>
-            <h3>Histórico de Movimentações</h3>
+    <div class="es-modal-conteudo" style="max-width: 850px;">
+        <!-- BOTÃO DE FECHAR PADRONIZADO -->
+        <button class="botao-fechar es-btn-perigo" id="fecharModalHistorico" title="Fechar">X</button>
+        <h3>Histórico de Movimentações</h3>
             <div class="es-tabela-wrapper" style="max-height: 50vh; overflow-y: auto;">
                 <table class="es-tabela-estilizada" id="tabelaHistoricoMovimentacoes">
                     <thead>
@@ -303,6 +326,12 @@
             </div>
         </div>
     </div>
+
+          <!-- "CARRINHO" FLUTUANTE (permanece o mesmo) -->
+        <button id="carrinhoSeparacao" class="es-fab-carrinho hidden" title="Revisar e Finalizar Separação">
+            <i class="fa-regular fa-square-plus"></i>
+            <span id="carrinhoContadorBadge" class="es-fab-badge hidden">0</span>
+        </button>
 
 
     <script src="/js/admin-estoque.js" type="module"></script>

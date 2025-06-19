@@ -60,12 +60,11 @@ router.get('/saldo', async (req, res) => {
     try {
         dbClient = await pool.connect();
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
-
         if (!permissoesCompletas.includes('acesso-estoque')) {
             return res.status(403).json({ error: 'Permissão negada para visualizar saldo do estoque.' });
         }
 
-        // QUERY ATUALIZADA COM JOIN E FILTRO
+        // --- CORREÇÃO NA QUERY SQL ---
         const queryText = `
             WITH Saldos AS (
                 SELECT
@@ -76,11 +75,14 @@ router.get('/saldo', async (req, res) => {
                         (SELECT p.sku FROM produtos p WHERE p.nome = em.produto_nome LIMIT 1),
                         em.produto_nome || COALESCE('_VAR_' || em.variante_nome, '_BASE')
                     ) AS produto_ref_id,
-                    SUM(CASE 
-                        WHEN tipo_movimento LIKE 'ENTRADA%' OR tipo_movimento = 'AJUSTE_BALANCO_POSITIVO' THEN quantidade
-                        WHEN tipo_movimento LIKE 'SAIDA%' OR tipo_movimento = 'AJUSTE_BALANCO_NEGATIVO' THEN -ABS(quantidade) 
-                        ELSE 0 
-                    END) AS saldo_atual,
+                    SUM(
+                        CASE 
+                            -- Adicionamos a condição "OR tipo_movimento LIKE 'ESTORNO%'" aqui
+                            WHEN tipo_movimento LIKE 'ENTRADA%' OR tipo_movimento = 'AJUSTE_BALANCO_POSITIVO' OR tipo_movimento LIKE 'ESTORNO%' THEN quantidade
+                            WHEN tipo_movimento LIKE 'SAIDA%' OR tipo_movimento = 'AJUSTE_BALANCO_NEGATIVO' THEN -ABS(quantidade) 
+                            ELSE 0 
+                        END
+                    ) AS saldo_atual,
                     MAX(data_movimento) as ultima_data_movimento
                 FROM estoque_movimentos em
                 GROUP BY produto_nome, variante_nome
@@ -88,7 +90,7 @@ router.get('/saldo', async (req, res) => {
             SELECT s.*
             FROM Saldos s
             LEFT JOIN estoque_itens_arquivados aia ON s.produto_ref_id = aia.produto_ref_id
-            WHERE aia.id IS NULL -- <<< A MÁGICA ACONTECE AQUI: Exclui os itens arquivados
+            WHERE aia.id IS NULL
             ORDER BY s.ultima_data_movimento DESC, s.produto_nome ASC, s.variante_nome ASC;
         `;
 

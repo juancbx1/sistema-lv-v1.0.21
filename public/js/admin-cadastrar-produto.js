@@ -128,11 +128,12 @@ function configurarEventListeners() {
     // Aba de Produção
     document.getElementById('btnAddStep')?.addEventListener('click', () => addStepRow());
     document.getElementById('btnAddEtapaTiktik')?.addEventListener('click', () => addEtapaTiktikRow());
+    document.getElementById('btnSalvarProducao')?.addEventListener('click', salvarEtapasProducao);
     initializeDragAndDrop();
 
     // Aba de Variações
     document.getElementById('btnAddVariacao')?.addEventListener('click', () => addVariacaoRow());
-    document.getElementById('btnSalvarGrade')?.addEventListener('click', salvarGrade);
+    document.getElementById('btnSalvarGrade')?.addEventListener('click', salvarGrade); 
 
     // Modal de Seleção de Imagem (para a grade)
     document.getElementById('btnTriggerUpload')?.addEventListener('click', () => {
@@ -171,27 +172,35 @@ function configurarEventListeners() {
 function handleHashChange() {
     const hash = window.location.hash;
     const isEditing = (hash === '#editando');
+    const overlay = document.getElementById('formLoadingOverlay');
 
     elements.productListView.style.display = isEditing ? 'none' : 'block';
     elements.productFormView.style.display = isEditing ? 'block' : 'none';
 
     if (isEditing) {
-        // Se a hash mudou para #editando, mas não temos um produto em edição
-        // (ex: o usuário apertou F5 ou colou a URL), buscamos o último editado.
-        if (!editingProduct) {
+        // Se a hash mudou para #editando, verificamos se temos um produto pronto para exibir
+        if (editingProduct) {
+            // Ótimo! Temos os dados, então podemos carregar o formulário com segurança
+            console.log("handleHashChange: editingProduct está pronto. Carregando formulário.");
+            loadEditForm(editingProduct);
+            if (overlay) overlay.classList.add('hidden'); // Esconde o overlay
+        } else {
+            // Não temos um produto. Isso acontece no F5. Precisamos buscar os dados.
             const ultimoProdutoNome = localStorage.getItem('ultimoProdutoEditado');
             if (ultimoProdutoNome) {
+                // A função iniciarEdicaoProduto cuidará de buscar os dados
+                // e depois mudará a hash de novo, o que chamará esta função novamente.
                 iniciarEdicaoProduto(ultimoProdutoNome);
             } else {
-                // Se não há último produto, volta para a lista para evitar uma tela em branco.
-                window.location.hash = '';
+                // Se não há último produto, estamos criando um novo
+                handleAdicionarNovoProduto();
             }
         }
     } else {
-        // Se a hash mudou para qualquer outra coisa, limpamos o estado de edição.
+        // Se a hash não é de edição, limpa o estado
         editingProduct = null;
         localStorage.removeItem('ultimoProdutoEditado');
-        filterProducts(); // Atualiza a lista principal
+        filterProducts();
     }
 }
 
@@ -239,7 +248,7 @@ function loadProductTable(filteredProdutos) {
             <td data-label="Estoque">${produto.estoque || 0}</td>
             <td data-label="Tipo">${(produto.tipos || []).join(', ') || '-'}</td>
         `;
-        // CORREÇÃO: O clique agora chama a nova função mestre
+        // CORREÇÃO: O clique AGORA SÓ CHAMA iniciarEdicaoProduto.
         tr.addEventListener('click', () => iniciarEdicaoProduto(produto.nome));
         elements.productTableBody.appendChild(tr);
     });
@@ -256,15 +265,18 @@ function filterProducts(type = 'todos') {
 }
 
 async function iniciarEdicaoProduto(nome) {
+    const overlay = document.getElementById('formLoadingOverlay');
     try {
-        // Passo 1: Mostra um feedback de carregamento e troca a view
-        document.body.style.cursor = 'wait';
+        // Passo 1: Troca a view e ATIVA o estado de carregamento
         elements.productListView.style.display = 'none';
         elements.productFormView.style.display = 'block';
-        elements.editProductNameDisplay.textContent = 'Carregando...';
-        elements.productForm.style.visibility = 'hidden'; // Esconde o form enquanto carrega
+        if (overlay) overlay.classList.remove('hidden');
+        document.body.style.cursor = 'wait';
+        
+        // **A MUDANÇA MAIS IMPORTANTE**: Limpa o conteúdo ANTES de buscar os dados.
+        limparFormularioDeEdicao();
 
-        // Passo 2: Busca os dados mais recentes do backend
+        // Passo 2: Busca os dados
         console.log(`Buscando dados atualizados para: ${nome}`);
         const token = localStorage.getItem('token');
         const response = await fetch(`/api/produtos/por-nome?nome=${encodeURIComponent(nome)}`, {
@@ -276,15 +288,15 @@ async function iniciarEdicaoProduto(nome) {
         }
         const produtoAtualizado = await response.json();
 
-        // Passo 3: Define as variáveis de estado globais
+        // Passo 3: Define o estado global APÓS o sucesso da busca
         editingProduct = deepClone(produtoAtualizado);
         gradeTemp = deepClone(editingProduct.grade || []);
+        localStorage.setItem('ultimoProdutoEditado', nome);
         
-        // Passo 4: AGORA que os dados estão prontos, carrega o formulário
+        // Passo 4: AGORA, com os dados prontos, carrega o formulário
         loadEditForm(editingProduct);
 
-        // Passo 5: Atualiza o estado da URL e localStorage
-        localStorage.setItem('ultimoProdutoEditado', nome);
+        // Atualiza a URL no final
         if (window.location.hash !== '#editando') {
             window.history.pushState({ produto: nome }, 'Editando ' + nome, '#editando');
         }
@@ -292,16 +304,91 @@ async function iniciarEdicaoProduto(nome) {
     } catch (error) {
         console.error(`[iniciarEdicaoProduto] Erro:`, error);
         mostrarPopup(`Erro ao carregar produto: ${error.message}`, 'erro');
-        // Em caso de erro, força o retorno para a lista
         window.location.hash = ''; 
     } finally {
-        elements.productForm.style.visibility = 'visible';
+        // Passo 5: Esconde o overlay
+        if (overlay) overlay.classList.add('hidden');
         document.body.style.cursor = 'default';
+    }
+}
+
+function limparFormularioDeEdicao() {
+    // Limpa os campos de texto e inputs
+    elements.editProductNameDisplay.textContent = 'Carregando...';
+    elements.inputProductName.value = '';
+    elements.sku.value = '';
+    elements.gtin.value = '';
+    
+    // Desmarca todos os checkboxes de tipo
+    document.querySelectorAll('input[name="tipo"]').forEach(cb => { cb.checked = false; });
+    
+    // Limpa a imagem principal
+    handleRemoveImagem();
+
+    // Limpa o conteúdo das tabelas e containers dinâmicos
+    const containersParaLimpar = [
+        elements.stepsBody,
+        elements.etapasTiktikBody,
+        elements.variationsComponentContainer,
+        elements.gradeBody,
+        elements.gradeHeader,
+    ];
+
+    containersParaLimpar.forEach(container => {
+        if (container) {
+            container.innerHTML = '';
+        }
+    });
+
+    // Garante que nenhuma aba de variação/etc. esteja visível
+    const variacoesTabBtn = document.querySelector('.cp-tab-btn[data-tab="variacoes"]');
+    if (variacoesTabBtn) variacoesTabBtn.remove();
+}
+
+async function salvarGrade() {
+    if (!editingProduct) return;
+    try {
+        await salvarProdutoNoBackend();
+        mostrarPopup('Grade e Variações salvas com sucesso!', 'sucesso');
+    } catch (error) { /* erro já tratado */ }
+}
+
+async function salvarEtapasProducao() {
+    if (!editingProduct) return;
+
+    console.log("Salvando etapas de produção...");
+    
+    // Coleta os dados das duas tabelas
+    editingProduct.etapas = Array.from(elements.stepsBody.querySelectorAll('tr')).map(tr => ({
+        processo: tr.querySelector('.processo-select')?.value || '',
+        maquina: tr.querySelector('.maquina-select')?.value || '',
+        feitoPor: tr.querySelector('.feito-por-select')?.value || ''
+    }));
+    
+    editingProduct.etapasTiktik = Array.from(elements.etapasTiktikBody.querySelectorAll('tr')).map(tr => ({
+        processo: tr.querySelector('.processo-select')?.value || '',
+        maquina: tr.querySelector('.maquina-select')?.value || '',
+        feitoPor: tr.querySelector('.feito-por-select')?.value || ''
+    }));
+
+    try {
+        // Chama a função principal de salvamento, que já envia o objeto 'editingProduct' inteiro
+        await salvarProdutoNoBackend();
+        mostrarPopup('Etapas de produção salvas com sucesso!', 'sucesso');
+    } catch (error) {
+        mostrarPopup('Erro ao salvar as etapas de produção.', 'erro');
     }
 }
 
 // --- Edição de Produto ---
 function handleAdicionarNovoProduto() {
+    // Troca a view imediatamente
+    elements.productListView.style.display = 'none';
+    elements.productFormView.style.display = 'block';
+
+    // Limpa completamente o formulário
+    limparFormularioDeEdicao();
+
     // Define o estado inicial para um produto novo
     editingProduct = {
         nome: '', sku: '', gtin: '', unidade: 'pç', estoque: 0, imagem: '',
@@ -311,9 +398,7 @@ function handleAdicionarNovoProduto() {
     gradeTemp = [];
     localStorage.removeItem('ultimoProdutoEditado');
     
-    // Troca a view e carrega o formulário vazio
-    elements.productListView.style.display = 'none';
-    elements.productFormView.style.display = 'block';
+    // Carrega o formulário agora que ele está limpo e com o estado novo
     loadEditForm(editingProduct);
     
     // Atualiza a URL
@@ -365,6 +450,23 @@ async function editProduct(nome) {
 }
 
 function loadEditForm(produto) {
+    // --- PASSO 1: LIMPEZA IMEDIATA E FEEDBACK DE CARREGAMENTO ---
+    elements.editProductNameDisplay.textContent = `Carregando: ${produto.nome || 'Novo Produto'}...`;
+    
+    // Limpa todas as áreas que serão preenchidas
+    const containersParaLimpar = [
+        elements.stepsBody,
+        elements.etapasTiktikBody,
+        elements.variationsComponentContainer,
+        elements.gradeBody
+    ];
+    containersParaLimpar.forEach(container => {
+        if (container) {
+            container.innerHTML = '<tr><td colspan="100%"><div class="spinner-btn-interno" style="margin: 20px auto;"></div></td></tr>';
+        }
+    });
+
+    // --- PASSO 2: PREENCHIMENTO DOS DADOS (O código que você já tem) ---
     elements.editProductNameDisplay.textContent = produto.id ? `Editando: ${produto.nome}` : 'Cadastrando Novo Produto';
     elements.inputProductName.value = produto.nome || '';
     elements.sku.value = produto.sku || '';
@@ -372,19 +474,28 @@ function loadEditForm(produto) {
     elements.unidade.value = produto.unidade || 'pç';
     elements.estoque.value = produto.estoque || 0;
     document.querySelectorAll('input[name="tipo"]').forEach(cb => { cb.checked = (produto.tipos || []).includes(cb.value); });
-    handleRemoveImagem();
+    
+    handleRemoveImagem(); // Limpa a imagem anterior
     if (produto.imagem) {
         elements.previewImagem.src = produto.imagem;
         elements.previewImagem.style.display = 'block';
         elements.removeImagem.style.display = 'inline-block';
     }
+    
+    // Carregamento das etapas
     elements.stepsBody.innerHTML = '';
     (produto.etapas || []).forEach((etapa, index) => addStepRow(etapa.processo, etapa.maquina, etapa.feitoPor, index));
+    
     elements.etapasTiktikBody.innerHTML = '';
-    (produto.etapasTiktik || []).forEach((etapa, index) => addEtapaTiktikRow(etapa.processo, etapa.maquina, etapa.feitoPor, index));
+    const etapasTiktikParaCarregar = produto.etapasTiktik || produto.etapastiktik || [];
+    etapasTiktikParaCarregar.forEach((etapa, index) => addEtapaTiktikRow(etapa.processo, etapa.maquina, etapa.feitoPor, index));
+
+    // Carregamento das variações e grade
     loadVariacoesComponent(produto);
     loadGrade();
     toggleTabs();
+    
+    // Define a aba inicial
     const abaPadrao = (produto.tipos || []).find(t => t === 'variacoes' || t === 'kits') ? 'variacoes' : 'dados-gerais';
     switchTab(abaPadrao);
 }
@@ -832,25 +943,50 @@ function handleAddVariacaoKit() {
     kitComposicaoTemp.push({ produto, variacao, quantidade: 1 });
     renderizarComposicaoKit();
 }
+
+
 function renderizarComposicaoKit() {
     elements.composicaoKitContainer.innerHTML = '';
     kitComposicaoTemp.forEach((comp, idx) => {
         const div = document.createElement('div');
         div.className = 'composicao-kit-row';
-        div.innerHTML = `<span>${comp.produto} - ${comp.variacao}</span><input type="number" class="cp-input" min="1" value="${comp.quantidade}" onchange="atualizarQuantidadeKit(${idx}, this.value)"><button type="button" class="cp-remove-btn" onclick="removerComposicaoKit(${idx})">X</button>`;
+        
+        // CORREÇÃO: Garante que comp.quantidade tenha um valor padrão de 1
+        const quantidade = comp.quantidade || 1;
+        
+        div.innerHTML = `
+            <span>${comp.produto} - ${comp.variacao}</span>
+            <input type="number" class="cp-input" min="1" value="${quantidade}" onchange="atualizarQuantidadeKit(${idx}, this.value)">
+            <button type="button" class="cp-remove-btn" onclick="removerComposicaoKit(${idx})">X</button>
+        `;
         elements.composicaoKitContainer.appendChild(div);
     });
 }
+
+
 window.atualizarQuantidadeKit = (index, qty) => { kitComposicaoTemp[index].quantidade = parseInt(qty) || 1; };
 window.removerComposicaoKit = (index) => { kitComposicaoTemp.splice(index, 1); renderizarComposicaoKit(); };
+
+
 async function salvarComposicaoKit() {
     if (currentKitVariationIndex !== null && editingProduct.grade[currentKitVariationIndex]) {
         editingProduct.grade[currentKitVariationIndex].composicao = deepClone(kitComposicaoTemp);
         gradeTemp = deepClone(editingProduct.grade);
         loadGrade();
-        fecharPopup();
-        await salvarGrade(); // Salva a alteração no backend
+        
+        // CORREÇÃO: Chama a nova função de fechar o modal
+        fecharPopupConfigurarVariacao(); 
+        
+        // Salva as alterações no backend
+        await salvarGrade();
     }
+}
+
+function fecharPopupConfigurarVariacao() {
+    const modal = document.getElementById('configurarVariacaoView');
+    if (modal) modal.classList.remove('active');
+    currentKitVariationIndex = null;
+    kitComposicaoTemp = [];
 }
 
 // --- Ponto de Entrada ---
@@ -868,12 +1004,12 @@ Object.assign(window, {
     
     // Funções da aba de variações
     addVariacaoRow,
-    salvarGrade,
     excluirGrade,
     updateGradeSku,
     
     // Funções dos popups
     fecharModalSelecaoImagem,
+    fecharPopupConfigurarVariacao, 
     
     // Funções de Kit
     abrirConfigurarVariacao,
