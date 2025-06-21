@@ -76,7 +76,16 @@
 
             <!-- Barra de busca (permanece igual) -->
             <input type="text" id="searchEstoque" class="es-input-busca" placeholder="Buscar por produto, variação ou SKU...">
-            
+            <div class="es-filtros-container">
+            <button id="toggleFiltrosAvancadosBtn" class="es-btn es-btn-secundario">
+                <i class="fas fa-filter"></i> Filtros Avançados
+            </button>
+            <div id="filtrosAvancados" class="hidden">
+                <!-- Selects de filtro serão inseridos aqui pelo JS -->
+                <button id="limparFiltrosEstoqueBtn" class="es-btn es-btn-perigo">Limpar Filtros</button>
+            </div>
+        </div>
+
             <h2 class="es-titulo-secao" style="text-align:left;">Itens em Estoque</h2>
 
             <!-- NOVA ESTRUTURA: Container para a grade de cards -->
@@ -238,11 +247,27 @@
         <!-- PAINEL DA ABA 1: PRIORIDADES -->
         <div id="tab-prioridades" class="es-tab-panel active">
             <div class="es-card es-fila-acoes">
-                <p>Arraste e solte os cards para definir a ordem de prioridade.</p>
-                <button id="btnSalvarPrioridades" class="es-btn es-btn-primario hidden">
-                    <i class="fas fa-save"></i> Salvar Ordem da Fila
-                </button>
+            <!-- NOVO: Área de Filtros da Fila -->
+            <div class="es-filtros-fila-container">
+                <div id="filtrosFilaStatus" class="es-form-grupo">
+                    <label for="filtroFilaStatusSelect">Filtrar por Status</label>
+                    <select id="filtroFilaStatusSelect" class="es-select">
+                        <option value="">Todos os Status</option>
+                        <option value="urgente">Urgente</option>
+                        <option value="baixo">Baixo</option>
+                    </select>
+                </div>
+                <div id="filtrosFilaDinamicos">
+                    <!-- Filtros dinâmicos (cor, tamanho, etc.) serão inseridos aqui -->
+                </div>
+                <button id="limparFiltrosFilaBtn" class="es-btn es-btn-perigo" style="align-self: flex-end;">Limpar</button>
             </div>
+
+            <button id="btnSalvarPrioridades" class="es-btn es-btn-primario hidden">
+                <i class="fas fa-save"></i> Salvar Ordem da Fila
+            </button>
+        </div>
+
             <div id="filaProducaoContainer" class="es-fila-producao-container">
                 <!-- Cards da fila de prioridades serão inseridos aqui -->
             </div>

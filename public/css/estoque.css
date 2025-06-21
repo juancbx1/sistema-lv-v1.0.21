@@ -204,6 +204,53 @@ body.autenticado { visibility: visible; }
 .es-tabela-estilizada .saldo-estoque { font-weight: bold; font-size: 1rem; }
 
 
+/* Estilo para destacar a linha de estorno em TODAS as resoluções */
+.es-tabela-estilizada tr.linha-estorno {
+    background-color: #fff5f5; /* Fundo levemente avermelhado */
+}
+
+.es-tabela-estilizada tr.linha-estorno:hover {
+    background-color: #ffebeb; /* Um tom um pouco mais escuro no hover */
+}
+
+
+/*------------------------------------*\
+    # FILTROS AVANÇADOS
+\*------------------------------------*/
+.es-filtros-container {
+    margin-bottom: 20px;
+}
+
+#filtrosAvancados, .es-filtros-fila-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    padding: 20px;
+    background-color: var(--es-cor-cinza-fundo-input);
+    border-radius: var(--es-raio-borda-card);
+    margin-top: 15px;
+}
+
+#filtrosAvancados .es-form-grupo,
+.es-filtros-fila-container .es-form-grupo {
+    flex: 1 1 180px; /* Permite que os filtros cresçam e quebrem a linha */
+    margin-bottom: 0;
+}
+
+.es-filtros-fila-container {
+    width: 100%;
+    align-items: flex-end; /* Alinha os botões na base */
+}
+
+#filtrosFilaDinamicos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    flex-grow: 1;
+}
+
+
+
 /* Estilos para o Modal de Configurar Níveis */
 .es-modal { /* Ou .pr-modal se você usou essa classe no HTML do modal */
     display: none; /* Inicialmente oculto */
@@ -1800,6 +1847,46 @@ body.autenticado { visibility: visible; }
     .movimento-saldo span {
         font-size: 2rem;
     }
+
+    /* --- NOVO: Layout Mobile para a Tabela de Histórico --- */
+#historicoContainer .es-tabela-estilizada thead {
+    display: none; /* Esconde o cabeçalho da tabela no mobile */
+}
+
+#historicoContainer .es-tabela-estilizada tr {
+    display: block; /* Transforma cada linha em um "card" */
+    border: 1px solid var(--es-cor-cinza-borda);
+    border-radius: var(--es-raio-borda-card);
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+#historicoContainer .es-tabela-estilizada td {
+    display: flex; /* Alinha o label e o valor lado a lado */
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    text-align: right; /* Alinha o valor à direita */
+    border-bottom: 1px dotted #e9ecef;
+}
+
+#historicoContainer .es-tabela-estilizada td:last-child {
+    border-bottom: none;
+}
+
+#historicoContainer .es-tabela-estilizada td::before {
+    content: attr(data-label); /* Pega o texto do data-label */
+    font-weight: 600;
+    color: var(--es-cor-cinza-texto-secundario);
+    text-align: left;
+    margin-right: 10px;
+}
+
+/* NOVO: Estilo para destacar o estorno (o "charme") */
+#historicoContainer .es-tabela-estilizada tr.linha-estorno {
+    background-color: #fff5f5; /* Fundo levemente avermelhado */
+    border-left: 4px solid var(--es-cor-vermelho-perigo);
+}
 
 }
 

@@ -422,6 +422,89 @@ function fecharModalNiveis() {
 
 
 // --- LÓGICA DE DADOS E TABELA PRINCIPAL (Sem alterações significativas) ---
+function gerarFiltrosDinamicos() {
+    const chavesDeVariacao = new Map();
+
+    // 1. Mapeia todas as chaves de variação, NORMALIZANDO a chave de cor
+    todosOsProdutosCadastrados.forEach(p => {
+        if (p.variacoes && Array.isArray(p.variacoes)) {
+            p.variacoes.forEach(variacao => {
+                // --- LÓGICA DE PADRONIZAÇÃO ---
+                // Pega a chave, converte para minúsculas e remove espaços
+                let chaveNormalizada = variacao.chave.toLowerCase().trim();
+                
+                // Agrupa qualquer chave que seja "cor" em uma única chave padronizada
+                // (Isso vai pegar "cor" e "Cor")
+                if (chaveNormalizada === 'cor') {
+                    // Nós a tratamos como 'cor'. Não precisamos fazer nada.
+                } 
+                // Você pode adicionar outras regras aqui se necessário no futuro
+                // Ex: else if (chaveNormalizada === 'tamanho') { ... }
+
+                // Usa a chave normalizada para agrupar, mas guarda a chave original para o label
+                if (!chavesDeVariacao.has(chaveNormalizada)) {
+                    chavesDeVariacao.set(chaveNormalizada, new Set());
+                }
+                
+                const valores = variacao.valores.split(',').map(v => v.trim()).filter(Boolean);
+                valores.forEach(val => chavesDeVariacao.get(chaveNormalizada).add(val));
+            });
+        }
+    });
+
+    // 2. Pega os containers dos filtros no HTML
+    const containerFiltroEstoque = document.getElementById('filtrosAvancados');
+    const containerFiltroFila = document.getElementById('filtrosFilaDinamicos');
+
+    containerFiltroEstoque.innerHTML = '';
+    containerFiltroFila.innerHTML = '';
+
+    // 3. Cria os selects para cada chave de variação NORMALIZADA
+    chavesDeVariacao.forEach((valoresSet, chaveNormalizada) => {
+        // Cria um label mais amigável (ex: "cor" -> "Cor")
+        const labelAmigavel = chaveNormalizada.charAt(0).toUpperCase() + chaveNormalizada.slice(1);
+
+        // --- Cria o select para o filtro de ESTOQUE ---
+        const grupoEstoque = document.createElement('div');
+        grupoEstoque.className = 'es-form-grupo';
+        const selectEstoque = document.createElement('select');
+        selectEstoque.className = 'es-select filtro-dinamico-estoque';
+        selectEstoque.dataset.chave = chaveNormalizada; // Usa a chave normalizada para a lógica de filtro
+        
+        let optionsHTML = `<option value="">Toda(o)s ${labelAmigavel}</option>`;
+        Array.from(valoresSet).sort().forEach(val => {
+            optionsHTML += `<option value="${val}">${val}</option>`;
+        });
+        selectEstoque.innerHTML = optionsHTML;
+        selectEstoque.addEventListener('change', () => carregarTabelaEstoque());
+        grupoEstoque.appendChild(selectEstoque);
+        containerFiltroEstoque.appendChild(grupoEstoque);
+
+        // --- Cria o select para o filtro da FILA ---
+        const grupoFila = document.createElement('div');
+        grupoFila.className = 'es-form-grupo';
+        const selectFila = selectEstoque.cloneNode(true);
+        selectFila.className = 'es-select filtro-dinamico-fila';
+        selectFila.addEventListener('change', renderizarFilaDeProducao);
+        grupoFila.appendChild(selectFila);
+        containerFiltroFila.appendChild(grupoFila);
+    });
+
+    // Adiciona o botão de limpar ao final
+    const btnLimparEstoque = document.createElement('button');
+    btnLimparEstoque.id = 'limparFiltrosEstoqueBtn';
+    btnLimparEstoque.className = 'es-btn es-btn-perigo';
+    btnLimparEstoque.textContent = 'Limpar Filtros';
+    btnLimparEstoque.addEventListener('click', () => {
+        document.querySelectorAll('.filtro-dinamico-estoque').forEach(s => s.value = '');
+        document.getElementById('searchEstoque').value = '';
+        carregarTabelaEstoque();
+    });
+    containerFiltroEstoque.appendChild(btnLimparEstoque);
+}
+
+
+
 async function obterSaldoEstoqueAtualAPI() {
     console.log('[obterSaldoEstoqueAtualAPI] Buscando saldo do estoque...');
     try {
@@ -435,36 +518,40 @@ async function obterSaldoEstoqueAtualAPI() {
     }
 }
 
-async function carregarTabelaEstoque(searchTerm = '', page = 1) {
-    // A lógica de filtros, busca de dados e paginação permanece a mesma
-    if (searchTerm && filtroAlertaAtivo) {
+async function carregarTabelaEstoque(searchTerm = null, page = 1) {
+    // Pega o termo de busca do input se não for passado como argumento, para manter o estado
+    const termoBusca = searchTerm !== null ? searchTerm : (document.getElementById('searchEstoque')?.value || '');
+    
+    // Se uma busca for feita, reseta o filtro de alerta ativo para não haver conflito
+    if (termoBusca && filtroAlertaAtivo) {
         filtroAlertaAtivo = null;
         document.getElementById('filtroAtivoHeader').style.display = 'none';
         document.querySelectorAll('.es-alerta-card').forEach(c => c.classList.remove('filtro-ativo'));
     }
     
     currentPageEstoqueTabela = parseInt(page) || 1;
-    const container = document.getElementById('estoqueCardsContainer'); // Alvo agora é o container de cards
+    const container = document.getElementById('estoqueCardsContainer');
     if (!container) return;
-    container.innerHTML = `<div class="es-spinner" style="grid-column: 1 / -1;"></div>`;
+    container.innerHTML = `<div class="es-spinner" style="grid-column: 1 / -1;">Atualizando itens...</div>`;
     
     try {
         let dadosDeSaldo;
+        // Força a busca na API se os dados ainda não foram carregados ou se um filtro de alerta foi clicado
         if (saldosEstoqueGlobaisCompletos.length === 0 || filtroAlertaAtivo) {
             dadosDeSaldo = await obterSaldoEstoqueAtualAPI(); 
         } else {
             dadosDeSaldo = [...saldosEstoqueGlobaisCompletos];
         }
 
+        // Garante que os dados de produtos e níveis de alerta estão carregados
         const [todosProdutosDef, niveisDeAlertaApi] = await Promise.all([
             obterProdutos(), 
             niveisEstoqueAlertaCache.length > 0 ? Promise.resolve([...niveisEstoqueAlertaCache]) : fetchEstoqueAPI('/niveis-estoque')
         ]);
-        
         if (niveisEstoqueAlertaCache.length === 0) niveisEstoqueAlertaCache = Array.isArray(niveisDeAlertaApi) ? niveisDeAlertaApi : [];
         const niveisAlertaValidos = niveisEstoqueAlertaCache;
 
-        // ... (lógica de cálculo de contadores de alerta permanece a mesma) ...
+        // Atualiza os contadores dos cards de alerta
         let countUrgente = 0, countBaixo = 0;
         dadosDeSaldo.forEach(item => {
             const configNivel = niveisAlertaValidos.find(n => n.produto_ref_id === item.produto_ref_id && n.ativo);
@@ -474,22 +561,15 @@ async function carregarTabelaEstoque(searchTerm = '', page = 1) {
                 else if (configNivel.nivel_estoque_baixo !== null && saldoNum <= configNivel.nivel_estoque_baixo) countBaixo++;
             }
         });
-
-        // --- Lógica para fazer o ícone piscar ---
         const iconeUrgente = document.querySelector('#cardReposicaoUrgente .es-alerta-icone');
-        if (iconeUrgente) {
-            if (countUrgente > 0) {
-                iconeUrgente.classList.add('icone-piscando');
-            } else {
-                iconeUrgente.classList.remove('icone-piscando');
-            }
-        }
-        // --- Fim da lógica de icone piscando ---
-
+        if (iconeUrgente) iconeUrgente.classList.toggle('icone-piscando', countUrgente > 0);
         document.getElementById('contadorUrgente').textContent = countUrgente;
         document.getElementById('contadorBaixo').textContent = countBaixo;
 
+        // Começa a filtrar a lista de itens
         let itensFiltrados = [...dadosDeSaldo];
+        
+        // Aplica o filtro de alerta (se ativo)
         if (filtroAlertaAtivo) {
             itensFiltrados = itensFiltrados.filter(item => {
                 const configNivel = niveisAlertaValidos.find(n => n.produto_ref_id === item.produto_ref_id && n.ativo);
@@ -500,33 +580,62 @@ async function carregarTabelaEstoque(searchTerm = '', page = 1) {
                 return false;
             });
         }
-
-        if (searchTerm) {
-            const termo = searchTerm.toLowerCase();
+        
+        // Aplica o filtro de busca por texto
+        if (termoBusca) {
+            const termo = termoBusca.toLowerCase();
             itensFiltrados = itensFiltrados.filter(item =>
                 item.produto_nome.toLowerCase().includes(termo) ||
-                (item.variante_nome && item.variante_nome !== '-' && item.variante_nome.toLowerCase().includes(termo)) ||
-                (item.produto_ref_id && item.produto_ref_id.toLowerCase().includes(termo)) // Adicionado busca por SKU
+                (item.variante_nome && item.variante_nome.toLowerCase().includes(termo)) ||
+                (item.produto_ref_id && item.produto_ref_id.toLowerCase().includes(termo))
             );
         }
+
+        // Aplica os filtros avançados (selects dinâmicos)
+        const filtrosAtivos = {};
+    document.querySelectorAll('.filtro-dinamico-estoque').forEach(select => {
+        if (select.value) {
+            // Usa a chave normalizada do dataset
+            filtrosAtivos[select.dataset.chave] = select.value;
+        }
+    });
+
+    if (Object.keys(filtrosAtivos).length > 0) {
+        itensFiltrados = itensFiltrados.filter(item => {
+            const produtoDef = todosOsProdutosCadastrados.find(p => p.nome === item.produto_nome);
+            if (!produtoDef || !produtoDef.variacoes) return false;
+
+            return Object.entries(filtrosAtivos).every(([chaveFiltro, valorFiltro]) => {
+                // Encontra a definição da variação no produto, ignorando maiúsculas/minúsculas
+                const variacaoDef = produtoDef.variacoes.find(v => v.chave.toLowerCase().trim() === chaveFiltro);
+                if (!variacaoDef) return false;
+                
+                // Encontra a posição (índice) da variação para poder comparar com o valor
+                const indexVariacao = produtoDef.variacoes.indexOf(variacaoDef);
+                const valoresItem = item.variante_nome?.split(' | ').map(v => v.trim()) || [];
+                
+                return valoresItem[indexVariacao] === valorFiltro;
+            });
+        });
+    }
         
+        // Pagina o resultado final
         const totalItems = itensFiltrados.length;
         const totalPages = Math.ceil(totalItems / itemsPerPageEstoqueTabela) || 1;
         currentPageEstoqueTabela = Math.min(currentPageEstoqueTabela, totalPages);
         const itensPaginados = itensFiltrados.slice((currentPageEstoqueTabela - 1) * itemsPerPageEstoqueTabela, currentPageEstoqueTabela * itemsPerPageEstoqueTabela);
            
-        // Chama a NOVA função de renderização
+        // Renderiza o resultado
         renderizarCardsConsulta(itensPaginados, todosProdutosDef, niveisAlertaValidos);
-        
-        renderizarPaginacaoEstoque(totalPages, searchTerm);
+        renderizarPaginacaoEstoque(totalPages, termoBusca); // Passa o termo de busca para a paginação
 
+        // Controla a visibilidade do botão "Mostrar Todos"
         const btnMostrarTodosEl = document.getElementById('btnMostrarTodosEstoque');
         if (btnMostrarTodosEl) {
-            btnMostrarTodosEl.style.display = (filtroAlertaAtivo || searchTerm) ? 'inline-flex' : 'none';
+            btnMostrarTodosEl.style.display = (filtroAlertaAtivo || termoBusca || Object.keys(filtrosAtivos).length > 0) ? 'inline-flex' : 'none';
         }
     } catch (error) { 
         container.innerHTML = `<p style="text-align: center; color: red; grid-column: 1 / -1;">Erro ao carregar estoque.</p>`;
-        mostrarPopupEstoque("Erro inesperado ao carregar dados do estoque.", "erro");
     }
 }
 
@@ -747,8 +856,19 @@ function renderizarFilaDeProducao() {
     const container = document.getElementById('filaProducaoContainer');
     container.innerHTML = `<div class="es-spinner"></div>`;
 
+    // 1. Pega os valores dos filtros da fila
+    const statusFiltro = document.getElementById('filtroFilaStatusSelect').value;
+    const filtrosDinamicosFila = {};
+    document.querySelectorAll('.filtro-dinamico-fila').forEach(select => {
+        if (select.value) {
+            filtrosDinamicosFila[select.dataset.chave] = select.value;
+        }
+    });
+
     const idsEmProducao = new Set(promessasDeProducaoCache.map(p => p.produto_ref_id));
-    const itensNaFila = niveisEstoqueAlertaCache
+    
+    // 2. Começa com a lista base de itens que precisam de produção
+    let itensFiltrados = niveisEstoqueAlertaCache
         .filter(config => {
             if (!config.ativo || idsEmProducao.has(config.produto_ref_id)) return false;
             const itemSaldo = saldosEstoqueGlobaisCompletos.find(s => s.produto_ref_id === config.produto_ref_id);
@@ -756,16 +876,54 @@ function renderizarFilaDeProducao() {
             const saldoNum = parseFloat(itemSaldo.saldo_atual);
             return (config.nivel_reposicao_urgente !== null && saldoNum <= config.nivel_reposicao_urgente) ||
                    (config.nivel_estoque_baixo !== null && saldoNum <= config.nivel_estoque_baixo);
-        })
-        .sort((a, b) => (a.prioridade || 99) - (b.prioridade || 99));
+        });
+
+    // 3. Aplica os filtros
+    if (statusFiltro) {
+        itensFiltrados = itensFiltrados.filter(config => {
+            const itemSaldo = saldosEstoqueGlobaisCompletos.find(s => s.produto_ref_id === config.produto_ref_id);
+            if (!itemSaldo) return false;
+            const saldoNum = parseFloat(itemSaldo.saldo_atual);
+            if (statusFiltro === 'urgente') {
+                return config.nivel_reposicao_urgente !== null && saldoNum <= config.nivel_reposicao_urgente;
+            }
+            if (statusFiltro === 'baixo') {
+                return config.nivel_estoque_baixo !== null && saldoNum <= config.nivel_estoque_baixo &&
+                       (config.nivel_reposicao_urgente === null || saldoNum > config.nivel_reposicao_urgente);
+            }
+            return true;
+        });
+    }
+
+    if (Object.keys(filtrosDinamicosFila).length > 0) {
+        itensFiltrados = itensFiltrados.filter(config => {
+            const itemSaldo = saldosEstoqueGlobaisCompletos.find(s => s.produto_ref_id === config.produto_ref_id);
+            if (!itemSaldo) return false;
+            const produtoDef = todosOsProdutosCadastrados.find(p => p.nome === itemSaldo.produto_nome);
+            if (!produtoDef || !produtoDef.variacoes) return false;
+
+            return Object.entries(filtrosDinamicosFila).every(([chave, valor]) => {
+                const variacaoDef = produtoDef.variacoes.find(v => v.chave === chave);
+                if (!variacaoDef) return false;
+                
+                const indexVariacao = produtoDef.variacoes.indexOf(variacaoDef);
+                const valoresItem = itemSaldo.variante_nome?.split(' | ').map(v => v.trim()) || [];
+                
+                return valoresItem[indexVariacao] === valor;
+            });
+        });
+    }
+    
+    // 4. Ordena e renderiza o resultado final
+    const itensParaRenderizar = itensFiltrados.sort((a, b) => (a.prioridade || 99) - (b.prioridade || 99));
 
     container.innerHTML = '';
-    if (itensNaFila.length === 0) {
-        container.innerHTML = '<p style="text-align: center;">Nenhum item na fila de prioridades.</p>';
+    if (itensParaRenderizar.length === 0) {
+        container.innerHTML = '<p style="text-align: center;">Nenhum item na fila de prioridades com os filtros selecionados.</p>';
         return;
     }
 
-    itensNaFila.forEach((config, index) => {
+    itensParaRenderizar.forEach((config, index) => {
         const itemSaldo = saldosEstoqueGlobaisCompletos.find(s => s.produto_ref_id === config.produto_ref_id);
         const produtoDef = todosOsProdutosCadastrados.find(p => p.nome === itemSaldo.produto_nome);
         
@@ -784,7 +942,6 @@ function renderizarFilaDeProducao() {
 
         const podeGerenciarFila = permissoesGlobaisEstoque.includes('gerenciar-fila-de-producao');
 
-        // O 'pegador' para drag-and-drop foi movido para o wrapper de ordenação
         const reordenarHTML = podeGerenciarFila
             ? `<div class="fila-card-reordenar">
                    <button class="reordenar-btn up" onclick="moverItemFila('${config.produto_ref_id}', -1)" title="Mover para cima"><i class="fas fa-arrow-up"></i></button>
@@ -798,15 +955,12 @@ function renderizarFilaDeProducao() {
                </div>`
             : '';
 
-        // --- ESTRUTURA HTML FINAL COM OS WRAPPERS CORRETOS ---
         card.innerHTML = `
-            <!-- Novo wrapper para setas e número -->
             <div class="fila-card-ordenacao-wrapper ${podeGerenciarFila ? 'pode-arrastar' : ''}" 
                  ${podeGerenciarFila ? `draggable="true" title="Arraste para reordenar"` : ''}>
                 ${reordenarHTML}
                 <div class="fila-card-posicao">#${index + 1}</div>
             </div>
-
             <div class="fila-card-info-wrapper">
                 <img src="${imagemSrc}" class="fila-card-img" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">
                 <div class="fila-card-info">
@@ -814,7 +968,6 @@ function renderizarFilaDeProducao() {
                     <p>${itemSaldo.variante_nome || 'Padrão'}</p>
                 </div>
             </div>
-
             <div class="fila-card-footer">
                 <div class="fila-card-dados-producao">
                     <span>Estoque: <strong>${saldoNum}</strong> / Ideal: <strong>${config.nivel_estoque_ideal || '-'}</strong></span>
@@ -1028,56 +1181,42 @@ function abrirViewMovimento(item) {
     window.location.hash = '#editar-estoque-movimento'; // Dispara o handleHashChangeEstoque
 }
 
-// NOVO: Função para preparar e popular a nova view unificada
+// Função para preparar e popular a nova view unificada
 function prepararViewMovimento() {
     if (!itemEstoqueSelecionado) return;
     const item = itemEstoqueSelecionado;
-
-    // --- PREENCHE O CABEÇALHO (lado esquerdo) ---
+    
+    // Todo o código de preenchimento de header, sku, imagem...
     document.getElementById('movimentoItemNome').textContent = `${item.produto_nome} ${item.variante_nome && item.variante_nome !== '-' ? `(${item.variante_nome})` : ''}`;
     document.getElementById('movimentoSaldoAtual').textContent = item.saldo_atual;
     const produtoDef = todosOsProdutosCadastrados.find(p => p.nome === item.produto_nome);
     let skuParaExibir = item.produto_ref_id || 'N/A';
     let imagemSrc = '/img/placeholder-image.png';
     if (produtoDef) {
-        if (skuParaExibir === 'N/A') {
-            if (item.variante_nome && item.variante_nome !== '-' && item.variante_nome !== 'Padrão') {
-                const gradeItem = produtoDef.grade?.find(g => g.variacao === item.variante_nome);
-                skuParaExibir = gradeItem?.sku || produtoDef.sku || 'SKU Indisp.';
-            } else {
-                skuParaExibir = produtoDef.sku || 'SKU Indisp.';
-            }
-        }
         if (item.variante_nome && item.variante_nome !== '-' && item.variante_nome !== 'Padrão') {
             const gradeItem = produtoDef.grade?.find(g => g.variacao === item.variante_nome);
-            if (gradeItem?.imagem) imagemSrc = gradeItem.imagem;
-            else if (produtoDef.imagem) imagemSrc = produtoDef.imagem;
-        } else if (produtoDef.imagem) {
-            imagemSrc = produtoDef.imagem;
+            if(gradeItem) {
+                 skuParaExibir = gradeItem.sku || skuParaExibir;
+                 imagemSrc = gradeItem.imagem || produtoDef.imagem || imagemSrc;
+            }
+        } else {
+             skuParaExibir = produtoDef.sku || skuParaExibir;
+             imagemSrc = produtoDef.imagem || imagemSrc;
         }
     }
     document.getElementById('movimentoItemSKU').textContent = `SKU: ${skuParaExibir}`;
     document.getElementById('movimentoThumbnail').innerHTML = `<img src="${imagemSrc}" alt="${item.produto_nome}" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">`;
 
-     // --- PREENCHE O FORMULÁRIO DE AÇÃO (lado direito) ---
+    // Reset e preenchimento do formulário de ação...
     const qtdInput = document.getElementById('quantidadeMovimentar');
     const qtdLabel = document.getElementById('labelQuantidadeMovimentar');
     const inputTipoOperacaoOculto = document.getElementById('tipoMovimentoSelecionado');
     const containerBotoesTipoOp = document.querySelector('.movimento-tipo-operacao-container');
-    
     const atualizarCamposPorTipoOperacao = (tipoSelecionado) => {
-        if (!inputTipoOperacaoOculto) return;
         inputTipoOperacaoOculto.value = tipoSelecionado;
-        containerBotoesTipoOp.querySelectorAll('.movimento-op-btn').forEach(btn => {
-            btn.classList.toggle('ativo', btn.dataset.tipo === tipoSelecionado);
-        });
-        if (tipoSelecionado === 'BALANCO') {
-            qtdLabel.textContent = 'Ajustar Saldo Para:';
-            qtdInput.value = item.saldo_atual;
-        } else {
-            qtdLabel.textContent = 'Quantidade a Movimentar:';
-            qtdInput.value = '';
-        }
+        containerBotoesTipoOp.querySelectorAll('.movimento-op-btn').forEach(btn => btn.classList.toggle('ativo', btn.dataset.tipo === tipoSelecionado));
+        qtdLabel.textContent = tipoSelecionado === 'BALANCO' ? 'Ajustar Saldo Para:' : 'Quantidade a Movimentar:';
+        qtdInput.value = tipoSelecionado === 'BALANCO' ? item.saldo_atual : '';
     };
     containerBotoesTipoOp.querySelectorAll('.movimento-op-btn').forEach(btn => {
         const newBtn = btn.cloneNode(true);
@@ -1087,78 +1226,170 @@ function prepararViewMovimento() {
     atualizarCamposPorTipoOperacao('ENTRADA_MANUAL');
     document.getElementById('observacaoMovimento').value = '';
     const btnArquivar = document.getElementById('arquivarItemBtn');
-    if (btnArquivar) {
-        btnArquivar.style.display = permissoesGlobaisEstoque.includes('arquivar-produto-do-estoque') ? 'inline' : 'none';
-    }
+    if(btnArquivar) btnArquivar.style.display = permissoesGlobaisEstoque.includes('arquivar-produto-do-estoque') ? 'inline' : 'none';
 
-    // --- CARREGA O HISTÓRICO DIRETAMENTE NA PÁGINA ---
+
+    // --- ADIÇÃO DO EVENT LISTENER NO LOCAL CORRETO ---
+    const historicoContainer = document.getElementById('historicoContainer');
+    // Remove qualquer listener antigo para evitar duplicação e vazamento de memória
+    if (historicoContainer.listenerEstorno) {
+        historicoContainer.removeEventListener('click', historicoContainer.listenerEstorno);
+    }
+    
+    // Cria a nova função de listener. Esta é a correção.
+    historicoContainer.listenerEstorno = function(event) {
+        const botaoEstorno = event.target.closest('.btn-iniciar-estorno');
+        if (botaoEstorno) {
+            // **A MUDANÇA ESTÁ AQUI**
+            // Extrai os dados DIRETAMENTE do dataset do botão
+            const movimentoId = parseInt(botaoEstorno.dataset.movimentoId);
+            const quantidadeOriginal = parseInt(botaoEstorno.dataset.quantidadeOriginal);
+
+            // Chama a função de estorno passando os valores puros, não o botão
+            iniciarProcessoDeEstorno(movimentoId, quantidadeOriginal, botaoEstorno);
+        }
+    };
+    
+    // Adiciona o novo listener
+    historicoContainer.addEventListener('click', historicoContainer.listenerEstorno);
+
+    // Carrega o histórico
     const historicoBody = document.getElementById('historicoMovimentacoesBody');
     if (historicoBody) historicoBody.innerHTML = '<tr><td colspan="6"><div class="es-spinner"></div></td></tr>';
     carregarHistoricoMovimentacoes(item.produto_nome, item.variante_nome, 1);
 }
 
 
+async function iniciarProcessoDeEstorno(movimentoId, quantidadeOriginalStr, botao) {
+    const quantidadeOriginal = Math.abs(quantidadeOriginalStr);
 
-async function estornarMovimento(movimentoId) {
-    const confirmado = await mostrarPopupConfirmacao(
-        'Tem certeza que deseja estornar este movimento?<br><br>Esta ação devolverá a quantidade ao estoque.',
-        'aviso'
+    if (isNaN(movimentoId) || isNaN(quantidadeOriginal)) {
+        mostrarPopupEstoque('Erro: Informações do movimento não encontradas.', 'erro');
+        return;
+    }
+    
+    // O resto da função continua exatamente o mesmo, usando as variáveis recebidas
+    const quantidadeParaEstornar = await mostrarPopupEstornoParcial(
+        `Estornar movimento de <strong>${quantidadeOriginal}</strong> unidades.<br>Quantas deseja devolver ao estoque?`,
+        quantidadeOriginal
     );
 
-    if (!confirmado) return;
+    if (quantidadeParaEstornar === null || quantidadeParaEstornar <= 0) {
+        return; 
+    }
+
+    // Usamos o 'botao' passado como terceiro argumento para a UI
+    botao.disabled = true;
+    botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
     try {
         const response = await fetchEstoqueAPI('/estoque/estornar-movimento', {
             method: 'POST',
-            body: JSON.stringify({ id_movimento_original: movimentoId })
+            body: JSON.stringify({ 
+                id_movimento_original: movimentoId,
+                quantidade_a_estornar: quantidadeParaEstornar
+            })
         });
 
         const movimentoDeEstorno = response.movimentoDeEstorno;
-        if (!movimentoDeEstorno) {
-            throw new Error("A API não retornou os dados do estorno.");
-        }
-
-        mostrarPopupEstoque('Estorno realizado com sucesso!', 'sucesso');
-
-        // --- CORREÇÃO DA LÓGICA DE ATUALIZAÇÃO E PERSISTÊNCIA ---
-
-        // 1. Atualiza o saldo do item específico DENTRO do nosso cache global
-        const itemNoCache = saldosEstoqueGlobaisCompletos.find(
-            item => item.produto_ref_id === movimentoDeEstorno.produto_ref_id
-        );
+        if (!movimentoDeEstorno) throw new Error("A API não retornou os dados do estorno.");
         
-        if (itemNoCache) {
-            const saldoAtualCache = parseFloat(itemNoCache.saldo_atual);
-            const quantidadeEstornada = parseFloat(movimentoDeEstorno.quantidade);
-            itemNoCache.saldo_atual = saldoAtualCache + quantidadeEstornada;
-            console.log(`Cache atualizado para ${itemNoCache.produto_ref_id}. Novo saldo em cache: ${itemNoCache.saldo_atual}`);
-        } else {
-            // Se o item não estava no cache por algum motivo (raro, mas possível),
-            // a melhor opção é limpar o cache inteiro para forçar uma recarga completa.
-            saldosEstoqueGlobaisCompletos = [];
-        }
-
-        // 2. Atualiza a UI da tela de detalhes para feedback imediato
+        mostrarPopupEstoque('Estorno realizado com sucesso!', 'sucesso');
+        
+        // ... (lógica de atualização da UI)
+        const itemNoCache = saldosEstoqueGlobaisCompletos.find(item => item.produto_ref_id === movimentoDeEstorno.produto_ref_id);
+        if (itemNoCache) itemNoCache.saldo_atual = parseFloat(itemNoCache.saldo_atual) + parseFloat(movimentoDeEstorno.quantidade);
         if (itemEstoqueSelecionado) {
             const saldoAtualEl = document.getElementById('movimentoSaldoAtual');
             if (saldoAtualEl) {
-                const saldoAtualNumerico = parseInt(saldoAtualEl.textContent);
-                const quantidadeEstornada = parseInt(movimentoDeEstorno.quantidade);
-                const novoSaldo = saldoAtualNumerico + quantidadeEstornada;
+                const novoSaldo = parseInt(saldoAtualEl.textContent) + parseInt(movimentoDeEstorno.quantidade);
                 saldoAtualEl.textContent = novoSaldo;
                 itemEstoqueSelecionado.saldo_atual = novoSaldo;
             }
-        }
-        
-        // 3. Recarrega a tabela de histórico para remover o botão de estorno
-        if (itemEstoqueSelecionado) {
             carregarHistoricoMovimentacoes(itemEstoqueSelecionado.produto_nome, itemEstoqueSelecionado.variante_nome, currentPageHistorico);
         }
 
     } catch (error) {
-        console.error('Erro ao estornar movimento:', error);
         mostrarPopupEstoque(`Falha no estorno: ${error.data?.details || error.message}`, 'erro');
+        botao.disabled = false;
+        botao.innerHTML = '<i class="fas fa-undo"></i>';
     }
+}
+
+// Popup para solicitar a quantidade de estorno parcial
+function mostrarPopupEstornoParcial(mensagem, quantidadeMaxima) {
+    return new Promise((resolve) => {
+        // Remove qualquer popup de confirmação existente para evitar duplicação
+        const popupExistente = document.getElementById('popup-confirmacao-estoque');
+        if (popupExistente) popupExistente.parentElement.remove();
+
+        const container = document.createElement('div');
+        container.id = 'popup-confirmacao-estoque';
+
+        const popup = document.createElement('div');
+        popup.className = `es-popup-mensagem popup-aviso`; // Usando o estilo de aviso
+        
+        const overlay = document.createElement('div');
+        overlay.className = 'es-popup-overlay';
+
+        const p = document.createElement('p');
+        p.innerHTML = mensagem;
+        popup.appendChild(p);
+        
+        // --- Input para a quantidade ---
+        const inputContainer = document.createElement('div');
+        inputContainer.style.margin = '15px 0';
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.className = 'es-input'; // Reutilizando o estilo de input
+        input.placeholder = `Máx: ${quantidadeMaxima}`;
+        input.max = quantidadeMaxima;
+        input.min = 1;
+        input.value = quantidadeMaxima; // Começa com o valor máximo sugerido
+        input.style.textAlign = 'center';
+        input.style.width = '120px';
+        input.style.fontSize = '1.2rem';
+        inputContainer.appendChild(input);
+        popup.appendChild(inputContainer);
+
+        const botoesContainer = document.createElement('div');
+        botoesContainer.style.display = 'flex';
+        botoesContainer.style.gap = '10px';
+        botoesContainer.style.justifyContent = 'center';
+
+        const fecharEResolver = (valor) => {
+            document.body.removeChild(container);
+            resolve(valor);
+        };
+
+        const btnConfirmar = document.createElement('button');
+        btnConfirmar.textContent = 'Confirmar Estorno';
+        btnConfirmar.className = 'es-btn-confirmar';
+        btnConfirmar.onclick = () => {
+            const qtd = parseInt(input.value);
+            if (isNaN(qtd) || qtd <= 0 || qtd > quantidadeMaxima) {
+                // Simples alerta para validação
+                alert(`Por favor, insira uma quantidade válida entre 1 e ${quantidadeMaxima}.`);
+                return;
+            }
+            fecharEResolver(qtd); // Resolve a promise com a quantidade
+        };
+
+        const btnCancelar = document.createElement('button');
+        btnCancelar.textContent = 'Cancelar';
+        btnCancelar.className = 'es-btn-cancelar';
+        btnCancelar.onclick = () => fecharEResolver(null); // Resolve como nulo se cancelar
+        
+        botoesContainer.appendChild(btnCancelar);
+        botoesContainer.appendChild(btnConfirmar);
+        popup.appendChild(botoesContainer);
+
+        container.appendChild(overlay);
+        container.appendChild(popup);
+        document.body.appendChild(container);
+        
+        input.focus(); // Foco automático no input
+    });
 }
 
 // Função para arquivar um item de estoque (ATUALIZADA)
@@ -1377,7 +1608,6 @@ async function carregarHistoricoMovimentacoes(produtoNome, varianteNome, page) {
 }
 
 function renderizarHistoricoMovimentacoes(movimentos) {
-    // CORREÇÃO: O ID do tbody foi corrigido no HTML para 'historicoMovimentacoesBody'
     const tbody = document.getElementById('historicoMovimentacoesBody');
     if (!tbody) {
         console.error("Elemento #historicoMovimentacoesBody não encontrado.");
@@ -1386,7 +1616,6 @@ function renderizarHistoricoMovimentacoes(movimentos) {
     tbody.innerHTML = '';
 
     if (!movimentos || movimentos.length === 0) {
-        // Agora a tabela tem 6 colunas, então o colspan deve ser 6
         tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Nenhuma movimentação encontrada.</td></tr>';
         return;
     }
@@ -1394,22 +1623,41 @@ function renderizarHistoricoMovimentacoes(movimentos) {
     movimentos.forEach(mov => {
         const tr = tbody.insertRow();
         const quantidadeClasse = mov.quantidade > 0 ? 'quantidade-entrada' : 'quantidade-saida';
-        
-        let acoesHtml = '';
-        if (mov.quantidade < 0 && mov.estornado !== true && permissoesGlobaisEstoque.includes('gerenciar-estoque')) {
-            acoesHtml = `<button class="es-btn-icon-estorno" title="Estornar este movimento" onclick="estornarMovimento(${mov.id})">
-                            <i class="fas fa-undo"></i>
-                         </button>`;
+
+        // NOVO: Adiciona a classe 'linha-estorno' se o tipo de movimento incluir "ESTORNO"
+        if (mov.tipo_movimento.includes('ESTORNO')) {
+            tr.classList.add('linha-estorno');
         }
 
         tr.innerHTML = `
-            <td>${new Date(mov.data_movimento).toLocaleString('pt-BR')}</td>
-            <td>${mov.tipo_movimento.replace(/_/g, ' ')}</td>
-            <td class="${quantidadeClasse}" style="text-align:right;">${mov.quantidade}</td>
-            <td>${mov.usuario_responsavel || '-'}</td>
-            <td>${mov.observacao || '-'}</td>
-            <td style="text-align:center;">${acoesHtml}</td>
+            <td data-label="Data">${new Date(mov.data_movimento).toLocaleString('pt-BR')}</td>
+            <td data-label="Tipo">${mov.tipo_movimento.replace(/_/g, ' ')}</td>
+            <td data-label="Quantidade" class="${quantidadeClasse}" style="text-align:right;">${mov.quantidade > 0 ? '+' : ''}${mov.quantidade}</td>
+            <td data-label="Usuário">${mov.usuario_responsavel || '-'}</td>
+            <td data-label="Observação">${mov.observacao || '-'}</td>
+            <td data-label="Ações" style="text-align:center;"></td>
         `;
+
+        if (mov.quantidade < 0 && (mov.quantidade_estornada || 0) > 0) {
+            const estornadoInfo = document.createElement('span');
+            estornadoInfo.style.fontSize = '0.8em';
+            estornadoInfo.style.color = '#7f8c8d';
+            estornadoInfo.textContent = `(estornado: ${mov.quantidade_estornada})`;
+            tr.cells[2].appendChild(estornadoInfo);
+        }
+
+        const saldoParaEstornar = Math.abs(mov.quantidade) - (mov.quantidade_estornada || 0);
+        
+        if (mov.quantidade < 0 && saldoParaEstornar > 0 && permissoesGlobaisEstoque.includes('gerenciar-estoque')) {
+            const cellAcoes = tr.cells[5];
+            const btnEstornar = document.createElement('button');
+            btnEstornar.className = 'es-btn-icon-estorno btn-iniciar-estorno';
+            btnEstornar.title = 'Estornar este movimento';
+            btnEstornar.innerHTML = '<i class="fas fa-undo"></i>';
+            btnEstornar.dataset.movimentoId = mov.id;
+            btnEstornar.dataset.quantidadeOriginal = mov.quantidade;
+            cellAcoes.appendChild(btnEstornar);
+        }
     });
 }
 
@@ -1894,6 +2142,7 @@ async function inicializarPaginaEstoque() {
         if (todosOsProdutosCadastrados.length === 0) {
             todosOsProdutosCadastrados = await obterProdutos();
         }
+        gerarFiltrosDinamicos();
         await carregarTabelaEstoque(); // Esta função agora vai popular tudo
 
     } catch (error) {
@@ -1923,6 +2172,29 @@ function setupEventListenersEstoque() {
                 removerItemDoCarrinho(refId);
             }
         }
+    });
+
+    // ---  Listener para o histórico de movimentações ---
+    // Adiciona um único listener à tabela de histórico
+    document.getElementById('historicoContainer')?.addEventListener('click', function(event) {
+        // Verifica se o elemento clicado (ou um pai dele) é o nosso botão de estorno
+        const botaoEstorno = event.target.closest('.btn-iniciar-estorno');
+        if (botaoEstorno) {
+            // Se for, chama a nossa nova função de estorno
+            iniciarProcessoDeEstorno(event);
+        }
+    });
+
+     // --- Novos Listeners para os Filtros ---
+    document.getElementById('toggleFiltrosAvancadosBtn')?.addEventListener('click', () => {
+        document.getElementById('filtrosAvancados').classList.toggle('hidden');
+    });
+
+    document.getElementById('filtroFilaStatusSelect')?.addEventListener('change', renderizarFilaDeProducao);
+    document.getElementById('limparFiltrosFilaBtn')?.addEventListener('click', () => {
+    document.getElementById('filtroFilaStatusSelect').value = '';
+    document.querySelectorAll('.filtro-dinamico-fila').forEach(s => s.value = '');
+    renderizarFilaDeProducao();
     });
 
     // --- Listeners de Elementos Estáticos ---
@@ -2009,17 +2281,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 const funcoesGlobaisEstoque = {
-    // Funções da Fila de Produção
     iniciarProducao,
-
-    // Funções do Histórico de Movimentação
-    estornarMovimento,
-
-    //anular uma promessa
     anularPromessa,
-
-    moverItemFila
-
+    moverItemFila,
+    removerItemDoCarrinho
 };
 
 // Anexa todas as funções acima ao objeto window

@@ -52,7 +52,8 @@ export const permissoesDisponiveis = [
     { id: 'assinar-proprio-arremate', label: 'Permite o Tiktik assinar o próprio arremate' }, // para dashboard-tiktik.html
     { id: 'arquivar-produto-do-estoque', label: 'Permite arquivar um produto do estoque' }, // para estoque.html
     { id: 'gerenciar-fila-de-producao', label: 'Permite gerenciar fila de producao do estoque' }, // para estoque.html
-    { id: 'anular-promessa-producao', label: 'Permite anular uma promessa de producao' } // para estoque.html
+    { id: 'anular-promessa-producao', label: 'Permite anular uma promessa de producao' }, // para estoque.html
+    { id: 'registrar-perda-arremate', label: 'Permite registrar uma perda em Arremates' } // para ordens-de-arremate.html
 
 ];
 
@@ -113,7 +114,8 @@ export const permissoesPorTipo = {
         'ajustar-saldo',
         'arquivar-produto-do-estoque',
         'gerenciar-fila-de-producao',
-        'anular-promessa-producao'
+        'anular-promessa-producao',
+        'registrar-perda-arremate'
 
         
     ]

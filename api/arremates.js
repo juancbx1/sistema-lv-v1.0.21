@@ -210,10 +210,21 @@ router.get('/historico', async (req, res) => {
     let dbClient;
     try {
         dbClient = await pool.connect();
-        // Não precisa de verificação de permissão complexa, pois já está no middleware.
-        // A query busca os últimos 7 dias.
+        
+        // Query modificada para tratar lançamentos normais e de perda
         const query = `
-            SELECT * FROM arremates
+            SELECT 
+                id,
+                op_numero,
+                produto,
+                variante,
+                quantidade_arrematada,
+                usuario_tiktik,
+                lancado_por,
+                data_lancamento,
+                tipo_lancamento,
+                id_perda_origem
+            FROM arremates
             WHERE data_lancamento >= NOW() - INTERVAL '7 days'
             ORDER BY data_lancamento DESC;
         `;
@@ -373,6 +384,79 @@ router.put('/assinar-lote', async (req, res) => {
     } catch (error) {
         console.error('[API /arremates/assinar-lote PUT] Erro:', error.message);
         res.status(500).json({ error: 'Erro interno ao assinar arremates.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+router.post('/registrar-perda', async (req, res) => {
+    const { usuarioLogado } = req;
+    const { produto, variante, quantidadePerdida, motivo, observacao, opsOrigem } = req.body;
+    let dbClient;
+
+    try {
+        dbClient = await pool.connect();
+        const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
+        if (!permissoes.includes('registrar-perda-arremate')) {
+            return res.status(403).json({ error: 'Permissão negada para registrar perdas.' });
+        }
+        
+        // Validações
+        if (!produto || !motivo || !quantidadePerdida || quantidadePerdida <= 0) {
+            return res.status(400).json({ error: "Dados para registro de perda estão incompletos." });
+        }
+
+        await dbClient.query('BEGIN');
+
+        // 1. Insere o registro na nova tabela de perdas
+        const perdaQuery = `
+            INSERT INTO arremate_perdas (produto_nome, variante_nome, quantidade_perdida, motivo, observacao, usuario_responsavel, data_registro)
+            VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING id;
+        `;
+        const perdaResult = await dbClient.query(perdaQuery, [
+            produto,
+            variante,
+            quantidadePerdida,
+            motivo,
+            observacao,
+            usuarioLogado.nome || 'Sistema'
+        ]);
+        const perdaId = perdaResult.rows[0].id;
+
+        // 2. Cria um lançamento de arremate do tipo 'PERDA' para abater do saldo
+        // Esta lógica de "abater" das OPs é a mesma do lançamento normal
+        let quantidadeRestanteParaAbater = quantidadePerdida;
+        const opsOrdenadas = opsOrigem.sort((a, b) => a.numero - b.numero);
+
+        for (const op of opsOrdenadas) {
+            if (quantidadeRestanteParaAbater <= 0) break;
+            
+            const qtdAbaterDaOP = Math.min(quantidadeRestanteParaAbater, op.quantidade_pendente_nesta_op);
+            if (qtdAbaterDaOP > 0) {
+                const lancamentoPerdaQuery = `
+                    INSERT INTO arremates (op_numero, produto, variante, quantidade_arrematada, usuario_tiktik, lancado_por, data_lancamento, tipo_lancamento, id_perda_origem, assinada)
+                    VALUES ($1, $2, $3, $4, $5, $6, NOW(), 'PERDA', $7, TRUE);
+                `;
+                await dbClient.query(lancamentoPerdaQuery, [
+                    op.numero,
+                    produto,
+                    variante,
+                    qtdAbaterDaOP,
+                    'Sistema (Perda)', // Indica que não foi um Tiktik, mas uma baixa
+                    usuarioLogado.nome,
+                    perdaId
+                ]);
+                quantidadeRestanteParaAbater -= qtdAbaterDaOP;
+            }
+        }
+
+        await dbClient.query('COMMIT');
+        res.status(201).json({ message: 'Registro de perda efetuado com sucesso.' });
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error('[API /arremates/registrar-perda] Erro:', error);
+        res.status(500).json({ error: 'Erro ao registrar a perda.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }

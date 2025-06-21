@@ -465,7 +465,8 @@ router.post('/movimento-em-lote', async (req, res) => {
 
 router.post('/estornar-movimento', async (req, res) => {
     const { usuarioLogado } = req;
-    const { id_movimento_original } = req.body; // Recebe o ID do movimento a ser estornado
+    // Novos campos do corpo da requisição
+    const { id_movimento_original, quantidade_a_estornar } = req.body;
 
     if (!id_movimento_original) {
         return res.status(400).json({ error: 'O ID do movimento original é obrigatório.' });
@@ -476,57 +477,64 @@ router.post('/estornar-movimento', async (req, res) => {
         dbClient = await pool.connect();
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
         
-        // Usamos a mesma permissão de gerenciar estoque
         if (!permissoesCompletas.includes('gerenciar-estoque')) {
             return res.status(403).json({ error: 'Permissão negada para estornar movimentos.' });
         }
 
-        await dbClient.query('BEGIN'); // Inicia a transação
+        await dbClient.query('BEGIN');
 
-        // 1. Busca os dados do movimento original para garantir que ele existe e é uma saída
-        const movimentoOriginalRes = await dbClient.query('SELECT * FROM estoque_movimentos WHERE id = $1', [id_movimento_original]);
+        // 1. Busca os dados do movimento original com lock para evitar concorrência
+        const movimentoOriginalRes = await dbClient.query('SELECT * FROM estoque_movimentos WHERE id = $1 FOR UPDATE', [id_movimento_original]);
         
         if (movimentoOriginalRes.rows.length === 0) {
             throw new Error('Movimento original não encontrado.');
         }
+        const movOriginal = movimentoOriginalRes.rows[0];
+        const qtdOriginalAbs = Math.abs(movOriginal.quantidade);
+        const qtdJaEstornada = movOriginal.quantidade_estornada || 0;
+        const saldoDisponivelParaEstorno = qtdOriginalAbs - qtdJaEstornada;
 
-        const movimentoOriginal = movimentoOriginalRes.rows[0];
-
-        // 2. Validação: só permite estornar saídas e verifica se já não foi estornado
-        if (movimentoOriginal.quantidade >= 0) {
+        // 2. Validações
+        if (movOriginal.quantidade >= 0) {
             throw new Error('Apenas movimentos de SAÍDA podem ser estornados.');
         }
-        if (movimentoOriginal.estornado === true) {
-            throw new Error('Este movimento já foi estornado anteriormente.');
+        if (saldoDisponivelParaEstorno <= 0) {
+            throw new Error('Este movimento já foi totalmente estornado.');
         }
+        
+        // =================================================================
+        // >> A CORREÇÃO PRINCIPAL ESTÁ AQUI <<
+        // =================================================================
+        // Usa a quantidade enviada pelo frontend. Se não for enviada, LANÇA UM ERRO.
+        // Não vamos mais assumir o valor total.
+        const qtdEstornarAgora = quantidade_a_estornar ? parseInt(quantidade_a_estornar) : 0;
+
+        if (qtdEstornarAgora <= 0) {
+            throw new Error('A quantidade a ser estornada deve ser maior que zero.');
+        }
+        if (qtdEstornarAgora > saldoDisponivelParaEstorno) {
+            throw new Error(`Quantidade a estornar (${qtdEstornarAgora}) inválida. Saldo disponível para estorno: ${saldoDisponivelParaEstorno}.`);
+        }
+        // =================================================================
 
         // 3. Cria a nova movimentação de estorno (entrada)
-        const quantidadeEstorno = Math.abs(movimentoOriginal.quantidade); // A quantidade de entrada é o valor positivo
-        const tipoMovimentoEstorno = `ESTORNO_${movimentoOriginal.tipo_movimento}`;
-        const observacaoEstorno = `Estorno referente ao movimento de ID #${id_movimento_original}.`;
+        const tipoMovimentoEstorno = `ESTORNO_${movOriginal.tipo_movimento}`;
+        const observacaoEstorno = `Estorno referente ao movimento #${id_movimento_original}.`;
 
         const insertQuery = `
-            INSERT INTO estoque_movimentos 
-                (produto_nome, variante_nome, quantidade, tipo_movimento, usuario_responsavel, observacao, data_movimento)
-            VALUES ($1, $2, $3, $4, $5, $6, NOW())
-            RETURNING *;
+            INSERT INTO estoque_movimentos (produto_nome, variante_nome, quantidade, tipo_movimento, usuario_responsavel, observacao, data_movimento)
+            VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *;
         `;
-        const insertValues = [
-            movimentoOriginal.produto_nome,
-            movimentoOriginal.variante_nome,
-            quantidadeEstorno,
-            tipoMovimentoEstorno,
-            (usuarioLogado.nome || usuarioLogado.nome_usuario),
-            observacaoEstorno
-        ];
-        
-        const novoMovimentoRes = await dbClient.query(insertQuery, insertValues);
+        const novoMovimentoRes = await dbClient.query(insertQuery, [
+            movOriginal.produto_nome, movOriginal.variante_nome, qtdEstornarAgora,
+            tipoMovimentoEstorno, (usuarioLogado.nome || usuarioLogado.nome_usuario), observacaoEstorno
+        ]);
 
-        // 4. Marca o movimento original como estornado para prevenir duplos estornos
-        // (Isso requer que você adicione uma coluna 'estornado' à sua tabela. Ver Passo 1.1 abaixo)
-        await dbClient.query('UPDATE estoque_movimentos SET estornado = TRUE WHERE id = $1', [id_movimento_original]);
+        // 4. Atualiza o movimento original com a nova quantidade estornada
+        const novaQtdTotalEstornada = qtdJaEstornada + qtdEstornarAgora;
+        await dbClient.query('UPDATE estoque_movimentos SET quantidade_estornada = $1 WHERE id = $2', [novaQtdTotalEstornada, id_movimento_original]);
 
-        await dbClient.query('COMMIT'); // Confirma a transação
+        await dbClient.query('COMMIT');
 
         res.status(201).json({ 
             message: 'Movimento estornado com sucesso.', 
@@ -535,9 +543,8 @@ router.post('/estornar-movimento', async (req, res) => {
 
     } catch (error) {
         if (dbClient) await dbClient.query('ROLLBACK');
-        console.error('[router/estoque POST /estornar-movimento] Erro:', error);
-        // Retorna status 400 para erros de validação e 500 para outros
-        const statusCode = error.message.includes('não pode ser estornado') || error.message.includes('já foi estornado') ? 400 : 500;
+        console.error('[API /estornar-movimento] Erro:', error);
+        const statusCode = error.message.includes('inválida') || error.message.includes('não encontrado') ? 400 : 500;
         res.status(statusCode).json({ error: 'Erro ao estornar movimento.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();

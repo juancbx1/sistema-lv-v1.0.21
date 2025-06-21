@@ -244,6 +244,64 @@ router.post('/', async (req, res) => {
     }
 });
 
+router.put('/:id', async (req, res) => {
+    const { id } = req.params;
+    const { usuarioLogado } = req;
+    let dbClient;
+
+    if (!usuarioLogado || !usuarioLogado.id) {
+        return res.status(401).json({ error: "Autenticação necessária." });
+    }
+
+    try {
+        dbClient = await pool.connect();
+        const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
+        if (!permissoes.includes('gerenciar-produtos')) {
+            return res.status(403).json({ error: 'Permissão negada.' });
+        }
+
+        const produto = req.body;
+        if (!produto.nome) {
+            return res.status(400).json({ error: "O nome do produto é obrigatório." });
+        }
+        
+        const isKitValue = produto.is_kit === true || (Array.isArray(produto.tipos) && produto.tipos.includes('kits'));
+
+        const query = `
+            UPDATE produtos SET
+                nome = $1, sku = $2, gtin = $3, unidade = $4, estoque = $5, 
+                imagem = $6, tipos = $7, variacoes = $8, estrutura = $9, 
+                etapas = $10, "etapastiktik" = $11, grade = $12, is_kit = $13,
+                data_atualizacao = CURRENT_TIMESTAMP
+            WHERE id = $14
+            RETURNING *;
+        `;
+        const values = [
+            produto.nome, produto.sku || null, produto.gtin || null,
+            produto.unidade || null, produto.estoque || 0, produto.imagem || null,
+            JSON.stringify(produto.tipos || []), JSON.stringify(produto.variacoes || []),
+            JSON.stringify(produto.estrutura || []), JSON.stringify(produto.etapas || []),
+            JSON.stringify(produto.etapasTiktik || []), JSON.stringify(produto.grade || []),
+            isKitValue,
+            id
+        ];
+
+        const result = await dbClient.query(query, values);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Produto não encontrado para atualização.' });
+        }
+        
+        res.status(200).json(result.rows[0]);
+
+    } catch (error) {
+        // ... (código de tratamento de erro, igual ao da sua rota POST)
+        console.error('[API PUT /produtos/:id] Erro:', error);
+        res.status(500).json({ error: 'Erro ao atualizar produto.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
 
 
 export default router;
