@@ -185,23 +185,23 @@ function getMetaSelecionada() {
     return metaSalva ? parseInt(metaSalva) : null;
 }
 
-function salvarMetaSelecionada(meta) {
-    localStorage.setItem(`metaSelecionada_${usuarioLogado.nome}`, meta);
+function salvarMetaSelecionada(pontosMeta) { // Salva os pontos da meta
+    localStorage.setItem(`metaSelecionada_${usuarioLogado.nome}`, pontosMeta);
 }
 
-function carregarMetas(metaAtual) {
+function carregarMetas(pontosMetaAtual) { // Recebe os pontos da meta atual
     const nivel = usuarioLogado.nivel || 1;
-    const metas = obterMetasPorNivel(nivel);
+    const metas = obterMetasPorNivel(nivel); // Agora retorna objetos com 'pontos_meta'
     const metaSelect = document.getElementById('metaSelect');
     
     if (!metas || metas.length === 0) {
-        console.error('Nenhuma meta disponível para o nível:', nivel);
         metaSelect.innerHTML = '<option value="0">Nenhuma meta disponível</option>';
         return;
     }
     
     metaSelect.innerHTML = metas.map(m => 
-        `<option value="${m.processos}" ${m.processos === metaAtual ? 'selected' : ''}>${m.processos} Pontos (R$ ${m.valor.toFixed(2)})</option>`
+        // O valor do option será m.pontos_meta
+        `<option value="${m.pontos_meta}" ${m.pontos_meta === pontosMetaAtual ? 'selected' : ''}>${m.pontos_meta} Pontos (R$ ${m.valor.toFixed(2)})</option>`
     ).join('');
     metaSelect.disabled = true;
 }
@@ -244,101 +244,121 @@ async function atualizarDashboard() {
     }
 }
 
-function atualizarCardMeta(producoesDaCostureira, produtos) {
+function atualizarCardMeta(producoesDaCostureira /* , produtos - não é mais necessário aqui */) {
     const metaSelect = document.getElementById('metaSelect');
+    const progressoBarraEl = document.getElementById('progressoBarra');
+    const quantidadePontosFeitosEl = document.getElementById('quantidadeProcessos'); // Renomear ID no HTML para 'quantidadePontosFeitos' seria mais claro
+    const pontosFaltantesEl = document.getElementById('processosFaltantes'); // Renomear ID no HTML para 'pontosFaltantesDisplay' seria mais claro
+    const comissaoGarantidaEl = document.getElementById('comissaoGarantida');
+    const valorComissaoEl = document.getElementById('valorComissao');
+    const semMetaBatidaEl = document.getElementById('semMetaBatida');
 
-    // --- INÍCIO DA LÓGICA RESTAURADA PARA metaSelecionada ---
-    let metaSelecionada = getMetaSelecionada(); // Tenta pegar do localStorage
-
-    if (!metaSelecionada && metaSelect) { // Adicionei verificação se metaSelect existe
-        // Pega do valor atual do select, ou usa 0 como padrão se o select não tiver valor ou não existir
-        metaSelecionada = parseInt(metaSelect.value) || 0;
-    } else if (!metaSelecionada) { // Se metaSelect não existe e não tem nada no localStorage
-        metaSelecionada = 0; // Define um padrão
+    // Verifica se todos os elementos da UI existem
+    if (!metaSelect || !progressoBarraEl || !quantidadePontosFeitosEl || !pontosFaltantesEl || !comissaoGarantidaEl || !valorComissaoEl || !semMetaBatidaEl) {
+        console.error("[atualizarCardMeta] Um ou mais elementos da UI para o card de metas não foram encontrados.");
+        return;
     }
-    // --- FIM DA LÓGICA RESTAURADA PARA metaSelecionada ---
 
-    carregarMetas(metaSelecionada); // Agora metaSelecionada deve estar definida
+    // 1. Obter a meta de pontos selecionada
+    let pontosMetaSelecionada = getMetaSelecionada(); // Tenta pegar do localStorage
 
+    const nivelUsuario = usuarioLogado.nivel || 1;
+    const todasMetasDoNivel = obterMetasPorNivel(nivelUsuario);
+
+    if (pontosMetaSelecionada === null) { // Se não tem no localStorage
+        if (metaSelect.value && metaSelect.value !== "0") { // Tenta pegar do valor atual do select
+            pontosMetaSelecionada = parseInt(metaSelect.value);
+        } else if (todasMetasDoNivel.length > 0) { // Fallback para a primeira meta do nível
+            // Garante que as metas estejam ordenadas para pegar a "primeira" (menor)
+            todasMetasDoNivel.sort((a,b) => a.pontos_meta - b.pontos_meta);
+            pontosMetaSelecionada = todasMetasDoNivel[0].pontos_meta;
+        } else { // Se não há metas definidas para o nível
+            pontosMetaSelecionada = 0;
+        }
+    }
+    // Garante que pontosMetaSelecionada seja um número
+    pontosMetaSelecionada = parseInt(pontosMetaSelecionada) || 0;
+
+    // Recarrega as opções do select, marcando a meta correta
+    // Isso também define metaSelect.disabled = true;
+    carregarMetas(pontosMetaSelecionada);
+
+    // 2. Obter informações do ciclo e semana atual
     const cicloInfo = getCicloAtual(); 
     if (!cicloInfo || !cicloInfo.semana) { 
-        console.error('Nenhuma semana de ciclo atual encontrada para o card de metas.');
-        const qtdProcessosEl = document.getElementById('quantidadeProcessos');
-        const processosFaltantesEl = document.getElementById('processosFaltantes');
-        if (qtdProcessosEl) qtdProcessosEl.textContent = 0;
-        if (processosFaltantesEl) processosFaltantesEl.textContent = 'Informação da semana atual indisponível.';
-        // Para evitar mais erros, limpe também os outros campos relacionados à meta
-        const comissaoGarantidaEl = document.getElementById('comissaoGarantida');
-        const semMetaBatidaEl = document.getElementById('semMetaBatida');
-        if (comissaoGarantidaEl) comissaoGarantidaEl.style.display = 'none';
-        if (semMetaBatidaEl) semMetaBatidaEl.style.display = 'block'; // Ou 'Informação indisponível'
+        console.warn('[atualizarCardMeta] Nenhuma semana de ciclo atual encontrada.');
+        quantidadePontosFeitosEl.textContent = "0";
+        pontosFaltantesEl.textContent = 'Período da meta indisponível.';
+        progressoBarraEl.style.width = '0%';
+        comissaoGarantidaEl.style.display = 'none';
+        semMetaBatidaEl.style.display = 'block';
+        if (valorComissaoEl) valorComissaoEl.textContent = `R$ 0,00`;
         return;
     }
 
     const inicioSemana = cicloInfo.semana.inicio; 
     const fimSemana = cicloInfo.semana.fim;
 
+    // 3. Filtrar produções da costureira para a semana atual do ciclo
     const producoesSemana = producoesDaCostureira.filter(p => {
         const dataProducao = new Date(p.data);
+        // Compara as datas corretamente (Date objects)
         return dataProducao >= inicioSemana && dataProducao <= fimSemana;
     });
 
-    let totalPontosDaSemana = 0;
+    // 4. Calcular o total de pontos_gerados na semana
+    let totalPontosFeitosNaSemana = 0;
     producoesSemana.forEach(p => {
+        // Usa p.pontos_gerados que já vem da API (corrigido na API /api/producoes GET)
+        // E a API POST /api/producoes já calcula e salva os pontos corretamente
         if (p.pontos_gerados !== undefined && p.pontos_gerados !== null) {
             const pontos = parseFloat(p.pontos_gerados);
             if (!isNaN(pontos)) {
-                totalPontosDaSemana += pontos;
+                totalPontosFeitosNaSemana += pontos;
             } else {
-                console.warn(`[atualizarCardMeta] Produção ID ${p.id} com 'pontos_gerados' não numérico ('${p.pontos_gerados}'). Usando quantidade como fallback.`);
-                totalPontosDaSemana += p.quantidade || 0;
+                // Fallback se pontos_gerados for inválido (embora a API deva garantir isso)
+                console.warn(`[atualizarCardMeta] Produção ID ${p.id} com 'pontos_gerados' não numérico ('${p.pontos_gerados}'). Usando quantidade (${p.quantidade || 0}) como fallback.`);
+                totalPontosFeitosNaSemana += (p.quantidade || 0); 
             }
         } else {
-            console.warn(`[atualizarCardMeta] Produção ID ${p.id} (OP: ${p.op_numero}, Produto: ${p.produto}, Processo: ${p.processo}) não possui 'pontos_gerados'. Usando p.quantidade como fallback para pontos.`);
-            totalPontosDaSemana += p.quantidade || 0; 
+            // Fallback se pontos_gerados estiver ausente
+            console.warn(`[atualizarCardMeta] Produção ID ${p.id} (OP: ${p.op_numero}) não possui 'pontos_gerados'. Usando quantidade (${p.quantidade || 0}) como fallback.`);
+            totalPontosFeitosNaSemana += (p.quantidade || 0); 
         }
     });
 
-    // Renomeando para totalPontos para manter consistência com o resto da função original
-    const totalPontos = totalPontosDaSemana; 
-    const nivel = usuarioLogado.nivel || 1;
-    const metas = obterMetasPorNivel(nivel);
-    const metaInfo = metas.find(m => m.processos === metaSelecionada) || { valor: 0, processos: metaSelecionada }; // Garante que metaInfo.processos exista
+    // 5. Atualizar UI do progresso
+    const progressoPercentual = pontosMetaSelecionada > 0 ? (totalPontosFeitosNaSemana / pontosMetaSelecionada) * 100 : 0;
+    progressoBarraEl.style.width = `${Math.min(progressoPercentual, 100)}%`;
+    quantidadePontosFeitosEl.textContent = Math.round(totalPontosFeitosNaSemana); // Exibe os pontos feitos
 
-    const progresso = metaInfo.processos ? (totalPontos / metaInfo.processos) * 100 : 0;
-    const progressoBarraEl = document.getElementById('progressoBarra');
-    const quantidadeProcessosEl = document.getElementById('quantidadeProcessos');
-    const processosFaltantesEl = document.getElementById('processosFaltantes');
-
-    if (progressoBarraEl) progressoBarraEl.style.width = `${Math.min(progresso, 100)}%`;
-    if (quantidadeProcessosEl) quantidadeProcessosEl.textContent = Math.round(totalPontos);
-
-    const pontosFaltantes = metaInfo.processos - totalPontos;
-    if (processosFaltantesEl) {
-        if (metaInfo.processos > 0) { // Só mostra "faltam" se houver uma meta definida
-             processosFaltantesEl.innerHTML = pontosFaltantes > 0 
-            ? `Faltam <span class="highlight">${Math.ceil(pontosFaltantes)}</span> pontos para atingir a meta de ${metaInfo.processos} pontos` 
-            : 'Meta atingida!';
-        } else {
-            processosFaltantesEl.innerHTML = 'Nenhuma meta selecionada para calcular o progresso.';
-        }
+    const pontosQueFaltam = pontosMetaSelecionada - totalPontosFeitosNaSemana;
+    if (pontosMetaSelecionada > 0) {
+        pontosFaltantesEl.innerHTML = pontosQueFaltam > 0 
+            ? `Faltam <span class="highlight">${Math.ceil(pontosQueFaltam)}</span> pontos para a meta de ${pontosMetaSelecionada} pontos` 
+            : '<span class="dc-texto-sucesso">Meta de pontos atingida!</span>'; // Mensagem de sucesso
+    } else {
+        pontosFaltantesEl.innerHTML = 'Nenhuma meta de pontos selecionada.';
     }
 
-    const metasBatidas = metas.filter(m => totalPontos >= m.processos);
-    const maiorMetaBatida = metasBatidas.length > 0 ? metasBatidas.sort((a, b) => b.processos - a.processos)[0] : null; // Pega a de maior valor
+    // 6. Calcular e exibir a comissão
+    // calcularComissaoSemanal agora usa 'pontos_meta' e retorna o valor da comissão ou {faltam: ...}
+    const resultadoCalculoComissao = calcularComissaoSemanal(totalPontosFeitosNaSemana, nivelUsuario);
     
-    const comissaoGarantidaEl = document.getElementById('comissaoGarantida');
-    const valorComissaoEl = document.getElementById('valorComissao');
-    const semMetaBatidaEl = document.getElementById('semMetaBatida');
-
-    if (maiorMetaBatida) {
-        if(valorComissaoEl) valorComissaoEl.textContent = `R$ ${maiorMetaBatida.valor.toFixed(2)}`;
-        if(comissaoGarantidaEl) comissaoGarantidaEl.style.display = 'block';
-        if(semMetaBatidaEl) semMetaBatidaEl.style.display = 'none';
-    } else {
-        if(comissaoGarantidaEl) comissaoGarantidaEl.style.display = 'none';
-        if(semMetaBatidaEl) semMetaBatidaEl.style.display = 'block';
-        if(valorComissaoEl) valorComissaoEl.textContent = `R$ 0,00`; // Limpa o valor se nenhuma meta foi batida
+    if (typeof resultadoCalculoComissao === 'number') { // Significa que uma meta foi batida e retornou o valor da comissão
+        valorComissaoEl.textContent = `R$ ${resultadoCalculoComissao.toFixed(2)}`;
+        comissaoGarantidaEl.style.display = 'block';
+        semMetaBatidaEl.style.display = 'none';
+    } else { // Nenhuma meta batida, resultadoCalculoComissao é um objeto {faltam: ...}
+        valorComissaoEl.textContent = `R$ 0,00`;
+        comissaoGarantidaEl.style.display = 'none';
+        semMetaBatidaEl.style.display = 'block';
+        // Opcional: exibir quantos pontos faltam para a *próxima* comissão no elemento semMetaBatidaEl
+        if (semMetaBatidaEl && resultadoCalculoComissao && typeof resultadoCalculoComissao.faltam === 'number') {
+            semMetaBatidaEl.innerHTML = `Você está a <span class="highlight">${resultadoCalculoComissao.faltam}</span> pontos da próxima comissão.`;
+        } else if (semMetaBatidaEl) {
+            semMetaBatidaEl.textContent = "Continue produzindo para alcançar sua meta!";
+        }
     }
 }
 

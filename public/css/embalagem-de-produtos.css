@@ -759,7 +759,7 @@ body.autenticado {
     }
 
     .ep-input-qte-embalar-produto{
-        width: 10%;
+        width: 50%;
         font-size: 1.2rem;
         padding: 20px;
         border: 1px solid var(--ep-cor-cinza-borda);

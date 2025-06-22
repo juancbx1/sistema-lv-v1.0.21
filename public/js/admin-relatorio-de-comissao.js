@@ -311,8 +311,6 @@ async function atualizarRelatorio() {
             const comissaoDaSemana = calcularComissaoSemanal(
                 pontosSemanaPonderados,
                 nivelCostureira,
-                producoesDaSemanaParaCostureira,
-                produtos // Passa a lista completa de produtos para calcularComissaoSemanal
             );
 
             let comissaoSemanaValor = 0;

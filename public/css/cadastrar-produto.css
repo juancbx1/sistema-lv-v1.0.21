@@ -57,11 +57,13 @@ body.autenticado {
     box-shadow: 0 2px 5px rgba(52, 152, 219, 0.4);
 }
 
-.cp-tabs-content .cp-tab-content {
+.cp-tab-content {
     display: none;
+    animation: fadeIn 0.4s ease; /* Efeito extra */
 }
 
-.cp-tabs-content .cp-tab-content.active {
+/* Mostra apenas a que tiver a classe .active */
+.cp-tab-content.active {
     display: block;
 }
 
@@ -95,6 +97,7 @@ body.autenticado {
 /* Formulários e Inputs */
 .cp-form {
     background-color: #fff;
+    position: relative;
     padding: 2rem;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -578,26 +581,27 @@ body.autenticado {
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(255, 255, 255, 0.8); /* Fundo branco semitransparente */
+    background-color: rgba(255, 255, 255, 0.85); /* Fundo branco semitransparente */
     z-index: 10; /* Garante que fique por cima do conteúdo do formulário */
     display: flex;
     align-items: center;
     justify-content: center;
     transition: opacity 0.3s ease;
+    border-radius: 8px; /* Para acompanhar as bordas do formulário */
 }
 
 .cp-form-loading-overlay.hidden {
     display: none;
 }
 
-/* Spinner (pode reutilizar o do estoque se tiver um global, ou usar este) */
+/* Spinner (pode reutilizar um global se tiver, ou usar este) */
 .cp-spinner {
-    width: 40px;
-    height: 40px;
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #3498db;
+    width: 48px;
+    height: 48px;
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid #3498db;
     border-radius: 50%;
-    animation: cp-spin 1s linear infinite;
+    animation: cp-spin 1.2s linear infinite;
 }
 
 @keyframes cp-spin {
@@ -622,87 +626,129 @@ body.autenticado {
 }
 
 /* --- Estilos para o Upload de Imagem Principal --- */
+.hidden { display: none !important; }
+
+.cp-btn-icon-danger {
+    background-color: #e74c3c; color: white; border: none; width: 40px; height: 40px;
+    border-radius: 8px; cursor: pointer; font-size: 1rem;
+    display: flex; align-items: center; justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.cp-btn-icon-danger:hover {
+    background-color: #c0392b;
+}
+
 .cp-imagem-wrapper {
     display: flex;
-    align-items: flex-start;
-    gap: 20px;
+    align-items: flex-start; /* Alterado para flex-start se quiser o botão ao lado */
+    gap: 10px; /* Espaço entre placeholder/imagem e botão de ação */
+    position: relative; /* Para posicionar o botão de remover absoluto ao wrapper */
 }
+
 .cp-imagem-placeholder {
-    width: 200px;
-    height: 200px;
+    width: 180px;
+    height: 180px;
     border: 2px dashed #dcdfe4;
     border-radius: 8px;
-    position: relative; /* Container de posicionamento */
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    overflow: hidden;
+    overflow: hidden; /* Importante para que a img não ultrapasse as bordas arredondadas */
     background-color: #f8f9fa;
     cursor: pointer;
+    transition: border-color 0.3s ease;
 }
-.cp-imagem-placeholder img {
+
+.cp-imagem-placeholder:hover {
+    border-color: var(--cp-cor-primaria, #3498db); /* Usando variável CSS se tiver */
+}
+
+.cp-imagem-placeholder img#previewImagem {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: cover; /* Garante que a imagem cubra o espaço sem distorcer */
     position: absolute;
     top: 0;
     left: 0;
-    /* A imagem por padrão não tem z-index, fica no fundo */
+    z-index: 1; /* Abaixo do overlay */
+    /* Por padrão, o preview da imagem está escondido até que haja uma imagem */
+    opacity: 0;
+    transition: opacity 0.3s ease;
 }
+
 .cp-imagem-placeholder .overlay {
-    position: absolute; /* Posiciona o overlay sobre a imagem */
+    position: absolute;
     top: 0; left: 0; width: 100%; height: 100%;
-    z-index: 2; /* Garante que o overlay fique na frente */
+    z-index: 2; /* Acima da imagem de preview */
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     text-align: center;
     color: #7f8c8d;
-    background-color: rgba(248, 249, 250, 0.8); /* Fundo semi-transparente */
+    background-color: rgba(248, 249, 250, 0.9); /* Levemente transparente para ver a borda */
+    opacity: 1; /* Visível por padrão */
     transition: opacity 0.3s ease;
 }
+
 .cp-imagem-placeholder .overlay i {
     font-size: 2.5rem;
     margin-bottom: 10px;
 }
 
-/* --- LÓGICA DE EXIBIÇÃO --- */
-/* Por padrão, a imagem está escondida e o overlay visível */
-.cp-imagem-placeholder img {
-    display: none;
-}
-.cp-imagem-placeholder .overlay {
-    opacity: 1;
-}
-
-/* Quando tem a classe .has-image: */
-.cp-imagem-wrapper.has-image .cp-imagem-placeholder img {
-    display: block; /* Mostra a imagem */
-}
-.cp-imagem-wrapper.has-image .cp-imagem-placeholder .overlay {
-    opacity: 0; /* Esconde o overlay (mas ele ainda está lá) */
-    pointer-events: none; /* Impede que o overlay invisível bloqueie o clique na imagem */
-}
-.cp-imagem-wrapper.has-image .cp-imagem-placeholder:hover .overlay {
-    opacity: 1; /* Mostra o overlay no hover para trocar a imagem */
-    background-color: rgba(44, 62, 80, 0.6);
-    color: white;
-}
-
 .cp-imagem-actions {
-    display: none;
-    flex-direction: column;
-    gap: 10px;
+    /* Este container para o botão de remover pode ser posicionado
+       absolutamente em relação ao wrapper ou ficar ao lado.
+       Seu HTML atual sugere que ele fica fora do placeholder. */
+    display: none; /* Escondido por padrão */
+    /* Se quiser o botão no canto da imagem (dentro do wrapper):
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    z-index: 3;
+    */
 }
+
+.cp-imagem-actions #removeImagem {
+    /* Estilos para o botão de remover. Você já tem cp-btn-icon-danger */
+    padding: 5px; /* Ajuste o padding para o tamanho desejado */
+}
+
+/* --- ESTADOS COM A CLASSE .has-image --- */
+
+.cp-imagem-wrapper.has-image .cp-imagem-placeholder {
+    border-style: solid; /* Ou 'none' se preferir sem borda quando tem imagem */
+    border-color: #adb5bd; /* Uma borda mais sutil quando tem imagem */
+    background-color: #e9ecef; /* Fundo levemente diferente */
+}
+
+.cp-imagem-wrapper.has-image .cp-imagem-placeholder img#previewImagem {
+    opacity: 1; /* Torna o preview da imagem visível */
+}
+
+.cp-imagem-wrapper.has-image .cp-imagem-placeholder .overlay {
+    opacity: 0; /* Esconde o overlay de upload (ícone e texto) */
+    pointer-events: none; /* Impede que o overlay bloqueie cliques na imagem, se necessário */
+}
+
 .cp-imagem-wrapper.has-image .cp-imagem-actions {
-    display: flex;
+    display: block; /* Mostra o container do botão de remover */
 }
-.cp-btn-icon-danger {
-    background-color: #e74c3c; color: white; border: none; width: 40px; height: 40px;
-    border-radius: 50%; cursor: pointer; font-size: 1rem;
+
+/* Input de arquivo escondido visualmente, mas funcional, pois o label o aciona */
+input[type="file"].hidden#imagemProduto {
+    display: none;
 }
+
+
 .hidden { display: none; }
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
 
 /* Responsividade */ 
 @media screen and (max-width: 1024px) {

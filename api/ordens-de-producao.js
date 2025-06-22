@@ -15,7 +15,6 @@ const pool = new Pool({
 });
 const SECRET_KEY = process.env.JWT_SECRET;
 
-// Função verificarTokenOriginal (deve ser a mesma do seu api/usuarios.js e outras APIs)
 const verificarTokenOriginal = (reqOriginal) => {
     const authHeader = reqOriginal.headers.authorization;
     if (!authHeader) {
@@ -30,9 +29,7 @@ const verificarTokenOriginal = (reqOriginal) => {
         throw error;
     }
     try {
-        const decoded = jwt.verify(token, SECRET_KEY);
-        // console.log('[api/ordens-de-producao - verificarTokenOriginal] Token decodificado:', decoded);
-        return decoded; // Payload do token
+        return jwt.verify(token, SECRET_KEY);
     }
     catch (err) {
         const error = new Error('Token inválido ou expirado');
@@ -43,14 +40,11 @@ const verificarTokenOriginal = (reqOriginal) => {
 };
 
 // Middleware para este router: Apenas autentica o token.
-// A gestão de conexão DB e verificação de permissões detalhadas fica em cada rota.
 router.use(async (req, res, next) => {
     try {
-        // console.log(`[router/ordens-de-producao MID] Recebida ${req.method} em ${req.originalUrl}`);
         req.usuarioLogado = verificarTokenOriginal(req);
         next();
     } catch (error) {
-        console.error('[router/ordens-de-producao MID] Erro no middleware:', error.message);
         const statusCode = error.statusCode || 500;
         res.status(statusCode).json({ error: error.message, details: error.details });
     }
@@ -58,92 +52,82 @@ router.use(async (req, res, next) => {
 
 // GET /api/ordens-de-producao/ (Listar OPs com filtros e paginação)
 router.get('/', async (req, res) => {
-    const { usuarioLogado } = req; // usuarioLogado vem do token (via middleware)
+    const { usuarioLogado } = req;
     const { query } = req;
     let dbClient; 
 
     try {
         dbClient = await pool.connect();
-
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
-
         if (!permissoesCompletas.includes('acesso-ordens-de-producao')) {
-            return res.status(403).json({ error: 'Permissão negada para acessar ordens de produção.' });
+            return res.status(403).json({ error: 'Permissão negada.' });
         }
 
-        const fetchAll = query.all === 'true';
-        const getNextNumber = query.getNextNumber === 'true';
-        const noStatusFilter = query.noStatusFilter === 'true';
-        const page = parseInt(query.page) || 1;
-        const limit = parseInt(query.limit) || 10; // Padrão para frontend é 10
-        const offset = (page - 1) * limit;
-        const statusFilter = query.status;
-        const searchTerm = query.search ? String(query.search).trim() : null;
-
-        if (getNextNumber) {
-            const getNextNumberQueryText = `SELECT numero FROM ordens_de_producao ORDER BY CAST(NULLIF(REGEXP_REPLACE(numero, '\\D', '', 'g'), '') AS INTEGER) DESC NULLS LAST, numero DESC`;
-            const result = await dbClient.query(getNextNumberQueryText);
+        if (query.getNextNumber === 'true') {
+            const result = await dbClient.query(`SELECT numero FROM ordens_de_producao ORDER BY CAST(NULLIF(REGEXP_REPLACE(numero, '\\D', '', 'g'), '') AS INTEGER) DESC NULLS LAST, numero DESC`);
             return res.status(200).json(result.rows.map(row => row.numero));
         }
 
-        const queryTextBase = 'SELECT * FROM ordens_de_producao';
-        const countQueryTextBase = 'SELECT COUNT(*) FROM ordens_de_producao';
-        let whereClausesNew = [];
-        let dynamicParams = [];
-        let currentParamIdx = 1;
+        const page = parseInt(query.page) || 1;
+        const limit = parseInt(query.limit) || 10;
+        const offset = (page - 1) * limit;
 
-        if (noStatusFilter) {
-        } else if (statusFilter) {
-            whereClausesNew.push(`status = $${currentParamIdx++}`);
-            dynamicParams.push(statusFilter);
+        const queryTextBase = `
+        SELECT 
+            op.id, op.numero, op.variante, op.quantidade, op.data_entrega, 
+            op.observacoes, op.status, op.edit_id, op.etapas, op.data_final,
+            op.produto_id, -- INCLUINDO O ID
+            p.nome AS produto
+        FROM ordens_de_producao op
+        LEFT JOIN produtos p ON op.produto_id = p.id
+    `;
+        
+        let whereClauses = [];
+        let params = [];
+        let paramIndex = 1;
+
+        // --- A LÓGICA DO FILTRO CORRIGIDA ESTÁ AQUI ---
+        if (query.status && query.status !== 'todas') {
+            // Se um status específico (e diferente de 'todas') for enviado, use-o
+            whereClauses.push(`op.status = $${paramIndex++}`);
+            params.push(query.status);
         } else {
-            whereClausesNew.push(`status IN ('em-aberto', 'produzindo')`);
+            // Se o status for 'todas' ou se nenhum status for enviado,
+            // aplica o filtro padrão para mostrar apenas 'em-aberto' e 'produzindo'.
+            whereClauses.push(`op.status IN ('em-aberto', 'produzindo')`);
         }
 
-        if (searchTerm) {
-            whereClausesNew.push(`(
-                numero ILIKE $${currentParamIdx++} OR
-                produto ILIKE $${currentParamIdx++} OR
-                COALESCE(variante, '') ILIKE $${currentParamIdx++}
-            )`);
-            const likeSearchTerm = `%${searchTerm}%`;
-            dynamicParams.push(likeSearchTerm, likeSearchTerm, likeSearchTerm);
+        if (query.search) {
+            const searchTerm = `%${query.search}%`;
+            whereClauses.push(`(op.numero ILIKE $${paramIndex} OR p.nome ILIKE $${paramIndex + 1} OR op.variante ILIKE $${paramIndex + 2})`);
+            params.push(searchTerm, searchTerm, searchTerm);
+            paramIndex += 3;
         }
-
-        const finalWhereCondition = whereClausesNew.length > 0 ? `WHERE ${whereClausesNew.join(' AND ')}` : '';
-        let queryText = `${queryTextBase} ${finalWhereCondition} ORDER BY CAST(NULLIF(REGEXP_REPLACE(numero, '\\D', '', 'g'), '') AS INTEGER) DESC NULLS LAST, numero DESC`;
-        let countQueryText = `${countQueryTextBase} ${finalWhereCondition}`;
         
-        let queryParamsForData = [...dynamicParams];
-        let queryParamsForCount = [...dynamicParams]; // Usar uma cópia para a contagem
+        const whereCondition = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
+        
+        const countQuery = `SELECT COUNT(op.id) FROM ordens_de_producao op LEFT JOIN produtos p ON op.produto_id = p.id ${whereCondition}`;
+        const dataQuery = `${queryTextBase} ${whereCondition} ORDER BY op.id DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+        
+        const countParams = params.slice();
+        params.push(limit, offset);
 
-        if (!fetchAll) {
-            queryText += ` LIMIT $${currentParamIdx} OFFSET $${currentParamIdx + 1}`; // Os placeholders são relativos aos params já adicionados
-            queryParamsForData.push(limit, offset);
-        }
-
-        const result = await dbClient.query(queryText, queryParamsForData);
-
-        const totalResult = await dbClient.query(countQueryText, queryParamsForCount);
+        const totalResult = await dbClient.query(countQuery, countParams);
         const total = parseInt(totalResult.rows[0].count);
-        
-        const totalPages = limit > 0 ? Math.ceil(total / limit) : (total > 0 ? 1 : 0);
-
+        const result = await dbClient.query(dataQuery, params);
 
         res.status(200).json({
             rows: result.rows,
             total: total,
-            page: fetchAll ? 1 : page, // Se fetchAll, considera como página 1 de todas as páginas possíveis
-            pages: fetchAll ? (total > 0 ? totalPages : 1) : totalPages,
+            page: page,
+            pages: Math.ceil(total / limit) || 1,
         });
 
     } catch (error) {
-        console.error('[router/ordens-de-producao GET /] Erro detalhado:', error.message, error.stack ? error.stack.substring(0,500) : "");
-        res.status(500).json({ error: 'Erro ao buscar ordens de produção', details: error.message });
+        console.error('[router/ordens-de-producao GET /] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar ordens de produção.', details: error.message });
     } finally {
-        if (dbClient) {
-            dbClient.release();
-        }
+        if (dbClient) dbClient.release();
     }
 });
 
@@ -155,27 +139,34 @@ router.get('/:id', async (req, res) => {
 
     try {
         dbClient = await pool.connect();
-
-        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
-        if (!permissoesCompletas.includes('acesso-ordens-de-producao')) { // Ou uma permissão mais específica como 'ver-detalhe-op'
-            return res.status(403).json({ error: 'Permissão negada para ver detalhes da OP.' });
+        const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
+        if (!permissoes.includes('acesso-ordens-de-producao')) {
+            return res.status(403).json({ error: 'Permissão negada.' });
         }
 
-        const result = await dbClient.query(
-            `SELECT * FROM ordens_de_producao WHERE edit_id = $1 OR numero = $1`,
-            [opIdentifier]
-        );
+        const query = `
+        SELECT 
+            op.id, op.numero, op.variante, op.quantidade, op.data_entrega, 
+            op.observacoes, op.status, op.edit_id, op.etapas, op.data_final,
+            op.produto_id, -- INCLUINDO O ID
+            p.nome as produto
+        FROM ordens_de_producao op
+        LEFT JOIN produtos p ON op.produto_id = p.id
+        WHERE op.edit_id = $1 OR op.numero = $1
+    `;
+        const result = await dbClient.query(query, [opIdentifier]);
+
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Ordem de Produção não encontrada.' });
         }
+        
         res.status(200).json(result.rows[0]);
+
     } catch (error) {
-        console.error(`[router/ordens-de-producao GET /:id] Erro:`, error.message, error.stack ? error.stack.substring(0,500):"");
-        res.status(500).json({ error: 'Erro ao buscar OP.', details: error.message });
+        console.error(`[router/ordens-de-producao GET /:id] Erro:`, error);
+        res.status(500).json({ error: 'Erro ao buscar detalhes da OP.', details: error.message });
     } finally {
-        if (dbClient) {
-            dbClient.release();
-        }
+        if (dbClient) dbClient.release();
     }
 });
 
@@ -184,42 +175,73 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
     const { usuarioLogado } = req;
     let dbClient;
+
     try {
+        // Log inicial para ver exatamente o que o backend recebeu
+        console.log('[API POST OP] Corpo da requisição recebido:', JSON.stringify(req.body, null, 2));
+
         dbClient = await pool.connect();
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
         if (!permissoesCompletas.includes('criar-op')) {
-            return res.status(403).json({ error: 'Permissão negada para criar Ordem de Produção.' });
+            return res.status(403).json({ error: 'Permissão negada.' });
         }
         
-        const { numero, produto, variante, quantidade, data_entrega, observacoes, status, etapas, edit_id: fornecido_edit_id } = req.body;
+        const { numero, produto_id, variante, quantidade, data_entrega, observacoes, status, etapas, edit_id } = req.body;
         
-        // Validações
-        if (!numero || !produto || quantidade === undefined || !data_entrega) {
-            return res.status(400).json({ error: 'Campos obrigatórios ausentes (numero, produto, quantidade, data_entrega).' });
-        }
-        if (typeof quantidade !== 'number' || quantidade <= 0) {
-            return res.status(400).json({ error: 'Quantidade deve ser um número positivo.' });
+        if (!numero || !produto_id || quantidade === undefined || !data_entrega) {
+            return res.status(400).json({ error: 'Campos obrigatórios ausentes.' });
         }
         
-        const editId = fornecido_edit_id || Date.now().toString() + Math.random().toString(36).substring(2, 7);
+        // Inicia a transação
+        await dbClient.query('BEGIN');
+        console.log('[API POST OP] Transação iniciada (BEGIN).');
+
+        const final_edit_id = edit_id || Date.now().toString() + Math.random().toString(36).substring(2, 7);
+
+        const queryText = `
+            INSERT INTO ordens_de_producao (
+                numero, produto_id, variante, quantidade, data_entrega, 
+                observacoes, status, edit_id, etapas
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+            RETURNING *
+        `;
+
+        const values = [
+            numero, 
+            parseInt(produto_id),
+            variante || null, 
+            parseInt(quantidade),
+            data_entrega, 
+            observacoes || '', 
+            status || 'em-aberto', 
+            final_edit_id, 
+            JSON.stringify(etapas || [])
+        ];
+
+        console.log('[API POST OP] Query a ser executada:', queryText);
+        console.log('[API POST OP] Valores para a query:', values);
+
+        const result = await dbClient.query(queryText, values);
+
+        // Confirma a transação
+        await dbClient.query('COMMIT');
+        console.log('[API POST OP] Transação confirmada (COMMIT).');
         
-        const checkExists = await dbClient.query('SELECT 1 FROM ordens_de_producao WHERE numero = $1', [numero]);
-        if (checkExists.rowCount > 0) {
-            return res.status(409).json({ error: `Número da OP '${numero}' já existe.` });
+        // Se o resultado voltou, loga o que foi inserido
+        if (result.rows[0]) {
+            console.log('[API POST OP] Linha retornada pelo banco:', result.rows[0]);
         }
-        
-        const result = await dbClient.query(
-            `INSERT INTO ordens_de_producao (numero, produto, variante, quantidade, data_entrega, observacoes, status, edit_id, etapas, data_criacao)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP) RETURNING *`,
-            [numero, produto, variante || null, quantidade, data_entrega, observacoes || '', status || 'em-aberto', editId, JSON.stringify(etapas || [])]
-        );
+
         res.status(201).json(result.rows[0]);
 
     } catch (error) {
-        console.error('[router/ordens-de-producao POST] Erro:', error.message, error.stack? error.stack.substring(0,500):"");
-        if (error.code === '23505') { // Unique violation (ex: edit_id duplicado se não for bem gerado)
-            return res.status(409).json({ error: 'Conflito de dados. Possível ID duplicado.', details: error.detail });
+        if (dbClient) {
+            // Se der erro, desfaz a transação
+            await dbClient.query('ROLLBACK');
+            console.error('[API POST OP] ERRO! Transação desfeita (ROLLBACK).');
         }
+        console.error('[API POST OP] Erro detalhado:', error);
         res.status(500).json({ error: 'Erro ao criar Ordem de Produção.', details: error.message });
     } finally {
         if (dbClient) {
@@ -277,20 +299,23 @@ router.put('/', async (req, res) => {
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
         
         const opData = req.body;
-        const { edit_id, numero, status } = opData;
+        const { edit_id, numero, status, produto_id } = opData;
 
+        // Validação de dados essenciais
         if (!edit_id) {
             return res.status(400).json({ error: 'O campo "edit_id" é obrigatório para atualização.' });
         }
+        if (!produto_id && status !== 'cancelada') { // Permite cancelar mesmo sem produto_id (caso de erro antigo)
+            return res.status(400).json({ error: 'O campo "produto_id" é obrigatório para atualização.' });
+        }
 
-        // --- LÓGICA DE PERMISSÃO CORRIGIDA ---
+        // Lógica de permissão para a ação específica
         let permissaoConcedida = false;
         if (status === 'cancelada' && permissoesCompletas.includes('cancelar-op')) {
             permissaoConcedida = true;
         } else if (status === 'finalizado' && permissoesCompletas.includes('finalizar-op')) {
             permissaoConcedida = true;
         } else if (permissoesCompletas.includes('editar-op')) {
-            // Permissão genérica para qualquer outra mudança que não seja cancelar/finalizar
             permissaoConcedida = true;
         }
 
@@ -298,16 +323,11 @@ router.put('/', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada para realizar esta alteração na Ordem de Produção.' });
         }
 
-        // --- LÓGICA DE CASCATA (CANCELAR OU FINALIZAR) ---
+        // Lógica de cascata para cancelar ou finalizar OPs filhas
         let finalizedChildrenNumbers = [];
-
         if (status === 'cancelada') {
             console.log(`[API OPs PUT] OP #${numero} está sendo cancelada. Marcando corte associado como 'excluido'...`);
-            // Procura o corte associado pelo número da OP e muda seu status.
-            await dbClient.query(
-                `UPDATE cortes SET status = 'excluido' WHERE op = $1`,
-                [numero]
-            );
+            await dbClient.query(`UPDATE cortes SET status = 'excluido' WHERE op = $1`, [numero]);
         } else if (status === 'finalizado') {
             console.log(`[API OPs PUT] OP Mãe #${numero} está sendo finalizada. Verificando por OPs filhas...`);
             const textoBusca = `OP gerada em conjunto com a OP mãe #${numero}`;
@@ -318,20 +338,17 @@ router.put('/', async (req, res) => {
                  RETURNING numero`,
                 [textoBusca]
             );
-
             if (filhasResult.rowCount > 0) {
                 finalizedChildrenNumbers = filhasResult.rows.map(r => r.numero);
                 console.log(`[API OPs PUT] Sucesso! OPs filhas finalizadas: ${finalizedChildrenNumbers.join(', ')}`);
-            } else {
-                console.log(`[API OPs PUT] Nenhuma OP filha encontrada para a OP #${numero}.`);
             }
         }
         
-        // --- EXECUÇÃO DO UPDATE PRINCIPAL ---
-        const result = await dbClient.query(
-            `UPDATE ordens_de_producao
+        // Query de atualização principal
+        const queryText = `
+            UPDATE ordens_de_producao
              SET numero = $1, 
-                 produto = $2, 
+                 produto_id = $2,
                  variante = $3, 
                  quantidade = $4, 
                  data_entrega = $5,
@@ -340,40 +357,37 @@ router.put('/', async (req, res) => {
                  etapas = $8, 
                  data_final = $9, 
                  data_atualizacao = CURRENT_TIMESTAMP
-             WHERE edit_id = $10 RETURNING *`,
-            [
-                opData.numero, 
-                opData.produto, 
-                opData.variante || null, 
-                opData.quantidade, 
-                opData.data_entrega, 
-                opData.observacoes || '', 
-                opData.status, 
-                JSON.stringify(opData.etapas || []), 
-                opData.data_final || null, 
-                edit_id
-            ]
-        );
+             WHERE edit_id = $10 RETURNING *`;
+        
+        const values = [
+            opData.numero, 
+            parseInt(produto_id), 
+            opData.variante || null, 
+            parseInt(opData.quantidade), 
+            opData.data_entrega, 
+            opData.observacoes || '', 
+            status, 
+            JSON.stringify(opData.etapas || []), 
+            opData.data_final || null, 
+            edit_id
+        ];
+
+        const result = await dbClient.query(queryText, values);
 
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Ordem de Produção não encontrada para atualização.' });
         }
 
-        const opAtualizada = result.rows[0];
-
-        // Adiciona a informação das filhas finalizadas à resposta
-        res.status(200).json({
-            ...opAtualizada,
+        // Adiciona a informação das filhas finalizadas à resposta, se houver
+        const opAtualizada = {
+            ...result.rows[0],
             finalizedChildren: finalizedChildrenNumbers 
-        });
+        };
+        
+        res.status(200).json(opAtualizada);
 
     } catch (error) {
-        console.error('[router/ordens-de-producao PUT] Erro:', error.message, error.stack? error.stack.substring(0,500):"");
-        if (error.code === '23505' && error.constraint === 'ordens_de_producao_numero_key') {
-            return res.status(409).json({ error: `O número de OP '${req.body.numero}' já está em uso.`, details: error.detail });
-        } else if (error.code === '23505') {
-             return res.status(409).json({ error: 'Conflito de dados ao atualizar OP.', details: error.detail });
-        }
+        console.error('[router/ordens-de-producao PUT] Erro:', error);
         res.status(500).json({ error: 'Erro ao atualizar Ordem de Produção.', details: error.message });
     } finally {
         if (dbClient) {

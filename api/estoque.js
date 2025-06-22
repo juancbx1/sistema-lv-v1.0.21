@@ -64,39 +64,40 @@ router.get('/saldo', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada para visualizar saldo do estoque.' });
         }
 
-        // --- CORREÇÃO NA QUERY SQL ---
+        // QUERY REESCRITA PARA SER MAIS ROBUSTA
         const queryText = `
-            WITH Saldos AS (
+            WITH SaldosAgregados AS (
                 SELECT
-                    produto_nome,
-                    COALESCE(variante_nome, '-') AS variante_nome,
-                    COALESCE(
-                        (SELECT g.sku FROM produtos p, jsonb_to_recordset(p.grade) AS g(sku TEXT, variacao TEXT) WHERE p.nome = em.produto_nome AND ((em.variante_nome IS NULL AND (g.variacao IS NULL OR g.variacao = '-' OR g.variacao = 'Padrão')) OR (em.variante_nome IS NOT NULL AND g.variacao = em.variante_nome)) LIMIT 1),
-                        (SELECT p.sku FROM produtos p WHERE p.nome = em.produto_nome LIMIT 1),
-                        em.produto_nome || COALESCE('_VAR_' || em.variante_nome, '_BASE')
-                    ) AS produto_ref_id,
+                    produto_id,
+                    variante_nome,
                     SUM(
                         CASE 
-                            -- Adicionamos a condição "OR tipo_movimento LIKE 'ESTORNO%'" aqui
                             WHEN tipo_movimento LIKE 'ENTRADA%' OR tipo_movimento = 'AJUSTE_BALANCO_POSITIVO' OR tipo_movimento LIKE 'ESTORNO%' THEN quantidade
                             WHEN tipo_movimento LIKE 'SAIDA%' OR tipo_movimento = 'AJUSTE_BALANCO_NEGATIVO' THEN -ABS(quantidade) 
                             ELSE 0 
                         END
                     ) AS saldo_atual,
                     MAX(data_movimento) as ultima_data_movimento
-                FROM estoque_movimentos em
-                GROUP BY produto_nome, variante_nome
+                FROM estoque_movimentos
+                GROUP BY produto_id, variante_nome
             )
-            SELECT s.*
-            FROM Saldos s
-            LEFT JOIN estoque_itens_arquivados aia ON s.produto_ref_id = aia.produto_ref_id
-            WHERE aia.id IS NULL
-            ORDER BY s.ultima_data_movimento DESC, s.produto_nome ASC, s.variante_nome ASC;
+            SELECT
+                s.produto_id,
+                p.nome AS produto_nome,
+                COALESCE(s.variante_nome, '-') AS variante_nome,
+                s.saldo_atual,
+                s.ultima_data_movimento,
+                COALESCE(g.sku, p.sku, p.id::text) AS produto_ref_id
+            FROM SaldosAgregados s
+            JOIN produtos p ON s.produto_id = p.id
+            LEFT JOIN jsonb_to_recordset(p.grade) AS g(sku TEXT, variacao TEXT) ON g.variacao = s.variante_nome
+            LEFT JOIN estoque_itens_arquivados aia ON COALESCE(g.sku, p.sku, p.id::text) = aia.produto_ref_id
+            WHERE s.saldo_atual != 0 OR aia.id IS NULL
+            ORDER BY s.ultima_data_movimento DESC, p.nome ASC;
         `;
 
         const result = await dbClient.query(queryText);
         res.status(200).json(result.rows);
-
     } catch (error) {
         console.error('[router/estoque GET /saldo] Erro:', error);
         res.status(500).json({ error: 'Erro ao buscar saldo do estoque.', details: error.message });
@@ -149,56 +150,49 @@ router.post('/entrada-producao', async (req, res) => {
     try {
         dbCliente = await pool.connect();
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbCliente, usuarioLogado.id);
-
-        if (!permissoesCompletas.includes('lancar-embalagem')) { // Ou uma permissão mais específica como 'registrar-entrada-estoque-producao'
-            return res.status(403).json({ error: 'Permissão negada para registrar entrada de produção no estoque.' });
+        if (!permissoesCompletas.includes('lancar-embalagem')) {
+            return res.status(403).json({ error: 'Permissão negada para registrar entrada de produção.' });
         }
 
-        const { produto_nome, variante_nome, quantidade_entrada, id_arremate_origem, observacao_opcional } = req.body;
+        const { produto_id, variante_nome, quantidade_entrada, id_arremate_origem } = req.body;
 
-        if (!produto_nome || quantidade_entrada === undefined) {
-            return res.status(400).json({ error: 'Campos obrigatórios: produto_nome, quantidade_entrada.' });
+        if (!produto_id || quantidade_entrada === undefined) {
+            return res.status(400).json({ error: 'Campos obrigatórios: produto_id, quantidade_entrada.' });
         }
+        
         const quantidade = parseInt(quantidade_entrada);
         if (isNaN(quantidade) || quantidade <= 0) {
             return res.status(400).json({ error: 'Quantidade de entrada deve ser um número positivo.' });
         }
 
         const varianteParaDB = (variante_nome === '' || variante_nome === '-' || variante_nome === undefined) ? null : variante_nome;
-        // console.log(`[router/estoque POST /entrada-producao] Registrando: P:${produto_nome} V:${varianteParaDB || '-'} Qtd:${quantidade} OrigemArremateID:${id_arremate_origem}`);
         
         const queryText = `
             INSERT INTO estoque_movimentos 
-                (produto_nome, variante_nome, quantidade, tipo_movimento, origem_arremate_id, usuario_responsavel, observacao, data_movimento)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+                (produto_id, variante_nome, quantidade, tipo_movimento, origem_arremate_id, usuario_responsavel)
+            VALUES ($1, $2, $3, 'ENTRADA_PRODUCAO_ARREMATE', $4, $5)
             RETURNING *;
         `;
         
         const result = await dbCliente.query(queryText, [
-            produto_nome, varianteParaDB, quantidade,
-            'ENTRADA_PRODUCAO_ARREMATE', // Tipo de movimento
+            parseInt(produto_id), 
+            varianteParaDB, 
+            quantidade,
             id_arremate_origem || null,
-            (usuarioLogado.nome || usuarioLogado.nome_usuario),
-            observacao_opcional || `Entrada de produção finalizada (Arremate ID: ${id_arremate_origem || 'N/A'})`
+            (usuarioLogado.nome || usuarioLogado.nome_usuario)
         ]);
 
-        // console.log('[router/estoque POST /entrada-producao] Movimento de entrada registrado:', result.rows[0]);
-        res.status(201).json({
-            message: 'Entrada no estoque registrada com sucesso.',
-            movimentoRegistrado: result.rows[0],
-        });
+        res.status(201).json(result.rows[0]);
 
     } catch (error) {
-        console.error('[router/estoque POST /entrada-producao] Erro:', error.message, error.stack ? error.stack.substring(0,300):"");
+        console.error('[router/estoque POST /entrada-producao] Erro:', error);
         res.status(500).json({ error: 'Erro ao registrar entrada no estoque.', details: error.message });
     } finally {
         if (dbCliente) dbCliente.release();
     }
 });
 
-
 // GET /api/estoque/movimentos
-// --- ROTA GET /movimentos ATUALIZADA E COMPLETA ---
 router.get('/movimentos', async (req, res) => {
     const { usuarioLogado } = req;
     let dbCliente;
@@ -206,62 +200,37 @@ router.get('/movimentos', async (req, res) => {
         dbCliente = await pool.connect();
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbCliente, usuarioLogado.id);
         
-        if (!permissoesCompletas.includes('acesso-estoque')) { // Simplificando: se pode ver estoque, pode ver histórico
+        if (!permissoesCompletas.includes('acesso-estoque')) {
             return res.status(403).json({ error: 'Permissão negada para visualizar histórico de movimentos.' });
         }
 
-        const { 
-            // produto_nome, // NÃO desestruture aqui diretamente
-            // variante_nome será pego de req.query.variante_nome
-            tipo_movimento, 
-            data_inicio, 
-            data_fim, 
-            limit = 10,
-            page = 1 
-        } = req.query;
+        const { produto_id, tipo_movimento, data_inicio, data_fim, limit = 10, page = 1 } = req.query;
         const offset = (parseInt(page) - 1) * parseInt(limit);
 
-        // Obter e tratar produto_nome
-        let produtoNomeOriginalDaQuery = req.query.produto_nome;
-        let produtoNomeTratadoParaSQL;
-        if (produtoNomeOriginalDaQuery) {
-            produtoNomeTratadoParaSQL = produtoNomeOriginalDaQuery.replace(/\+/g, ' '); // Substitui '+' por espaço
-        }
+        let varianteNomeTratadaParaSQL = req.query.variante_nome ? req.query.variante_nome.replace(/\+/g, ' ') : null;
 
-        // Obter e tratar variante_nome
-        let varianteNomeOriginalDaQuery = req.query.variante_nome;
-        let varianteNomeTratadaParaSQL;
-        if (varianteNomeOriginalDaQuery) {
-            varianteNomeTratadaParaSQL = varianteNomeOriginalDaQuery.replace(/\+/g, ' '); 
-        } else {
-            varianteNomeTratadaParaSQL = null; 
-        }
-
-        console.log(`[API /movimentos] Recebido req.query:`, JSON.parse(JSON.stringify(req.query)));
-        console.log(`[API /movimentos] produtoNomeTratadoParaSQL: '${produtoNomeTratadoParaSQL}', varianteNomeTratadaParaSQL: '${varianteNomeTratadaParaSQL}'`);
-
-        let queryText = `SELECT * FROM estoque_movimentos em`;
-        let countQueryText = `SELECT COUNT(*) as count FROM estoque_movimentos em`;
+        let queryText = `SELECT em.*, p.nome as produto_nome FROM estoque_movimentos em JOIN produtos p ON em.produto_id = p.id`;
+        let countQueryText = `SELECT COUNT(*) as count FROM estoque_movimentos em JOIN produtos p ON em.produto_id = p.id`;
         
         const queryParams = [];
         const whereClauses = [];
         let paramIndex = 1;
 
-        if (produtoNomeTratadoParaSQL) { // Usa a variável tratada
-            whereClauses.push(`em.produto_nome = $${paramIndex++}`); 
-            queryParams.push(produtoNomeTratadoParaSQL); // Usa a variável tratada
+        if (produto_id) {
+            whereClauses.push(`em.produto_id = $${paramIndex++}`); 
+            queryParams.push(parseInt(produto_id));
         }
-
-        // Lógica para variante_nome usando a variável tratada
-        if (varianteNomeOriginalDaQuery) { 
+        
+        // A lógica da variante permanece a mesma, pois ela é um texto
+        if (req.query.variante_nome) { 
             if (varianteNomeTratadaParaSQL === '-' || varianteNomeTratadaParaSQL === 'Padrão') {
                 whereClauses.push(`(em.variante_nome IS NULL OR em.variante_nome = '-' OR em.variante_nome = 'Padrão')`);
             } else {
                 whereClauses.push(`em.variante_nome = $${paramIndex++}`);
                 queryParams.push(varianteNomeTratadaParaSQL); 
             }
-        } else { 
-            whereClauses.push(`em.variante_nome IS NULL`);
+        } else {
+             whereClauses.push(`em.variante_nome IS NULL`);
         }
         
         if (tipo_movimento) {
@@ -281,29 +250,19 @@ router.get('/movimentos', async (req, res) => {
         queryText += whereCondition;
         countQueryText += whereCondition;
         
-        // Guarda os parâmetros apenas do WHERE para a query de contagem
         const countParams = [...queryParams]; 
-
-        queryText += ` ORDER BY em.data_movimento DESC, em.id DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+        queryText += ` ORDER BY em.id DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
         queryParams.push(parseInt(limit), offset); 
 
-        console.log("[API /movimentos] Query SQL Final:", queryText);
-        console.log("[API /movimentos] Parâmetros da Query:", queryParams);
-
         const result = await dbCliente.query(queryText, queryParams);
-        
-        console.log("[API /movimentos] Query de Contagem SQL:", countQueryText);
-        console.log("[API /movimentos] Parâmetros da Query de Contagem:", countParams);
         const totalResult = await dbCliente.query(countQueryText, countParams); 
-        
         const total = totalResult.rows[0] ? parseInt(totalResult.rows[0].count) : 0;
-        const pages = Math.ceil(total / parseInt(limit)) || 1; // Garante pelo menos 1 página
+        const pages = Math.ceil(total / parseInt(limit)) || 1;
 
-        console.log(`[API /movimentos] ${result.rows.length} movimentos encontrados (Total: ${total}, Página: ${page}, Total Págs: ${pages}).`);
         res.status(200).json({ rows: result.rows, total, page: parseInt(page), pages });
 
     } catch (error) {
-        console.error('[API /movimentos] Erro na rota:', error.message, error.stack ? error.stack.substring(0,500):"");
+        console.error('[API /movimentos] Erro na rota:', error);
         res.status(500).json({ error: 'Erro ao buscar movimentos do estoque.', details: error.message });
     } finally {
         if (dbCliente) dbCliente.release();
@@ -324,9 +283,9 @@ router.post('/movimento-manual', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada para realizar movimentos manuais de estoque.' });
         }
 
-        const { produto_nome, variante_nome, quantidade_movimentada, tipo_operacao, observacao } = req.body;
+        const { produto_id, variante_nome, quantidade_movimentada, tipo_operacao, observacao } = req.body;
 
-        if (!produto_nome || quantidade_movimentada === undefined || !tipo_operacao) {
+        if (!produto_id || quantidade_movimentada === undefined || !tipo_operacao) {
             return res.status(400).json({ error: 'Campos obrigatórios: produto_nome, quantidade_movimentada, tipo_operacao.' });
         }
         const qtdMov = parseInt(quantidade_movimentada);
@@ -350,9 +309,9 @@ router.post('/movimento-manual', async (req, res) => {
                                     ELSE 0 
                                  END), 0) AS saldo 
                  FROM estoque_movimentos 
-                 WHERE produto_nome = $1 AND 
+                 WHERE produto_id = $1 AND 
                        ( ($2::text IS NULL AND variante_nome IS NULL) OR variante_nome = $2 )`,
-                [produto_nome, varianteParaDB]
+                [produto_id, varianteParaDB]
             );
             const saldoAtual = parseInt(saldoAtualQuery.rows[0].saldo);
             movimentoReal = qtdMov - saldoAtual;
@@ -375,11 +334,11 @@ router.post('/movimento-manual', async (req, res) => {
         
         const result = await dbCliente.query(
             `INSERT INTO estoque_movimentos 
-                (produto_nome, variante_nome, quantidade, tipo_movimento, usuario_responsavel, observacao, data_movimento)
+                (produto_id, variante_nome, quantidade, tipo_movimento, usuario_responsavel, observacao, data_movimento)
              VALUES ($1, $2, $3, $4, $5, $6, NOW())
              RETURNING *;`,
             [
-                produto_nome, varianteParaDB, movimentoReal, tipoMovimentoDB,
+                produto_id, varianteParaDB, movimentoReal, tipoMovimentoDB,
                 (usuarioLogado.nome || usuarioLogado.nome_usuario),
                 observacao || null
             ]
@@ -425,7 +384,7 @@ router.post('/movimento-em-lote', async (req, res) => {
         await dbClient.query('BEGIN'); // Inicia a transação
 
         for (const item of itens) {
-            if (!item.produto_nome || !item.quantidade_movimentada || item.quantidade_movimentada <= 0) {
+            if (!item.produto_id || !item.quantidade_movimentada || item.quantidade_movimentada <= 0) {
                 // Se algum item for inválido, desfaz a transação inteira.
                 throw new Error(`Item inválido no lote: ${item.produto_nome}. Verifique os dados.`);
             }
@@ -436,11 +395,11 @@ router.post('/movimento-em-lote', async (req, res) => {
 
             const query = `
                 INSERT INTO estoque_movimentos 
-                    (produto_nome, variante_nome, quantidade, tipo_movimento, usuario_responsavel, observacao, data_movimento)
+                    (produto_id, variante_nome, quantidade, tipo_movimento, usuario_responsavel, observacao, data_movimento)
                 VALUES ($1, $2, $3, $4, $5, $6, NOW());
             `;
             await dbClient.query(query, [
-                item.produto_nome,
+                item.produto_id,
                 varianteParaDB,
                 quantidadeNegativa,
                 tipo_operacao,
@@ -465,11 +424,10 @@ router.post('/movimento-em-lote', async (req, res) => {
 
 router.post('/estornar-movimento', async (req, res) => {
     const { usuarioLogado } = req;
-    // Novos campos do corpo da requisição
     const { id_movimento_original, quantidade_a_estornar } = req.body;
 
-    if (!id_movimento_original) {
-        return res.status(400).json({ error: 'O ID do movimento original é obrigatório.' });
+    if (!id_movimento_original || !quantidade_a_estornar) {
+        return res.status(400).json({ error: 'ID do movimento e quantidade a estornar são obrigatórios.' });
     }
 
     let dbClient;
@@ -483,55 +441,45 @@ router.post('/estornar-movimento', async (req, res) => {
 
         await dbClient.query('BEGIN');
 
-        // 1. Busca os dados do movimento original com lock para evitar concorrência
-        const movimentoOriginalRes = await dbClient.query('SELECT * FROM estoque_movimentos WHERE id = $1 FOR UPDATE', [id_movimento_original]);
+        // 1. Busca os dados do movimento original, incluindo o produto_id
+        const movimentoOriginalRes = await dbClient.query(
+            'SELECT * FROM estoque_movimentos WHERE id = $1 FOR UPDATE', 
+            [id_movimento_original]
+        );
         
-        if (movimentoOriginalRes.rows.length === 0) {
-            throw new Error('Movimento original não encontrado.');
-        }
+        if (movimentoOriginalRes.rows.length === 0) throw new Error('Movimento original não encontrado.');
+        
         const movOriginal = movimentoOriginalRes.rows[0];
-        const qtdOriginalAbs = Math.abs(movOriginal.quantidade);
-        const qtdJaEstornada = movOriginal.quantidade_estornada || 0;
-        const saldoDisponivelParaEstorno = qtdOriginalAbs - qtdJaEstornada;
+        const saldoDisponivelParaEstorno = Math.abs(movOriginal.quantidade) - (movOriginal.quantidade_estornada || 0);
 
         // 2. Validações
-        if (movOriginal.quantidade >= 0) {
-            throw new Error('Apenas movimentos de SAÍDA podem ser estornados.');
-        }
-        if (saldoDisponivelParaEstorno <= 0) {
-            throw new Error('Este movimento já foi totalmente estornado.');
+        if (movOriginal.quantidade >= 0) throw new Error('Apenas movimentos de SAÍDA podem ser estornados.');
+        if (saldoDisponivelParaEstorno <= 0) throw new Error('Este movimento já foi totalmente estornado.');
+        if (parseInt(quantidade_a_estornar) > saldoDisponivelParaEstorno) {
+            throw new Error(`Quantidade a estornar (${quantidade_a_estornar}) inválida. Saldo disponível para estorno: ${saldoDisponivelParaEstorno}.`);
         }
         
-        // =================================================================
-        // >> A CORREÇÃO PRINCIPAL ESTÁ AQUI <<
-        // =================================================================
-        // Usa a quantidade enviada pelo frontend. Se não for enviada, LANÇA UM ERRO.
-        // Não vamos mais assumir o valor total.
-        const qtdEstornarAgora = quantidade_a_estornar ? parseInt(quantidade_a_estornar) : 0;
-
-        if (qtdEstornarAgora <= 0) {
-            throw new Error('A quantidade a ser estornada deve ser maior que zero.');
-        }
-        if (qtdEstornarAgora > saldoDisponivelParaEstorno) {
-            throw new Error(`Quantidade a estornar (${qtdEstornarAgora}) inválida. Saldo disponível para estorno: ${saldoDisponivelParaEstorno}.`);
-        }
-        // =================================================================
-
         // 3. Cria a nova movimentação de estorno (entrada)
         const tipoMovimentoEstorno = `ESTORNO_${movOriginal.tipo_movimento}`;
         const observacaoEstorno = `Estorno referente ao movimento #${id_movimento_original}.`;
 
+        // --- QUERY DE INSERT CORRIGIDA ---
         const insertQuery = `
-            INSERT INTO estoque_movimentos (produto_nome, variante_nome, quantidade, tipo_movimento, usuario_responsavel, observacao, data_movimento)
-            VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *;
+            INSERT INTO estoque_movimentos 
+                (produto_id, variante_nome, quantidade, tipo_movimento, usuario_responsavel, observacao)
+            VALUES ($1, $2, $3, $4, $5, $6) RETURNING *;
         `;
         const novoMovimentoRes = await dbClient.query(insertQuery, [
-            movOriginal.produto_nome, movOriginal.variante_nome, qtdEstornarAgora,
-            tipoMovimentoEstorno, (usuarioLogado.nome || usuarioLogado.nome_usuario), observacaoEstorno
+            movOriginal.produto_id, // << USA O ID DO MOVIMENTO ORIGINAL
+            movOriginal.variante_nome, 
+            parseInt(quantidade_a_estornar),
+            tipoMovimentoEstorno, 
+            (usuarioLogado.nome || usuarioLogado.nome_usuario), 
+            observacaoEstorno
         ]);
 
         // 4. Atualiza o movimento original com a nova quantidade estornada
-        const novaQtdTotalEstornada = qtdJaEstornada + qtdEstornarAgora;
+        const novaQtdTotalEstornada = (movOriginal.quantidade_estornada || 0) + parseInt(quantidade_a_estornar);
         await dbClient.query('UPDATE estoque_movimentos SET quantidade_estornada = $1 WHERE id = $2', [novaQtdTotalEstornada, id_movimento_original]);
 
         await dbClient.query('COMMIT');
@@ -544,8 +492,7 @@ router.post('/estornar-movimento', async (req, res) => {
     } catch (error) {
         if (dbClient) await dbClient.query('ROLLBACK');
         console.error('[API /estornar-movimento] Erro:', error);
-        const statusCode = error.message.includes('inválida') || error.message.includes('não encontrado') ? 400 : 500;
-        res.status(statusCode).json({ error: 'Erro ao estornar movimento.', details: error.message });
+        res.status(error.message.includes('inválida') ? 400 : 500).json({ error: 'Erro ao estornar movimento.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }

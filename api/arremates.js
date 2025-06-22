@@ -72,78 +72,54 @@ router.post('/', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada para lançar arremate.' });
         }
 
-        const { op_numero, op_edit_id, produto, variante, quantidade_arrematada, usuario_tiktik } = req.body;
+        const { op_numero, op_edit_id, produto_id, variante, quantidade_arrematada, usuario_tiktik } = req.body;
 
-        if (!op_numero || !produto || quantidade_arrematada === undefined || !usuario_tiktik) {
-            return res.status(400).json({ error: 'Dados incompletos. Campos obrigatórios: op_numero, produto, quantidade_arrematada, usuario_tiktik.' });
+        if (!op_numero || !produto_id || quantidade_arrematada === undefined || !usuario_tiktik) {
+            return res.status(400).json({ error: 'Dados incompletos: op_numero, produto_id, quantidade e tiktik são obrigatórios.' });
         }
+        
         const quantidadeNum = parseInt(quantidade_arrematada);
         if (isNaN(quantidadeNum) || quantidadeNum <= 0) {
             return res.status(400).json({ error: 'Quantidade arrematada deve ser um número positivo.' });
         }
 
-        // --- CÁLCULO DE PONTOS NO MOMENTO DO LANÇAMENTO ---
-        let valorPontoAplicado; // Será definido abaixo
-        
+        // --- LÓGICA DE PONTOS CORRIGIDA ---
+        const produtoInfo = await dbClient.query('SELECT nome FROM produtos WHERE id = $1', [produto_id]);
+        if (produtoInfo.rows.length === 0) {
+            throw new Error(`Produto com ID ${produto_id} não encontrado para cálculo de pontos.`);
+        }
+        const nomeDoProduto = produtoInfo.rows[0].nome;
+
+        let valorPontoAplicado = 1.00;
         const configPontosQuery = `
-            SELECT pontos_padrao FROM configuracoes_pontos_processos
-            WHERE produto_nome = $1 
-              AND tipo_atividade = 'arremate_tiktik' 
-            /* E processo_nome = 'Arremate (Config)' -- Se você padronizou assim */
-              AND ativo = TRUE 
-            LIMIT 1;
-        `;
-        const configResult = await dbClient.query(configPontosQuery, [produto]);
+        SELECT pontos_padrao FROM configuracoes_pontos_processos
+        WHERE produto_id = $1 AND tipo_atividade = 'arremate_tiktik' AND ativo = TRUE LIMIT 1; -- USA produto_id
+    `;
+        const configResult = await dbClient.query(configPontosQuery, [produto_id]);
 
         if (configResult.rows.length > 0 && configResult.rows[0].pontos_padrao !== null) {
-            const pontosPadraoConfig = parseFloat(configResult.rows[0].pontos_padrao);
-            // Garante que o ponto da configuração seja um número positivo
-            if (!isNaN(pontosPadraoConfig) && pontosPadraoConfig > 0) {
-                valorPontoAplicado = pontosPadraoConfig;
-            } else {
-                console.warn(`[API Arremates POST] Configuração de pontos inválida (valor: ${configResult.rows[0].pontos_padrao}) para arremate do produto: ${produto}. Usando valor padrão 1.00.`);
-                valorPontoAplicado = 1.00;
-            }
-        } else {
-            console.warn(`[API Arremates POST] Configuração de pontos não encontrada ou inativa para arremate do produto: ${produto}. Usando valor padrão 1.00.`);
-            valorPontoAplicado = 1.00; // Padrão se não houver configuração ou se o valor for inválido
+            valorPontoAplicado = parseFloat(configResult.rows[0].pontos_padrao);
         }
-           
         const pontosGerados = quantidadeNum * valorPontoAplicado;
-        // --- FIM DO CÁLCULO DE PONTOS ---
+        
+        const nomeDoLancador = usuarioLogado.nome || 'Sistema';
 
-        // PEGA O NOME DO USUÁRIO LOGADO DO TOKEN
-        const nomeDoLancador = usuarioLogado.nome || 'Sistema'; // Fallback para "Sistema"
-
+        // --- INSERT CORRIGIDO ---
         const result = await dbClient.query(
-        `INSERT INTO arremates 
-        (op_numero, op_edit_id, produto, variante, quantidade_arrematada, usuario_tiktik, lancado_por, data_lancamento, valor_ponto_aplicado, pontos_gerados, assinada)
-        VALUES 
-        ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, $9, FALSE)
-         RETURNING *`, // << VÍRGULA AQUI, APÓS A QUERY
-        [ // << INÍCIO DO ARRAY DE PARÂMETROS
-        op_numero,
-        op_edit_id || null,
-        produto,
-        variante || null,
-        quantidadeNum,
-        usuario_tiktik,
-        nomeDoLancador,       // $7
-        valorPontoAplicado,   // $8
-        pontosGerados         // $9
-        ] 
-    );
-
-        if (result.rows.length === 0) {
-            throw new Error('Falha ao inserir o registro de arremate, nenhum dado retornado.');
-        }
+            `INSERT INTO arremates (op_numero, op_edit_id, produto_id, variante, quantidade_arrematada, usuario_tiktik, lancado_por, valor_ponto_aplicado, pontos_gerados)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+            [
+                op_numero, op_edit_id || null, parseInt(produto_id), variante || null, 
+                quantidadeNum, usuario_tiktik, nomeDoLancador,
+                valorPontoAplicado, pontosGerados
+            ]
+        );
+        
         res.status(201).json(result.rows[0]);
 
     } catch (error) {
-        console.error('[API Arremates POST] Erro:', error.message);
-        const statusCode = error.statusCode || (error.code === '23505' ? 409 : 500);
-        const errorMsg = error.code === '23505' ? 'Conflito de dados.' : (error.message || 'Erro interno ao salvar arremate.');
-        res.status(statusCode).json({ error: errorMsg, details: error.detail });
+        console.error('[API Arremates POST] Erro:', error);
+        res.status(500).json({ error: 'Erro interno ao salvar arremate.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }
@@ -160,36 +136,44 @@ router.get('/', async (req, res) => {
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
         const podeAcessarEmbalagemGeral = permissoesCompletas.includes('acesso-embalagem-de-produtos');
         const podeVerPropriosArremates = permissoesCompletas.includes('ver-proprios-arremates');
-        const nomeUsuarioNoToken = usuarioLogado.nome; // Assegure que 'nome' está no token
+        const nomeUsuarioNoToken = usuarioLogado.nome;
 
-        // Validação de Acesso Principal para a Rota GET
         if (!podeAcessarEmbalagemGeral && !podeVerPropriosArremates) {
             return res.status(403).json({ error: 'Permissão negada para visualizar arremates.' });
         }
 
+        // Base da query com JOIN para buscar o nome do produto
+        const baseSelect = `
+        SELECT 
+            a.id, a.op_numero, a.op_edit_id, a.variante, a.quantidade_arrematada,
+            a.usuario_tiktik, a.data_lancamento, a.quantidade_ja_embalada, a.assinada,
+            a.valor_ponto_aplicado, a.pontos_gerados, a.lancado_por, a.tipo_lancamento,
+            a.produto_id,
+            p.nome AS produto
+        FROM arremates a
+        LEFT JOIN produtos p ON a.produto_id = p.id
+    `;
+        
         let queryText;
         let queryParams = [];
 
-        // console.log(`[router/arremates GET] User: ${nomeUsuarioNoToken}, EmbalagemGeral: ${podeAcessarEmbalagemGeral}, VerProprios: ${podeVerPropriosArremates}, QueryTiktik: ${queryUsuarioTiktikParam}`);
-
         if (op_numero) {
-            queryText = 'SELECT * FROM arremates WHERE op_numero = $1 ORDER BY data_lancamento DESC';
+            queryText = `${baseSelect} WHERE a.op_numero = $1 ORDER BY a.data_lancamento DESC`;
             queryParams = [String(op_numero)];
         } else if (queryUsuarioTiktikParam) {
             if (podeAcessarEmbalagemGeral || (podeVerPropriosArremates && queryUsuarioTiktikParam === nomeUsuarioNoToken)) {
-                queryText = 'SELECT * FROM arremates WHERE usuario_tiktik = $1 ORDER BY data_lancamento DESC';
+                queryText = `${baseSelect} WHERE a.usuario_tiktik = $1 ORDER BY a.data_lancamento DESC`;
                 queryParams = [String(queryUsuarioTiktikParam)];
             } else {
                 return res.status(403).json({ error: 'Você só pode visualizar os arremates especificados ou os seus próprios.' });
             }
         } else if (podeAcessarEmbalagemGeral) {
-            queryText = 'SELECT * FROM arremates ORDER BY data_lancamento DESC';
-        } else if (podeVerPropriosArremates) { // Se não tem acesso geral, mas pode ver os próprios, e não filtrou por nada.
+            queryText = `${baseSelect} ORDER BY a.data_lancamento DESC`;
+        } else if (podeVerPropriosArremates) {
             if (!nomeUsuarioNoToken) return res.status(400).json({ error: "Falha ao identificar usuário para filtro." });
-            queryText = 'SELECT * FROM arremates WHERE usuario_tiktik = $1 ORDER BY data_lancamento DESC';
+            queryText = `${baseSelect} WHERE a.usuario_tiktik = $1 ORDER BY a.data_lancamento DESC`;
             queryParams = [nomeUsuarioNoToken];
         } else {
-             // Este caso não deveria ser alcançado por causa da validação de acesso principal acima.
             return res.status(403).json({ error: 'Acesso a arremates não configurado corretamente.' });
         }
         
@@ -205,28 +189,22 @@ router.get('/', async (req, res) => {
     }
 });
 
-// NOVA ROTA: GET /api/arremates/historico
+// ROTA: GET /api/arremates/historico
 router.get('/historico', async (req, res) => {
     let dbClient;
     try {
         dbClient = await pool.connect();
         
-        // Query modificada para tratar lançamentos normais e de perda
         const query = `
             SELECT 
-                id,
-                op_numero,
-                produto,
-                variante,
-                quantidade_arrematada,
-                usuario_tiktik,
-                lancado_por,
-                data_lancamento,
-                tipo_lancamento,
-                id_perda_origem
-            FROM arremates
-            WHERE data_lancamento >= NOW() - INTERVAL '7 days'
-            ORDER BY data_lancamento DESC;
+                a.id, a.op_numero, a.variante, a.quantidade_arrematada,
+                a.usuario_tiktik, a.lancado_por, a.data_lancamento,
+                a.tipo_lancamento, a.id_perda_origem,
+                p.nome as produto
+            FROM arremates a
+            LEFT JOIN produtos p ON a.produto_id = p.id
+            WHERE a.data_lancamento >= NOW() - INTERVAL '7 days'
+            ORDER BY a.data_lancamento DESC;
         `;
         const result = await dbClient.query(query);
         res.status(200).json(result.rows);
@@ -391,7 +369,8 @@ router.put('/assinar-lote', async (req, res) => {
 
 router.post('/registrar-perda', async (req, res) => {
     const { usuarioLogado } = req;
-    const { produto, variante, quantidadePerdida, motivo, observacao, opsOrigem } = req.body;
+    // << MUDANÇA: Recebe 'produto_id' do frontend >>
+    const { produto_id, variante, quantidadePerdida, motivo, observacao, opsOrigem } = req.body;
     let dbClient;
 
     try {
@@ -401,20 +380,27 @@ router.post('/registrar-perda', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada para registrar perdas.' });
         }
         
-        // Validações
-        if (!produto || !motivo || !quantidadePerdida || quantidadePerdida <= 0) {
-            return res.status(400).json({ error: "Dados para registro de perda estão incompletos." });
+        // << MUDANÇA: Validação para produto_id >>
+        if (!produto_id || !motivo || !quantidadePerdida || quantidadePerdida <= 0) {
+            return res.status(400).json({ error: "Dados para registro de perda estão incompletos (produto_id, motivo, quantidade)." });
         }
+        
+        // Busca o nome do produto para salvar na tabela de perdas (se ela ainda usa o nome)
+        const produtoInfo = await dbClient.query('SELECT nome FROM produtos WHERE id = $1', [produto_id]);
+        if (produtoInfo.rows.length === 0) {
+            throw new Error(`Produto com ID ${produto_id} não encontrado.`);
+        }
+        const nomeDoProduto = produtoInfo.rows[0].nome;
 
         await dbClient.query('BEGIN');
 
-        // 1. Insere o registro na nova tabela de perdas
+        // 1. Insere o registro na tabela de perdas
         const perdaQuery = `
-            INSERT INTO arremate_perdas (produto_nome, variante_nome, quantidade_perdida, motivo, observacao, usuario_responsavel, data_registro)
-            VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING id;
+            INSERT INTO arremate_perdas (produto_nome, variante_nome, quantidade_perdida, motivo, observacao, usuario_responsavel)
+            VALUES ($1, $2, $3, $4, $5, $6) RETURNING id;
         `;
         const perdaResult = await dbClient.query(perdaQuery, [
-            produto,
+            nomeDoProduto, // Salva o nome na tabela de perdas
             variante,
             quantidadePerdida,
             motivo,
@@ -424,7 +410,6 @@ router.post('/registrar-perda', async (req, res) => {
         const perdaId = perdaResult.rows[0].id;
 
         // 2. Cria um lançamento de arremate do tipo 'PERDA' para abater do saldo
-        // Esta lógica de "abater" das OPs é a mesma do lançamento normal
         let quantidadeRestanteParaAbater = quantidadePerdida;
         const opsOrdenadas = opsOrigem.sort((a, b) => a.numero - b.numero);
 
@@ -433,16 +418,17 @@ router.post('/registrar-perda', async (req, res) => {
             
             const qtdAbaterDaOP = Math.min(quantidadeRestanteParaAbater, op.quantidade_pendente_nesta_op);
             if (qtdAbaterDaOP > 0) {
+                // << MUDANÇA: Insere produto_id na tabela 'arremates' >>
                 const lancamentoPerdaQuery = `
-                    INSERT INTO arremates (op_numero, produto, variante, quantidade_arrematada, usuario_tiktik, lancado_por, data_lancamento, tipo_lancamento, id_perda_origem, assinada)
-                    VALUES ($1, $2, $3, $4, $5, $6, NOW(), 'PERDA', $7, TRUE);
+                    INSERT INTO arremates (op_numero, produto_id, variante, quantidade_arrematada, usuario_tiktik, lancado_por, tipo_lancamento, id_perda_origem, assinada)
+                    VALUES ($1, $2, $3, $4, $5, $6, 'PERDA', $7, TRUE);
                 `;
                 await dbClient.query(lancamentoPerdaQuery, [
                     op.numero,
-                    produto,
+                    produto_id, // Insere o ID aqui
                     variante,
                     qtdAbaterDaOP,
-                    'Sistema (Perda)', // Indica que não foi um Tiktik, mas uma baixa
+                    'Sistema (Perda)',
                     usuarioLogado.nome,
                     perdaId
                 ]);

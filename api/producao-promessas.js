@@ -12,7 +12,7 @@ const pool = new Pool({
     timezone: 'UTC',
 });
 const SECRET_KEY = process.env.JWT_SECRET;
-
+ 
 // Middleware de Autenticação
 router.use(async (req, res, next) => {
     try {

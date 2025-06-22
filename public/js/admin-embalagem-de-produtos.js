@@ -137,46 +137,53 @@ async function buscarArrematesCompletos() { // Nome mais genérico, pois vamos f
 
 // --- Lógica Principal de Cálculo e Agregação para Embalagem ---
 async function calcularEAgruparProntosParaEmbalar() {
-    await buscarArrematesCompletos(); // Garante que `todosArrematesRegistradosCache` está atualizado
+    // Garante que os dados mais frescos sejam usados
+    await buscarArrematesCompletos(); 
     if (todosOsProdutosCadastrados.length === 0) {
          todosOsProdutosCadastrados = await obterProdutosDoStorage();
     }
 
     const arrematesComSaldoParaEmbalar = [];
     for (const arremate of todosArrematesRegistradosCache) {
-        const quantidadeTotalNesteArremate = parseInt(arremate.quantidade_arrematada) || 0;
-        const quantidadeJaEmbaladaNesteArremate = parseInt(arremate.quantidade_ja_embalada) || 0;
-        const saldoParaEmbalarNesteArremate = quantidadeTotalNesteArremate - quantidadeJaEmbaladaNesteArremate;
+        const quantidadeTotal = parseInt(arremate.quantidade_arrematada) || 0;
+        const quantidadeJaEmbalada = parseInt(arremate.quantidade_ja_embalada) || 0;
+        const saldoParaEmbalar = quantidadeTotal - quantidadeJaEmbalada;
 
-        if (saldoParaEmbalarNesteArremate > 0) {
+        if (saldoParaEmbalar > 0) {
+            // AQUI ESTÁ A CORREÇÃO: Passamos o produto_id para o próximo objeto
             arrematesComSaldoParaEmbalar.push({
                 id_arremate: arremate.id,
-                op_numero_origem: arremate.op_numero, // Mantemos para rastreabilidade, se necessário
-                produto: arremate.produto,
-                variante: arremate.variante || '-', // Normaliza variante nula/vazia para '-'
-                quantidade_disponivel_para_embalar: saldoParaEmbalarNesteArremate,
-                // Outros dados relevantes do arremate podem ser adicionados aqui
+                op_numero_origem: arremate.op_numero,
+                produto: arremate.produto, // O nome, que vem do JOIN da API de arremates
+                produto_id: arremate.produto_id, // O ID, que também vem da API
+                variante: arremate.variante || '-',
+                quantidade_disponivel_para_embalar: saldoParaEmbalar,
             });
         }
     }
 
     const aggregatedMap = new Map();
     arrematesComSaldoParaEmbalar.forEach(arremateComSaldo => {
-        const produtoKey = `${arremateComSaldo.produto}|${arremateComSaldo.variante}`; // Chave de agregação
+        // Agora usamos a chave com produto_id para garantir unicidade
+        const produtoKey = `${arremateComSaldo.produto_id}|${arremateComSaldo.variante}`;
+        
         if (!aggregatedMap.has(produtoKey)) {
             aggregatedMap.set(produtoKey, {
                 produto: arremateComSaldo.produto,
+                produto_id: arremateComSaldo.produto_id, // Passando o ID para o objeto agregado
                 variante: arremateComSaldo.variante,
                 total_quantidade_disponivel_para_embalar: 0,
-                arremates_detalhe: [] // Guarda os arremates individuais que compõem este agregado
+                arremates_detalhe: []
             });
         }
+        
         const aggregatedItem = aggregatedMap.get(produtoKey);
         aggregatedItem.total_quantidade_disponivel_para_embalar += arremateComSaldo.quantidade_disponivel_para_embalar;
-        aggregatedItem.arremates_detalhe.push(arremateComSaldo); // Adiciona o arremate individual
+        aggregatedItem.arremates_detalhe.push(arremateComSaldo);
     });
+    
     produtosAgregadosParaEmbalarGlobal = Array.from(aggregatedMap.values());
-    console.log('[calcularEAgruparProntosParaEmbalar] Produtos agregados para embalar:', produtosAgregadosParaEmbalarGlobal.length, produtosAgregadosParaEmbalarGlobal);
+    console.log('[calcularEAgruparProntosParaEmbalar] Produtos agregados para embalar:', produtosAgregadosParaEmbalarGlobal);
 }
 
 // --- Funções de Renderização ---
@@ -359,17 +366,23 @@ async function carregarDetalhesEmbalagemView(agregado) {
     document.getElementById('kitTableContainerNova').style.display = 'none';
     document.getElementById('kitFooterNova').style.display = 'none';
     document.getElementById('kitErrorMessageNova').classList.add('hidden');
-    const temKits = await temKitsDisponiveis(agregado.produto, agregado.variante);
-    const podeMontarKit = permissoes.includes('montar-kit');
-    if (kitTabButton) {
+     const temKits = await temKitsDisponiveis(agregado.produto_id, agregado.variante);
+    const podeMontarKit = permissoes.includes('montar-kit'); // Sua verificação de permissão
+
+    console.log(`[carregarDetalhesEmbalagemView] Para ${agregado.produto} (ID: ${agregado.produto_id}) - ${agregado.variante}: temKits=${temKits}, podeMontarKit=${podeMontarKit}`);
+
+     if (kitTabButton) {
+        // ESTA CONDIÇÃO DETERMINA SE A ABA APARECE
         kitTabButton.style.display = (temKits && podeMontarKit) ? 'inline-flex' : 'none';
     }
-    unidadeTabButton.classList.add('active');
-    unidadePanel.classList.add('active');
-    unidadePanel.style.display = 'block';
-    if (kitTabButton) {
-        kitTabButton.classList.remove('active');
+
+    // Lógica para definir qual aba fica ativa por padrão (geralmente 'unidade')
+    if (unidadeTabButton) unidadeTabButton.classList.add('active');
+    if (unidadePanel) {
+        unidadePanel.classList.add('active');
+        unidadePanel.style.display = 'block';
     }
+    if (kitTabButton) kitTabButton.classList.remove('active');
     if (kitPanel) {
         kitPanel.classList.remove('active');
         kitPanel.style.display = 'none';
@@ -391,9 +404,8 @@ async function embalarUnidade() {
     }
 
     operacaoEmAndamento.add('embalarUnidade');
-    const originalButtonHTML = btnEmbalar.innerHTML;
     btnEmbalar.disabled = true;
-    btnEmbalar.innerHTML = '<div class="spinner-btn-interno"></div> Embalando...';
+    btnEmbalar.innerHTML = '<div class="spinner-btn-interno"></div> Processando...';
     inputQtd.disabled = true;
 
     try {
@@ -402,6 +414,7 @@ async function embalarUnidade() {
             .filter(arr => arr.quantidade_disponivel_para_embalar > 0)
             .sort((a, b) => a.id_arremate - b.id_arremate);
 
+        // Primeiro, atualiza o saldo dos arremates consumidos
         for (const arremate of arrematesOrdenados) {
             if (quantidadeRestanteDaMeta <= 0) break;
             const qtdAEmbalarDeste = Math.min(quantidadeRestanteDaMeta, arremate.quantidade_disponivel_para_embalar);
@@ -414,65 +427,79 @@ async function embalarUnidade() {
             }
         }
         
-        if (quantidadeRestanteDaMeta > 0) {
-            throw new Error("Não foi possível alocar a quantidade total. Saldo inconsistente.");
+        if (quantidadeRestanteDaMeta > 0 && quantidadeEnviada > 0) {
+            // Este erro não deveria acontecer se a lógica estiver correta, mas é uma segurança
+            throw new Error("Não foi possível alocar a quantidade total nos arremates disponíveis. Saldo inconsistente.");
         }
-
+        
+        // << AQUI ESTÁ A CORREÇÃO PRINCIPAL >>
+        // Monta o payload para a entrada de estoque usando o produto_id
+        const payloadEstoque = {
+            produto_id: embalagemAgregadoEmVisualizacao.produto_id,
+            variante_nome: embalagemAgregadoEmVisualizacao.variante === '-' ? null : embalagemAgregadoEmVisualizacao.variante,
+            quantidade_entrada: quantidadeEnviada,
+            // Passa o ID do primeiro arremate da lista como referência, se houver
+            id_arremate_origem: arrematesOrdenados[0]?.id_arremate || null
+        };
+        
         await fetchFromAPI('/estoque/entrada-producao', {
             method: 'POST',
-            body: JSON.stringify({
-                produto_nome: embalagemAgregadoEmVisualizacao.produto,
-                variante_nome: embalagemAgregadoEmVisualizacao.variante === '-' ? null : embalagemAgregadoEmVisualizacao.variante,
-                quantidade_entrada: quantidadeEnviada,
-                tipo_origem: "PRODUCAO_UNIDADE"
-            })
+            body: JSON.stringify(payloadEstoque)
         });
         
         mostrarPopupMensagem(`${quantidadeEnviada} unidade(s) embalada(s) com sucesso!`, 'sucesso');
         
-        // Após sucesso, invalida os caches e volta para a lista
-        todosArrematesRegistradosCache = [];
-        await calcularEAgruparProntosParaEmbalar();
+        // Após sucesso, volta para a lista para forçar a atualização dos dados
         window.location.hash = '';
 
     } catch (error) {
         console.error('[embalarUnidade] Erro:', error);
         mostrarPopupMensagem(`Falha ao embalar unidade: ${error.message}`, 'erro');
-        // Se der erro, reabilita os campos para nova tentativa
         inputQtd.disabled = false;
         btnEmbalar.disabled = false;
-
+        btnEmbalar.innerHTML = 'Estocar Unidades';
     } finally {
         operacaoEmAndamento.delete('embalarUnidade');
-        // CORREÇÃO: Garante que o texto do botão seja sempre restaurado,
-        // mesmo que a navegação ocorra em seguida.
-        if (document.body.contains(btnEmbalar)) {
-            btnEmbalar.innerHTML = originalButtonHTML;
-        }
     }
 }
 
 async function montarKits() {
-    if (!embalagemAgregadoEmVisualizacao || operacaoEmAndamento.has('montarKits')) return;
+    if (!embalagemAgregadoEmVisualizacao || operacaoEmAndamento.has('montarKits')) {
+        console.warn('[montarKits] Operação já em andamento ou nenhum agregado em visualização.');
+        return;
+    }
 
     const selectKitEl = document.getElementById('kitsListNova').querySelector('button.active');
     const selectVariacaoKitEl = document.getElementById('kitVariacoesNova');
     const inputQtdKitsEl = document.getElementById('qtdEnviarKitsNova');
     const btnMontarEl = document.getElementById('btnMontarEnviarKitsEstoque');
 
-    if (!selectKitEl || !selectVariacaoKitEl.value || !inputQtdKitsEl.value) {
-        mostrarPopupMensagem('Selecione o kit, a variação do kit e a quantidade.', 'aviso');
+    if (!selectKitEl || !selectVariacaoKitEl || !selectVariacaoKitEl.value || !inputQtdKitsEl || !inputQtdKitsEl.value) {
+        mostrarPopupMensagem('Selecione o kit, a variação do kit e a quantidade para montar.', 'aviso');
         return;
     }
-    const nomeKitProduto = selectKitEl.textContent;
-    const variacaoKitProduto = selectVariacaoKitEl.value;
+
+    const nomeKitProduto = selectKitEl.textContent.trim(); // Nome do kit selecionado
+    const variacaoKitProduto = selectVariacaoKitEl.value; // Variação do kit selecionado
     const qtdKitsParaEnviar = parseInt(inputQtdKitsEl.value);
     const maxKitsMontaveis = parseInt(document.getElementById('qtdDisponivelKitsNova').textContent) || 0;
 
-    if (isNaN(qtdKitsParaEnviar) || qtdKitsParaEnviar <= 0 || qtdKitsParaEnviar > maxKitsMontaveis) {
-        mostrarPopupMensagem('Quantidade de kits inválida ou excede o máximo montável.', 'erro');
+    if (isNaN(qtdKitsParaEnviar) || qtdKitsParaEnviar <= 0) {
+        mostrarPopupMensagem('Quantidade de kits para montar deve ser maior que zero.', 'erro');
         return;
     }
+    if (qtdKitsParaEnviar > maxKitsMontaveis) {
+        mostrarPopupMensagem(`Não é possível montar ${qtdKitsParaEnviar} kit(s). Máximo disponível: ${maxKitsMontaveis}.`, 'erro');
+        return;
+    }
+
+    // Buscar o ID do produto kit
+    const kitProdutoSelecionadoObj = todosOsProdutosCadastrados.find(p => p.nome === nomeKitProduto && p.is_kit === true);
+    if (!kitProdutoSelecionadoObj || !kitProdutoSelecionadoObj.id) {
+        mostrarPopupMensagem(`Erro: Não foi possível encontrar o ID para o kit "${nomeKitProduto}". Verifique o cadastro.`, 'erro');
+        return;
+    }
+    const idDoKitParaAPI = kitProdutoSelecionadoObj.id;
 
     operacaoEmAndamento.add('montarKits');
     const originalButtonHTML = btnMontarEl.innerHTML;
@@ -484,30 +511,34 @@ async function montarKits() {
 
     let sucessoGeral = false;
     try {
-        const kitSelecionadoObj = todosOsProdutosCadastrados.find(p => p.nome === nomeKitProduto && p.is_kit);
-        const variacaoDoKitObj = kitSelecionadoObj?.grade?.find(g => g.variacao === variacaoKitProduto);
+        const variacaoDoKitObj = kitProdutoSelecionadoObj.grade?.find(g => g.variacao === variacaoKitProduto);
         const composicaoDoKitSelecionado = variacaoDoKitObj?.composicao;
 
         if (!composicaoDoKitSelecionado || composicaoDoKitSelecionado.length === 0) {
-            throw new Error('Composição do kit não encontrada ou vazia.');
+            throw new Error('Composição do kit não encontrada ou está vazia. Verifique o cadastro do kit.');
         }
 
         const componentesParaPayload = [];
         for (const itemCompDef of composicaoDoKitSelecionado) {
-            const nomeComp = itemCompDef.produto;
-            const varComp = itemCompDef.variacao || '-';
+            // itemCompDef AGORA DEVE TER produto_id e produto_nome
+            const idComp = itemCompDef.produto_id;
+            const nomeCompParaLog = itemCompDef.produto_nome || itemCompDef.produto; // Fallback para nome antigo
+            const varComp = itemCompDef.variacao === '-' ? null : (itemCompDef.variacao || null);
             const qtdNecPorKit = parseInt(itemCompDef.quantidade) || 1;
             let qtdTotalCompNec = qtdKitsParaEnviar * qtdNecPorKit;
 
-            // Encontra o agregado do componente para pegar seus arremates_detalhe
+            // Encontra o agregado do componente usando o ID do componente
             const agregadoDoComponente = produtosAgregadosParaEmbalarGlobal.find(
-                agg => agg.produto === nomeComp && (agg.variante || '-') === varComp
+                agg => String(agg.produto_id) === String(idComp) && (agg.variante || '-') === (varComp || '-')
             );
-            if (!agregadoDoComponente) throw new Error(`Componente ${nomeComp} (${varComp}) não encontrado nos itens disponíveis para embalar.`);
+
+            if (!agregadoDoComponente) {
+                throw new Error(`Componente "${nomeCompParaLog}" (${varComp || 'Padrão'}) não encontrado nos itens disponíveis para embalar ou saldo insuficiente.`);
+            }
 
             const arrematesDisponiveisDoComponente = [...agregadoDoComponente.arremates_detalhe]
                 .filter(arr => arr.quantidade_disponivel_para_embalar > 0)
-                .sort((a, b) => a.id_arremate - b.id_arremate);
+                .sort((a, b) => a.id_arremate - b.id_arremate); // FIFO de arremates
 
             for (const arremateComp of arrematesDisponiveisDoComponente) {
                 if (qtdTotalCompNec <= 0) break;
@@ -515,71 +546,91 @@ async function montarKits() {
                 if (qtdUsarDesteArremate > 0) {
                     componentesParaPayload.push({
                         id_arremate: arremateComp.id_arremate,
-                        produto: arremateComp.produto,
-                        variante: arremateComp.variante === '-' ? null : arremateComp.variante,
+                        produto_id: idComp, // ID do produto componente
+                        produto_nome: nomeCompParaLog, // Nome para referência/log
+                        variacao: varComp,
                         quantidade_usada: qtdUsarDesteArremate
                     });
                     qtdTotalCompNec -= qtdUsarDesteArremate;
                 }
             }
             if (qtdTotalCompNec > 0) {
-                throw new Error(`Saldo insuficiente para o componente ${nomeComp} (${varComp}). Faltam ${qtdTotalCompNec}.`);
+                throw new Error(`Saldo insuficiente para o componente "${nomeCompParaLog}" (${varComp || 'Padrão'}). Faltam ${qtdTotalCompNec} unidades.`);
             }
         }
 
         const payloadAPI = {
-            kit_nome: nomeKitProduto,
+            kit_produto_id: idDoKitParaAPI, // Envia o ID do kit
+            kit_nome: nomeKitProduto,        // Envia o nome para logs e observação
             kit_variante: variacaoKitProduto === '-' ? null : variacaoKitProduto,
             quantidade_kits_montados: qtdKitsParaEnviar,
             componentes_consumidos_de_arremates: componentesParaPayload
         };
+
+        console.log("[montarKits] Payload final para API:", JSON.stringify(payloadAPI, null, 2));
+        
         await fetchFromAPI('/kits/montar', { method: 'POST', body: JSON.stringify(payloadAPI) });
-        mostrarPopupMensagem(`${qtdKitsParaEnviar} kit(s) montado(s) e enviado(s) para estoque!`, 'sucesso');
+        
+        mostrarPopupMensagem(`${qtdKitsParaEnviar} kit(s) "${nomeKitProduto}" montado(s) e enviado(s) para estoque!`, 'sucesso');
         sucessoGeral = true;
 
-        todosArrematesRegistradosCache = [];
-        await calcularEAgruparProntosParaEmbalar();
-        window.location.hash = '';
+        // Limpar caches e voltar para a lista principal
+        todosArrematesRegistradosCache = []; // Força recarga dos arremates
+        // produtosAgregadosParaEmbalarGlobal será recalculado
+        await calcularEAgruparProntosParaEmbalar(); // Recalcula o que está pronto para embalar
+        window.location.hash = ''; // Volta para a lista
 
     } catch (error) {
         console.error('[montarKits] Erro:', error);
         mostrarPopupMensagem(`Erro ao montar kits: ${error.message}`, 'erro');
     } finally {
         operacaoEmAndamento.delete('montarKits');
-         if (document.body.contains(btnMontarEl)) {
-            btnMontarEl.innerHTML = originalButtonHTML;
-            if (!sucessoGeral) { // Reabilita tudo para nova tentativa se falhou
-                document.querySelectorAll('#kitsListNova button').forEach(b => b.disabled = false);
-                if(document.body.contains(selectVariacaoKitEl)) selectVariacaoKitEl.disabled = false;
-                if(document.body.contains(inputQtdKitsEl)) inputQtdKitsEl.disabled = false;
-                // Reabilita o botão de montar se ainda for possível
-                atualizarEstadoBotaoMontarKitNova();
-            }
+        // Garante que os elementos do DOM existam antes de tentar manipulá-los
+        const currentBtnMontarEl = document.getElementById('btnMontarEnviarKitsEstoque');
+        const currentKitsListButtons = document.querySelectorAll('#kitsListNova button');
+        const currentSelectVariacaoKitEl = document.getElementById('kitVariacoesNova');
+        const currentInputQtdKitsEl = document.getElementById('qtdEnviarKitsNova');
+
+        if (currentBtnMontarEl) {
+            currentBtnMontarEl.innerHTML = originalButtonHTML;
+        }
+        if (!sucessoGeral) { // Reabilita tudo para nova tentativa se falhou
+            if (currentKitsListButtons) currentKitsListButtons.forEach(b => b.disabled = false);
+            if (currentSelectVariacaoKitEl) currentSelectVariacaoKitEl.disabled = false;
+            if (currentInputQtdKitsEl) currentInputQtdKitsEl.disabled = false;
+            atualizarEstadoBotaoMontarKitNova(); // Tenta reabilitar o botão de montar se possível
         }
     }
 }
 
 // --- Funções Auxiliares de Kit (copiadas e adaptadas com sufixo Nova) ---
-async function temKitsDisponiveis(produto, variante) {
+async function temKitsDisponiveis(produtoIdBase, varianteBase) {
     if (todosOsProdutosCadastrados.length === 0) {
-        todosOsProdutosCadastrados = await obterProdutosDoStorage();
+        console.log("[temKitsDisponiveis] Buscando produtos pois o cache local está vazio.");
+        todosOsProdutosCadastrados = await obterProdutosDoStorage(true); // Força busca se vazio
     }
     const kits = todosOsProdutosCadastrados.filter(p => p.is_kit === true);
+    // console.log("[temKitsDisponiveis] Kits encontrados para verificação:", kits); // Log dos kits
+
     if (kits.length === 0) return false;
 
-    const produtoLower = produto.toLowerCase();
-    const varAtualLower = (variante === '-' ? '' : variante).toLowerCase();
+    const varBaseNormalizada = (varianteBase === '-' || varianteBase === null || varianteBase === undefined ? '' : String(varianteBase)).toLowerCase();
+    console.log(`[temKitsDisponiveis] Procurando por Produto Base ID: ${produtoIdBase}, Variante Base Normalizada: '${varBaseNormalizada}'`);
 
     for (const kit of kits) {
+        // console.log(`[temKitsDisponiveis] Verificando Kit: ${kit.nome} (ID: ${kit.id})`);
         if (kit.grade && Array.isArray(kit.grade)) {
-            for (const g of kit.grade) {
+            for (const g of kit.grade) { // Para cada variação do kit (ex: "Pacote Azul")
                 if (g.composicao && Array.isArray(g.composicao)) {
-                    for (const c of g.composicao) {
-                        const compProdutoNome = (c.produto || kit.nome);
-                        const compProdutoNomeLower = compProdutoNome.toLowerCase();
-                        const compVariacao = (c.variacao === '-' ? '' : (c.variacao || '')); // Trata null/undefined para ''
-                        const compVariacaoLower = compVariacao.toLowerCase();
-                        if (compProdutoNomeLower === produtoLower && compVariacaoLower === varAtualLower) {
+                    for (const componente of g.composicao) {
+                        const idComponenteNoKit = componente.produto_id;
+                        const nomeComponenteNoKit = componente.produto_nome || componente.produto; // Para log
+                        const varComponenteNoKitNormalizada = (componente.variacao === '-' || componente.variacao === null || componente.variacao === undefined ? '' : String(componente.variacao)).toLowerCase();
+
+                        // console.log(`  -> Componente no kit: ID ${idComponenteNoKit} (${nomeComponenteNoKit}), Var: '${varComponenteNoKitNormalizada}' (Qtd: ${componente.quantidade})`);
+
+                        if (idComponenteNoKit && String(idComponenteNoKit) === String(produtoIdBase) && varComponenteNoKitNormalizada === varBaseNormalizada) {
+                            console.log(`[temKitsDisponiveis] ENCONTRADO! Kit: ${kit.nome}, Variação do Kit: ${g.variacao}, Componente: ID ${idComponenteNoKit} (${nomeComponenteNoKit}) - Var: '${varComponenteNoKitNormalizada}'`);
                             return true;
                         }
                     }
@@ -587,113 +638,206 @@ async function temKitsDisponiveis(produto, variante) {
             }
         }
     }
+    console.log(`[temKitsDisponiveis] NÃO ENCONTRADO para Produto Base ID: ${produtoIdBase}, Variante Base: '${varBaseNormalizada}'`);
     return false;
 }
 
-async function carregarKitsDisponiveisNova(produtoBase, varianteBase) {
-    if (todosOsProdutosCadastrados.length === 0) {
-        todosOsProdutosCadastrados = await obterProdutosDoStorage();
-    }
+async function carregarKitsDisponiveisNova(produtoBaseId, varianteBase) {
+    // produtoBaseId: O ID do produto que o usuário clicou para embalar (o "item base").
+    // varianteBase: A variante do produto que o usuário clicou para embalar.
+
+    // Elementos do DOM para a lista de kits e seções subsequentes
     const kitsListEl = document.getElementById('kitsListNova');
-    const kitVariacaoWrapper = document.getElementById('kitVariacaoComposicaoWrapperNova');
-    const kitFooter = document.getElementById('kitFooterNova');
+    const kitVariacaoWrapperEl = document.getElementById('kitVariacaoComposicaoWrapperNova'); // Renomeado para clareza
+    const kitTableContainerEl = document.getElementById('kitTableContainerNova');
+    const kitFooterEl = document.getElementById('kitFooterNova');
+    const kitVariacoesSelectEl = document.getElementById('kitVariacoesNova'); // Referência ao select de variações do KIT
 
-    if (!kitsListEl || !kitVariacaoWrapper || !kitFooter) {
-        console.error("Elementos da aba kit não encontrados em carregarKitsDisponiveisNova");
+    // Validação dos elementos do DOM
+    if (!kitsListEl || !kitVariacaoWrapperEl || !kitTableContainerEl || !kitFooterEl || !kitVariacoesSelectEl) {
+        console.error("[carregarKitsDisponiveisNova] Um ou mais elementos essenciais da UI para kits não foram encontrados.");
+        if (kitsListEl) kitsListEl.innerHTML = '<p style="color:red;">Erro: Elementos da UI ausentes.</p>';
         return;
     }
-    kitsListEl.innerHTML = '<p>Buscando kits...</p>';
-    kitVariacaoWrapper.style.display = 'none';
-    kitFooter.style.display = 'none';
 
-
-    const varBaseLower = (varianteBase === '-' ? '' : varianteBase).toLowerCase();
-    const kitsFiltrados = todosOsProdutosCadastrados.filter(kit =>
-        kit.is_kit && kit.grade?.some(g =>
-            g.composicao?.some(item =>
-                (item.produto || kit.nome).toLowerCase() === produtoBase.toLowerCase() &&
-                (item.variacao === '-' ? '' : (item.variacao || '')).toLowerCase() === varBaseLower
-            )
-        )
-    );
-
-    if (kitsFiltrados.length === 0) {
-        kitsListEl.innerHTML = '<p style="font-style:italic; color: var(--op-cor-cinza-texto);">Nenhum kit cadastrado utiliza este item base.</p>';
+    // Validação do produtoBaseId
+    if (!produtoBaseId) {
+        console.warn("[carregarKitsDisponiveisNova] produtoBaseId não fornecido. Não é possível carregar kits.");
+        kitsListEl.innerHTML = '<p style="font-style:italic; color: var(--op-cor-cinza-texto);">Informação do item base inválida para buscar kits.</p>';
+        kitVariacaoWrapperEl.style.display = 'none';
+        kitTableContainerEl.style.display = 'none';
+        kitFooterEl.style.display = 'none';
         return;
     }
-    kitsListEl.innerHTML = ''; // Limpa "Buscando..."
 
-    kitsFiltrados.forEach(kit => {
+    // Garante que a lista de todos os produtos esteja carregada
+    if (!todosOsProdutosCadastrados || todosOsProdutosCadastrados.length === 0) {
+        console.log("[carregarKitsDisponiveisNova] Cache todosOsProdutosCadastrados vazio, buscando do storage...");
+        todosOsProdutosCadastrados = await obterProdutosDoStorage(true); // Força a busca se estiver vazio
+    }
+
+    // Reset e mensagem de carregamento
+    kitsListEl.innerHTML = '<p>Buscando kits que utilizam este item...</p>';
+    kitVariacaoWrapperEl.style.display = 'none';
+    kitTableContainerEl.style.display = 'none';
+    kitFooterEl.style.display = 'none';
+    kitVariacoesSelectEl.innerHTML = '<option value="">Selecione o Kit primeiro</option>'; // Reseta o select de variações do kit
+    kitVariacoesSelectEl.disabled = true;
+
+
+    // Normaliza a variante do item base que o usuário quer usar como componente
+    const varianteBaseNormalizada = (varianteBase === '-' || varianteBase === null || varianteBase === undefined ? '' : String(varianteBase)).toLowerCase();
+    console.log(`[carregarKitsDisponiveisNova] Procurando kits que usam Produto Base ID: ${produtoBaseId}, Variante Base Normalizada: '${varianteBaseNormalizada}'`);
+
+    // Filtra todos os produtos para encontrar apenas aqueles que SÃO KITS
+    // E que em ALGUMA de suas variações de grade, contêm o produtoBaseId com a varianteBase como COMPONENTE.
+    const kitsQueUtilizamOComponente = todosOsProdutosCadastrados.filter(kitProduto => {
+        if (!kitProduto.is_kit || !kitProduto.grade || !Array.isArray(kitProduto.grade)) {
+            return false; // Não é um kit ou não tem grade definida
+        }
+        // Verifica se ALGUMA variação deste kit (g) contém o componente desejado
+        return kitProduto.grade.some(variacaoDoKit => 
+            variacaoDoKit.composicao && Array.isArray(variacaoDoKit.composicao) &&
+            variacaoDoKit.composicao.some(componenteDaComposicao => {
+                const idComponente = componenteDaComposicao.produto_id; // ID do componente na definição do kit
+                const nomeComponenteLog = componenteDaComposicao.produto_nome || componenteDaComposicao.produto; // Para log
+                const variacaoComponenteNormalizada = (componenteDaComposicao.variacao === '-' || componenteDaComposicao.variacao === null || componenteDaComposicao.variacao === undefined ? '' : String(componenteDaComposicao.variacao)).toLowerCase();
+                
+                const match = idComponente && String(idComponente) === String(produtoBaseId) && variacaoComponenteNormalizada === varianteBaseNormalizada;
+                if(match){
+                     console.log(`  -> Item Base (ID: ${produtoBaseId}, Var: '${varianteBaseNormalizada}') ENCONTRADO como componente (ID: ${idComponente}, Nome: ${nomeComponenteLog}, Var: '${variacaoComponenteNormalizada}') no Kit: "${kitProduto.nome}", Variação do Kit: "${variacaoDoKit.variacao}"`);
+                }
+                return match;
+            })
+        );
+    });
+
+    console.log(`[carregarKitsDisponiveisNova] Total de kits filtrados que usam o item base: ${kitsQueUtilizamOComponente.length}`, kitsQueUtilizamOComponente.map(k => ({id: k.id, nome: k.nome})));
+
+    if (kitsQueUtilizamOComponente.length === 0) {
+        kitsListEl.innerHTML = '<p style="font-style:italic; color: var(--op-cor-cinza-texto);">Nenhum kit cadastrado utiliza este item base específico.</p>';
+        return;
+    }
+
+    kitsListEl.innerHTML = ''; // Limpa a mensagem "Buscando..."
+
+    kitsQueUtilizamOComponente.forEach(kit => {
         const button = document.createElement('button');
-        button.className = 'ep-btn'; // Reutiliza classe de botão de filtro
-        button.textContent = kit.nome;
+        button.className = 'ep-btn'; // Sua classe de botão
+        button.textContent = kit.nome; // Mostra o nome do KIT que pode ser montado
+        button.dataset.kitId = kit.id; // Armazena o ID do kit no botão para referência futura
+
         button.addEventListener('click', (e) => {
+            // Lógica para quando um kit é selecionado da lista
             document.querySelectorAll('#kitsListNova button').forEach(btn => btn.classList.remove('active'));
             e.target.classList.add('active');
-            kitVariacaoWrapper.style.display = 'block'; // Mostra a parte de seleção de variação
-            carregarVariacoesKitNova(kit.nome, produtoBase, varianteBase);
+            
+            kitVariacaoWrapperEl.style.display = 'block'; // Mostra a seção para selecionar a variação do kit
+
+            // Passa o NOME do kit selecionado e o ID e VARIANTE do ITEM BASE ORIGINAL para a próxima função
+            // O NOME do kit é usado para encontrar o objeto kit em todosOsProdutosCadastrados
+            // O ID e VARIANTE do item base são para filtrar as variações do kit que usam esse componente específico
+            carregarVariacoesKitNova(kit.nome, produtoBaseId, varianteBase);
         });
         kitsListEl.appendChild(button);
     });
-    // Opcional: clicar no primeiro kit automaticamente
-    // if (kitsListEl.children.length > 0) kitsListEl.children[0].click();
 }
 
-async function carregarVariacoesKitNova(nomeKit, produtoBase, varianteBase) {
+async function carregarVariacoesKitNova(nomeKitSelecionado, produtoBaseIdComponente, varianteBaseComponente) {
     const kitVariacoesSelect = document.getElementById('kitVariacoesNova');
-    const kitTableContainer = document.getElementById('kitTableContainerNova');
-    const kitFooter = document.getElementById('kitFooterNova');
-    const kitErrorMessage = document.getElementById('kitErrorMessageNova');
+    const kitTableContainerEl = document.getElementById('kitTableContainerNova'); // Referência correta
+    const kitFooterEl = document.getElementById('kitFooterNova');             // Referência correta
+    const kitErrorMessageEl = document.getElementById('kitErrorMessageNova');   // Referência correta
 
-    if (!kitVariacoesSelect || !kitTableContainer || !kitFooter || !kitErrorMessage) return;
+    if (!kitVariacoesSelect || !kitTableContainerEl || !kitFooterEl || !kitErrorMessageEl) {
+        console.error("[carregarVariacoesKitNova] Elementos da UI para variações do kit não encontrados.");
+        return;
+    }
+
+    console.log(`[carregarVariacoesKitNova] Carregando variações para Kit: "${nomeKitSelecionado}" que usa o componente ID: ${produtoBaseIdComponente}, Var Comp: "${varianteBaseComponente}"`);
 
     // Estado inicial enquanto carrega
-    kitVariacoesSelect.innerHTML = '<option value="">Carregando variações...</option>';
+    kitVariacoesSelect.innerHTML = '<option value="">Carregando variações do kit...</option>';
     kitVariacoesSelect.disabled = true;
-    kitTableContainer.style.display = 'none';
-    kitFooter.style.display = 'none';
-    kitErrorMessage.classList.add('hidden');
+    kitTableContainerEl.style.display = 'none';
+    kitFooterEl.style.display = 'none';
+    kitErrorMessageEl.classList.add('hidden');
 
-    const kit = todosOsProdutosCadastrados.find(p => p.is_kit && p.nome === nomeKit);
-    if (!kit || !kit.grade) {
+    if (!nomeKitSelecionado || produtoBaseIdComponente === undefined || varianteBaseComponente === undefined) {
+        console.warn("[carregarVariacoesKitNova] Argumentos inválidos recebidos.");
+        kitVariacoesSelect.innerHTML = '<option value="">Erro nos dados de entrada</option>';
+        return;
+    }
+
+    const kitObj = todosOsProdutosCadastrados.find(p => p.is_kit && p.nome === nomeKitSelecionado);
+    if (!kitObj || !kitObj.grade || !Array.isArray(kitObj.grade)) {
+        console.error(`[carregarVariacoesKitNova] Kit "${nomeKitSelecionado}" não encontrado ou não possui grade.`);
         kitVariacoesSelect.innerHTML = '<option value="">Erro: Kit não encontrado</option>';
         return;
     }
 
-    const varBaseLower = (varianteBase === '-' ? '' : varianteBase).toLowerCase();
-    const variacoesFiltradasDoKit = kit.grade.filter(g =>
-        g.composicao?.some(item =>
-            (item.produto || kit.nome).toLowerCase() === produtoBase.toLowerCase() &&
-            (item.variacao === '-' ? '' : (item.variacao || '')).toLowerCase() === varBaseLower
-        )
-    );
+    // Normaliza a variante do componente base que estamos procurando
+    const varianteBaseComponenteNormalizada = (
+        varianteBaseComponente === '-' || varianteBaseComponente === null || varianteBaseComponente === undefined 
+        ? '' 
+        : String(varianteBaseComponente)
+    ).toLowerCase();
 
-    if (variacoesFiltradasDoKit.length === 0) {
-        kitVariacoesSelect.innerHTML = '<option value="">Nenhuma variação deste kit utiliza o item base.</option>';
+    // Filtra as variações do KIT SELECIONADO (kitObj.grade)
+    // para encontrar apenas aquelas que contêm o produtoBaseIdComponente com a varianteBaseComponenteNormalizada
+    const variacoesDoKitQueUsamOComponente = kitObj.grade.filter(variacaoDoKitGradeItem => // cada item da grade do KIT
+        variacaoDoKitGradeItem.composicao && Array.isArray(variacaoDoKitGradeItem.composicao) &&
+        variacaoDoKitGradeItem.composicao.some(componenteNaComposicao => {
+            const idDoComponente = componenteNaComposicao.produto_id;
+            const variacaoDoComponenteNormalizada = (
+                componenteNaComposicao.variacao === '-' || componenteNaComposicao.variacao === null || componenteNaComposicao.variacao === undefined
+                ? ''
+                : String(componenteNaComposicao.variacao)
+            ).toLowerCase();
+            
+            return idDoComponente && 
+                   String(idDoComponente) === String(produtoBaseIdComponente) && 
+                   variacaoDoComponenteNormalizada === varianteBaseComponenteNormalizada;
+        })
+    );
+    
+    console.log(`[carregarVariacoesKitNova] Variações do kit "${nomeKitSelecionado}" que usam o componente (ID: ${produtoBaseIdComponente}, VarNorm: '${varianteBaseComponenteNormalizada}'): ${variacoesDoKitQueUsamOComponente.length}`, variacoesDoKitQueUsamOComponente.map(v => v.variacao));
+
+    if (variacoesDoKitQueUsamOComponente.length === 0) {
+        kitVariacoesSelect.innerHTML = '<option value="">Nenhuma variação deste kit utiliza o item base especificado.</option>';
+        // Mantém as seções subsequentes escondidas
+        kitTableContainerEl.style.display = 'none';
+        kitFooterEl.style.display = 'none';
         return;
     }
 
-    // Popula o select com as opções corretas
     kitVariacoesSelect.innerHTML = '<option value="">Selecione a Variação do Kit</option>';
-    variacoesFiltradasDoKit.forEach(grade => {
-        kitVariacoesSelect.add(new Option(grade.variacao || 'Padrão', grade.variacao));
+    variacoesDoKitQueUsamOComponente.forEach(gradeItemDoKit => {
+        // O 'value' aqui é a string da variação do KIT (ex: "Marsala com Preto")
+        kitVariacoesSelect.add(new Option(gradeItemDoKit.variacao || 'Padrão', gradeItemDoKit.variacao));
     });
 
-    // **CORREÇÃO: Define o listener 'onchange' diretamente e reabilita o select**
-    kitVariacoesSelect.onchange = (e) => {
-        const selVariacaoKit = e.target.value;
-        if (selVariacaoKit) {
-            kitTableContainer.style.display = 'block';
-            kitFooter.style.display = 'block';
-            kitErrorMessage.classList.add('hidden');
-            carregarTabelaKitNova(nomeKit, selVariacaoKit);
+    // Remove listener antigo para evitar duplicação
+    const novoSelect = kitVariacoesSelect.cloneNode(true); // Clona para limpar listeners
+    kitVariacoesSelect.parentNode.replaceChild(novoSelect, kitVariacoesSelect);
+    // Reatribui a referência global se você a usa em outro lugar, ou pegue-a novamente pelo ID
+    // elements.kitVariacoesSelect = novoSelect; // Se kitVariacoesSelectEl for uma referência em 'elements'
+
+    document.getElementById('kitVariacoesNova').addEventListener('change', (e) => { // Adiciona listener ao novo select
+        const variacaoDoKitSelecionadaString = e.target.value;
+        if (variacaoDoKitSelecionadaString) {
+            kitTableContainerEl.style.display = 'block';
+            kitFooterEl.style.display = 'block';
+            kitErrorMessageEl.classList.add('hidden');
+            // Passa o nome do kit e a STRING da variação do kit selecionada para carregar a tabela de componentes
+            carregarTabelaKitNova(nomeKitSelecionado, variacaoDoKitSelecionadaString);
         } else {
-            kitTableContainer.style.display = 'none';
-            kitFooter.style.display = 'none';
+            kitTableContainerEl.style.display = 'none';
+            kitFooterEl.style.display = 'none';
         }
-    };
+    });
     
-    kitVariacoesSelect.disabled = false; // Reabilita o select agora que está pronto
+    document.getElementById('kitVariacoesNova').disabled = false; // Reabilita o select
 }
 
 async function carregarTabelaKitNova(kitNome, variacaoKitSelecionada) {
@@ -704,42 +848,59 @@ async function carregarTabelaKitNova(kitNome, variacaoKitSelecionada) {
     const kitErrorMessage = document.getElementById('kitErrorMessageNova');
     
     if(!kitTableBody || !qtdDisponivelKitsSpan || !qtdEnviarKitsInput || !kitEstoqueBtn || !kitErrorMessage) {
-        console.error("Elementos da tabela de kit não encontrados em carregarTabelaKitNova");
+        console.error("[carregarTabelaKitNova] Elementos da UI para a tabela de kit não encontrados.");
         return;
     }
 
-    kitErrorMessage.classList.add('hidden');
-    kitTableBody.innerHTML = `<tr><td colspan="3" style="text-align:center;"><div class="spinner">Analisando componentes...</div></td></tr>`;
+    console.log(`[carregarTabelaKitNova] Carregando tabela para Kit: "${kitNome}", Variação do Kit: "${variacaoKitSelecionada}"`);
+
+    kitErrorMessage.classList.add('hidden'); // Esconde mensagem de erro antiga
+    kitTableBody.innerHTML = `<tr><td colspan="3" style="text-align:center;"><div class="spinner">Analisando componentes e disponibilidade...</div></td></tr>`;
     qtdEnviarKitsInput.disabled = true;
     kitEstoqueBtn.disabled = true;
     qtdDisponivelKitsSpan.textContent = '0';
 
     const kitSelecionado = todosOsProdutosCadastrados.find(p => p.nome === kitNome && p.is_kit === true);
-    const variacaoDoKitObj = kitSelecionado?.grade?.find(g => g.variacao === variacaoKitSelecionada); // variacaoKitSelecionada já é o valor correto
-    const composicaoDoKit = variacaoDoKitObj?.composicao;
-
-    if (!composicaoDoKit || composicaoDoKit.length === 0) {
-        kitErrorMessage.textContent = 'Composição não definida para esta variação do kit.';
+    if (!kitSelecionado) {
+        kitErrorMessage.textContent = `Kit "${kitNome}" não encontrado nos dados carregados.`;
         kitErrorMessage.classList.remove('hidden');
         kitTableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:red;">${kitErrorMessage.textContent}</td></tr>`;
         return;
     }
-    kitTableBody.innerHTML = '';
+
+    const variacaoDoKitObj = kitSelecionado.grade?.find(g => g.variacao === variacaoKitSelecionada);
+    const composicaoDoKit = variacaoDoKitObj?.composicao;
+
+    if (!composicaoDoKit || composicaoDoKit.length === 0) {
+        kitErrorMessage.textContent = 'Composição não definida ou vazia para esta variação do kit.';
+        kitErrorMessage.classList.remove('hidden');
+        kitTableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--op-cor-texto-aviso);">${kitErrorMessage.textContent}</td></tr>`;
+        return;
+    }
+
+    kitTableBody.innerHTML = ''; // Limpa o spinner
 
     let menorQuantidadeKitsMontaveis = Infinity;
-    let todosComponentesDisponiveisParaUmKit = true;
+    let todosComponentesDisponiveisParaUmKitPeloMenos = true; // Para montar pelo menos UM kit
 
     for (const itemComponente of composicaoDoKit) {
-        const nomeProdutoComponente = itemComponente.produto; // Nome do produto na composição do kit
-        const varianteComponente = itemComponente.variacao || '-'; // Variante do produto na composição
+        // CORREÇÃO 1: Obter o nome do componente corretamente
+        const nomeProdutoComponente = itemComponente.produto_nome || itemComponente.produto || 'Componente Desconhecido';
+        const varianteComponente = itemComponente.variacao || '-'; // Variante como está na definição do kit
         const quantidadeNecessariaPorKit = parseInt(itemComponente.quantidade) || 1;
+        
         let qtdDisponivelTotalComponente = 0;
 
+        // CORREÇÃO 2: Buscar o agregado do componente usando o produto_id do itemComponente
         const agregadoComponente = produtosAgregadosParaEmbalarGlobal.find(
-            agg => agg.produto === nomeProdutoComponente && (agg.variante || '-') === varianteComponente
+            agg => String(agg.produto_id) === String(itemComponente.produto_id) && // Compara IDs
+                   (agg.variante || '-') === (varianteComponente === '-' ? '-' : varianteComponente) // Compara variantes normalizadas
         );
+
         if (agregadoComponente) {
             qtdDisponivelTotalComponente = agregadoComponente.total_quantidade_disponivel_para_embalar;
+        } else {
+            console.warn(`[carregarTabelaKitNova] Agregado não encontrado para componente ID: ${itemComponente.produto_id} (${nomeProdutoComponente}) - Var: ${varianteComponente}. Saldo considerado 0.`);
         }
         
         const tr = document.createElement('tr');
@@ -747,33 +908,42 @@ async function carregarTabelaKitNova(kitNome, variacaoKitSelecionada) {
             <td>${nomeProdutoComponente} ${varianteComponente !== '-' ? `(${varianteComponente})` : ''}</td>
             <td style="text-align:center;">${quantidadeNecessariaPorKit}</td>
             <td style="text-align:center;">
-                <input type="number" class="op-input readonly ep-kit-componente-disponivel-input" value="${qtdDisponivelTotalComponente}" readonly style="background:transparent; border:none; box-shadow:none;">
+                <input type="number" class="op-input readonly ep-kit-componente-disponivel-input" value="${qtdDisponivelTotalComponente}" readonly 
+                       style="background:transparent; border:none; box-shadow:none; text-align:center; width: 60px;">
             </td>
         `;
+
         if (qtdDisponivelTotalComponente < quantidadeNecessariaPorKit) {
-            tr.classList.add('item-insuficiente'); // Adicione estilo para esta classe (texto vermelho, etc.)
-            todosComponentesDisponiveisParaUmKit = false;
+            tr.classList.add('item-insuficiente'); // Adicione estilo CSS para esta classe (ex: texto vermelho)
+            todosComponentesDisponiveisParaUmKitPeloMenos = false;
         }
         kitTableBody.appendChild(tr);
 
         if (quantidadeNecessariaPorKit > 0) {
             menorQuantidadeKitsMontaveis = Math.min(menorQuantidadeKitsMontaveis, Math.floor(qtdDisponivelTotalComponente / quantidadeNecessariaPorKit));
         } else {
-            menorQuantidadeKitsMontaveis = 0; // Evita divisão por zero e indica problema na config do kit
+            // Se um componente tem quantidade necessária 0, isso é estranho.
+            // Para evitar divisão por zero, mas indica problema na configuração do kit.
+            menorQuantidadeKitsMontaveis = 0; 
         }
     }
-    const maxKitsMontaveisFinal = (todosComponentesDisponiveisParaUmKit && composicaoDoKit.length > 0 && menorQuantidadeKitsMontaveis !== Infinity) ? menorQuantidadeKitsMontaveis : 0;
+
+    const maxKitsMontaveisFinal = (todosComponentesDisponiveisParaUmKitPeloMenos && composicaoDoKit.length > 0 && menorQuantidadeKitsMontaveis !== Infinity) 
+                                  ? menorQuantidadeKitsMontaveis 
+                                  : 0;
+    
     qtdDisponivelKitsSpan.textContent = maxKitsMontaveisFinal;
     
     if (maxKitsMontaveisFinal <= 0 && composicaoDoKit.length > 0) {
-        kitErrorMessage.textContent = 'Componentes insuficientes para montar este kit.';
+        kitErrorMessage.textContent = 'Componentes insuficientes em estoque para montar este kit.';
         kitErrorMessage.classList.remove('hidden');
     }
-    qtdEnviarKitsInput.value = maxKitsMontaveisFinal > 0 ? "1" : "0"; // Sugere 1 se possível, senão 0
+
+    qtdEnviarKitsInput.value = maxKitsMontaveisFinal > 0 ? "1" : "0";
     qtdEnviarKitsInput.max = maxKitsMontaveisFinal;
-    qtdEnviarKitsInput.disabled = maxKitsMontaveisFinal <= 0;
+    qtdEnviarKitsInput.disabled = maxKitsMontaveisFinal <= 0; // Desabilita se não pode montar nenhum
     
-    atualizarEstadoBotaoMontarKitNova(); // Atualiza o estado do botão com base nos cálculos
+    atualizarEstadoBotaoMontarKitNova(); // Atualiza o estado do botão "Estocar Kits"
 }
 
 function atualizarEstadoBotaoMontarKitNova() {
@@ -822,12 +992,13 @@ async function handleHashChangeEmbalagem() {
 async function inicializarDadosEViewsEmbalagem() {
     // Carrega dados essenciais primeiro
     await Promise.all([
-        obterProdutosDoStorage().then(p => {
-            todosOsProdutosCadastrados = p;
-            console.log(`[inicializarDadosEViewsEmbalagem] ${todosOsProdutosCadastrados.length} produtos carregados.`);
-        }),
-        buscarArrematesCompletos() // Carrega todos os arremates no cache global
-    ]);
+    obterProdutosDoStorage(true).then(p => { // Deveria ser obterProdutosDoStorage(true) para forçar?
+        todosOsProdutosCadastrados = p;
+        console.log(`[inicializarDadosEViewsEmbalagem] ${todosOsProdutosCadastrados.length} produtos carregados.`);
+    }),
+    buscarArrematesCompletos()
+]);
+
     // Após os dados base, processa a view correta
     await handleHashChangeEmbalagem();
 }
@@ -871,10 +1042,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 
                 if (tabId === 'kit' && embalagemAgregadoEmVisualizacao) {
-                    await carregarKitsDisponiveisNova(embalagemAgregadoEmVisualizacao.produto, embalagemAgregadoEmVisualizacao.variante);
-                }
-            });
-        });
+            await carregarKitsDisponiveisNova(embalagemAgregadoEmVisualizacao.produto_id, embalagemAgregadoEmVisualizacao.variante);
+        }
+    });
+});
         
         const searchInput = document.getElementById('searchProdutoEmbalagem');
         if (searchInput) {

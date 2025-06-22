@@ -171,38 +171,129 @@ function configurarEventListeners() {
 // --- Navegação e Views ---
 function handleHashChange() {
     const hash = window.location.hash;
-    const isEditing = (hash === '#editando');
-    const overlay = document.getElementById('formLoadingOverlay');
+    const isEditing = hash.startsWith('#editando'); // Aceita #editando e #editando/alguma-coisa
 
+    // Controla a visibilidade das views principais
     elements.productListView.style.display = isEditing ? 'none' : 'block';
     elements.productFormView.style.display = isEditing ? 'block' : 'none';
 
     if (isEditing) {
-        // Se a hash mudou para #editando, verificamos se temos um produto pronto para exibir
-        if (editingProduct) {
-            // Ótimo! Temos os dados, então podemos carregar o formulário com segurança
-            console.log("handleHashChange: editingProduct está pronto. Carregando formulário.");
-            loadEditForm(editingProduct);
-            if (overlay) overlay.classList.add('hidden'); // Esconde o overlay
-        } else {
-            // Não temos um produto. Isso acontece no F5. Precisamos buscar os dados.
+        // Se estamos na view de edição, mas o produto ainda não foi carregado na memória...
+        // Isso acontece principalmente quando o usuário atualiza a página (F5).
+        if (!editingProduct) {
             const ultimoProdutoNome = localStorage.getItem('ultimoProdutoEditado');
             if (ultimoProdutoNome) {
-                // A função iniciarEdicaoProduto cuidará de buscar os dados
-                // e depois mudará a hash de novo, o que chamará esta função novamente.
+                // Encontramos o nome do último produto no localStorage.
+                // A função 'iniciarEdicaoProduto' vai cuidar de buscar os dados e carregar o form.
+                console.log("handleHashChange: F5 detectado. Iniciando edição para:", ultimoProdutoNome);
                 iniciarEdicaoProduto(ultimoProdutoNome);
             } else {
-                // Se não há último produto, estamos criando um novo
+                // Se não há último produto, significa que é um produto novo.
+                console.log("handleHashChange: Nenhuma edição em andamento, tratando como novo produto.");
                 handleAdicionarNovoProduto();
             }
         }
     } else {
-        // Se a hash não é de edição, limpa o estado
+        // Se a hash mudou para qualquer coisa que não seja de edição (ex: #),
+        // limpamos o estado de edição e voltamos para a lista.
         editingProduct = null;
         localStorage.removeItem('ultimoProdutoEditado');
-        filterProducts();
+        filterProducts(); // Recarrega e filtra a lista de produtos
     }
 }
+
+async function iniciarEdicaoProduto(nome) {
+    const overlay = document.getElementById('formLoadingOverlay');
+    try {
+        // Passo 1: Mostra o formulário (se não estiver visível) e ATIVA o estado de carregamento.
+        if (elements.productFormView.style.display === 'none') {
+            elements.productListView.style.display = 'none';
+            elements.productFormView.style.display = 'block';
+        }
+        overlay?.classList.remove('hidden');
+        document.body.style.cursor = 'wait';
+        
+        // Passo 2 (MUITO IMPORTANTE): Limpa o formulário ANTES de buscar os novos dados.
+        // Isso evita que dados do produto anterior "vazem" para o novo.
+        limparFormularioDeEdicao();
+
+        // Passo 3: Busca os dados mais recentes do produto no backend.
+        console.log(`[iniciarEdicaoProduto] Buscando dados atualizados para: ${nome}`);
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/api/produtos/por-nome?nome=${encodeURIComponent(nome)}`, {
+             headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || "Produto não encontrado.");
+        }
+        const produtoAtualizado = await response.json();
+
+        // Passo 4: Define as variáveis de estado globais APÓS o sucesso da busca.
+        editingProduct = deepClone(produtoAtualizado);
+        gradeTemp = deepClone(editingProduct.grade || []);
+        localStorage.setItem('ultimoProdutoEditado', nome); // Salva para o caso de F5
+        
+        // Passo 5: AGORA, com os dados prontos, carrega o formulário.
+        loadEditForm(editingProduct);
+
+        // Passo 6: Atualiza a URL no final do processo, se necessário.
+        if (window.location.hash !== '#editando') {
+            window.history.pushState({ produto: nome }, 'Editando ' + nome, '#editando');
+        }
+        
+    } catch (error) {
+        console.error(`[iniciarEdicaoProduto] Erro:`, error);
+        mostrarPopup(`Erro ao carregar produto: ${error.message}`, 'erro');
+        window.location.hash = ''; // Em caso de erro, volta para a lista
+    } finally {
+        // Passo 7: Esconde o overlay de carregamento e restaura o cursor.
+        overlay?.classList.add('hidden');
+        document.body.style.cursor = 'default';
+    }
+}
+
+function limparFormularioDeEdicao() {
+    console.log("Limpando formulário de edição...");
+    // Limpa os campos de texto e inputs
+    elements.editProductNameDisplay.textContent = 'Carregando...';
+    elements.inputProductName.value = '';
+    elements.sku.value = '';
+    elements.gtin.value = '';
+    elements.unidade.value = 'pç';
+    elements.estoque.value = '0';
+    
+    // Desmarca todos os checkboxes de tipo
+    document.querySelectorAll('input[name="tipo"]').forEach(cb => { cb.checked = false; });
+    
+    // Limpa a imagem principal
+    handleRemoveImagem();
+
+    // Limpa o conteúdo das tabelas e containers dinâmicos
+    const containersParaLimpar = [
+        elements.stepsBody,
+        elements.etapasTiktikBody,
+        elements.variationsComponentContainer,
+        elements.gradeBody,
+        elements.gradeHeader,
+    ];
+
+    containersParaLimpar.forEach(container => {
+        if (container) {
+            container.innerHTML = '';
+        }
+    });
+
+    // Garante que a aba de variações (que é dinâmica) seja removida
+    const variacoesTabBtn = document.querySelector('.cp-tab-btn[data-tab="variacoes"]');
+    if (variacoesTabBtn) {
+        variacoesTabBtn.remove();
+    }
+    // Volta para a primeira aba
+    switchTab('dados-gerais');
+}
+
+
 
 // Esta é a nova função de controle principal
 function handleNavigation(hash) {
@@ -264,145 +355,61 @@ function filterProducts(type = 'todos') {
     loadProductTable(filtered);
 }
 
-async function iniciarEdicaoProduto(nome) {
-    const overlay = document.getElementById('formLoadingOverlay');
-    try {
-        // Passo 1: Troca a view e ATIVA o estado de carregamento
-        elements.productListView.style.display = 'none';
-        elements.productFormView.style.display = 'block';
-        if (overlay) overlay.classList.remove('hidden');
-        document.body.style.cursor = 'wait';
-        
-        // **A MUDANÇA MAIS IMPORTANTE**: Limpa o conteúdo ANTES de buscar os dados.
-        limparFormularioDeEdicao();
-
-        // Passo 2: Busca os dados
-        console.log(`Buscando dados atualizados para: ${nome}`);
-        const token = localStorage.getItem('token');
-        const response = await fetch(`/api/produtos/por-nome?nome=${encodeURIComponent(nome)}`, {
-             headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error || "Produto não encontrado.");
-        }
-        const produtoAtualizado = await response.json();
-
-        // Passo 3: Define o estado global APÓS o sucesso da busca
-        editingProduct = deepClone(produtoAtualizado);
-        gradeTemp = deepClone(editingProduct.grade || []);
-        localStorage.setItem('ultimoProdutoEditado', nome);
-        
-        // Passo 4: AGORA, com os dados prontos, carrega o formulário
-        loadEditForm(editingProduct);
-
-        // Atualiza a URL no final
-        if (window.location.hash !== '#editando') {
-            window.history.pushState({ produto: nome }, 'Editando ' + nome, '#editando');
-        }
-        
-    } catch (error) {
-        console.error(`[iniciarEdicaoProduto] Erro:`, error);
-        mostrarPopup(`Erro ao carregar produto: ${error.message}`, 'erro');
-        window.location.hash = ''; 
-    } finally {
-        // Passo 5: Esconde o overlay
-        if (overlay) overlay.classList.add('hidden');
-        document.body.style.cursor = 'default';
-    }
-}
-
-function limparFormularioDeEdicao() {
-    // Limpa os campos de texto e inputs
-    elements.editProductNameDisplay.textContent = 'Carregando...';
-    elements.inputProductName.value = '';
-    elements.sku.value = '';
-    elements.gtin.value = '';
-    
-    // Desmarca todos os checkboxes de tipo
-    document.querySelectorAll('input[name="tipo"]').forEach(cb => { cb.checked = false; });
-    
-    // Limpa a imagem principal
-    handleRemoveImagem();
-
-    // Limpa o conteúdo das tabelas e containers dinâmicos
-    const containersParaLimpar = [
-        elements.stepsBody,
-        elements.etapasTiktikBody,
-        elements.variationsComponentContainer,
-        elements.gradeBody,
-        elements.gradeHeader,
-    ];
-
-    containersParaLimpar.forEach(container => {
-        if (container) {
-            container.innerHTML = '';
-        }
-    });
-
-    // Garante que nenhuma aba de variação/etc. esteja visível
-    const variacoesTabBtn = document.querySelector('.cp-tab-btn[data-tab="variacoes"]');
-    if (variacoesTabBtn) variacoesTabBtn.remove();
-}
-
 async function salvarGrade() {
     if (!editingProduct) return;
     try {
         await salvarProdutoNoBackend();
         mostrarPopup('Grade e Variações salvas com sucesso!', 'sucesso');
-    } catch (error) { /* erro já tratado */ }
+    } catch (error) { 
+        // O erro já é tratado e exibido em salvarProdutoNoBackend, 
+        // então não precisamos fazer nada aqui.
+    }
 }
 
 async function salvarEtapasProducao() {
     if (!editingProduct) return;
-
     console.log("Salvando etapas de produção...");
-    
-    // Coleta os dados das duas tabelas
-    editingProduct.etapas = Array.from(elements.stepsBody.querySelectorAll('tr')).map(tr => ({
-        processo: tr.querySelector('.processo-select')?.value || '',
-        maquina: tr.querySelector('.maquina-select')?.value || '',
-        feitoPor: tr.querySelector('.feito-por-select')?.value || ''
-    }));
-    
-    editingProduct.etapasTiktik = Array.from(elements.etapasTiktikBody.querySelectorAll('tr')).map(tr => ({
-        processo: tr.querySelector('.processo-select')?.value || '',
-        maquina: tr.querySelector('.maquina-select')?.value || '',
-        feitoPor: tr.querySelector('.feito-por-select')?.value || ''
-    }));
-
     try {
-        // Chama a função principal de salvamento, que já envia o objeto 'editingProduct' inteiro
+        // A função salvarProdutoNoBackend já coleta os dados das etapas do DOM,
+        // então só precisamos chamá-la.
         await salvarProdutoNoBackend();
         mostrarPopup('Etapas de produção salvas com sucesso!', 'sucesso');
     } catch (error) {
-        mostrarPopup('Erro ao salvar as etapas de produção.', 'erro');
+        // O erro também já é tratado na função principal.
     }
 }
 
 // --- Edição de Produto ---
 function handleAdicionarNovoProduto() {
-    // Troca a view imediatamente
-    elements.productListView.style.display = 'none';
-    elements.productFormView.style.display = 'block';
-
-    // Limpa completamente o formulário
-    limparFormularioDeEdicao();
-
-    // Define o estado inicial para um produto novo
+    // Define o estado para um produto novo em branco
     editingProduct = {
+        id: undefined, // Sem ID, indica que é novo
         nome: '', sku: '', gtin: '', unidade: 'pç', estoque: 0, imagem: '',
-        tipos: [], variacoes: [{ chave: 'Cor', valores: '' }], grade: [], is_kit: false, id: undefined,
-        etapas: [], etapasTiktik: []
+        tipos: ['simples'], // Começa como simples por padrão
+        variacoes: [{ chave: 'Cor', valores: '' }], 
+        grade: [], 
+        is_kit: false,
+        etapas: [], 
+        etapasTiktik: []
     };
     gradeTemp = [];
     localStorage.removeItem('ultimoProdutoEditado');
     
-    // Carrega o formulário agora que ele está limpo e com o estado novo
-    loadEditForm(editingProduct);
+    // Atualiza a URL para indicar que estamos no modo de edição/criação
+    window.location.hash = 'editando';
+
+    // A função handleHashChange vai detectar a mudança na hash e, como editingProduct está
+    // definido, ela não fará nada. Agora, podemos limpar e carregar o formulário com segurança.
     
-    // Atualiza a URL
-    window.history.pushState({ produto: 'novo' }, 'Novo Produto', '#editando');
+    // Mostra o formulário e esconde a lista
+    elements.productListView.style.display = 'none';
+    elements.productFormView.style.display = 'block';
+    
+    // Limpa qualquer resquício de uma edição anterior
+    limparFormularioDeEdicao();
+    
+    // Carrega o formulário com os dados do nosso objeto de produto novo
+    loadEditForm(editingProduct);
 }
 
 async function editProduct(nome) {
@@ -450,54 +457,82 @@ async function editProduct(nome) {
 }
 
 function loadEditForm(produto) {
-    // --- PASSO 1: LIMPEZA IMEDIATA E FEEDBACK DE CARREGAMENTO ---
-    elements.editProductNameDisplay.textContent = `Carregando: ${produto.nome || 'Novo Produto'}...`;
+    console.log("Carregando formulário com dados do produto:", produto.nome || "Novo Produto");
     
-    // Limpa todas as áreas que serão preenchidas
-    const containersParaLimpar = [
-        elements.stepsBody,
-        elements.etapasTiktikBody,
-        elements.variationsComponentContainer,
-        elements.gradeBody
-    ];
-    containersParaLimpar.forEach(container => {
-        if (container) {
-            container.innerHTML = '<tr><td colspan="100%"><div class="spinner-btn-interno" style="margin: 20px auto;"></div></td></tr>';
-        }
-    });
+    // Referência ao wrapper da imagem
+    const imagemWrapperEl = document.querySelector('.cp-imagem-wrapper');
 
-    // --- PASSO 2: PREENCHIMENTO DOS DADOS (O código que você já tem) ---
+    // --- Limpeza Prévia (Opcional aqui, mas bom se loadEditForm for chamado múltiplas vezes sem limpar antes) ---
+    // Se você já chama limparFormularioDeEdicao() antes de loadEditForm, esta parte pode ser mais simples.
+    // Por segurança, vamos garantir o estado inicial correto para a imagem.
+    if (elements.previewImagem) elements.previewImagem.src = '';
+    if (imagemWrapperEl) imagemWrapperEl.classList.remove('has-image');
+    // (outras limpezas de formulário se não feitas antes)
+
+    // --- Preenchimento dos Dados Gerais ---
     elements.editProductNameDisplay.textContent = produto.id ? `Editando: ${produto.nome}` : 'Cadastrando Novo Produto';
     elements.inputProductName.value = produto.nome || '';
     elements.sku.value = produto.sku || '';
     elements.gtin.value = produto.gtin || '';
-    elements.unidade.value = produto.unidade || 'pç';
-    elements.estoque.value = produto.estoque || 0;
-    document.querySelectorAll('input[name="tipo"]').forEach(cb => { cb.checked = (produto.tipos || []).includes(cb.value); });
+    elements.unidade.value = produto.unidade || 'pç'; // Valor padrão se produto.unidade for nulo/undefined
+    elements.estoque.value = produto.estoque !== undefined ? produto.estoque : 0; // Valor padrão se produto.estoque for nulo/undefined
     
-    handleRemoveImagem(); // Limpa a imagem anterior
+    // Tipos de produto (checkboxes)
+    document.querySelectorAll('input[name="tipo"]').forEach(cb => { 
+        cb.checked = (produto.tipos || []).includes(cb.value); 
+    });
+    
+    // --- Lógica da Imagem Principal ---
     if (produto.imagem) {
-        elements.previewImagem.src = produto.imagem;
-        elements.previewImagem.style.display = 'block';
-        elements.removeImagem.style.display = 'inline-block';
+        if (elements.previewImagem) elements.previewImagem.src = produto.imagem;
+        if (imagemWrapperEl) imagemWrapperEl.classList.add('has-image');
+    } else {
+        // Garante que se não houver imagem, o estado 'sem imagem' seja aplicado
+        if (elements.previewImagem) elements.previewImagem.src = ''; // Limpa src para não mostrar imagem quebrada
+        if (imagemWrapperEl) imagemWrapperEl.classList.remove('has-image');
+    }
+    // Input de arquivo não precisa ser resetado aqui, pois é para novo upload.
+    // elements.imagemProduto.value = ''; 
+    
+    // --- Carregamento das Tabelas Dinâmicas (Etapas, Variações, Grade) ---
+    // Aba de Produção (Etapas Normais)
+    if (elements.stepsBody) {
+        elements.stepsBody.innerHTML = ''; // Limpa antes de adicionar
+        (produto.etapas || []).forEach(etapa => addStepRow(etapa.processo, etapa.maquina, etapa.feitoPor));
     }
     
-    // Carregamento das etapas
-    elements.stepsBody.innerHTML = '';
-    (produto.etapas || []).forEach((etapa, index) => addStepRow(etapa.processo, etapa.maquina, etapa.feitoPor, index));
-    
-    elements.etapasTiktikBody.innerHTML = '';
-    const etapasTiktikParaCarregar = produto.etapasTiktik || produto.etapastiktik || [];
-    etapasTiktikParaCarregar.forEach((etapa, index) => addEtapaTiktikRow(etapa.processo, etapa.maquina, etapa.feitoPor, index));
+    // Aba de Produção (Etapas Tiktik)
+    if (elements.etapasTiktikBody) {
+        elements.etapasTiktikBody.innerHTML = ''; // Limpa antes de adicionar
+        // Usa a propriedade correta 'etapastiktik' (minúsculo como no seu JSON e API)
+        const etapasTiktikParaCarregar = produto.etapastiktik || []; 
+        etapasTiktikParaCarregar.forEach(etapa => addEtapaTiktikRow(etapa.processo, etapa.maquina, etapa.feitoPor));
+    }
 
-    // Carregamento das variações e grade
-    loadVariacoesComponent(produto);
-    loadGrade();
-    toggleTabs();
+    // Aba de Variações e Grade
+    // A função loadVariacoesComponent e loadGrade já limpam seus respectivos containers.
+    loadVariacoesComponent(produto); // Carrega as definições de variação (Cor, Tamanho, etc.)
+    loadGrade(); // Carrega a grade de SKUs baseada em gradeTemp (que deve ser populada a partir de produto.grade)
+
+    // --- Controle de Abas ---
+    // toggleTabs garante que a aba "Variações e Grade" apareça/desapareça conforme o tipo do produto.
+    toggleTabs(); 
     
-    // Define a aba inicial
-    const abaPadrao = (produto.tipos || []).find(t => t === 'variacoes' || t === 'kits') ? 'variacoes' : 'dados-gerais';
-    switchTab(abaPadrao);
+    // Define qual aba deve estar ativa inicialmente.
+    // Se for um produto com variações ou kit, geralmente queremos ir para essa aba.
+    // Caso contrário, a aba de dados gerais.
+    const temTipoEspecial = (produto.tipos || []).some(t => t === 'variacoes' || t === 'kits');
+    const abaParaAtivar = temTipoEspecial ? 'variacoes' : 'dados-gerais';
+    
+    // Verifica se a aba de destino existe antes de tentar ativá-la
+    if (document.querySelector(`.cp-tab-btn[data-tab="${abaParaAtivar}"]`)) {
+        switchTab(abaParaAtivar);
+    } else {
+        // Fallback para a primeira aba se a aba de destino não existir (ex: 'variacoes' foi removida)
+        switchTab('dados-gerais');
+    }
+
+    console.log("Formulário carregado para:", produto.nome || "Novo Produto");
 }
 
 async function handleFormSubmit(e) {
@@ -609,12 +644,27 @@ function loadGrade() {
     elements.gradeBody.innerHTML = '';
     const isKit = (editingProduct?.tipos || []).includes('kits');
     const headers = Array.from(elements.variationsComponentContainer.querySelectorAll('input[id^="chaveVariacao"]')).map(input => input.value.trim() || 'Variação');
-    elements.gradeHeader.innerHTML = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}${isKit ? '<th>Composto Por</th>' : ''}<th>Código (SKU)</th><th>Imagem</th><th>Ações</th></tr>`;
+    
+    let headerHTML = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}`;
+    if (isKit) {
+        headerHTML += '<th>Composto Por</th>';
+    }
+    headerHTML += '<th>Código (SKU)</th><th>Imagem</th><th>Ações</th></tr>';
+    elements.gradeHeader.innerHTML = headerHTML;
 
-    if (gradeTemp.length === 0) {
-        elements.gradeBody.innerHTML = `<tr><td colspan="${headers.length + (isKit ? 3 : 2)}" style="text-align:center;">Defina as variações acima.</td></tr>`;
+    if (gradeTemp.length === 0 && headers.length > 0) { // Só mostra mensagem se houver variações definidas
+        elements.gradeBody.innerHTML = `<tr><td colspan="${headers.length + (isKit ? 3 : 2)}" style="text-align:center;">Nenhuma combinação de grade gerada.</td></tr>`;
         return;
     }
+    if (gradeTemp.length === 0 && headers.length === 0 && isKit) {
+         elements.gradeBody.innerHTML = `<tr><td colspan="${(isKit ? 3 : 2)}" style="text-align:center;">Defina as variações do kit acima para gerar a grade.</td></tr>`;
+        return;
+    }
+     if (gradeTemp.length === 0 && !isKit) { // Para produto simples sem variações
+        // Não mostra mensagem de "nenhuma combinação" se não for kit e não tiver variações.
+        // A grade pode estar vazia legitimamente.
+    }
+
 
     gradeTemp.forEach((item, idx) => {
         const tr = document.createElement('tr');
@@ -623,19 +673,36 @@ function loadGrade() {
         let rowHTML = valores.map((v, i) => `<td data-label="${headers[i] || ''}">${v}</td>`).join('');
         
         if (isKit) {
-            const composicaoHtml = item.composicao?.length > 0 && item.composicao[0]?.produto
-               ? `<div class="composicao-tags">${item.composicao.map(c => `<span class="composicao-tag">${c.produto} - ${c.variacao} (${c.quantidade})</span>`).join('')}<button type="button" class="cp-btn" onclick="abrirConfigurarVariacao('${idx}')">Editar</button></div>`
-               : `<div class="composicao-tags"><button type="button" class="cp-btn" onclick="abrirConfigurarVariacao('${idx}')">Configurar</button></div>`;
-           rowHTML += `<td data-label="Composto Por">${composicaoHtml}</td>`;
+            let composicaoDisplayHtml = '';
+            if (item.composicao && item.composicao.length > 0) {
+                composicaoDisplayHtml = '<div class="composicao-tags">';
+                item.composicao.forEach(comp => {
+                    // Prioriza comp.produto_nome, fallback para comp.produto
+                    const nomeComponente = comp.produto_nome || comp.produto || 'Componente Desconhecido';
+                    // Pega a variação do componente. Se for nula ou '-', pode exibir 'Padrão' ou omitir.
+                    const variacaoComponente = comp.variacao && comp.variacao !== '-' ? ` - ${comp.variacao}` : '';
+                    const quantidadeComponente = comp.quantidade || 0;
+
+                    // Monta a string do componente
+                    composicaoDisplayHtml += `<span class="composicao-tag">${nomeComponente}${variacaoComponente} (${quantidadeComponente})</span>`;
+                });
+                composicaoDisplayHtml += '</div>';
+            }
+            // Adiciona o botão de configurar/editar
+            const textoBotao = (item.composicao && item.composicao.length > 0 && item.composicao.some(c => c.produto_id || c.produto)) 
+                                ? 'Editar Composição' 
+                                : 'Configurar Composição';
+            composicaoDisplayHtml += `<button type="button" class="cp-btn" style="margin-top: 5px;" onclick="abrirConfigurarVariacao('${idx}')">
+                                        ${textoBotao}
+                                     </button>`;
+            rowHTML += `<td data-label="Composto Por">${composicaoDisplayHtml}</td>`;
         }
         
-        // --- MUDANÇA PRINCIPAL AQUI ---
-        // Adicionando o onclick diretamente no elemento.
         rowHTML += `
             <td data-label="SKU"><input type="text" class="cp-input cp-grade-sku" value="${item.sku || ''}" onblur="updateGradeSku(${idx}, this.value)"></td>
             <td data-label="Imagem">
                 <div class="cp-grade-img-placeholder" onclick="abrirModalSelecaoImagem('${idx}')" title="Editar Imagem">
-                    ${item.imagem ? `<img src="${item.imagem}" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">` : ''}
+                    ${item.imagem ? `<img src="${item.imagem}" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">` : '<i class="fas fa-image"></i>'}
                 </div>
             </td>
             <td data-label="Ações"><button type="button" class="cp-remove-btn" onclick="excluirGrade('${idx}')">X</button></td>
@@ -675,43 +742,67 @@ async function salvarProdutoNoBackend() {
         if (skuInput) item.sku = skuInput.value.trim();
     });
     const updatedProduct = {
-        ...editingProduct,
+        ...editingProduct, // Importante para manter o ID
         nome: elements.inputProductName.value.trim(),
         sku: elements.sku.value.trim(),
         gtin: elements.gtin.value.trim(),
         unidade: elements.unidade.value,
         tipos: Array.from(document.querySelectorAll('input[name="tipo"]:checked')).map(cb => cb.value),
-        imagem: elements.previewImagem.src.startsWith('data:') ? elements.previewImagem.src : (editingProduct.imagem || ''),
+        imagem: elements.previewImagem.src.includes('blob.vercel-storage.com') ? elements.previewImagem.src : (editingProduct.imagem || ''),
         etapas: Array.from(elements.stepsBody.querySelectorAll('tr')).map(tr => ({
             processo: tr.querySelector('.processo-select')?.value || '', maquina: tr.querySelector('.maquina-select')?.value || '', feitoPor: tr.querySelector('.feito-por-select')?.value || ''
         })),
-        etapasTiktik: Array.from(elements.etapasTiktikBody.querySelectorAll('tr')).map(tr => ({
+        etapastiktik: Array.from(elements.etapasTiktikBody.querySelectorAll('tr')).map(tr => ({
             processo: tr.querySelector('.processo-select')?.value || '', maquina: tr.querySelector('.maquina-select')?.value || '', feitoPor: tr.querySelector('.feito-por-select')?.value || ''
         })),
         grade: deepClone(gradeTemp),
+        variacoes: Array.from(elements.variationsComponentContainer.querySelectorAll('.cp-variation-row')).map(row => ({
+            chave: row.querySelector('input[id^="chaveVariacao"]').value.trim(),
+            valores: Array.from(row.querySelectorAll('.cp-tag')).map(tag => tag.firstChild.textContent.trim()).join(',')
+        })).filter(v => v.chave)
     };
     updatedProduct.is_kit = updatedProduct.tipos.includes('kits');
-    if (!updatedProduct.nome) { alert('O nome do produto é obrigatório!'); throw new Error('Nome do produto é obrigatório.'); }
+
+    if (!updatedProduct.nome) { 
+        mostrarPopup('O nome do produto é obrigatório!', 'erro');
+        throw new Error('Nome do produto é obrigatório.'); 
+    }
+
+    // --- LÓGICA DE DECISÃO: POST (novo) ou PUT (existente)? ---
+    const isUpdating = !!updatedProduct.id; // Se tem ID, estamos atualizando.
+    const url = isUpdating ? `/api/produtos/${updatedProduct.id}` : '/api/produtos';
+    const method = isUpdating ? 'PUT' : 'POST';
+
     try {
         const token = localStorage.getItem('token');
-        const response = await fetch('/api/produtos', {
-            method: 'POST',
+        const response = await fetch(url, {
+            method: method, // USA O MÉTODO CORRETO
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify(updatedProduct)
         });
+
         if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.error || `Erro do servidor: ${response.status}`);
         }
+        
         const savedProduct = await response.json();
+
+        // Atualiza a lista de produtos em memória
         const index = produtos.findIndex(p => p.id === savedProduct.id);
-        if (index > -1) produtos[index] = savedProduct; else produtos.push(savedProduct);
+        if (index > -1) {
+            produtos[index] = savedProduct;
+        } else {
+            produtos.push(savedProduct);
+        }
+
         editingProduct = deepClone(savedProduct);
         gradeTemp = deepClone(savedProduct.grade || []);
         await invalidateCache('produtos');
         return savedProduct;
+
     } catch (error) {
-        alert('Falha ao salvar o produto: ' + error.message);
+        mostrarPopup('Falha ao salvar o produto: ' + error.message, 'erro');
         console.error('Erro em salvarProdutoNoBackend:', error);
         throw error;
     }
@@ -719,17 +810,18 @@ async function salvarProdutoNoBackend() {
 
 // --- Funções Utilitárias e Popups ---
 async function handleImagemChange(event, tipo) {
-    // Nota: O 'index' da grade agora é pego da variável global 'currentGradeIndex'
-    // que é definida quando o modal de seleção é aberto.
     const targetIndex = (tipo === 'grade') ? currentGradeIndex : null;
 
     const input = event.target;
     const file = input.files[0];
     if (!file) return;
 
+    // A lógica para encontrar o elemento de pré-visualização continua a mesma
     let previewElement;
+    let imageWrapper; // Para o novo controle de classe
     if (tipo === 'principal') {
         previewElement = elements.previewImagem;
+        imageWrapper = document.querySelector('.cp-imagem-wrapper');
     } else if (tipo === 'grade' && targetIndex !== null) {
         const tr = elements.gradeBody.querySelector(`tr[data-index="${targetIndex}"]`);
         previewElement = tr?.querySelector('.cp-grade-img-placeholder');
@@ -740,10 +832,13 @@ async function handleImagemChange(event, tipo) {
         return;
     }
 
-    previewElement.innerHTML = '<div class="spinner-btn-interno"></div>';
-    if (elements.removeImagem && tipo === 'principal') elements.removeImagem.style.display = 'none';
-
-    // Se o upload foi para a grade, fecha o modal de seleção imediatamente
+    // Mostra um spinner enquanto faz o upload
+    if (tipo === 'principal') {
+        previewElement.parentElement.innerHTML += '<div class="spinner-btn-interno" style="position:absolute; z-index:5;"></div>';
+    } else {
+        previewElement.innerHTML = '<div class="spinner-btn-interno"></div>';
+    }
+    
     if (tipo === 'grade') {
         fecharModalSelecaoImagem();
     }
@@ -765,16 +860,15 @@ async function handleImagemChange(event, tipo) {
         // Atualiza a UI com a imagem
         if (tipo === 'principal') {
             previewElement.src = imageUrl;
-            previewElement.style.display = 'block';
-            previewElement.innerHTML = '';
-            if (elements.removeImagem) elements.removeImagem.style.display = 'inline-block';
+            // AQUI ESTÁ A MUDANÇA: Em vez de mexer no estilo, adicionamos a classe.
+            imageWrapper?.classList.add('has-image');
             if (editingProduct) editingProduct.imagem = imageUrl;
+
         } else if (tipo === 'grade' && targetIndex !== null) {
             previewElement.innerHTML = `<img src="${imageUrl}" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">`;
             if (gradeTemp[targetIndex]) gradeTemp[targetIndex].imagem = imageUrl;
         }
 
-        // Salva automaticamente o produto no backend para persistir a nova URL
         console.log("Imagem atualizada. Salvando produto para persistir a URL...");
         await salvarProdutoNoBackend();
         
@@ -786,48 +880,151 @@ async function handleImagemChange(event, tipo) {
 
         // Reverte a UI em caso de erro
         if (tipo === 'principal') {
-            previewElement.style.display = 'none';
+            // AQUI ESTÁ A MUDANÇA: Revertemos removendo a classe.
+            imageWrapper?.classList.remove('has-image');
+            previewElement.src = '';
         } else if (tipo === 'grade' && previewElement) {
-            // Se tinha uma imagem antes, recoloca, senão, limpa.
             const imagemAntiga = gradeTemp[targetIndex]?.imagem || '';
             previewElement.innerHTML = imagemAntiga ? `<img src="${imagemAntiga}" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">` : '';
         }
     } finally {
-        // Limpa o valor do input de arquivo para permitir selecionar o mesmo arquivo novamente
+        // Limpa o spinner e o valor do input de arquivo
         input.value = '';
+        const spinner = document.querySelector('.cp-imagem-placeholder .spinner-btn-interno');
+        spinner?.remove();
+    }
+}
+
+function handleRemoveImagem() {
+    // Limpa os dados
+    elements.imagemProduto.value = '';
+    elements.previewImagem.src = '';
+    if (editingProduct) {
+        editingProduct.imagem = '';
+    }
+
+    // AQUI ESTÁ A MUDANÇA: Em vez de manipular o display de cada elemento,
+    // apenas removemos a classe de estado do container principal. O CSS fará o resto.
+    const wrapper = document.querySelector('.cp-imagem-wrapper');
+    wrapper?.classList.remove('has-image'); // O '?' é uma segurança caso o elemento não seja encontrado
+}
+
+
+window.switchTab = function(tabId) {
+    console.log(`Tentando trocar para a aba: ${tabId}`);
+
+    // Primeiro, desativa todas as abas e conteúdos.
+    document.querySelectorAll('.cp-tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.cp-tab-content').forEach(content => content.classList.remove('active'));
+
+    // Agora, encontra e ativa a aba e o conteúdo corretos.
+    const tabButton = document.querySelector(`.cp-tab-btn[data-tab="${tabId}"]`);
+    const tabContent = document.getElementById(tabId);
+
+    // Verificações de segurança: só ativa se os elementos existirem.
+    if (tabButton) {
+        tabButton.classList.add('active');
+        console.log(`Botão da aba "${tabId}" ativado.`);
+    } else {
+        console.warn(`Botão para a aba "${tabId}" não foi encontrado.`);
+    }
+
+    if (tabContent) {
+        tabContent.classList.add('active');
+        console.log(`Conteúdo da aba "${tabId}" ativado.`);
+    } else {
+        console.warn(`Conteúdo com ID "${tabId}" não foi encontrado.`);
+    }
+};
+
+async function loadVariacoesKit(produtoIdComponenteSelecionado) {
+    // 'produtoIdComponenteSelecionado' é o ID do produto que foi escolhido no select "Produto Componente"
+
+    elements.variacaoKitSelect.innerHTML = '<option value="">Carregando variações...</option>'; // Feedback inicial
+    elements.variacaoKitSelect.disabled = true;
+
+    if (!produtoIdComponenteSelecionado) {
+        elements.variacaoKitSelect.innerHTML = '<option value="">Selecione um produto primeiro</option>';
+        // Não precisa desabilitar explicitamente aqui se o estado inicial já for desabilitado
+        // ou se a lógica de quando habilitar estiver correta.
+        return;
+    }
+
+    try {
+        // 'produtos' deve ser a sua lista completa de produtos carregada (ex: de obterProdutosDoStorage())
+        // Certifique-se que 'produtos' está acessível aqui ou passe-a como argumento se necessário.
+        if (!produtos || produtos.length === 0) {
+            console.error("[loadVariacoesKit] Lista de produtos principal não está carregada.");
+            elements.variacaoKitSelect.innerHTML = '<option value="">Erro ao carregar produtos</option>';
+            return;
+        }
+
+        const produtoComponente = produtos.find(p => String(p.id) === String(produtoIdComponenteSelecionado));
+
+        if (!produtoComponente) {
+            console.warn(`[loadVariacoesKit] Produto componente com ID "${produtoIdComponenteSelecionado}" não encontrado.`);
+            elements.variacaoKitSelect.innerHTML = '<option value="">Produto não encontrado</option>';
+            return;
+        }
+
+        let variantesDisponiveis = [];
+
+        // Lógica para extrair variações da GRADE do produto componente
+        if (produtoComponente.grade && Array.isArray(produtoComponente.grade) && produtoComponente.grade.length > 0) {
+            // Pega todas as strings de 'variacao' da grade e remove duplicatas
+            variantesDisponiveis = [...new Set(produtoComponente.grade.map(g => g.variacao).filter(Boolean))].sort();
+        }
+        // Você pode adicionar um fallback para 'produtoComponente.variacoes' se alguns produtos simples
+        // que podem ser componentes não usarem 'grade' mas sim a estrutura 'variacoes' (o que seria menos comum para componentes).
+        // else if (produtoComponente.variacoes && produtoComponente.variacoes.length > 0) {
+        //    // Lógica para extrair de produtoComponente.variacoes (se aplicável a componentes)
+        // }
+
+
+        if (variantesDisponiveis.length > 0) {
+            elements.variacaoKitSelect.innerHTML = '<option value="">Selecione uma variação</option>';
+            variantesDisponiveis.forEach(varianteNome => {
+                elements.variacaoKitSelect.add(new Option(varianteNome, varianteNome));
+            });
+            elements.variacaoKitSelect.disabled = false;
+        } else {
+            // Se não houver variações de grade, consideramos "Padrão" como a única opção.
+            // Isso é importante para produtos simples que podem ser componentes de kit.
+            elements.variacaoKitSelect.innerHTML = '<option value="-">Padrão</option>'; // Usar "-" ou "" para padrão?
+            // Se usar "-", seu backend/lógica de salvar precisa saber que "-" significa sem variação ou padrão.
+            // Se usar "", certifique-se que isso é tratado corretamente.
+            // Vou usar "-" como no seu código `loadVariacoesKit` original.
+            elements.variacaoKitSelect.disabled = false; // Habilita mesmo para "Padrão"
+        }
+
+    } catch (error) {
+        console.error(`[loadVariacoesKit] Erro ao carregar variações para produto ID ${produtoIdComponenteSelecionado}:`, error);
+        elements.variacaoKitSelect.innerHTML = '<option value="">Erro ao carregar variações</option>';
+        elements.variacaoKitSelect.disabled = true;
     }
 }
 
 
-
-function handleRemoveImagem() {
-    elements.imagemProduto.value = '';
-    elements.previewImagem.src = '';
-    elements.previewImagem.style.display = 'none';
-    elements.removeImagem.style.display = 'none';
-    if (editingProduct) editingProduct.imagem = '';
-}
-window.switchTab = function(tabId) {
-    document.querySelectorAll('.cp-tab-btn').forEach(btn => btn.classList.remove('active'));
-    document.querySelectorAll('.cp-tab-content').forEach(tab => tab.classList.remove('active'));
-    document.querySelector(`.cp-tab-btn[data-tab="${tabId}"]`)?.classList.add('active');
-    document.getElementById(tabId)?.classList.add('active');
-};
 window.toggleTabs = function() {
     const tipos = Array.from(document.querySelectorAll('input[name="tipo"]:checked')).map(cb => cb.value);
     let variacoesBtn = document.querySelector('.cp-tab-btn[data-tab="variacoes"]');
     if (tipos.includes('variacoes') || tipos.includes('kits')) {
-        if (!variacoesBtn) {
-            const btn = document.createElement('button');
-            btn.className = 'cp-tab-btn';
-            btn.dataset.tab = 'variacoes';
-            btn.textContent = 'Variações e Grade';
-            btn.onclick = () => switchTab('variacoes');
-            elements.tabFilter.appendChild(btn);
-        }
+    if (!variacoesBtn) {
+        const btn = document.createElement('button');
+        btn.className = 'cp-tab-btn';
+        btn.dataset.tab = 'variacoes'; // Apenas o data-attribute é necessário
+        btn.type = 'button'; // Boa prática
+        btn.textContent = 'Variações e Grade';
+        // NENHUM ONCLICK AQUI. A delegação de eventos vai cuidar disso.
+        elements.tabFilter.appendChild(btn);
+    }
     } else if (variacoesBtn) {
+        const abaAtiva = variacoesBtn.classList.contains('active');
         variacoesBtn.remove();
-        if (document.getElementById('variacoes').classList.contains('active')) switchTab('dados-gerais');
+        // Se a aba removida era a que estava ativa, mude para a aba de dados gerais.
+        if (abaAtiva) {
+            switchTab('dados-gerais');
+        }
     }
 };
 
@@ -913,18 +1110,45 @@ function initializeDragAndDrop() {
         });
     });
 }
-window.abrirConfigurarVariacao = function(index) {
+window.abrirConfigurarVariacao = async function(index) { // Tornando async para usar await
     currentKitVariationIndex = parseInt(index);
-    if (isNaN(currentKitVariationIndex) || !editingProduct?.grade[currentKitVariationIndex]) { alert('Erro: Variação de kit não encontrada.'); return; }
+    if (isNaN(currentKitVariationIndex) || !editingProduct?.grade[currentKitVariationIndex]) {
+        alert('Erro: Variação de kit não encontrada.');
+        return;
+    }
     const variacaoKit = editingProduct.grade[currentKitVariationIndex];
     elements.configurarVariacaoTitle.textContent = `Configurar: ${variacaoKit.variacao}`;
     kitComposicaoTemp = deepClone(variacaoKit.composicao || []);
-    const produtosComponentes = produtos.filter(p => (p.tipos?.includes('simples') || p.tipos?.includes('variacoes')) && p.id !== editingProduct.id);
-    elements.produtoKitSelect.innerHTML = '<option value="">Selecione um produto</option>' + produtosComponentes.map(p => `<option value="${p.nome}">${p.nome}</option>`).join('');
-    elements.variacaoKitSelect.innerHTML = '<option value="">Selecione uma variação</option>';
+
+    // Popula o select de PRODUTOS componentes (o value já é o ID)
+    const produtosComponentes = produtos.filter(p =>
+        (p.tipos?.includes('simples') || p.tipos?.includes('variacoes')) && // Produtos que podem ser componentes
+        String(p.id) !== String(editingProduct.id) // Kit não pode ser componente de si mesmo
+    ).sort((a,b) => a.nome.localeCompare(b.nome));
+
+    elements.produtoKitSelect.innerHTML = '<option value="">Selecione um produto</option>' +
+        produtosComponentes.map(p => `<option value="${p.id}">${p.nome}</option>`).join('');
+
+    // Limpa e desabilita o select de VARIAÇÕES de componente inicialmente
+    elements.variacaoKitSelect.innerHTML = '<option value="">Selecione um produto primeiro</option>';
+    elements.variacaoKitSelect.disabled = true;
+
+    // Remove listener antigo para evitar duplicação se abrirConfigurarVariacao for chamada múltiplas vezes
+    const novoSelectProduto = elements.produtoKitSelect.cloneNode(true); // Clona para remover listeners
+    elements.produtoKitSelect.parentNode.replaceChild(novoSelectProduto, elements.produtoKitSelect);
+    elements.produtoKitSelect = novoSelectProduto; // Reatribui a referência global
+
+    // Adiciona o listener de change para o select de Produto Componente
+    elements.produtoKitSelect.addEventListener('change', async (event) => {
+        const produtoIdSelecionado = event.target.value;
+        await loadVariacoesKit(produtoIdSelecionado); // Chama a função para carregar as variações do componente
+    });
+
     renderizarComposicaoKit();
     elements.configurarVariacaoView.classList.add('active');
 };
+
+
 window.loadVariacoesKit = function() {
     const produtoNome = elements.produtoKitSelect.value;
     const produto = produtos.find(p => p.nome === produtoNome);
@@ -935,12 +1159,61 @@ window.loadVariacoesKit = function() {
         elements.variacaoKitSelect.innerHTML += '<option value="-">Padrão</option>';
     }
 };
+
+
 function handleAddVariacaoKit() {
-    const produto = elements.produtoKitSelect.value;
+    const produtoIdComponente = elements.produtoKitSelect.value;
+    const selectElement = elements.produtoKitSelect;
+    const produtoNomeComponente = selectElement.options[selectElement.selectedIndex].text;
     const variacao = elements.variacaoKitSelect.value;
-    if (!produto || !variacao) { alert('Selecione produto e variação.'); return; }
-    if (kitComposicaoTemp.some(c => c.produto === produto && c.variacao === variacao)) { alert('Componente já adicionado.'); return; }
-    kitComposicaoTemp.push({ produto, variacao, quantidade: 1 });
+
+    if (!produtoIdComponente || !variacao) {
+        alert('Selecione produto e variação do componente.'); return;
+    }
+
+    // MUDANÇA AQUI: Ao verificar duplicatas, considere que itens antigos em kitComposicaoTemp
+    // podem não ter 'produto_id' e podem ter 'produto' (nome) em vez disso.
+    // Esta verificação agora é mais complexa e depende de como você quer tratar
+    // a migração de componentes antigos.
+
+    // Abordagem 1: Se um componente com o mesmo nome/variação já existe (mesmo que sem ID), avisa.
+    // Isso pode ser muito restritivo se você está tentando "atualizar" um componente antigo para ter ID.
+    /*
+    if (kitComposicaoTemp.some(c =>
+        (c.produto_id && String(c.produto_id) === String(produtoIdComponente) && c.variacao === variacao) ||
+        (!c.produto_id && c.produto === produtoNomeComponente && c.variacao === variacao)
+    )) {
+        alert('Componente já adicionado ou um componente com o mesmo nome/variação já existe.'); return;
+    }
+    */
+
+    // Abordagem 2 (Recomendada): Se você está adicionando um NOVO componente (que terá ID),
+    // apenas verifique se já existe um com o MESMO ID e VARIAÇÃO.
+    // Se o usuário quiser "atualizar" um componente antigo (que só tem nome), ele deve
+    // primeiro remover o antigo e depois adicionar o novo com o ID.
+    if (kitComposicaoTemp.some(c => c.produto_id && String(c.produto_id) === String(produtoIdComponente) && c.variacao === variacao)) {
+        alert('Este componente (com ID e variação) já foi adicionado.'); return;
+    }
+
+    // Se você está tentando substituir um componente antigo que só tinha nome:
+    // Primeiro, procure e remova o componente antigo se ele existir com o mesmo nome e variação.
+    const indexComponenteAntigo = kitComposicaoTemp.findIndex(c =>
+        !c.produto_id && // Só se não tiver ID (é um antigo)
+        c.produto === produtoNomeComponente &&
+        c.variacao === variacao
+    );
+    if (indexComponenteAntigo > -1) {
+        console.log("Substituindo componente antigo (baseado em nome) por um novo com ID:", produtoNomeComponente, variacao);
+        kitComposicaoTemp.splice(indexComponenteAntigo, 1);
+    }
+
+
+    kitComposicaoTemp.push({
+        produto_id: parseInt(produtoIdComponente),
+        produto_nome: produtoNomeComponente,
+        variacao: variacao,
+        quantidade: 1
+    });
     renderizarComposicaoKit();
 }
 
@@ -950,12 +1223,13 @@ function renderizarComposicaoKit() {
     kitComposicaoTemp.forEach((comp, idx) => {
         const div = document.createElement('div');
         div.className = 'composicao-kit-row';
-        
-        // CORREÇÃO: Garante que comp.quantidade tenha um valor padrão de 1
         const quantidade = comp.quantidade || 1;
         
+        // MUDANÇA AQUI: Prioriza 'produto_nome', mas usa 'produto' como fallback
+        const nomeDoProdutoComponenteParaExibir = comp.produto_nome || comp.produto || 'Componente Desconhecido';
+        
         div.innerHTML = `
-            <span>${comp.produto} - ${comp.variacao}</span>
+            <span>${nomeDoProdutoComponenteParaExibir} - ${comp.variacao || 'Padrão'}</span> 
             <input type="number" class="cp-input" min="1" value="${quantidade}" onchange="atualizarQuantidadeKit(${idx}, this.value)">
             <button type="button" class="cp-remove-btn" onclick="removerComposicaoKit(${idx})">X</button>
         `;
@@ -970,15 +1244,14 @@ window.removerComposicaoKit = (index) => { kitComposicaoTemp.splice(index, 1); r
 
 async function salvarComposicaoKit() {
     if (currentKitVariationIndex !== null && editingProduct.grade[currentKitVariationIndex]) {
+        // kitComposicaoTemp já deve ter a estrutura { produto_id, produto_nome, variacao, quantidade }
         editingProduct.grade[currentKitVariationIndex].composicao = deepClone(kitComposicaoTemp);
-        gradeTemp = deepClone(editingProduct.grade);
-        loadGrade();
+        gradeTemp = deepClone(editingProduct.grade); // Atualiza gradeTemp também se você a usa em outro lugar
+        loadGrade(); // Recarrega a visualização da grade principal
         
-        // CORREÇÃO: Chama a nova função de fechar o modal
         fecharPopupConfigurarVariacao(); 
         
-        // Salva as alterações no backend
-        await salvarGrade();
+        await salvarProdutoNoBackend(); // Salva o produto principal com a grade atualizada
     }
 }
 

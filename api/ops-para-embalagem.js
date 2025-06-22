@@ -88,46 +88,49 @@ router.use(async (req, res, next) => {
 
 // GET /api/ops-para-embalagem/
 router.get('/', async (req, res) => {
-    // req.usuarioLogado já foi validado e anexado pelo middleware.
-    // A permissão 'acesso-embalagem-de-produtos' também já foi validada pelo middleware.
     const { query } = req;
-    let dbClienteRota; // Cliente específico para esta rota
+    let dbClienteRota;
 
     try {
-        dbClienteRota = await pool.connect(); // Pega uma nova conexão para a rota
-        // console.log('[router/ops-para-embalagem GET] Processando...');
+        dbClienteRota = await pool.connect();
         
         const fetchAll = query.all === 'true';
         const page = parseInt(query.page) || 1;
         const limit = parseInt(query.limit) || 50;
         const offset = (page - 1) * limit;
 
-        const baseQuery = `FROM ordens_de_producao WHERE status = 'finalizado'`;
-        // Ajuste na ordenação para OPs com número não puramente numérico
-        const orderBy = `ORDER BY data_final DESC NULLS LAST, CAST(NULLIF(REGEXP_REPLACE(numero, '\\D', '', 'g'), '') AS INTEGER) DESC NULLS LAST, numero DESC`;
+        // --- QUERY CORRIGIDA COM JOIN ---
+        // Agora ela busca o produto_id e também o nome do produto
+        const baseQuery = `
+            FROM ordens_de_producao op
+            LEFT JOIN produtos p ON op.produto_id = p.id
+            WHERE op.status = 'finalizado'
+        `;
+        
+        const selectFields = `
+            SELECT 
+                op.id, op.numero, op.variante, op.quantidade, op.data_entrega, 
+                op.observacoes, op.status, op.edit_id, op.etapas, op.data_final,
+                op.produto_id, 
+                p.nome AS produto
+        `;
 
+        const orderBy = `ORDER BY op.data_final DESC NULLS LAST, op.id DESC`;
 
-        let queryText = `SELECT * ${baseQuery} ${orderBy}`;
+        let queryText = `${selectFields} ${baseQuery} ${orderBy}`;
         let queryParams = [];
-        let totalQuery = `SELECT COUNT(*) AS count ${baseQuery}`;
+        let totalQuery = `SELECT COUNT(op.id) AS count ${baseQuery}`;
 
         if (!fetchAll) {
             queryText += ` LIMIT $1 OFFSET $2`;
             queryParams = [limit, offset];
-        } else {
-            // console.log('[router/ops-para-embalagem GET] Buscando todas as OPs finalizadas (all=true).');
         }
 
-        // console.log('[router/ops-para-embalagem GET] Executando query principal:', queryText, queryParams);
         const result = await dbClienteRota.query(queryText, queryParams);
-
-        // console.log('[router/ops-para-embalagem GET] Executando query de contagem:', totalQuery);
-        const totalResult = await dbClienteRota.query(totalQuery); // Não precisa de params aqui
+        const totalResult = await dbClienteRota.query(totalQuery);
         const total = parseInt(totalResult.rows[0].count);
-        
-        const totalPages = limit > 0 ? Math.ceil(total / limit) : (total > 0 ? 1 : 0);
+        const totalPages = limit > 0 ? Math.ceil(total / limit) : 1;
 
-        // console.log(`[router/ops-para-embalagem GET] ${result.rows.length} OPs finalizadas encontradas (Total: ${total}).`);
         res.status(200).json({
             rows: result.rows,
             total: total,
@@ -136,13 +139,11 @@ router.get('/', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[router/ops-para-embalagem GET] Erro não tratado:', error.message, error.stack ? error.stack.substring(0,300):"");
-        const statusCode = error.statusCode || 500;
-        res.status(statusCode).json({ error: error.message || 'Erro interno ao buscar OPs para embalagem.' });
+        console.error('[router/ops-para-embalagem GET] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar OPs para embalagem.', details: error.message });
     } finally {
         if (dbClienteRota) {
             dbClienteRota.release();
-            // console.log('[router/ops-para-embalagem GET] Cliente DB da rota liberado.');
         }
     }
 });

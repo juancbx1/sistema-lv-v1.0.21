@@ -21,7 +21,6 @@ const verificarTokenOriginal = (reqOriginal) => {
     if (!token) throw new Error('Token não fornecido');
     try {
         const decoded = jwt.verify(token, SECRET_KEY);
-        // console.log('[api/cortes - verificarTokenOriginal] Token decodificado:', decoded);
         return decoded;
     } catch (err) {
         const error = new Error('Token inválido ou expirado');
@@ -82,51 +81,38 @@ router.get('/next-pc-number', async (req, res) => {
 
 // GET /api/cortes
 router.get('/', async (req, res) => {
-    const { usuarioLogado } = req; // Do token
+    const { usuarioLogado } = req;
     let dbClient;
-
     try {
         dbClient = await pool.connect();
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
-        // console.log(`[API Cortes GET /] Permissões de ${usuarioLogado.nome || usuarioLogado.nome_usuario}:`, permissoesCompletas);
-
-        // Permissão para visualizar cortes (geralmente quem acessa OPs ou cria OPs precisa ver cortes)
-        // Ajuste estas permissões conforme sua lógica de negócios
-        if (!permissoesCompletas.includes('acesso-ordens-de-producao') && 
-            !permissoesCompletas.includes('criar-op') &&
-            !permissoesCompletas.includes('registrar-corte')) { // Adicionar permissão de quem registra corte
+        
+        if (!permissoesCompletas.includes('acesso-ordens-de-producao')) {
             return res.status(403).json({ error: 'Permissão negada para visualizar cortes.' });
         }
 
-        const { status } = req.query; // Pega o ?status=pendente da URL, se existir
+        const { status } = req.query;
 
-        // 1. A base da nossa instrução para o banco de dados.
-        //    Leia como: "Selecione tudo da tabela 'cortes' ONDE o status for DIFERENTE de 'excluido'".
-        //    O `$1` é um placeholder. Nós diremos qual valor ele representa em seguida.
-        let queryText = 'SELECT * FROM cortes WHERE status != $1';
-        
-        // 2. O valor para o placeholder `$1`.
-        //    Estamos dizendo que a condição `!= $1` significa `!= 'excluido'`.
+        const baseSelect = `
+            SELECT 
+                c.id, c.pn, c.variante, c.quantidade, c.data, c.cortador,
+                c.status, c.op, c.data_atualizacao, c.produto_id,
+                p.nome AS produto
+            FROM cortes c
+            LEFT JOIN produtos p ON c.produto_id = p.id
+        `;
+
+        let queryText = `${baseSelect} WHERE c.status != $1`;
         let queryParams = ['excluido'];
 
-        // 3. Se o frontend pediu um status específico (ex: 'pendente' ou 'cortados')...
         if (status) {
-            // ...adicionamos OUTRA condição à nossa instrução.
-            //    Agora ela lê: "... ONDE status != $1 E TAMBÉM status = $2"
-            queryText += ' AND status = $2';
-            // E adicionamos o valor para o novo placeholder `$2`.
-            queryParams.push(status); 
+            queryText += ' AND c.status = $2';
+            queryParams.push(status);
         }
 
-        // 4. Sempre bom ordenar os resultados.
-        queryText += ' ORDER BY data DESC';
+        queryText += ' ORDER BY c.data DESC, c.id DESC';
         
-        console.log(`[API Cortes GET] Executando query: "${queryText}" com params:`, queryParams);
-
-        // 5. Executamos a instrução final no banco de dados.
         const result = await dbClient.query(queryText, queryParams);
-        
-        // 6. Enviamos a resposta (já filtrada!) de volta para o frontend.
         res.status(200).json(result.rows);
 
     } catch (error) {
@@ -145,92 +131,56 @@ router.post('/', async (req, res) => {
         dbClient = await pool.connect();
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
 
-        if (!permissoesCompletas.includes('registrar-corte')) {
+        // Permite criar corte se tiver permissão específica ou se estiver criando uma OP
+        if (!permissoesCompletas.includes('registrar-corte') && !permissoesCompletas.includes('criar-op')) {
             return res.status(403).json({ error: 'Permissão negada para registrar corte.' });
         }
 
-        // Sua lógica de POST original aqui, usando 'dbClient'
         const {
-            produto, variante: varianteInput, quantidade, data,
-            cortador: cortadorInput, status = 'pendente', // status default se não vier
-            op = null, pn: pnInput
+            produto_id, // Recebe o ID do produto
+            variante,
+            quantidade,
+            data,
+            status = 'pendente',
+            op = null,
+            pn
         } = req.body;
 
-        if (!produto || quantidade === undefined || !data || !status) {
-            return res.status(400).json({ error: 'Dados incompletos: produto, quantidade, data e status são obrigatórios.' });
+        if (!produto_id || quantidade === undefined || !data || !status || !pn) {
+            return res.status(400).json({ error: 'Dados incompletos: produto_id, quantidade, data, status e pn são obrigatórios.' });
         }
+
         const parsedQuantidade = parseInt(quantidade, 10);
         if (isNaN(parsedQuantidade) || parsedQuantidade <= 0) {
             return res.status(400).json({ error: 'Quantidade deve ser um número positivo.' });
         }
-        const varianteFinal = (varianteInput === undefined || varianteInput === null || String(varianteInput).trim() === '') ? null : String(varianteInput).trim();
-        let cortadorFinal = null;
-        if (status !== 'pendente') {
-            if (!cortadorInput || String(cortadorInput).trim() === '') {
-                return res.status(400).json({ error: 'Cortador é obrigatório para status diferente de "pendente".' });
-            }
-            cortadorFinal = String(cortadorInput).trim();
-        } else {
-            if (cortadorInput && String(cortadorInput).trim() !== '') {
-                cortadorFinal = String(cortadorInput).trim();
-            }
-        }
 
-        const MAX_RETRIES = 5;
-        let insertedCorte = null;
-        let pnGerado;
+        const varianteFinal = (variante === undefined || variante === null || String(variante).trim() === '') ? null : String(variante).trim();
+        
+        const queryText = `
+            INSERT INTO cortes (produto_id, variante, quantidade, data, status, op, pn)
+            VALUES ($1, $2, $3, $4, $5, $6, $7) 
+            RETURNING *
+        `;
+        const values = [
+            parseInt(produto_id),
+            varianteFinal,
+            parsedQuantidade,
+            data,
+            status,
+            op,
+            pn
+        ];
 
-        if (pnInput && String(pnInput).trim() !== '') {
-            pnGerado = String(pnInput).trim();
-            try {
-                const result = await dbClient.query(
-                    `INSERT INTO cortes (pn, produto, variante, quantidade, data, cortador, status, op)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-                    [pnGerado, produto, varianteFinal, parsedQuantidade, data, cortadorFinal, status, op]
-                );
-                insertedCorte = result.rows[0];
-            } catch (error) {
-                if (error.code === '23505' && error.constraint && error.constraint.endsWith('_pn_key')) {
-                    return res.status(409).json({ error: `O PN "${pnGerado}" fornecido já está em uso.`, details: error.detail});
-                }
-                throw error;
-            }
-        } else {
-            for (let i = 0; i < MAX_RETRIES; i++) {
-                pnGerado = Math.floor(1000 + Math.random() * 9000).toString();
-                try {
-                    const result = await dbClient.query(
-                        `INSERT INTO cortes (pn, produto, variante, quantidade, data, cortador, status, op)
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-                        [pnGerado, produto, varianteFinal, parsedQuantidade, data, cortadorFinal, status, op]
-                    );
-                    insertedCorte = result.rows[0];
-                    break;
-                } catch (error) {
-                    if (error.code === '23505' && error.constraint && error.constraint.endsWith('_pn_key')) {
-                        if (i === MAX_RETRIES - 1) {
-                            throw new Error('Não foi possível gerar um PN único após várias tentativas.');
-                        }
-                    } else {
-                        throw error;
-                    }
-                }
-            }
-        }
-        if (!insertedCorte) {
-            throw new Error('Falha ao criar lançamento de corte após retentativas.');
-        }
-        res.status(201).json(insertedCorte);
+        const result = await dbClient.query(queryText, values);
+        res.status(201).json(result.rows[0]);
 
     } catch (error) {
-        console.error('[router/cortes POST] Erro:', error.message, error.stack ? error.stack.substring(0,500) : "");
-        if (error.message.includes('PN único')) {
-            res.status(500).json({ error: error.message });
-        } else if (error.code === '23505') {
-            res.status(409).json({ error: 'Erro de conflito ao criar corte.', details: error.detail });
-        } else {
-            res.status(500).json({ error: 'Erro interno ao criar o corte.', details: error.message });
+        console.error('[router/cortes POST] Erro:', error);
+        if (error.code === '23505') { // Erro de violação de chave única (ex: pn duplicado)
+            return res.status(409).json({ error: 'Conflito de dados. O Pedido de Corte (PC/PN) já existe.', details: error.detail });
         }
+        res.status(500).json({ error: 'Erro interno ao criar o corte.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }
@@ -244,27 +194,16 @@ router.put('/', async (req, res) => {
         dbClient = await pool.connect();
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
         
-        const { id, status, cortador, op, quantidade, produto, variante } = req.body;
-
-        // Lógica de permissão para diferentes ações no PUT
-        let permissaoConcedida = false;
-        if (['cortados', 'verificado', 'usado'].includes(status) && permissoesCompletas.includes('marcar-como-cortado')) {
-            permissaoConcedida = true;
-        } else if (permissoesCompletas.includes('editar-op')) { // Permissão genérica para outras edições de corte
-            permissaoConcedida = true;
-        } else if (permissoesCompletas.includes('editar-corte')) { // Se você tiver uma permissão mais específica
-             permissaoConcedida = true;
-        }
-        // Adicione mais 'else if' para outras permissões de edição de corte se necessário
-
-        if (!permissaoConcedida) {
-            return res.status(403).json({ error: 'Permissão negada para atualizar este corte ou seu status.' });
+        if (!permissoesCompletas.includes('marcar-como-cortado') && !permissoesCompletas.includes('editar-op')) {
+            return res.status(403).json({ error: 'Permissão negada para atualizar este corte.' });
         }
 
-        // Sua lógica de PUT original aqui, usando 'dbClient'
+        const { id, status, cortador, op, quantidade, produto_id, variante } = req.body;
+
         if (!id) {
             return res.status(400).json({ error: 'ID do corte é obrigatório para atualização.' });
         }
+
         const fieldsToUpdate = [];
         const updateValues = [];
         let paramCount = 1;
@@ -272,15 +211,18 @@ router.put('/', async (req, res) => {
         if (status !== undefined) { fieldsToUpdate.push(`status = $${paramCount++}`); updateValues.push(status); }
         if (cortador !== undefined) { fieldsToUpdate.push(`cortador = $${paramCount++}`); updateValues.push(cortador); }
         if (op !== undefined) { fieldsToUpdate.push(`op = $${paramCount++}`); updateValues.push(op); }
-        if (quantidade !== undefined) { fieldsToUpdate.push(`quantidade = $${paramCount++}`); updateValues.push(quantidade); }
-        if (produto !== undefined) { fieldsToUpdate.push(`produto = $${paramCount++}`); updateValues.push(produto); }
-        if (variante !== undefined) { fieldsToUpdate.push(`variante = $${paramCount++}`); updateValues.push(variante === '' ? null : variante); } // Trata variante vazia como null
+        if (quantidade !== undefined) { fieldsToUpdate.push(`quantidade = $${paramCount++}`); updateValues.push(parseInt(quantidade)); }
+        if (produto_id !== undefined) { fieldsToUpdate.push(`produto_id = $${paramCount++}`); updateValues.push(parseInt(produto_id)); }
+        if (variante !== undefined) { fieldsToUpdate.push(`variante = $${paramCount++}`); updateValues.push(variante === '' ? null : variante); }
 
         if (fieldsToUpdate.length === 0) {
             return res.status(400).json({ error: 'Nenhum campo fornecido para atualização.' });
         }
-        updateValues.push(id); // Para o WHERE id = $X
-        const queryText = `UPDATE cortes SET ${fieldsToUpdate.join(', ')}, data_atualizacao = CURRENT_TIMESTAMP WHERE id = $${paramCount} RETURNING *`;
+
+        fieldsToUpdate.push(`data_atualizacao = CURRENT_TIMESTAMP`);
+        updateValues.push(id);
+        
+        const queryText = `UPDATE cortes SET ${fieldsToUpdate.join(', ')} WHERE id = $${paramCount} RETURNING *`;
 
         const result = await dbClient.query(queryText, updateValues);
         if (result.rows.length === 0) {
@@ -289,7 +231,7 @@ router.put('/', async (req, res) => {
         res.status(200).json(result.rows[0]);
 
     } catch (error) {
-        console.error('[router/cortes PUT] Erro:', error.message, error.stack ? error.stack.substring(0,500) : "");
+        console.error('[router/cortes PUT] Erro:', error);
         res.status(500).json({ error: 'Erro ao atualizar corte', details: error.message });
     } finally {
         if (dbClient) dbClient.release();

@@ -58,83 +58,127 @@ router.use(async (req, res, next) => {
 
 // POST /api/producoes/
 router.post('/', async (req, res) => {
-    const { usuarioLogado } = req; // Do token
+    const { usuarioLogado: requisitante } = req; // Renomeado para clareza
     let dbClient; 
 
     try {
-        dbClient = await pool.connect();
-        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
-        // console.log(`[API Producoes POST] Permissões de ${usuarioLogado.nome || usuarioLogado.nome_usuario}:`, permissoesCompletas);
+        console.log('--- INÍCIO: ROTA POST /api/producoes ---');
+        console.log('[1. DADOS RECEBIDOS] Corpo da requisição:', JSON.stringify(req.body, null, 2));
 
-        if (!permissoesCompletas.includes('lancar-producao')) {
+        dbClient = await pool.connect();
+        const permissoesRequisitante = await getPermissoesCompletasUsuarioDB(dbClient, requisitante.id);
+        if (!permissoesRequisitante.includes('lancar-producao')) {
             return res.status(403).json({ error: 'Permissão negada para lançar produção.' });
         }
 
         const {
-            id, opNumero, etapaIndex, processo, produto, variacao,
-            maquina, quantidade, funcionario, data, lancadoPor
+            id, opNumero, etapaIndex, processo, produto_id, variacao,
+            maquina, quantidade, funcionario, // 'funcionario' é o nome de quem realizou a produção
+            data, lancadoPor
         } = req.body;
 
-        if (!id || !opNumero || etapaIndex === undefined || !processo || !produto || quantidade === undefined || !funcionario || !data || !lancadoPor) {
-            return res.status(400).json({ error: 'Dados incompletos para lançamento de produção.' });
+        console.log(`[2. VALIDAÇÃO] Validando dados... Produto ID recebido: ${produto_id}, Funcionário: ${funcionario}`);
+        if (!id || !opNumero || etapaIndex === undefined || !processo || !produto_id || !funcionario || quantidade === undefined || !data || !lancadoPor) {
+            return res.status(400).json({ error: 'Dados incompletos. Todos os campos são obrigatórios, incluindo produto_id e funcionário.' });
         }
+        
+        const parsedProdutoId = parseInt(produto_id);
+        if (isNaN(parsedProdutoId) || parsedProdutoId <= 0) {
+            return res.status(400).json({ error: 'produto_id inválido.' });
+        }
+
         const parsedQuantidade = parseInt(quantidade, 10);
-        if (isNaN(parsedQuantidade) || parsedQuantidade < 0) { 
-            return res.status(400).json({ error: 'Quantidade inválida (deve ser um número >= 0).' });
+        if (isNaN(parsedQuantidade) || parsedQuantidade < 0) { // Permitir 0 se for um lançamento de "não fez nada"
+            return res.status(400).json({ error: 'Quantidade inválida.' });
         }
-        // Se o frontend já garante que a quantidade > 0 para não-tiktik, a validação acima é suficiente.
+        console.log('[2. VALIDAÇÃO] Dados básicos validados com sucesso.');
 
-        let parsedDate;
-        try {
-            parsedDate = data; 
-            const dateTest = new Date(parsedDate);
-            if (isNaN(dateTest.getTime())) throw new Error('Formato de data inválido para produção.');
-        } catch (error) {
-            console.error('[router/producoes POST] Erro ao processar data:', error.message);
-            return res.status(400).json({ error: 'Formato de data inválido para produção.' });
-        }
+        // --- LÓGICA DE PONTOS COM TIPO DE ATIVIDADE INFERIDO ---
+        console.log(`[3. PONTOS] Iniciando cálculo de pontos para Produto ID: ${parsedProdutoId}, Processo: "${processo}", Funcionário: "${funcionario}"`);
 
-        let valorPontoAplicado = 1.00; // Default
-        const configPontosResult = await dbClient.query(
-            `SELECT pontos_padrao FROM configuracoes_pontos_processos
-             WHERE produto_nome = $1 AND processo_nome = $2 AND ativo = TRUE LIMIT 1;`,
-            [produto, processo]
+        // 3a. Buscar o tipo do usuário 'funcionario' para determinar o 'tipo_atividade'
+        const funcionarioInfoResult = await dbClient.query(
+            'SELECT tipos FROM usuarios WHERE nome = $1 LIMIT 1',
+            [funcionario]
         );
 
-        if (configPontosResult.rows.length > 0) {
-            valorPontoAplicado = parseFloat(configPontosResult.rows[0].pontos_padrao);
+        let tipoAtividadeParaConfigPontos;
+        if (funcionarioInfoResult.rows.length > 0 && funcionarioInfoResult.rows[0].tipos) {
+            const tiposFuncionario = funcionarioInfoResult.rows[0].tipos; // Ex: ['costureira'] ou ['tiktik']
+            if (tiposFuncionario.includes('costureira')) {
+                tipoAtividadeParaConfigPontos = 'costura_op_costureira';
+            } else if (tiposFuncionario.includes('tiktik')) {
+                // Assumindo que esta rota NÃO é para "arremate_tiktik", mas sim para outros processos de OP feitos por tiktiks
+                tipoAtividadeParaConfigPontos = 'processo_op_tiktik';
+            } else {
+                console.warn(`[3. PONTOS] Funcionário "${funcionario}" não tem um tipo ('costureira' ou 'tiktik') definido em seus 'tipos' para determinar a atividade. Usando fallback se houver ou ponto padrão.`);
+                // Você pode definir um tipo padrão aqui ou deixar que a busca de configuração falhe (e use valorPontoAplicado = 1.00)
+                // tipoAtividadeParaConfigPontos = 'tipo_desconhecido'; // Ou algo que não encontrará config
+            }
         } else {
+            console.warn(`[3. PONTOS] Informações do funcionário "${funcionario}" não encontradas ou sem tipos definidos. Não é possível determinar tipo_atividade para pontos.`);
+            // Decida o comportamento: erro ou ponto padrão. Por segurança, ponto padrão.
         }
+        console.log(`[3. PONTOS] Tipo de Atividade determinado para busca de pontos: "${tipoAtividadeParaConfigPontos}"`);
+        
+        let valorPontoAplicado = 1.00; // Valor padrão
+        let pontosGerados = parsedQuantidade * valorPontoAplicado; // Cálculo padrão inicial
 
-        const pontosGerados = parsedQuantidade * valorPontoAplicado;
+        if (tipoAtividadeParaConfigPontos && parsedQuantidade > 0) { // Só busca config se o tipo foi determinado e há quantidade
+            const configPontosResult = await dbClient.query(
+                `SELECT pontos_padrao FROM configuracoes_pontos_processos
+                 WHERE produto_id = $1 AND processo_nome = $2 AND tipo_atividade = $3 AND ativo = TRUE LIMIT 1;`,
+                [parsedProdutoId, processo, tipoAtividadeParaConfigPontos]
+            );
 
-        const result = await dbClient.query(
-            `INSERT INTO producoes (
-                id, op_numero, etapa_index, processo, produto, variacao, maquina,
-                quantidade, funcionario, data, lancado_por,
-                valor_ponto_aplicado, pontos_gerados
+            if (configPontosResult.rows.length > 0 && configPontosResult.rows[0].pontos_padrao !== null) {
+                valorPontoAplicado = parseFloat(configPontosResult.rows[0].pontos_padrao);
+                pontosGerados = parsedQuantidade * valorPontoAplicado; // Recalcula com o ponto da config
+                console.log(`[3. PONTOS] Configuração de pontos encontrada. Valor do ponto: ${valorPontoAplicado}. Pontos gerados recalculados: ${pontosGerados}`);
+            } else {
+                console.log(`[3. PONTOS] Nenhuma configuração de pontos encontrada para Produto ID: ${parsedProdutoId}, Processo: "${processo}", Tipo Atividade: "${tipoAtividadeParaConfigPontos}". Usando valor de ponto padrão: ${valorPontoAplicado}. Pontos gerados (padrão): ${pontosGerados}`);
+            }
+        } else if (parsedQuantidade === 0) {
+            valorPontoAplicado = 0; // Se a quantidade for zero, os pontos são zero
+            pontosGerados = 0;
+            console.log(`[3. PONTOS] Quantidade é 0. Pontos gerados definidos como 0.`);
+        } else {
+             console.log(`[3. PONTOS] Tipo de atividade não pôde ser determinado para o funcionário '${funcionario}'. Usando valor de ponto padrão ${valorPontoAplicado}. Pontos gerados (padrão): ${pontosGerados}`);
+        }
+        // --- FIM DA LÓGICA DE PONTOS ---
+
+        const queryText = `
+            INSERT INTO producoes (
+                id, op_numero, etapa_index, processo, produto_id, variacao, maquina,
+                quantidade, funcionario, data, lancado_por, valor_ponto_aplicado, pontos_gerados
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-            RETURNING *;`,
-            [
-                id, opNumero, etapaIndex, processo, produto, variacao, maquina,
-                parsedQuantidade, funcionario, parsedDate, lancadoPor,
-                valorPontoAplicado, pontosGerados
-            ]
-        );
+            RETURNING *;`;
+        
+        const values = [
+            id, opNumero, etapaIndex, processo, parsedProdutoId, variacao || null, maquina,
+            parsedQuantidade, funcionario, data, lancadoPor, 
+            parseFloat(valorPontoAplicado.toFixed(2)), // Garante 2 casas decimais
+            parseFloat(pontosGerados.toFixed(2))     // Garante 2 casas decimais
+        ];
 
-        // console.log('[router/producoes POST] Produção lançada com sucesso:', result.rows[0].id);
-        res.status(201).json({ ...result.rows[0], id: id }); // Retorna o ID original do frontend
+        console.log('[4. BANCO DE DADOS] Executando query INSERT com valores:', values);
+        const result = await dbClient.query(queryText, values);
+        console.log('[5. SUCESSO] Inserção no banco de dados bem-sucedida.');
+
+        res.status(201).json(result.rows[0]);
 
     } catch (error) {
-        console.error('[router/producoes POST] Erro detalhado:', error.message, error.stack ? error.stack.substring(0,500):"");
-        const dbErrorCode = error.code;
-        if (dbErrorCode === '23505') { // Unique constraint violation
-             res.status(409).json({ error: 'Erro de conflito ao salvar produção (ex: ID duplicado).', details: error.detail, code: dbErrorCode });
-        } else {
-            res.status(500).json({ error: 'Erro interno ao salvar produção.', details: error.message, code: dbErrorCode });
+        console.error('--- ERRO NA ROTA POST /api/producoes ---');
+        console.error('[ERRO DETALHADO] Mensagem:', error.message, error.stack);
+        if (error.message.includes("violates not-null constraint") && error.message.includes("pontos_gerados")) {
+             console.error("[ERRO ESPECÍFICO] A coluna 'pontos_gerados' ou 'valor_ponto_aplicado' na tabela 'producoes' pode estar configurada como NOT NULL e não está recebendo um valor válido em todos os cenários.");
         }
+        res.status(500).json({ error: 'Erro interno ao salvar produção.', details: error.message });
     } finally {
-        if (dbClient) dbClient.release();
+        if (dbClient) {
+            dbClient.release();
+            console.log('--- FIM: ROTA POST /api/producoes (conexão liberada) ---');
+        }
     }
 });
 
@@ -145,57 +189,62 @@ router.get('/', async (req, res) => {
 
     try {
         dbClient = await pool.connect();
-        // console.log(`[API Producoes GET /] Usuário do token: ${usuarioLogado.nome || usuarioLogado.nome_usuario}, ID: ${usuarioLogado.id}`);
-
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
-        // console.log(`[API Producoes GET /] Permissões Completas DB para ${usuarioLogado.nome || usuarioLogado.nome_usuario}:`, permissoesCompletas);
-
         const podeGerenciarTudo = permissoesCompletas.includes('acesso-gerenciar-producao');
         const podeVerProprias = permissoesCompletas.includes('ver-proprias-producoes');
 
         if (!podeGerenciarTudo && !podeVerProprias) {
-            // console.log('[API Producoes GET /] Acesso negado.');
             return res.status(403).json({ error: 'Permissão negada para visualizar produções.' });
         }
 
+        // << MUDANÇA: Query base com JOIN para buscar o nome do produto >>
+        const baseSelect = `
+        SELECT 
+            pr.id, 
+            pr.op_numero, 
+            pr.etapa_index, 
+            pr.processo, 
+            pr.variacao,
+            pr.maquina, 
+            pr.quantidade, 
+            pr.funcionario, 
+            pr.data, 
+            pr.lancado_por,
+            pr.valor_ponto_aplicado, -- << ADICIONADO
+            pr.pontos_gerados,       -- << ADICIONADO
+            p.nome AS produto        -- Nome do produto do JOIN
+        FROM producoes pr
+        LEFT JOIN produtos p ON pr.produto_id = p.id
+    `;
+
         let queryText;
         let queryParams = [];
-        const opNumeroRaw = req.query.op_numero;
-        const opNumero = opNumeroRaw ? String(opNumeroRaw).trim() : undefined;
+        const { op_numero: opNumero } = req.query;
 
         if (opNumero) {
-            queryText = 'SELECT * FROM producoes WHERE op_numero = $1 ORDER BY data DESC';
+            queryText = `${baseSelect} WHERE pr.op_numero = $1 ORDER BY pr.data DESC`;
             queryParams = [opNumero];
-            // console.log(`[API Producoes GET /] Buscando por OP específica: ${opNumero}`);
         } else if (podeGerenciarTudo) {
-            queryText = 'SELECT * FROM producoes ORDER BY data DESC';
-            // console.log(`[API Producoes GET /] Usuário ${usuarioLogado.nome || usuarioLogado.nome_usuario} (com acesso-gerenciar-producao) buscando todas.`);
+            queryText = `${baseSelect} ORDER BY pr.data DESC`;
         } else if (podeVerProprias) {
-            const nomeFuncionario = usuarioLogado.nome; 
+            const nomeFuncionario = usuarioLogado.nome;
             if (!nomeFuncionario) {
-                console.error("[API Producoes GET /] ERRO: Campo 'nome' não encontrado no token JWT para filtrar produções próprias.");
-                return res.status(400).json({ error: "Falha ao identificar funcionário para filtro de produções." });
+                return res.status(400).json({ error: "Falha ao identificar funcionário para filtro." });
             }
-            queryText = 'SELECT * FROM producoes WHERE funcionario = $1 ORDER BY data DESC';
+            queryText = `${baseSelect} WHERE pr.funcionario = $1 ORDER BY pr.data DESC`;
             queryParams = [nomeFuncionario];
-            // console.log(`[API Producoes GET /] Usuário ${nomeFuncionario} (com ver-proprias-producoes) buscando apenas as suas.`);
         } else {
-            // console.warn('[API Producoes GET /] Lógica de permissão não cobriu um caso. Negando acesso.');
-            return res.status(403).json({ error: 'Configuração de acesso inválida para produções.' });
+            return res.status(403).json({ error: 'Configuração de acesso inválida.' });
         }
         
         const result = await dbClient.query(queryText, queryParams);
         res.status(200).json(result.rows);
 
     } catch (error) {
-        console.error('[API Producoes GET /] Erro na rota:', error.message, error.stack ? error.stack.substring(0,500):"");
-        const statusCode = error.statusCode || 500;
-        res.status(statusCode).json({ error: error.message || 'Erro interno ao buscar produções.' });
+        console.error('[API Producoes GET /] Erro na rota:', error);
+        res.status(500).json({ error: 'Erro interno ao buscar produções.' });
     } finally {
-        if (dbClient) {
-            dbClient.release();
-            // console.log('[API Producoes GET /] Cliente DB liberado.');
-        }
+        if (dbClient) dbClient.release();
     }
 });
 

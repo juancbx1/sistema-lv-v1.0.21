@@ -83,17 +83,21 @@ router.get('/', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada para visualizar a lista de produtos.' });
         }
 
-        // ***** CORREÇÃO NA QUERY: Usando os nomes corretos das colunas e alias para o frontend *****
         const queryText = `
-            SELECT id, nome, sku, gtin, unidade, estoque, imagem, 
-                   tipos, variacoes, estrutura, etapas, 
-                   "etapastiktik" AS "etapasTiktik", 
-                   grade, is_kit,
-                   criado_em AS "dataCriacao",      -- Corrigido e com alias
-                   data_atualizacao AS "dataAtualizacao" -- Nome correto e com alias (opcional, mas bom para consistência)
-            FROM produtos ORDER BY nome ASC`;
+        SELECT id, nome, sku, gtin, unidade, estoque, imagem, 
+           tipos, variacoes, estrutura, etapas, 
+           "etapastiktik" AS "etapasTiktik",
+           grade, is_kit,
+           criado_em AS "dataCriacao",
+           data_atualizacao AS "dataAtualizacao"
+        FROM produtos ORDER BY nome ASC`;
             
         const result = await dbClient.query(queryText);
+
+        // ***** ADICIONA HEADERS DE CACHE *****
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate'); // HTTP 1.1.
+        res.setHeader('Pragma', 'no-cache'); // HTTP 1.0.
+        res.setHeader('Expires', '0'); // Proxies.
         res.status(200).json(result.rows);
 
     } catch (error) {
@@ -162,37 +166,35 @@ router.post('/', async (req, res) => {
         // Adicionado 'data_atualizacao = CURRENT_TIMESTAMP' no DO UPDATE SET
         // Adicionado aliases no RETURNING para consistência com o GET
         const query = `
-            INSERT INTO produtos (
-                nome, sku, gtin, unidade, estoque, imagem,
-                tipos, variacoes, estrutura, etapas, "etapastiktik", grade,
-                is_kit 
-                -- Coluna 'criado_em' não é listada aqui, assumindo DEFAULT no DB ou valor já existente
-                -- Coluna 'data_atualizacao' não é listada aqui para INSERT, será NULL ou valor de um UPDATE
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-            ON CONFLICT (nome) 
-            DO UPDATE SET
-                sku = EXCLUDED.sku,
-                gtin = EXCLUDED.gtin,
-                unidade = EXCLUDED.unidade,
-                estoque = EXCLUDED.estoque,
-                imagem = EXCLUDED.imagem,
-                tipos = EXCLUDED.tipos,
-                variacoes = EXCLUDED.variacoes,
-                estrutura = EXCLUDED.estrutura,
-                etapas = EXCLUDED.etapas,
-                "etapastiktik" = EXCLUDED."etapastiktik",
-                grade = EXCLUDED.grade,
-                is_kit = EXCLUDED.is_kit,
-                data_atualizacao = CURRENT_TIMESTAMP  -- <<< ESSENCIAL PARA ATUALIZAR ESTE CAMPO
-            RETURNING 
-                id, nome, sku, gtin, unidade, estoque, imagem, 
-                tipos, variacoes, estrutura, etapas, 
-                "etapastiktik" AS "etapasTiktik", 
-                grade, is_kit,
-                criado_em AS "dataCriacao",
-                data_atualizacao AS "dataAtualizacao";
-        `;
+        INSERT INTO produtos (
+            nome, sku, gtin, unidade, estoque, imagem,
+            tipos, variacoes, estrutura, etapas, "etapastiktik", grade,
+            is_kit 
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        ON CONFLICT (nome) 
+        DO UPDATE SET
+            sku = EXCLUDED.sku,
+            gtin = EXCLUDED.gtin,
+            unidade = EXCLUDED.unidade,
+            estoque = EXCLUDED.estoque,
+            imagem = EXCLUDED.imagem,
+            tipos = EXCLUDED.tipos,
+            variacoes = EXCLUDED.variacoes,
+            estrutura = EXCLUDED.estrutura,
+            etapas = EXCLUDED.etapas,
+            "etapastiktik" = EXCLUDED."etapastiktik",
+            grade = EXCLUDED.grade,
+            is_kit = EXCLUDED.is_kit,
+            data_atualizacao = CURRENT_TIMESTAMP  -- Linha correta, sem os '<'
+        RETURNING 
+            id, nome, sku, gtin, unidade, estoque, imagem, 
+            tipos, variacoes, estrutura, etapas, 
+            "etapastiktik" AS "etapasTiktik", 
+            grade, is_kit,
+            criado_em AS "dataCriacao",
+            data_atualizacao AS "dataAtualizacao";
+            `;
         const values = [
             produto.nome, produto.sku || null, produto.gtin || null,
             produto.unidade || null, produto.estoque || 0, produto.imagem || null,

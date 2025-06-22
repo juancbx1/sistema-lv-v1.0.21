@@ -3,16 +3,19 @@
 export const PRODUTOS = [
     'Scrunchie (Padrão)',
     'Scrunchie (Fina)',
-    'Scrunchie Xuxona',
-    'Fronha',
+    'Scrunchie (Xuxona)',
+    'Fronha de Cetim',
     'Touca de Cetim (Dupla Face)',
     'Faixa de Cabelo',
+    'Samba Canção de Cetim'
 ];
 
 export const PRODUTOSKITS = [
     'Kit 10 Scrunchies',
     'Kit 5 Scrunchies',
     'Kit 4 Scrunchies',
+    'Kit 5 Scrunchies - Fina',
+    ''
 ];
 
 export const MAQUINAS = [

@@ -1,7 +1,7 @@
 // public/js/admin-ponto-por-processo.js
 import { verificarAutenticacao } from '/js/utils/auth.js';
 
-(async () => {
+(async () => { 
     let usuarioLogado = null;
     let todasConfiguracoesPontos = []; // Cache das configurações de pontos
     let listaDeProdutosDisponiveis = []; // Cache dos produtos e seus processos/etapas
@@ -37,80 +37,91 @@ import { verificarAutenticacao } from '/js/utils/auth.js';
     }
 
     async function carregarProdutosDoServidor() {
-        try {
-            const token = localStorage.getItem('token');
-            if (!token) throw new Error("Token de autenticação não encontrado.");
-            
-            const response = await fetch('/api/produtos', { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: `Erro HTTP ${response.status}` }));
-                throw new Error(errorData.error || `Erro ${response.status} ao carregar produtos.`);
-            }
-            listaDeProdutosDisponiveis = await response.json();
-            if (!Array.isArray(listaDeProdutosDisponiveis)) {
-                console.warn("API de produtos não retornou um array:", listaDeProdutosDisponiveis);
-                listaDeProdutosDisponiveis = [];
-            }
-            popularFiltroProdutos();
-        } catch (error) {
-            console.error('Erro ao carregar produtos do servidor:', error);
-            mostrarFeedback(`Erro ao carregar lista de produtos: ${error.message}`, 'erro');
-            listaDeProdutosDisponiveis = []; // Garante que seja um array em caso de falha
-            popularFiltroProdutos(); // Chama para limpar o filtro se deu erro
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) throw new Error("Token de autenticação não encontrado.");
+        
+        const response = await fetch('/api/produtos', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: `Erro HTTP ${response.status}` }));
+            throw new Error(errorData.error || `Erro ${response.status} ao carregar produtos.`);
         }
+        const produtosCrus = await response.json();
+        if (!Array.isArray(produtosCrus)) {
+            console.warn("API de produtos não retornou um array:", produtosCrus);
+            listaDeProdutosDisponiveis = [];
+        } else {
+            // Garante que cada produto tenha um ID numérico e um nome.
+            // Filtra produtos sem ID ou nome, se houver, para evitar erros posteriores.
+            listaDeProdutosDisponiveis = produtosCrus.filter(p => p && typeof p.id === 'number' && typeof p.nome === 'string');
+        }
+        popularFiltroProdutos(); // Popula o select com os produtos carregados (ID como value)
+    } catch (error) {
+        console.error('Erro ao carregar produtos do servidor:', error);
+        mostrarFeedback(`Erro ao carregar lista de produtos: ${error.message}`, 'erro');
+        listaDeProdutosDisponiveis = [];
+        popularFiltroProdutos();
     }
+}
 
-    function popularFiltroProdutos() {
-        if (!filtroProdutoEl) return;
-        filtroProdutoEl.innerHTML = '<option value="">Todos os Produtos</option>'; // Reseta
-        if (Array.isArray(listaDeProdutosDisponiveis)) {
-            const nomesProdutosUnicos = [...new Set(listaDeProdutosDisponiveis.map(p => p.nome))].sort();
-            nomesProdutosUnicos.forEach(nomeProduto => {
-                filtroProdutoEl.add(new Option(nomeProduto, nomeProduto));
-            });
-        }
+        function popularFiltroProdutos() {
+    if (!filtroProdutoEl) return;
+    filtroProdutoEl.innerHTML = '<option value="">Todos os Produtos</option>'; // Reseta
+    if (Array.isArray(listaDeProdutosDisponiveis) && listaDeProdutosDisponiveis.length > 0) {
+        // Ordena os produtos pelo nome para exibição no select
+        const produtosOrdenados = [...listaDeProdutosDisponiveis].sort((a, b) => a.nome.localeCompare(b.nome));
+        produtosOrdenados.forEach(produto => {
+            // O VALOR do option é o produto.id, o TEXTO exibido é produto.nome
+            filtroProdutoEl.add(new Option(produto.nome, produto.id));
+        });
     }
+}
 
     async function carregarConfiguracoesPontos() {
-        if (!corpoTabelaPontosPadraoEl) {
-            console.error("Elemento corpoTabelaPontosPadraoEl não encontrado.");
-            return;
-        }
-        corpoTabelaPontosPadraoEl.innerHTML = '<tr><td colspan="6" class="ppp-carregando"><div class="ppp-spinner"></div> Carregando configurações...</td></tr>'; // Adicionado spinner
-        
-        try {
-            const token = localStorage.getItem('token');
-            if (!token) throw new Error("Token de autenticação não encontrado.");
-
-            const produtoFiltro = filtroProdutoEl.value;
-            const tipoAtividadeFiltro = filtroTipoAtividadeEl.value;
-            
-            const params = new URLSearchParams();
-            if (produtoFiltro) params.append('produto_nome', produtoFiltro); // API usa ILIKE, não precisa de % aqui
-            if (tipoAtividadeFiltro) params.append('tipo_atividade', tipoAtividadeFiltro);
-            // Adicionar filtro de 'ativo=true' se quiser buscar apenas os ativos por padrão
-            // params.append('ativo', 'true'); 
-            
-            const apiUrl = `/api/configuracao-pontos/padrao?${params.toString()}`;
-            const response = await fetch(apiUrl, { headers: { 'Authorization': `Bearer ${token}` } });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: `Erro HTTP ${response.status}` }));
-                throw new Error(errorData.error || `Erro ${response.status} ao carregar configurações.`);
-            }
-            todasConfiguracoesPontos = await response.json();
-            if (!Array.isArray(todasConfiguracoesPontos)) {
-                console.warn("API de configurações não retornou um array:", todasConfiguracoesPontos);
-                todasConfiguracoesPontos = [];
-            }
-            renderizarTabelaPontosPadrao();
-        } catch (error) {
-            console.error('Erro ao carregar configurações de pontos:', error);
-            mostrarFeedback(`Erro ao carregar configurações: ${error.message}`, 'erro');
-            todasConfiguracoesPontos = [];
-            if (corpoTabelaPontosPadraoEl) corpoTabelaPontosPadraoEl.innerHTML = '<tr><td colspan="6" class="ppp-erro-carregar">Falha ao carregar configurações. Tente novamente.</td></tr>';
-        }
+    if (!corpoTabelaPontosPadraoEl) {
+        console.error("Elemento corpoTabelaPontosPadraoEl não encontrado.");
+        return;
     }
+    corpoTabelaPontosPadraoEl.innerHTML = '<tr><td colspan="6" class="ppp-carregando"><div class="ppp-spinner"></div> Carregando configurações...</td></tr>';
+    
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) throw new Error("Token de autenticação não encontrado.");
+
+        const produtoIdFiltro = filtroProdutoEl.value; // Pega o ID do produto do select
+        const tipoAtividadeFiltro = filtroTipoAtividadeEl.value;
+        
+        const params = new URLSearchParams();
+        if (produtoIdFiltro) {
+            params.append('produto_id', produtoIdFiltro); // Envia produto_id para a API
+        }
+        if (tipoAtividadeFiltro) {
+            params.append('tipo_atividade', tipoAtividadeFiltro);
+        }
+        // Exemplo: para buscar apenas ativos por padrão
+        // params.append('ativo', 'true'); 
+        
+        const apiUrl = `/api/configuracao-pontos/padrao?${params.toString()}`;
+        const response = await fetch(apiUrl, { headers: { 'Authorization': `Bearer ${token}` } });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: `Erro HTTP ${response.status}` }));
+            throw new Error(errorData.error || `Erro ${response.status} ao carregar configurações.`);
+        }
+        todasConfiguracoesPontos = await response.json();
+        if (!Array.isArray(todasConfiguracoesPontos)) {
+            console.warn("API de configurações não retornou um array:", todasConfiguracoesPontos);
+            todasConfiguracoesPontos = [];
+        }
+        // A API GET /padrao agora deve retornar 'produto_nome' (do JOIN) e 'produto_id'
+        renderizarTabelaPontosPadrao();
+    } catch (error) {
+        console.error('Erro ao carregar configurações de pontos:', error);
+        mostrarFeedback(`Erro ao carregar configurações: ${error.message}`, 'erro');
+        todasConfiguracoesPontos = [];
+        if (corpoTabelaPontosPadraoEl) corpoTabelaPontosPadraoEl.innerHTML = '<tr><td colspan="6" class="ppp-erro-carregar">Falha ao carregar configurações. Tente novamente.</td></tr>';
+    }
+}
 
     function getTipoAtividadeTexto(tipo) {
         if (tipo === 'costura_op_costureira') return 'Costura OP (Costureira)';
@@ -120,97 +131,106 @@ import { verificarAutenticacao } from '/js/utils/auth.js';
     }
 
     function renderizarTabelaPontosPadrao() {
-        if (!corpoTabelaPontosPadraoEl) return;
-        corpoTabelaPontosPadraoEl.innerHTML = '';
+    if (!corpoTabelaPontosPadraoEl) return;
+    corpoTabelaPontosPadraoEl.innerHTML = '';
 
-        const configuracoesParaExibir = todasConfiguracoesPontos;
+    const configuracoesParaExibir = todasConfiguracoesPontos;
 
-        if (configuracoesParaExibir.length === 0) {
-            corpoTabelaPontosPadraoEl.innerHTML = `<tr><td colspan="6">Nenhuma configuração de ponto encontrada para os filtros selecionados.</td></tr>`;
-            return;
+    if (configuracoesParaExibir.length === 0) {
+        corpoTabelaPontosPadraoEl.innerHTML = `<tr><td colspan="6">Nenhuma configuração de ponto encontrada para os filtros selecionados.</td></tr>`;
+        return;
+    }
+
+    configuracoesParaExibir.forEach(config => {
+        const tr = corpoTabelaPontosPadraoEl.insertRow();
+        tr.dataset.configId = config.id;
+        // Armazena o produto_id e o produto_nome (vindo do JOIN na API)
+        tr.dataset.produtoIdOriginal = config.produto_id;
+        tr.dataset.produtoNomeOriginal = config.produto_nome; // Usado para exibição e referência se necessário
+        tr.dataset.processoNomeOriginal = config.processo_nome || '';
+        tr.dataset.tipoAtividadeOriginal = config.tipo_atividade;
+
+        tr.innerHTML = `
+            <td>${config.produto_nome}</td>
+            <td>${config.processo_nome || (config.tipo_atividade === 'arremate_tiktik' ? NOME_PROCESSO_ARREMATE_PADRAO : '-')}</td>
+            <td>${getTipoAtividadeTexto(config.tipo_atividade)}</td>
+            <td><input type="number" class="ppp-input-pontos" value="${parseFloat(config.pontos_padrao || 0).toFixed(2)}" step="0.01" min="0.01"></td>
+            <td><input type="checkbox" class="ppp-checkbox-ativo" ${config.ativo ? 'checked' : ''}></td>
+            <td>
+                <button class="ppp-botao ppp-botao-salvar" title="Salvar Alterações"><i class="fas fa-save"></i> Salvar</button>
+                <button class="ppp-botao ppp-botao-excluir" title="Excluir Configuração"><i class="fas fa-trash"></i> Excluir</button>
+            </td>
+        `;
+    });
+}
+
+    async function salvarConfiguracaoPonto(configId, produtoId, processoNome, tipoAtividade, pontosValor, ativo) {
+    const isNovaConfiguracao = (configId === 'novo' || !configId);
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) throw new Error("Token de autenticação não encontrado.");
+
+        if (!produtoId || !tipoAtividade ) {
+             mostrarFeedback('Produto e Tipo de Atividade são obrigatórios.', 'erro'); return null;
+        }
+        const produtoIdNum = parseInt(produtoId);
+        if (isNaN(produtoIdNum) || produtoIdNum <= 0) {
+            mostrarFeedback('ID do Produto inválido.', 'erro'); return null;
         }
 
-        configuracoesParaExibir.forEach(config => {
-            const tr = corpoTabelaPontosPadraoEl.insertRow();
-            tr.dataset.configId = config.id;
-            tr.dataset.produtoNomeOriginal = config.produto_nome;
-            tr.dataset.processoNomeOriginal = config.processo_nome || ''; // Garante string
-            tr.dataset.tipoAtividadeOriginal = config.tipo_atividade;
+        if (tipoAtividade !== 'arremate_tiktik' && !processoNome) {
+             mostrarFeedback('Processo é obrigatório para este tipo de atividade.', 'erro'); return null;
+        }
+        
+        // ---- INÍCIO DO BLOCO DE DEBUG PARA PONTOS ----
+        console.log("[salvarConfiguracaoPonto] Valor de 'pontosValor' ANTES do parseFloat:", pontosValor, "Tipo:", typeof pontosValor); // DEBUG
+        const pontosFloat = parseFloat(pontosValor);
+        console.log("[salvarConfiguracaoPonto] Valor de 'pontosFloat' DEPOIS do parseFloat:", pontosFloat, "Tipo:", typeof pontosFloat); // DEBUG
+        // ---- FIM DO BLOCO DE DEBUG PARA PONTOS ----
 
-            tr.innerHTML = `
-                <td>${config.produto_nome}</td>
-                <td>${config.processo_nome || (config.tipo_atividade === 'arremate_tiktik' ? NOME_PROCESSO_ARREMATE_PADRAO : '-')}</td>
-                <td>${getTipoAtividadeTexto(config.tipo_atividade)}</td>
-                <td><input type="number" class="ppp-input-pontos" value="${parseFloat(config.pontos_padrao || 0).toFixed(2)}" step="0.01" min="0.01"></td>
-                <td><input type="checkbox" class="ppp-checkbox-ativo" ${config.ativo ? 'checked' : ''}></td>
-                <td>
-                    <button class="ppp-botao ppp-botao-salvar" title="Salvar Alterações"><i class="fas fa-save"></i> Salvar</button>
-                    <button class="ppp-botao ppp-botao-excluir" title="Excluir Configuração"><i class="fas fa-trash"></i> Excluir</button>
-                </td>
-            `;
+        if (isNaN(pontosFloat) || pontosFloat <= 0) {
+             console.error("[salvarConfiguracaoPonto] Validação FALHOU: isNaN(pontosFloat) =", isNaN(pontosFloat), "|| pontosFloat <= 0 =", (pontosFloat <= 0)); // DEBUG
+             mostrarFeedback('Pontos devem ser um número positivo.', 'erro'); return null;
+        }
+
+        
+
+        const payload = {
+            produto_id: produtoIdNum, // Envia o ID numérico do produto
+            processo_nome: (tipoAtividade === 'arremate_tiktik') ? NOME_PROCESSO_ARREMATE_PADRAO : processoNome,
+            tipo_atividade: tipoAtividade,
+            pontos_padrao: pontosFloat,
+            ativo: ativo
+        };
+        
+        // A API POST /padrao foi ajustada para fazer UPSERT usando (produto_id, processo_nome, tipo_atividade)
+        const url = '/api/configuracao-pontos/padrao';
+        const method = 'POST'; 
+
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
         });
-    }
 
-    async function salvarConfiguracaoPonto(configId, produtoNome, processoNome, tipoAtividade, pontosValor, ativo) {
-        const isNovaConfiguracao = (configId === 'novo' || !configId);
-        try {
-            const token = localStorage.getItem('token');
-            if (!token) throw new Error("Token de autenticação não encontrado.");
-
-            // Validação dos campos antes de enviar
-            if (!produtoNome || !tipoAtividade ) {
-                 mostrarFeedback('Produto e Tipo de Atividade são obrigatórios.', 'erro'); return null;
-            }
-            if (tipoAtividade !== 'arremate_tiktik' && !processoNome) {
-                 mostrarFeedback('Processo é obrigatório para este tipo de atividade.', 'erro'); return null;
-            }
-            const pontosFloat = parseFloat(pontosValor);
-            if (isNaN(pontosFloat) || pontosFloat <= 0) {
-                 mostrarFeedback('Pontos devem ser um número positivo.', 'erro'); return null;
-            }
-
-            const payload = {
-                produto_nome: produtoNome,
-                processo_nome: (tipoAtividade === 'arremate_tiktik') ? NOME_PROCESSO_ARREMATE_PADRAO : processoNome,
-                tipo_atividade: tipoAtividade,
-                pontos_padrao: pontosFloat,
-                ativo: ativo
-            };
-            
-            // A API POST faz UPSERT. Para editar uma linha existente, se não quisermos depender
-            // do UPSERT pela chave (produto, processo, tipo), precisaríamos de um PUT por ID.
-            // Por ora, manteremos o POST para criar/UPSERT.
-            const url = '/api/configuracao-pontos/padrao';
-            const method = 'POST';
-            
-            // Se configId existe e é diferente de 'novo', estamos tentando editar.
-            // A API POST com ON CONFLICT cuidará de atualizar se a chave (produto, processo, tipo) for a mesma.
-            // Se a chave mudar, ele criará um novo. Isso pode não ser o ideal para "editar".
-            // Para uma edição verdadeira via ID, a API PUT /:id seria usada,
-            // e o payload não deveria incluir as chaves (produto, processo, tipo) se elas não puderem ser alteradas.
-            // Por simplicidade, deixamos o POST fazer o trabalho de UPSERT.
-
-            const response = await fetch(url, {
-                method: method,
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-
-            const responseData = await response.json();
-            if (!response.ok) {
-                throw new Error(responseData.error || `Erro ${response.status} ao salvar configuração.`);
-            }
-            
-            mostrarFeedback(`Configuração ${isNovaConfiguracao ? 'adicionada' : 'atualizada'} com sucesso!`, 'sucesso');
-            await carregarConfiguracoesPontos(); // Recarrega e renderiza
-            return responseData;
-
-        } catch (error) {
-            console.error('Erro ao salvar configuração:', error);
-            mostrarFeedback(`Erro ao salvar: ${error.message}`, 'erro');
-            return null;
+        const responseData = await response.json();
+        if (!response.ok) {
+            throw new Error(responseData.error || `Erro ${response.status} ao salvar configuração.`);
         }
+        
+        mostrarFeedback(`Configuração ${isNovaConfiguracao ? 'adicionada' : 'atualizada'} com sucesso!`, 'sucesso');
+        // É importante que a API POST retorne o objeto completo, incluindo o nome do produto (do JOIN)
+        // para que a tabela seja recarregada corretamente se a API não for chamada novamente.
+        // No entanto, a forma mais segura é sempre recarregar da API GET.
+        await carregarConfiguracoesPontos(); 
+        return responseData;
+
+    } catch (error) {
+        console.error('Erro ao salvar configuração:', error);
+        mostrarFeedback(`Erro ao salvar: ${error.message}`, 'erro');
+        return null;
     }
+}
 
     async function excluirConfiguracaoPonto(configId) {
         if (!confirm('Tem certeza que deseja excluir esta configuração de ponto? Esta ação não pode ser desfeita.')) return;
@@ -236,116 +256,123 @@ import { verificarAutenticacao } from '/js/utils/auth.js';
     }
 
     function adicionarLinhaNovaConfiguracao() {
-        if (corpoTabelaPontosPadraoEl.querySelector('tr[data-config-id="novo"]')) {
-            mostrarFeedback("Finalize ou cancele a adição da configuração atual antes de adicionar outra.", "aviso");
-            corpoTabelaPontosPadraoEl.querySelector('tr[data-config-id="novo"] .ppp-input-novo-produto')?.focus();
-            return;
-        }
-
-        const tr = corpoTabelaPontosPadraoEl.insertRow(0);
-        tr.dataset.configId = "novo";
-        tr.classList.add('ppp-nova-linha'); // Para estilização opcional
-
-        const criarCellComSelect = (optionsArray, className, defaultOptionText = "Selecione") => {
-            const cell = tr.insertCell();
-            const select = document.createElement('select');
-            select.className = `ppp-select ppp-select-novo ${className}`;
-            select.add(new Option(defaultOptionText, ""));
-            optionsArray.forEach(opt => {
-                if (typeof opt === 'string') select.add(new Option(opt, opt));
-                else select.add(new Option(opt.texto, opt.valor)); // Para {texto, valor}
-            });
-            cell.appendChild(select);
-            return select;
-        };
-
-        const nomesProdutos = [...new Set(listaDeProdutosDisponiveis.map(p => p.nome))].sort();
-        const selectProduto = criarCellComSelect(nomesProdutos, 'ppp-input-novo-produto', "Selecione Produto");
-
-        const cellProcesso = tr.insertCell();
-        const selectProcesso = document.createElement('select');
-        selectProcesso.className = 'ppp-select ppp-select-novo ppp-input-novo-processo';
-        selectProcesso.disabled = true;
-        cellProcesso.appendChild(selectProcesso);
-
-        const tiposAtividade = [
-            { texto: "Selecione Tipo", valor: "" },
-            { texto: "Costura OP (Costureira)", valor: "costura_op_costureira" },
-            { texto: "Processo OP (Tiktik)", valor: "processo_op_tiktik" },
-            { texto: "Arremate (Tiktik)", valor: "arremate_tiktik" }
-        ];
-        const selectTipoAtividade = criarCellComSelect(tiposAtividade, 'ppp-input-novo-tipo', "Selecione Tipo");
-        
-        const atualizarCamposProcesso = () => {
-            const produtoNome = selectProduto.value;
-            const tipoAtividade = selectTipoAtividade.value;
-            selectProcesso.innerHTML = ''; // Limpa
-            selectProcesso.disabled = true;
-
-            if (tipoAtividade === 'arremate_tiktik') {
-                selectProcesso.add(new Option(NOME_PROCESSO_ARREMATE_PADRAO, NOME_PROCESSO_ARREMATE_PADRAO, true, true));
-                // selectProcesso.disabled = true; // Opcional: desabilitar pois é fixo
-            } else if (produtoNome && (tipoAtividade === 'costura_op_costureira' || tipoAtividade === 'processo_op_tiktik')) {
-                const produtoObj = listaDeProdutosDisponiveis.find(p => p.nome === produtoNome);
-                selectProcesso.add(new Option("Selecione Processo OP", ""));
-                if (produtoObj && Array.isArray(produtoObj.etapas) && produtoObj.etapas.length > 0) {
-                    const etapasRelevantes = produtoObj.etapas; // Usar estas para OPs
-                    etapasRelevantes.forEach(etapa => {
-                        const nomeProc = (typeof etapa === 'object' && etapa.processo) ? etapa.processo : String(etapa);
-                        if(nomeProc) selectProcesso.add(new Option(nomeProc, nomeProc));
-                    });
-                    selectProcesso.disabled = false;
-                } else {
-                     selectProcesso.add(new Option("Produto sem processos OP", ""));
-                }
-            } else {
-                 selectProcesso.add(new Option("----", ""));
-            }
-        };
-        selectProduto.addEventListener('change', atualizarCamposProcesso);
-        selectTipoAtividade.addEventListener('change', atualizarCamposProcesso);
-        // Chamada inicial para o caso de um tipo já estar selecionado (não deve acontecer com "Selecione Tipo")
-        // atualizarCamposProcesso(); 
-
-        const cellPontos = tr.insertCell();
-        const inputPontos = document.createElement('input');
-        inputPontos.type = 'number'; inputPontos.className = 'ppp-input-pontos ppp-input-novo-pontos';
-        inputPontos.value = '1.00'; inputPontos.step = '0.01'; inputPontos.min = '0.01';
-        cellPontos.appendChild(inputPontos);
-
-        const cellAtivo = tr.insertCell();
-        const checkboxAtivo = document.createElement('input');
-        checkboxAtivo.type = 'checkbox'; checkboxAtivo.className = 'ppp-checkbox-ativo ppp-input-novo-ativo';
-        checkboxAtivo.checked = true;
-        cellAtivo.appendChild(checkboxAtivo);
-
-        const cellAcoes = tr.insertCell();
-        const btnSalvarNovo = document.createElement('button');
-        btnSalvarNovo.className = 'ppp-botao ppp-botao-salvar';
-        btnSalvarNovo.innerHTML = '<i class="fas fa-save"></i> Salvar';
-        btnSalvarNovo.title = "Salvar Nova Configuração";
-        btnSalvarNovo.onclick = async () => {
-            await salvarConfiguracaoPonto(
-                'novo',
-                selectProduto.value,
-                selectProcesso.value,
-                selectTipoAtividade.value,
-                inputPontos.value,
-                checkboxAtivo.checked
-            );
-            // A tabela é recarregada pela função salvarConfiguracaoPonto
-        };
-
-        const btnCancelarNovo = document.createElement('button');
-        btnCancelarNovo.className = 'ppp-botao ppp-botao-excluir';
-        btnCancelarNovo.innerHTML = '<i class="fas fa-times"></i> Cancelar';
-        btnCancelarNovo.title = "Cancelar Adição";
-        btnCancelarNovo.onclick = () => tr.remove();
-        
-        cellAcoes.appendChild(btnSalvarNovo);
-        cellAcoes.appendChild(btnCancelarNovo);
-        selectProduto.focus();
+    if (corpoTabelaPontosPadraoEl.querySelector('tr[data-config-id="novo"]')) {
+        mostrarFeedback("Finalize ou cancele a adição da configuração atual antes de adicionar outra.", "aviso");
+        corpoTabelaPontosPadraoEl.querySelector('tr[data-config-id="novo"] .ppp-select-novo.ppp-input-novo-produto')?.focus();
+        return;
     }
+
+    const tr = corpoTabelaPontosPadraoEl.insertRow(0);
+    tr.dataset.configId = "novo";
+    tr.classList.add('ppp-nova-linha');
+
+    const criarCellComSelect = (optionsArray, className, defaultOptionText = "Selecione") => {
+        const cell = tr.insertCell();
+        const select = document.createElement('select');
+        select.className = `ppp-select ppp-select-novo ${className}`;
+        select.add(new Option(defaultOptionText, ""));
+        optionsArray.forEach(opt => {
+            // opt é esperado como { texto: "Nome Produto", valor: ID_DO_PRODUTO }
+            // ou string para tipos de atividade fixos, mas para produtos usamos o objeto.
+            select.add(new Option(opt.texto, opt.valor));
+        });
+        cell.appendChild(select);
+        return select;
+    };
+
+    // Prepara a lista de produtos para o select: { texto: nome, valor: id }
+    const produtosParaSelect = listaDeProdutosDisponiveis
+        .map(p => ({ texto: p.nome, valor: p.id }))
+        .sort((a,b) => a.texto.localeCompare(b.texto));
+    
+    const selectProduto = criarCellComSelect(produtosParaSelect, 'ppp-input-novo-produto', "Selecione Produto");
+
+    const cellProcesso = tr.insertCell();
+    const selectProcesso = document.createElement('select');
+    selectProcesso.className = 'ppp-select ppp-select-novo ppp-input-novo-processo';
+    selectProcesso.disabled = true;
+    cellProcesso.appendChild(selectProcesso);
+
+    const tiposAtividade = [
+        { texto: "Selecione Tipo", valor: "" },
+        { texto: "Costura OP (Costureira)", valor: "costura_op_costureira" },
+        { texto: "Processo OP (Tiktik)", valor: "processo_op_tiktik" },
+        { texto: "Arremate (Tiktik)", valor: "arremate_tiktik" }
+    ];
+    const selectTipoAtividade = criarCellComSelect(tiposAtividade, 'ppp-input-novo-tipo', "Selecione Tipo");
+    
+    const atualizarCamposProcesso = () => {
+        const produtoIdSelecionado = selectProduto.value; // Pega o ID do produto
+        const tipoAtividade = selectTipoAtividade.value;
+        selectProcesso.innerHTML = '';
+        selectProcesso.disabled = true;
+
+        if (tipoAtividade === 'arremate_tiktik') {
+            selectProcesso.add(new Option(NOME_PROCESSO_ARREMATE_PADRAO, NOME_PROCESSO_ARREMATE_PADRAO, true, true));
+            // selectProcesso.disabled = true; // Mantém desabilitado ou habilita se quiser que seja editável (não recomendado)
+        } else if (produtoIdSelecionado && (tipoAtividade === 'costura_op_costureira' || tipoAtividade === 'processo_op_tiktik')) {
+            // Encontra o objeto produto completo usando o ID
+            const produtoObj = listaDeProdutosDisponiveis.find(p => String(p.id) === String(produtoIdSelecionado));
+            selectProcesso.add(new Option("Selecione Processo OP", ""));
+            if (produtoObj && Array.isArray(produtoObj.etapas) && produtoObj.etapas.length > 0) {
+                // Remove duplicados e ordena as etapas/processos do produto selecionado
+                const nomesProcessosUnicos = [...new Set(produtoObj.etapas.map(etapa => 
+                    (typeof etapa === 'object' && etapa.processo) ? etapa.processo : String(etapa)
+                ).filter(Boolean))].sort();
+
+                nomesProcessosUnicos.forEach(nomeProc => {
+                    selectProcesso.add(new Option(nomeProc, nomeProc));
+                });
+                selectProcesso.disabled = false;
+            } else {
+                 selectProcesso.add(new Option("Produto sem processos OP", ""));
+            }
+        } else {
+             selectProcesso.add(new Option("----", ""));
+        }
+    };
+    selectProduto.addEventListener('change', atualizarCamposProcesso);
+    selectTipoAtividade.addEventListener('change', atualizarCamposProcesso);
+
+    const cellPontos = tr.insertCell();
+    const inputPontos = document.createElement('input');
+    inputPontos.type = 'number'; inputPontos.className = 'ppp-input-pontos ppp-input-novo-pontos';
+    inputPontos.value = '1.00'; inputPontos.step = '0.01'; inputPontos.min = '0.01';
+    cellPontos.appendChild(inputPontos);
+
+    const cellAtivo = tr.insertCell();
+    const checkboxAtivo = document.createElement('input');
+    checkboxAtivo.type = 'checkbox'; checkboxAtivo.className = 'ppp-checkbox-ativo ppp-input-novo-ativo';
+    checkboxAtivo.checked = true;
+    cellAtivo.appendChild(checkboxAtivo);
+
+    const cellAcoes = tr.insertCell();
+    const btnSalvarNovo = document.createElement('button');
+    btnSalvarNovo.className = 'ppp-botao ppp-botao-salvar';
+    btnSalvarNovo.innerHTML = '<i class="fas fa-save"></i> Salvar';
+    btnSalvarNovo.title = "Salvar Nova Configuração";
+    btnSalvarNovo.onclick = async () => {
+        // Envia o produtoId (que é o value do selectProduto)
+        await salvarConfiguracaoPonto(
+            'novo',
+            selectProduto.value, // Este agora é o ID do produto
+            selectProcesso.value,
+            selectTipoAtividade.value,
+            inputPontos.value,
+            checkboxAtivo.checked
+        );
+    };
+
+    const btnCancelarNovo = document.createElement('button');
+    btnCancelarNovo.className = 'ppp-botao ppp-botao-excluir';
+    btnCancelarNovo.innerHTML = '<i class="fas fa-times"></i> Cancelar';
+    btnCancelarNovo.title = "Cancelar Adição";
+    btnCancelarNovo.onclick = () => tr.remove();
+    
+    cellAcoes.appendChild(btnSalvarNovo);
+    cellAcoes.appendChild(btnCancelarNovo);
+    selectProduto.focus();
+}
 
     async function init() {
         try {
@@ -366,47 +393,51 @@ import { verificarAutenticacao } from '/js/utils/auth.js';
             if(btnAdicionarNovaConfiguracaoEl) btnAdicionarNovaConfiguracaoEl.addEventListener('click', adicionarLinhaNovaConfiguracao);
 
             if(corpoTabelaPontosPadraoEl) {
-                corpoTabelaPontosPadraoEl.addEventListener('click', async (e) => {
-                    const targetButton = e.target.closest('button.ppp-botao');
-                    if (!targetButton) return;
+            corpoTabelaPontosPadraoEl.addEventListener('click', async (e) => {
+                const targetButton = e.target.closest('button.ppp-botao');
+                if (!targetButton) return;
 
-                    const tr = targetButton.closest('tr');
-                    if (!tr) return;
-                    const configId = tr.dataset.configId;
+                const tr = targetButton.closest('tr');
+                if (!tr) return;
+                const configId = tr.dataset.configId;
 
-                    if (targetButton.classList.contains('ppp-botao-salvar') && configId !== 'novo') {
-                        const produtoNomeOriginal = tr.dataset.produtoNomeOriginal;
-                        const processoNomeOriginal = tr.dataset.processoNomeOriginal;
-                        const tipoAtividadeOriginal = tr.dataset.tipoAtividadeOriginal;
+                if (targetButton.classList.contains('ppp-botao-salvar') && configId !== 'novo') {
+                    const produtoIdOriginal = tr.dataset.produtoIdOriginal; 
+                    const processoNomeOriginal = tr.dataset.processoNomeOriginal;
+                    const tipoAtividadeOriginal = tr.dataset.tipoAtividadeOriginal;
 
-                        const pontosInput = tr.querySelector('.ppp-input-pontos');
-                        const ativoCheckbox = tr.querySelector('.ppp-checkbox-ativo');
+                    const pontosInput = tr.querySelector('.ppp-input-pontos');
+                    const ativoCheckbox = tr.querySelector('.ppp-checkbox-ativo');
 
-                        if (pontosInput && ativoCheckbox) {
-                            const pontosValor = pontosInput.value;
-                            const ativo = ativoCheckbox.checked;
-                            
-                            if (parseFloat(pontosValor) <= 0 || isNaN(parseFloat(pontosValor))) {
-                                mostrarFeedback('Ao editar, os pontos devem ser um número positivo.', 'erro'); return;
-                            }
-                            // Para editar uma linha existente, só atualizamos pontos_padrao e ativo.
-                            // A chave (produto, processo, tipo) não deve ser alterada aqui.
-                            // A API POST com ON CONFLICT fará o UPSERT se a chave for a mesma.
-                            // Se a API PUT /:id fosse usada, ela só atualizaria pontos e ativo.
-                            await salvarConfiguracaoPonto(
-                                configId, // Passar o ID não é estritamente necessário para o POST com UPSERT, mas não prejudica
-                                produtoNomeOriginal, 
-                                processoNomeOriginal, 
-                                tipoAtividadeOriginal, 
-                                pontosValor, 
-                                ativo
-                            );
-                        }
-                    } else if (targetButton.classList.contains('ppp-botao-excluir') && configId !== 'novo') {
-                        await excluirConfiguracaoPonto(configId);
+                    if (pontosInput && ativoCheckbox) {
+                        const pontosValor = pontosInput.value; // Valor lido do input
+                        const ativo = ativoCheckbox.checked;
+
+                        // ---- INÍCIO DO BLOCO DE DEBUG ----
+                        console.log("[Listener Salvar Edição] Tentando salvar. Config ID:", configId);
+                        console.log("[Listener Salvar Edição] Valor lido do input de pontos (pontosValor):", pontosValor, "Tipo:", typeof pontosValor);
+                        console.log("[Listener Salvar Edição] Checkbox 'ativo':", ativo);
+                        // ---- FIM DO BLOCO DE DEBUG ----
+                        
+                        // A validação original estava aqui, mas é melhor centralizar em salvarConfiguracaoPonto
+                        // if (parseFloat(pontosValor) <= 0 || isNaN(parseFloat(pontosValor))) {
+                        //     mostrarFeedback('Ao editar, os pontos devem ser um número positivo.', 'erro'); return;
+                        // }
+
+                        await salvarConfiguracaoPonto(
+                            configId, 
+                            produtoIdOriginal, 
+                            processoNomeOriginal, 
+                            tipoAtividadeOriginal, 
+                            pontosValor, // Passa o valor lido
+                            ativo
+                        );
                     }
-                });
-            }
+                } else if (targetButton.classList.contains('ppp-botao-excluir') && configId !== 'novo') {
+                    await excluirConfiguracaoPonto(configId);
+                }
+            });
+        }
         } catch (error) {
             console.error("Erro na inicialização da página de Pontos por Processo:", error);
             document.body.innerHTML = `<p style="color: red; padding: 20px;">Erro crítico ao carregar a página: ${error.message || 'Erro desconhecido'}. Verifique o console.</p>`;

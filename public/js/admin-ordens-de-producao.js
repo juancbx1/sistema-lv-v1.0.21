@@ -281,17 +281,35 @@ window.limparCacheCortes = limparCacheCortes;
 async function loadProdutosSelect() {
     const produtoSelect = document.getElementById('produtoOP');
     if (!produtoSelect) return;
-    produtoSelect.disabled = true; produtoSelect.innerHTML = '<option value="">Carregando...</option>';
+
+    produtoSelect.disabled = true;
+    // Define o texto de carregamento uma vez
+    const placeholderOption = produtoSelect.querySelector('option[value=""]');
+    if (placeholderOption) {
+        placeholderOption.textContent = 'Carregando produtos...';
+    } else {
+        produtoSelect.innerHTML = '<option value="">Carregando produtos...</option>';
+    }
+
     try {
-        const produtos = await obterProdutosDoStorage();
-        produtoSelect.innerHTML = '<option value="">Selecione produto</option>';
+        const produtos = await obterProdutosDoStorage(); // Deve usar o cache fresco
+        
+        produtoSelect.innerHTML = '<option value="">Selecione produto</option>'; // Placeholder final
+        
         produtos.filter(p => CONST_PRODUTOS.includes(p.nome) && !CONST_PRODUTOSKITS.includes(p.nome))
-                .forEach(p => produtoSelect.add(new Option(p.nome, p.nome)));
+                .forEach(p => {
+                    const option = new Option(p.nome, p.id);
+                    produtoSelect.appendChild(option);
+                });
+    } catch (e) {
+        console.error("[loadProdutosSelect] Erro:", e);
+        produtoSelect.innerHTML = '<option value="">Erro ao carregar</option>';
+    } finally {
         produtoSelect.disabled = false;
-    } catch (e) { produtoSelect.innerHTML = '<option value="">Erro</option>'; produtoSelect.disabled = false; }
+    }
 }
 
-async function loadVariantesSelects(produtoNome, produtosDisponiveisRecebidos) {
+async function loadVariantesSelects(produtoId, produtosDisponiveisRecebidos) {
     const variantesContainer = document.getElementById('variantesContainer');
     const variantesSelectsDiv = document.querySelector('#opFormView .variantes-selects');
     const infoCorteContainer = document.getElementById('infoCorteContainer');
@@ -308,6 +326,7 @@ async function loadVariantesSelects(produtoNome, produtosDisponiveisRecebidos) {
         return;
     }
 
+    // Limpa a UI
     variantesSelectsDiv.innerHTML = '';
     variantesContainer.style.display = 'none';
     if (infoCorteContainer) {
@@ -316,17 +335,24 @@ async function loadVariantesSelects(produtoNome, produtosDisponiveisRecebidos) {
     }
     camposDependentesPrincipais.forEach(el => el.style.display = 'none');
 
-    if (!produtoNome) {
+    // Se nenhum produtoId foi passado, para aqui.
+    if (!produtoId) {
         console.log('[loadVariantesSelects] Nenhum produto selecionado.');
         return;
     }
 
-    const produto = produtosDisponiveisRecebidos.find(p => p.nome === produtoNome);
+    // AQUI ESTÁ A CORREÇÃO:
+    // Compara o p.id (que é um número) com o produtoId (que vem do select como string).
+    // Usar '==' faz a conversão de tipo automaticamente, o que é seguro neste caso.
+    const produto = produtosDisponiveisRecebidos.find(p => p.id == produtoId);
+
     if (!produto) {
-        console.warn(`[loadVariantesSelects] Produto "${produtoNome}" não encontrado na lista de produtos fornecida.`);
+        // Esta mensagem de erro agora faz mais sentido
+        console.warn(`[loadVariantesSelects] Produto com ID "${produtoId}" não encontrado na lista de produtos fornecida.`);
         return;
     }
 
+    // O resto da sua função para popular o select de variantes continua igual...
     let listaDeVariantesParaSelect = [];
     if (produto.variantes && produto.variantes.length > 0) {
         listaDeVariantesParaSelect = produto.variantes.map(v => v.valores.split(',')).flat().map(v => v.trim()).filter(Boolean);
@@ -340,35 +366,17 @@ async function loadVariantesSelects(produtoNome, produtosDisponiveisRecebidos) {
         selectVariante.innerHTML = '<option value="">Selecione uma variação</option>';
         
         listaDeVariantesParaSelect.forEach(variante => {
-            const option = new Option(variante, variante);
-            selectVariante.appendChild(option);
+            selectVariante.appendChild(new Option(variante, variante));
         });
         
         variantesSelectsDiv.appendChild(selectVariante);
         variantesContainer.style.display = 'block';
 
         selectVariante.addEventListener('change', async () => {
-            const varianteSelecionada = selectVariante.value;
-            if (varianteSelecionada) {
-                await verificarCorteEAtualizarFormOP();
-            } else {
-                console.log('[selectVariante change] Nenhuma variante selecionada. Limpando campos dependentes.');
-                if (infoCorteContainer) {
-                    infoCorteContainer.innerHTML = '';
-                    infoCorteContainer.style.display = 'none';
-                }
-                camposDependentesPrincipais.forEach(el => el.style.display = 'none');
-                corteDeEstoqueSelecionadoId = null;
-                const quantidadeOPInput = document.getElementById('quantidadeOP');
-                if (quantidadeOPInput) {
-                    quantidadeOPInput.value = '';
-                    quantidadeOPInput.disabled = false;
-                    quantidadeOPInput.style.backgroundColor = '';
-                }
-            }
+            await verificarCorteEAtualizarFormOP();
         });
     } else {
-        console.log(`[loadVariantesSelects] Produto "${produtoNome}" não possui variantes configuradas.`);
+        console.log(`[loadVariantesSelects] Produto "${produto.nome}" não possui variantes configuradas.`);
         variantesContainer.style.display = 'none';
     }
 }
@@ -408,207 +416,205 @@ function limparFormularioOP() {
 
 
 async function verificarCorteEAtualizarFormOP() {
-    const prodNome = document.getElementById('produtoOP').value;
-    const varSel = document.querySelector('#opFormView .variantes-selects select');
-    const varVal = varSel ? varSel.value : '';
-    const qtdIn = document.getElementById('quantidadeOP'), numOPIn = document.getElementById('numeroOP');
-    const dataEntIn = document.getElementById('dataEntregaOP'), obsIn = document.getElementById('observacoesOP');
-    const infoCorte = document.getElementById('infoCorteContainer');
-    corteDeEstoqueSelecionadoId = null;
+    const produtoSelect = document.getElementById('produtoOP');
+    const produtoId = produtoSelect.value;
+    const varianteSelect = document.querySelector('#opFormView .variantes-selects select');
+    // Se o select de variante não existe (para produtos sem variante), o valor é ''.
+    const varianteValor = varianteSelect ? varianteSelect.value : '';
 
-    // AQUI É A MUDANÇA: Certifique-se de que os elementos existam e tenham parentElement antes de manipulá-los.
-    // E que a lógica de display: none/block seja mais controlada.
-    const camposDep = [
-        qtdIn?.parentElement,
-        numOPIn?.parentElement,
-        dataEntIn?.parentElement,
-        obsIn?.parentElement,
-        infoCorte
+    const quantidadeInput = document.getElementById('quantidadeOP');
+    const numeroInput = document.getElementById('numeroOP');
+    const dataEntregaInput = document.getElementById('dataEntregaOP');
+    const observacoesInput = document.getElementById('observacoesOP');
+    const infoCorteContainer = document.getElementById('infoCorteContainer');
+    
+    // Container dos campos que devem aparecer
+    const camposDependentes = [
+        quantidadeInput?.parentElement,
+        numeroInput?.parentElement,
+        dataEntregaInput?.parentElement,
+        observacoesInput?.parentElement
     ].filter(Boolean);
 
-    // Esconde todos os campos dependentes no início, para ter certeza
-    camposDep.forEach(el => {
-        if (el) { // Certifique-se que o elemento existe
-            el.style.display = 'none';
-        }
-    });
-    if (infoCorte) infoCorte.innerHTML = '';
+    // Esconde tudo primeiro para garantir um estado limpo
+    camposDependentes.forEach(el => el.style.display = 'none');
+    if (infoCorteContainer) infoCorteContainer.innerHTML = '';
+    corteDeEstoqueSelecionadoId = null;
 
-    if (!prodNome) return;
+    if (!produtoId) return; // Se não há produto, não faz nada
+
     const produtos = await obterProdutosDoStorage();
-    const prodObj = produtos.find(p => p.nome === prodNome); if (!prodObj) return;
-    const temVar = (prodObj.variantes?.length || prodObj.grade?.length);
-    if (temVar && !varVal) return;
+    const produtoObj = produtos.find(p => p.id == produtoId);
+    if (!produtoObj) return;
 
-    if (infoCorte) { infoCorte.innerHTML = '<div class="spinner">Verificando...</div>'; infoCorte.style.display = 'block';}
+    const produtoTemVariantes = produtoObj.variantes?.length > 0 || produtoObj.grade?.length > 0;
+    // Se o produto tem variantes, mas nenhuma foi selecionada ainda, não faz nada.
+    if (produtoTemVariantes && !varianteValor) {
+        console.log(`[verificarCorte] Produto ${produtoObj.nome} requer variante, mas nenhuma foi selecionada.`);
+        return;
+    }
+
+    // A partir daqui, temos um produto e, se necessário, uma variante.
+    console.log(`[verificarCorte] Verificando estoque de corte para ${produtoObj.nome} - ${varianteValor || 'Sem variante'}`);
+    
+    if (infoCorteContainer) {
+        infoCorteContainer.innerHTML = '<div class="spinner">Verificando estoque de corte...</div>';
+        infoCorteContainer.style.display = 'block';
+    }
+
     try {
         const cortados = await obterCortes('cortados');
-        const estoque = cortados.find(c => c.produto === prodNome && (temVar ? c.variante === varVal : true) && !c.op);
-        if (infoCorte) infoCorte.innerHTML = ''; // Limpa o spinner
+        const estoque = cortados.find(c => 
+            c.produto_id == produtoId &&
+            (produtoTemVariantes ? c.variante === varianteValor : true) &&
+            !c.op // Garante que é um corte que ainda não foi usado em nenhuma OP
+        );
+
+        if (infoCorteContainer) infoCorteContainer.innerHTML = '';
 
         if (estoque) {
             corteDeEstoqueSelecionadoId = estoque.id;
-            // Renomeando PN para PC na mensagem
-            if (infoCorte) infoCorte.innerHTML = `<p style="color:green;font-weight:bold;"><i class="fas fa-check-circle"></i> Corte em estoque! (PC: ${estoque.pn||'N/A'}, Qtd: ${estoque.quantidade})</p><p>Qtd da OP definida.</p>`;
-            if (qtdIn) { qtdIn.value = estoque.quantidade; qtdIn.disabled = true; qtdIn.style.backgroundColor = '#e9ecef'; }
+            if (infoCorteContainer) infoCorteContainer.innerHTML = `<p class="op-feedback-sucesso"><i class="fas fa-check-circle"></i> Corte em estoque! (PC: ${estoque.pn || 'N/A'}, Qtd: ${estoque.quantidade})</p>`;
+            if (quantidadeInput) {
+                quantidadeInput.value = estoque.quantidade;
+                quantidadeInput.disabled = true;
+                quantidadeInput.style.backgroundColor = '#e9ecef';
+            }
         } else {
-            // ----> AQUI ESTÁ A MUDANÇA PRINCIPAL <----
             const token = localStorage.getItem('token');
-            const response = await fetch('/api/cortes/next-pc-number', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await fetch('/api/cortes/next-pc-number', { headers: { 'Authorization': `Bearer ${token}` } });
             if (!response.ok) throw new Error('Falha ao buscar próximo número de PC.');
             const data = await response.json();
             const proximoPC = data.nextPC;
             
-            // Renomeando PN para PC e usando o número sequencial
-            if (infoCorte) { 
-            // Mensagem para o usuário continua usando "PC" para clareza
-            infoCorte.innerHTML = `<p style="color:orange;font-weight:bold;"><i class="fas fa-exclamation-triangle"></i> Nenhum corte em estoque.</p><p>Novo Pedido de Corte (PC: ${proximoPC}) será gerado.</p>`; 
-            // Salvamos o número puro no dataset
-            infoCorte.dataset.pcGerado = proximoPC;
+            if (infoCorteContainer) {
+                infoCorteContainer.innerHTML = `<p class="op-feedback-aviso"><i class="fas fa-exclamation-triangle"></i> Novo Pedido de Corte (PC: ${proximoPC}) será gerado.</p>`;
+                infoCorteContainer.dataset.pcGerado = proximoPC;
             }
-            if (qtdIn) { qtdIn.value = ''; qtdIn.disabled = false; qtdIn.style.backgroundColor = ''; qtdIn.placeholder = 'Qtd'; }
+            if (quantidadeInput) {
+                quantidadeInput.value = '';
+                quantidadeInput.disabled = false;
+                quantidadeInput.style.backgroundColor = '';
+                quantidadeInput.placeholder = 'Qtd a produzir';
+            }
         }
 
-
-        // AGORA, TORNE OS PARENTES VISÍVEIS ANTES DE ATUALIZAR OS VALORES
-        camposDep.forEach(el => {
-            if (el) { // Certifique-se que o elemento existe
-                el.style.display = 'block';
-            }
-        });
+        // AGORA, TORNA OS CAMPOS VISÍVEIS
+        camposDependentes.forEach(el => el.style.display = 'block');
         
-        // E SÓ AGORA PREENCHA OS VALORES
-        if (numOPIn) numOPIn.value = await getNextOPNumber();
-        if (dataEntIn) setCurrentDate(dataEntIn);
+        // E PREENCHE OS VALORES RESTANTES
+        if (numeroInput) numeroInput.value = await getNextOPNumber();
+        if (dataEntregaInput) setCurrentDate(dataEntregaInput);
 
     } catch (e) {
-        if (infoCorte) infoCorte.innerHTML = `<p style="color:red">Erro: ${e.message}</p>`;
-        if (qtdIn) { qtdIn.value = ''; qtdIn.disabled = false; }
-        // Se houver erro, garanta que os campos ainda fiquem escondidos ou com status de erro.
-        camposDep.forEach(el => {
-            if (el) { el.style.display = 'none'; } // Esconde novamente em caso de erro
-        });
+        if (infoCorteContainer) infoCorteContainer.innerHTML = `<p class="op-feedback-erro">Erro: ${e.message}</p>`;
+        camposDependentes.forEach(el => el.style.display = 'none');
     }
 }
 
 // --- CRUD ORDENS DE PRODUÇÃO ---
 async function salvarOrdemDeProducao(ordem) {
     const token = localStorage.getItem('token');
-    console.log('[salvarOrdemDeProducao] Enviando:', ordem);
-    const response = await fetch('/api/ordens-de-producao', { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(ordem) });
+    // A rota no backend já espera produto_id, então o objeto 'ordem' já está correto
+    const response = await fetch('/api/ordens-de-producao', { 
+        method: 'POST', 
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(ordem) 
+    });
     if (!response.ok) {
-        const errorText = await response.text(); console.error('[salvarOrdemDeProducao] Erro Servidor:', errorText);
-        let errorJson = { error: 'Erro desconhecido' }; try { errorJson = JSON.parse(errorText); } catch (e) { errorJson.error = errorText.substring(0,150); }
-        throw new Error(`Erro ao salvar OP: ${errorJson.error}`);
-    } return await response.json();
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }));
+        throw new Error(`Erro ao salvar OP: ${errorData.error}`);
+    }
+    return await response.json();
 }
 
 window.saveOPChanges = async function saveOPChangesGlobal(op) {
-    console.log(`[saveOPChangesGlobal] Atualizando OP #${op.numero}, Status: ${op.status}`);
+    console.log(`[saveOPChanges] Atualizando OP #${op.numero} com ID ${op.produto_id}`);
+    
+    // VERIFICAÇÃO DE SEGURANÇA
+    if (!op.produto_id) {
+        console.error("[saveOPChanges] ERRO CRÍTICO: Tentando atualizar uma OP sem produto_id.", op);
+        throw new Error("Não é possível atualizar uma OP sem um ID de produto válido.");
+    }
+    
     const token = localStorage.getItem('token');
+    
     const payload = { 
-        edit_id: op.edit_id, numero: op.numero, produto: op.produto, variante: op.variante, 
-        quantidade: parseInt(op.quantidade) || 0, data_entrega: op.data_entrega, 
-        observacoes: op.observacoes, status: op.status, etapas: op.etapas, data_final: op.data_final 
+        edit_id: op.edit_id, 
+        numero: op.numero, 
+        produto_id: op.produto_id, // << MUDANÇA ESSENCIAL: Envia o ID
+        variante: op.variante, 
+        quantidade: parseInt(op.quantidade) || 0, 
+        data_entrega: op.data_entrega, 
+        observacoes: op.observacoes, 
+        status: op.status, 
+        etapas: op.etapas, 
+        data_final: op.data_final 
     };
+
+    // A API de PUT não precisa mais de /:id na URL, ela pega o edit_id do corpo
     const response = await fetch('/api/ordens-de-producao', { 
         method: 'PUT', 
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, 
         body: JSON.stringify(payload) 
     });
+
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido ao atualizar OP.' }));
-        console.error(`[saveOPChangesGlobal] Erro ao atualizar OP #${op.numero}:`, errorData);
+        console.error(`[saveOPChanges] Erro ao atualizar OP #${op.numero}:`, errorData);
         throw new Error(`Erro ao atualizar OP: ${errorData.error}`);
     }
-    console.log(`[saveOPChangesGlobal] OP #${op.numero} atualizada.`);
+
+    console.log(`[saveOPChanges] OP #${op.numero} atualizada com sucesso.`);
     return await response.json();
 };
 
 // --- CRUD CORTES ---
 
 async function salvarCorte() {
-     const produtoNomeInput = document.getElementById('produtoCorte');
+    const produtoCorteSelect = document.getElementById('produtoCorte'); // Agora é um <select>
     const varianteSelectEl = document.querySelector('#corteView .variantes-selects-corte select');
     const quantidadeInput = document.getElementById('quantidadeCorte');
     const dataCorteInput = document.getElementById('dataCorte');
     const cortadorInput = document.getElementById('cortadorCorte');
-
-       // ==========================================================
-    // >> CORREÇÃO AQUI: PEGAMOS O pcNumber JUNTO COM OS OUTROS <<
-    // ==========================================================
     const pcNumberInput = document.getElementById('pcNumberCorte');
     const pcNumber = pcNumberInput ? pcNumberInput.value : null;
     
-    // Checagem de permissão no frontend
     if (!permissoes.includes('registrar-corte')) {
         mostrarPopupMensagem('Você não tem permissão para registrar cortes.', 'erro');
         return;
     }
 
-    const produtoNome = produtoNomeInput.value;
+    // --- COLETA DE DADOS CORRIGIDA ---
+    const produtoId = produtoCorteSelect.value; // Pega o ID
     const varianteValor = varianteSelectEl ? varianteSelectEl.value : '';
     const quantidade = parseInt(quantidadeInput.value) || 0;
     const dataCorte = dataCorteInput.value;
     const cortador = cortadorInput.value;
 
+    // --- VALIDAÇÃO ---
     let erros = [];
-
-    if (!pcNumber) {
-        erros.push("Não foi possível obter um número de PC. Tente recarregar a página.");
-    }
-    if (!produtoNome) {
-        erros.push("Produto não selecionado");
-    }
-    if (quantidade <= 0) {
-        erros.push("Quantidade deve ser maior que zero");
-    }
-    if (!dataCorte) {
-        erros.push("Data do Corte não preenchida");
-    }
-    if (!cortador) {
-        erros.push("Cortador não definido");
-    }
-
-    let produtoObj = null;
-    if (produtoNome && erros.length === 0) {
-        try {
-            const todosOsProdutos = await obterProdutosDoStorage();
-            if (!todosOsProdutos || todosOsProdutos.length === 0) {
-                erros.push("Não foi possível carregar a lista de produtos para validação.");
-            } else {
-                produtoObj = todosOsProdutos.find(p => p.nome === produtoNome);
-                if (!produtoObj) {
-                    erros.push(`Produto "${produtoNome}" selecionado é inválido.`);
-                } else {
-                    const produtoRealmenteTemVariantes = (produtoObj.variantes?.length > 0 || produtoObj.grade?.length > 0);
-                    if (produtoRealmenteTemVariantes && !varianteValor) {
-                        erros.push("Variação não selecionada para este produto.");
-                    }
-                }
-            }
-        } catch (error) {
-            console.error("[salvarCorte] Erro ao obter produtos para validação:", error);
-            erros.push("Erro ao validar produto. Tente novamente.");
-        }
-    }
-
+    if (!pcNumber) erros.push("Não foi possível obter um número de PC. Tente recarregar a página.");
+    if (!produtoId) erros.push("Produto não selecionado");
+    if (quantidade <= 0) erros.push("Quantidade deve ser maior que zero");
+    if (!dataCorte) erros.push("Data do Corte não preenchida");
+    if (!cortador) erros.push("Cortador não definido");
+    
     if (erros.length > 0) {
         mostrarPopupMensagem(`Por favor, corrija: ${erros.join('; ')}.`, 'erro');
         return;
     }
 
+    // --- MONTAGEM DO OBJETO CORRIGIDO ---
     const corteData = {
-        produto: produtoNome,
-        variante: (produtoObj && (produtoObj.variantes?.length > 0 || produtoObj.grade?.length > 0)) ? (varianteValor || null) : null,
+        produto_id: parseInt(produtoId), // << MUDANÇA PRINCIPAL
+        variante: varianteValor || null,
         quantidade,
         data: dataCorte,
         cortador,
-        pn: pcNumber, // << USA A VARIÁVEL pcNumber CORRETAMENTE
-        status: 'cortados',
-        op: null
+        pn: pcNumber,
+        status: 'cortados', // Status para corte de estoque direto
+        op: null // Sem OP associada, pois é para estoque
     };
 
     const btnSalvar = document.getElementById('btnCortar');
@@ -1174,18 +1180,26 @@ async function toggleView() {
                 const response = await fetch(`/api/ordens-de-producao/${encodeURIComponent(editIdFromHash)}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({ error: `Erro HTTP ${response.status}.` }));
                     throw new Error(`Erro ao carregar OP para edição: ${errorData.error || JSON.stringify(errorData)}`);
                 }
+                
                 const opParaEditar = await response.json();
-
                 if (opParaEditar) {
                     console.log(`[toggleView #editar] OP encontrada:`, opParaEditar);
-                    limparCacheOrdens();
-
+                    
                     if (opNumeroTitle) opNumeroTitle.textContent = `OP n°: ${opParaEditar.numero}`;
-                    if (editProdutoOPInput) editProdutoOPInput.value = opParaEditar.produto || '';
+                    
+                    const editProdutoOPInput = document.getElementById('editProdutoOP');
+                    if (editProdutoOPInput) {
+                        // **A API GET /:id já retorna 'produto' com o nome, então isso deve funcionar**
+                        editProdutoOPInput.value = opParaEditar.produto || 'Produto não encontrado'; 
+                        editProdutoOPInput.disabled = true;
+                    }
+                    
+                    
                     if (editVarianteContainer && editVarianteInput) {
                         if (opParaEditar.variante) {
                             editVarianteInput.value = opParaEditar.variante;
@@ -1216,12 +1230,15 @@ async function toggleView() {
             console.warn('[toggleView] Elemento opEditView não encontrado no DOM.');
         }
     } else if (hash === '#adicionar') {
-        if (permissoes.includes('criar-op')) {
-            if (views.opFormView) {
-                views.opFormView.style.display = 'block';
-                limparFormularioOP(); 
-                await loadProdutosSelect(); 
-                await loadVariantesSelects('');
+    if (permissoes.includes('criar-op')) {
+        if (views.opFormView) {
+            views.opFormView.style.display = 'block';
+            limparFormularioOP();
+            // FORÇA A ATUALIZAÇÃO DO CACHE ANTES DE POPULAR O SELECT
+            console.log("[toggleView #adicionar] Forçando atualização de produtos do storage...");
+            await obterProdutosDoStorage(true);
+            await loadProdutosSelect();
+            await loadVariantesSelects('');
             } else {
                 console.warn('[toggleView] Elemento opFormView não encontrado no DOM.');
             }
@@ -1232,18 +1249,22 @@ async function toggleView() {
             window.location.hash = ''; // Redireciona para a lista principal
         }
     } else if (hash === '#corte') {
-        if (permissoes.includes('registrar-corte')) { // Permissão para registrar corte
-            if (views.corteView) {
-                views.corteView.style.display = 'block';
-                limparFormularioCorte();
-                await loadProdutosCorte();
-                setCurrentDateForCorte();
+    if (permissoes.includes('registrar-corte')) {
+        if (views.corteView) {
+            views.corteView.style.display = 'block';
+            limparFormularioCorte();
+            // FORÇA A ATUALIZAÇÃO DO CACHE ANTES DE POPULAR O SELECT
+            console.log("[toggleView #corte] Forçando atualização de produtos do storage...");
+            await obterProdutosDoStorage(true);
+            await loadProdutosCorte();
+            setCurrentDateForCorte();
                 const produtoCorteSelect = document.getElementById('produtoCorte');
                 if (produtoCorteSelect && !produtoCorteSelect.dataset.eventAttached) {
-                     produtoCorteSelect.addEventListener('change', async (e) => {
-                         await loadVariantesCorte(e.target.value);
-                     });
-                     produtoCorteSelect.dataset.eventAttached = 'true';
+                    produtoCorteSelect.addEventListener('change', async (e) => {
+                        // e.target.value agora é o ID do produto, o que está correto para a nova função.
+                        await loadVariantesCorte(e.target.value);
+                    });
+                    produtoCorteSelect.dataset.eventAttached = 'true';
                 }
                 await loadVariantesCorte('');
             } else {
@@ -1396,6 +1417,9 @@ async function loadOPTable(
             usarNoStatusFilterAPI,
             search
         );
+
+        // LOG DE DEPURAÇÃO: Vamos ver o que a API está realmente retornando.
+        console.log("Dados recebidos em loadOPTable:", data.rows);
 
         if (!data || !Array.isArray(data.rows)) {
             console.error('[loadOPTable] ERRO: Dados de OPs retornados pela API são inválidos ou data.rows não é um array. Valor de data.rows:', data.rows);
@@ -1626,14 +1650,14 @@ function ordenarOPs(ops, criterio, ordem = 'asc') {
 }
 
 // --- FUNÇÕES DE ETAPAS ---
-async function getTipoUsuarioPorProcesso(processo, produtoNome) {
-    const cacheKey = `${produtoNome}-${processo}`;
+async function getTipoUsuarioPorProcesso(processo, produtoId) { // <== RECEBE ID
+    const cacheKey = `${produtoId}-${processo}`; // Cache por ID
     if (tipoUsuarioProcessoCache.has(cacheKey)) {
         return tipoUsuarioProcessoCache.get(cacheKey);
     }
 
     const todosOsProdutos = await obterProdutosDoStorage();
-    const produto = todosOsProdutos.find(p => p.nome === produtoNome);
+    const produto = todosOsProdutos.find(p => p.id == produtoId); // <== USA ID
     let tipoUsuario = '';
     if (produto && produto.etapas) {
         const etapaConfig = produto.etapas.find(e => (typeof e === 'object' ? e.processo : e) === processo);
@@ -1674,7 +1698,7 @@ async function loadEtapasEdit(op, skipReload = false) {
         ]);
         const todosCortes = [...cortesPendentes, ...cortesCortados, ...cortesVerificados, ...cortesUsados];
 
-        const produtoConfig = produtos.find(p => p.nome === op.produto);
+        const produtoConfig = produtos.find(p => p.id == op.produto_id);
         if ((!op.etapas || !Array.isArray(op.etapas) || op.etapas.length === 0) && produtoConfig && produtoConfig.etapas && Array.isArray(produtoConfig.etapas)) {
             op.etapas = produtoConfig.etapas.map(eInfo => {
                 const processoNome = typeof eInfo === 'object' ? eInfo.processo : eInfo;
@@ -1727,7 +1751,7 @@ async function loadEtapasEdit(op, skipReload = false) {
                 if (op.status === 'em-aberto' || !op.etapas[corteEtapaIndex].lancado) {
                     corteParaUsar = todosCortes.find(c =>
                         !c.op &&
-                        c.produto === op.produto &&
+                        c.produto_id == op.produto_id && 
                         (c.variante || null) === (op.variante || null) &&
                         ['cortados', 'verificado', 'usado'].includes(c.status) &&
                         c.quantidade >= op.quantidade
@@ -1839,7 +1863,7 @@ async function loadEtapasEdit(op, skipReload = false) {
                     row.appendChild(linkDiv);
                 }
             } else {
-                const tipoUsuarioEtapa = await getTipoUsuarioPorProcesso(etapa.processo, op.produto);
+                const tipoUsuarioEtapa = await getTipoUsuarioPorProcesso(etapa.processo, op.produto_id);
                 const exigeQtd = tipoUsuarioEtapa === 'costureira' || tipoUsuarioEtapa === 'tiktik';
 
                 const userSelect = document.createElement('select');
@@ -1939,44 +1963,118 @@ async function loadEtapasEdit(op, skipReload = false) {
     }
 }
 
-async function salvarProducao(op, etapa, etapaIndex) {
-    if (!etapa.usuario) throw new Error(`Funcionário não selecionado para ${etapa.processo}`);
-    const todosOsProdutos = await obterProdutosDoStorage();
-    const produtoConfig = todosOsProdutos.find(p => p.nome === op.produto);
-    if (!produtoConfig) throw new Error(`Produto ${op.produto} não encontrado.`);
-    if (produtoConfig.tipos?.includes('kits')) throw new Error(`${op.produto} é kit, sem etapas.`);
-    const etapaProdutoConfig = produtoConfig.etapas?.[etapaIndex];
-    if (!etapaProdutoConfig || (typeof etapaProdutoConfig === 'object' ? etapaProdutoConfig.processo : etapaProdutoConfig) !== etapa.processo) throw new Error(`Etapa ${etapa.processo} inválida.`);
-    const maquina = typeof etapaProdutoConfig === 'object' ? etapaProdutoConfig.maquina : null;
-    if (!maquina && (await getTipoUsuarioPorProcesso(etapa.processo, op.produto) !== 'tiktik') ) throw new Error(`Máquina não definida para ${etapa.processo}`);
+async function salvarProducao(op, etapa, etapaIndex) { // etapaIndex ainda é útil para atualizar op.etapas[etapaIndex]
+    console.log("[salvarProducao] Iniciando. Objeto OP recebido:", op, "Etapa:", etapa, "EtapaIndex:", etapaIndex);
+
+    if (!op.produto_id) {
+        throw new Error("ERRO CRÍTICO: Não foi possível identificar o produto da OP. Recarregue a página e tente novamente.");
+    }
+    if (!etapa.usuario) {
+        throw new Error(`Funcionário não selecionado para a etapa "${etapa.processo}"`);
+    }
+
+    const tipoUsuario = await getTipoUsuarioPorProcesso(etapa.processo, op.produto_id);
+    const exigeQtd = tipoUsuario === 'costureira' || tipoUsuario === 'tiktik';
+
+    if (exigeQtd && (!etapa.quantidade || parseInt(etapa.quantidade) <= 0)) {
+        throw new Error('A quantidade para esta etapa deve ser um número positivo.');
+    }
+    
+    // 2. Montagem do objeto de dados para a API
+    const produtoConfig = (await obterProdutosDoStorage()).find(p => p.id == op.produto_id);
+
+    if (!produtoConfig || !produtoConfig.etapas || !Array.isArray(produtoConfig.etapas)) {
+        console.error(`[salvarProducao] Configuração do produto (ID: ${op.produto_id}) ou suas etapas não encontradas.`);
+        // Decida como tratar: erro ou máquina padrão? Por ora, erro para forçar a correção da config.
+        throw new Error(`Configuração de etapas não encontrada para o produto ID ${op.produto_id}. Verifique o cadastro do produto.`);
+    }
+
+    // ***** INÍCIO DA MUDANÇA CRUCIAL *****
+    // Encontrar a configuração da etapa em produtoConfig pelo NOME DO PROCESSO
+    const etapaConfigNoProduto = produtoConfig.etapas.find(eConfig => {
+        const nomeProcessoConfig = typeof eConfig === 'object' ? eConfig.processo : eConfig;
+        return nomeProcessoConfig === etapa.processo;
+    });
+
+    let maquinaParaSalvar = null;
+    if (etapaConfigNoProduto && typeof etapaConfigNoProduto === 'object' && etapaConfigNoProduto.maquina) {
+        maquinaParaSalvar = etapaConfigNoProduto.maquina;
+    } else {
+        // Se a etapa de configuração não for encontrada ou não tiver 'maquina'
+        // OU se a 'etapa' do produto for apenas uma string de processo (sem objeto de máquina)
+        // Você precisa decidir o que fazer. Se máquina é obrigatória, lance um erro.
+        // Se pode haver etapas sem máquina e o banco permite NULL (o que não é o seu caso atual),
+        // aqui seria null. Como o banco NÃO permite null, precisamos de um valor ou um erro.
+        console.warn(`[salvarProducao] Máquina não definida na configuração do produto (ID: ${op.produto_id}) para o processo "${etapa.processo}".`);
+        // Se a máquina é absolutamente necessária e não pode ser null:
+        throw new Error(`Máquina não configurada para o processo "${etapa.processo}" do produto ID ${op.produto_id}. Verifique o cadastro do produto.`);
+        // Ou, se você tivesse um valor padrão para "Não Usa" e o banco aceitasse:
+        // maquinaParaSalvar = "Não Usa";
+    }
+    console.log(`[salvarProducao] Máquina determinada para o processo "${etapa.processo}": ${maquinaParaSalvar}`);
+    // ***** FIM DA MUDANÇA CRUCIAL *****
 
     const dados = {
         id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        opNumero: op.numero, etapaIndex, processo: etapa.processo, produto: op.produto,
-        variacao: op.variante || null, maquina, quantidade: parseInt(etapa.quantidade) || 0,
-        funcionario: etapa.usuario, data: new Date().toLocaleString('sv', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T'),
+        opNumero: op.numero,
+        etapaIndex, // O etapaIndex original ainda é útil para saber qual etapa da OP foi lançada
+        processo: etapa.processo,
+        produto_id: op.produto_id,
+        variacao: op.variante || null,
+        maquina: maquinaParaSalvar, // Usa a máquina encontrada pela busca por nome do processo
+        quantidade: parseInt(etapa.quantidade) || 0,
+        funcionario: etapa.usuario,
+        data: new Date().toLocaleString('sv', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T'),
         lancadoPor: usuarioLogado?.nome || 'Sistema'
     };
-    Object.entries(dados).forEach(([key, value]) => { if (value === undefined || value === null && !['variacao', 'maquina'].includes(key)) throw new Error(`${key} não informado.`); });
-    if (dados.quantidade <= 0 && (await getTipoUsuarioPorProcesso(etapa.processo, op.produto) !== 'tiktik') ) throw new Error('Quantidade inválida.');
 
+    console.log("[salvarProducao] Objeto de dados pronto para ser enviado para /api/producoes:", dados);
 
-    const response = await fetch('/api/producoes', { method: 'POST', headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json'}, body: JSON.stringify(dados)});
+    const response = await fetch('/api/producoes', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(dados)
+    });
+
     if (!response.ok) {
-        const error = await response.json().catch(() => ({error: `HTTP ${response.status}`}));
-        if (error.details === 'jwt expired') { throw new Error('Sessão expirada');}
-        if (response.status === 403) throw new Error('Permissão negada para lançar.');
-        if (response.status === 409) { mostrarPopupMensagem('Lançamento duplicado detectado.', 'aviso'); return null; }
-        throw new Error(`Erro ao salvar produção: ${error.error || 'Desconhecido'}`);
+        const errorData = await response.json().catch(() => ({ error: `Erro HTTP ${response.status}. Tente novamente.` }));
+        console.error("[salvarProducao] API de produções retornou um erro:", errorData);
+        throw new Error(errorData.error || 'Falha ao salvar lançamento na API.');
     }
+
     const producaoSalva = await response.json();
-    op.etapas[etapaIndex] = { ...etapa, usuario: dados.funcionario, quantidade: dados.quantidade, lancado: true, ultimoLancamentoId: producaoSalva.id };
-    await window.saveOPChanges(op);
+    
+    // Atualiza o objeto op.etapas[etapaIndex] localmente
+    if (op.etapas && op.etapas[etapaIndex]) {
+        op.etapas[etapaIndex] = {
+            ...op.etapas[etapaIndex], // Mantém outros dados que possam existir
+            usuario: dados.funcionario,
+            quantidade: dados.quantidade,
+            lancado: true,
+            ultimoLancamentoId: producaoSalva.id
+        };
+    } else {
+        console.warn(`[salvarProducao] Não foi possível atualizar op.etapas[${etapaIndex}] localmente após salvar produção.`);
+    }
+
+
+    // Tenta salvar o objeto OP inteiro com a etapa atualizada
+    // A função saveOPChanges já deve estar ciente de produto_id
+    try {
+        console.log(`[salvarProducao] Tentando salvar o objeto OP inteiro (número: ${op.numero}) após lançar etapa.`);
+        await window.saveOPChanges(op); // saveOPChanges é global e usa produto_id
+    } catch (errorSaveOp) {
+        console.error(`[salvarProducao] Erro ao tentar salvar o objeto OP completo após lançar etapa: `, errorSaveOp);
+        // Decide se isso é um erro fatal ou apenas um aviso
+        mostrarPopupMensagem(`Produção da etapa lançada, mas houve um erro ao atualizar o estado geral da OP: ${errorSaveOp.message.substring(0,100)}`, 'aviso');
+    }
+    
     return producaoSalva.id;
 }
 
 async function lancarEtapa(op, etapaIndex, quantidade) {
     const etapa = op.etapas[etapaIndex];
+    console.log(`[lancarEtapa] PRE-SALVAR: OP Num: ${op.numero}, Produto ID: ${op.produto_id}, Processo: ${etapa.processo}, EtapaIndex USADO: ${etapaIndex}, Quantidade: ${quantidade}`);
     etapa.quantidade = parseInt(quantidade);
     const novoId = await salvarProducao(op, etapa, etapaIndex);
     if (novoId) {
@@ -2214,16 +2312,16 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEtapaAtualEditavel, row)
 
 async function getEtapasFuturasValidas(op, etapaIndex) {
     const todosOsProdutos = await obterProdutosDoStorage();
-    const produtoConfig = todosOsProdutos.find(p => p.nome === op.produto);
+    const produtoConfig = todosOsProdutos.find(p => p.id == op.produto_id);
     const etapasProduto = produtoConfig?.etapas || [];
     if (etapaIndex >= etapasProduto.length || etapaIndex >= op.etapas.length) return [];
     const etapaAtualConfig = etapasProduto[etapaIndex];
     const maquinaAtual = (typeof etapaAtualConfig === 'object' ? etapaAtualConfig.maquina : null) || 'Não Usa';
-    const tipoUsuarioAtual = await getTipoUsuarioPorProcesso( (typeof etapaAtualConfig === 'object' ? etapaAtualConfig.processo : etapaAtualConfig) , op.produto);
+    const tipoUsuarioAtual = await getTipoUsuarioPorProcesso( (typeof etapaAtualConfig === 'object' ? etapaAtualConfig.processo : etapaAtualConfig) , op.produto_id);
     const futuras = [];
     for (let i = etapaIndex + 1; i < op.etapas.length; i++) {
         const proximaEtapaConfig = etapasProduto[i]; if (!proximaEtapaConfig) break;
-        const tipoProx = await getTipoUsuarioPorProcesso((typeof proximaEtapaConfig === 'object' ? proximaEtapaConfig.processo : proximaEtapaConfig), op.produto);
+        const tipoProx = await getTipoUsuarioPorProcesso((typeof proximaEtapaConfig === 'object' ? proximaEtapaConfig.processo : proximaEtapaConfig), op.produto_id);
         const maqProx = (typeof proximaEtapaConfig === 'object' ? proximaEtapaConfig.maquina : null) || 'Não Usa';
         if (tipoProx !== 'costureira' || maqProx !== maquinaAtual) break;
         if (op.etapas[i].lancado) break;
@@ -2567,11 +2665,11 @@ async function updateFinalizarButtonState(op) {
         finalizarBtn.classList.add('op-finalizada-btn-estilo');
     } else {
         const produtos = await obterProdutosDoStorage();
-        const camposPrincipaisPreenchidos = op.produto && (op.quantidade || 0) > 0 && op.data_entrega;
+        const camposPrincipaisPreenchidos = op.produto_id && (op.quantidade || 0) > 0 && op.data_entrega;
         let todasEtapasCompletas = false;
         if (op.etapas?.length > 0) {
             todasEtapasCompletas = (await Promise.all(op.etapas.map(async e => {
-                const tipoUser = await getTipoUsuarioPorProcesso(e.processo, op.produto);
+                const tipoUser = await getTipoUsuarioPorProcesso(e.processo, op.produto_id);
                 const exigeQtd = tipoUser === 'costureira' || tipoUser === 'tiktik';
                 return e.lancado && (!exigeQtd || (e.quantidade || 0) > 0);
             }))).every(Boolean);
@@ -2618,31 +2716,24 @@ async function verificarEtapasEStatus(op) {
 
 
 // --- FUNÇÕES ESPECÍFICAS PARA A TELA DE CORTE P/ ESTOQUE (#corteView) ---
-
 async function loadProdutosCorte() {
     const produtoSelect = document.getElementById('produtoCorte');
-    if (!produtoSelect) {
-        console.warn('[loadProdutosCorte] Elemento #produtoCorte não encontrado.');
-        return;
-    }
+    if (!produtoSelect) return;
 
     produtoSelect.disabled = true;
-    produtoSelect.innerHTML = '<option value="">Carregando produtos...</option>';
+    produtoSelect.innerHTML = '<option value="">Carregando...</option>';
     try {
-        const produtos = await obterProdutosDoStorage(); 
-        
+        const produtos = await obterProdutosDoStorage();
         produtoSelect.innerHTML = '<option value="">Selecione um produto</option>';
         if (produtos && produtos.length > 0) {
             const produtosFiltrados = produtos.filter(produto => 
                 CONST_PRODUTOS.includes(produto.nome) && !CONST_PRODUTOSKITS.includes(produto.nome)
             );
             produtosFiltrados.forEach(produto => {
-                const option = new Option(produto.nome, produto.nome);
+                // O texto é o nome, o valor é o ID
+                const option = new Option(produto.nome, produto.id);
                 produtoSelect.appendChild(option);
             });
-        } else {
-            console.warn('[loadProdutosCorte] Nenhum produto retornado por obterProdutosDoStorage.');
-            produtoSelect.innerHTML = '<option value="">Nenhum produto encontrado</option>';
         }
         produtoSelect.disabled = false;
     } catch (error) {
@@ -2653,7 +2744,7 @@ async function loadProdutosCorte() {
     }
 }
 
-async function loadVariantesCorte(produtoNome) {
+async function loadVariantesCorte(produtoId) {
     const variantesContainer = document.getElementById('variantesCorteContainer');
     const variantesSelects = document.querySelector('#corteView .variantes-selects-corte');
     
@@ -2665,20 +2756,22 @@ async function loadVariantesCorte(produtoNome) {
     variantesSelects.innerHTML = ''; 
     variantesContainer.style.display = 'none';
 
-    if (!produtoNome) {
+    if (!produtoId) { // << MUDANÇA 2: Verifica o ID
         console.log('[loadVariantesCorte] Nenhum produto selecionado para carregar variantes.');
         return;
     }
 
     try {
-        const todosOsProdutos = await obterProdutosDoStorage(); 
-        const produto = todosOsProdutos.find(p => p.nome === produtoNome);
+        const todosOsProdutos = await obterProdutosDoStorage();
+        // << MUDANÇA 3: Busca pelo ID, não pelo nome >>
+        const produto = todosOsProdutos.find(p => p.id == produtoId);
 
         if (!produto) {
-            console.warn(`[loadVariantesCorte] Produto "${produtoNome}" não encontrado.`);
+            console.warn(`[loadVariantesCorte] Produto com ID "${produtoId}" não encontrado.`);
             return;
         }
 
+        // O resto da lógica para popular as variantes continua o mesmo
         let variantesDisponiveis = [];
         if (produto.variantes && produto.variantes.length > 0) {
             variantesDisponiveis = produto.variantes.map(v => v.valores.split(',')).flat().map(v => v.trim()).filter(Boolean);
@@ -2696,10 +2789,10 @@ async function loadVariantesCorte(produtoNome) {
             variantesSelects.appendChild(select);
             variantesContainer.style.display = 'block';
         } else {
-            console.log(`[loadVariantesCorte] Nenhuma variação disponível para "${produtoNome}".`);
+            console.log(`[loadVariantesCorte] Nenhuma variação disponível para "${produto.nome}".`);
         }
     } catch (error) {
-        console.error(`[loadVariantesCorte] Erro ao carregar variantes para ${produtoNome}:`, error);
+        console.error(`[loadVariantesCorte] Erro ao carregar variantes para produto ID ${produtoId}:`, error);
         mostrarPopupMensagem(`Erro ao carregar variações: ${error.message.substring(0,100)}`, 'erro');
     }
 }
@@ -2838,73 +2931,75 @@ document.addEventListener('DOMContentLoaded', async () => {
     const statusFilterContainer = document.getElementById('statusFilter');
 
     const produtoOPSelect = document.getElementById('produtoOP');
-    if (produtoOPSelect) {
-        produtoOPSelect.addEventListener('change', async (e) => {
-            const produtoNome = e.target.value;
-            console.log(`[produtoOP change] Produto selecionado pela UI: "${produtoNome}"`);
-            const infoCorteContainer = document.getElementById('infoCorteContainer');
-            const variantesContainer = document.getElementById('variantesContainer');
-            const variantesSelectsDiv = document.querySelector('#opFormView .variantes-selects');
-            const quantidadeOPInput = document.getElementById('quantidadeOP');
+if (produtoOPSelect) {
+    produtoOPSelect.addEventListener('change', async (e) => {
+        const produtoId = e.target.value;
+        console.log(`[produtoOP change] Produto selecionado pela UI: ID="${produtoId}"`);
 
-            const camposDependentesParaReset = [
-                document.getElementById('quantidadeOP')?.parentElement,
-                document.getElementById('numeroOP')?.parentElement,
-                document.getElementById('dataEntregaOP')?.parentElement,
-                document.getElementById('observacoesOP')?.parentElement,
-                infoCorteContainer,
-                variantesContainer
-            ].filter(Boolean);
+        // Limpa a interface imediatamente para dar feedback ao usuário
+        const infoCorteContainer = document.getElementById('infoCorteContainer');
+        const variantesContainer = document.getElementById('variantesContainer');
+        const variantesSelectsDiv = document.querySelector('#opFormView .variantes-selects');
+        const quantidadeOPInput = document.getElementById('quantidadeOP');
 
-            if (!produtoNome) {
-                console.log('[produtoOP change] Nenhum produto selecionado. Limpando campos dependentes.');
-                if (variantesSelectsDiv) variantesSelectsDiv.innerHTML = '';
-                camposDependentesParaReset.forEach(el => { if(el) el.style.display = 'none'; });
-                if (infoCorteContainer) infoCorteContainer.innerHTML = '';
-                corteDeEstoqueSelecionadoId = null;
-                if (quantidadeOPInput) {
-                    quantidadeOPInput.value = '';
-                    quantidadeOPInput.disabled = false;
-                    quantidadeOPInput.style.backgroundColor = '';
-                }
+        if (variantesSelectsDiv) variantesSelectsDiv.innerHTML = '';
+        if (variantesContainer) variantesContainer.style.display = 'none';
+        if (infoCorteContainer) infoCorteContainer.innerHTML = '';
+        corteDeEstoqueSelecionadoId = null;
+        if (quantidadeOPInput) {
+            quantidadeOPInput.value = '';
+            quantidadeOPInput.disabled = false;
+        }
+
+        if (!produtoId) {
+            console.log('[produtoOP change] Nenhum produto selecionado. Limpando campos.');
+            return; // Sai da função se o usuário selecionou a opção "Selecione produto"
+        }
+
+        try {
+            // Passo 1: Obter a lista de produtos
+            const produtosDisponiveis = await obterProdutosDoStorage();
+
+            // Passo 2: VERIFICAÇÃO CRÍTICA
+            if (!produtosDisponiveis || produtosDisponiveis.length === 0) {
+                mostrarPopupMensagem('Erro crítico: Não foi possível carregar a lista de produtos.', 'erro');
+                console.error('[produtoOP change] A função obterProdutosDoStorage() retornou uma lista vazia ou nula.');
                 return;
             }
 
-            let produtosDisponiveis;
-            try {
-                produtosDisponiveis = await obterProdutosDoStorage();
-                if (!produtosDisponiveis || produtosDisponiveis.length === 0) {
-                    mostrarPopupMensagem('Dados de produtos não carregados. Não é possível continuar.', 'erro');
-                    return;
-                }
-            } catch (error) {
-                mostrarPopupMensagem(`Erro ao carregar produtos para OP: ${error.message.substring(0,100)}`, 'erro');
+            // LOG DE DEPURAÇÃO: Vamos ver a lista de produtos que estamos usando
+            console.log('[produtoOP change] Lista de produtos obtida do storage:', produtosDisponiveis);
+
+            // Passo 3: Encontrar o produto selecionado NA LISTA OBTIDA
+            const produtoObj = produtosDisponiveis.find(p => p.id == produtoId);
+            
+            // Passo 4: Outra VERIFICAÇÃO CRÍTICA
+            if (!produtoObj) {
+                // Se o produto não foi encontrado, a lista pode estar desatualizada.
+                console.error(`[produtoOP change] Produto com ID "${produtoId}" não foi encontrado na lista de produtos. A lista pode estar desatualizada.`);
+                mostrarPopupMensagem('Produto não encontrado na lista. Tente recarregar a página.', 'erro');
                 return;
             }
             
-            await loadVariantesSelects(produtoNome, produtosDisponiveis);
+            console.log(`[produtoOP change] Produto encontrado:`, produtoObj);
 
-            const produtoObj = produtosDisponiveis.find(p => p.nome === produtoNome);
-            if (!produtoObj) {
-                console.warn(`[produtoOP change] Produto "${produtoNome}" não encontrado na lista.`);
-                camposDependentesParaReset.forEach(el => { if(el) el.style.display = 'none'; });
-                if (infoCorteContainer) infoCorteContainer.innerHTML = '';
-                return;
-            }
+            // Passo 5: Chamar as funções subsequentes com os dados corretos
+            await loadVariantesSelects(produtoId, produtosDisponiveis);
+
             const produtoTemVariantes = (produtoObj.variantes?.length > 0 || produtoObj.grade?.length > 0);
             if (!produtoTemVariantes) {
+                // Se o produto não tem variantes, podemos verificar o corte imediatamente
                 await verificarCorteEAtualizarFormOP();
             } else {
-                console.log(`[produtoOP change] Produto "${produtoNome}" tem variantes. Aguardando seleção de variante.`);
-                camposDependentesParaReset.forEach(el => { if (el !== variantesContainer || (variantesContainer && variantesContainer.style.display === 'none')) { if(el) el.style.display = 'none'; }});
-                if (infoCorteContainer) infoCorteContainer.innerHTML = '';
-                corteDeEstoqueSelecionadoId = null;
-                if (quantidadeOPInput) { quantidadeOPInput.value = ''; quantidadeOPInput.disabled = false; quantidadeOPInput.style.backgroundColor = ''; }
+                console.log(`[produtoOP change] Produto "${produtoObj.nome}" tem variantes. Aguardando seleção.`);
             }
-        });
-    } else {
-        console.warn('[DOMContentLoaded] Elemento #produtoOP não encontrado.');
-    }
+
+        } catch (error) {
+            console.error('[produtoOP change] Ocorreu um erro:', error);
+            mostrarPopupMensagem(`Erro ao processar seleção do produto: ${error.message}`, 'erro');
+        }
+    });
+}
 
     const btnIncluirOP = document.getElementById('btnIncluirOP');
         if (btnIncluirOP) {
@@ -2922,187 +3017,131 @@ document.addEventListener('DOMContentLoaded', async () => {
 }
 
     const opForm = document.getElementById('opForm');
-    if (opForm) {
-        opForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const btnSalvar = opForm.querySelector('.botao-salvar-op');
-            if (!btnSalvar) {
-                console.error("Botão 'Salvar OP' não encontrado no opForm.");
-                mostrarPopupMensagem("Erro: Botão de salvar não encontrado.", "erro");
-                return;
-            }
-            const originalButtonText = btnSalvar.innerHTML;
-            btnSalvar.disabled = true;
-            btnSalvar.innerHTML = '<div class="spinner-btn-interno"></div> Salvando OP...';
+if (opForm) {
+    opForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
 
-            const numero = document.getElementById('numeroOP').value.trim();
-            const produtoNome = document.getElementById('produtoOP').value;
-            const varianteSelect = document.querySelector('#opFormView .variantes-selects select');
-            const varianteValor = varianteSelect ? varianteSelect.value : '';
-            const quantidadeStr = document.getElementById('quantidadeOP').value;
-            const quantidade = parseInt(quantidadeStr) || 0;
-            const dataEntrega = document.getElementById('dataEntregaOP').value;
-            const observacoes = document.getElementById('observacoesOP').value.trim();
-            const infoCorteContainer = document.getElementById('infoCorteContainer');
-            // Antes era `dataset.pnGerado`, agora é `dataset.pcGerado`
-            const pcGeradoParaNovoCorte = infoCorteContainer ? infoCorteContainer.dataset.pcGerado : null;
-            
-            let produtoObj;
-            try {
-                const todosOsProdutos = await obterProdutosDoStorage();
-                if (!todosOsProdutos || todosOsProdutos.length === 0) {
-                    throw new Error("Lista de produtos não pôde ser carregada do storage.");
-                }
-                produtoObj = todosOsProdutos.find(p => p.nome === produtoNome);
-            } catch (error) {
-                console.error("[opForm submit] Erro crítico ao obter produtos do storage:", error);
-                mostrarPopupMensagem("Erro crítico ao obter dados dos produtos. Não é possível salvar a OP.", "erro");
-                btnSalvar.disabled = false; btnSalvar.innerHTML = originalButtonText;
-                return;
-            }
-
-            let erros = [];
-            if (!produtoNome) { 
-                erros.push('Produto não selecionado');
-            } else if (!produtoObj) { 
-                erros.push(`Produto "${produtoNome}" é inválido ou não encontrado na configuração.`);
-            } else {
-                const produtoRealmenteTemVariantes = (produtoObj.variantes?.length > 0 || produtoObj.grade?.length > 0);
-                if (produtoRealmenteTemVariantes && !varianteValor) {
-                    erros.push('Variação não selecionada para este produto');
-                }
-            }
-            if (!quantidadeStr || quantidade <= 0) erros.push('Quantidade deve ser maior que zero');
-            if (!dataEntrega) erros.push('Data de entrega não preenchida');
-            if (!numero) erros.push('Número da OP não preenchido');
-
-            if (erros.length > 0) {
-                mostrarPopupMensagem(`Por favor, corrija os seguintes erros: ${erros.join('; ')}.`, 'erro');
-                btnSalvar.disabled = false; btnSalvar.innerHTML = originalButtonText;
-                return;
-            }
-
-            const pnGeradoParaNovoCorte = infoCorteContainer ? infoCorteContainer.dataset.pnGerado : null;
-            let novaOP = {
-                numero,
-                produto: produtoNome,
-                variante: varianteValor || null,
-                quantidade,
-                data_entrega: dataEntrega,
-                observacoes,
-                status: 'em-aberto',
-                edit_id: generateUniqueId(),
-                etapas: []
-            };
-
-            if (produtoObj && Array.isArray(produtoObj.etapas)) {
-                novaOP.etapas = produtoObj.etapas.map(eInfo => ({
-                    processo: typeof eInfo === 'object' ? eInfo.processo : eInfo,
-                    usuario: '',
-                    quantidade: 0,
-                    lancado: false,
-                    ultimoLancamentoId: null
-                }));
-            }
-
-            if (corteDeEstoqueSelecionadoId) {
-                const idxCorteNaOP = novaOP.etapas.findIndex(et => et.processo?.toLowerCase() === 'corte');
-                if (idxCorteNaOP !== -1) {
-                    novaOP.etapas[idxCorteNaOP].lancado = true;
-                    novaOP.etapas[idxCorteNaOP].usuario = 'Estoque';
-                    novaOP.etapas[idxCorteNaOP].quantidade = quantidade;
-                }
-                novaOP.status = 'produzindo';
-            }
-
-                try {
-                const savedOP = await salvarOrdemDeProducao(novaOP);
-                console.log('[opForm.submit] Ordem de Produção salva:', savedOP);
-
-                let msgSucesso = `OP <strong>#${novaOP.numero}</strong> salva com sucesso!`;
-                let durPopup = 5000;
-                let htmlPop = true;
-                let tipoPopup = 'sucesso';
-
-                if (corteDeEstoqueSelecionadoId) {
-                    console.log(`[opForm submit] Vinculando corte de estoque ID ${corteDeEstoqueSelecionadoId} à OP ${savedOP.numero}...`);
-                    await atualizarCorte(corteDeEstoqueSelecionadoId, 'usado', usuarioLogado?.nome || 'Sistema', savedOP.numero);
-                    msgSucesso += "<br>Corte de estoque foi utilizado.";
-                    console.log(`[opForm.submit] Corte de estoque ID ${corteDeEstoqueSelecionadoId} marcado como usado para OP ${savedOP.numero}.`);
-                } if (pcGeradoParaNovoCorte) {
-                const corteData = {
-                produto: produtoNome,
-                variante: varianteValor || null,
-                quantidade: quantidade,
-                data: new Date().toISOString().split('T')[0],
-                pn: pcGeradoParaNovoCorte, // <-- AQUI! Passando o valor "PC-10001"
-                status: 'pendente',
-                op: savedOP.numero,
-                cortador: null
-            };
-            const token = localStorage.getItem('token');
-
-            console.log('[opForm.submit] Tentando criar corte pendente com dados:', corteData);
-
-                    const resCorte = await fetch('/api/cortes', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
-                        },
-                        body: JSON.stringify(corteData)
-                    });
-
-                    if (!resCorte.ok) {
-                        const errorStatus = resCorte.status;
-                        const errorData = await resCorte.json().catch(() => ({
-                            error: `Erro HTTP ${errorStatus}. Não foi possível ler detalhes do erro.`
-                        }));
-                        console.error(`[opForm.submit] Falha ao criar corte pendente (PC: ${pnGeradoParaNovoCorte}). Status: ${errorStatus}`, errorData);
-                        
-                        msgSucesso = `OP <strong>#${novaOP.numero}</strong> salva! <br><strong style="color:orange; font-weight:bold;">ATENÇÃO:</strong> Falha ao gerar o pedido de corte automático (PC: ${pcGeradoParaNovoCorte}). <br>...`;                        tipoPopup = 'aviso';
-                        durPopup = 0;
-                    } else {
-                        const savedCorteResponse = await resCorte.json();
-                        console.log(`[opForm.submit] Pedido de corte (PC: ${pcGeradoParaNovoCorte}) para OP #${savedOP.numero} gerado com sucesso.`);
-                        msgSucesso += `<br>Pedido de corte gerado. <a href="#cortes-pendentes" style="color:#0056b3;text-decoration:underline;font-weight:bold;">Ver Corte Pendente (PC: ${pcGeradoParaNovoCorte})</a>`;
-                        durPopup = 0;
-                    }
-                }
-
-                mostrarPopupMensagem(msgSucesso, tipoPopup, durPopup, htmlPop);
-
-                limparCacheOrdens();
-                if (pcGeradoParaNovoCorte || corteDeEstoqueSelecionadoId) {
-                limparCacheCortes();
-                }
-
-                if (infoCorteContainer) delete infoCorteContainer.dataset.pcGerado;
-                corteDeEstoqueSelecionadoId = null;
-
-                if (durPopup > 0) {
-                    setTimeout(() => {
-                        if (window.location.hash === '#adicionar') {
-                            window.location.hash = '';
-                        }
-                    }, durPopup + 300);
-                } else if (window.location.hash === '#adicionar') {
-                    console.log("[opForm submit] Popup com interação/aviso. Limpando formulário para nova OP.");
-                    limparFormularioOP();
-                    await loadProdutosSelect();
-                }
-
-            } catch (errorPrincipal) {
-                console.error('[opForm.submit] Erro CRÍTICO ao processar OP ou corte de estoque:', errorPrincipal);
-                mostrarPopupMensagem(`Erro grave ao salvar OP: ${errorPrincipal.message.substring(0, 250)}`, 'erro');
-            } finally {
-                btnSalvar.disabled = false;
-                btnSalvar.innerHTML = originalButtonText;
-            }
-        });
-    } else {
-        console.warn('[DOMContentLoaded] Formulário #opForm não encontrado.');
+    const btnSalvar = opForm.querySelector('.botao-salvar-op');
+    if (!btnSalvar) {
+        console.error("Botão 'Salvar OP' não foi encontrado no formulário.");
+        return;
     }
+    
+    const originalButtonText = btnSalvar.innerHTML;
+    btnSalvar.disabled = true;
+    btnSalvar.innerHTML = '<div class="spinner-btn-interno"></div> Salvando...';
+
+    try {
+        // --- 1. COLETA E VALIDAÇÃO DOS DADOS ---
+        const produtoSelect = document.getElementById('produtoOP');
+        const produtoId = produtoSelect.value;
+        const produtoNome = produtoId ? produtoSelect.options[produtoSelect.selectedIndex].text : '';
+
+        const varianteSelect = document.querySelector('#opFormView .variantes-selects select');
+        const varianteValor = varianteSelect ? varianteSelect.value : '';
+
+        const quantidade = parseInt(document.getElementById('quantidadeOP').value) || 0;
+        const dataEntrega = document.getElementById('dataEntregaOP').value;
+        const numero = document.getElementById('numeroOP').value.trim();
+        const observacoes = document.getElementById('observacoesOP').value.trim();
+        const infoCorteContainer = document.getElementById('infoCorteContainer');
+        const pcGeradoParaNovoCorte = infoCorteContainer ? infoCorteContainer.dataset.pcGerado : null;
+
+        if (!produtoId || quantidade <= 0 || !dataEntrega || !numero) {
+            throw new Error('Por favor, preencha todos os campos obrigatórios (Produto, Quantidade, Data, Número OP).');
+        }
+
+        const todosOsProdutos = await obterProdutosDoStorage();
+        const produtoObj = todosOsProdutos.find(p => p.id == produtoId);
+        if (!produtoObj) throw new Error("Produto selecionado é inválido.");
+
+        // --- 2. MONTAGEM INICIAL DO OBJETO OP ---
+        let opParaSalvar = {
+            numero,
+            produto_id: parseInt(produtoId),
+            variante: varianteValor || null,
+            quantidade,
+            data_entrega: dataEntrega,
+            observacoes,
+            status: 'em-aberto', // Começa sempre como 'em-aberto'
+            edit_id: generateUniqueId(),
+            etapas: produtoObj.etapas ? produtoObj.etapas.map(eInfo => ({
+                processo: typeof eInfo === 'object' ? eInfo.processo : eInfo,
+                usuario: '',
+                quantidade: 0,
+                lancado: false,
+                ultimoLancamentoId: null
+            })) : []
+        };
+        
+        // --- 3. SALVA A OP INICIALMENTE ---
+        // A OP é criada primeiro no estado mais simples possível.
+        const opSalvaInicialmente = await salvarOrdemDeProducao(opParaSalvar);
+        console.log(`[Submit OP] OP #${opSalvaInicialmente.numero} criada com sucesso no estado inicial.`);
+        let msgSucesso = `OP <strong>#${opSalvaInicialmente.numero}</strong> criada!`;
+
+        // --- 4. LÓGICA PÓS-CRIAÇÃO (CORTE E ATUALIZAÇÃO DE STATUS) ---
+        
+        // Caso 1: Um corte de estoque existente foi selecionado
+        if (corteDeEstoqueSelecionadoId) {
+            console.log(`[Submit OP] Vinculando corte de estoque ID ${corteDeEstoqueSelecionadoId} à OP.`);
+            await atualizarCorte(corteDeEstoqueSelecionadoId, 'usado', usuarioLogado?.nome || 'Sistema', opSalvaInicialmente.numero);
+            
+            // Agora, atualizamos a OP que acabamos de criar para o status 'produzindo'
+            const opParaAtualizar = { ...opSalvaInicialmente, status: 'produzindo' };
+            await window.saveOPChanges(opParaAtualizar); // saveOPChanges faz o PUT
+            
+            console.log(`[Submit OP] Status da OP #${opSalvaInicialmente.numero} atualizado para 'produzindo'.`);
+            msgSucesso += "<br>Corte de estoque utilizado e produção iniciada.";
+        } 
+        // Caso 2: Um novo pedido de corte precisa ser gerado
+        else if (pcGeradoParaNovoCorte) {
+            console.log(`[Submit OP] Criando novo pedido de corte (PC: ${pcGeradoParaNovoCorte}) para a OP.`);
+            const corteData = {
+            produto_id: parseInt(produtoId),
+            variante: varianteValor || null,
+            quantidade: quantidade,
+            pn: pcGeradoParaNovoCorte,
+            status: 'pendente',
+            op: opSalvaInicialmente.numero,
+            // AQUI ESTÁ A CORREÇÃO: Adicionamos a data do dia.
+            // Usamos a mesma data que foi usada para a OP, que já coletamos.
+            data: new Date().toISOString().split('T')[0]
+        };
+            
+            const token = localStorage.getItem('token');
+            const resCorte = await fetch('/api/cortes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(corteData)
+            });
+
+            if (!resCorte.ok) {
+                const err = await resCorte.json().catch(() => ({error: "Erro desconhecido"}));
+                msgSucesso = `OP criada, mas <strong style="color:orange;">ATENÇÃO:</strong> falha ao gerar pedido de corte. Erro: ${err.error}`;
+            } else {
+                msgSucesso += `<br>Pedido de corte gerado: <a href="#cortes-pendentes">Ver Corte Pendente (PC: ${pcGeradoParaNovoCorte})</a>`;
+            }
+        }
+
+        // --- 5. FEEDBACK FINAL E LIMPEZA ---
+        mostrarPopupMensagem(msgSucesso, 'sucesso', 0, true); // Deixa o popup aberto para o usuário ler
+        limparCacheOrdens();
+        limparCacheCortes();
+        limparFormularioOP();
+        await loadProdutosSelect();
+        
+        // Não redireciona automaticamente, deixa o usuário na tela para criar outra OP se quiser.
+        // window.location.hash = '';
+
+    } catch (error) {
+        mostrarPopupMensagem(`Erro ao salvar OP: ${error.message}`, 'erro');
+    } finally {
+        btnSalvar.disabled = false;
+        btnSalvar.innerHTML = originalButtonText;
+    }
+    });
+}
 
     const btnSalvarCorteEstoque = document.getElementById('btnCortar');
     if (btnSalvarCorteEstoque) {
@@ -3353,164 +3392,112 @@ if (btnCriarOpFilha) {
 
         if (btnCriarOpFilha.disabled) return;
 
-        const btnOriginal = btnCriarOpFilha;
-        btnOriginal.disabled = true;
-        btnOriginal.innerHTML = '<div class="spinner-btn-interno"></div> Verificando...';
+        btnCriarOpFilha.disabled = true;
+        btnCriarOpFilha.innerHTML = '<div class="spinner-btn-interno"></div> Processando...';
 
         try {
             const token = localStorage.getItem('token');
             
-            // --- ETAPA 0: BUSCAR OP MÃE E FAZER A VERIFICAÇÃO ---
+            // Etapa 1: Buscar dados da OP mãe e verificar se a filha já existe
             const responseMae = await fetch(`/api/ordens-de-producao/${opMaeEditId}`, { headers: { 'Authorization': `Bearer ${token}` } });
             if (!responseMae.ok) throw new Error('Falha ao carregar dados da OP mãe para verificação.');
-            const opMae = await responseMae.json(); // opMae é declarada e atribuída aqui.
+            const opMae = await responseMae.json();
             
-            const responseCheck = await fetch(`/api/ordens-de-producao/check-op-filha/${opMae.numero}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const responseCheck = await fetch(`/api/ordens-de-producao/check-op-filha/${opMae.numero}`, { headers: { 'Authorization': `Bearer ${token}` } });
             const dataCheck = await responseCheck.json();
             
             if (dataCheck.existe) {
-                mostrarPopupMensagem('Ação bloqueada: Uma OP filha já existe para esta OP mãe.', 'aviso');
-                await loadEtapasEdit(opMae, true); 
-                return;
+                throw new Error('Ação bloqueada: Uma OP filha já existe para esta OP mãe.');
             }
 
-            btnOriginal.innerHTML = '<div class="spinner-btn-interno"></div> Processando...';
-
-            // --- ETAPA 1: BUSCAR DADOS ADICIONAIS ---
-            // Agora `opMae` existe e `opMae.numero` é válido.
+            // Etapa 2: Preparar dados para a nova OP Filha
             const lancamentosMae = await obterLancamentos(opMae.numero, true);
             const proximoNumeroOp = await getNextOPNumber();
             const todosProdutos = await obterProdutosDoStorage();
+            
             const produtoFilho = todosProdutos.find(p => p.nome === 'Scrunchie (Fina)');
-            if (!produtoFilho) throw new Error('Produto "Scrunchie (Fina)" não encontrado.');
+            if (!produtoFilho || !produtoFilho.id) {
+                throw new Error('Produto "Scrunchie (Fina)" ou seu ID não foram encontrados.');
+            }
 
-            // --- ETAPA 2: CRIAR A OP FILHA (ESTRUTURA) ---
-            console.log(`[OP Filha] Criando a estrutura da OP Filha #${proximoNumeroOp}`);
+            // Etapa 3: Criar a OP Filha (com produto_id)
             const novaOpFilha = {
                 numero: proximoNumeroOp,
-                produto: produtoFilho.nome,
+                produto_id: produtoFilho.id,
                 variante: opMae.variante,
                 quantidade: quantidadeFilha,
                 data_entrega: opMae.data_entrega,
                 observacoes: `OP gerada em conjunto com a OP mãe #${opMae.numero}`,
-                status: 'em-aberto', // Começa em aberto, vamos atualizar depois
+                status: 'em-aberto',
                 edit_id: generateUniqueId(),
-                etapas: produtoFilho.etapas.map(eInfo => ({
+                etapas: produtoFilho.etapas ? produtoFilho.etapas.map(eInfo => ({
                     processo: typeof eInfo === 'object' ? eInfo.processo : eInfo,
                     usuario: '',
                     quantidade: 0,
                     lancado: false,
                     ultimoLancamentoId: null
-                }))
+                })) : []
             };
             const opFilhaSalva = await salvarOrdemDeProducao(novaOpFilha);
 
-            // --- ETAPA 3: REPLICAR OS LANÇAMENTOS DE PRODUÇÃO ---
-            console.log(`[OP Filha] Replicando ${lancamentosMae.length} lançamentos da OP Mãe para a OP Filha...`);
+            // Etapa 4: Replicar os lançamentos de produção da mãe para a filha
             let etapasLancadasNaFilha = 0;
             for (const lancamento of lancamentosMae) {
-                // Não replicamos o corte, pois a OP filha não precisa de um novo corte físico.
-                if (lancamento.processo.toLowerCase() === 'corte') {
-                    continue;
-                }
+                if (lancamento.processo.toLowerCase() === 'corte') continue;
                 
                 const dadosProducaoFilha = {
-                    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, // Novo ID único
-                    opNumero: opFilhaSalva.numero, // OP da filha
+                    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                    opNumero: opFilhaSalva.numero,
                     etapaIndex: lancamento.etapa_index,
                     processo: lancamento.processo,
-                    produto: opFilhaSalva.produto, // Produto da filha
+                    produto_id: opFilhaSalva.produto_id,
                     variacao: opFilhaSalva.variante,
                     maquina: lancamento.maquina,
-                    quantidade: quantidadeFilha, // Quantidade da filha!
+                    quantidade: quantidadeFilha,
                     funcionario: lancamento.funcionario,
                     data: new Date().toISOString(),
                     lancadoPor: usuarioLogado?.nome || 'Sistema'
                 };
 
-                // Enviando o lançamento para a API de produções
                 const responseProd = await fetch('/api/producoes', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify(dadosProducaoFilha)
                 });
 
-                if (!responseProd.ok) {
-                    console.warn(`[OP Filha] Falha ao replicar lançamento para a etapa "${lancamento.processo}". Continuando...`);
-                    // Decide se quer parar ou continuar. Por enquanto, vamos continuar.
-                } else {
-                    console.log(`[OP Filha] Lançamento da etapa "${lancamento.processo}" replicado com sucesso.`);
+                if (responseProd.ok) {
                     etapasLancadasNaFilha++;
-                    
-                    // Atualiza a etapa correspondente no objeto da OP filha em memória
+                    const producaoSalva = await responseProd.json();
                     const etapaNaFilha = opFilhaSalva.etapas[lancamento.etapa_index];
                     if (etapaNaFilha) {
                         etapaNaFilha.lancado = true;
                         etapaNaFilha.usuario = dadosProducaoFilha.funcionario;
                         etapaNaFilha.quantidade = dadosProducaoFilha.quantidade;
-                        etapaNaFilha.ultimoLancamentoId = dadosProducaoFilha.id;
+                        etapaNaFilha.ultimoLancamentoId = producaoSalva.id;
                     }
                 }
             }
 
-            // --- ETAPA 4: ATUALIZAR O STATUS FINAL DA OP FILHA ---
+            // Etapa 5: Atualizar o status da OP filha se necessário
             if (etapasLancadasNaFilha > 0) {
-                console.log('[OP Filha] Como houve lançamentos, atualizando status da OP Filha para "produzindo".');
                 opFilhaSalva.status = 'produzindo';
-                
-                // Salva a OP Filha novamente, agora com as etapas atualizadas e o status correto
                 await window.saveOPChanges(opFilhaSalva);
             }
 
-        
-            // --- ETAPA 5: FEEDBACK VISUAL DETALHADO ---
-limparCacheOrdens();
+            // Etapa 6: Feedback visual de sucesso
+            mostrarPopupMensagem(`OP Filha #${opFilhaSalva.numero} criada com sucesso!`, 'sucesso');
+            await loadEtapasEdit(opMae, true); // Recarrega a UI para mostrar que a filha foi criada
 
-const feedbackDiv = document.getElementById('opFilhaFeedback');
-feedbackDiv.className = 'op-filha-feedback sucesso';
-
-// Monta a mensagem de feedback
-let feedbackHTML = `<p><strong>Sucesso!</strong> OP Filha <strong>#${opFilhaSalva.numero}</strong> foi criada.</p>`;
-
-if (etapasLancadasNaFilha > 0) {
-    feedbackHTML += `<p>As seguintes etapas foram lançadas em conjunto:</p><ul class="remover-bullets">`;
-    // Percorre novamente os lançamentos da mãe para listar os processos replicados
-    for (const lancamento of lancamentosMae) {
-        if (lancamento.processo.toLowerCase() !== 'corte') {
-            feedbackHTML += `<li class="remover-bullets"><i class="fas fa-check-circle" style="color: green;"></i> ${lancamento.processo}</li>`;
-        }
-    }
-    feedbackHTML += `</ul>`;
-} else {
-    feedbackHTML += `<p>Nenhuma etapa da OP mãe havia sido lançada, então a OP filha aguarda o início da produção.</p>`;
-}
-
-feedbackDiv.innerHTML = feedbackHTML;
-feedbackDiv.style.display = 'block';
-
-// Reajusta a altura do contêiner do accordion para incluir o novo feedback
-const accordionContent = feedbackDiv.closest('.op-accordion-conteudo');
-if (accordionContent) {
-    accordionContent.style.maxHeight = (accordionContent.scrollHeight + 40) + "px";
-}
-
-// Limpa o campo de quantidade
-document.getElementById('quantidadeOpFilha').value = '';
-            await loadEtapasEdit(opMae, true);
-
-         } catch (error) {
+        } catch (error) {
             console.error('Erro ao criar e processar OP filha:', error);
             mostrarPopupMensagem(`Erro ao criar OP filha: ${error.message}`, 'erro');
-            // Se der erro, reabilita o botão para o usuário poder tentar de novo.
-            btnOriginal.disabled = false;
-            btnOriginal.innerHTML = '<i class="fas fa-plus-circle"></i> Criar OP Filha';
+            // Reabilita o botão em caso de erro para o usuário poder tentar de novo
+            btnCriarOpFilha.disabled = false;
+            btnCriarOpFilha.innerHTML = '<i class="fas fa-plus-circle"></i> Criar OP Filha';
         } 
-        // O bloco 'finally' não é mais necessário para reabilitar o botão,
-        // pois o loadEtapasEdit no final do try ou o catch já cuidam disso.
     });
 }
+
 
         // ========================================================
 // NOVA LÓGICA DO ACCORDION USANDO DELEGAÇÃO DE EVENTOS

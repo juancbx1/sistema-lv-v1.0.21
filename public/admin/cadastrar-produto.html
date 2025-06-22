@@ -47,199 +47,207 @@
             </table>
         </section>
 
-        <!-- VIEW DO FORMULÁRIO DE EDIÇÃO/CADASTRO -->
+        
         <section class="cp-form" id="productFormView" style="display: none;" aria-label="Formulário de edição de produto">
-            <!-- Overlay de Carregamento -->
-            <div id="formLoadingOverlay" class="cp-form-loading-overlay hidden">
-                <div class="cp-spinner"></div>
-            </div>
-            
-            <a href="#" id="btnVoltarDoForm" class="cp-btn cp-btn-back" aria-label="Voltar à lista">
-                <i class="fas fa-arrow-left"></i> Voltar
-            </a>
-            <h2 id="editProductName"></h2>
-            <div class="cp-tab-filter" id="tabFilter" role="tablist">
-                <button class="cp-tab-btn active" data-tab="dados-gerais" role="tab" aria-selected="true">Dados Gerais</button>
-                <button class="cp-tab-btn" data-tab="ficha-tecnica" role="tab" aria-selected="false">Ficha Técnica</button>
-                <button class="cp-tab-btn" data-tab="producao" role="tab" aria-selected="false">Produção</button>
-            </div>
-            
-            <div class="cp-tabs-content">
-                <!-- Aba: Dados Gerais -->
-                <div class="cp-tab-content active" id="dados-gerais" role="tabpanel">
-                    <form id="productForm">
-                        <div class="cp-form-group">
-                            <label for="inputProductName">Nome do Produto:</label>
-                            <input type="text" id="inputProductName" class="cp-input" required aria-required="true">
-                        </div>
-                        <div class="cp-form-group">
-                            <label for="sku">Código (SKU Principal):</label>
-                            <input type="text" id="sku" class="cp-input" required aria-required="true">
-                        </div>
-                        <div class="cp-form-group">
-                            <label>Tipo:</label>
-                            <div>
-                                <label><input type="checkbox" name="tipo" value="simples" onchange="toggleTabs()"> Simples</label>
-                                <label><input type="checkbox" name="tipo" value="variacoes" onchange="toggleTabs()"> Variações</label>
-                                <label><input type="checkbox" name="tipo" value="kits" onchange="toggleTabs()"> Kits</label>
-                            </div>
-                        </div>
-                        <div class="cp-form-group">
-                            <label for="gtin">GTIN/EAN:</label>
-                            <input type="text" id="gtin" class="cp-input">
-                        </div>
-                        <div class="cp-form-group">
-                            <label for="unidade">Unidade:</label>
-                            <select id="unidade" class="cp-select" required aria-required="true">
-                                <option value="pç">Peça (pç)</option>
-                                <option value="m">Metro (m)</option>
-                                <option value="kg">Quilograma (kg)</option>
-                            </select>
-                        </div>
-                        <div class="cp-form-group">
-                            <label for="estoque">Estoque:</label>
-                            <input type="number" id="estoque" class="cp-input" disabled aria-disabled="true">
-                        </div>
-                        <button type="submit" class="cp-btn cp-btn-submit"><i class="fas fa-save"></i> Salvar Produto</button>
-                    </form>
-                </div>
-
-                <!-- Aba: Ficha Técnica -->
-                <div class="cp-tab-content" id="ficha-tecnica" role="tabpanel">
-                    <div class="cp-form-group">
-                        <label for="imagemProduto">Imagem Principal:</label>
-                        <input type="file" id="imagemProduto" accept="image/*" class="cp-input">
-                        <img id="previewImagem" style="display: none; max-width: 200px; margin-top: 1rem; border-radius: 8px;" alt="Pré-visualização da imagem">
-                        <button type="button" id="removeImagem" style="display: none;" class="cp-btn cp-btn-danger" aria-label="Remover imagem">Remover</button>
-                    </div>
-                </div>
-
-                <!-- Aba: Produção -->
-                <div class="cp-tab-content" id="producao" role="tabpanel">
-                    <div class="cp-form-group">
-                        <h3>Etapas de Produção</h3>
-                        <table class="cp-table" aria-label="Etapas de produção">
-                            <thead>
-                                <tr>
-                                    <th scope="col" style="width: 5%;"></th><th scope="col">Processo</th><th scope="col">Máquina</th><th scope="col">Feito Por</th><th scope="col">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody id="stepsBody" draggable="true"></tbody>
-                        </table>
-                        <button type="button" class="cp-btn cp-btn-add" id="btnAddStep"><i class="fas fa-plus"></i> Add Etapa</button>
-                    </div>
-                    <div class="cp-form-group">
-                        <h3>Etapas de Arremate/Tik Tik</h3>
-                        <table class="cp-table" aria-label="Etapas de arremate/tik tik">
-                           <thead>
-                                <tr>
-                                    <th scope="col" style="width: 5%;"></th><th scope="col">Processo</th><th scope="col">Máquina</th><th scope="col">Feito Por</th><th scope="col">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody id="etapasTiktikBody" draggable="true"></tbody>
-                        </table>
-                        <button type="button" class="cp-btn cp-btn-add" id="btnAddEtapaTiktik"><i class="fas fa-plus"></i> Add Etapa</button>
-                    </div>
-                        
-                <!-- BOTAO SALVAR -->
-                    <div style="text-align: right; margin-top: 20px;">
-                        <button id="btnSalvarProducao" class="cp-btn cp-btn-success">
-                        <i class="fas fa-save"></i> Salvar Etapas de Produção
-                        </button>
-                    </div>
-
-                </div>
-
-                <!-- Aba: Variações -->
-<div class="cp-tab-content" id="variacoes" role="tabpanel">
-    
-    <!-- NOVO CONTAINER PARA O COMPONENTE DE VARIAÇÕES -->
-    <div class="cp-form-group">
-        <h3>Definir Variações</h3>
-        <div id="variationsComponentContainer" class="cp-variations-container">
-            <!-- As linhas de variação (chave + valores em tags) serão injetadas aqui pelo JS -->
+        <!-- Overlay de Carregamento -->
+        <div id="formLoadingOverlay" class="cp-form-loading-overlay hidden">
+            <div class="cp-spinner"></div>
         </div>
-        <button type="button" class="cp-btn cp-btn-add" id="btnAddVariacao" style="margin-top: 1rem;">
-            <i class="fas fa-plus"></i> Adicionar Outra Variação
-        </button>
-    </div>
+        
+        <a href="#" id="btnVoltarDoForm" class="cp-btn cp-btn-back" aria-label="Voltar à lista">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+        <h2 id="editProductName"></h2>
 
-    <!-- A GRADE DE VARIAÇÕES PERMANECE IGUAL -->
-    <div class="cp-form-group" id="gradeVariacoes">
-        <h3>Grade de Variações</h3>
-        <p>Atribua SKUs e imagens para cada combinação. Exclua as combinações que não existem.</p>
-        <table class="cp-table" aria-label="Grade de variações">
-            <thead id="gradeHeader"></thead>
-            <tbody id="gradeBody"></tbody>
-        </table>
-        <button id="btnSalvarGrade" class="cp-btn cp-btn-success">
-            <i class="fas fa-check"></i> Salvar Grade e Variações
-        </button>
-    </div>
+        <!-- CONTAINER DOS BOTÕES DAS ABAS -->
+        <div class="cp-tab-filter" id="tabFilter" role="tablist">
+            <button class="cp-tab-btn active" type="button" data-tab="dados-gerais" role="tab" aria-selected="true">Dados Gerais</button>
+            <button class="cp-tab-btn" type="button" data-tab="ficha-tecnica" role="tab" aria-selected="false">Ficha Técnica</button>
+            <button class="cp-tab-btn" type="button" data-tab="producao" role="tab" aria-selected="false">Produção</button>
+            <!-- A aba 'Variações' será adicionada aqui pelo JS -->
+        </div>
+        
+        <!-- CONTAINER DOS CONTEÚDOS DAS ABAS -->
+        <div class="cp-tabs-content">
 
-</div>
-
-            <!-- Popups -->
-            
-
-            <div id="configurarVariacaoView" class="cp-popup" role="dialog" aria-labelledby="configurarVariacaoTitle">
-                <div class="cp-popup-content">
-                    <button type="button" class="cp-popup-close-btn" onclick="fecharPopupConfigurarVariacao()">X</button>
-                    <h3 id="configurarVariacaoTitle"></h3>
+            <!-- Aba: Dados Gerais -->
+            <div class="cp-tab-content active" id="dados-gerais" role="tabpanel">
+                <form id="productForm">
                     <div class="cp-form-group">
-                        <label for="produtoKitSelect">Produto Componente:</label>
-                        <select id="produtoKitSelect" class="cp-select" onchange="loadVariacoesKit()"></select>
+                        <label for="inputProductName">Nome do Produto:</label>
+                        <input type="text" id="inputProductName" class="cp-input" required aria-required="true">
                     </div>
                     <div class="cp-form-group">
-                        <label for="variacaoKitSelect">Variação do Componente:</label>
-                        <div style="display: flex; gap: 10px;">
-                            <select id="variacaoKitSelect" class="cp-select" style="flex-grow: 1;"></select>
-                            <button id="addVariacaoKitBtn" class="cp-btn cp-btn-primary">Add</button>
+                        <label for="sku">Código (SKU Principal):</label>
+                        <input type="text" id="sku" class="cp-input">
+                    </div>
+                    <div class="cp-form-group">
+                        <label>Tipo:</label>
+                        <div>
+                            <label><input type="checkbox" name="tipo" value="simples"> Simples</label>
+                            <label><input type="checkbox" name="tipo" value="variacoes"> Variações</label>
+                            <label><input type="checkbox" name="tipo" value="kits"> Kits</label>
                         </div>
                     </div>
                     <div class="cp-form-group">
-                        <label>Composição Atual:</label>
-                        <div id="composicaoKitContainer"></div>
+                        <label for="gtin">GTIN/EAN:</label>
+                        <input type="text" id="gtin" class="cp-input">
                     </div>
-                    <div class="cp-popup-buttons">
+                    <div class="cp-form-group">
+                        <label for="unidade">Unidade:</label>
+                        <select id="unidade" class="cp-select" required aria-required="true">
+                            <option value="pç">Peça (pç)</option>
+                            <option value="m">Metro (m)</option>
+                            <option value="kg">Quilograma (kg)</option>
+                        </select>
+                    </div>
+                    <div class="cp-form-group">
+                        <label for="estoque">Estoque:</label>
+                        <input type="number" id="estoque" class="cp-input" disabled aria-disabled="true">
+                    </div>
+                    <button type="submit" class="cp-btn cp-btn-submit"><i class="fas fa-save"></i> Salvar Produto</button>
+                </form>
+            </div>
 
-                         <button type="button" class="cp-btn cp-btn-secondary" onclick="fecharPopupConfigurarVariacao()">Cancelar</button>
-                    <button id="saveKitConfigBtn" class="cp-btn cp-btn-primary">Salvar Composição</button>
+            <!-- Aba: Ficha Técnica -->
+            <div class="cp-tab-content" id="ficha-tecnica" role="tabpanel">
+                <div class="cp-form-group">
+                    <label>Imagem Principal</label>
+                    <div class="cp-imagem-wrapper">
+                        <input type="file" id="imagemProduto" accept="image/*" class="hidden">
+                        <label for="imagemProduto" class="cp-imagem-placeholder">
+                            <img id="previewImagem" alt="Pré-visualização da imagem">
+                            <div class="overlay">
+                                <i class="fas fa-camera"></i>
+                                <span>Clique para enviar<br>ou trocar imagem</span>
+                            </div>
+                        </label>
+                        <div class="cp-imagem-actions">
+                            <button type="button" id="removeImagem" class="cp-btn-icon-danger" title="Remover Imagem">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
 
+            <!-- Aba: Produção -->
+            <div class="cp-tab-content" id="producao" role="tabpanel">
+                <div class="cp-form-group">
+                    <h3>Etapas de Produção</h3>
+                    <table class="cp-table" aria-label="Etapas de produção">
+                        <thead>
+                            <tr>
+                                <th scope="col" style="width: 5%;"></th><th scope="col">Processo</th><th scope="col">Máquina</th><th scope="col">Feito Por</th><th scope="col">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stepsBody"></tbody>
+                    </table>
+                    <button type="button" class="cp-btn cp-btn-add" id="btnAddStep"><i class="fas fa-plus"></i> Add Etapa</button>
+                </div>
+                <div class="cp-form-group">
+                    <h3>Etapas de Arremate/Tik Tik</h3>
+                    <table class="cp-table" aria-label="Etapas de arremate/tik tik">
+                    <thead>
+                            <tr>
+                                <th scope="col" style="width: 5%;"></th><th scope="col">Processo</th><th scope="col">Máquina</th><th scope="col">Feito Por</th><th scope="col">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="etapasTiktikBody"></tbody>
+                    </table>
+                    <button type="button" class="cp-btn cp-btn-add" id="btnAddEtapaTiktik"><i class="fas fa-plus"></i> Add Etapa</button>
+                </div>
+                <div style="text-align: right; margin-top: 20px;">
+                    <button id="btnSalvarProducao" class="cp-btn cp-btn-success">
+                        <i class="fas fa-save"></i> Salvar Etapas de Produção
+                    </button>
+                </div>
+            </div>
+
+            <!-- Aba: Variações (AGORA DENTRO DO CONTAINER PRINCIPAL) -->
+            <div class="cp-tab-content" id="variacoes" role="tabpanel">
+                <div class="cp-form-group">
+                    <h3>Definir Variações</h3>
+                    <div id="variationsComponentContainer" class="cp-variations-container">
+                        <!-- As linhas de variação serão injetadas aqui pelo JS -->
+                    </div>
+                    <button type="button" class="cp-btn cp-btn-add" id="btnAddVariacao" style="margin-top: 1rem;">
+                        <i class="fas fa-plus"></i> Adicionar Outra Variação
+                    </button>
+                </div>
+                <div class="cp-form-group" id="gradeVariacoes">
+                    <h3>Grade de Variações</h3>
+                    <p>Atribua SKUs e imagens para cada combinação. Exclua as combinações que não existem.</p>
+                    <table class="cp-table" aria-label="Grade de variações">
+                        <thead id="gradeHeader"></thead>
+                        <tbody id="gradeBody"></tbody>
+                    </table>
+                    <button id="btnSalvarGrade" class="cp-btn cp-btn-success" style="margin-top: 1rem;">
+                        <i class="fas fa-check"></i> Salvar Grade e Variações
+                    </button>
+                </div>
+            </div>
+
+        </div> <!-- FIM do cp-tabs-content -->
 
 
-             <!-- NOVO MODAL DE SELEÇÃO DE IMAGEM -->
+        <!-- ================================================================ -->
+        <!--  POPUPS E MODAIS (Permanecem no final, fora do fluxo das abas)   -->
+        <!-- ================================================================ -->
+
+        <!-- POPUP DE CONFIGURAÇÃO DE KIT -->
+        <div id="configurarVariacaoView" class="cp-popup" role="dialog" aria-labelledby="configurarVariacaoTitle">
+            <div class="cp-popup-content">
+                <button type="button" class="cp-popup-close-btn" onclick="fecharPopupConfigurarVariacao()">X</button>
+                <h3 id="configurarVariacaoTitle"></h3>
+                <div class="cp-form-group">
+                    <label for="produtoKitSelect">Produto Componente:</label>
+                    <select id="produtoKitSelect" class="cp-select" onchange="loadVariacoesKit()"></select>
+                </div>
+                <div class="cp-form-group">
+                    <label for="variacaoKitSelect">Variação do Componente:</label>
+                    <div style="display: flex; gap: 10px;">
+                        <select id="variacaoKitSelect" class="cp-select" style="flex-grow: 1;"></select>
+                        <button id="addVariacaoKitBtn" type="button" class="cp-btn cp-btn-primary">Add</button>
+                    </div>
+                </div>
+                <div class="cp-form-group">
+                    <label>Composição Atual:</label>
+                    <div id="composicaoKitContainer"></div>
+                </div>
+                <div class="cp-popup-buttons">
+                    <button type="button" class="cp-btn cp-btn-secondary" onclick="fecharPopupConfigurarVariacao()">Cancelar</button>
+                    <button id="saveKitConfigBtn" type="button" class="cp-btn cp-btn-primary">Salvar Composição</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL DE SELEÇÃO DE IMAGEM PARA A GRADE -->
         <div id="modalSelecionarImagem" class="cp-popup" role="dialog" aria-labelledby="modalSelecionarImagemTitle">
             <div class="cp-popup-content" style="max-width: 600px;">
                 <h3 id="modalSelecionarImagemTitle">Selecionar Imagem para a Variação</h3>
-                
                 <div class="cp-form-grupo">
                     <label>Fazer um novo upload:</label>
-                    <button id="btnTriggerUpload" class="cp-btn cp-btn-primary">
+                    <button id="btnTriggerUpload" type="button" class="cp-btn cp-btn-primary">
                         <i class="fas fa-upload"></i> Escolher Arquivo do Computador
                     </button>
-                    <input type="file" id="gradeImageInput" accept="image/*" style="display: none;">
+                    <input type="file" id="gradeImageInput" accept="image/*" class="hidden">
                 </div>
-
                 <hr style="border: 0; height: 1px; background: #eee; margin: 20px 0;">
-
                 <div class="cp-form-grupo">
                     <label>Ou usar uma imagem existente deste produto:</label>
                     <div id="galeriaImagensExistentes" class="cp-galeria-imagens">
                         <p class="cp-galeria-vazia-msg" style="display: none;">Nenhuma outra imagem foi enviada para este produto ainda.</p>
                     </div>
                 </div>
-
                 <div class="cp-popup-buttons" style="margin-top: 30px;">
                     <button type="button" class="cp-btn cp-btn-secondary" id="btnFecharModalSelecaoImagem">Cancelar</button>
                 </div>
             </div>
         </div>
 
-        </section>
+    </section>
+
     </div>
     <script src="/js/admin-cadastrar-produto.js" type="module" defer></script>
     <script src="/js/carregar-menu-lateral.js" type="module"></script>

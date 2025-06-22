@@ -2,7 +2,7 @@
 import { verificarAutenticacao } from '/js/utils/auth.js';
 import { obterProdutos as obterProdutosDoStorage } from '/js/utils/storage.js';
 
-// --- Variáveis Globais ---
+// --- Variáveis Globais --- 
 let usuarioLogado = null;
 let permissoes = [];
 let todosOsProdutosCadastrados = [];
@@ -127,17 +127,32 @@ function obterQuantidadeFinalProduzida(op) {
 
 // --- Lógica de Dados ---
 async function buscarDadosIniciais() {
-    const [produtos, usuarios, opsFinalizadas, arrematesRegistrados] = await Promise.all([
-        obterProdutosDoStorage(true),
-        fetchFromAPI('/usuarios'),
-        fetchFromAPI('/ops-para-embalagem?all=true'),
-        fetchFromAPI('/arremates')
-    ]);
+    try {
+        const [produtos, usuarios, opsFinalizadas, arrematesRegistrados] = await Promise.all([
+            obterProdutosDoStorage(true), // Força a busca de produtos frescos
+            fetchFromAPI('/usuarios'),
+            fetchFromAPI('/ops-para-embalagem?all=true'),
+            fetchFromAPI('/arremates')
+        ]);
 
-    todosOsProdutosCadastrados = produtos || [];
-    todosOsUsuarios = usuarios || [];
-    opsFinalizadasCompletas = opsFinalizadas?.rows || [];
-    todosArrematesRegistradosCache = arrematesRegistrados || [];
+        todosOsProdutosCadastrados = produtos || [];
+        todosOsUsuarios = usuarios || [];
+        opsFinalizadasCompletas = opsFinalizadas?.rows || [];
+        todosArrematesRegistradosCache = arrematesRegistrados || [];
+
+        console.log("Dados iniciais carregados:", {
+            produtos: todosOsProdutosCadastrados.length,
+            usuarios: todosOsUsuarios.length,
+            opsFinalizadas: opsFinalizadasCompletas.length,
+            arremates: todosArrematesRegistradosCache.length
+        });
+
+    } catch (error) {
+        console.error("Falha ao buscar dados iniciais:", error);
+        mostrarPopupMensagem(`Erro ao carregar dados essenciais: ${error.message}`, 'erro');
+        // Lança o erro para que a função que chamou saiba que algo deu errado
+        throw error;
+    }
 }
 
 function calcularPendenciasDeArremate(itemParaPriorizar = null) {
@@ -158,14 +173,16 @@ function calcularPendenciasDeArremate(itemParaPriorizar = null) {
 
     const aggregatedMap = new Map();
     opsComSaldo.forEach(op => {
-        const key = `${op.produto}|${op.variante || '-'}`;
+        // A API de OPs agora retorna 'produto_id', vamos usá-lo!
+        const key = `${op.produto_id}|${op.variante || '-'}`;
         if (!aggregatedMap.has(key)) {
             aggregatedMap.set(key, {
-                produto: op.produto,
+                produto: op.produto, // O nome do produto, que vem do JOIN
+                produto_id: op.produto_id, // << ADIÇÃO ESSENCIAL
                 variante: op.variante || '-',
                 total_quantidade_pendente_arremate: 0,
                 ops_detalhe: [],
-                ultima_atualizacao: new Date(0) 
+                ultima_atualizacao: new Date(0)
             });
         }
         const item = aggregatedMap.get(key);
@@ -183,7 +200,6 @@ function calcularPendenciasDeArremate(itemParaPriorizar = null) {
 
     let listaAgregada = Array.from(aggregatedMap.values());
     
-    // Lógica de Priorização
     if (itemParaPriorizar) {
         const itemIndex = listaAgregada.findIndex(
             p => p.produto === itemParaPriorizar.produto && p.variante === itemParaPriorizar.variante
@@ -349,21 +365,17 @@ async function lancarArremateAgregado() {
     const usuarioTiktik = selectUser.value;
     const quantidadeTotal = parseInt(inputQtd.value);
 
-    // Validações... (permanecem as mesmas)
-    if (!usuarioTiktik) return mostrarPopupMensagem('Por favor, selecione um usuário Tiktik para continuar.', 'aviso');
-    if (isNaN(quantidadeTotal) || quantidadeTotal <= 0) return mostrarPopupMensagem('A quantidade a ser arrematada deve ser um número maior que zero.', 'aviso');
-    if (quantidadeTotal > arremateAgregadoEmVisualizacao.total_quantidade_pendente_arremate) return mostrarPopupMensagem('A quantidade informada excede o total pendente para este item.', 'aviso');
+    if (!usuarioTiktik || isNaN(quantidadeTotal) || quantidadeTotal <= 0 || quantidadeTotal > arremateAgregadoEmVisualizacao.total_quantidade_pendente_arremate) {
+        mostrarPopupMensagem('Verifique os dados. Usuário e quantidade válida são obrigatórios.', 'aviso');
+        return;
+    }
     
-    // Bloqueio de UI... (permanece o mesmo)
     const lockKey = arremateAgregadoEmVisualizacao.produto + arremateAgregadoEmVisualizacao.variante;
     if (lancamentosArremateEmAndamento.has(lockKey)) return;
     lancamentosArremateEmAndamento.add(lockKey);
 
-    const originalButtonHTML = btnLancar.innerHTML;
     btnLancar.disabled = true;
     btnLancar.innerHTML = '<div class="spinner-btn-interno"></div> Lançando...';
-    selectUser.disabled = true;
-    inputQtd.disabled = true;
 
     try {
         let quantidadeRestante = quantidadeTotal;
@@ -373,31 +385,32 @@ async function lancarArremateAgregado() {
             if (quantidadeRestante <= 0) break;
             const qtdParaEstaOP = Math.min(quantidadeRestante, op.quantidade_pendente_nesta_op);
             if (qtdParaEstaOP > 0) {
+                // A OP vinda da API já deve ter o produto_id
+                const opCompleta = opsFinalizadasCompletas.find(opc => opc.numero === op.numero);
+                if (!opCompleta || !opCompleta.produto_id) {
+                    throw new Error(`Não foi possível encontrar o ID do produto para a OP #${op.numero}.`);
+                }
+
                 const payload = {
                     op_numero: op.numero,
-                    produto: arremateAgregadoEmVisualizacao.produto,
+                    produto_id: opCompleta.produto_id, // << MUDANÇA ESSENCIAL
                     variante: arremateAgregadoEmVisualizacao.variante === '-' ? null : arremateAgregadoEmVisualizacao.variante,
                     quantidade_arrematada: qtdParaEstaOP,
                     usuario_tiktik: usuarioTiktik
                 };
+                
                 await fetchFromAPI('/arremates', { method: 'POST', body: JSON.stringify(payload) });
                 quantidadeRestante -= qtdParaEstaOP;
             }
         }
         
         mostrarPopupMensagem('Arremate lançado com sucesso!', 'sucesso');
-        
-        // CORREÇÃO: Volta para a tela principal programaticamente
         window.location.hash = '';
 
     } catch (error) {
         console.error("Erro ao lançar arremate agregado:", error);
         mostrarPopupMensagem(`Erro ao lançar arremate: ${error.message}`, 'erro');
-        // Reabilita a UI para o usuário tentar novamente em caso de erro
-        selectUser.disabled = false;
-        inputQtd.disabled = false;
     } finally {
-        // Garante que o botão e o lock sejam resetados
         btnLancar.disabled = false;
         btnLancar.innerHTML = '<i class="fas fa-check"></i> Lançar Arremate';
         lancamentosArremateEmAndamento.delete(lockKey);
@@ -436,23 +449,38 @@ function fecharModalPerda() {
 async function registrarPerda() {
     if (!arremateAgregadoEmVisualizacao) return;
 
+    // --- 1. Coleta de dados ---
     const motivo = document.getElementById('selectMotivoPerda').value;
     const quantidadePerdida = parseInt(document.getElementById('inputQuantidadePerdida').value);
     const observacao = document.getElementById('textareaObservacaoPerda').value;
     const totalPendente = arremateAgregadoEmVisualizacao.total_quantidade_pendente_arremate;
 
-    // Validações...
-    if (!motivo) return mostrarPopupMensagem('Selecione o motivo da perda.', 'aviso');
-    if (isNaN(quantidadePerdida) || quantidadePerdida <= 0) return mostrarPopupMensagem('A quantidade perdida deve ser maior que zero.', 'aviso');
-    if (quantidadePerdida > totalPendente) return mostrarPopupMensagem(`A quantidade perdida não pode ser maior que o total pendente de ${totalPendente}.`, 'aviso');
+    // --- 2. VALIDAÇÃO ROBUSTA COM MENSAGENS ESPECÍFICAS ---
+    if (!motivo) {
+        mostrarPopupMensagem('Por favor, selecione o motivo da perda.', 'aviso');
+        return;
+    }
+    if (isNaN(quantidadePerdida) || quantidadePerdida <= 0) {
+        mostrarPopupMensagem('A quantidade perdida deve ser um número maior que zero.', 'aviso');
+        return;
+    }
+    // AQUI ESTÁ A NOVA VALIDAÇÃO
+    if (quantidadePerdida > totalPendente) {
+        mostrarPopupMensagem(
+            `Não é possível registrar a perda de ${quantidadePerdida} unidades, pois o saldo pendente é de apenas ${totalPendente}.`, 
+            'erro' // Usamos o tipo 'erro' para dar mais destaque
+        );
+        return; // Bloqueia a execução
+    }
     
+    // --- 3. Lógica de envio (se a validação passar) ---
     const btnConfirmar = document.getElementById('btnConfirmarRegistroPerda');
     btnConfirmar.disabled = true;
     btnConfirmar.innerHTML = '<div class="spinner-btn-interno"></div> Registrando...';
     
     try {
         const payload = {
-            produto: arremateAgregadoEmVisualizacao.produto,
+            produto_id: arremateAgregadoEmVisualizacao.produto_id,
             variante: arremateAgregadoEmVisualizacao.variante === '-' ? null : arremateAgregadoEmVisualizacao.variante,
             quantidadePerdida: quantidadePerdida,
             motivo: motivo,
@@ -462,11 +490,10 @@ async function registrarPerda() {
         
         await fetchFromAPI('/arremates/registrar-perda', { method: 'POST', body: JSON.stringify(payload) });
 
-        mostrarPopupMensagem('Perda registrada com sucesso!', 'sucesso', 2500); // Popup com duração de 2.5s
+        mostrarPopupMensagem('Perda registrada com sucesso!', 'sucesso');
         fecharModalPerda();
 
-        // Espera um pouco para o usuário ver o popup antes de redirecionar
-        await new Promise(resolve => setTimeout(resolve, 500)); 
+        // Força a atualização da view principal
         window.location.hash = '';
 
     } catch (error) {
@@ -571,9 +598,28 @@ function renderizarHistoricoModal(page = 1) {
     renderizarPaginacao(paginacaoContainer, paginated.totalPages, paginated.currentPage, renderizarHistoricoModal);
 }
 
-function abrirModalHistorico() {
-    document.getElementById('historicoModalContainer').classList.remove('hidden');
-    renderizarHistoricoModal(1);
+async function abrirModalHistorico() {
+    const modal = document.getElementById('historicoModalContainer');
+    const corpoTabela = document.getElementById('historicoTabelaCorpo');
+    const paginacaoContainer = document.getElementById('historicoPaginacao');
+    
+    // Mostra o modal imediatamente com um feedback de "carregando"
+    modal.classList.remove('hidden');
+    corpoTabela.innerHTML = '<tr><td colspan="6" style="text-align: center;"><div class="spinner">Buscando histórico...</div></td></tr>';
+    paginacaoContainer.innerHTML = ''; // Limpa a paginação antiga
+
+    try {
+        // AQUI ESTÁ A MÁGICA: Chama a função que busca os dados da API
+        await carregarHistorico();
+        
+        // Só depois que os dados chegam, renderiza a tabela com os dados frescos
+        renderizarHistoricoModal(1);
+        
+    } catch (error) {
+        // Se a busca der erro, mostra uma mensagem dentro do modal
+        console.error("Erro ao carregar histórico no modal:", error);
+        corpoTabela.innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;">Falha ao carregar o histórico. Tente novamente.</td></tr>';
+    }
 }
 
 function fecharModalHistorico() {

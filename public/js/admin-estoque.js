@@ -602,7 +602,8 @@ async function carregarTabelaEstoque(searchTerm = null, page = 1) {
 
     if (Object.keys(filtrosAtivos).length > 0) {
         itensFiltrados = itensFiltrados.filter(item => {
-            const produtoDef = todosOsProdutosCadastrados.find(p => p.nome === item.produto_nome);
+            // Usa o ID para encontrar a definição do produto
+            const produtoDef = todosOsProdutosCadastrados.find(p => p.id == item.produto_id);
             if (!produtoDef || !produtoDef.variacoes) return false;
 
             return Object.entries(filtrosAtivos).every(([chaveFiltro, valorFiltro]) => {
@@ -652,7 +653,7 @@ function renderizarCardsConsulta(itensDeEstoque, produtosDefinicoes, niveisDeAle
 
     const fragment = document.createDocumentFragment();
     itensDeEstoque.forEach(item => {
-        const produtoDef = produtosDefinicoes.find(p => p.nome === item.produto_nome);
+        const produtoDef = produtosDefinicoes.find(p => p.id == item.produto_id);
         let imagemSrc = '/img/placeholder-image.png';
         if (produtoDef) {
             const gradeItem = produtoDef.grade?.find(g => g.variacao === item.variante_nome);
@@ -1186,18 +1187,24 @@ function prepararViewMovimento() {
     if (!itemEstoqueSelecionado) return;
     const item = itemEstoqueSelecionado;
     
-    // Todo o código de preenchimento de header, sku, imagem...
     document.getElementById('movimentoItemNome').textContent = `${item.produto_nome} ${item.variante_nome && item.variante_nome !== '-' ? `(${item.variante_nome})` : ''}`;
     document.getElementById('movimentoSaldoAtual').textContent = item.saldo_atual;
-    const produtoDef = todosOsProdutosCadastrados.find(p => p.nome === item.produto_nome);
+
+    // --- AQUI ESTÁ A CORREÇÃO DA IMAGEM ---
+    // Busca a definição do produto usando o ID, que é mais confiável
+    const produtoDef = todosOsProdutosCadastrados.find(p => p.id == item.produto_id);
     let skuParaExibir = item.produto_ref_id || 'N/A';
     let imagemSrc = '/img/placeholder-image.png';
+
     if (produtoDef) {
         if (item.variante_nome && item.variante_nome !== '-' && item.variante_nome !== 'Padrão') {
             const gradeItem = produtoDef.grade?.find(g => g.variacao === item.variante_nome);
             if(gradeItem) {
                  skuParaExibir = gradeItem.sku || skuParaExibir;
                  imagemSrc = gradeItem.imagem || produtoDef.imagem || imagemSrc;
+            } else {
+                 // Se não achar na grade, usa a imagem principal do produto
+                 imagemSrc = produtoDef.imagem || imagemSrc;
             }
         } else {
              skuParaExibir = produtoDef.sku || skuParaExibir;
@@ -1235,50 +1242,46 @@ function prepararViewMovimento() {
     if (historicoContainer.listenerEstorno) {
         historicoContainer.removeEventListener('click', historicoContainer.listenerEstorno);
     }
-    
-    // Cria a nova função de listener. Esta é a correção.
+
+    // Cria a nova função de listener.
     historicoContainer.listenerEstorno = function(event) {
         const botaoEstorno = event.target.closest('.btn-iniciar-estorno');
         if (botaoEstorno) {
-            // **A MUDANÇA ESTÁ AQUI**
-            // Extrai os dados DIRETAMENTE do dataset do botão
             const movimentoId = parseInt(botaoEstorno.dataset.movimentoId);
-            const quantidadeOriginal = parseInt(botaoEstorno.dataset.quantidadeOriginal);
+            // CORRIGIDO AQUI: Use 'saldoParaEstorno' e um nome de variável diferente para clareza
+            const saldoDoBotao = parseInt(botaoEstorno.dataset.saldoParaEstorno);
 
-            // Chama a função de estorno passando os valores puros, não o botão
-            iniciarProcessoDeEstorno(movimentoId, quantidadeOriginal, botaoEstorno);
+            // Chama a função de estorno passando os valores corretos
+            iniciarProcessoDeEstorno(movimentoId, saldoDoBotao, botaoEstorno);
         }
     };
-    
+
     // Adiciona o novo listener
     historicoContainer.addEventListener('click', historicoContainer.listenerEstorno);
 
     // Carrega o histórico
     const historicoBody = document.getElementById('historicoMovimentacoesBody');
     if (historicoBody) historicoBody.innerHTML = '<tr><td colspan="6"><div class="es-spinner"></div></td></tr>';
-    carregarHistoricoMovimentacoes(item.produto_nome, item.variante_nome, 1);
+    carregarHistoricoMovimentacoes(item.produto_id, item.variante_nome, 1);
 }
 
 
-async function iniciarProcessoDeEstorno(movimentoId, quantidadeOriginalStr, botao) {
-    const quantidadeOriginal = Math.abs(quantidadeOriginalStr);
-
-    if (isNaN(movimentoId) || isNaN(quantidadeOriginal)) {
-        mostrarPopupEstoque('Erro: Informações do movimento não encontradas.', 'erro');
+async function iniciarProcessoDeEstorno(movimentoId, saldoParaEstorno, botao) {
+    if (isNaN(movimentoId) || isNaN(saldoParaEstorno)) {
+        mostrarPopupEstoque('Erro: Informações do movimento para estorno estão inválidas.', 'erro');
         return;
     }
     
-    // O resto da função continua exatamente o mesmo, usando as variáveis recebidas
+    // Mostra o popup com o saldo máximo correto
     const quantidadeParaEstornar = await mostrarPopupEstornoParcial(
-        `Estornar movimento de <strong>${quantidadeOriginal}</strong> unidades.<br>Quantas deseja devolver ao estoque?`,
-        quantidadeOriginal
+        `Estornar este movimento.<br>Quantas unidades deseja devolver ao estoque?`,
+        saldoParaEstorno
     );
 
     if (quantidadeParaEstornar === null || quantidadeParaEstornar <= 0) {
         return; 
     }
 
-    // Usamos o 'botao' passado como terceiro argumento para a UI
     botao.disabled = true;
     botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
@@ -1296,23 +1299,33 @@ async function iniciarProcessoDeEstorno(movimentoId, quantidadeOriginalStr, bota
         
         mostrarPopupEstoque('Estorno realizado com sucesso!', 'sucesso');
         
-        // ... (lógica de atualização da UI)
-        const itemNoCache = saldosEstoqueGlobaisCompletos.find(item => item.produto_ref_id === movimentoDeEstorno.produto_ref_id);
-        if (itemNoCache) itemNoCache.saldo_atual = parseFloat(itemNoCache.saldo_atual) + parseFloat(movimentoDeEstorno.quantidade);
-        if (itemEstoqueSelecionado) {
+        // Atualiza a UI principal
+        const itemNoCache = saldosEstoqueGlobaisCompletos.find(item => item.produto_id == movimentoDeEstorno.produto_id && item.variante_nome == (movimentoDeEstorno.variante_nome || '-'));
+        if (itemNoCache) {
+            itemNoCache.saldo_atual = parseFloat(itemNoCache.saldo_atual) + parseFloat(movimentoDeEstorno.quantidade);
+        }
+        
+        if (itemEstoqueSelecionado && itemEstoqueSelecionado.produto_id == movimentoDeEstorno.produto_id) {
             const saldoAtualEl = document.getElementById('movimentoSaldoAtual');
             if (saldoAtualEl) {
                 const novoSaldo = parseInt(saldoAtualEl.textContent) + parseInt(movimentoDeEstorno.quantidade);
                 saldoAtualEl.textContent = novoSaldo;
                 itemEstoqueSelecionado.saldo_atual = novoSaldo;
             }
-            carregarHistoricoMovimentacoes(itemEstoqueSelecionado.produto_nome, itemEstoqueSelecionado.variante_nome, currentPageHistorico);
+            // AQUI ESTÁ A CORREÇÃO:
+            // Recarrega o histórico usando o ID do item que está em tela.
+            carregarHistoricoMovimentacoes(itemEstoqueSelecionado.produto_id, itemEstoqueSelecionado.variante_nome, currentPageHistorico);
         }
 
     } catch (error) {
         mostrarPopupEstoque(`Falha no estorno: ${error.data?.details || error.message}`, 'erro');
-        botao.disabled = false;
-        botao.innerHTML = '<i class="fas fa-undo"></i>';
+    } finally {
+        // Garante que o botão seja reabilitado, mesmo que esteja em outra "página" do histórico
+        const btnOriginal = document.querySelector(`.btn-iniciar-estorno[data-movimento-id="${movimentoId}"]`);
+        if(btnOriginal) {
+            btnOriginal.disabled = false;
+            btnOriginal.innerHTML = '<i class="fas fa-undo"></i>';
+        }
     }
 }
 
@@ -1345,7 +1358,7 @@ function mostrarPopupEstornoParcial(mensagem, quantidadeMaxima) {
         input.placeholder = `Máx: ${quantidadeMaxima}`;
         input.max = quantidadeMaxima;
         input.min = 1;
-        input.value = quantidadeMaxima; // Começa com o valor máximo sugerido
+        input.value = '';
         input.style.textAlign = 'center';
         input.style.width = '120px';
         input.style.fontSize = '1.2rem';
@@ -1468,9 +1481,8 @@ async function salvarMovimentoManualEstoque() {
     }
 
     const payload = {
-        produto_nome: itemEstoqueSelecionado.produto_nome,
-        variante_nome: (itemEstoqueSelecionado.variante_nome === '-' || !itemEstoqueSelecionado.variante_nome) ? null : itemEstoqueSelecionado.variante_nome,
-        quantidade_movimentada: quantidade,
+        produto_id: itemEstoqueSelecionado.produto_id,
+        variante_nome: (itemEstoqueSelecionado.variante_nome === '-' || !itemEstoqueSelecionado.variante_nome) ? null : itemEstoqueSelecionado.variante_nome,        quantidade_movimentada: quantidade,
         tipo_operacao: tipoOperacao,
         observacao: observacao
     };
@@ -1577,42 +1589,42 @@ function fecharModalHistorico() {
     if (modalHistoricoElement) modalHistoricoElement.style.display = 'none';
 }
 
-async function carregarHistoricoMovimentacoes(produtoNome, varianteNome, page) {
+async function carregarHistoricoMovimentacoes(produtoId, varianteNome, page) {
     currentPageHistorico = page;
-    const tbody = document.getElementById('historicoMovimentacoesTableBody');
+    const tbody = document.getElementById('historicoMovimentacoesBody');
     const paginacaoContainer = document.getElementById('paginacaoHistoricoMovimentacoes');
     if (!tbody || !paginacaoContainer) return;
 
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;"><div class="es-spinner">Carregando...</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;"><div class="es-spinner">Carregando...</div></td></tr>`;
     paginacaoContainer.innerHTML = '';
 
     try {
-        const varianteParaAPI = (varianteNome === '-' || !varianteNome) ? null : varianteNome;
+        // AQUI ESTÁ A CORREÇÃO:
+        // Montamos os parâmetros da URL com 'produto_id'
         const params = new URLSearchParams({
-            produto_nome: produtoNome,
+            produto_id: produtoId,
             limit: itemsPerPageHistorico,
             page: currentPageHistorico
         });
-        if (varianteParaAPI) {
-            params.append('variante_nome', varianteParaAPI);
+        
+        // A API de movimentos agora também precisa do nome da variante
+        if (varianteNome && varianteNome !== '-') {
+            params.append('variante_nome', varianteNome);
         }
 
         const data = await fetchEstoqueAPI(`/estoque/movimentos?${params.toString()}`);
         
         renderizarHistoricoMovimentacoes(data.rows || []);
-        renderizarPaginacaoHistorico(data.pages || 0, produtoNome, varianteNome);
+        renderizarPaginacaoHistorico(data.pages || 0, produtoId, varianteNome); // Passa o ID para a paginação
     } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:red;">Erro ao carregar histórico.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:red;">Erro ao carregar histórico.</td></tr>`;
         mostrarPopupEstoque('Erro ao carregar histórico de movimentações.', 'erro');
     }
 }
 
 function renderizarHistoricoMovimentacoes(movimentos) {
     const tbody = document.getElementById('historicoMovimentacoesBody');
-    if (!tbody) {
-        console.error("Elemento #historicoMovimentacoesBody não encontrado.");
-        return;
-    }
+    if (!tbody) return;
     tbody.innerHTML = '';
 
     if (!movimentos || movimentos.length === 0) {
@@ -1624,7 +1636,6 @@ function renderizarHistoricoMovimentacoes(movimentos) {
         const tr = tbody.insertRow();
         const quantidadeClasse = mov.quantidade > 0 ? 'quantidade-entrada' : 'quantidade-saida';
 
-        // NOVO: Adiciona a classe 'linha-estorno' se o tipo de movimento incluir "ESTORNO"
         if (mov.tipo_movimento.includes('ESTORNO')) {
             tr.classList.add('linha-estorno');
         }
@@ -1638,31 +1649,36 @@ function renderizarHistoricoMovimentacoes(movimentos) {
             <td data-label="Ações" style="text-align:center;"></td>
         `;
 
-        if (mov.quantidade < 0 && (mov.quantidade_estornada || 0) > 0) {
+        // --- CORREÇÃO NA LÓGICA DE ESTORNO ---
+        const quantidadeOriginalAbs = Math.abs(mov.quantidade);
+        const quantidadeJaEstornada = mov.quantidade_estornada || 0;
+        const saldoDisponivelParaEstorno = quantidadeOriginalAbs - quantidadeJaEstornada;
+        
+        // Mostra o total já estornado se for maior que zero
+        if (mov.quantidade < 0 && quantidadeJaEstornada > 0) {
             const estornadoInfo = document.createElement('span');
-            estornadoInfo.style.fontSize = '0.8em';
-            estornadoInfo.style.color = '#7f8c8d';
-            estornadoInfo.textContent = `(estornado: ${mov.quantidade_estornada})`;
+            estornadoInfo.className = 'info-estornado';
+            estornadoInfo.textContent = `(estornado: ${quantidadeJaEstornada})`;
             tr.cells[2].appendChild(estornadoInfo);
         }
-
-        const saldoParaEstornar = Math.abs(mov.quantidade) - (mov.quantidade_estornada || 0);
         
-        if (mov.quantidade < 0 && saldoParaEstornar > 0 && permissoesGlobaisEstoque.includes('gerenciar-estoque')) {
+        // Mostra o botão de estorno APENAS se houver saldo disponível
+        if (mov.quantidade < 0 && saldoDisponivelParaEstorno > 0 && permissoesGlobaisEstoque.includes('gerenciar-estoque')) {
             const cellAcoes = tr.cells[5];
             const btnEstornar = document.createElement('button');
             btnEstornar.className = 'es-btn-icon-estorno btn-iniciar-estorno';
-            btnEstornar.title = 'Estornar este movimento';
+            btnEstornar.title = `Estornar até ${saldoDisponivelParaEstorno} unidades`;
             btnEstornar.innerHTML = '<i class="fas fa-undo"></i>';
             btnEstornar.dataset.movimentoId = mov.id;
-            btnEstornar.dataset.quantidadeOriginal = mov.quantidade;
+            // Armazena o SALDO REAL disponível para estorno
+            btnEstornar.dataset.saldoParaEstorno = saldoDisponivelParaEstorno;
             cellAcoes.appendChild(btnEstornar);
         }
     });
 }
 
 
-function renderizarPaginacaoHistorico(totalPages, produtoNome, varianteNome) {
+function renderizarPaginacaoHistorico(totalPages, produtoId, varianteNome) {
     const paginacaoContainer = document.getElementById('paginacaoHistoricoMovimentacoes');
     paginacaoContainer.innerHTML = '';
     if (totalPages <= 1) {
@@ -1680,7 +1696,8 @@ function renderizarPaginacaoHistorico(totalPages, produtoNome, varianteNome) {
     paginacaoContainer.querySelectorAll('.pagination-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const targetPage = parseInt(btn.dataset.page);
-            carregarHistoricoMovimentacoes(produtoNome, varianteNome, targetPage);
+            // AQUI ESTÁ A CORREÇÃO: A chamada recursiva usa o ID
+            carregarHistoricoMovimentacoes(produtoId, varianteNome, targetPage);
         });
     });
 }
@@ -1897,7 +1914,13 @@ function renderizarCardsDeVariacao() {
             saldoDisplay.textContent = saldoInicial - qtdFinal;
 
             if (qtdFinal > 0) {
-                itensEmSeparacao.set(item.produto_ref_id, { produto_nome: item.produto_nome, variante_nome: item.variante_nome, quantidade_movimentada: qtdFinal });
+                // CORREÇÃO: Garante que o ID e o NOME sejam salvos no carrinho
+                itensEmSeparacao.set(item.produto_ref_id, { 
+                    produto_id: item.produto_id, 
+                    produto_nome: item.produto_nome, 
+                    variante_nome: item.variante_nome, 
+                    quantidade_movimentada: qtdFinal 
+                });
                 card.classList.add('selecionado');
                 saldoDisplay.style.color = '#e74c3c';
             } else {
@@ -1911,7 +1934,6 @@ function renderizarCardsDeVariacao() {
         plusBtn.addEventListener('click', () => atualizarItem(parseInt(qtyInput.value) + 1));
         minusBtn.addEventListener('click', () => atualizarItem(parseInt(qtyInput.value) - 1));
         qtyInput.addEventListener('change', () => atualizarItem(parseInt(qtyInput.value)));
-        qtyInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') { e.target.blur(); } });
         container.appendChild(card);
     });
 }
@@ -2062,12 +2084,14 @@ async function confirmarSaidaEstoque() {
         return;
     }
 
-    const itensParaEnviar = Array.from(itensEmSeparacao.values());
-    if (itensParaEnviar.length === 0) {
-        mostrarPopupEstoque('O carrinho de separação está vazio.', 'aviso');
-        fecharModalFinalizacao();
-        return;
-    }
+    // CORREÇÃO: Garante que o payload enviado para a API tenha 'produto_id'
+    const itensParaEnviar = Array.from(itensEmSeparacao.values()).map(item => ({
+        produto_id: item.produto_id, // Usa o ID salvo no carrinho
+        variante_nome: item.variante_nome,
+        quantidade_movimentada: item.quantidade_movimentada
+    }));
+
+    if (itensParaEnviar.length === 0) { /* ... */ }
     
     const payload = { itens: itensParaEnviar, tipo_operacao, observacao };
 
@@ -2171,17 +2195,6 @@ function setupEventListenersEstoque() {
             if (refId) {
                 removerItemDoCarrinho(refId);
             }
-        }
-    });
-
-    // ---  Listener para o histórico de movimentações ---
-    // Adiciona um único listener à tabela de histórico
-    document.getElementById('historicoContainer')?.addEventListener('click', function(event) {
-        // Verifica se o elemento clicado (ou um pai dele) é o nosso botão de estorno
-        const botaoEstorno = event.target.closest('.btn-iniciar-estorno');
-        if (botaoEstorno) {
-            // Se for, chama a nossa nova função de estorno
-            iniciarProcessoDeEstorno(event);
         }
     });
 
