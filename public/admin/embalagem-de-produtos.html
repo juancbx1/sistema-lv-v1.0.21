@@ -12,7 +12,7 @@
     <!-- Botão Hambúrguer -->
     <div class="hamburger-menu">
         <i class="fas fa-bars"></i>
-        <i class="fas fa-times"></i>
+        <i class="fas fa-times"></i> 
     </div>
 
  <div class="container-ep">
@@ -45,86 +45,151 @@
         <!-- Nova Seção para Detalhes da Embalagem (inicialmente oculta) -->
         <!-- Esta seção será MUITO PARECIDA com a sua #embalarView atual, mas adaptada ao novo design -->
         <section class="ep-card" id="embalarDetalheView" style="display: none;">
-            <div class="ep-embalar-header"> <!-- Reutilize a classe do seu CSS antigo se já estiver bom, ou adapte -->
-                <div class="ep-thumbnail-detalhe" id="embalagemDetalheThumbnail"></div>
-                <div class="ep-embalar-title-group">
-                    <h2 id="embalagemDetalheTitulo" class="ep-titulo-secao" style="border-bottom:none; margin-bottom:0;">Embalar Produto</h2>
-                    <p id="embalagemDetalheSubTitle" class="ep-sub-title" style="font-size:1.1em; margin-top:5px;"></p>
-                </div>
-                <button class="botao-fechar ep-btn-perigo" id="fecharEmbalarDetalheBtn" title="Voltar para Lista">X</button>
-            </div>
+            <div class="ep-movimento-header">
+        <div class="ep-movimento-thumbnail" id="embalagemDetalheThumbnail">
+            <!-- Imagem será preenchida pelo JS -->
+        </div>
+        <div class="ep-movimento-info">
+            <h2 id="embalagemDetalheTitulo">[Produto]</h2>
+            <p id="embalagemDetalheSubTitle">Variação: [Variante]</p>
+            <!-- Poderia adicionar o SKU aqui também se desejar, como no card -->
+            <!-- <p id="embalagemDetalheSKU" class="ep-sku-info-detalhe">SKU: [SKU]</p> -->
+        </div>
+        <div class="ep-movimento-saldo">
+            <label>DISPONÍVEL P/ EMBALAR</label>
+            <span id="embalagemDetalheSaldoTotal">0</span> <!-- JS preencherá com agregado.total_quantidade_disponivel_para_embalar -->
+        </div>
+        <!-- O botão fechar agora está posicionado pelo CSS da section pai ou do header -->
+    </div>
+    <button class="botao-fechar ep-btn-perigo" id="fecharEmbalarDetalheBtn" title="Voltar para Lista">X</button>
+    <!-- FIM DO NOVO CABEÇALHO -->
 
-            <!-- Abas (Unidade / Kit) - Reutilize sua estrutura de abas existente -->
-            <div class="ep-tabs">
-                <button class="ep-tab-btn active" data-tab="unidade">Embalar Unidade</button>
-                <button class="ep-tab-btn" data-tab="kit" style="display:none;">Montar e Embalar Kit</button> <!-- Inicialmente escondido -->
-            </div>
+    <hr class="ep-movimento-divisor"> <!-- Divisor opcional, mas ajuda na separação visual -->
+
+    <!-- Abas (Unidade / Kit) - Sua estrutura atual continua aqui -->
+        <div class="ep-tabs">
+        <button class="ep-tab-btn active" data-tab="unidade">Embalar Unidade</button>
+        <button class="ep-tab-btn" data-tab="kit" style="display:none;">Montar e Embalar Kit</button>
+        </div>
 
             <!-- Painel da Aba UNIDADE -->
             <div class="ep-tab-panel active" id="unidade-tab-nova">
-                <div class="ep-form-estilizado" style="padding-top:20px;">
-                     <div class="ep-titulo-variacao-prod" style="text-align: center; margin-bottom: 15px;">
-                        <p><strong>Produto:</strong> <span id="embalarProdutoNome"></span></p>
-                        <p><strong>Variação:</strong> <span id="embalarVarianteNome"></span></p>
-                    </div>
-                    <div class="ep-qtd-disponivel-destaque" style="background-color: var(--ep-cor-verde-sucesso);"> <!-- Cor diferente para embalagem -->
-                        <span>Disponível para Embalagem (deste item):</span>
-                        <strong id="embalarQtdDisponivelUnidade">0</strong>
-                    </div>
-                    <div class="ep-form-grupo">
-                        <label for="inputQuantidadeEmbalarUnidade">Quantidade de Unidades a Embalar:</label>
-                        <input type="number" id="inputQuantidadeEmbalarUnidade" class="ep-input-embalar-produto" min="1">
-                    </div>
-                    <div class="ep-form-botoes" style="justify-content: center;">
-                        <button id="btnEmbalarEnviarEstoqueUnidade" class="ep-btn ep-btn-success">
-                            <i class="fas fa-box-open"></i> Estocar Unidades
+                        <div class="ep-acao-embalagem-container">
+                <div class="ep-form-grupo ep-grupo-quantidade">
+                    <label for="inputQuantidadeEmbalarUnidade" class="ep-label-destacado">Quantidade de Unidades a Embalar:</label>
+                    <div class="ep-input-com-acoes">
+                        <input type="number" id="inputQuantidadeEmbalarUnidade" class="ep-input ep-input-grande" min="1" placeholder="0">
+                        <button id="btnEmbalarTudoUnidade" class="ep-btn ep-btn-secundario" title="Embalar toda quantidade disponível">
+                            <i class="fas fa-boxes"></i> Tudo
                         </button>
                     </div>
+                    <!-- Botões de Ação Rápida de Quantidade (opcional, mas legal) -->
+                    <div class="ep-acoes-rapidas-qtd">
+                        <button class="ep-btn ep-btn-outline-pequeno" data-qtd-add="1">+1</button>
+                        <button class="ep-btn ep-btn-outline-pequeno" data-qtd-add="5">+5</button>
+                        <button class="ep-btn ep-btn-outline-pequeno" data-qtd-add="10">+10</button>
+                        <button class="ep-btn ep-btn-outline-pequeno ep-btn-perigo-outline" data-qtd-add="-1" title="Remover 1"><i class="fas fa-minus"></i></button>
+                    </div>
+                    <p id="feedbackSaldoRestanteUnidade" class="ep-feedback-saldo"> </p> <!-- Para "Restarão X unidades..." -->
+                </div>
+
+                <div class="ep-form-grupo">
+                    <label for="observacaoEmbalagemUnidade">Observação (Opcional):</label>
+                    <textarea id="observacaoEmbalagemUnidade" class="ep-textarea" rows="2" placeholder="Ex: Lote especial, cliente específico..."></textarea>
+                </div>
+
+                <div class="ep-form-botoes ep-botoes-acao-principal">
+                    <button id="btnEmbalarEnviarEstoqueUnidade" class="ep-btn ep-btn-sucesso ep-btn-grande">
+                        <i class="fas fa-box-open"></i> EMBALAR E ESTOCAR UNIDADES
+                    </button>
                 </div>
             </div>
+            </div>
 
-            <!-- Painel da Aba KIT -->
+           <!-- Painel da Aba KIT -->
             <div class="ep-tab-panel" id="kit-tab-nova" style="display:none;">
-                <div class="ep-form-estilizado" style="padding-top:20px;">
-                    <div id="kit-selection-area-nova" class="ep-form-grupo">
-                        <label>1. Selecione o Kit para Montagem:</label>
-                        <div id="kitsListNova" class="ep-button-group">
-                            <!-- Botões dos kits -->
+                <div class="ep-acao-embalagem-container ep-kit-container"> <!-- Container principal da aba, classe específica para kit -->
+
+                    <!-- Passo 1: Seleção do Kit -->
+                    <div class="ep-form-grupo ep-kit-passo">
+                        <label class="ep-label-destacado">1. Selecione o Kit para Montagem:</label>
+                        <div id="kitsListNova" class="ep-kit-selecao-botoes">
+                            <!-- Botões dos kits serão inseridos pelo JS -->
+                            <p class="ep-placeholder-kits">Buscando kits compatíveis...</p>
                         </div>
                     </div>
-                    <div id="kitVariacaoComposicaoWrapperNova" style="display:none; margin-top:15px; padding-top:15px; border-top:1px dashed var(--ep-cor-cinza-borda);">
-                        <div class="ep-form-grupo">
-                            <label for="kitVariacoesNova">Selecione a Variação do Kit:</label>
-                            <select id="kitVariacoesNova" class="ep-select ep-input"></select>
+
+                    <!-- Passo 2: Seleção da Variação do Kit e Visualização (aparece após selecionar um kit) -->
+                    <div id="kitVariacaoWrapperNova" class="ep-form-grupo ep-kit-passo" style="display:none;">
+                        <label for="kitVariacoesNova" class="ep-label-destacado">2. Selecione a Variação do Kit:</label>
+                        <div class="ep-kit-variacao-selecao-container">
+                            <select id="kitVariacoesNova" class="ep-select ep-input-medio">
+                                <option value="">-- Selecione uma variação --</option>
+                            </select>
+                            <div id="kitImagemSelecionadoNova" class="ep-kit-imagem-preview">
+                                <img src="/img/placeholder-image.png" alt="Preview do Kit" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">
+                            </div>
                         </div>
-                        <div id="kitTableContainerNova" style="display:none; margin-top:10px;" class="ep-tabela-wrapper">
-                            <h4 class="ep-subtitulo-secao">Composição do Kit:</h4>
-                            <table class="ep-tabela-estilizada ep-mini-table"> <!-- Reutilizar estilo de mini-tabela -->
-                                <thead><tr><th>Componente</th><th style="text-align:center;">Necessário</th><th style="text-align:center;">Disponível</th></tr></thead>
-                                <tbody id="kitTableBodyNova"></tbody>
+                    </div>
+
+                    <!-- Passo 3: Composição e Disponibilidade (aparece após selecionar uma variação de kit) -->
+                    <div id="kitComposicaoWrapperNova" class="ep-kit-passo" style="display:none;">
+                        <h4 class="ep-label-destacado ep-composicao-titulo">3. Composição e Disponibilidade do Kit:</h4>
+                        <div id="kitTableContainerNova" class="ep-tabela-wrapper ep-tabela-composicao-kit">
+                            <table class="ep-tabela-estilizada ep-mini-table">
+                                <thead>
+                                    <tr>
+                                        <th>Componente</th>
+                                        <th style="text-align:center;">Necessário</th>
+                                        <th style="text-align:center;">Disponível</th>
+                                        <th style="text-align:center;">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="kitTableBodyNova">
+                                    <!-- Linhas da composição inseridas pelo JS -->
+                                </tbody>
                             </table>
                         </div>
-                        <p id="kitErrorMessageNova" class="ep-error-message hidden" style="text-align:center; margin-top:10px;"></p>
+                        <p id="kitErrorMessageNova" class="ep-error-message hidden"></p>
                     </div>
-                    <div id="kitFooterNova" style="display:none; margin-top:20px; text-align:center;">
-                         <div class="ep-qtd-disponivel-destaque" style="background-color: var(--ep-cor-laranja-aviso); margin-bottom:15px;">
-                            <span>Kits Montáveis:</span> <strong id="qtdDisponivelKitsNova">0</strong>
+
+                    <!-- Passo 4: Ação de Montagem (aparece se o kit puder ser montado) -->
+                    <div id="kitAcaoMontagemWrapperNova" class="ep-kit-passo" style="display:none;">
+                        <div class="ep-form-grupo ep-grupo-quantidade ep-grupo-quantidade-kit">
+                            <div class="ep-kits-montaveis-info">
+                                <span>Kits Montáveis com Saldo Atual:</span>
+                                <strong id="qtdDisponivelKitsNova">0</strong>
+                            </div>
+                            <label for="qtdEnviarKitsNova" class="ep-label-destacado" style="margin-top:15px;">Quantidade de Kits a Montar:</label>
+                            <div class="ep-input-com-acoes">
+                                <input type="number" id="qtdEnviarKitsNova" class="ep-input ep-input-grande" min="0" value="0" placeholder="0">
+                                <button id="btnMontarMaximoKits" class="ep-btn ep-btn-secundario" title="Montar o máximo possível">
+                                    <i class="fas fa-battery-full"></i> Máx.
+                                </button>
+                            </div>
+                             <!-- Ações rápidas de quantidade para kits (opcional) -->
+                            <div class="ep-acoes-rapidas-qtd ep-acoes-rapidas-kit">
+                                <button class="ep-btn ep-btn-outline-pequeno" data-qtd-add="1">+1</button>
+                                <button class="ep-btn ep-btn-outline-pequeno" data-qtd-add="5">+5</button>
+                                <button class="ep-btn ep-btn-outline-pequeno ep-btn-perigo-outline" data-qtd-add="-1" title="Remover 1"><i class="fas fa-minus"></i></button>
+                            </div>
                         </div>
+
                         <div class="ep-form-grupo">
-                            <label for="qtdEnviarKitsNova">Montar Quantidade de Kits:</label>
-                            <input type="number" id="qtdEnviarKitsNova" class="ep-input-qte-embalar-produto" min="0" value="0">
+                            <label for="observacaoMontagemKit">Observação para Montagem (Opcional):</label>
+                            <textarea id="observacaoMontagemKit" class="ep-textarea" rows="2" placeholder="Ex: Lote de kits para evento X..."></textarea>
                         </div>
-                        <div class="ep-form-botoes" style="justify-content: center; margin-top:10px;">
-                            <button id="btnMontarEnviarKitsEstoque" class="ep-btn ep-botao-principal">
-                                <i class="fas fa-boxes"></i> Estocar Kits
+
+                        <div class="ep-form-botoes ep-botoes-acao-principal">
+                            <button id="btnMontarEnviarKitsEstoque" class="ep-btn ep-btn-sucesso ep-btn-grande">
+                                <i class="fas fa-boxes"></i> MONTAR E ESTOCAR KITS
                             </button>
                         </div>
                     </div>
-                </div>
-            </div>
+                </div> <!-- Fim do .ep-acao-embalagem-container.ep-kit-container -->
+            </div> <!-- Fim do .ep-tab-panel#kit-tab-nova -->
+    
         </section>
-
- </div>
 
     <script src="/js/admin-embalagem-de-produtos.js" type="module"></script>
     <script src="/js/carregar-menu-lateral.js" type="module"></script>

@@ -21,6 +21,7 @@
     --ep-cor-cinza-fundo-input: #f8f9fa;   /* Fundo de inputs */
     --ep-cor-cinza-fundo-alternativo: #f9fbfd; /* Para fundos de seção leves */
     --ep-cor-branco: #ffffff;
+    --ep-cor-status-pronto: var(--ep-cor-verde-sucesso);
 
     --ep-sombra-padrao: 0 4px 12px rgba(0, 0, 0, 0.08);
     --ep-sombra-hover: 0 6px 16px rgba(0, 0, 0, 0.12);
@@ -30,6 +31,9 @@
     --ep-raio-borda-card: 8px;
     --ep-raio-borda-input: 6px;
     --ep-raio-borda-botao: 6px;
+
+     --ep-cor-label-dado: #6c757d;
+    --ep-cor-valor-dado: var(--ep-cor-azul-primario); /* Cor padrão para valores nos dados */
 
     --ep-font-principal: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
@@ -292,75 +296,523 @@ body.autenticado {
 /*------------------------------------*\
     #CARDS DE EMBALAGEM (na lista principal)
 \*------------------------------------*/
-.ep-embalagem-card-container { 
+/* Estilo do Card Individual de Consulta (Adaptado para EP) */
+.ep-consulta-card {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); 
-    gap: 20px;
-}
-
-.op-embalagem-card { /* MANTENDO .op- pois o JS já usa essa classe */
+    /* Coluna da imagem (auto), coluna da info (ocupa o resto), coluna dos dados (auto) */
+    grid-template-columns: auto 1fr auto;
     background-color: var(--ep-cor-branco);
     border-radius: var(--ep-raio-borda-card);
-    padding: 18px;
     box-shadow: var(--ep-sombra-padrao);
-    border: 1px solid var(--ep-cor-cinza-borda);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    display: flex;
-    flex-direction: column;
-    text-align: center;
-}
-.op-embalagem-card:not([style*="opacity: 0.6"]):hover {
-    transform: translateY(-4px);
-    box-shadow: var(--ep-sombra-hover);
+    border-left: 6px solid; /* A cor da borda vem da classe de status, ex: .status-pronto-para-embalar */
     cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    overflow: hidden; /* Importante para que o conteúdo não vaze */
+    align-items: center; /* Alinha os itens da grade verticalmente ao centro */
+    min-height: 90px; /* Garante uma altura mínima para consistência visual */
 }
 
-.op-embalagem-card-thumbnail {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%; 
+.ep-consulta-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+}
+
+.ep-consulta-card.status-pronto-para-embalar {
+    border-left-color: var(--ep-cor-status-pronto);
+}
+
+.ep-consulta-card-img {
+    width: 70px;
+    height: 70px;
+    object-fit: cover;
+    margin: 15px; /* Aumenta um pouco a margem para desktop */
+    border-radius: 4px;
+    background-color: #f0f2f5;
+}
+
+.ep-consulta-card-info {
+    padding: 15px 10px 15px 0; /* Ajusta padding, sem padding à esquerda da imagem */
+    overflow: hidden; /* Para evitar que textos longos quebrem o layout */
+}
+
+.ep-consulta-card-info h3 {
+    font-size: 1.05rem;
+    color: var(--ep-cor-azul-escuro);
+    margin: 0 0 5px 0;
+    font-weight: 600;
+    white-space: nowrap; /* Evita quebra de linha no título */
     overflow: hidden;
-    margin: 0 auto 15px auto;
-    background-color: var(--ep-cor-cinza-fundo-input);
-    border: 2px solid var(--ep-cor-cinza-borda);
+    text-overflow: ellipsis; /* Adiciona "..." se o texto for muito longo */
+}
+
+.ep-consulta-card-info p {
+    font-size: 0.85rem;
+    color: var(--ep-cor-cinza-texto-secundario, #6c757d);
+    margin: 0 0 3px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ep-consulta-card-info .ep-sku-info {
+    font-size: 0.8rem;
+    color: #7f8c8d;
+    margin-top: 5px;
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ep-consulta-card-dados {
     display: flex;
+    flex-direction: column; /* Dados empilhados verticalmente */
+    gap: 12px; /* Espaço entre "Disponível" e "Aguardando" */
+    padding: 15px 20px; /* Aumenta o padding lateral */
+    background-color: #f8f9fa;
+    border-left: 1px solid #eef0f3;
+    height: 100%;
+    justify-content: center;
+    text-align: center;
+    min-width: 120px; /* Largura mínima para a seção de dados */
+}
+
+.ep-dado-bloco .label {
+    display: block;
+    font-size: 0.7rem; /* Label um pouco menor */
+    color: var(--ep-cor-label-dado);
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.ep-dado-bloco .valor {
+    display: block;
+    font-size: 1.5rem; /* Valor destacado */
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--ep-cor-valor-dado);
+}
+
+/* Estilo para o CONTAINER da grade de cards */
+.ep-embalagem-card-container {
+    display: grid;
+    /* Define que teremos colunas que se auto-ajustam.
+       Cada coluna terá no MÍNIMO 300px.
+       Se houver mais espaço, elas se expandem (1fr).
+       'auto-fill' tenta preencher o espaço com o máximo de colunas possível. */
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px; /* Espaçamento entre os cards */
+    margin-top: 20px; /* Espaçamento acima da grade de cards */
+}
+
+/* Estilo para a section principal da view de detalhe */
+#embalarDetalheView.ep-card { /* Adiciona especificidade se necessário */
+    position: relative; /* Necessário para o posicionamento absoluto do botão fechar */
+    padding-top: 25px;  /* Deixa espaço no topo se o botão fechar não estiver no header */
+    min-height: 400px; /* Um valor mínimo razoável */
+    overflow: visible !important;    /* OU visible. 'auto' mostrará scrollbars se necessário */
+}
+
+/* NOVO CABEÇALHO DA VIEW DE DETALHE (Baseado no .movimento-header do Estoque) */
+.ep-movimento-header {
+    display: grid;
+    /* Colunas: Thumbnail (auto), Info (1fr - flexível), Saldo (auto) */
+    grid-template-columns: auto 1fr auto;
+    gap: 20px;
+    align-items: center; /* Alinha verticalmente os itens do grid */
+    margin-bottom: 20px; /* Espaço abaixo do header, antes do divisor/abas */
+    /* Removido padding-bottom e border-bottom daqui, o <hr> cuidará da divisão visual */
+}
+
+.ep-movimento-thumbnail {
+    width: 80px;  /* Tamanho da imagem */
+    height: 80px;
+    border-radius: var(--ep-raio-borda-card); /* Borda do card para consistência */
+    overflow: hidden;
+    background-color: var(--ep-cor-cinza-fundo-input);
+    border: 1px solid var(--ep-cor-cinza-borda);
+    display: flex; /* Para centralizar a imagem se ela for menor que o container */
     align-items: center;
     justify-content: center;
 }
-.op-embalagem-card-thumbnail img {
+
+.ep-movimento-thumbnail img {
     width: 100%;
     height: 100%;
     object-fit: cover;
 }
 
-.op-embalagem-card-info {
-    margin-bottom: 15px;
-    flex-grow: 1;
-}
-.op-embalagem-card-produto {
-    font-size: 1.15rem;
-    font-weight: 600;
+
+.ep-movimento-info h2 { /* #embalagemDetalheTitulo */
+    font-size: 1.7rem;
     color: var(--ep-cor-azul-escuro);
-    margin-bottom: 3px;
-}
-.op-embalagem-card-variante {
-    font-size: 0.9rem;
-    color: var(--ep-cor-cinza-texto-secundario);
+    margin: 0 0 5px 0;
+    font-weight: 600;
 }
 
-.op-embalagem-card-disponivel {
+.ep-movimento-info p { /* #embalagemDetalheSubTitle e #embalagemDetalheSKU */
     font-size: 1rem;
-    font-weight: 500;
-    color: var(--ep-cor-texto-principal);
-    padding-top: 10px;
-    border-top: 1px dashed var(--ep-cor-cinza-borda);
+    color: var(--ep-cor-cinza-texto-secundario, #6c757d);
+    margin: 0 0 3px 0;
 }
-.op-embalagem-card-disponivel strong {
-    font-size: 1.3rem;
-    color: var(--ep-cor-verde-sucesso);
+
+.ep-movimento-info .ep-sku-info-detalhe { /* Classe para o SKU se você adicionar */
+    font-size: 0.85rem;
+    color: #7f8c8d;
+    margin-top: 5px;
+}
+
+.ep-movimento-saldo {
+    text-align: center;
+    background-color: var(--ep-cor-fundo-pagina); /* Fundo sutil para destacar */
+    padding: 10px 20px; /* Padding interno */
+    border-radius: var(--ep-raio-borda-card);
+    border: 1px solid var(--ep-cor-cinza-borda);
+    min-width: 150px; /* Largura mínima para este bloco */
+    margin-right: 60px;
+}
+
+.ep-movimento-saldo label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--ep-cor-cinza-texto-secundario);
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+}
+
+.ep-movimento-saldo span { /* #embalagemDetalheSaldoTotal */
+    font-size: 2rem; /* Tamanho grande para o número */
     font-weight: 700;
-    margin-left: 5px;
+    color: var(--ep-cor-azul-primario); /* Cor de destaque */
 }
+
+/* Divisor Horizontal (opcional) */
+.ep-movimento-divisor {
+    border: 0;
+    height: 1px;
+    background-color: var(--ep-cor-cinza-borda);
+    margin: 0 0 25px 0; /* Margem abaixo, antes das abas */
+}
+
+/* Estilo do Botão Fechar (X) - Se já não estiver globalmente definido e posicionado) */
+/* O HTML já tem: <button class="botao-fechar ep-btn-perigo" id="fecharEmbalarDetalheBtn" ...> */
+/* A classe .botao-fechar e .ep-btn-perigo já devem estar definidas.
+   O posicionamento é relativo à section#embalarDetalheView.ep-card */
+#embalarDetalheView .botao-fechar { /* Garante que se aplique dentro desta view */
+    position: absolute;
+    top: 20px; /* Ajuste conforme o padding da section */
+    right: 20px; /* Ajuste conforme o padding da section */
+    /* Os outros estilos (tamanho, cor) vêm de .botao-fechar e .ep-btn-perigo */
+}
+
+/*------------------------------------*\
+    #ABA "EMBALAR UNIDADE" - CONTEÚDO DE AÇÃO
+\*------------------------------------*/
+
+.ep-acao-embalagem-container {
+    padding: 25px 15px; /* Espaçamento interno no container da aba */
+    max-width: 600px;   /* Limita a largura para melhor leitura em telas largas */
+    margin: 0 auto;     /* Centraliza o container de ação */
+    background-color: var(--ep-cor-cinza-fundo-alternativo, #f9fbfd); /* Fundo sutil */
+    border: 1px solid var(--ep-cor-cinza-borda, #e0e0e0);
+    border-top: none; /* Remove a borda de cima, pois as abas já têm */
+    border-radius: 0 0 var(--ep-raio-borda-card) var(--ep-raio-borda-card); /* Arredonda cantos inferiores */
+}
+
+.ep-form-grupo { /* Estilo base para grupos de formulário, você já deve ter algo similar */
+    margin-bottom: 25px;
+}
+.ep-form-grupo:last-child {
+    margin-bottom: 0;
+}
+
+.ep-grupo-quantidade {
+    text-align: center; /* Centraliza o conteúdo deste grupo */
+}
+
+.ep-label-destacado {
+    display: block;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--ep-cor-azul-escuro);
+    margin-bottom: 10px;
+}
+
+.ep-input-com-acoes {
+    display: flex;
+    align-items: center; /* Alinha o input e o botão "Tudo" */
+    gap: 10px;
+    max-width: 350px; /* Limita a largura do input + botão "Tudo" */
+    margin: 0 auto 10px auto; /* Centraliza */
+}
+
+.ep-input.ep-input-grande { /* Para o input de quantidade */
+    font-size: 1.5rem; /* Tamanho da fonte maior */
+    padding: 12px 15px;
+    text-align: center;
+    flex-grow: 1; /* Faz o input ocupar o espaço disponível */
+    min-width: 80px; /* Garante que não fique muito pequeno */
+}
+/* Remove setas de number input (opcional, mas melhora visual com botões customizados) */
+.ep-input.ep-input-grande[type=number] {
+    appearance: textfield; /* Propriedade padrão */
+    -webkit-appearance: textfield; /* Para compatibilidade com WebKit mais antigos, se necessário */
+    margin: 0; /* Para garantir que o -webkit-appearance: none interno não afete o espaçamento */
+}
+/* Específico para remover as setas no WebKit/Blink (Chrome, Safari, Edge) */
+.ep-input.ep-input-grande[type=number]::-webkit-outer-spin-button,
+.ep-input.ep-input-grande[type=number]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0; /* Garante que não haja margem residual das setas */
+}
+
+
+#btnEmbalarTudoUnidade.ep-btn-secundario { /* Estilo para o botão "Tudo" */
+    padding: 10px 15px; /* Ajuste o padding para o tamanho desejado */
+    font-size: 0.9rem;
+    min-height: 53px; /* Para alinhar com o input grande (ajuste conforme necessário) */
+    /* Você pode usar a classe .ep-btn-secundario ou criar uma nova */
+    background-color: var(--ep-cor-cinza-texto-secundario, #7f8c8d);
+    color: var(--ep-cor-branco);
+}
+#btnEmbalarTudoUnidade.ep-btn-secundario:hover {
+    background-color: #6a7879;
+}
+
+
+.ep-acoes-rapidas-qtd {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.ep-btn-outline-pequeno {
+    background-color: transparent;
+    border: 1px solid var(--ep-cor-azul-primario);
+    color: var(--ep-cor-azul-primario);
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    border-radius: var(--ep-raio-borda-botao);
+    transition: background-color 0.2s, color 0.2s;
+}
+.ep-btn-outline-pequeno:hover {
+    background-color: var(--ep-cor-azul-primario);
+    color: var(--ep-cor-branco);
+}
+/* Específico para o botão de remover (-) */
+.ep-btn-outline-pequeno.ep-btn-perigo-outline {
+    border-color: var(--ep-cor-vermelho-perigo);
+    color: var(--ep-cor-vermelho-perigo);
+}
+.ep-btn-outline-pequeno.ep-btn-perigo-outline:hover {
+    background-color: var(--ep-cor-vermelho-perigo);
+    color: var(--ep-cor-branco);
+}
+
+
+.ep-feedback-saldo {
+    font-size: 0.9rem;
+    color: var(--ep-cor-cinza-texto-secundario);
+    min-height: 1.2em; /* Para evitar que o layout pule quando o texto aparece */
+    margin-top: 5px;
+    text-align: center;
+}
+
+/* Estilo para o container dos botões de ação principais */
+.ep-botoes-acao-principal {
+    margin-top: 30px; /* Mais espaço antes do botão principal */
+    justify-content: center; /* Centraliza o botão principal */
+}
+
+.ep-btn.ep-btn-grande { /* Para o botão "EMBALAR E ESTOCAR UNIDADES" */
+    font-size: 1.1rem;
+    padding: 12px 25px;
+    font-weight: 600;
+    /* A cor de fundo vem da classe .ep-btn-sucesso */
+}
+
+/* Estilos para textarea de observação (reutilizando .ep-textarea se já existir) */
+.ep-form-grupo textarea.ep-textarea {
+    min-height: 60px; /* Altura mínima */
+    font-size: 0.95rem;
+}
+
+/*------------------------------------*\
+    #ABA "MONTAR E EMBALAR KIT" - CONTEÚDO DE AÇÃO
+\*------------------------------------*/
+
+.ep-kit-passo {
+    margin-bottom: 30px; /* Espaço entre os passos */
+    padding-bottom: 20px; /* Espaço interno inferior */
+    border-bottom: 1px dashed var(--ep-cor-cinza-borda, #e0e0e0); /* Divisor sutil entre os passos */
+}
+.ep-kit-passo:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+/* Passo 1: Seleção do Kit */
+.ep-kit-selecao-botoes {
+    display: flex;
+    flex-wrap: wrap; /* Permite que os botões quebrem linha */
+    gap: 10px;
+    justify-content: center; /* Centraliza os botões */
+    margin-top: 10px;
+}
+.ep-kit-selecao-botoes .ep-btn { /* Estilo para os botões de kit */
+    background-color: var(--ep-cor-branco);
+    color: var(--ep-cor-azul-subtitulo, #5a7c9b);
+    border: 1px solid var(--ep-cor-cinza-borda);
+    padding: 8px 18px;
+    font-size: 0.95rem;
+}
+.ep-kit-selecao-botoes .ep-btn.active { /* Botão de kit selecionado */
+    background-color: var(--ep-cor-azul-subtitulo, #5a7c9b);
+    color: var(--ep-cor-branco);
+    border-color: var(--ep-cor-azul-subtitulo, #5a7c9b);
+    font-weight: 600;
+}
+.ep-kit-selecao-botoes .ep-btn:hover:not(.active) {
+    border-color: var(--ep-cor-azul-subtitulo, #5a7c9b);
+    color: var(--ep-cor-azul-subtitulo, #5a7c9b);
+}
+.ep-placeholder-kits {
+    font-style: italic;
+    color: var(--ep-cor-cinza-texto-secundario);
+    width: 100%;
+    text-align: center;
+}
+
+
+/* Passo 2: Seleção da Variação do Kit e Preview */
+.ep-kit-variacao-selecao-container {
+    display: flex;
+    align-items: flex-end; /* Alinha o select e a imagem na base */
+    gap: 20px;
+    margin-top: 10px;
+}
+.ep-kit-variacao-selecao-container .ep-select.ep-input-medio { /* Para o select de variações */
+    flex-grow: 1; /* Faz o select ocupar o espaço disponível */
+    max-width: 400px; /* Limita a largura máxima do select */
+    /* Você pode precisar criar a classe .ep-input-medio se não existir,
+       ou apenas usar .ep-select e .ep-input */
+    padding: 10px 14px; /* Consistência com outros inputs */
+    font-size: 1rem;
+}
+.ep-kit-imagem-preview {
+    width: 100px; /* Tamanho da imagem de preview do kit */
+    height: 100px;
+    border: 1px solid var(--ep-cor-cinza-borda);
+    border-radius: var(--ep-raio-borda-card);
+    overflow: hidden;
+    background-color: var(--ep-cor-cinza-fundo-input);
+    flex-shrink: 0; /* Não deixa a imagem encolher */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.ep-kit-imagem-preview img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain; /* 'contain' para ver a imagem inteira, 'cover' para preencher */
+}
+
+
+/* Passo 3: Composição do Kit */
+.ep-composicao-titulo { /* Título "3. Composição e Disponibilidade..." */
+    margin-bottom: 15px; /* Espaço antes da tabela */
+    text-align: left; /* Alinha à esquerda, diferente de outros .ep-label-destacado */
+    font-size: 1.1rem; /* Pode ser um pouco menor que os labels de passo */
+}
+.ep-tabela-wrapper.ep-tabela-composicao-kit {
+    max-height: 250px; /* Altura máxima para a tabela, com scroll */
+    overflow-y: auto;
+    border: 1px solid var(--ep-cor-cinza-borda);
+    border-radius: var(--ep-raio-borda-input);
+}
+/* Estilos para .ep-tabela-estilizada e .ep-mini-table você já deve ter.
+   Apenas adicionamos uma coluna de Status. */
+.ep-tabela-estilizada th:last-child, /* Para a coluna Status */
+.ep-tabela-estilizada td:last-child {
+    text-align: center;
+}
+.ep-status-componente {
+    padding: 3px 8px;
+    border-radius: 15px; /* Pílula */
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--ep-cor-branco);
+    display: inline-block;
+}
+.ep-status-componente.ok {
+    background-color: var(--ep-cor-verde-sucesso);
+}
+.ep-status-componente.atencao {
+    background-color: var(--ep-cor-laranja-aviso);
+}
+.ep-status-componente.em-falta {
+    background-color: var(--ep-cor-vermelho-perigo);
+}
+
+.ep-error-message { /* Já definido, mas garantindo que tenha margem */
+    margin-top: 15px;
+    padding: 10px;
+    background-color: #ffebee;
+    color: var(--ep-cor-vermelho-perigo);
+    border: 1px solid var(--ep-cor-vermelho-perigo);
+    border-radius: var(--ep-raio-borda-input);
+    text-align: center;
+}
+.ep-error-message.hidden { display: none !important; }
+
+
+/* Passo 4: Ação de Montagem */
+.ep-kits-montaveis-info {
+    padding: 12px 15px;
+    background-color: var(--ep-cor-laranja-aviso); /* Cor de destaque para kits montáveis */
+    color: var(--ep-cor-branco);
+    border-radius: var(--ep-raio-borda-input);
+    margin-bottom: 20px;
+    text-align: center;
+}
+.ep-kits-montaveis-info span {
+    font-size: 0.95rem;
+    display: block;
+    margin-bottom: 4px;
+    opacity: 0.9;
+}
+.ep-kits-montaveis-info strong { /* #qtdDisponivelKitsNova */
+    font-size: 1.8rem;
+    font-weight: 700;
+}
+
+.ep-grupo-quantidade-kit .ep-label-destacado { /* Label para "Quantidade de Kits a Montar" */
+    margin-top: 15px;
+}
+/* O input de quantidade e o botão Máx. reutilizarão os estilos de
+   .ep-input-com-acoes, .ep-input-grande, #btnEmbalarTudoUnidade (adaptado para #btnMontarMaximoKits) */
+#btnMontarMaximoKits.ep-btn-secundario { /* Similar ao #btnEmbalarTudoUnidade */
+    padding: 10px 15px;
+    font-size: 0.9rem;
+    min-height: 53px;
+    background-color: var(--ep-cor-cinza-texto-secundario, #7f8c8d);
+    color: var(--ep-cor-branco);
+}
+#btnMontarMaximoKits.ep-btn-secundario:hover {
+    background-color: #6a7879;
+}
+
+/* Ações rápidas para kits (.ep-acoes-rapidas-kit) podem usar os mesmos estilos de .ep-acoes-rapidas-qtd */
+.ep-acoes-rapidas-kit {
+    margin-top: 10px; /* Adiciona um pouco de espaço acima dos botões de +/- */
+}
+
+
 
 /*------------------------------------*\
     #PAGINAÇÃO
@@ -500,8 +952,16 @@ body.autenticado {
 #embalarDetalheView .ep-tabs .ep-tab-btn:hover:not(.active) {
     color: var(--ep-cor-azul-escuro);
 }
-.ep-tab-panel { display: none; } 
-.ep-tab-panel.active { display: block; }
+
+.ep-tab-panel {
+    display: none;
+}
+
+/* Regra para .ep-tab-panel.active que você modificou */
+.ep-tab-panel.active {
+    display: block;
+}
+
 
 /* Card interno do formulário de embalagem */
 .ep-embalar-form-card-interno { 
@@ -696,8 +1156,7 @@ body.autenticado {
     .ep-titulo-secao { font-size: 1.4rem; }
     .ep-card { padding: 20px; }
     .ep-embalagem-card-container {
-        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-        gap: 15px;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     }
 
     .ep-titulo-variacao-prod {
@@ -806,6 +1265,65 @@ body.autenticado {
         line-height: 32px;
         font-size: 1rem;
     }
+    /* cards */
+    .ep-embalagem-card-container {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+     .ep-consulta-card-dados {
+        flex-direction: row; /* Lado a lado em telas menores se couber */
+        justify-content: space-around; /* Espaça os blocos */
+        align-items: center;
+        padding: 10px;
+        gap: 15px;
+    }
+    .ep-dado-bloco .valor {
+        font-size: 1.3rem;
+    }
+
+    /* header da view de detalhe */
+
+    .ep-movimento-header {
+        grid-template-columns: 1fr; /* Coluna única */
+        text-align: center; /* Centraliza tudo no mobile */
+        gap: 15px; /* Reduz o gap */
+    }
+
+    .ep-movimento-thumbnail {
+        margin: 0 auto 10px auto; /* Centraliza a imagem */
+        width: 100px; /* Pode aumentar um pouco no modo coluna única */
+        height: 100px;
+    }
+
+    .ep-movimento-info h2 {
+        font-size: 1.5rem;
+    }
+    .ep-movimento-info p {
+        font-size: 0.9rem;
+    }
+
+    .ep-movimento-saldo {
+        margin: 0 auto; /* Centraliza o bloco de saldo */
+        padding: 10px 15px;
+    }
+    .ep-movimento-saldo span {
+        font-size: 1.8rem;
+    }
+
+    /* Ajuste no botão fechar para não sobrepor título em telas menores */
+    #embalarDetalheView .botao-fechar {
+        top: 15px;
+        right: 15px;
+    }
+
+    /* --- Aba de Kit (simplificado) --- */
+    .ep-kit-variacao-selecao-container {
+        flex-direction: column; /* Empilha select e imagem */
+        align-items: center; /* Centraliza */
+    }
+    .ep-kit-variacao-selecao-container .ep-select.ep-input-medio {
+        max-width: 100%; /* Ocupa largura total */
+        margin-bottom: 15px;
+    }
 }
 
 @media (max-width: 480px) { /* Smartphones médios e menores */
@@ -875,49 +1393,61 @@ body.autenticado {
 
     /* Cards de embalagem (lista) */
     .ep-embalagem-card-container {
-        grid-template-columns: 1fr; /* Uma coluna para melhor visualização */
-        gap: 15px;
+        grid-template-columns: 1fr !important;  /* Uma coluna em telas bem pequenas */
     }
-    .op-embalagem-card {
-        padding: 15px;
+
+    /* Ajusta o layout interno do card para mobile, similar ao estoque */
+    .ep-consulta-card {
+        grid-template-columns: auto 1fr;
+        grid-template-rows: auto auto;
+        gap: 0 15px;
+        padding: 10px;
+        margin-top: 15px;
     }
-    .op-embalagem-card-thumbnail {
-        width: 65px; /* Thumbnail um pouco menor */
+
+    .ep-consulta-card-img {
+        grid-row: 1 / 3; /* Imagem ocupa as duas linhas na vertical */
+        width: 65px;
         height: 65px;
-        margin-bottom: 12px;
-    }
-    .op-embalagem-card-produto {
-        font-size: 1rem;
-    }
-    .op-embalagem-card-variante {
-        font-size: 0.8rem;
-    }
-    .op-embalagem-card-disponivel {
-        font-size: 0.95rem;
-    }
-    .op-embalagem-card-disponivel strong {
-        font-size: 1.15rem;
+        margin: 0;
     }
 
-    /* Tela de Detalhe (#embalarDetalheView, #arremateDetalheView) */
-    #embalarDetalheView, 
-    #arremateDetalheView {
-        padding-top: 50px; /* Mantém ou ajusta o espaço para o botão X */
+    .ep-consulta-card-info {
+        grid-column: 2 / 3; /* Info na segunda coluna, primeira linha */
+        grid-row: 1 / 2;
+        padding: 0; /* Remove padding extra pois o card já tem */
+    }
+    .ep-consulta-card-info h3 { font-size: 1rem; }
+    .ep-consulta-card-info p { font-size: 0.8rem; }
+    .ep-consulta-card-info .ep-sku-info { font-size: 0.75rem; margin-top: 3px; }
+
+    .ep-consulta-card-info h3,
+     .ep-consulta-card-info p,
+     .ep-consulta-card-info .ep-sku-info {
+        white-space: normal; /* Permite quebra de linha no mobile */
+        overflow: visible;
+        text-overflow: clip;
     }
 
-    .ep-thumbnail-detalhe {
-        width: 75px; /* Imagem de detalhe um pouco menor */
-        height: 75px;
+    .ep-consulta-card-dados {
+        grid-column: 2 / 3;
+        grid-row: 2 / 3;
+        flex-direction: row;
+        justify-content: flex-start;
+        gap: 20px; /* Ajuste o gap para mobile */
+        padding: 10px 0 0 0;
+        background-color: transparent;
+        border-left: none;
+        border-top: 1px solid #f0f2f5;
+        margin-top: 10px;
+        height: auto;
+        text-align: left;
     }
-    #embalagemDetalheTitulo, #arremateDetalheTitulo { /* ID específico do título do detalhe */
-        font-size: 1.25rem;
+    .ep-dado-bloco .valor {
+        font-size: 1.2rem;
     }
-    #embalagemDetalheSubTitle, #arremateDetailSubTitle { /* ID específico do subtítulo do detalhe */
-        font-size: 0.85rem;
-    }
-
-    #embalarDetalheView .botao-fechar {
-        margin-top: 1px;
+     .ep-dado-bloco .label {
+        font-size: 0.7rem;
     }
 
     .botao-fechar { /* Botão X continua pequeno */
@@ -958,6 +1488,26 @@ body.autenticado {
         font-size: 0.9rem
    }
 
+   /* header da view de detalhe */
+   .ep-movimento-info h2 {
+        font-size: 1.3rem;
+    }
+    .ep-movimento-saldo span {
+        font-size: 1.6rem;
+    }
+    .ep-movimento-thumbnail {
+        width: 90px;
+        height: 90px;
+    }
+    /* Botão fechar já tem estilos responsivos, mas pode precisar de ajuste fino */
+    #embalarDetalheView .botao-fechar {
+        top: 12px;
+        right: 12px;
+        width: 30px;
+        height: 30px;
+        line-height: 30px; /* Importante para centralizar o X */
+        font-size: 0.9rem;
+    }
 
     /* Popup de mensagem */
     .popup-mensagem {
@@ -972,6 +1522,66 @@ body.autenticado {
         padding: 8px 20px;
         font-size: 0.9rem;
     }
+    /* #ABA "EMBALAR UNIDADE" - CONTEÚDO DE AÇÃO */
+    .ep-acao-embalagem-container {
+        padding: 15px 10px;
+    }
+    .ep-label-destacado {
+        font-size: 1rem;
+    }
+    .ep-input-com-acoes {
+        flex-direction: column; /* Empilha o input e o botão "Tudo" */
+        gap: 8px;
+        align-items: stretch; /* Faz o botão "Tudo" ocupar a largura */
+    }
+    .ep-input.ep-input-grande {
+        font-size: 1.3rem;
+    }
+    #btnEmbalarTudoUnidade.ep-btn-secundario {
+        width: 100%; /* Botão "Tudo" ocupa largura total */
+        min-height: auto; /* Reseta min-height */
+    }
+
+    .ep-acoes-rapidas-qtd {
+        flex-wrap: wrap; /* Permite que os botões quebrem linha */
+        gap: 6px;
+    }
+    .ep-btn-outline-pequeno {
+        padding: 5px 10px;
+        font-size: 0.8rem;
+    }
+    .ep-btn.ep-btn-grande {
+        font-size: 1rem;
+        padding: 10px 20px;
+    }
+
+    /* --- Aba de Kit (simplificado) --- */
+    .ep-kit-passo {
+        padding-bottom: 15px;
+        margin-bottom: 20px;
+    }
+    .ep-label-destacado, .ep-composicao-titulo {
+        font-size: 1rem;
+    }
+    .ep-kit-imagem-preview {
+        width: 80px;
+        height: 80px;
+    }
+    .ep-tabela-wrapper.ep-tabela-composicao-kit {
+        max-height: 200px; /* Reduz altura da tabela */
+    }
+    .ep-tabela-estilizada th, .ep-tabela-estilizada td {
+        font-size: 0.8rem; /* Fonte menor na tabela */
+        padding: 6px 8px;
+    }
+    .ep-status-componente {
+        font-size: 0.7rem;
+        padding: 2px 6px;
+    }
+    .ep-kits-montaveis-info strong {
+        font-size: 1.6rem;
+    }
+
 }
 /* ****** FIM BREAKPOINT 480px ****** */
 
