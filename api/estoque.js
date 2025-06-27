@@ -146,18 +146,19 @@ router.post('/arquivar-item', async (req, res) => {
 // POST /api/estoque/entrada-producao
 router.post('/entrada-producao', async (req, res) => {
     const { usuarioLogado } = req;
-    let dbCliente;
+    let dbClient;
     try {
-        dbCliente = await pool.connect();
-        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbCliente, usuarioLogado.id);
+        dbClient = await pool.connect();
+        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
         if (!permissoesCompletas.includes('lancar-embalagem')) {
             return res.status(403).json({ error: 'Permissão negada para registrar entrada de produção.' });
         }
 
-        const { produto_id, variante_nome, quantidade_entrada, id_arremate_origem } = req.body;
+        // Recebe o novo campo produto_ref_id do body
+        const { produto_id, variante_nome, quantidade_entrada, id_arremate_origem, observacao, produto_ref_id } = req.body;
 
-        if (!produto_id || quantidade_entrada === undefined) {
-            return res.status(400).json({ error: 'Campos obrigatórios: produto_id, quantidade_entrada.' });
+        if (!produto_id || quantidade_entrada === undefined || !produto_ref_id) {
+            return res.status(400).json({ error: 'Campos obrigatórios: produto_id, quantidade_entrada e produto_ref_id (SKU).' });
         }
         
         const quantidade = parseInt(quantidade_entrada);
@@ -167,28 +168,63 @@ router.post('/entrada-producao', async (req, res) => {
 
         const varianteParaDB = (variante_nome === '' || variante_nome === '-' || variante_nome === undefined) ? null : variante_nome;
         
-        const queryText = `
+        await dbClient.query('BEGIN');
+
+        // 1. Insere o movimento no estoque e retorna o ID
+        const movimentoQueryText = `
             INSERT INTO estoque_movimentos 
-                (produto_id, variante_nome, quantidade, tipo_movimento, origem_arremate_id, usuario_responsavel)
-            VALUES ($1, $2, $3, 'ENTRADA_PRODUCAO_ARREMATE', $4, $5)
-            RETURNING *;
+                (produto_id, variante_nome, quantidade, tipo_movimento, origem_arremate_id, usuario_responsavel, observacao)
+            VALUES ($1, $2, $3, 'ENTRADA_PRODUCAO_ARREMATE', $4, $5, $6)
+            RETURNING id;
         `;
-        
-        const result = await dbCliente.query(queryText, [
+        const movimentoResult = await dbClient.query(movimentoQueryText, [
             parseInt(produto_id), 
             varianteParaDB, 
             quantidade,
             id_arremate_origem || null,
-            (usuarioLogado.nome || usuarioLogado.nome_usuario)
+            (usuarioLogado.nome || usuarioLogado.nome_usuario),
+            observacao || null
         ]);
 
-        res.status(201).json(result.rows[0]);
+        if (movimentoResult.rows.length === 0) {
+            throw new Error("Falha ao inserir movimento no estoque, não retornou ID.");
+        }
+        const novoMovimentoId = movimentoResult.rows[0].id;
+
+        // 2. Insere o registro em 'embalagens_realizadas' COM o SKU (produto_ref_id)
+        const embalagemQueryText = `
+            INSERT INTO embalagens_realizadas
+                (tipo_embalagem, produto_embalado_id, variante_embalada_nome, produto_ref_id, quantidade_embalada, 
+                usuario_responsavel_id, observacao, movimento_estoque_id, status)
+            VALUES ('UNIDADE', $1, $2, $3, $4, $5, $6, $7, 'ATIVO');
+        `;
+        await dbClient.query(embalagemQueryText, [
+            parseInt(produto_id),
+            varianteParaDB,
+            produto_ref_id, // SALVANDO O SKU AQUI
+            quantidade,
+            usuarioLogado.id,
+            observacao || null,
+            novoMovimentoId
+        ]);
+
+        await dbClient.query('COMMIT'); 
+
+        console.log(`[API /estoque/entrada-producao] Sucesso: Movimento ${novoMovimentoId} e registro de embalagem de UNIDADE criados.`);
+        res.status(201).json({ 
+            message: 'Entrada de produção registrada com sucesso.',
+            movimento_estoque_id: novoMovimentoId 
+        });
 
     } catch (error) {
-        console.error('[router/estoque POST /entrada-producao] Erro:', error);
+        if (dbClient) {
+            console.error('[API /estoque/entrada-producao] Erro detectado, executando ROLLBACK.');
+            await dbClient.query('ROLLBACK');
+        }
+        console.error('[API /estoque/entrada-producao] Erro:', error);
         res.status(500).json({ error: 'Erro ao registrar entrada no estoque.', details: error.message });
     } finally {
-        if (dbCliente) dbCliente.release();
+        if (dbClient) dbClient.release();
     }
 });
 
@@ -452,9 +488,26 @@ router.post('/estornar-movimento', async (req, res) => {
         const movOriginal = movimentoOriginalRes.rows[0];
         const saldoDisponivelParaEstorno = Math.abs(movOriginal.quantidade) - (movOriginal.quantidade_estornada || 0);
 
-        // 2. Validações
-        if (movOriginal.quantidade >= 0) throw new Error('Apenas movimentos de SAÍDA podem ser estornados.');
-        if (saldoDisponivelParaEstorno <= 0) throw new Error('Este movimento já foi totalmente estornado.');
+        // --- VALIDAÇÕES APRIMORADAS ---
+        // 2a. Valida se é um movimento de saída
+        if (movOriginal.quantidade >= 0) {
+            throw new Error('Apenas movimentos de SAÍDA podem ser estornados.');
+        }
+        
+        // 2b. NOVO: Valida se o movimento JÁ É UM ESTORNO
+        if (movOriginal.tipo_movimento.startsWith('ESTORNO_')) {
+            // Retorna um erro 400 Bad Request, pois a requisição é logicamente inválida.
+            const err = new Error('Não é possível estornar um movimento que já é um estorno.');
+            err.statusCode = 400; // Define o status code para o erro
+            throw err;
+        }
+
+        // 2c. Valida se ainda há saldo para estornar
+        if (saldoDisponivelParaEstorno <= 0) {
+            throw new Error('Este movimento já foi totalmente estornado.');
+        }
+
+        // 2d. Valida a quantidade solicitada
         if (parseInt(quantidade_a_estornar) > saldoDisponivelParaEstorno) {
             throw new Error(`Quantidade a estornar (${quantidade_a_estornar}) inválida. Saldo disponível para estorno: ${saldoDisponivelParaEstorno}.`);
         }

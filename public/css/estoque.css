@@ -65,7 +65,7 @@ body.autenticado { visibility: visible; }
     padding: 10px 14px;
     border: 1px solid var(--es-cor-cinza-borda);
     border-radius: var(--es-raio-borda-input);
-    font-size: 1rem;
+    font-size: 1.2rem;
     width: 100%;
     max-width: 400px; /* Limita a largura da busca */
     margin-bottom: 20px; /* Espaço antes da tabela */
@@ -498,7 +498,7 @@ body.autenticado { visibility: visible; }
     border-radius: var(--es-raio-borda-card); /* Usa variável de raio do estoque */
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
     z-index: 10002; /* Acima do overlay */
-    max-width: 480px; 
+    max-width: 480px;
     width: 90%;
     text-align: center; 
     font-family: var(--es-font-principal);
@@ -1764,6 +1764,61 @@ body.autenticado { visibility: visible; }
 .reordenar-btn:disabled {
     opacity: 0.3;
     cursor: not-allowed;
+}
+
+/* NOVO: Header para seções com título e botões de ação */
+.es-secao-header {
+    display: flex;
+    justify-content: space-between; /* Alinha o título à esquerda e o botão à direita */
+    align-items: center; /* Alinha verticalmente */
+    margin-bottom: 10px; /* Espaço antes da lista de cards */
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+/* Ajusta o título da seção para não ter mais margem e borda, já que o pai tem */
+.es-secao-header .es-titulo-secao {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+    font-size: 1.5rem; /* Mantém o tamanho do título */
+}
+
+
+/* NOVO ESTILO 100% NOVO PARA O BOTÃO DE ATUALIZAR */
+.es-btn-atualizar {
+    background-color: transparent;
+    color: var(--es-cor-azul-primario);
+    border: 1px solid var(--es-cor-cinza-borda);
+    border-radius: 50px; /* Formato de pílula */
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+
+.es-btn-atualizar:hover:not(:disabled) {
+    background-color: var(--es-cor-azul-primario);
+    color: var(--es-cor-branco);
+    border-color: var(--es-cor-azul-primario);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+}
+
+.es-btn-atualizar:disabled {
+    color: #b0b9c2;
+    background-color: #f8f9fa;
+    cursor: not-allowed;
+    border-color: var(--es-cor-cinza-borda);
+}
+
+/* Animação de rotação para o ícone quando o botão estiver desabilitado (carregando) */
+.es-btn-atualizar:disabled i {
+    animation: es-spin 1.2s linear infinite;
 }
 
 /* Responsividade */

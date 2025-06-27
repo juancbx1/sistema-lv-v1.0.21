@@ -17,6 +17,160 @@ const itemsPerPageEmbalagemCards = 6; // Quantos cards de "Pronto para Embalar" 
 
 const operacaoEmAndamento = new Set(); // Para evitar duplo clique em botões de ação
 
+// Variáveis globais para paginação do histórico
+let currentPageHistorico = 1;
+const itemsPerPageHistorico = 5;
+
+// 1. FUNÇÃO PARA BUSCAR O HISTÓRICO DA API
+async function carregarHistoricoEmbalagem(produtoRefId, page) {
+    currentPageHistorico = page;
+    const tbodyEl = document.getElementById('historicoEmbalagemTableBody');
+    const paginacaoEl = document.getElementById('paginacaoHistoricoEmbalagem');
+
+    if (!tbodyEl || !paginacaoEl) return;
+    
+    tbodyEl.innerHTML = `<tr><td colspan="6" style="text-align:center;"><div class="spinner">Carregando...</div></td></tr>`;
+    paginacaoEl.style.display = 'none';
+
+    if (!produtoRefId) {
+        tbodyEl.innerHTML = `<tr><td colspan="6" style="text-align:center;color:red;">Erro: SKU do item não fornecido.</td></tr>`;
+        return;
+    }
+
+    try {
+        const params = new URLSearchParams({
+            produto_ref_id: produtoRefId,
+            limit: itemsPerPageHistorico,
+            page: currentPageHistorico
+        });
+
+        const data = await fetchFromAPI(`/embalagens/historico?${params.toString()}`);
+        renderizarHistoricoEmbalagem(data.rows || []);
+        renderizarPaginacaoHistorico(data.pages || 0, produtoRefId);
+    } catch (error) {
+        tbodyEl.innerHTML = `<tr><td colspan="6" style="text-align:center;color:red;">Erro ao carregar histórico.</td></tr>`;
+    }
+}
+
+
+// 2. FUNÇÃO PARA RENDERIZAR AS LINHAS DO HISTÓRICO NA TABELA
+function renderizarHistoricoEmbalagem(registros) {
+    const tbodyEl = document.getElementById('historicoEmbalagemTableBody');
+    if (!tbodyEl) return;
+    tbodyEl.innerHTML = '';
+
+    if (!registros || registros.length === 0) {
+        tbodyEl.innerHTML = '<tr><td colspan="6" style="text-align:center;">Nenhuma embalagem registrada para este item.</td></tr>';
+        return;
+    }
+
+    registros.forEach(reg => {
+        const tr = tbodyEl.insertRow();
+        
+        // Formata o nome do item para exibição (útil para kits)
+        let nomeExibicao = reg.tipo_embalagem;
+        if (reg.tipo_embalagem === 'KIT') {
+            // A API de histórico precisa retornar 'produto_embalado_nome' e 'variante_embalada_nome'
+            nomeExibicao = `KIT: ${reg.produto_embalado_nome || ''} ${reg.variante_embalada_nome || ''}`.trim();
+        }
+
+        tr.innerHTML = `
+            <td data-label="Data">${new Date(reg.data_embalagem).toLocaleString('pt-BR')}</td>
+            <td data-label="Tipo" title="${nomeExibicao}">${reg.tipo_embalagem}</td>
+            <td data-label="Qtd." style="text-align:right;">${reg.quantidade_embalada}</td>
+            <td data-label="Usuário">${reg.usuario_responsavel || '-'}</td>
+            <td data-label="Obs.">${reg.observacao || '-'}</td>
+            <td data-label="Ações" style="text-align:center;"></td>
+        `;
+
+        const acoesCell = tr.cells[5];
+
+        if (reg.status === 'ESTORNADO') {
+            acoesCell.innerHTML = `<span class="ep-tag-estornado">Estornado</span>`;
+        } else if (permissoes.includes('lancar-embalagem')) { // Permissão para estornar
+            const btnEstornar = document.createElement('button');
+            btnEstornar.className = 'ep-btn-icon-estorno';
+            btnEstornar.title = 'Estornar esta embalagem';
+            btnEstornar.innerHTML = '<i class="fas fa-undo"></i>';
+            btnEstornar.dataset.id = reg.id;
+            btnEstornar.dataset.info = `${reg.quantidade_embalada}x ${nomeExibicao}`;
+            btnEstornar.addEventListener('click', handleEstornoClick);
+            acoesCell.appendChild(btnEstornar);
+        }
+    });
+}
+
+// 3. FUNÇÃO PARA RENDERIZAR A PAGINAÇÃO DO HISTÓRICO
+function renderizarPaginacaoHistorico(totalPages, produtoRefId) {
+    const paginacaoEl = document.getElementById('paginacaoHistoricoEmbalagem');
+    if (!paginacaoEl) {
+        console.error("Elemento #paginacaoHistoricoEmbalagem não encontrado.");
+        return;
+    }
+    
+    paginacaoEl.innerHTML = '';
+    
+    if (totalPages <= 1) {
+        paginacaoEl.style.display = 'none';
+        return;
+    }
+    paginacaoEl.style.display = 'flex';
+
+    paginacaoEl.innerHTML = `
+        <button class="pagination-btn ep-btn" data-page="${Math.max(1, currentPageHistorico - 1)}" ${currentPageHistorico === 1 ? 'disabled' : ''}>Anterior</button>
+        <span class="pagination-current">Pág. ${currentPageHistorico} de ${totalPages}</span>
+        <button class="pagination-btn ep-btn" data-page="${Math.min(totalPages, currentPageHistorico + 1)}" ${currentPageHistorico === totalPages ? 'disabled' : ''}>Próximo</button>
+    `;
+
+    paginacaoEl.querySelectorAll('.pagination-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetPage = parseInt(btn.dataset.page);
+            // Chama a função de carregar histórico passando o SKU (produtoRefId) e a nova página
+            carregarHistoricoEmbalagem(produtoRefId, targetPage);
+        });
+    });
+}
+
+// 4. HANDLER PARA O CLIQUE NO BOTÃO DE ESTORNO
+async function handleEstornoClick(event) {
+    const button = event.currentTarget;
+    const embalagemId = button.dataset.id;
+    const embalagemInfo = button.dataset.info;
+
+    if (!embalagemId) {
+        console.error("ID da embalagem não encontrado no botão de estorno.");
+        return;
+    }
+
+    const confirmado = await mostrarPopupConfirmacao(
+        `Tem certeza que deseja estornar (reverter) esta embalagem?<br><strong>${embalagemInfo}</strong><br><br>A quantidade voltará a ficar disponível para embalagem e a entrada no estoque será revertida.`,
+        'perigo'
+    );
+
+    if (!confirmado) return;
+    
+    button.disabled = true;
+    button.innerHTML = '<div class="spinner-btn-interno" style="width:12px; height:12px; border-width:2px; margin:0;"></div>';
+
+    try {
+        await fetchFromAPI(`/embalagens/estornar`, {
+            method: 'POST',
+            body: JSON.stringify({ id_embalagem_realizada: parseInt(embalagemId) })
+        });
+        
+        mostrarPopupMensagem('Embalagem estornada com sucesso! A página será recarregada para refletir as mudanças.', 'sucesso');
+        
+        setTimeout(() => {
+            window.location.hash = ''; // Volta para a lista principal, forçando recarga de todos os dados
+        }, 2000);
+
+    } catch (error) {
+        mostrarPopupMensagem(`Erro ao estornar: ${error.data?.details || error.data?.error || error.message}`, 'erro');
+        button.disabled = false;
+        button.innerHTML = '<i class="fas fa-undo"></i>';
+    }
+}
+
 // --- Funções Auxiliares Essenciais ---
 
 function mostrarPopupMensagem(mensagem, tipo = 'erro', duracao = 4000, permitirHTML = false) {
@@ -67,6 +221,56 @@ function mostrarPopupMensagem(mensagem, tipo = 'erro', duracao = 4000, permitirH
             }
         }, duracao);
     }
+}
+
+function mostrarPopupConfirmacao(mensagem, tipo = 'aviso') {
+    return new Promise((resolve) => {
+        // Remove qualquer popup de confirmação existente
+        const popupExistente = document.getElementById('ep-popup-confirmacao');
+        if (popupExistente) popupExistente.parentElement.remove();
+
+        const container = document.createElement('div');
+        container.id = 'ep-popup-confirmacao';
+
+        const popup = document.createElement('div');
+        popup.className = `popup-mensagem popup-${tipo}`;
+        
+        const overlay = document.createElement('div');
+        overlay.className = 'popup-overlay';
+
+        const p = document.createElement('p');
+        p.innerHTML = mensagem;
+        popup.appendChild(p);
+
+        const botoesContainer = document.createElement('div');
+        botoesContainer.style.display = 'flex';
+        botoesContainer.style.gap = '10px';
+        botoesContainer.style.justifyContent = 'center';
+
+        const fecharEResolver = (valor) => {
+            // Animação de saída se desejar...
+            document.body.removeChild(container);
+            resolve(valor);
+        };
+
+        const btnConfirmar = document.createElement('button');
+        btnConfirmar.textContent = 'Sim, Confirmar';
+        btnConfirmar.className = 'ep-btn-confirmar'; // Estilize no CSS se quiser
+        btnConfirmar.onclick = () => fecharEResolver(true);
+
+        const btnCancelar = document.createElement('button');
+        btnCancelar.textContent = 'Cancelar';
+        btnCancelar.className = 'ep-btn-cancelar'; // Estilize no CSS se quiser
+        btnCancelar.onclick = () => fecharEResolver(false);
+        
+        botoesContainer.appendChild(btnCancelar);
+        botoesContainer.appendChild(btnConfirmar);
+        popup.appendChild(botoesContainer);
+
+        container.appendChild(overlay);
+        container.appendChild(popup);
+        document.body.appendChild(container);
+    });
 }
 
 function debounce(func, wait) {
@@ -136,20 +340,20 @@ async function buscarArrematesCompletos() { // Nome mais genérico, pois vamos f
 
 // --- Lógica Principal de Cálculo e Agregação para Embalagem ---
 async function calcularEAgruparProntosParaEmbalar() {
-    // Garante que os dados mais frescos sejam usados
+    // 1. Garante que os dados mais frescos sejam usados
     await buscarArrematesCompletos(); 
     if (todosOsProdutosCadastrados.length === 0) {
          todosOsProdutosCadastrados = await obterProdutosDoStorage();
     }
 
+    // 2. Cria uma lista de todos os itens de arremate com saldo para embalar
     const arrematesComSaldoParaEmbalar = [];
-    for (const arremate of todosArrematesRegistradosCache) { // todosArrematesRegistradosCache vem de GET /api/arremates
+    for (const arremate of todosArrematesRegistradosCache) {
         const quantidadeTotal = parseInt(arremate.quantidade_arrematada) || 0;
         const quantidadeJaEmbalada = parseInt(arremate.quantidade_ja_embalada) || 0;
         const saldoParaEmbalar = quantidadeTotal - quantidadeJaEmbalada;
 
         if (saldoParaEmbalar > 0) {
-            // AQUI ESTÁ A CORREÇÃO: Passamos o produto_id para o próximo objeto
             arrematesComSaldoParaEmbalar.push({
                 id_arremate: arremate.id,
                 op_numero_origem: arremate.op_numero,
@@ -162,6 +366,7 @@ async function calcularEAgruparProntosParaEmbalar() {
         }
     }
 
+    // 3. Agrega os itens de arremate por produto/variação
     const aggregatedMap = new Map();
     arrematesComSaldoParaEmbalar.forEach(arremateComSaldo => {
         const produtoKey = `${arremateComSaldo.produto_id}|${arremateComSaldo.variante}`;
@@ -173,7 +378,7 @@ async function calcularEAgruparProntosParaEmbalar() {
                 variante: arremateComSaldo.variante,
                 total_quantidade_disponivel_para_embalar: 0,
                 arremates_detalhe: [],
-                data_lancamento_mais_antiga: arremateComSaldo.data_lancamento // Inicializa com a data do primeiro arremate
+                data_lancamento_mais_antiga: arremateComSaldo.data_lancamento
             });
         }
         
@@ -181,136 +386,225 @@ async function calcularEAgruparProntosParaEmbalar() {
         aggregatedItem.total_quantidade_disponivel_para_embalar += arremateComSaldo.quantidade_disponivel_para_embalar;
         aggregatedItem.arremates_detalhe.push(arremateComSaldo);
 
-        // Atualiza a data de lançamento mais antiga se a atual for mais antiga
         if (arremateComSaldo.data_lancamento) {
             const dataAtualDoArremate = new Date(arremateComSaldo.data_lancamento);
-            const dataMaisAntigaRegistrada = new Date(aggregatedItem.data_lancamento_mais_antiga);
-            if (dataAtualDoArremate < dataMaisAntigaRegistrada) {
+            if (!aggregatedItem.data_lancamento_mais_antiga || dataAtualDoArremate < new Date(aggregatedItem.data_lancamento_mais_antiga)) {
                 aggregatedItem.data_lancamento_mais_antiga = arremateComSaldo.data_lancamento;
             }
         }
     });
     
-    produtosAgregadosParaEmbalarGlobal = Array.from(aggregatedMap.values());
+    // 4. Converte o Map para um Array
+    let itensAgregados = Array.from(aggregatedMap.values());
+    console.log('[calcularEAgruparProntosParaEmbalar] Produtos agregados (antes da ordenação):', itensAgregados.length);
+
+    // --- AJUSTE PRINCIPAL: ORDENAÇÃO PADRÃO ---
+    // 5. Aplica a ordenação padrão ("Mais Recentes Primeiro") imediatamente após agregar os dados.
+    // Usamos 'data_lancamento_mais_antiga' porque um item que recebeu uma nova remessa de arremate
+    // deve ser considerado "recente" novamente. Se preferir a data do primeiro arremate,
+    // podemos ajustar a lógica de data no passo 3. Por ora, vamos usar a data do arremate mais recente
+    // que compõe o agregado. Para isso, precisamos ajustar o passo 3 para guardar também a data mais RECENTE.
+    
+    // Ajuste no Passo 3 para guardar a data mais recente também.
+    // (A lógica será adicionada na reescrita completa abaixo)
+
+    // Vamos refazer a lógica de agregação para incluir a data mais recente.
+    const aggregatedMapComDataRecente = new Map();
+    arrematesComSaldoParaEmbalar.forEach(arremateComSaldo => {
+        const produtoKey = `${arremateComSaldo.produto_id}|${arremateComSaldo.variante}`;
+        
+        if (!aggregatedMapComDataRecente.has(produtoKey)) {
+            aggregatedMapComDataRecente.set(produtoKey, {
+                produto: arremateComSaldo.produto,
+                produto_id: arremateComSaldo.produto_id,
+                variante: arremateComSaldo.variante,
+                total_quantidade_disponivel_para_embalar: 0,
+                arremates_detalhe: [],
+                data_lancamento_mais_antiga: arremateComSaldo.data_lancamento,
+                data_lancamento_mais_recente: arremateComSaldo.data_lancamento // NOVO CAMPO
+            });
+        }
+        
+        const aggregatedItem = aggregatedMapComDataRecente.get(produtoKey);
+        aggregatedItem.total_quantidade_disponivel_para_embalar += arremateComSaldo.quantidade_disponivel_para_embalar;
+        aggregatedItem.arremates_detalhe.push(arremateComSaldo);
+
+        if (arremateComSaldo.data_lancamento) {
+            const dataAtualDoArremate = new Date(arremateComSaldo.data_lancamento);
+            // Atualiza data mais antiga
+            if (!aggregatedItem.data_lancamento_mais_antiga || dataAtualDoArremate < new Date(aggregatedItem.data_lancamento_mais_antiga)) {
+                aggregatedItem.data_lancamento_mais_antiga = arremateComSaldo.data_lancamento;
+            }
+            // Atualiza data mais recente
+            if (!aggregatedItem.data_lancamento_mais_recente || dataAtualDoArremate > new Date(aggregatedItem.data_lancamento_mais_recente)) {
+                aggregatedItem.data_lancamento_mais_recente = arremateComSaldo.data_lancamento;
+            }
+        }
+    });
+
+    let itensAgregadosFinal = Array.from(aggregatedMapComDataRecente.values());
+
+    // Agora, ordenamos por 'data_lancamento_mais_recente'
+    itensAgregadosFinal.sort((a, b) => {
+        return new Date(b.data_lancamento_mais_recente) - new Date(a.data_lancamento_mais_recente);
+    });
+
+    // Atualiza a variável global com os dados já ordenados
+    produtosAgregadosParaEmbalarGlobal = itensAgregadosFinal;
+    
+    console.log('[calcularEAgruparProntosParaEmbalar] Produtos agregados e ordenados por padrão:', produtosAgregadosParaEmbalarGlobal.length);
 }
 
 // --- Funções de Renderização ---
 async function renderizarCardsEmbalagem() {
-    const container = document.getElementById('embalagemCardsContainer');
-    const paginationContainer = document.getElementById('embalagemPaginationContainer');
-    const searchInput = document.getElementById('searchProdutoEmbalagem');
+    const containerEl = document.getElementById('embalagemCardsContainer');
+    const paginationContainerEl = document.getElementById('embalagemPaginationContainer');
+    
+    // Obtém os valores dos filtros e da ordenação
+    const searchInputEl = document.getElementById('searchProdutoEmbalagem');
+    const filtroAlertaEl = document.getElementById('filtroAlertaSelect');
+    const ordenacaoEl = document.getElementById('ordenacaoSelect');
 
-    if (!container || !paginationContainer || !searchInput) {
-        console.error("Elementos DOM para renderizar cards de embalagem não encontrados.");
+    if (!containerEl || !paginationContainerEl || !searchInputEl || !filtroAlertaEl || !ordenacaoEl) {
+        console.error("Elementos DOM para renderização/filtros não encontrados.");
+        if(containerEl) containerEl.innerHTML = `<p style="color:red; text-align:center;">Erro de interface. Recarregue a página.</p>`;
         return;
     }
 
-    container.innerHTML = '<div class="spinner">Carregando itens para embalagem...</div>'; // Feedback visual
-    paginationContainer.innerHTML = '';
+    containerEl.innerHTML = '<div class="spinner">Carregando e aplicando filtros...</div>';
+    paginationContainerEl.innerHTML = '';
 
-    // Recalcula/recarrega os dados agregados. Se já carregados, pode otimizar
-    // mas para garantir consistência após uma ação, é bom recarregar.
-    // await calcularEAgruparProntosParaEmbalar(); // Chamado no inicializar e após ações
+    // --- LÓGICA DE FILTRAGEM E ORDENAÇÃO ---
+    let itensProcessados = [...produtosAgregadosParaEmbalarGlobal];
 
-    const searchTerm = searchInput.value.toLowerCase().trim();
-    let itensFiltrados = produtosAgregadosParaEmbalarGlobal;
+    // 1. Aplicar filtro de alerta
+    const filtroAlerta = filtroAlertaEl.value;
+    if (filtroAlerta === 'antigos' || filtroAlerta === 'recentes') {
+        const doisDiasAtras = new Date();
+        doisDiasAtras.setHours(0, 0, 0, 0);
+        doisDiasAtras.setDate(doisDiasAtras.getDate() - 2);
+        
+        itensProcessados = itensProcessados.filter(item => {
+            const dataItem = new Date(item.data_lancamento_mais_antiga);
+            dataItem.setHours(0, 0, 0, 0);
+            if (filtroAlerta === 'antigos') {
+                return dataItem < doisDiasAtras; // Itens com mais de 2 dias de espera
+            } else { // 'recentes'
+                return dataItem >= doisDiasAtras; // Itens com 2 dias ou menos de espera
+            }
+        });
+    }
+
+    // 2. Aplicar busca textual
+    const searchTerm = searchInputEl.value.toLowerCase().trim();
     if (searchTerm) {
-        itensFiltrados = produtosAgregadosParaEmbalarGlobal.filter(item =>
+        itensProcessados = itensProcessados.filter(item =>
             item.produto.toLowerCase().includes(searchTerm) ||
-            (item.variante && item.variante !== '-' && item.variante.toLowerCase().includes(searchTerm))
+            (item.variante && item.variante !== '-' && item.variante.toLowerCase().includes(searchTerm)) ||
+            (item.sku && item.sku.toLowerCase().includes(searchTerm)) // Adicionando busca por SKU se disponível no agregado
         );
     }
+    
+    // 3. Aplicar ordenação
+    const ordenacao = ordenacaoEl.value;
+    itensProcessados.sort((a, b) => {
+        switch (ordenacao) {
+            case 'mais_antigos':
+                return new Date(a.data_lancamento_mais_antiga) - new Date(b.data_lancamento_mais_antiga);
+            case 'maior_quantidade':
+                return b.total_quantidade_disponivel_para_embalar - a.total_quantidade_disponivel_para_embalar;
+            case 'menor_quantidade':
+                return a.total_quantidade_disponivel_para_embalar - b.total_quantidade_disponivel_para_embalar;
+            case 'mais_recentes':
+            default:
+                return new Date(b.data_lancamento_mais_antiga) - new Date(a.data_lancamento_mais_antiga);
+        }
+    });
+    // --- FIM DA LÓGICA DE FILTRAGEM E ORDENAÇÃO ---
 
-    if (itensFiltrados.length === 0) {
-        container.innerHTML = `<p style="text-align: center; padding: 20px; color: var(--op-cor-cinza-texto);">
-            ${searchTerm ? 'Nenhum item encontrado para "' + searchTerm + '".' : 'Nenhum item pronto para embalar.'}
-        </p>`;
-        paginationContainer.style.display = 'none';
+    if (itensProcessados.length === 0) {
+        containerEl.innerHTML = `<p style="text-align: center; grid-column: 1 / -1;">Nenhum item encontrado com os filtros aplicados.</p>`;
+        paginationContainerEl.style.display = 'none';
         return;
     }
-    container.innerHTML = ''; // Limpa o spinner/mensagem
-    paginationContainer.style.display = 'flex';
+    
+    containerEl.innerHTML = ''; 
+    paginationContainerEl.style.display = 'flex';
 
-    const totalItems = itensFiltrados.length;
-    const totalPages = Math.ceil(totalItems / itemsPerPageEmbalagemCards);
-    currentPageEmbalagemCards = Math.max(1, Math.min(currentPageEmbalagemCards, totalPages)); // Garante que a página atual seja válida
+    const totalItems = itensProcessados.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPageEmbalagemCards) || 1;
+    currentPageEmbalagemCards = Math.max(1, Math.min(currentPageEmbalagemCards, totalPages)); // Garante que a pág. atual seja válida
     const startIndex = (currentPageEmbalagemCards - 1) * itemsPerPageEmbalagemCards;
-    const endIndex = Math.min(startIndex + itemsPerPageEmbalagemCards, totalItems);
-    const paginatedItems = itensFiltrados.slice(startIndex, endIndex);
+    const paginatedItems = itensProcessados.slice(startIndex, startIndex + itemsPerPageEmbalagemCards);
 
     const fragment = document.createDocumentFragment();
-    if (todosOsProdutosCadastrados.length === 0) { // Garante que temos dados de produtos para imagens
+    if (todosOsProdutosCadastrados.length === 0) {
         todosOsProdutosCadastrados = await obterProdutosDoStorage();
     }
 
     paginatedItems.forEach(item => {
         const card = document.createElement('div');
-    // A classe principal do card será definida abaixo, junto com o status.
-
-    const produtoCadastrado = todosOsProdutosCadastrados.find(p => p.nome === item.produto);
-    let imagemSrc = '/img/placeholder-image.png'; // Imagem padrão
-    let skuProduto = 'N/A'; // SKU Padrão
-
-    if (produtoCadastrado) {
-        if (item.variante && item.variante !== '-') {
-            const gradeInfo = produtoCadastrado.grade?.find(g => g.variacao === item.variante);
-            if (gradeInfo) {
-                imagemSrc = gradeInfo.imagem || produtoCadastrado.imagem || '/img/placeholder-image.png';
-                skuProduto = gradeInfo.sku || produtoCadastrado.sku || 'N/A'; // Pega SKU da grade ou do produto principal
+        const produtoCadastrado = todosOsProdutosCadastrados.find(p => p.id == item.produto_id);
+        let imagemSrc = '/img/placeholder-image.png';
+        let skuProduto = 'N/A';
+        if (produtoCadastrado) {
+            if (item.variante && item.variante !== '-') {
+                const gradeInfo = produtoCadastrado.grade?.find(g => g.variacao === item.variante);
+                if (gradeInfo) {
+                    imagemSrc = gradeInfo.imagem || produtoCadastrado.imagem || '/img/placeholder-image.png';
+                    skuProduto = gradeInfo.sku || produtoCadastrado.sku || 'N/A';
+                }
             } else {
                 imagemSrc = produtoCadastrado.imagem || '/img/placeholder-image.png';
                 skuProduto = produtoCadastrado.sku || 'N/A';
             }
-        } else {
-            imagemSrc = produtoCadastrado.imagem || '/img/placeholder-image.png';
-            skuProduto = produtoCadastrado.sku || 'N/A'; // SKU do produto principal para itens sem variação ou padrão
         }
-    }
-     const imgElement = `<img src="${imagemSrc}" alt="${item.produto}" class="ep-consulta-card-img" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">`;
-    card.className = `ep-consulta-card status-pronto-para-embalar`;
-
-    // Lógica para formatar "dias esperando" usando item.data_lancamento_mais_antiga
-    let diasEsperandoTexto = '-';
-    if (item.data_lancamento_mais_antiga) { // << USA A NOVA PROPRIEDADE
-        const dataAntiga = new Date(item.data_lancamento_mais_antiga);
-        const hoje = new Date();
         
-        // Zera as horas para comparar apenas dias completos
-        const inicioDoDiaDataAntiga = new Date(dataAntiga.getFullYear(), dataAntiga.getMonth(), dataAntiga.getDate());
-        const inicioDoDiaHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
-
-        const diffTime = Math.abs(inicioDoDiaHoje - inicioDoDiaDataAntiga);
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); // Diferença em dias
-        
-        if (diffDays === 0) {
-            diasEsperandoTexto = 'Hoje';
-        } else if (diffDays === 1) {
-            diasEsperandoTexto = '1 dia';
-        } else {
-            diasEsperandoTexto = `${diffDays} dias`;
+        let classeStatus = 'status-pronto-para-embalar'; 
+        let diffDays = -1; 
+        if (item.data_lancamento_mais_antiga) {
+            const dataAntiga = new Date(item.data_lancamento_mais_antiga);
+            const hoje = new Date();
+            const inicioDoDiaDataAntiga = new Date(dataAntiga.getFullYear(), dataAntiga.getMonth(), dataAntiga.getDate());
+            const inicioDoDiaHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+            const diffTime = Math.abs(inicioDoDiaHoje - inicioDoDiaDataAntiga);
+            diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            if (diffDays > 2) {
+                classeStatus = 'status-aguardando-muito';
+            }
         }
-    }
+        card.className = `ep-consulta-card ${classeStatus}`;
 
-    card.innerHTML = `
-        ${imgElement}
-        <div class="ep-consulta-card-info">
-            <h3>${item.produto}</h3>
-            <p>${item.variante !== '-' ? item.variante : 'Padrão'}</p>
-            <p class="ep-sku-info">SKU: ${skuProduto}</p>
-        </div>
-        <div class="ep-consulta-card-dados">
-            <div class="ep-dado-bloco">
-                <span class="label">Disponível</span>
-                <span class="valor">${item.total_quantidade_disponivel_para_embalar}</span>
-            </div>
-            <div class="ep-dado-bloco">
-                <span class="label">Aguardando</span>
-                <span class="valor">${diasEsperandoTexto}</span>
-            </div>
-        </div>
-    `;
-    card.dataset.embalagemAgregado = JSON.stringify(item);
+        let diasEsperandoTexto = '-';
+        if (diffDays !== -1) {
+            if (diffDays === 0) diasEsperandoTexto = 'Hoje';
+            else if (diffDays === 1) diasEsperandoTexto = '1 dia';
+            else diasEsperandoTexto = `${diffDays} dias`;
+        }
+        let estiloDiasAguardando = '';
+        if (classeStatus === 'status-aguardando-muito') {
+            estiloDiasAguardando = `style="color: var(--ep-cor-laranja-aviso); font-weight: 600;"`;
+        }
 
+        card.innerHTML = `
+            <img src="${imagemSrc}" alt="${item.produto}" class="ep-consulta-card-img" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">
+            <div class="ep-consulta-card-info">
+                <h3>${item.produto}</h3>
+                <p>${item.variante !== '-' ? item.variante : 'Padrão'}</p>
+                <p class="ep-sku-info">SKU: ${skuProduto}</p>
+            </div>
+            <div class="ep-consulta-card-dados">
+                <div class="ep-dado-bloco">
+                    <span class="label">Disponível</span>
+                    <span class="valor">${item.total_quantidade_disponivel_para_embalar}</span>
+                </div>
+                <div class="ep-dado-bloco">
+                    <span class="label">Aguardando</span>
+                    <span class="valor" ${estiloDiasAguardando}>${diasEsperandoTexto}</span>
+                </div>
+            </div>
+        `;
+        card.dataset.embalagemAgregado = JSON.stringify(item);
         if (item.total_quantidade_disponivel_para_embalar > 0 && permissoes.includes('lancar-embalagem')) {
             card.addEventListener('click', handleEmbalagemCardClick);
         } else {
@@ -320,22 +614,22 @@ async function renderizarCardsEmbalagem() {
         }
         fragment.appendChild(card);
     });
-    container.appendChild(fragment);
+    
+    containerEl.appendChild(fragment);
 
     if (totalPages > 1) {
-        let paginationHTML = `<button class="pagination-btn prev ep-btn" data-page="${Math.max(1, currentPageEmbalagemCards - 1)}" ${currentPageEmbalagemCards === 1 ? 'disabled' : ''}>Anterior</button>`;
+        let paginationHTML = `<button class="pagination-btn ep-btn" data-page="${Math.max(1, currentPageEmbalagemCards - 1)}" ${currentPageEmbalagemCards === 1 ? 'disabled' : ''}>Anterior</button>`;
         paginationHTML += `<span class="pagination-current">Pág. ${currentPageEmbalagemCards} de ${totalPages}</span>`;
-        paginationHTML += `<button class="pagination-btn next ep-btn" data-page="${Math.min(totalPages, currentPageEmbalagemCards + 1)}" ${currentPageEmbalagemCards === totalPages ? 'disabled' : ''}>Próximo</button>`;
-        paginationContainer.innerHTML = paginationHTML;
-
-        paginationContainer.querySelectorAll('.pagination-btn').forEach(btn => {
+        paginationHTML += `<button class="pagination-btn ep-btn" data-page="${Math.min(totalPages, currentPageEmbalagemCards + 1)}" ${currentPageEmbalagemCards === totalPages ? 'disabled' : ''}>Próximo</button>`;
+        paginationContainerEl.innerHTML = paginationHTML;
+        paginationContainerEl.querySelectorAll('.pagination-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 currentPageEmbalagemCards = parseInt(btn.dataset.page);
-                renderizarCardsEmbalagem();
+                renderizarCardsEmbalagem(); // Re-renderiza a página clicada
             });
         });
     } else {
-         paginationContainer.style.display = 'none';
+         paginationContainerEl.style.display = 'none';
     }
 }
 
@@ -464,6 +758,22 @@ async function carregarDetalhesEmbalagemView(agregado) {
         inputQtdUnidadeEl.dispatchEvent(new Event('input')); // Estado inicial
     }
 
+    // Lógica para buscar e preencher o SKU
+    const skuEl = document.getElementById('embalagemDetalheSKU');
+    if (skuEl) {
+        let skuProduto = 'N/A';
+        const produtoCad = todosOsProdutosCadastrados.find(p => p.id == agregado.produto_id);
+        if (produtoCad) {
+            if (agregado.variante && agregado.variante !== '-') {
+                const gradeInfo = produtoCad.grade?.find(g => g.variacao === agregado.variante);
+                skuProduto = gradeInfo?.sku || produtoCad.sku || 'N/A';
+            } else {
+                skuProduto = produtoCad.sku || 'N/A';
+            }
+        }
+        skuEl.textContent = `SKU: ${skuProduto}`;
+    }
+
     // --- APENAS RESET VISUAL da Aba "Montar e Embalar Kit" ---
     // Os listeners de interação serão configurados UMA VEZ no DOMContentLoaded.
     console.log("[carregarDetalhesEmbalagemView] Resetando UI da Aba Kit...");
@@ -522,30 +832,49 @@ async function carregarDetalhesEmbalagemView(agregado) {
 
 // --- Funções para Embalar Unidade e Montar Kit (lógica de envio) ---
 async function embalarUnidade() {
-    if (!embalagemAgregadoEmVisualizacao || operacaoEmAndamento.has('embalarUnidade')) return;
+    if (!embalagemAgregadoEmVisualizacao || operacaoEmAndamento.has('embalarUnidade')) {
+        return; // Evita execuções múltiplas ou sem dados
+    }
 
-    const inputQtd = document.getElementById('inputQuantidadeEmbalarUnidade');
-    const btnEmbalar = document.getElementById('btnEmbalarEnviarEstoqueUnidade');
-    const observacaoInput = document.getElementById('observacaoEmbalagemUnidade'); // Pega o campo de observação
-    const quantidadeEnviada = parseInt(inputQtd.value);
-    const observacao = observacaoInput ? observacaoInput.value.trim() : ''; // Pega o valor da observação
+    const inputQtdEl = document.getElementById('inputQuantidadeEmbalarUnidade');
+    const btnEmbalarEl = document.getElementById('btnEmbalarEnviarEstoqueUnidade');
+    const observacaoInputEl = document.getElementById('observacaoEmbalagemUnidade');
 
-    if (isNaN(quantidadeEnviada) || quantidadeEnviada <= 0 || quantidadeEnviada > embalagemAgregadoEmVisualizacao.total_quantidade_disponivel_para_embalar) {
-        mostrarPopupMensagem('Quantidade para embalar inválida.', 'erro');
+    if (!inputQtdEl || !btnEmbalarEl || !observacaoInputEl) {
+        console.error("Erro: Um ou mais elementos do formulário de embalagem de unidade não foram encontrados.");
+        mostrarPopupMensagem("Erro na interface. Tente recarregar a página.", "erro");
         return;
     }
 
+    const quantidadeEnviada = parseInt(inputQtdEl.value);
+    const observacao = observacaoInputEl.value.trim();
+
+    if (isNaN(quantidadeEnviada) || quantidadeEnviada <= 0 || quantidadeEnviada > embalagemAgregadoEmVisualizacao.total_quantidade_disponivel_para_embalar) {
+        mostrarPopupMensagem('A quantidade para embalar é inválida ou excede o disponível.', 'erro');
+        return;
+    }
+
+    const confirmado = await mostrarPopupConfirmacao(
+        `Confirma a embalagem de <strong>${quantidadeEnviada}</strong> unidade(s) de <br><strong>${embalagemAgregadoEmVisualizacao.produto} - ${embalagemAgregadoEmVisualizacao.variante}</strong>?`,
+        'aviso'
+    );
+
+    if (!confirmado) {
+        console.log("Embalagem de unidade cancelada pelo usuário.");
+        return; 
+    }
+
     operacaoEmAndamento.add('embalarUnidade');
-    btnEmbalar.disabled = true;
-    btnEmbalar.innerHTML = '<div class="spinner-btn-interno"></div> Processando...';
-    inputQtd.disabled = true;
-    if (observacaoInput) observacaoInput.disabled = true; // Desabilita observação durante envio
+    btnEmbalarEl.disabled = true;
+    btnEmbalarEl.innerHTML = '<div class="spinner-btn-interno"></div> Processando...';
+    inputQtdEl.disabled = true;
+    observacaoInputEl.disabled = true;
 
     try {
         let quantidadeRestanteDaMeta = quantidadeEnviada;
         const arrematesOrdenados = [...embalagemAgregadoEmVisualizacao.arremates_detalhe]
             .filter(arr => arr.quantidade_disponivel_para_embalar > 0)
-            .sort((a, b) => a.id_arremate - b.id_arremate);
+            .sort((a, b) => new Date(a.data_lancamento) - new Date(b.data_lancamento)); 
 
         for (const arremate of arrematesOrdenados) {
             if (quantidadeRestanteDaMeta <= 0) break;
@@ -560,18 +889,34 @@ async function embalarUnidade() {
         }
         
         if (quantidadeRestanteDaMeta > 0 && quantidadeEnviada > 0) {
-            throw new Error("Não foi possível alocar a quantidade total nos arremates. Saldo inconsistente.");
+            throw new Error("Não foi possível alocar a quantidade total nos arremates disponíveis.");
         }
         
+        // --- LÓGICA ATUALIZADA PARA OBTER E ENVIAR O SKU DA UNIDADE ---
+        let skuUnidade = null;
+        const produtoCad = todosOsProdutosCadastrados.find(p => p.id == embalagemAgregadoEmVisualizacao.produto_id);
+        if (produtoCad) {
+            if (embalagemAgregadoEmVisualizacao.variante && embalagemAgregadoEmVisualizacao.variante !== '-') {
+                const gradeInfo = produtoCad.grade?.find(g => g.variacao === embalagemAgregadoEmVisualizacao.variante);
+                skuUnidade = gradeInfo?.sku || produtoCad.sku;
+            } else {
+                skuUnidade = produtoCad.sku;
+            }
+        }
+        if (!skuUnidade) {
+            throw new Error("Não foi possível determinar o SKU da unidade para registro.");
+        }
+        // --- FIM DA LÓGICA DO SKU ---
+
         const payloadEstoque = {
             produto_id: embalagemAgregadoEmVisualizacao.produto_id,
             variante_nome: embalagemAgregadoEmVisualizacao.variante === '-' ? null : embalagemAgregadoEmVisualizacao.variante,
+            produto_ref_id: skuUnidade, // << ENVIANDO O SKU PARA A API
             quantidade_entrada: quantidadeEnviada,
             id_arremate_origem: arrematesOrdenados[0]?.id_arremate || null,
-            observacao: observacao || null // << ADICIONA OBSERVAÇÃO AO PAYLOAD
+            observacao: observacao || null
         };
         
-        // A API /estoque/entrada-producao precisa ser ajustada para receber e salvar 'observacao'
         await fetchFromAPI('/estoque/entrada-producao', {
             method: 'POST',
             body: JSON.stringify(payloadEstoque)
@@ -579,34 +924,20 @@ async function embalarUnidade() {
         
         mostrarPopupMensagem(`${quantidadeEnviada} unidade(s) embalada(s) com sucesso!`, 'sucesso');
         
-        // Resetar campos após sucesso (opcional, pois vai para outra tela)
-        inputQtd.value = '';
-        if (observacaoInput) observacaoInput.value = '';
-        const feedbackSaldoEl = document.getElementById('feedbackSaldoRestanteUnidade');
-        if (feedbackSaldoEl) feedbackSaldoEl.innerHTML = ' ';
-
-        window.location.hash = ''; // Volta para a lista principal
+        todosArrematesRegistradosCache = [];
+        window.location.hash = '';
 
     } catch (error) {
         console.error('[embalarUnidade] Erro:', error);
         mostrarPopupMensagem(`Falha ao embalar unidade: ${error.data?.details || error.message || error.message}`, 'erro');
-        // Reabilita campos em caso de erro
-        inputQtd.disabled = false;
-        if (observacaoInput) observacaoInput.disabled = false;
-        // O estado do botão de enviar será reavaliado pelo oninput se o usuário interagir novamente
+        inputQtdEl.disabled = false;
+        observacaoInputEl.disabled = false;
+        inputQtdEl.dispatchEvent(new Event('input'));
+
     } finally {
         operacaoEmAndamento.delete('embalarUnidade');
-        // Garante que o botão seja resetado mesmo se o usuário não interagir
-        // O oninput do inputQtd já deve cuidar de reabilitar o btnEmbalar se as condições forem atendidas.
-        // Mas, para garantir o texto, podemos fazer:
-        if (btnEmbalar && !btnEmbalar.disabled) { // Se ele não foi desabilitado pelo oninput após erro
-            btnEmbalar.innerHTML = '<i class="fas fa-box-open"></i> EMBALAR E ESTOCAR UNIDADES';
-        }
-        // Se o inputQtd foi reabilitado e tem valor, disparamos o oninput para o botão
-        if (!inputQtd.disabled && inputQtd.value) {
-            inputQtd.dispatchEvent(new Event('input'));
-        } else if (!inputQtd.disabled && btnEmbalar) { // Se input está vazio, desabilita o botão
-             btnEmbalar.disabled = true;
+        if (btnEmbalarEl && !btnEmbalarEl.disabled) {
+            btnEmbalarEl.innerHTML = '<i class="fas fa-box-open"></i> EMBALAR E ESTOCAR UNIDADES';
         }
     }
 }
@@ -622,7 +953,6 @@ async function montarKits() {
     const qtdKitsInputEl = document.getElementById('qtdEnviarKitsNova');
     const observacaoTextareaEl = document.getElementById('observacaoMontagemKit');
     const btnMontarEl = document.getElementById('btnMontarEnviarKitsEstoque');
-    // Não precisamos pegar btnMontarMaximoKitsEl aqui para o fluxo principal, apenas para desabilitar
 
     if (!kitSelecionadoBtnEl || !variacaoKitSelectEl || !variacaoKitSelectEl.value || !qtdKitsInputEl || qtdKitsInputEl.value.trim() === '') {
         mostrarPopupMensagem('Selecione o kit, a variação e a quantidade para montar.', 'aviso');
@@ -653,12 +983,22 @@ async function montarKits() {
     }
     const idDoKitParaAPI = kitProdutoSelecionadoObj.id;
 
+    // ADICIONADO: POPUP DE CONFIRMAÇÃO
+    const confirmado = await mostrarPopupConfirmacao(
+        `Confirma a montagem de <strong>${qtdKitsParaEnviar}</strong> kit(s) de <br><strong>${nomeKitProduto} - ${variacaoKitProduto}</strong>?`,
+        'aviso'
+    );
+
+    if (!confirmado) {
+        console.log("Montagem de kit cancelada pelo usuário.");
+        return; // Interrompe a função se o usuário cancelar
+    }
+
     operacaoEmAndamento.add('montarKits');
     const originalButtonHTML = btnMontarEl.innerHTML;
     btnMontarEl.disabled = true;
     btnMontarEl.innerHTML = '<div class="spinner-btn-interno"></div> Montando Kits...';
     
-    // Desabilitar todos os controles relevantes durante a operação
     document.querySelectorAll('#kitsListNova button').forEach(b => b.disabled = true);
     if(variacaoKitSelectEl) variacaoKitSelectEl.disabled = true;
     if(qtdKitsInputEl) qtdKitsInputEl.disabled = true;
@@ -672,7 +1012,7 @@ async function montarKits() {
         const variacaoDoKitObj = kitProdutoSelecionadoObj.grade?.find(g => g.variacao === variacaoKitProduto);
         const composicaoDoKitSelecionado = variacaoDoKitObj?.composicao;
         if (!composicaoDoKitSelecionado || composicaoDoKitSelecionado.length === 0) {
-            throw new Error('Composição do kit não encontrada ou está vazia. Verifique o cadastro do kit.');
+            throw new Error('Composição do kit não encontrada ou está vazia.');
         }
 
         const componentesParaPayload = [];
@@ -687,7 +1027,7 @@ async function montarKits() {
                 agg => String(agg.produto_id) === String(idComp) && (agg.variante || '-') === (varComp || '-')
             );
             if (!agregadoDoComponente || agregadoDoComponente.total_quantidade_disponivel_para_embalar < qtdTotalCompNec) {
-                 throw new Error(`Saldo insuficiente para componente "${nomeCompParaLog}" (${varComp || 'Padrão'}). Nec: ${qtdTotalCompNec}, Disp: ${agregadoDoComponente?.total_quantidade_disponivel_para_embalar || 0}.`);
+                 throw new Error(`Saldo insuficiente para componente "${nomeCompParaLog}" (${varComp || 'Padrão'}).`);
             }
 
             const arrematesDisponiveisDoComponente = [...agregadoDoComponente.arremates_detalhe]
@@ -709,7 +1049,7 @@ async function montarKits() {
                 }
             }
             if (qtdTotalCompNec > 0) { 
-                throw new Error(`Falha ao alocar saldo para "${nomeCompParaLog}" (${varComp || 'Padrão'}). Faltam ${qtdTotalCompNec}.`);
+                throw new Error(`Falha ao alocar saldo para "${nomeCompParaLog}" (${varComp || 'Padrão'}).`);
             }
         }
 
@@ -722,70 +1062,96 @@ async function montarKits() {
             observacao: observacaoMontagem || null
         };
         
+        // A API /kits/montar precisa ser ajustada para receber 'observacao'
         await fetchFromAPI('/kits/montar', { method: 'POST', body: JSON.stringify(payloadAPI) });
         
-        mostrarPopupMensagem(`${qtdKitsParaEnviar} kit(s) "${nomeKitProduto}" montado(s) e enviado(s) para estoque!`, 'sucesso');
+        mostrarPopupMensagem(`${qtdKitsParaEnviar} kit(s) "${nomeKitProduto}" montado(s) com sucesso!`, 'sucesso');
         sucessoGeral = true;
         
-        todosArrematesRegistradosCache = []; 
+        todosArrematesRegistradosCache = [];
         await calcularEAgruparProntosParaEmbalar(); 
-        window.location.hash = ''; // Redireciona para a lista principal
+        window.location.hash = '';
 
     } catch (error) {
         console.error('[montarKits] Erro:', error);
         mostrarPopupMensagem(`Erro ao montar kits: ${error.data?.details || error.message || error.message}`, 'erro');
-        // sucessoGeral permanece false, o finally cuidará de reabilitar os botões
     } finally {
         operacaoEmAndamento.delete('montarKits');
-        if (btnMontarEl) { // Restaura o botão principal de montar
+        if (btnMontarEl) {
             btnMontarEl.innerHTML = originalButtonHTML;
-            // O estado 'disabled' dele será tratado por atualizarEstadoBotaoMontarKitNova
-            // quando a view for recarregada ou a aba/variação for alterada.
         }
-
-        // Se NÃO houve sucesso, reabilita os controles para permitir nova tentativa.
-        // Se HOUVE sucesso, o redirecionamento via hashchange cuidará do estado dos controles
-        // ao chamar carregarDetalhesEmbalagemView -> carregarTabelaKitNova.
         if (!sucessoGeral) {
-            console.log("[montarKits FINALLY] Operação falhou. Tentando reabilitar controles.");
-            
-            // Reabilita botões de seleção de kit
-            document.querySelectorAll('#kitsListNova button').forEach(b => {
-                // Apenas reabilita se não for o botão ativo (o usuário pode querer trocar)
-                // ou se for o único, reabilita.
-                if (!b.classList.contains('active') || document.querySelectorAll('#kitsListNova button').length === 1) {
-                    b.disabled = false;
-                }
-            });
-             if(kitSelecionadoBtnEl) kitSelecionadoBtnEl.disabled = false; // Garante que o ativo também seja habilitado
-
-
+            console.log("[montarKits FINALLY] Operação falhou. Reabilitando controles.");
+            document.querySelectorAll('#kitsListNova button').forEach(b => b.disabled = false);
             if(variacaoKitSelectEl) variacaoKitSelectEl.disabled = false;
             
             const qtdInputAtual = document.getElementById('qtdEnviarKitsNova');
-            const qtdDisponivelAtual = document.getElementById('qtdDisponivelKitsNova');
-            let aindaHaKitsMontaveis = 0;
-            if(qtdDisponivelAtual) {
-                aindaHaKitsMontaveis = parseInt(qtdDisponivelAtual.textContent) || 0;
-            }
-
             if (qtdInputAtual) {
-                qtdInputAtual.disabled = !(aindaHaKitsMontaveis > 0);
+                const aindaMontaveis = parseInt(document.getElementById('qtdDisponivelKitsNova')?.textContent || '0');
+                qtdInputAtual.disabled = !(aindaMontaveis > 0);
+                
+                const isDisabledBasedOnInput = qtdInputAtual.disabled;
+                document.querySelectorAll('#kit-tab-nova .ep-acoes-rapidas-qtd button').forEach(b => b.disabled = isDisabledBasedOnInput);
+                const btnMaximoAtual = document.getElementById('btnMontarMaximoKits');
+                if(btnMaximoAtual) btnMaximoAtual.disabled = isDisabledBasedOnInput;
             }
-
-            // Reabilita botões +/-/Max se o input de quantidade estiver habilitado
-            const isDisabledBasedOnInput = qtdInputAtual ? qtdInputAtual.disabled : true;
-            document.querySelectorAll('#kit-tab-nova .ep-acoes-rapidas-qtd button').forEach(b => b.disabled = isDisabledBasedOnInput);
-            const btnMaximoAtual = document.getElementById('btnMontarMaximoKits');
-            if(btnMaximoAtual) btnMaximoAtual.disabled = isDisabledBasedOnInput;
 
             if(observacaoTextareaEl) observacaoTextareaEl.disabled = false;
-            
-            atualizarEstadoBotaoMontarKitNova(); // Atualiza o estado do botão principal de montar
+            atualizarEstadoBotaoMontarKitNova(); 
         }
-        // Se sucessoGeral for true, não precisamos fazer nada aqui para os botões +/-/Max,
-        // pois o redirecionamento e o recarregamento da view via carregarTabelaKitNova 
-        // definirão o estado 'disabled' corretamente para esses botões.
+    }
+}
+
+async function atualizarContadoresPainel() {
+    console.log("[atualizarContadoresPainel] Atualizando dados do painel...");
+    
+    // Referências aos elementos do contador
+    const contadorTotalEl = document.getElementById('contadorTotalAEmbalar');
+    const contadorAguardandoEl = document.getElementById('contadorAguardandoMuitoTempo');
+    const contadorHojeEl = document.getElementById('contadorEmbaladoHoje');
+
+    // --- Contadores que usam dados já carregados (são rápidos) ---
+
+    // 1. Total de Itens (grupos de produto/variação) a Embalar
+    if (contadorTotalEl) {
+        const totalAEmbalar = produtosAgregadosParaEmbalarGlobal.length;
+        contadorTotalEl.textContent = totalAEmbalar;
+    }
+
+    // 2. Aguardando há mais de 2 dias
+    if (contadorAguardandoEl) {
+        const doisDiasAtras = new Date();
+        doisDiasAtras.setHours(0, 0, 0, 0);
+        doisDiasAtras.setDate(doisDiasAtras.getDate() - 2);
+        
+        const aguardandoMuitoTempo = produtosAgregadosParaEmbalarGlobal.filter(item => {
+            if (!item.data_lancamento_mais_antiga) return false;
+            const dataItem = new Date(item.data_lancamento_mais_antiga);
+            dataItem.setHours(0, 0, 0, 0);
+            return dataItem < doisDiasAtras;
+        }).length;
+        contadorAguardandoEl.textContent = aguardandoMuitoTempo;
+    }
+    
+    // --- Contador que precisa de uma chamada de API (pode ser um pouco mais lento) ---
+
+    // 3. Embalado Hoje
+    if (contadorHojeEl) {
+        try {
+            // Define como "Carregando..." enquanto busca
+            contadorHojeEl.textContent = '...'; 
+            
+            // Chama a nova API
+            const response = await fetchFromAPI('/embalagens/contagem-hoje');
+            
+            // Atualiza com o valor real
+            contadorHojeEl.textContent = response.total || 0;
+            console.log(`[atualizarContadoresPainel] Total embalado hoje: ${response.total}`);
+        } catch (error) {
+            console.error("Erro ao buscar contagem de embalagens de hoje:", error);
+            contadorHojeEl.textContent = "?"; // Indica erro na busca
+            contadorHojeEl.title = "Não foi possível carregar esta informação.";
+        }
     }
 }
 
@@ -1147,8 +1513,8 @@ function atualizarEstadoBotaoMontarKitNova() {
 // --- Controle de Views (Hash e LocalStorage) ---
 async function handleHashChangeEmbalagem() {
     const hash = window.location.hash;
-    const embalagemListViewEl = document.getElementById('embalagemListViewNova'); // Usar novo ID
-    const embalarDetalheViewEl = document.getElementById('embalarDetalheView');   // Usar novo ID
+    const embalagemListViewEl = document.getElementById('embalagemListViewNova');
+    const embalarDetalheViewEl = document.getElementById('embalarDetalheView');
 
     if (!embalagemListViewEl || !embalarDetalheViewEl) {
         console.error("Views principais de embalagem não encontradas no DOM.");
@@ -1161,30 +1527,51 @@ async function handleHashChangeEmbalagem() {
             await carregarDetalhesEmbalagemView(JSON.parse(data));
         } else {
             console.warn("Hash #embalar-produto sem dados no localStorage. Voltando para lista.");
-            window.location.hash = ''; // Volta para a lista se não houver dados
+            window.location.hash = ''; 
         }
-    } else { // Para hash vazio ou qualquer outro não reconhecido
+    } else { 
         embalagemListViewEl.style.display = 'block';
         embalarDetalheViewEl.style.display = 'none';
         localStorage.removeItem('embalarDetalheAtual');
         embalagemAgregadoEmVisualizacao = null;
-        // Recarrega os dados e renderiza os cards da lista principal
+
+        // --- AJUSTE PRINCIPAL ---
+        console.log("Voltando para a lista. Resetando paginação e recarregando dados...");
+        
+        // 1. Reseta para a primeira página
+        currentPageEmbalagemCards = 1; 
+
+        // 2. Reseta os filtros para os valores padrão
+        const filtroAlertaEl = document.getElementById('filtroAlertaSelect');
+        const ordenacaoEl = document.getElementById('ordenacaoSelect');
+        const searchInputEl = document.getElementById('searchProdutoEmbalagem');
+        if (filtroAlertaEl) filtroAlertaEl.value = 'todos';
+        if (ordenacaoEl) ordenacaoEl.value = 'mais_recentes';
+        if (searchInputEl) searchInputEl.value = '';
+        
+        // 3. Recarrega e reordena os dados
         await calcularEAgruparProntosParaEmbalar();
+        
+        // 4. Renderiza a lista (que agora usará currentPageEmbalagemCards = 1)
         await renderizarCardsEmbalagem();
+
+        // 5. Atualiza os contadores do painel
+        atualizarContadoresPainel();
     }
 }
 
 // --- Inicialização ---
 async function inicializarDadosEViewsEmbalagem() {
-    // Carrega dados essenciais primeiro
     await Promise.all([
-    obterProdutosDoStorage(true).then(p => { // Deveria ser obterProdutosDoStorage(true) para forçar?
-        todosOsProdutosCadastrados = p;
-    }),
-    buscarArrematesCompletos()
-]);
-
-    // Após os dados base, processa a view correta
+        obterProdutosDoStorage(true).then(p => { todosOsProdutosCadastrados = p; }),
+        buscarArrematesCompletos()
+    ]);
+    await calcularEAgruparProntosParaEmbalar();
+    
+    // Atualiza os contadores do painel com os dados carregados
+    await atualizarContadoresPainel(); // A chamada deve estar aqui e agora ser com await
+    
+    // Processa a view correta (lista ou detalhe)
     await handleHashChangeEmbalagem();
 }
 
@@ -1202,11 +1589,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         window.addEventListener('hashchange', handleHashChangeEmbalagem);
         
+        // Listeners de navegação e ação principais (permanentes na página)
         const fecharDetalheBtnEl = document.getElementById('fecharEmbalarDetalheBtn');
         if (fecharDetalheBtnEl) {
-            fecharDetalheBtnEl.addEventListener('click', () => {
-                window.location.hash = '';
-            });
+            fecharDetalheBtnEl.addEventListener('click', () => { window.location.hash = ''; });
         }
 
         const btnEmbalarUnidadeEl = document.getElementById('btnEmbalarEnviarEstoqueUnidade');
@@ -1226,45 +1612,59 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const tabId = tabBtn.dataset.tab;
                 console.log(`[ABA CLICK] Aba clicada: ${tabId}`);
 
+                // Esconde todos os painéis e desativa todos os botões de aba
                 document.querySelectorAll('#embalarDetalheView .ep-tabs .ep-tab-btn').forEach(b => b.classList.remove('active'));
                 document.querySelectorAll('#embalarDetalheView .ep-tab-panel').forEach(p => {
                     p.classList.remove('active');
                     p.style.display = 'none'; 
                 });
 
+                // Ativa o botão clicado e mostra o painel correspondente
                 tabBtn.classList.add('active');
                 const activePanel = document.getElementById(`${tabId}-tab-nova`);
                 if (activePanel) {
                     activePanel.classList.add('active');
                     activePanel.style.display = 'block'; 
-                    console.log(`[ABA CLICK] Painel #${activePanel.id} display ANTES de carregarKits: ${window.getComputedStyle(activePanel).display}`);
                 } else {
                     console.error(`[ABA CLICK] ERRO: Painel para aba ${tabId} não encontrado!`);
                 }
                 
-                if (tabId === 'kit') {
-                    console.log('[ABA CLICK] Iniciando lógica para aba Kit.');
-                    if (embalagemAgregadoEmVisualizacao && embalagemAgregadoEmVisualizacao.produto_id !== undefined) {
-                        console.log(`[ABA CLICK] Chamando carregarKitsDisponiveisNova para produto_id: ${embalagemAgregadoEmVisualizacao.produto_id}, variante: ${embalagemAgregadoEmVisualizacao.variante}`);
-                        await carregarKitsDisponiveisNova(embalagemAgregadoEmVisualizacao.produto_id, embalagemAgregadoEmVisualizacao.variante);
-                        
-                        const panelKitAfterLoad = document.getElementById('kit-tab-nova');
-                        if (panelKitAfterLoad) {
-                           console.log(`[ABA CLICK] Painel #${panelKitAfterLoad.id} display DEPOIS de carregarKits: ${window.getComputedStyle(panelKitAfterLoad).display}`);
-                           // A função carregarTabelaKitNova agora configura o oninput e dispara o evento inicial.
-                           // A chamada para atualizarEstadoBotaoMontarKitNova() foi movida para o final de carregarTabelaKitNova
-                           // ou é acionada pelo dispatchEvent do input.
+                // Lógica de carregamento de dados para a aba clicada
+                if (tabId === 'kit' && embalagemAgregadoEmVisualizacao) {
+                    // Carrega os kits disponíveis para o item base atual
+                    console.log(`[ABA CLICK] Chamando carregarKitsDisponiveisNova para produto_id: ${embalagemAgregadoEmVisualizacao.produto_id}`);
+                    await carregarKitsDisponiveisNova(embalagemAgregadoEmVisualizacao.produto_id, embalagemAgregadoEmVisualizacao.variante);
+                
+                } else if (tabId === 'historico' && embalagemAgregadoEmVisualizacao) {
+                    // LÓGICA ATUALIZADA PARA O HISTÓRICO
+                    // 1. Encontra o SKU (produto_ref_id) do item que está sendo visualizado.
+                    let skuParaBusca = null;
+                    const produtoCad = todosOsProdutosCadastrados.find(p => p.id == embalagemAgregadoEmVisualizacao.produto_id);
+                    
+                    if (produtoCad) {
+                        if (embalagemAgregadoEmVisualizacao.variante && embalagemAgregadoEmVisualizacao.variante !== '-') {
+                            const gradeInfo = produtoCad.grade?.find(g => g.variacao === embalagemAgregadoEmVisualizacao.variante);
+                            skuParaBusca = gradeInfo?.sku || produtoCad.sku;
+                        } else {
+                            skuParaBusca = produtoCad.sku;
                         }
+                    }
+
+                    // 2. Se o SKU foi encontrado, chama a função de carregar histórico com ele.
+                    if (skuParaBusca) {
+                        console.log(`[ABA CLICK] Chamando carregarHistoricoEmbalagem para produto_ref_id: ${skuParaBusca}`);
+                        carregarHistoricoEmbalagem(skuParaBusca, 1); // Passa o SKU e a primeira página
                     } else {
-                        console.warn('[ABA CLICK] Aba Kit: embalagemAgregadoEmVisualizacao inválido.', embalagemAgregadoEmVisualizacao);
-                        const kitsListEl = document.getElementById('kitsListNova');
-                        if(kitsListEl) kitsListEl.innerHTML = '<p class="ep-placeholder-kits" style="color:orange;">Selecione um item válido da lista para ver os kits.</p>';
+                        // 3. Se não encontrou o SKU, exibe uma mensagem de erro.
+                        console.error("Não foi possível encontrar o SKU para buscar o histórico do item:", embalagemAgregadoEmVisualizacao);
+                        const tbodyHistEl = document.getElementById('historicoEmbalagemTableBody');
+                        if(tbodyHistEl) tbodyHistEl.innerHTML = '<tr><td colspan="6" style="text-align:center;color:red;">Erro ao identificar o SKU deste produto para buscar o histórico.</td></tr>';
                     }
                 }
             });
         });
         
-        // Listener DELEGADO para os cliques nos botões +/-/Máx DENTRO da aba Kit - CONFIGURADO UMA VEZ
+        // Listener DELEGADO para os cliques nos controles DENTRO da aba Kit
         const kitTabPanelEl = document.getElementById('kit-tab-nova');
         if (kitTabPanelEl) {
             console.log("[DOMContentLoaded] Configurando listener DELEGADO PERMANENTE de CLIQUE para #kit-tab-nova.");
@@ -1302,21 +1702,38 @@ document.addEventListener('DOMContentLoaded', async () => {
                     return; 
                 }
             });
-
-            // O oninput para #qtdEnviarKitsNova será configurado/reconfigurado por carregarTabelaKitNova
-            // Isso garante que ele esteja sempre no elemento input correto se o DOM for alterado.
-            // Não precisa configurar aqui permanentemente se carregarTabelaKitNova já faz.
-            
-        } else {
-            console.error("[DOMContentLoaded] Painel #kit-tab-nova não encontrado para configurar listener delegado.");
         }
-        
+
+        // Listener para os filtros e ordenação na tela principal
+        const toggleFiltrosBtnEl = document.getElementById('toggleFiltrosAvancadosBtn');
+        const filtrosContainerEl = document.getElementById('filtrosAvancadosContainer');
+        const filtroAlertaSelectEl = document.getElementById('filtroAlertaSelect');
+        const ordenacaoSelectEl = document.getElementById('ordenacaoSelect');
+        const limparFiltrosBtnEl = document.getElementById('limparFiltrosBtn');
         const searchInputEl = document.getElementById('searchProdutoEmbalagem');
-        if (searchInputEl) {
-            searchInputEl.addEventListener('input', debounce(async () => {
-                currentPageEmbalagemCards = 1; 
-                await renderizarCardsEmbalagem(); 
-            }, 350));
+
+        if (toggleFiltrosBtnEl && filtrosContainerEl) {
+            toggleFiltrosBtnEl.addEventListener('click', () => {
+                filtrosContainerEl.classList.toggle('hidden');
+            });
+        }
+
+        const aplicarFiltrosEOrdenar = () => {
+            currentPageEmbalagemCards = 1; 
+            renderizarCardsEmbalagem();
+        };
+
+        if (filtroAlertaSelectEl) filtroAlertaSelectEl.addEventListener('change', aplicarFiltrosEOrdenar);
+        if (ordenacaoSelectEl) ordenacaoSelectEl.addEventListener('change', aplicarFiltrosEOrdenar);
+        if(searchInputEl) searchInputEl.addEventListener('input', debounce(aplicarFiltrosEOrdenar, 350));
+
+        if (limparFiltrosBtnEl && filtroAlertaSelectEl && ordenacaoSelectEl && searchInputEl) {
+            limparFiltrosBtnEl.addEventListener('click', () => {
+                filtroAlertaSelectEl.value = 'todos';
+                ordenacaoSelectEl.value = 'mais_recentes';
+                searchInputEl.value = '';
+                aplicarFiltrosEOrdenar();
+            });
         }
 
     } catch (error) {
@@ -1324,6 +1741,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         mostrarPopupMensagem("Erro crítico ao carregar a página. Tente recarregar.", "erro", 0);
     }
 });
+
+
 
 // Função global para limpar cache (se necessário para debug)
 window.limparCacheEmbalagemProdutos = async () => {

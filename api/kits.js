@@ -62,129 +62,86 @@ router.use(async (req, res, next) => {
 router.post('/montar', async (req, res) => {
     const { usuarioLogado } = req;
     const {
-        kit_produto_id, // ID do produto kit que está sendo montado
-        kit_nome,       // Nome do kit (para logs, observações e fallback)
+        kit_produto_id,
         kit_variante,
         quantidade_kits_montados,
-        componentes_consumidos_de_arremates
+        componentes_consumidos_de_arremates, // Vem do frontend, sem SKU ainda
+        observacao
     } = req.body;
-    let dbCliente;
-
-    console.log('[API /kits/montar] Recebido:', JSON.stringify(req.body, null, 2));
+    
+    let dbClient;
 
     try {
-        dbCliente = await pool.connect();
+        dbClient = await pool.connect();
         
-        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbCliente, usuarioLogado.id);
+        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
         if (!permissoesCompletas.includes('montar-kit')) {
             return res.status(403).json({ error: 'Permissão negada para montar kits.' });
         }
 
-        // Validações de entrada
-        if ((!kit_produto_id && !kit_nome) || quantidade_kits_montados === undefined || quantidade_kits_montados <= 0) {
-            return res.status(400).json({ error: 'Dados inválidos: kit_produto_id (ou kit_nome), e quantidade_kits_montados (>0) são obrigatórios.' });
-        }
-        if (!componentes_consumidos_de_arremates || !Array.isArray(componentes_consumidos_de_arremates) || componentes_consumidos_de_arremates.length === 0) {
-            return res.status(400).json({ error: 'Nenhum componente especificado para consumo na montagem do kit.' });
+        if (!kit_produto_id || !quantidade_kits_montados || quantidade_kits_montados <= 0 || !componentes_consumidos_de_arremates || !Array.isArray(componentes_consumidos_de_arremates) || componentes_consumidos_de_arremates.length === 0) {
+            return res.status(400).json({ error: 'Dados para montagem de kit estão incompletos ou inválidos.' });
         }
 
-        let final_kit_produto_id = kit_produto_id ? parseInt(kit_produto_id) : null;
-        let final_kit_nome_para_log = kit_nome; // Usar o nome recebido para o log, se disponível
+        const final_kit_produto_id = parseInt(kit_produto_id);
+        await dbClient.query('BEGIN');
 
-        // Se kit_produto_id não veio, mas kit_nome sim, tenta buscar o ID
-        if (!final_kit_produto_id && kit_nome) {
-            console.log(`[API /kits/montar] Buscando ID do kit pelo nome: "${kit_nome}"`);
-            const produtoKitResult = await dbCliente.query('SELECT id FROM produtos WHERE nome = $1 AND is_kit = TRUE LIMIT 1', [kit_nome]);
-            if (produtoKitResult.rows.length > 0) {
-                final_kit_produto_id = produtoKitResult.rows[0].id;
-            } else {
-                return res.status(404).json({ error: `Produto kit com nome "${kit_nome}" não encontrado ou não é um kit.` });
-            }
-        } else if (!final_kit_produto_id) { // Se nem ID nem nome vieram (já coberto pela validação inicial, mas como dupla checagem)
-            return res.status(400).json({ error: 'Identificação do kit (ID ou Nome) não fornecida.' });
-        }
-
-        // Se o nome do kit não veio, mas o ID sim, busca o nome para usar em logs e observações
-        if (!final_kit_nome_para_log && final_kit_produto_id) {
-            const produtoKitInfo = await dbCliente.query('SELECT nome FROM produtos WHERE id = $1 LIMIT 1', [final_kit_produto_id]);
-            if (produtoKitInfo.rows.length > 0) {
-                final_kit_nome_para_log = produtoKitInfo.rows[0].nome;
-            } else {
-                // Isso indicaria um ID inválido fornecido pelo frontend
-                return res.status(404).json({ error: `Produto kit com ID "${final_kit_produto_id}" não encontrado.` });
-            }
-        }
-
-        await dbCliente.query('BEGIN');
+        const componentesComSkuParaSalvar = [];
 
         for (const componente of componentes_consumidos_de_arremates) {
-            const { id_arremate, produto_id: comp_produto_id, produto_nome: comp_produto_nome, variacao: comp_variacao, quantidade_usada } = componente;
+            const { id_arremate, produto_id: comp_produto_id, variacao: comp_variacao, quantidade_usada } = componente;
+            if (!id_arremate || !comp_produto_id || !quantidade_usada || quantidade_usada <= 0) throw new Error(`Componente com dados inválidos: ${JSON.stringify(componente)}`);
             
-            if (!id_arremate || !quantidade_usada || quantidade_usada <= 0) {
-                await dbCliente.query('ROLLBACK');
-                return res.status(400).json({ error: `Componente com dados inválidos no payload: ${JSON.stringify(componente)}`});
-            }
-            const arremateResult = await dbCliente.query(
-                'SELECT id, quantidade_arrematada, quantidade_ja_embalada FROM arremates WHERE id = $1 FOR UPDATE',
-                [id_arremate]
-            );
-            if (arremateResult.rows.length === 0) {
-                await dbCliente.query('ROLLBACK');
-                return res.status(404).json({ error: `Arremate de origem (ID: ${id_arremate}) não encontrado para o componente "${comp_produto_nome || comp_produto_id}" - "${comp_variacao}".` });
-            }
+            const arremateResult = await dbClient.query('SELECT quantidade_arrematada, quantidade_ja_embalada FROM arremates WHERE id = $1 FOR UPDATE', [id_arremate]);
+            if (arremateResult.rows.length === 0) throw new Error(`Arremate de origem (ID: ${id_arremate}) não encontrado.`);
             const arremate = arremateResult.rows[0];
             const saldoAtual = arremate.quantidade_arrematada - arremate.quantidade_ja_embalada;
-            if (saldoAtual < quantidade_usada) {
-                await dbCliente.query('ROLLBACK');
-                return res.status(400).json({ error: `Saldo insuficiente no arremate ${id_arremate} para o componente "${comp_produto_nome || comp_produto_id}" - "${comp_variacao}". Saldo: ${saldoAtual}, Necessário: ${quantidade_usada}.` });
-            }
-            await dbCliente.query(
-                'UPDATE arremates SET quantidade_ja_embalada = quantidade_ja_embalada + $1 WHERE id = $2',
-                [quantidade_usada, id_arremate]
-            );
+            if (saldoAtual < quantidade_usada) throw new Error(`Saldo insuficiente no arremate ${id_arremate}. Saldo: ${saldoAtual}, Necessário: ${quantidade_usada}.`);
+            
+            await dbClient.query('UPDATE arremates SET quantidade_ja_embalada = quantidade_ja_embalada + $1 WHERE id = $2', [quantidade_usada, id_arremate]);
+
+            let skuComponente = null;
+            const produtoComponenteInfo = await dbClient.query('SELECT nome, sku, grade FROM produtos WHERE id = $1', [comp_produto_id]);
+            if (produtoComponenteInfo.rows.length > 0) {
+                const prod = produtoComponenteInfo.rows[0];
+                if (comp_variacao && comp_variacao !== '-') {
+                    const gradeInfo = prod.grade?.find(g => g.variacao === comp_variacao);
+                    skuComponente = gradeInfo?.sku || prod.sku;
+                } else {
+                    skuComponente = prod.sku;
+                }
+                componentesComSkuParaSalvar.push({ ...componente, sku: skuComponente });
+            } else { throw new Error(`Produto componente com ID ${comp_produto_id} não encontrado.`); }
         }
 
-        // Inserir na tabela estoque_movimentos usando final_kit_produto_id
-        await dbCliente.query(
-            `INSERT INTO estoque_movimentos (
-                produto_id, variante_nome, quantidade, tipo_movimento, 
-                data_movimento, usuario_responsavel, observacao
-            ) VALUES ($1, $2, $3, $4, NOW(), $5, $6);`,
-            [
-                final_kit_produto_id,
-                kit_variante || null,
-                quantidade_kits_montados,
-                'ENTRADA_PRODUCAO_KIT_MONTADO',
-                (usuarioLogado.nome || 'Sistema'),
-                `Montagem de ${quantidade_kits_montados} kit(s) "${final_kit_nome_para_log}" (${kit_variante || 'Padrão'})`
-            ]
+        const movEstoqueKitResult = await dbClient.query(
+            `INSERT INTO estoque_movimentos (produto_id, variante_nome, quantidade, tipo_movimento, usuario_responsavel, observacao) VALUES ($1, $2, $3, 'ENTRADA_PRODUCAO_KIT', $4, $5) RETURNING id;`,
+            [final_kit_produto_id, kit_variante || null, quantidade_kits_montados, (usuarioLogado.nome || 'Sistema'), observacao || `Montagem de ${quantidade_kits_montados} kit(s)`]
         );
-        
-        // Inserir na tabela log_montagem_kits (mantendo kit_nome por enquanto)
-        await dbCliente.query(
-            `INSERT INTO log_montagem_kits (kit_nome, kit_variante, quantidade_montada, data_montagem, usuario_id, usuario_nome)
-             VALUES ($1, $2, $3, NOW(), $4, $5);`,
-            [
-                final_kit_nome_para_log, // Usa o nome do kit aqui
-                kit_variante || null,
-                quantidade_kits_montados,
-                usuarioLogado.id,
-                (usuarioLogado.nome || 'Sistema')
-            ]
-        );
+        const novoMovimentoId = movEstoqueKitResult.rows[0].id;
 
-        await dbCliente.query('COMMIT');
-        res.status(200).json({ message: `${quantidade_kits_montados} kit(s) "${final_kit_nome_para_log}" montado(s) e registrado(s) com sucesso!` });
+        let skuDoKitMontado = null;
+        const infoDoKitMontado = await dbClient.query('SELECT sku, grade FROM produtos WHERE id = $1', [final_kit_produto_id]);
+        if (infoDoKitMontado.rows.length > 0) {
+            const kitProd = infoDoKitMontado.rows[0];
+            if(kit_variante && kit_variante !== '-') {
+                const gradeInfoKit = kitProd.grade?.find(g => g.variacao === kit_variante);
+                skuDoKitMontado = gradeInfoKit?.sku || kitProd.sku;
+            } else { skuDoKitMontado = kitProd.sku; }
+        }
+
+        const embalagemRealizadaQuery = `INSERT INTO embalagens_realizadas (tipo_embalagem, produto_embalado_id, variante_embalada_nome, produto_ref_id, quantidade_embalada, usuario_responsavel_id, observacao, movimento_estoque_id, status, componentes_consumidos) VALUES ('KIT', $1, $2, $3, $4, $5, $6, $7, 'ATIVO', $8);`;
+        await dbClient.query(embalagemRealizadaQuery, [final_kit_produto_id, kit_variante || null, skuDoKitMontado, quantidade_kits_montados, usuarioLogado.id, observacao || null, novoMovimentoId, JSON.stringify(componentesComSkuParaSalvar)]);
+        
+        await dbClient.query('COMMIT');
+        res.status(200).json({ message: `${quantidade_kits_montados} kit(s) montado(s) com sucesso!` });
 
     } catch (error) {
-        if (dbCliente) {
-            try { await dbCliente.query('ROLLBACK'); console.log('[API /kits/montar] ROLLBACK executado.'); }
-            catch (rollbackError) { console.error('[API /kits/montar] Erro no ROLLBACK:', rollbackError); }
-        }
-        console.error('[API /kits/montar] Erro:', error.message, error.stack ? error.stack.substring(0,500):"");
-        res.status(error.statusCode || 400).json({ error: error.message || 'Erro ao montar kits.' });
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error('[API /kits/montar] Erro na transação:', error.message);
+        res.status(500).json({ error: 'Erro ao montar kits.', details: error.message });
     } finally {
-        if (dbCliente) dbCliente.release();
+        if (dbClient) dbClient.release();
     }
 });
 

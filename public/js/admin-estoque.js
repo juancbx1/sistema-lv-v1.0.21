@@ -221,6 +221,52 @@ async function fetchEstoqueAPI(endpoint, options = {}) {
     }
 }
 
+async function forcarAtualizacaoEstoque() {
+    const btn = document.getElementById('btnAtualizarEstoque');
+    if (!btn) return;
+
+    // Desabilita o botão e mostra feedback de carregamento
+    btn.disabled = true;
+    const span = btn.querySelector('span');
+    const originalText = span ? span.textContent : '';
+    if(span) span.textContent = 'Atualizando...';
+
+    console.log('[forcarAtualizacaoEstoque] Forçando atualização do estoque...');
+
+    try {
+        // Limpa os caches locais para forçar uma busca na API
+        saldosEstoqueGlobaisCompletos = [];
+        niveisEstoqueAlertaCache = [];
+        await invalidateCache('produtos'); // Invalida o cache de produtos
+
+        // Reseta filtros e paginação para uma visualização limpa
+        filtroAlertaAtivo = null;
+        document.querySelectorAll('.filtro-dinamico-estoque').forEach(s => s.value = '');
+        const searchInput = document.getElementById('searchEstoque');
+        if (searchInput) searchInput.value = '';
+        currentPageEstoqueTabela = 1;
+
+        // Esconde o header de filtro ativo, se estiver visível
+        const filtroHeader = document.getElementById('filtroAtivoHeader');
+        if(filtroHeader) filtroHeader.style.display = 'none';
+        document.querySelectorAll('.es-alerta-card').forEach(c => c.classList.remove('filtro-ativo'));
+        
+        // Chama a função principal de carregamento da tabela
+        await carregarTabelaEstoque();
+
+        mostrarPopupEstoque('Lista de estoque atualizada com sucesso!', 'sucesso', 2500);
+
+    } catch (error) {
+        console.error('[forcarAtualizacaoEstoque] Erro ao atualizar estoque:', error);
+        mostrarPopupEstoque('Falha ao atualizar a lista de estoque.', 'erro');
+    } finally {
+        // Reabilita o botão e restaura o texto
+        if(span) span.textContent = originalText;
+        btn.disabled = false;
+        console.log('[forcarAtualizacaoEstoque] Atualização concluída.');
+    }
+}
+
 // --- LÓGICA DE NÍVEIS DE ALERTA (Sem alterações) ---
 async function abrirModalConfigurarNiveis() {
     console.log(`%c[ABRINDO MODAL] - 'Configurar Níveis' foi chamada.`, 'color: #27ae60; font-weight: bold;');
@@ -1624,7 +1670,10 @@ async function carregarHistoricoMovimentacoes(produtoId, varianteNome, page) {
 
 function renderizarHistoricoMovimentacoes(movimentos) {
     const tbody = document.getElementById('historicoMovimentacoesBody');
-    if (!tbody) return;
+    if (!tbody) {
+        console.error("Elemento #historicoMovimentacoesBody não encontrado para renderizar histórico.");
+        return;
+    }
     tbody.innerHTML = '';
 
     if (!movimentos || movimentos.length === 0) {
@@ -1636,6 +1685,7 @@ function renderizarHistoricoMovimentacoes(movimentos) {
         const tr = tbody.insertRow();
         const quantidadeClasse = mov.quantidade > 0 ? 'quantidade-entrada' : 'quantidade-saida';
 
+        // Adiciona classe para destacar a linha se for um estorno (para o visual que já temos)
         if (mov.tipo_movimento.includes('ESTORNO')) {
             tr.classList.add('linha-estorno');
         }
@@ -1649,28 +1699,40 @@ function renderizarHistoricoMovimentacoes(movimentos) {
             <td data-label="Ações" style="text-align:center;"></td>
         `;
 
-        // --- CORREÇÃO NA LÓGICA DE ESTORNO ---
+        // --- LÓGICA DE ESTORNO APRIMORADA ---
+        
+        // 1. Calcula o saldo disponível para estorno neste movimento específico.
         const quantidadeOriginalAbs = Math.abs(mov.quantidade);
         const quantidadeJaEstornada = mov.quantidade_estornada || 0;
         const saldoDisponivelParaEstorno = quantidadeOriginalAbs - quantidadeJaEstornada;
         
-        // Mostra o total já estornado se for maior que zero
+        // 2. Mostra o total já estornado, se for maior que zero (para feedback).
         if (mov.quantidade < 0 && quantidadeJaEstornada > 0) {
             const estornadoInfo = document.createElement('span');
-            estornadoInfo.className = 'info-estornado';
+            estornadoInfo.className = 'info-estornado'; // Estilize esta classe se desejar
             estornadoInfo.textContent = `(estornado: ${quantidadeJaEstornada})`;
+            estornadoInfo.style.display = 'block'; // Para quebrar a linha
+            estornadoInfo.style.fontSize = '0.8em';
+            estornadoInfo.style.color = '#7f8c8d';
             tr.cells[2].appendChild(estornadoInfo);
         }
         
-        // Mostra o botão de estorno APENAS se houver saldo disponível
-        if (mov.quantidade < 0 && saldoDisponivelParaEstorno > 0 && permissoesGlobaisEstoque.includes('gerenciar-estoque')) {
+        // 3. Define as condições para mostrar o botão de estorno.
+        const podeEstornar = 
+            mov.quantidade < 0 &&                               // É uma saída
+            saldoDisponivelParaEstorno > 0 &&                   // Ainda tem saldo para estornar
+            !mov.tipo_movimento.startsWith('ESTORNO_') &&       // NÃO é um estorno
+            permissoesGlobaisEstoque.includes('gerenciar-estoque'); // Tem permissão
+
+        // 4. Se todas as condições forem verdadeiras, cria e adiciona o botão.
+        if (podeEstornar) {
             const cellAcoes = tr.cells[5];
             const btnEstornar = document.createElement('button');
             btnEstornar.className = 'es-btn-icon-estorno btn-iniciar-estorno';
             btnEstornar.title = `Estornar até ${saldoDisponivelParaEstorno} unidades`;
             btnEstornar.innerHTML = '<i class="fas fa-undo"></i>';
             btnEstornar.dataset.movimentoId = mov.id;
-            // Armazena o SALDO REAL disponível para estorno
+            // Armazena o SALDO REAL disponível para estorno no botão
             btnEstornar.dataset.saldoParaEstorno = saldoDisponivelParaEstorno;
             cellAcoes.appendChild(btnEstornar);
         }
@@ -2228,6 +2290,12 @@ function setupEventListenersEstoque() {
     document.querySelectorAll('.es-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => mudarAbaFila(btn.dataset.tab));
     });
+
+    //LISTENER PARA O BOTÃO DE ATUALIZAR
+    const btnAtualizarEstoque = document.getElementById('btnAtualizarEstoque');
+    if (btnAtualizarEstoque) {
+        btnAtualizarEstoque.addEventListener('click', forcarAtualizacaoEstoque);
+    }
 
     // Listeners para os botões da nova view
     document.getElementById('btnVoltarDaFila')?.addEventListener('click', voltarDaFilaParaEstoque);
