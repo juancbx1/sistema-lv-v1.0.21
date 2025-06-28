@@ -22,8 +22,9 @@
     --ep-cor-cinza-fundo-input: #f8f9fa;   /* Fundo de inputs */
     --ep-cor-cinza-fundo-alternativo: #f9fbfd; /* Para fundos de seção leves */
     --ep-cor-branco: #ffffff;
+    --ep-cor-branco-forte: #f5f5f5;
     --ep-cor-status-pronto: var(--ep-cor-cinza-borda-card); 
-
+    --ep-cor-fundo-botoes-kits:var(--ep-cor-branco-forte);
     --ep-sombra-padrao: 0 4px 12px rgba(0, 0, 0, 0.08);
     --ep-sombra-hover: 0 6px 16px rgba(0, 0, 0, 0.12);
     --ep-sombra-interna: inset 0 2px 4px rgba(0, 0, 0, 0.05);
@@ -670,7 +671,7 @@ body.autenticado {
     margin-top: 10px;
 }
 .ep-kit-selecao-botoes .ep-btn { /* Estilo para os botões de kit */
-    background-color: var(--ep-cor-branco);
+    background-color: var(--ep-cor-branco-forte);
     color: var(--ep-cor-azul-subtitulo, #5a7c9b);
     border: 1px solid var(--ep-cor-cinza-borda);
     padding: 8px 18px;
@@ -1353,6 +1354,57 @@ body.autenticado {
     font-size: 0.85rem;
 }
 
+/* Header para seções com título e botões de ação */
+.ep-secao-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.ep-secao-header .ep-titulo-secao {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+/* Botão de Atualizar (cópia do estilo de estoque) */
+.ep-btn-atualizar {
+    background-color: transparent;
+    color: var(--ep-cor-azul-primario);
+    border: 1px solid var(--ep-cor-cinza-borda);
+    border-radius: 50px;
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+
+.ep-btn-atualizar:hover:not(:disabled) {
+    background-color: var(--ep-cor-azul-primario);
+    color: var(--ep-cor-branco);
+    border-color: var(--ep-cor-azul-primario);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+}
+
+.ep-btn-atualizar:disabled {
+    color: #b0b9c2;
+    background-color: #f8f9fa;
+    cursor: not-allowed;
+    border-color: var(--ep-cor-cinza-borda);
+}
+
+.ep-btn-atualizar:disabled i {
+    animation: ep-spin 1.2s linear infinite; /* Requer a keyframe 'ep-spin' */
+}
+
 /*------------------------------------*\
     # Filtros Avançados e Ordenação
 \*------------------------------------*/
@@ -1371,9 +1423,9 @@ body.autenticado {
 
 /* Botão para mostrar/esconder filtros */
 .ep-btn-filtros {
-    background-color: #314b63;
+    background-color: transparent;
     border: 1px solid var(--ep-cor-cinza-borda);
-    color: var(--ep-cor-fundo-pagina);
+    color: var(--ep-cor-texto-principal);
     padding: 10px 15px;
     border-radius: var(--ep-raio-borda-botao);
     cursor: pointer;
@@ -1384,10 +1436,11 @@ body.autenticado {
     transition: all 0.2s ease;
     white-space: nowrap;
 }
-.ep-btn-filtros:hover {
-    background-color: #263441;
-    border-color: #dbdcdd;
+.es-btn-filtros:hover {
+    background-color: var(--ep-cor-cinza-fundo-input);
+    border-color: #b0b9c2;
 }
+
 
 /* Container dos filtros avançados */
 .ep-filtros-avancados-container {

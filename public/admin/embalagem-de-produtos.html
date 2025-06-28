@@ -17,9 +17,10 @@
 
  <div class="container-ep">
 <section class="ep-card" id="embalagemListViewNova">
-             <div class="ep-cabecalho-pagina">
+    <!-- CABEÇALHO PRINCIPAL DA PÁGINA -->
+    <div class="ep-cabecalho-pagina">
         <h1>Painel de Embalagem</h1>
-        <!-- Poderíamos ter um botão de ação principal aqui no futuro -->
+        <!-- Espaço para um futuro botão de ação principal, se necessário -->
     </div>
 
     <!-- NOVO PAINEL DE INFORMAÇÕES RÁPIDAS -->
@@ -28,11 +29,11 @@
             <i class="fas fa-box-open ep-info-card-icone"></i>
             <h3>Total a Embalar</h3>
             <span class="ep-info-card-contador" id="contadorTotalAEmbalar">0</span>
-            <p class="ep-info-card-descricao">Soma de todas as unidades pendentes.</p>
+            <p class="ep-info-card-descricao">Soma de todos os itens pendentes.</p>
         </div>
         <div class="ep-info-card alerta">
             <i class="fas fa-history ep-info-card-icone"></i>
-            <h3>Aguardando há > 7 Dias</h3>
+            <h3>Aguardando há > 2 Dias</h3>
             <span class="ep-info-card-contador" id="contadorAguardandoMuitoTempo">0</span>
             <p class="ep-info-card-descricao">Itens mais antigos na fila.</p>
         </div>
@@ -44,60 +45,70 @@
         </div>
     </div>
 
+    <!-- CONTAINER PARA A LISTA DE ITENS, INCLUINDO FILTROS -->
+    <div class="ep-card ep-card-filtros">
+        
+        <!-- CABEÇALHO DA SEÇÃO DE ITENS, COM BOTÃO DE ATUALIZAR -->
+        <div class="ep-secao-header">
+            <h2 class="ep-titulo-secao">Itens na Fila</h2>
+            <button id="btnAtualizarEmbalagem" class="ep-btn-atualizar">
+                <i class="fas fa-sync-alt"></i>
+                <span>Atualizar</span>
+            </button>
+        </div>
 
-                <!-- Container de Filtros e Busca -->
-            <div class="ep-card ep-card-filtros">
-                <h2 class="ep-titulo-secao" style="text-align:left; border:none; margin-bottom:15px;">Itens na Fila</h2>
-                
-                <!-- Linha para Busca e Ações -->
-                <div class="ep-filtros-linha">
-                    <div class="ep-form-grupo" style="flex-grow: 1;">
-                        <input type="text" id="searchProdutoEmbalagem" class="ep-input-busca" placeholder="Buscar por produto, variação ou SKU...">
-                    </div>
-                    <button id="toggleFiltrosAvancadosBtn" class="ep-btn-filtros">
-                        <i class="fas fa-filter"></i> Filtros Avançados
-                    </button>
-                </div>
-
-                <!-- Container dos Filtros Avançados (começa escondido) -->
-                <div id="filtrosAvancadosContainer" class="ep-filtros-avancados-container hidden">
-                    <div class="ep-form-grupo">
-                        <label for="filtroAlertaSelect">Filtrar por Status</label>
-                        <select id="filtroAlertaSelect" class="ep-select">
-                            <option value="todos">Todos os Itens</option>
-                            <option value="antigos">Aguardando há > 2 dias</option>
-                            <option value="recentes">Itens Recentes</option>
-                        </select>
-                    </div>
-                    
-                    <div class="ep-form-grupo">
-                        <label for="ordenacaoSelect">Ordenar por</label>
-                        <select id="ordenacaoSelect" class="ep-select">
-                            <option value="mais_recentes">Mais Recentes Primeiro</option>
-                            <option value="mais_antigos">Mais Antigos Primeiro</option>
-                            <option value="maior_quantidade">Maior Quantidade</option>
-                            <option value="menor_quantidade">Menor Quantidade</option>
-                        </select>
-                    </div>
-                    
-                    <div class="ep-form-grupo" style="justify-content: flex-end;">
-                        <button id="limparFiltrosBtn" class="ep-btn-limpar-filtros">
-                            <i class="fas fa-times-circle"></i> Limpar Filtros
-                        </button>
-                    </div>
-                </div>
+        <!-- LINHA PARA BUSCA E BOTÃO DE FILTROS AVANÇADOS -->
+        <div class="ep-filtros-linha">
+            <div class="ep-form-grupo" style="flex-grow: 1;">
+                 <input type="text" id="searchProdutoEmbalagem" class="ep-input-busca" placeholder="Buscar por produto, variação ou SKU...">
             </div>
+            <button id="toggleFiltrosAvancadosBtn" class="ep-btn-filtros">
+                <i class="fas fa-filter"></i>
+                <span>Filtros Avançados</span>
+            </button>
+        </div>
 
-            <div class="ep-card" id="embalagemCardsContainerWrapper">
-                <div id="embalagemCardsContainer" class="ep-embalagem-card-container">
-                    <!-- Cards de produtos/variações prontos para embalar -->
-                    <div class="spinner">Carregando itens para embalagem...</div>
-                </div>
-                <div id="embalagemPaginationContainer" class="ep-paginacao-container" style="display: none;">
-                    <!-- Paginação dos cards de embalagem -->
-                </div>
+        <!-- CONTAINER DOS FILTROS AVANÇADOS (COMEÇA ESCONDIDO) -->
+        <div id="filtrosAvancadosContainer" class="ep-filtros-avancados-container hidden">
+            <div class="ep-form-grupo">
+                <label for="filtroAlertaSelect">Filtrar por Status</label>
+                <select id="filtroAlertaSelect" class="ep-select">
+                    <option value="todos">Todos os Itens</option>
+                    <option value="antigos">Aguardando há > 2 dias</option>
+                    <option value="recentes">Itens Recentes</option>
+                </select>
             </div>
-        </section>
+            
+            <div class="ep-form-grupo">
+                <label for="ordenacaoSelect">Ordenar por</label>
+                <select id="ordenacaoSelect" class="ep-select">
+                    <option value="padrao" selected>Padrão (Recomendado)</option>
+                    <option value="mais_recentes">Mais Recentes Primeiro</option>
+                    <option value="mais_antigos">Mais Antigos Primeiro</option>
+                    <option value="maior_quantidade">Maior Quantidade</option>
+                    <option value="menor_quantidade">Menor Quantidade</option>
+                </select>
+            </div>
+            
+            <div class="ep-form-grupo" style="justify-content: flex-end;">
+                <button id="limparFiltrosBtn" class="ep-btn-limpar-filtros">
+                    <i class="fas fa-times-circle"></i> Limpar Filtros
+                </button>
+            </div>
+        </div>
+
+        <!-- CONTAINER ONDE OS CARDS DE ITENS SERÃO RENDERIZADOS -->
+        <div id="embalagemCardsContainer" class="ep-embalagem-card-container">
+            <div class="spinner">Carregando itens para embalagem...</div>
+        </div>
+
+        <!-- CONTAINER DA PAGINAÇÃO -->
+        <div id="embalagemPaginationContainer" class="ep-paginacao-container" style="display: none;">
+            <!-- Paginação será inserida aqui pelo JS -->
+        </div>
+
+    </div> <!-- Fim do .ep-card-filtros -->
+</section>
 
         <!-- Nova Seção para Detalhes da Embalagem -->
 <section class="ep-card" id="embalarDetalheView" style="display: none;">

@@ -64,7 +64,7 @@ router.get('/saldo', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada para visualizar saldo do estoque.' });
         }
 
-        // QUERY REESCRITA PARA SER MAIS ROBUSTA
+        // --- QUERY ATUALIZADA ---
         const queryText = `
             WITH SaldosAgregados AS (
                 SELECT
@@ -91,8 +91,10 @@ router.get('/saldo', async (req, res) => {
             FROM SaldosAgregados s
             JOIN produtos p ON s.produto_id = p.id
             LEFT JOIN jsonb_to_recordset(p.grade) AS g(sku TEXT, variacao TEXT) ON g.variacao = s.variante_nome
-            LEFT JOIN estoque_itens_arquivados aia ON COALESCE(g.sku, p.sku, p.id::text) = aia.produto_ref_id
-            WHERE s.saldo_atual != 0 OR aia.id IS NULL
+            
+            -- ** A LÓGICA DE FILTRO É APLICADA AQUI ** --
+            WHERE COALESCE(g.sku, p.sku, p.id::text) NOT IN (SELECT produto_ref_id FROM estoque_itens_arquivados)
+
             ORDER BY s.ultima_data_movimento DESC, p.nome ASC;
         `;
 
@@ -110,33 +112,44 @@ router.get('/saldo', async (req, res) => {
 router.post('/arquivar-item', async (req, res) => {
     const { usuarioLogado } = req;
     const { produto_ref_id } = req.body;
-    let dbClient;
+
+    console.log(`[API /arquivar-item] Recebida requisição para arquivar SKU: ${produto_ref_id}`);
 
     if (!produto_ref_id) {
+        console.warn("[API /arquivar-item] Requisição inválida: produto_ref_id não foi fornecido.");
         return res.status(400).json({ error: 'O ID de referência do produto (produto_ref_id) é obrigatório.' });
     }
 
+    let dbClient;
     try {
         dbClient = await pool.connect();
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
         
-        // Use uma permissão adequada, como gerenciar-estoque
-        if (!permissoesCompletas.includes('gerenciar-estoque')) {
+        if (!permissoesCompletas.includes('arquivar-produto-do-estoque')) { // Verifique se o nome da permissão está correto
+            console.warn(`[API /arquivar-item] Permissão negada para o usuário ID ${usuarioLogado.id}.`);
             return res.status(403).json({ error: 'Permissão negada para arquivar itens do estoque.' });
         }
 
         const query = `
             INSERT INTO estoque_itens_arquivados (produto_ref_id, usuario_responsavel_id)
             VALUES ($1, $2)
-            ON CONFLICT (produto_ref_id) DO NOTHING; -- Não faz nada se o item já estiver arquivado
+            ON CONFLICT (produto_ref_id) DO NOTHING;
         `;
-        await dbClient.query(query, [produto_ref_id, usuarioLogado.id]);
+        
+        console.log(`[API /arquivar-item] Executando query: INSERT INTO estoque_itens_arquivados com SKU: ${produto_ref_id} e user_id: ${usuarioLogado.id}`);
+        const result = await dbClient.query(query, [produto_ref_id, usuarioLogado.id]);
 
-        res.status(200).json({ message: `Item ${produto_ref_id} arquivado com sucesso.` });
+        if (result.rowCount > 0) {
+            console.log(`[API /arquivar-item] SUCESSO: SKU ${produto_ref_id} inserido na tabela de arquivados.`);
+            res.status(200).json({ message: `Item com SKU ${produto_ref_id} foi arquivado com sucesso.` });
+        } else {
+            console.log(`[API /arquivar-item] INFO: SKU ${produto_ref_id} já estava arquivado (ON CONFLICT DO NOTHING).`);
+            res.status(200).json({ message: `Item com SKU ${produto_ref_id} já se encontra arquivado.` });
+        }
 
     } catch (error) {
-        console.error('[router/estoque POST /arquivar-item] Erro:', error);
-        res.status(500).json({ error: 'Erro ao arquivar o item.', details: error.message });
+        console.error('[API /arquivar-item] Erro ao arquivar o item:', error);
+        res.status(500).json({ error: 'Erro interno ao arquivar o item.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }
@@ -310,10 +323,10 @@ router.get('/movimentos', async (req, res) => {
 // POST /api/estoque/movimento-manual
 router.post('/movimento-manual', async (req, res) => {
     const { usuarioLogado } = req;
-    let dbCliente;
+    let dbClient;
     try {
-        dbCliente = await pool.connect();
-        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbCliente, usuarioLogado.id);
+        dbClient = await pool.connect();
+        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
     
         if (!permissoesCompletas.includes('gerenciar-estoque')) {
             return res.status(403).json({ error: 'Permissão negada para realizar movimentos manuais de estoque.' });
@@ -322,75 +335,67 @@ router.post('/movimento-manual', async (req, res) => {
         const { produto_id, variante_nome, quantidade_movimentada, tipo_operacao, observacao } = req.body;
 
         if (!produto_id || quantidade_movimentada === undefined || !tipo_operacao) {
-            return res.status(400).json({ error: 'Campos obrigatórios: produto_nome, quantidade_movimentada, tipo_operacao.' });
+            return res.status(400).json({ error: 'Campos obrigatórios: produto_id, quantidade_movimentada, tipo_operacao.' });
         }
         const qtdMov = parseInt(quantidade_movimentada);
-        if ((tipo_operacao === 'ENTRADA_MANUAL' || tipo_operacao === 'SAIDA_MANUAL') && (isNaN(qtdMov) || qtdMov <= 0)) {
-            return res.status(400).json({ error: 'Quantidade para entrada/saída manual deve ser um número positivo.' });
-        }
-        if (tipo_operacao === 'BALANCO' && (isNaN(qtdMov) || qtdMov < 0)) {
-            return res.status(400).json({ error: 'Quantidade para balanço deve ser um número positivo ou zero.' });
+        if (isNaN(qtdMov) || qtdMov <= 0) {
+            return res.status(400).json({ error: 'A quantidade movimentada deve ser um número positivo.' });
         }
 
         const varianteParaDB = (variante_nome === '' || variante_nome === '-' || variante_nome === undefined) ? null : variante_nome;
         let movimentoReal;
         let tipoMovimentoDB;
+        let observacaoFinal = observacao || null; // Começa com a observação do usuário ou nulo
 
-        await dbCliente.query('BEGIN');
-        if (tipo_operacao === 'BALANCO') {
-            const saldoAtualQuery = await dbCliente.query(
-                `SELECT COALESCE(SUM(CASE 
-                                    WHEN tipo_movimento LIKE 'ENTRADA%' OR tipo_movimento = 'AJUSTE_BALANCO_POSITIVO' THEN quantidade
-                                    WHEN tipo_movimento LIKE 'SAIDA%' OR tipo_movimento = 'AJUSTE_BALANCO_NEGATIVO' THEN -ABS(quantidade)
-                                    ELSE 0 
-                                 END), 0) AS saldo 
-                 FROM estoque_movimentos 
-                 WHERE produto_id = $1 AND 
-                       ( ($2::text IS NULL AND variante_nome IS NULL) OR variante_nome = $2 )`,
-                [produto_id, varianteParaDB]
-            );
-            const saldoAtual = parseInt(saldoAtualQuery.rows[0].saldo);
-            movimentoReal = qtdMov - saldoAtual;
-            tipoMovimentoDB = movimentoReal >= 0 ? 'AJUSTE_BALANCO_POSITIVO' : 'AJUSTE_BALANCO_NEGATIVO';
-            if (movimentoReal === 0) {
-                await dbCliente.query('ROLLBACK'); // Não precisa de commit se não houve alteração
-                return res.status(200).json({ message: 'Nenhum ajuste necessário, saldo já confere.', saldo_atual: saldoAtual, novo_saldo_desejado: qtdMov });
-            }
-        } else if (tipo_operacao === 'ENTRADA_MANUAL') {
-            movimentoReal = qtdMov;
-            tipoMovimentoDB = 'ENTRADA_MANUAL';
-        } else if (tipo_operacao === 'SAIDA_MANUAL') {
-            movimentoReal = -qtdMov; // Saída é negativa
-            tipoMovimentoDB = 'SAIDA_MANUAL';
-            // Opcional: Verificar se há saldo suficiente
-        } else {
-            await dbCliente.query('ROLLBACK');
-            return res.status(400).json({ error: 'Tipo de operação inválido.' });
+        // --- LÓGICA ATUALIZADA PARA OS TIPOS DE OPERAÇÃO E OBSERVAÇÃO ---
+        switch (tipo_operacao) {
+            case 'ENTRADA_MANUAL':
+                movimentoReal = qtdMov;
+                tipoMovimentoDB = 'ENTRADA_MANUAL';
+                break;
+            case 'SAIDA_MANUAL':
+                movimentoReal = -qtdMov;
+                tipoMovimentoDB = 'SAIDA_MANUAL';
+                break;
+            case 'DEVOLUCAO':
+                movimentoReal = qtdMov;
+                tipoMovimentoDB = 'ENTRADA_DEVOLUCAO';
+                // --- AJUSTE NA OBSERVAÇÃO ---
+                // Cria um texto padrão para a devolução
+                const textoPadraoDevolucao = "[DEVOLUÇÃO REGISTRADA]";
+                // Concatena com a observação do usuário, se houver
+                observacaoFinal = observacao ? `${textoPadraoDevolucao} ${observacao}` : textoPadraoDevolucao;
+                break;
+            default:
+                return res.status(400).json({ error: 'Tipo de operação inválido.' });
         }
         
-        const result = await dbCliente.query(
+        const result = await dbClient.query(
             `INSERT INTO estoque_movimentos 
                 (produto_id, variante_nome, quantidade, tipo_movimento, usuario_responsavel, observacao, data_movimento)
              VALUES ($1, $2, $3, $4, $5, $6, NOW())
              RETURNING *;`,
             [
-                produto_id, varianteParaDB, movimentoReal, tipoMovimentoDB,
+                produto_id, 
+                varianteParaDB, 
+                movimentoReal, 
+                tipoMovimentoDB,
                 (usuarioLogado.nome || usuarioLogado.nome_usuario),
-                observacao || null
+                observacaoFinal // Usa a observação final (que pode ter sido modificada)
             ]
         );
-        await dbCliente.query('COMMIT');
-        // console.log(`[router/estoque POST /movimento-manual] Movimento manual (${tipoMovimentoDB}) registrado:`, result.rows[0]);
+        
+        console.log(`[API /estoque/movimento-manual] Movimento (${tipoMovimentoDB}) registrado:`, result.rows[0]);
         res.status(201).json({
             message: `Movimento de '${tipo_operacao}' registrado com sucesso.`,
             movimentoRegistrado: result.rows[0]
         });
+
     } catch (error) {
-        if(dbCliente) await dbClient.query('ROLLBACK');
-        console.error('[router/estoque POST /movimento-manual] Erro:', error.message, error.stack ? error.stack.substring(0,300):"");
+        console.error('[API /estoque/movimento-manual] Erro:', error.message);
         res.status(500).json({ error: 'Erro ao registrar movimento manual de estoque.', details: error.message });
     } finally {
-        if (dbCliente) dbCliente.release();
+        if (dbClient) dbClient.release();
     }
 });
 
@@ -546,6 +551,111 @@ router.post('/estornar-movimento', async (req, res) => {
         if (dbClient) await dbClient.query('ROLLBACK');
         console.error('[API /estornar-movimento] Erro:', error);
         res.status(error.message.includes('inválida') ? 400 : 500).json({ error: 'Erro ao estornar movimento.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// 1. ROTA PARA LISTAR TODOS OS ITENS ARQUIVADOS
+router.get('/arquivados', async (req, res) => {
+    const { usuarioLogado } = req;
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
+        
+        if (!permissoes.includes('gerenciar-estoque')) {
+            return res.status(403).json({ error: 'Permissão negada para visualizar itens arquivados.' });
+        }
+
+        // --- QUERY CORRIGIDA ---
+        const queryText = `
+            SELECT 
+                aia.produto_ref_id,
+                -- Usa COALESCE para pegar o nome do produto pai, seja do join direto ou do join via grade
+                COALESCE(p.nome, p_grade.nome) AS produto_nome,
+                COALESCE(g.variacao, '-') AS variante_nome,
+                -- Usa COALESCE para pegar a imagem da variação primeiro, senão a do produto principal
+                COALESCE(g.imagem, p.imagem, p_grade.imagem) as imagem
+            FROM 
+                estoque_itens_arquivados aia
+            -- JOIN com produtos para SKUs que estão no produto principal
+            LEFT JOIN produtos p ON p.sku = aia.produto_ref_id
+            -- JOIN com uma subquery que extrai dados da grade, INCLUINDO A IMAGEM
+            LEFT JOIN (
+                SELECT 
+                    p_sub.id as produto_id,
+                    gr.sku,
+                    gr.variacao,
+                    gr.imagem -- << CAMPO DE IMAGEM AGORA INCLUÍDO
+                FROM 
+                    produtos p_sub, 
+                    jsonb_to_recordset(p_sub.grade) AS gr(sku TEXT, variacao TEXT, imagem TEXT) -- << DEFINIÇÃO DA ESTRUTURA DO JSON
+            ) AS g ON g.sku = aia.produto_ref_id
+            -- JOIN secundário com produtos para obter o nome do produto pai quando o SKU é da grade
+            LEFT JOIN produtos p_grade ON p_grade.id = g.produto_id
+            WHERE 
+                COALESCE(p.nome, p_grade.nome) IS NOT NULL
+            ORDER BY 
+                produto_nome, variante_nome;
+        `;
+        
+        const result = await dbClient.query(queryText);
+
+        // A query agora retorna uma única coluna de imagem, vamos ajustar o frontend para usar isso
+        // Esta parte do backend está correta, mas vou notar a mudança para o frontend
+        const rows = result.rows.map(row => ({
+            produto_ref_id: row.produto_ref_id,
+            produto_nome: row.produto_nome,
+            variante_nome: row.variante_nome,
+            imagem: row.imagem // Apenas uma coluna 'imagem' agora
+        }));
+
+        res.status(200).json(rows);
+
+    } catch (error) {
+        console.error('[API /estoque/arquivados GET] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar itens arquivados.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+
+// 2. ROTA PARA RESTAURAR (DESARQUIVAR) UM ITEM
+router.delete('/arquivados/:produto_ref_id', async (req, res) => {
+    const { usuarioLogado } = req;
+    const { produto_ref_id } = req.params; // Pega o SKU da URL
+
+    console.log(`[API /estoque/arquivados DELETE] Recebida requisição para restaurar SKU: ${produto_ref_id}`);
+
+    if (!produto_ref_id) {
+        return res.status(400).json({ error: "O SKU do item a ser restaurado é obrigatório." });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
+
+        if (!permissoes.includes('gerenciar-estoque')) {
+            return res.status(403).json({ error: 'Permissão negada para restaurar itens.' });
+        }
+
+        const queryText = 'DELETE FROM estoque_itens_arquivados WHERE produto_ref_id = $1';
+        const result = await dbClient.query(queryText, [produto_ref_id]);
+
+        if (result.rowCount === 0) {
+            console.warn(`[API /estoque/arquivados DELETE] SKU ${produto_ref_id} não encontrado na tabela de arquivados para exclusão.`);
+            return res.status(404).json({ error: 'Item não encontrado na lista de arquivados.' });
+        }
+
+        console.log(`[API /estoque/arquivados DELETE] SUCESSO: SKU ${produto_ref_id} restaurado (removido da tabela).`);
+        res.status(200).json({ message: 'Item restaurado para o estoque com sucesso!' });
+
+    } catch (error) {
+        console.error('[API /estoque/arquivados DELETE] Erro:', error);
+        res.status(500).json({ error: 'Erro ao restaurar o item.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }

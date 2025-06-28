@@ -21,6 +21,43 @@ const operacaoEmAndamento = new Set(); // Para evitar duplo clique em botões de
 let currentPageHistorico = 1;
 const itemsPerPageHistorico = 5;
 
+async function forcarAtualizacaoEmbalagem() {
+    const btn = document.getElementById('btnAtualizarEmbalagem');
+    if (!btn || btn.disabled) return;
+
+    btn.disabled = true;
+    const span = btn.querySelector('span');
+    if (span) span.textContent = 'Atualizando...';
+
+    console.log('[forcarAtualizacaoEmbalagem] Forçando atualização da fila de embalagem...');
+
+    try {
+        // Limpa os caches relevantes para forçar busca na API
+        todosArrematesRegistradosCache = [];
+        // Não precisa invalidar o cache de produtos, pois a definição deles raramente muda.
+        
+        // A função abaixo já busca os arremates frescos e reordena a lista
+        await calcularEAgruparProntosParaEmbalar();
+        
+        // Renderiza a lista com os dados atualizados.
+        // A função renderizarCardsEmbalagem já respeita os filtros atuais.
+        await renderizarCardsEmbalagem();
+
+        // Atualiza os contadores do painel superior
+        await atualizarContadoresPainel();
+
+        mostrarPopupMensagem('Fila de embalagem atualizada!', 'sucesso', 2500);
+
+    } catch (error) {
+        console.error('[forcarAtualizacaoEmbalagem] Erro:', error);
+        mostrarPopupMensagem('Falha ao atualizar a fila de embalagem.', 'erro');
+    } finally {
+        if (span) span.textContent = 'Atualizar';
+        if (btn) btn.disabled = false;
+        console.log('[forcarAtualizacaoEmbalagem] Atualização concluída.');
+    }
+}
+
 // 1. FUNÇÃO PARA BUSCAR O HISTÓRICO DA API
 async function carregarHistoricoEmbalagem(produtoRefId, page) {
     currentPageHistorico = page;
@@ -459,8 +496,6 @@ async function calcularEAgruparProntosParaEmbalar() {
 async function renderizarCardsEmbalagem() {
     const containerEl = document.getElementById('embalagemCardsContainer');
     const paginationContainerEl = document.getElementById('embalagemPaginationContainer');
-    
-    // Obtém os valores dos filtros e da ordenação
     const searchInputEl = document.getElementById('searchProdutoEmbalagem');
     const filtroAlertaEl = document.getElementById('filtroAlertaSelect');
     const ordenacaoEl = document.getElementById('ordenacaoSelect');
@@ -474,53 +509,41 @@ async function renderizarCardsEmbalagem() {
     containerEl.innerHTML = '<div class="spinner">Carregando e aplicando filtros...</div>';
     paginationContainerEl.innerHTML = '';
 
-    // --- LÓGICA DE FILTRAGEM E ORDENAÇÃO ---
     let itensProcessados = [...produtosAgregadosParaEmbalarGlobal];
 
-    // 1. Aplicar filtro de alerta
     const filtroAlerta = filtroAlertaEl.value;
     if (filtroAlerta === 'antigos' || filtroAlerta === 'recentes') {
         const doisDiasAtras = new Date();
         doisDiasAtras.setHours(0, 0, 0, 0);
         doisDiasAtras.setDate(doisDiasAtras.getDate() - 2);
-        
         itensProcessados = itensProcessados.filter(item => {
+            if (!item.data_lancamento_mais_antiga) return false;
             const dataItem = new Date(item.data_lancamento_mais_antiga);
             dataItem.setHours(0, 0, 0, 0);
-            if (filtroAlerta === 'antigos') {
-                return dataItem < doisDiasAtras; // Itens com mais de 2 dias de espera
-            } else { // 'recentes'
-                return dataItem >= doisDiasAtras; // Itens com 2 dias ou menos de espera
-            }
+            return filtroAlerta === 'antigos' ? dataItem < doisDiasAtras : dataItem >= doisDiasAtras;
         });
     }
 
-    // 2. Aplicar busca textual
     const searchTerm = searchInputEl.value.toLowerCase().trim();
     if (searchTerm) {
         itensProcessados = itensProcessados.filter(item =>
             item.produto.toLowerCase().includes(searchTerm) ||
             (item.variante && item.variante !== '-' && item.variante.toLowerCase().includes(searchTerm)) ||
-            (item.sku && item.sku.toLowerCase().includes(searchTerm)) // Adicionando busca por SKU se disponível no agregado
+            (item.sku && String(item.sku).toLowerCase().includes(searchTerm))
         );
     }
     
-    // 3. Aplicar ordenação
     const ordenacao = ordenacaoEl.value;
-    itensProcessados.sort((a, b) => {
-        switch (ordenacao) {
-            case 'mais_antigos':
-                return new Date(a.data_lancamento_mais_antiga) - new Date(b.data_lancamento_mais_antiga);
-            case 'maior_quantidade':
-                return b.total_quantidade_disponivel_para_embalar - a.total_quantidade_disponivel_para_embalar;
-            case 'menor_quantidade':
-                return a.total_quantidade_disponivel_para_embalar - b.total_quantidade_disponivel_para_embalar;
-            case 'mais_recentes':
-            default:
-                return new Date(b.data_lancamento_mais_antiga) - new Date(a.data_lancamento_mais_antiga);
-        }
-    });
-    // --- FIM DA LÓGICA DE FILTRAGEM E ORDENAÇÃO ---
+    if (ordenacao !== 'padrao') {
+        itensProcessados.sort((a, b) => {
+            switch (ordenacao) {
+                case 'mais_antigos': return new Date(a.data_lancamento_mais_antiga) - new Date(b.data_lancamento_mais_antiga);
+                case 'maior_quantidade': return b.total_quantidade_disponivel_para_embalar - a.total_quantidade_disponivel_para_embalar;
+                case 'menor_quantidade': return a.total_quantidade_disponivel_para_embalar - b.total_quantidade_disponivel_para_embalar;
+                default: return new Date(b.data_lancamento_mais_recente) - new Date(a.data_lancamento_mais_recente);
+            }
+        });
+    }
 
     if (itensProcessados.length === 0) {
         containerEl.innerHTML = `<p style="text-align: center; grid-column: 1 / -1;">Nenhum item encontrado com os filtros aplicados.</p>`;
@@ -533,7 +556,7 @@ async function renderizarCardsEmbalagem() {
 
     const totalItems = itensProcessados.length;
     const totalPages = Math.ceil(totalItems / itemsPerPageEmbalagemCards) || 1;
-    currentPageEmbalagemCards = Math.max(1, Math.min(currentPageEmbalagemCards, totalPages)); // Garante que a pág. atual seja válida
+    currentPageEmbalagemCards = Math.max(1, Math.min(currentPageEmbalagemCards, totalPages));
     const startIndex = (currentPageEmbalagemCards - 1) * itemsPerPageEmbalagemCards;
     const paginatedItems = itensProcessados.slice(startIndex, startIndex + itemsPerPageEmbalagemCards);
 
@@ -561,26 +584,31 @@ async function renderizarCardsEmbalagem() {
         }
         
         let classeStatus = 'status-pronto-para-embalar'; 
-        let diffDays = -1; 
+        let diasEsperandoTexto = '-';
+
         if (item.data_lancamento_mais_antiga) {
             const dataAntiga = new Date(item.data_lancamento_mais_antiga);
-            const hoje = new Date();
-            const inicioDoDiaDataAntiga = new Date(dataAntiga.getFullYear(), dataAntiga.getMonth(), dataAntiga.getDate());
-            const inicioDoDiaHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
-            const diffTime = Math.abs(inicioDoDiaHoje - inicioDoDiaDataAntiga);
-            diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            if (diffDays > 2) {
-                classeStatus = 'status-aguardando-muito';
+            const agora = new Date();
+            
+            const diffTime = Math.abs(agora - dataAntiga);
+            const diffHoras = Math.floor(diffTime / (1000 * 60 * 60));
+
+            if (diffHoras < 1) {
+                const diffMinutos = Math.floor(diffTime / (1000 * 60));
+                diasEsperandoTexto = diffMinutos < 5 ? "Agora" : `${diffMinutos} min`;
+            } else if (diffHoras < 24) {
+                diasEsperandoTexto = `${diffHoras}h`;
+            } else {
+                const diffDias = Math.floor(diffHoras / 24);
+                diasEsperandoTexto = diffDias === 1 ? '1 dia' : `${diffDias} dias`;
+                if (diffDias > 2) {
+                    classeStatus = 'status-aguardando-muito';
+                }
             }
         }
+        
         card.className = `ep-consulta-card ${classeStatus}`;
 
-        let diasEsperandoTexto = '-';
-        if (diffDays !== -1) {
-            if (diffDays === 0) diasEsperandoTexto = 'Hoje';
-            else if (diffDays === 1) diasEsperandoTexto = '1 dia';
-            else diasEsperandoTexto = `${diffDays} dias`;
-        }
         let estiloDiasAguardando = '';
         if (classeStatus === 'status-aguardando-muito') {
             estiloDiasAguardando = `style="color: var(--ep-cor-laranja-aviso); font-weight: 600;"`;
@@ -625,7 +653,7 @@ async function renderizarCardsEmbalagem() {
         paginationContainerEl.querySelectorAll('.pagination-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 currentPageEmbalagemCards = parseInt(btn.dataset.page);
-                renderizarCardsEmbalagem(); // Re-renderiza a página clicada
+                renderizarCardsEmbalagem(); 
             });
         });
     } else {
@@ -833,15 +861,17 @@ async function carregarDetalhesEmbalagemView(agregado) {
 // --- Funções para Embalar Unidade e Montar Kit (lógica de envio) ---
 async function embalarUnidade() {
     if (!embalagemAgregadoEmVisualizacao || operacaoEmAndamento.has('embalarUnidade')) {
-        return; // Evita execuções múltiplas ou sem dados
+        return; 
     }
+
+    const itemEmbaladoCopia = { ...embalagemAgregadoEmVisualizacao }; // Guarda uma cópia para referência futura
 
     const inputQtdEl = document.getElementById('inputQuantidadeEmbalarUnidade');
     const btnEmbalarEl = document.getElementById('btnEmbalarEnviarEstoqueUnidade');
     const observacaoInputEl = document.getElementById('observacaoEmbalagemUnidade');
 
     if (!inputQtdEl || !btnEmbalarEl || !observacaoInputEl) {
-        console.error("Erro: Um ou mais elementos do formulário de embalagem de unidade não foram encontrados.");
+        console.error("Erro: Elementos do formulário de embalagem de unidade não foram encontrados.");
         mostrarPopupMensagem("Erro na interface. Tente recarregar a página.", "erro");
         return;
     }
@@ -849,13 +879,13 @@ async function embalarUnidade() {
     const quantidadeEnviada = parseInt(inputQtdEl.value);
     const observacao = observacaoInputEl.value.trim();
 
-    if (isNaN(quantidadeEnviada) || quantidadeEnviada <= 0 || quantidadeEnviada > embalagemAgregadoEmVisualizacao.total_quantidade_disponivel_para_embalar) {
+    if (isNaN(quantidadeEnviada) || quantidadeEnviada <= 0 || quantidadeEnviada > itemEmbaladoCopia.total_quantidade_disponivel_para_embalar) {
         mostrarPopupMensagem('A quantidade para embalar é inválida ou excede o disponível.', 'erro');
         return;
     }
 
     const confirmado = await mostrarPopupConfirmacao(
-        `Confirma a embalagem de <strong>${quantidadeEnviada}</strong> unidade(s) de <br><strong>${embalagemAgregadoEmVisualizacao.produto} - ${embalagemAgregadoEmVisualizacao.variante}</strong>?`,
+        `Confirma a embalagem de <strong>${quantidadeEnviada}</strong> unidade(s) de <br><strong>${itemEmbaladoCopia.produto} - ${itemEmbaladoCopia.variante}</strong>?`,
         'aviso'
     );
 
@@ -872,7 +902,7 @@ async function embalarUnidade() {
 
     try {
         let quantidadeRestanteDaMeta = quantidadeEnviada;
-        const arrematesOrdenados = [...embalagemAgregadoEmVisualizacao.arremates_detalhe]
+        const arrematesOrdenados = [...itemEmbaladoCopia.arremates_detalhe]
             .filter(arr => arr.quantidade_disponivel_para_embalar > 0)
             .sort((a, b) => new Date(a.data_lancamento) - new Date(b.data_lancamento)); 
 
@@ -892,12 +922,11 @@ async function embalarUnidade() {
             throw new Error("Não foi possível alocar a quantidade total nos arremates disponíveis.");
         }
         
-        // --- LÓGICA ATUALIZADA PARA OBTER E ENVIAR O SKU DA UNIDADE ---
         let skuUnidade = null;
-        const produtoCad = todosOsProdutosCadastrados.find(p => p.id == embalagemAgregadoEmVisualizacao.produto_id);
+        const produtoCad = todosOsProdutosCadastrados.find(p => p.id == itemEmbaladoCopia.produto_id);
         if (produtoCad) {
-            if (embalagemAgregadoEmVisualizacao.variante && embalagemAgregadoEmVisualizacao.variante !== '-') {
-                const gradeInfo = produtoCad.grade?.find(g => g.variacao === embalagemAgregadoEmVisualizacao.variante);
+            if (itemEmbaladoCopia.variante && itemEmbaladoCopia.variante !== '-') {
+                const gradeInfo = produtoCad.grade?.find(g => g.variacao === itemEmbaladoCopia.variante);
                 skuUnidade = gradeInfo?.sku || produtoCad.sku;
             } else {
                 skuUnidade = produtoCad.sku;
@@ -906,12 +935,11 @@ async function embalarUnidade() {
         if (!skuUnidade) {
             throw new Error("Não foi possível determinar o SKU da unidade para registro.");
         }
-        // --- FIM DA LÓGICA DO SKU ---
 
         const payloadEstoque = {
-            produto_id: embalagemAgregadoEmVisualizacao.produto_id,
-            variante_nome: embalagemAgregadoEmVisualizacao.variante === '-' ? null : embalagemAgregadoEmVisualizacao.variante,
-            produto_ref_id: skuUnidade, // << ENVIANDO O SKU PARA A API
+            produto_id: itemEmbaladoCopia.produto_id,
+            variante_nome: itemEmbaladoCopia.variante === '-' ? null : itemEmbaladoCopia.variante,
+            produto_ref_id: skuUnidade,
             quantidade_entrada: quantidadeEnviada,
             id_arremate_origem: arrematesOrdenados[0]?.id_arremate || null,
             observacao: observacao || null
@@ -924,7 +952,26 @@ async function embalarUnidade() {
         
         mostrarPopupMensagem(`${quantidadeEnviada} unidade(s) embalada(s) com sucesso!`, 'sucesso');
         
-        todosArrematesRegistradosCache = [];
+        // --- LÓGICA DE ATUALIZAÇÃO E REORDENAÇÃO PÓS-AÇÃO ---
+        // 1. Recalcula todos os saldos e aplica a ordenação padrão por data
+        await calcularEAgruparProntosParaEmbalar(); 
+
+        // 2. Encontra o índice do item que acabamos de embalar no array global atualizado
+        const indexDoItem = produtosAgregadosParaEmbalarGlobal.findIndex(
+            item => item.produto_id === itemEmbaladoCopia.produto_id && item.variante === itemEmbaladoCopia.variante
+        );
+
+        // 3. Se o item ainda existe na lista (ou seja, ainda tem saldo), move para o topo
+        if (indexDoItem > -1) {
+            const [itemAtualizado] = produtosAgregadosParaEmbalarGlobal.splice(indexDoItem, 1);
+            produtosAgregadosParaEmbalarGlobal.unshift(itemAtualizado);
+            console.log(`Item "${itemAtualizado.produto} - ${itemAtualizado.variante}" movido para o topo da lista.`);
+        }
+        
+        // 4. Reseta a paginação para a primeira página
+        currentPageEmbalagemCards = 1;
+        
+        // 5. Redireciona para a lista principal, que agora usará os dados reordenados e a página 1
         window.location.hash = '';
 
     } catch (error) {
@@ -944,9 +991,11 @@ async function embalarUnidade() {
 
 async function montarKits() {
     if (!embalagemAgregadoEmVisualizacao || operacaoEmAndamento.has('montarKits')) {
-        console.warn('[montarKits] Operação já em andamento ou nenhum agregado em visualização.');
         return;
     }
+
+    // Guarda uma cópia do COMPONENTE que iniciou a ação de montagem
+    const componenteBaseCopia = { ...embalagemAgregadoEmVisualizacao };
 
     const kitSelecionadoBtnEl = document.querySelector('#kitsListNova button.active');
     const variacaoKitSelectEl = document.getElementById('kitVariacoesNova');
@@ -983,16 +1032,11 @@ async function montarKits() {
     }
     const idDoKitParaAPI = kitProdutoSelecionadoObj.id;
 
-    // ADICIONADO: POPUP DE CONFIRMAÇÃO
     const confirmado = await mostrarPopupConfirmacao(
         `Confirma a montagem de <strong>${qtdKitsParaEnviar}</strong> kit(s) de <br><strong>${nomeKitProduto} - ${variacaoKitProduto}</strong>?`,
         'aviso'
     );
-
-    if (!confirmado) {
-        console.log("Montagem de kit cancelada pelo usuário.");
-        return; // Interrompe a função se o usuário cancelar
-    }
+    if (!confirmado) return;
 
     operacaoEmAndamento.add('montarKits');
     const originalButtonHTML = btnMontarEl.innerHTML;
@@ -1022,35 +1066,20 @@ async function montarKits() {
             const varComp = itemCompDef.variacao === '-' ? null : (itemCompDef.variacao || null);
             const qtdNecPorKit = parseInt(itemCompDef.quantidade) || 1;
             let qtdTotalCompNec = qtdKitsParaEnviar * qtdNecPorKit;
-
-            const agregadoDoComponente = produtosAgregadosParaEmbalarGlobal.find(
-                agg => String(agg.produto_id) === String(idComp) && (agg.variante || '-') === (varComp || '-')
-            );
+            const agregadoDoComponente = produtosAgregadosParaEmbalarGlobal.find(agg => String(agg.produto_id) === String(idComp) && (agg.variante || '-') === (varComp || '-'));
             if (!agregadoDoComponente || agregadoDoComponente.total_quantidade_disponivel_para_embalar < qtdTotalCompNec) {
                  throw new Error(`Saldo insuficiente para componente "${nomeCompParaLog}" (${varComp || 'Padrão'}).`);
             }
-
-            const arrematesDisponiveisDoComponente = [...agregadoDoComponente.arremates_detalhe]
-                .filter(arr => arr.quantidade_disponivel_para_embalar > 0)
-                .sort((a, b) => new Date(a.data_lancamento) - new Date(b.data_lancamento)); 
-
+            const arrematesDisponiveisDoComponente = [...agregadoDoComponente.arremates_detalhe].filter(arr => arr.quantidade_disponivel_para_embalar > 0).sort((a, b) => new Date(a.data_lancamento) - new Date(b.data_lancamento)); 
             for (const arremateComp of arrematesDisponiveisDoComponente) {
                 if (qtdTotalCompNec <= 0) break;
                 const qtdUsarDesteArremate = Math.min(qtdTotalCompNec, arremateComp.quantidade_disponivel_para_embalar);
                 if (qtdUsarDesteArremate > 0) {
-                    componentesParaPayload.push({
-                        id_arremate: arremateComp.id_arremate,
-                        produto_id: idComp, 
-                        produto_nome: nomeCompParaLog, 
-                        variacao: varComp,
-                        quantidade_usada: qtdUsarDesteArremate
-                    });
+                    componentesParaPayload.push({ id_arremate: arremateComp.id_arremate, produto_id: idComp, produto_nome: nomeCompParaLog, variacao: varComp, quantidade_usada: qtdUsarDesteArremate });
                     qtdTotalCompNec -= qtdUsarDesteArremate;
                 }
             }
-            if (qtdTotalCompNec > 0) { 
-                throw new Error(`Falha ao alocar saldo para "${nomeCompParaLog}" (${varComp || 'Padrão'}).`);
-            }
+            if (qtdTotalCompNec > 0) { throw new Error(`Falha ao alocar saldo para "${nomeCompParaLog}" (${varComp || 'Padrão'}).`); }
         }
 
         const payloadAPI = {
@@ -1062,16 +1091,32 @@ async function montarKits() {
             observacao: observacaoMontagem || null
         };
         
-        // A API /kits/montar precisa ser ajustada para receber 'observacao'
         await fetchFromAPI('/kits/montar', { method: 'POST', body: JSON.stringify(payloadAPI) });
         
         mostrarPopupMensagem(`${qtdKitsParaEnviar} kit(s) "${nomeKitProduto}" montado(s) com sucesso!`, 'sucesso');
-        sucessoGeral = true;
         
-        todosArrematesRegistradosCache = [];
+        // --- LÓGICA DE ATUALIZAÇÃO E REORDENAÇÃO PÓS-AÇÃO ---
+        // 1. Recalcula todos os saldos e aplica a ordenação padrão por data
         await calcularEAgruparProntosParaEmbalar(); 
-        window.location.hash = '';
 
+        // 2. Encontra o índice do componente base que usamos para iniciar a montagem
+        const indexDoComponente = produtosAgregadosParaEmbalarGlobal.findIndex(
+            item => item.produto_id === componenteBaseCopia.produto_id && item.variante === componenteBaseCopia.variante
+        );
+
+        // 3. Se o componente ainda existe na lista, move para o topo
+        if (indexDoComponente > -1) {
+            const [componenteAtualizado] = produtosAgregadosParaEmbalarGlobal.splice(indexDoComponente, 1);
+            produtosAgregadosParaEmbalarGlobal.unshift(componenteAtualizado);
+            console.log(`Componente "${componenteAtualizado.produto} - ${componenteAtualizado.variante}" movido para o topo da lista.`);
+        }
+
+        // 4. Reseta a paginação para a primeira página
+        currentPageEmbalagemCards = 1;
+        
+        // 5. Redireciona
+        window.location.hash = '';
+        
     } catch (error) {
         console.error('[montarKits] Erro:', error);
         mostrarPopupMensagem(`Erro ao montar kits: ${error.data?.details || error.message || error.message}`, 'erro');
@@ -1080,25 +1125,9 @@ async function montarKits() {
         if (btnMontarEl) {
             btnMontarEl.innerHTML = originalButtonHTML;
         }
-        if (!sucessoGeral) {
-            console.log("[montarKits FINALLY] Operação falhou. Reabilitando controles.");
-            document.querySelectorAll('#kitsListNova button').forEach(b => b.disabled = false);
-            if(variacaoKitSelectEl) variacaoKitSelectEl.disabled = false;
-            
-            const qtdInputAtual = document.getElementById('qtdEnviarKitsNova');
-            if (qtdInputAtual) {
-                const aindaMontaveis = parseInt(document.getElementById('qtdDisponivelKitsNova')?.textContent || '0');
-                qtdInputAtual.disabled = !(aindaMontaveis > 0);
-                
-                const isDisabledBasedOnInput = qtdInputAtual.disabled;
-                document.querySelectorAll('#kit-tab-nova .ep-acoes-rapidas-qtd button').forEach(b => b.disabled = isDisabledBasedOnInput);
-                const btnMaximoAtual = document.getElementById('btnMontarMaximoKits');
-                if(btnMaximoAtual) btnMaximoAtual.disabled = isDisabledBasedOnInput;
-            }
-
-            if(observacaoTextareaEl) observacaoTextareaEl.disabled = false;
-            atualizarEstadoBotaoMontarKitNova(); 
-        }
+        // Em caso de falha, os controles serão reabilitados quando o usuário interagir novamente
+        // ou quando a view for recarregada. A lógica no 'finally' foi simplificada para
+        // confiar no fluxo de recarregamento/reatualização da view.
     }
 }
 
@@ -1546,7 +1575,7 @@ async function handleHashChangeEmbalagem() {
         const ordenacaoEl = document.getElementById('ordenacaoSelect');
         const searchInputEl = document.getElementById('searchProdutoEmbalagem');
         if (filtroAlertaEl) filtroAlertaEl.value = 'todos';
-        if (ordenacaoEl) ordenacaoEl.value = 'mais_recentes';
+        if (ordenacaoEl) ordenacaoEl.value = 'padrao';
         if (searchInputEl) searchInputEl.value = '';
         
         // 3. Recarrega e reordena os dados
@@ -1612,82 +1641,63 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const tabId = tabBtn.dataset.tab;
                 console.log(`[ABA CLICK] Aba clicada: ${tabId}`);
 
-                // Esconde todos os painéis e desativa todos os botões de aba
                 document.querySelectorAll('#embalarDetalheView .ep-tabs .ep-tab-btn').forEach(b => b.classList.remove('active'));
                 document.querySelectorAll('#embalarDetalheView .ep-tab-panel').forEach(p => {
                     p.classList.remove('active');
                     p.style.display = 'none'; 
                 });
 
-                // Ativa o botão clicado e mostra o painel correspondente
                 tabBtn.classList.add('active');
                 const activePanel = document.getElementById(`${tabId}-tab-nova`);
                 if (activePanel) {
                     activePanel.classList.add('active');
                     activePanel.style.display = 'block'; 
-                } else {
-                    console.error(`[ABA CLICK] ERRO: Painel para aba ${tabId} não encontrado!`);
                 }
                 
-                // Lógica de carregamento de dados para a aba clicada
                 if (tabId === 'kit' && embalagemAgregadoEmVisualizacao) {
-                    // Carrega os kits disponíveis para o item base atual
-                    console.log(`[ABA CLICK] Chamando carregarKitsDisponiveisNova para produto_id: ${embalagemAgregadoEmVisualizacao.produto_id}`);
                     await carregarKitsDisponiveisNova(embalagemAgregadoEmVisualizacao.produto_id, embalagemAgregadoEmVisualizacao.variante);
-                
                 } else if (tabId === 'historico' && embalagemAgregadoEmVisualizacao) {
-                    // LÓGICA ATUALIZADA PARA O HISTÓRICO
-                    // 1. Encontra o SKU (produto_ref_id) do item que está sendo visualizado.
                     let skuParaBusca = null;
                     const produtoCad = todosOsProdutosCadastrados.find(p => p.id == embalagemAgregadoEmVisualizacao.produto_id);
-                    
-                    if (produtoCad) {
-                        if (embalagemAgregadoEmVisualizacao.variante && embalagemAgregadoEmVisualizacao.variante !== '-') {
+                    if(produtoCad) {
+                        if(embalagemAgregadoEmVisualizacao.variante && embalagemAgregadoEmVisualizacao.variante !== '-') {
                             const gradeInfo = produtoCad.grade?.find(g => g.variacao === embalagemAgregadoEmVisualizacao.variante);
                             skuParaBusca = gradeInfo?.sku || produtoCad.sku;
                         } else {
                             skuParaBusca = produtoCad.sku;
                         }
                     }
-
-                    // 2. Se o SKU foi encontrado, chama a função de carregar histórico com ele.
                     if (skuParaBusca) {
-                        console.log(`[ABA CLICK] Chamando carregarHistoricoEmbalagem para produto_ref_id: ${skuParaBusca}`);
-                        carregarHistoricoEmbalagem(skuParaBusca, 1); // Passa o SKU e a primeira página
+                        carregarHistoricoEmbalagem(skuParaBusca, 1);
                     } else {
-                        // 3. Se não encontrou o SKU, exibe uma mensagem de erro.
-                        console.error("Não foi possível encontrar o SKU para buscar o histórico do item:", embalagemAgregadoEmVisualizacao);
                         const tbodyHistEl = document.getElementById('historicoEmbalagemTableBody');
-                        if(tbodyHistEl) tbodyHistEl.innerHTML = '<tr><td colspan="6" style="text-align:center;color:red;">Erro ao identificar o SKU deste produto para buscar o histórico.</td></tr>';
+                        if (tbodyHistEl) tbodyHistEl.innerHTML = '<tr><td colspan="6" style="text-align:center;color:red;">Erro ao identificar SKU.</td></tr>';
                     }
                 }
             });
         });
         
-        // Listener DELEGADO para os cliques nos controles DENTRO da aba Kit
+        // Listener DELEGADO para os cliques nos controles DENTRO da aba Kit (Configurado UMA VEZ)
         const kitTabPanelEl = document.getElementById('kit-tab-nova');
         if (kitTabPanelEl) {
-            console.log("[DOMContentLoaded] Configurando listener DELEGADO PERMANENTE de CLIQUE para #kit-tab-nova.");
+            console.log("[DOMContentLoaded] Configurando listener DELEGADO PERMANENTE para #kit-tab-nova.");
             kitTabPanelEl.addEventListener('click', (event) => {
                 const target = event.target;
-                
                 const btnMaximo = target.closest('#btnMontarMaximoKits');
                 const acaoRapidaButton = target.closest('.ep-acoes-rapidas-qtd .ep-btn-outline-pequeno');
 
                 if (btnMaximo) {
-                    console.log('[DELEGATED LISTENER GLOBAL - KIT] Botão "Máximo" clicado.');
                     const currentQtdInput = document.getElementById('qtdEnviarKitsNova');
                     const currentDisponivelSpan = document.getElementById('qtdDisponivelKitsNova');
                     if (currentDisponivelSpan && currentQtdInput && !currentQtdInput.disabled) {
                         const maxMontaveis = parseInt(currentDisponivelSpan.textContent) || 0;
                         currentQtdInput.value = maxMontaveis;
                         currentQtdInput.dispatchEvent(new Event('input')); 
-                    } else { console.warn('[DELEGATED LISTENER GLOBAL - KIT] Máximo: Input desabilitado ou elementos não encontrados.'); }
+                    }
                     return; 
                 }
 
                 if (acaoRapidaButton && acaoRapidaButton.dataset.qtdAdd !== undefined) {
-                    console.log(`[DELEGATED LISTENER GLOBAL - KIT] Botão Ação Rápida '${acaoRapidaButton.dataset.qtdAdd}' clicado.`);
                     const currentQtdInput = document.getElementById('qtdEnviarKitsNova');
                     const currentDisponivelSpan = document.getElementById('qtdDisponivelKitsNova');
                     if (currentQtdInput && currentDisponivelSpan && !currentQtdInput.disabled) {
@@ -1698,26 +1708,43 @@ document.addEventListener('DOMContentLoaded', async () => {
                         novaQtd = Math.max(0, Math.min(novaQtd, maxQtd));
                         currentQtdInput.value = novaQtd;
                         currentQtdInput.dispatchEvent(new Event('input'));
-                    } else { console.warn('[DELEGATED LISTENER GLOBAL - KIT] Ação Rápida: Input desabilitado ou elementos não encontrados.'); }
+                    }
                     return; 
+                }
+            });
+
+            const qtdEnviarKitsInputEl = document.getElementById('qtdEnviarKitsNova');
+            if (qtdEnviarKitsInputEl) {
+                qtdEnviarKitsInputEl.oninput = () => {
+                    atualizarEstadoBotaoMontarKitNova(); 
+                };
+            }
+        }
+
+        // Listeners para filtros, ordenação e atualização na tela principal
+        const btnAtualizarEmbalagemEl = document.getElementById('btnAtualizarEmbalagem');
+        if(btnAtualizarEmbalagemEl) {
+            btnAtualizarEmbalagemEl.addEventListener('click', forcarAtualizacaoEmbalagem);
+        }
+
+        const toggleFiltrosBtnEl = document.getElementById('toggleFiltrosAvancadosBtn');
+        const filtrosContainerEl = document.getElementById('filtrosAvancadosContainer');
+        if (toggleFiltrosBtnEl && filtrosContainerEl) {
+            toggleFiltrosBtnEl.addEventListener('click', () => {
+                filtrosContainerEl.classList.toggle('hidden');
+                const isHidden = filtrosContainerEl.classList.contains('hidden');
+                const span = toggleFiltrosBtnEl.querySelector('span');
+                if (span) {
+                    span.textContent = isHidden ? 'Filtros Avançados' : 'Fechar Filtros';
                 }
             });
         }
 
-        // Listener para os filtros e ordenação na tela principal
-        const toggleFiltrosBtnEl = document.getElementById('toggleFiltrosAvancadosBtn');
-        const filtrosContainerEl = document.getElementById('filtrosAvancadosContainer');
         const filtroAlertaSelectEl = document.getElementById('filtroAlertaSelect');
         const ordenacaoSelectEl = document.getElementById('ordenacaoSelect');
-        const limparFiltrosBtnEl = document.getElementById('limparFiltrosBtn');
         const searchInputEl = document.getElementById('searchProdutoEmbalagem');
-
-        if (toggleFiltrosBtnEl && filtrosContainerEl) {
-            toggleFiltrosBtnEl.addEventListener('click', () => {
-                filtrosContainerEl.classList.toggle('hidden');
-            });
-        }
-
+        const limparFiltrosBtnEl = document.getElementById('limparFiltrosBtn');
+        
         const aplicarFiltrosEOrdenar = () => {
             currentPageEmbalagemCards = 1; 
             renderizarCardsEmbalagem();
@@ -1727,12 +1754,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (ordenacaoSelectEl) ordenacaoSelectEl.addEventListener('change', aplicarFiltrosEOrdenar);
         if(searchInputEl) searchInputEl.addEventListener('input', debounce(aplicarFiltrosEOrdenar, 350));
 
-        if (limparFiltrosBtnEl && filtroAlertaSelectEl && ordenacaoSelectEl && searchInputEl) {
+        if (limparFiltrosBtnEl && filtroAlertaSelectEl && ordenacaoSelectEl && searchInputEl && toggleFiltrosBtnEl && filtrosContainerEl) {
             limparFiltrosBtnEl.addEventListener('click', () => {
                 filtroAlertaSelectEl.value = 'todos';
-                ordenacaoSelectEl.value = 'mais_recentes';
+                ordenacaoSelectEl.value = 'padrao';
                 searchInputEl.value = '';
                 aplicarFiltrosEOrdenar();
+                
+                filtrosContainerEl.classList.add('hidden');
+                const span = toggleFiltrosBtnEl.querySelector('span');
+                if (span) {
+                    span.textContent = 'Filtros Avançados';
+                }
             });
         }
 

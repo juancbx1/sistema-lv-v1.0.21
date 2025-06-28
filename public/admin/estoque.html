@@ -17,94 +17,97 @@
     <main class="es-container-principal">
     
         <!-- View Principal: Lista de Estoque (Permanece igual) -->
-        <section class="es-card" id="mainViewEstoque">
-            <!-- Overlay de Carregamento da Página -->
-        <div id="paginaLoadingOverlay" class="es-pagina-loading-overlay">
-            <div class="es-spinner"></div>
+       <section class="es-card" id="mainViewEstoque">
+    <!-- Overlay de Carregamento da Página -->
+    <div id="paginaLoadingOverlay" class="es-pagina-loading-overlay">
+        <div class="es-spinner"></div>
+    </div>
+
+    <div class="es-cabecalho-pagina">
+        <h1>Controle de Estoque</h1>
+        <button id="btnIniciarSeparacao" class="es-btn-acao-principal">
+            <i class="fas fa-box-open"></i> Nova Separação
+        </button>
+    </div>
+
+    <!-- CARDS DE ALERTA E BOTÕES DE AÇÃO -->
+    <div class="es-card" style="margin-bottom: 20px;">
+        <h2 class="es-titulo-secao" style="text-align:left; border-bottom:none; margin-bottom:15px;">Alertas de Estoque</h2>
+        <div class="es-alerta-cards-container">
+            <div class="es-alerta-card urgente" id="cardReposicaoUrgente">
+                <i class="fas fa-exclamation-triangle es-alerta-icone"></i>
+                <h3>Reposição Urgente</h3>
+                <span class="es-alerta-card-contador" id="contadorUrgente">0</span>
+                <p class="es-alerta-card-descricao">Itens que atingiram o nível crítico.</p>
+            </div>
+            <div class="es-alerta-card baixo" id="cardEstoqueBaixo">
+                 <i class="fas fa-exclamation-circle es-alerta-icone"></i>
+                <h3>Estoque Baixo</h3>
+                <span class="es-alerta-card-contador" id="contadorBaixo">0</span>
+                <p class="es-alerta-card-descricao">Itens próximos do nível crítico.</p>
+            </div>
         </div>
-            <div class="es-cabecalho-pagina">
-                <h1>Controle de Estoque</h1>
-                <!-- NOVO BOTÃO PARA INICIAR SEPARAÇÃO -->
-                <button id="btnIniciarSeparacao" class="es-btn-acao-principal">
-                <i class="fas fa-box-open"></i> Nova Separação
-                </button>
-            </div>
-            <div class="es-card" style="margin-bottom: 20px;">
-                <h2 class="es-titulo-secao" style="text-align:left; border-bottom:none; margin-bottom:15px;">Alertas de Estoque</h2>
-                <div class="es-alerta-cards-container">
-                    <div class="es-alerta-card urgente" id="cardReposicaoUrgente">
-                        <i class="fas fa-exclamation-triangle es-alerta-icone"></i>
-                        <h3>Reposição Urgente</h3>
-                        <span class="es-alerta-card-contador" id="contadorUrgente">0</span>
-                        <p class="es-alerta-card-descricao">Itens que atingiram o nível crítico.</p>
-                    </div>
-                    <div class="es-alerta-card baixo" id="cardEstoqueBaixo">
-                         <i class="fas fa-exclamation-circle es-alerta-icone"></i>
-                        <h3>Estoque Baixo</h3>
-                        <span class="es-alerta-card-contador" id="contadorBaixo">0</span>
-                        <p class="es-alerta-card-descricao">Itens próximos do nível crítico.</p>
-                    </div>
-                </div>
 
-                 <!-- Botao da FILA -->
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; flex-wrap: wrap; gap: 10px;">
-                
-                <button class="es-btn es-btn-secundario" id="btnMostrarTodosEstoque" style="display: none;">
-                    <i class="fas fa-list"></i> Mostrar Todos os Itens
-                </button>
-                
-                <!-- NOVO BOTÃO PARA A FILA DE PRODUÇÃO -->
-                <button class="es-btn es-btn-primario" id="btnGerenciarFila" title="Gerenciar Fila de Produção Prioritária">
-                    <i class="fas fa-stream"></i> Gerenciar Fila
-                </button>
-
-                <!-- Botão de configurar níveis agora fica mais à direita -->
-                <button class="es-btn es-btn-primario" id="btnConfigurarNiveisEstoque" title="Configurar níveis de alerta" style="margin-left: auto;">
-                    <i class="fas fa-cog"></i> Configurar Níveis
-                </button>
-            </div>
-
-
-            </div>
-            
-            <div class="es-card">
-    
-            <!-- Título do filtro dinâmico (permanece igual) -->
-            <div id="filtroAtivoHeader" class="es-filtro-ativo-header" style="display: none;">
-                <h2 id="filtroAtivoTitulo"></h2>
-            </div>
-
-            <!-- Barra de busca (permanece igual) -->
-            <input type="text" id="searchEstoque" class="es-input-busca" placeholder="Buscar por produto, variação ou SKU...">
-            <div class="es-filtros-container">
-            <button id="toggleFiltrosAvancadosBtn" class="es-btn es-btn-secundario">
-                <i class="fas fa-filter"></i> Filtros Avançados
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; flex-wrap: wrap; gap: 10px;">
+            <button class="es-btn es-btn-secundario" id="btnMostrarTodosEstoque" style="display: none;">
+                <i class="fas fa-list"></i> Mostrar Todos os Itens
             </button>
-            <div id="filtrosAvancados" class="hidden">
-                <!-- Selects de filtro serão inseridos aqui pelo JS -->
-                <button id="limparFiltrosEstoqueBtn" class="es-btn es-btn-perigo">Limpar Filtros</button>
-            </div>
+            <button class="es-btn es-btn-primario" id="btnGerenciarFila" title="Gerenciar Fila de Produção Prioritária">
+                <i class="fas fa-stream"></i> Gerenciar Fila
+            </button>
+            <button class="es-btn es-btn-primario" id="btnConfigurarNiveisEstoque" title="Configurar níveis de alerta" style="margin-left: auto;">
+                <i class="fas fa-cog"></i> Configurar Níveis
+            </button>
+            <button class="es-btn es-btn-secundario" id="btnVerArquivados" title="Ver itens arquivados">
+                <i class="fas fa-archive"></i> Ver Arquivados
+            </button>
+        </div>
+    </div>
+    
+    <!-- CONTAINER PARA A LISTA DE ITENS, INCLUINDO FILTROS (ESTRUTURA ATUALIZADA) -->
+    <div class="es-card">
+        
+        <!-- Título do filtro dinâmico de alerta -->
+        <div id="filtroAtivoHeader" class="es-filtro-ativo-header" style="display: none;">
+            <h2 id="filtroAtivoTitulo"></h2>
         </div>
 
-            <!-- NOVO HEADER DA SEÇÃO DE ITENS EM ESTOQUE -->
-            <div class="es-secao-header">
-                <h2 class="es-titulo-secao">Itens em Estoque</h2>
-                <button id="btnAtualizarEstoque" class="es-btn-atualizar">
-                    <i class="fas fa-sync-alt"></i>
-                    <span>Atualizar</span>
-                </button>
-            </div>
-
-            <!-- NOVA ESTRUTURA: Container para a grade de cards -->
-            <div id="estoqueCardsContainer" class="es-cards-container-consulta">
-                <!-- Cards de consulta de estoque serão inseridos aqui pelo JS -->
-            </div>
-
-            <!-- Paginação (permanece igual, agora vai paginar os cards) -->
-            <div id="estoquePaginacaoContainer" class="es-paginacao-container" style="display: none; margin-top: 20px;">
-            </div>
+        <!-- CABEÇALHO DA SEÇÃO DE ITENS, COM BOTÃO DE ATUALIZAR -->
+        <div class="es-secao-header">
+            <h2 class="es-titulo-secao">Itens em Estoque</h2>
+            <button id="btnAtualizarEstoque" class="es-btn-atualizar">
+                <i class="fas fa-sync-alt"></i>
+                <span>Atualizar</span>
+            </button>
         </div>
-        </section>
+
+        <!-- LINHA PARA BUSCA E BOTÃO DE FILTROS AVANÇADOS -->
+        <div class="es-filtros-linha">
+            <div class="es-form-grupo" style="flex-grow: 1;">
+                 <input type="text" id="searchEstoque" class="es-input-busca" placeholder="Buscar por produto, variação ou SKU...">
+            </div>
+            <button id="toggleFiltrosAvancadosBtn" class="es-btn-filtros">
+                <i class="fas fa-filter"></i>
+                <span>Filtros Avançados</span>
+            </button>
+        </div>
+
+        <!-- CONTAINER DOS FILTROS AVANÇADOS -->
+        <div id="filtrosAvancados" class="es-filtros-avancados-container hidden">
+            <!-- Os selects dinâmicos serão inseridos aqui pelo JS -->
+        </div>
+
+        <!-- CONTAINER ONDE OS CARDS DE ITENS SERÃO RENDERIZADOS -->
+        <div id="estoqueCardsContainer" class="es-cards-container-consulta">
+            <!-- Cards de consulta de estoque serão inseridos aqui pelo JS -->
+        </div>
+
+        <!-- CONTAINER DA PAGINAÇÃO -->
+        <div id="estoquePaginacaoContainer" class="es-paginacao-container" style="display: none; margin-top: 20px;">
+        </div>
+
+    </div> <!-- Fim do .es-card -->
+</section>
 
         <!-- NOVA VIEW UNIFICADA: Movimentação de Estoque -->
       <section class="hidden" id="editarEstoqueMovimentoView">
@@ -160,9 +163,10 @@
                 <div class="movimento-form">
                     <label class="movimento-label-secao">TIPO DE OPERAÇÃO</label>
                     <div class="movimento-tipo-operacao-container">
-                        <button class="movimento-op-btn" data-tipo="ENTRADA_MANUAL" title="Entrada Manual"><i class="fas fa-plus"></i></button>
-                        <button class="movimento-op-btn" data-tipo="SAIDA_MANUAL" title="Saída Manual"><i class="fas fa-minus"></i></button>
-                        <button class="movimento-op-btn" data-tipo="BALANCO" title="Balanço (Ajustar Saldo)"><i class="fas fa-equals"></i></button>
+                        <button class="movimento-op-btn" data-tipo="ENTRADA_MANUAL" title="Entrada Manual (Produção, Compra)"><i class="fas fa-plus"></i></button>
+                        <button class="movimento-op-btn" data-tipo="SAIDA_MANUAL" title="Saída Manual (Ajuste, Perda)"><i class="fas fa-minus"></i></button>
+                        <!-- BOTÃO MODIFICADO -->
+                        <button class="movimento-op-btn" data-tipo="DEVOLUCAO" title="Registrar Devolução"><i class="fas fa-undo-alt"></i></button>
                         <input type="hidden" id="tipoMovimentoSelecionado">
                     </div>
                     
@@ -411,6 +415,33 @@
     <button id="btnVoltarAoTopo" class="es-fab-voltar-topo hidden" title="Voltar ao Topo">
         <i class="fas fa-arrow-up"></i>
     </button>
+
+     <!-- MODAL PARA ITENS ARQUIVADOS -->
+    <div id="modalItensArquivados" class="es-modal" style="display: none;">
+        <div class="es-modal-conteudo" style="max-width: 800px;">
+            <button class="botao-fechar es-btn-perigo" id="fecharModalArquivados" title="Fechar">X</button>
+            <h3 class="es-titulo-secao">Itens Arquivados</h3>
+            <p style="font-size: 0.9em; color: #6c757d; margin-top: -15px; margin-bottom: 20px;">
+                Estes itens estão ocultos da lista principal de estoque. Restaure-os para que voltem a ser exibidos.
+            </p>
+
+            <div class="es-tabela-wrapper" style="max-height: 60vh; overflow-y: auto;">
+                <table class="es-tabela-estilizada">
+                    <thead>
+                        <tr>
+                            <th style="width: 70px;"></th> <!-- Para a imagem -->
+                            <th>Produto / Variação</th>
+                            <th>SKU</th>
+                            <th style="text-align: center;">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaItensArquivadosBody">
+                        <!-- Conteúdo será preenchido pelo JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
 
     <script src="/js/admin-estoque.js" type="module"></script>

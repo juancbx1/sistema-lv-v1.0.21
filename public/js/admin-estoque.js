@@ -471,27 +471,14 @@ function fecharModalNiveis() {
 function gerarFiltrosDinamicos() {
     const chavesDeVariacao = new Map();
 
-    // 1. Mapeia todas as chaves de variação, NORMALIZANDO a chave de cor
+    // 1. Mapeia todas as chaves de variação e seus valores
     todosOsProdutosCadastrados.forEach(p => {
         if (p.variacoes && Array.isArray(p.variacoes)) {
             p.variacoes.forEach(variacao => {
-                // --- LÓGICA DE PADRONIZAÇÃO ---
-                // Pega a chave, converte para minúsculas e remove espaços
                 let chaveNormalizada = variacao.chave.toLowerCase().trim();
-                
-                // Agrupa qualquer chave que seja "cor" em uma única chave padronizada
-                // (Isso vai pegar "cor" e "Cor")
-                if (chaveNormalizada === 'cor') {
-                    // Nós a tratamos como 'cor'. Não precisamos fazer nada.
-                } 
-                // Você pode adicionar outras regras aqui se necessário no futuro
-                // Ex: else if (chaveNormalizada === 'tamanho') { ... }
-
-                // Usa a chave normalizada para agrupar, mas guarda a chave original para o label
                 if (!chavesDeVariacao.has(chaveNormalizada)) {
                     chavesDeVariacao.set(chaveNormalizada, new Set());
                 }
-                
                 const valores = variacao.valores.split(',').map(v => v.trim()).filter(Boolean);
                 valores.forEach(val => chavesDeVariacao.get(chaveNormalizada).add(val));
             });
@@ -500,22 +487,33 @@ function gerarFiltrosDinamicos() {
 
     // 2. Pega os containers dos filtros no HTML
     const containerFiltroEstoque = document.getElementById('filtrosAvancados');
-    const containerFiltroFila = document.getElementById('filtrosFilaDinamicos');
+    const containerFiltroFila = document.getElementById('filtrosFilaDinamicos'); // Mantém para a outra view
 
+    if (!containerFiltroEstoque || !containerFiltroFila) {
+        console.error("Containers de filtro (#filtrosAvancados ou #filtrosFilaDinamicos) não encontrados.");
+        return;
+    }
+
+    // Limpa os containers antes de adicionar os novos filtros
     containerFiltroEstoque.innerHTML = '';
     containerFiltroFila.innerHTML = '';
 
-    // 3. Cria os selects para cada chave de variação NORMALIZADA
+    // 3. Cria os selects para cada chave de variação
     chavesDeVariacao.forEach((valoresSet, chaveNormalizada) => {
-        // Cria um label mais amigável (ex: "cor" -> "Cor")
         const labelAmigavel = chaveNormalizada.charAt(0).toUpperCase() + chaveNormalizada.slice(1);
 
         // --- Cria o select para o filtro de ESTOQUE ---
         const grupoEstoque = document.createElement('div');
         grupoEstoque.className = 'es-form-grupo';
+        
+        const labelEstoque = document.createElement('label'); // Adiciona um label
+        labelEstoque.htmlFor = `filtro-estoque-${chaveNormalizada}`;
+        labelEstoque.textContent = labelAmigavel;
+        
         const selectEstoque = document.createElement('select');
+        selectEstoque.id = `filtro-estoque-${chaveNormalizada}`;
         selectEstoque.className = 'es-select filtro-dinamico-estoque';
-        selectEstoque.dataset.chave = chaveNormalizada; // Usa a chave normalizada para a lógica de filtro
+        selectEstoque.dataset.chave = chaveNormalizada; 
         
         let optionsHTML = `<option value="">Toda(o)s ${labelAmigavel}</option>`;
         Array.from(valoresSet).sort().forEach(val => {
@@ -523,30 +521,57 @@ function gerarFiltrosDinamicos() {
         });
         selectEstoque.innerHTML = optionsHTML;
         selectEstoque.addEventListener('change', () => carregarTabelaEstoque());
+        
+        grupoEstoque.appendChild(labelEstoque);
         grupoEstoque.appendChild(selectEstoque);
         containerFiltroEstoque.appendChild(grupoEstoque);
 
-        // --- Cria o select para o filtro da FILA ---
+        // --- Cria o select para o filtro da FILA DE PRODUÇÃO ---
         const grupoFila = document.createElement('div');
         grupoFila.className = 'es-form-grupo';
-        const selectFila = selectEstoque.cloneNode(true);
+        
+        const labelFila = labelEstoque.cloneNode(true); // Clona o label
+        labelFila.htmlFor = `filtro-fila-${chaveNormalizada}`;
+        
+        const selectFila = selectEstoque.cloneNode(true); // Clona o select
+        selectFila.id = `filtro-fila-${chaveNormalizada}`;
         selectFila.className = 'es-select filtro-dinamico-fila';
         selectFila.addEventListener('change', renderizarFilaDeProducao);
+        
+        grupoFila.appendChild(labelFila);
         grupoFila.appendChild(selectFila);
         containerFiltroFila.appendChild(grupoFila);
     });
 
-    // Adiciona o botão de limpar ao final
+    // 4. Adiciona o botão de limpar filtros ao final do container de ESTOQUE
+    const grupoBotaoEstoque = document.createElement('div');
+    grupoBotaoEstoque.className = 'es-form-grupo';
+    grupoBotaoEstoque.style.justifyContent = 'flex-end'; // Alinha o botão
+
     const btnLimparEstoque = document.createElement('button');
     btnLimparEstoque.id = 'limparFiltrosEstoqueBtn';
-    btnLimparEstoque.className = 'es-btn es-btn-perigo';
-    btnLimparEstoque.textContent = 'Limpar Filtros';
+    btnLimparEstoque.className = 'es-btn-limpar-filtros'; // Usa a mesma classe do outro botão
+    btnLimparEstoque.innerHTML = '<i class="fas fa-times-circle"></i> Limpar Filtros';
+
     btnLimparEstoque.addEventListener('click', () => {
         document.querySelectorAll('.filtro-dinamico-estoque').forEach(s => s.value = '');
         document.getElementById('searchEstoque').value = '';
         carregarTabelaEstoque();
+
+        // Lógica para resetar o botão "Filtros Avançados"
+        const toggleBtn = document.getElementById('toggleFiltrosAvancadosBtn');
+        const filtrosCont = document.getElementById('filtrosAvancados');
+        if (toggleBtn && filtrosCont) {
+            filtrosCont.classList.add('hidden');
+            const span = toggleBtn.querySelector('span');
+            if (span) {
+                span.textContent = 'Filtros Avançados';
+            }
+        }
     });
-    containerFiltroEstoque.appendChild(btnLimparEstoque);
+
+    grupoBotaoEstoque.appendChild(btnLimparEstoque); // Não precisa de label para o botão
+    containerFiltroEstoque.appendChild(grupoBotaoEstoque);
 }
 
 
@@ -1233,11 +1258,10 @@ function prepararViewMovimento() {
     if (!itemEstoqueSelecionado) return;
     const item = itemEstoqueSelecionado;
     
+    // Preenche as informações do cabeçalho da view
     document.getElementById('movimentoItemNome').textContent = `${item.produto_nome} ${item.variante_nome && item.variante_nome !== '-' ? `(${item.variante_nome})` : ''}`;
     document.getElementById('movimentoSaldoAtual').textContent = item.saldo_atual;
 
-    // --- AQUI ESTÁ A CORREÇÃO DA IMAGEM ---
-    // Busca a definição do produto usando o ID, que é mais confiável
     const produtoDef = todosOsProdutosCadastrados.find(p => p.id == item.produto_id);
     let skuParaExibir = item.produto_ref_id || 'N/A';
     let imagemSrc = '/img/placeholder-image.png';
@@ -1249,7 +1273,6 @@ function prepararViewMovimento() {
                  skuParaExibir = gradeItem.sku || skuParaExibir;
                  imagemSrc = gradeItem.imagem || produtoDef.imagem || imagemSrc;
             } else {
-                 // Se não achar na grade, usa a imagem principal do produto
                  imagemSrc = produtoDef.imagem || imagemSrc;
             }
         } else {
@@ -1260,55 +1283,93 @@ function prepararViewMovimento() {
     document.getElementById('movimentoItemSKU').textContent = `SKU: ${skuParaExibir}`;
     document.getElementById('movimentoThumbnail').innerHTML = `<img src="${imagemSrc}" alt="${item.produto_nome}" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">`;
 
-    // Reset e preenchimento do formulário de ação...
+    // --- LÓGICA ATUALIZADA DO FORMULÁRIO DE AÇÃO ---
     const qtdInput = document.getElementById('quantidadeMovimentar');
     const qtdLabel = document.getElementById('labelQuantidadeMovimentar');
     const inputTipoOperacaoOculto = document.getElementById('tipoMovimentoSelecionado');
     const containerBotoesTipoOp = document.querySelector('.movimento-tipo-operacao-container');
+
+    // Função interna para atualizar a UI com base no tipo de operação selecionado
     const atualizarCamposPorTipoOperacao = (tipoSelecionado) => {
+        if (!inputTipoOperacaoOculto || !containerBotoesTipoOp || !qtdLabel || !qtdInput) return;
+
         inputTipoOperacaoOculto.value = tipoSelecionado;
-        containerBotoesTipoOp.querySelectorAll('.movimento-op-btn').forEach(btn => btn.classList.toggle('ativo', btn.dataset.tipo === tipoSelecionado));
-        qtdLabel.textContent = tipoSelecionado === 'BALANCO' ? 'Ajustar Saldo Para:' : 'Quantidade a Movimentar:';
-        qtdInput.value = tipoSelecionado === 'BALANCO' ? item.saldo_atual : '';
+        containerBotoesTipoOp.querySelectorAll('.movimento-op-btn').forEach(btn => {
+            btn.classList.toggle('ativo', btn.dataset.tipo === tipoSelecionado);
+        });
+
+        // Lógica para mudar os textos e valores padrão
+        switch (tipoSelecionado) {
+            case 'DEVOLUCAO':
+                qtdLabel.textContent = 'Quantidade Devolvida:';
+                qtdInput.value = ''; // Limpa o campo
+                qtdInput.placeholder = 'Ex: 1';
+                qtdInput.min = "1"; // Devolução deve ser positiva
+                break;
+            case 'ENTRADA_MANUAL':
+                qtdLabel.textContent = 'Quantidade a Adicionar:';
+                qtdInput.value = '';
+                qtdInput.placeholder = 'Ex: 10';
+                qtdInput.min = "1";
+                break;
+            case 'SAIDA_MANUAL':
+                qtdLabel.textContent = 'Quantidade a Retirar:';
+                qtdInput.value = '';
+                qtdInput.placeholder = 'Ex: 5';
+                qtdInput.min = "1";
+                break;
+            // O caso 'BALANCO' foi removido do HTML e da lógica
+        }
     };
-    containerBotoesTipoOp.querySelectorAll('.movimento-op-btn').forEach(btn => {
-        const newBtn = btn.cloneNode(true);
-        btn.parentNode.replaceChild(newBtn, btn);
-        newBtn.addEventListener('click', () => atualizarCamposPorTipoOperacao(newBtn.dataset.tipo));
-    });
-    atualizarCamposPorTipoOperacao('ENTRADA_MANUAL');
+    
+    // Reconfigura os listeners dos botões de operação para garantir que estejam limpos
+    if (containerBotoesTipoOp) {
+        containerBotoesTipoOp.querySelectorAll('.movimento-op-btn').forEach(btn => {
+            const newBtn = btn.cloneNode(true);
+            btn.parentNode.replaceChild(newBtn, btn);
+            newBtn.addEventListener('click', () => atualizarCamposPorTipoOperacao(newBtn.dataset.tipo));
+        });
+    }
+
+    // Define a operação padrão ao abrir a view
+    atualizarCamposPorTipoOperacao('ENTRADA_MANUAL'); 
+    
+    // Reseta o campo de observação
     document.getElementById('observacaoMovimento').value = '';
+    
+    // Controla a visibilidade do botão de arquivar
     const btnArquivar = document.getElementById('arquivarItemBtn');
-    if(btnArquivar) btnArquivar.style.display = permissoesGlobaisEstoque.includes('arquivar-produto-do-estoque') ? 'inline' : 'none';
+    if(btnArquivar) {
+        btnArquivar.style.display = permissoesGlobaisEstoque.includes('arquivar-produto-do-estoque') ? 'inline-flex' : 'none';
+    }
 
-
-    // --- ADIÇÃO DO EVENT LISTENER NO LOCAL CORRETO ---
+    // --- LÓGICA DO HISTÓRICO ---
     const historicoContainer = document.getElementById('historicoContainer');
-    // Remove qualquer listener antigo para evitar duplicação e vazamento de memória
-    if (historicoContainer.listenerEstorno) {
+    // Remove qualquer listener antigo para evitar duplicação
+    if (historicoContainer && historicoContainer.listenerEstorno) {
         historicoContainer.removeEventListener('click', historicoContainer.listenerEstorno);
     }
 
-    // Cria a nova função de listener.
-    historicoContainer.listenerEstorno = function(event) {
-        const botaoEstorno = event.target.closest('.btn-iniciar-estorno');
-        if (botaoEstorno) {
-            const movimentoId = parseInt(botaoEstorno.dataset.movimentoId);
-            // CORRIGIDO AQUI: Use 'saldoParaEstorno' e um nome de variável diferente para clareza
-            const saldoDoBotao = parseInt(botaoEstorno.dataset.saldoParaEstorno);
+    if (historicoContainer) {
+        // Cria a nova função de listener para o estorno
+        historicoContainer.listenerEstorno = function(event) {
+            const botaoEstorno = event.target.closest('.btn-iniciar-estorno');
+            if (botaoEstorno) {
+                const movimentoId = parseInt(botaoEstorno.dataset.movimentoId);
+                const saldoDoBotao = parseInt(botaoEstorno.dataset.saldoParaEstorno);
+                iniciarProcessoDeEstorno(movimentoId, saldoDoBotao, botaoEstorno);
+            }
+        };
+        // Adiciona o novo listener
+        historicoContainer.addEventListener('click', historicoContainer.listenerEstorno);
+    }
 
-            // Chama a função de estorno passando os valores corretos
-            iniciarProcessoDeEstorno(movimentoId, saldoDoBotao, botaoEstorno);
-        }
-    };
-
-    // Adiciona o novo listener
-    historicoContainer.addEventListener('click', historicoContainer.listenerEstorno);
-
-    // Carrega o histórico
+    // Carrega o histórico para o item selecionado
     const historicoBody = document.getElementById('historicoMovimentacoesBody');
-    if (historicoBody) historicoBody.innerHTML = '<tr><td colspan="6"><div class="es-spinner"></div></td></tr>';
-    carregarHistoricoMovimentacoes(item.produto_id, item.variante_nome, 1);
+    if (historicoBody) {
+        historicoBody.innerHTML = '<tr><td colspan="6"><div class="es-spinner"></div></td></tr>';
+        carregarHistoricoMovimentacoes(item.produto_id, item.variante_nome, 1);
+    }
 }
 
 
@@ -1453,44 +1514,59 @@ function mostrarPopupEstornoParcial(mensagem, quantidadeMaxima) {
 
 // Função para arquivar um item de estoque (ATUALIZADA)
 async function arquivarItemEstoque() {
+    // 1. Validação inicial
     if (!itemEstoqueSelecionado || !itemEstoqueSelecionado.produto_ref_id) {
-        mostrarPopupEstoque('Nenhum item selecionado ou item sem SKU para arquivar.', 'erro');
+        console.error("[arquivarItemEstoque] Tentativa de arquivar sem um item selecionado ou sem produto_ref_id.", itemEstoqueSelecionado);
+        mostrarPopupEstoque('Nenhum item válido selecionado para arquivar.', 'erro');
         return;
     }
 
-    const mensagemConfirmacao = `Tem certeza que deseja arquivar o item <br><b>"${itemEstoqueSelecionado.produto_nome} - ${itemEstoqueSelecionado.variante_nome}"</b>?<br><br>Esta ação irá removê-lo da lista de estoque.`;
+    const skuParaArquivar = itemEstoqueSelecionado.produto_ref_id;
+    console.log(`[arquivarItemEstoque] SKU a ser arquivado: ${skuParaArquivar}`);
 
-    // Usa o novo popup de confirmação
+    // 2. Confirmação do usuário
+    const mensagemConfirmacao = `Tem certeza que deseja arquivar o item <br><b>"${itemEstoqueSelecionado.produto_nome} - ${itemEstoqueSelecionado.variante_nome}"</b> (SKU: ${skuParaArquivar})?<br><br>Esta ação irá removê-lo da lista de estoque se o saldo for zero.`;
+
     const confirmado = await mostrarPopupConfirmacao(mensagemConfirmacao, 'perigo');
 
     if (!confirmado) {
-        return; // Usuário clicou em "Cancelar"
+        console.log("[arquivarItemEstoque] Arquivamento cancelado pelo usuário.");
+        return; 
     }
 
+    // 3. Feedback visual e chamada da API
     const btnArquivar = document.getElementById('arquivarItemBtn');
-    btnArquivar.disabled = true;
-    btnArquivar.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; // Spinner sem texto
+    if(btnArquivar) {
+        btnArquivar.disabled = true;
+        btnArquivar.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    }
 
     try {
+        console.log(`[arquivarItemEstoque] Enviando requisição para API /estoque/arquivar-item com SKU: ${skuParaArquivar}`);
+        
         await fetchEstoqueAPI('/estoque/arquivar-item', {
             method: 'POST',
-            body: JSON.stringify({ produto_ref_id: itemEstoqueSelecionado.produto_ref_id })
+            body: JSON.stringify({ produto_ref_id: skuParaArquivar })
         });
         
         mostrarPopupEstoque('Item arquivado com sucesso!', 'sucesso');
 
-        // Força a recarga da lista principal ao voltar
+        // Força a recarga da lista principal ao voltar para refletir a mudança
         saldosEstoqueGlobaisCompletos = []; 
-        window.location.hash = '#';
+        window.location.hash = '#'; // Volta para a tela principal
 
     } catch (error) {
         console.error('[arquivarItemEstoque] Erro ao arquivar:', error);
-        mostrarPopupEstoque(error.data?.details || error.message || 'Erro ao arquivar o item.', 'erro');
+        mostrarPopupEstoque(error.data?.details || error.data?.error || error.message || 'Erro ao arquivar o item.', 'erro');
     } finally {
-        btnArquivar.disabled = false;
-        btnArquivar.innerHTML = '<i class="fas fa-archive"></i>';
+        if(btnArquivar) {
+            btnArquivar.disabled = false;
+            btnArquivar.innerHTML = '<i class="fas fa-archive"></i>';
+        }
     }
 }
+
+
 
 async function salvarMovimentoManualEstoque() {
     // AJUSTADO para usar itemEstoqueSelecionado e novos IDs
@@ -1610,6 +1686,96 @@ function handleHashChangeEstoque() {
             console.error("Erro ao recarregar tabela de estoque via handleHashChange:", err);
             mostrarPopupEstoque("Falha ao atualizar tabela de estoque.", "erro");
         });
+    }
+}
+
+// --- LÓGICA PARA GERENCIAR ITENS ARQUIVADOS ---
+
+async function abrirModalArquivados() {
+    const modal = document.getElementById('modalItensArquivados');
+    if (!modal) return;
+    
+    const tbody = document.getElementById('tabelaItensArquivadosBody');
+    if(tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;"><div class="es-spinner"></div> Carregando...</td></tr>';
+    
+    modal.style.display = 'flex';
+    await carregarItensArquivados();
+}
+
+function fecharModalArquivados() {
+    const modal = document.getElementById('modalItensArquivados');
+    if (modal) modal.style.display = 'none';
+}
+
+async function carregarItensArquivados() {
+    try {
+        const itensArquivados = await fetchEstoqueAPI('/estoque/arquivados');
+        renderizarTabelaArquivados(itensArquivados);
+    } catch (error) {
+        const tbody = document.getElementById('tabelaItensArquivadosBody');
+        if(tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:red;">Erro ao carregar itens arquivados.</td></tr>';
+        mostrarPopupEstoque('Falha ao carregar a lista de itens arquivados.', 'erro');
+    }
+}
+
+function renderizarTabelaArquivados(itens) {
+    const tbody = document.getElementById('tabelaItensArquivadosBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (!itens || itens.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Nenhum item arquivado.</td></tr>';
+        return;
+    }
+
+    itens.forEach(item => {
+        const tr = tbody.insertRow();
+        
+        // Agora usamos a coluna 'imagem' unificada que vem da API
+        const imagemSrc = item.imagem || '/img/placeholder-image.png';
+
+        tr.innerHTML = `
+            <td><img src="${imagemSrc}" class="thumbnail" style="width:45px; height:45px; object-fit:cover;" onerror="this.onerror=null;this.src='/img/placeholder-image.png';"></td>
+            <td><strong>${item.produto_nome}</strong><br><small>${item.variante_nome}</small></td>
+            <td>${item.produto_ref_id}</td>
+            <td style="text-align: center;">
+                <button class="es-btn es-btn-sucesso btn-restaurar-item" data-sku="${item.produto_ref_id}" data-nome="${item.produto_nome} - ${item.variante_nome}">
+                    <i class="fas fa-undo-alt"></i> Restaurar
+                </button>
+            </td>
+        `;
+    });
+}
+
+async function handleRestaurarItemClick(event) {
+    const targetButton = event.target.closest('.btn-restaurar-item');
+    if (!targetButton) return;
+
+    const sku = targetButton.dataset.sku;
+    const nome = targetButton.dataset.nome;
+
+    const confirmado = await mostrarPopupConfirmacao(`Tem certeza que deseja restaurar o item <br><b>${nome}</b> (SKU: ${sku})?<br><br>Ele voltará a aparecer na lista principal de estoque.`);
+    
+    if (!confirmado) return;
+
+    targetButton.disabled = true;
+    targetButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    try {
+        await fetchEstoqueAPI(`/estoque/arquivados/${sku}`, { method: 'DELETE' });
+        
+        mostrarPopupEstoque('Item restaurado com sucesso!', 'sucesso');
+        
+        // Remove a linha da tabela do modal para feedback imediato
+        targetButton.closest('tr').remove();
+
+        // Força a recarga da lista principal da próxima vez que for visualizada
+        saldosEstoqueGlobaisCompletos = [];
+
+    } catch (error) {
+        mostrarPopupEstoque(error.data?.error || 'Erro ao restaurar o item.', 'erro');
+        targetButton.disabled = false;
+        targetButton.innerHTML = '<i class="fas fa-undo-alt"></i> Restaurar';
     }
 }
 
@@ -2261,9 +2427,21 @@ function setupEventListenersEstoque() {
     });
 
      // --- Novos Listeners para os Filtros ---
-    document.getElementById('toggleFiltrosAvancadosBtn')?.addEventListener('click', () => {
-        document.getElementById('filtrosAvancados').classList.toggle('hidden');
-    });
+    const toggleFiltrosBtnEl = document.getElementById('toggleFiltrosAvancadosBtn');
+    const filtrosContainerEl = document.getElementById('filtrosAvancados'); // O ID do container é 'filtrosAvancados'
+
+    if (toggleFiltrosBtnEl && filtrosContainerEl) {
+        toggleFiltrosBtnEl.addEventListener('click', () => {
+            filtrosContainerEl.classList.toggle('hidden');
+            
+            // Lógica para mudar o texto do botão
+            const isHidden = filtrosContainerEl.classList.contains('hidden');
+            const span = toggleFiltrosBtnEl.querySelector('span');
+            if (span) {
+                span.textContent = isHidden ? 'Filtros Avançados' : 'Fechar Filtros';
+            }
+        });
+    }
 
     document.getElementById('filtroFilaStatusSelect')?.addEventListener('change', renderizarFilaDeProducao);
     document.getElementById('limparFiltrosFilaBtn')?.addEventListener('click', () => {
@@ -2290,6 +2468,7 @@ function setupEventListenersEstoque() {
     document.querySelectorAll('.es-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => mudarAbaFila(btn.dataset.tab));
     });
+
 
     //LISTENER PARA O BOTÃO DE ATUALIZAR
     const btnAtualizarEstoque = document.getElementById('btnAtualizarEstoque');
@@ -2325,7 +2504,8 @@ function setupEventListenersEstoque() {
     document.getElementById('btnConfirmarSaidaEstoque')?.addEventListener('click', confirmarSaidaEstoque);
     window.addEventListener('hashchange', handleHashChangeEstoque);
     console.log('[Estoque setupEventListenersEstoque] Todos os listeners foram configurados corretamente.');
-            // --- LÓGICA DO BOTÃO VOLTAR AO TOPO ---
+    
+    // --- LÓGICA DO BOTÃO VOLTAR AO TOPO ---
         const btnVoltarAoTopo = document.getElementById('btnVoltarAoTopo');
         if (btnVoltarAoTopo) {
             // Ação de clique: rolar para o topo suavemente
@@ -2342,6 +2522,47 @@ function setupEventListenersEstoque() {
                 }
             });
         }
+
+    // --- LÓGICA DE PERMISSÃO PARA O BOTÃO "VER ARQUIVADOS" ---
+    const btnVerArquivados = document.getElementById('btnVerArquivados');
+    if (btnVerArquivados) {
+        // Verifica se o usuário tem a permissão
+        if (permissoesGlobaisEstoque.includes('editar-itens-arquivados')) {
+            // Se tem permissão, o botão funciona normalmente
+            btnVerArquivados.addEventListener('click', abrirModalArquivados);
+        } else {
+            // Se NÃO tem permissão, adiciona a classe de estilo e o listener para o popup
+            btnVerArquivados.classList.add('permissao-negada');
+            btnVerArquivados.addEventListener('click', () => {
+                mostrarPopupEstoque('Você não tem permissão para visualizar e editar itens arquivados.', 'aviso');
+            });
+        }
+    }
+
+    // --- LISTENERS PARA FECHAR O MODAL DE ARQUIVADOS E RESTAURAR ITENS ---
+    const fecharModalArquivadosBtn = document.getElementById('fecharModalArquivados');
+    if (fecharModalArquivadosBtn) {
+        // Listener para o botão 'X' de fechar
+        fecharModalArquivadosBtn.addEventListener('click', fecharModalArquivados);
+    }
+
+    const modalArquivados = document.getElementById('modalItensArquivados');
+    if (modalArquivados) {
+        modalArquivados.addEventListener('click', (event) => {
+            // Delegação de evento para os botões de restaurar
+            const restaurarBtn = event.target.closest('.btn-restaurar-item');
+            if (restaurarBtn) {
+                handleRestaurarItemClick(event);
+                return; // Impede que o clique no botão feche o modal
+            }
+
+            // Fecha o modal se o clique for no fundo (overlay)
+            if (event.target === modalArquivados) {
+                fecharModalArquivados();
+            }
+        });
+    }
+
 
 
 }
