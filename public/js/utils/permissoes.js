@@ -1,124 +1,155 @@
-export const permissoesDisponiveis = [
-    { id: 'acesso-home', label: 'Acesso à Home' }, // Para home.html
-    { id: 'acesso-costureira-dashboard', label: 'Acesso à Dashboard Costureira' }, // Acesso a dashboards de costureira
-    { id: 'acesso-ordens-de-producao', label: 'Acesso a Ordens de Produção' }, // Para ordens-de-producao.html
-    { id: 'acesso-cadastrar-produto', label: 'Acesso a Cadastrar Produto' }, // Para cadastrar-produto.html
-    { id: 'acesso-embalagem-de-produtos', label: 'Acesso a Embalagem de Produtos' }, // Para embalagem-de-produtos.html
-    { id: 'acesso-gerenciar-producao', label: 'Acesso a Gerenciar Produção' }, // Para gerenciar-producao.html
-    { id: 'acesso-cadastrar-usuario', label: 'Acesso a Cadastrar Usuário' }, // Para cadastrar-usuario.html
-    { id: 'acesso-usuarios-cadastrados', label: 'Acesso a Usuários Cadastrados' }, // Para usuarios-cadastrados.html
-    { id: 'acesso-permissoes-usuarios', label: 'Acesso a Permissões de Usuários' }, // Para permissoes-usuarios.html
-    { id: 'acesso-relatorio-de-assinaturas', label: 'Acesso a Relatório de Assinaturas' }, // Para relatorio-de-assinaturas.html
-    { id: 'acesso-producao-geral-costura', label: 'Acesso a Produção Geral de Costureiras' }, // Para producao-geral-costura.html 
-    { id: 'acesso-relatorio-de-comissao', label: 'Acesso a Relatório de Comissão' }, // Para relatorio-de-comissao.html
-    { id: 'acesso-ponto-por-processo', label: 'Acesso a Ponto por Processo' }, // Para ponto-por-processo.html
-    { id: 'acesso-dashboard-tiktik', label: 'Acesso a Dashboard Tiktik' }, // Para dashboard-tiktik.html
-    { id: 'criar-op', label: 'Criar Ordem de Produção' }, // Para ordens-de-producao.html
-    { id: 'editar-op', label: 'Editar Ordem de Produção' }, // Para ordens-de-producao.html
-    { id: 'editar-usuarios', label: 'Editar Usuários' }, // Para usuarios-cadastrados.html
-    { id: 'acesso-cadastrar-usuarios', label: 'Cadastrar Usuários' }, // Para cadastrar-usuario.html
-    { id: 'excluir-usuarios', label: 'Excluir Usuários' }, // Para usuarios-cadastrados.html
-    { id: 'gerenciar-permissoes', label: 'Gerenciar Permissões' }, // Para permissoes-usuarios.html
-    { id: 'editar-registro-producao', label: 'Editar Registro de Produção' }, // Para gerenciar-producao.html
-    { id: 'excluir-registro-producao', label: 'Excluir Registro de Produção' }, // Para gerenciar-producao.html
-    { id: 'cadastrar-produto', label: 'Cadastrar Produto' }, // Para cadastrar-produto.html
-    { id: 'lancar-producao', label: 'Lançar Produção (Opera com editar OPs)' },
-    { id: 'embalar-produto', label: 'Embalagem de Produto' }, // Para embalagem-de-produtos.html
-    { id: 'lancar-arremate', label: 'Lançar Arremate' }, // Para embalagem-de-produtos.html
-    { id: 'acesso-estoque', label: 'Acesso ao Estoque' }, // Para estoque.html
-    { id: 'lancar-embalagem-unidade', label: 'Lançar embalagem Unidade' }, // Para relatorio-de-comissao.html
-    { id: 'confirmar-pagamento-comissao', label: 'Confirmar Pagamento de Comissão' }, // Para embalagem-de-produtos.html
-    { id: 'lancar-embalagem', label: 'Lançar Embalagem' }, // Para embalagem-de-produtos.html
-    { id: 'montar-kit', label: 'Montar Kit' }, // Para embalagem-de-produtos.html
-    { id: 'gerenciar-produtos', label: 'Gerenciar Produtos' }, // Para cadastrar-produtos.html
-    { id: 'gerenciar-estoque', label: 'Gerenciar Estoque' }, // Para estoque.html
-    { id: 'registrar-corte', label: 'Registrar Corte para Estoque' }, // Para ordens-de-producao.html
-    { id: 'excluir-estoque-corte', label: 'Excluir Corte do Estoque' }, // Para ordens-de-producao.html
-    { id: 'marcar-como-cortado', label: 'Marcar Corte como Cortado' }, // Para ordens-de-producao.html
-    { id: 'excluir-corte-pendente', label: 'Excluir Corte Pendente' }, // Para ordens-de-producao.html
-    { id: 'finalizar-op', label: 'Finalizar uma OP' }, // Para ordens-de-producao.html
-    { id: 'cancelar-op', label: 'Cancelar uma OP' }, // Para ordens-de-producao.html
-    { id: 'acesso-admin-geral', label: 'Acesso Geral para Telas de Admins' }, // Para usuário tiktik/costureira ser redirecionado para home.html
-    { id: 'ver-proprias-producoes', label: 'Permite ver as próprias producoes' }, // Para costureiras e tiktik (dashboards)
-    { id: 'ver-proprios-arremates', label: 'Permite ver os próprios arremates' }, // Para costureiras e tiktik (dashboards)
-    { id: 'assinar-propria-producao-costureira', label: 'Permite assinar a própria producao' }, // Para costureiras (dashboard)
-    { id: 'ver-lista-produtos', label: 'Permite visualizar a lista de produtos cadastrados' }, // para api/produtos.js
-    { id: 'acesso-ordens-de-arremates', label: 'Acesso a Ordens de Arremate' }, // para ordens-de-arremate.html
-    { id: 'gerenciar-precificacao', label: 'Permite Gerenciar Precificacao' }, // para precificacao.html
-    { id: 'acesso-precificacao', label: 'Acesso a Precificação' }, // para precificacao.html
-    { id: 'gerenciar-niveis-alerta-estoque', label: 'Permite Gerenciar os Níveis de Estoque Baixo e Urgente' }, // para estoque.html
-    { id: 'ajustar-saldo', label: 'Permite dar Entrada, Saída e Balanço' }, // para estoque.html
-    { id: 'assinar-propria-producao-tiktik', label: 'Permite o Tiktik assinar a própria producao' }, // para dashboard-tiktik.html
-    { id: 'assinar-proprio-arremate', label: 'Permite o Tiktik assinar o próprio arremate' }, // para dashboard-tiktik.html
-    { id: 'arquivar-produto-do-estoque', label: 'Permite arquivar um produto do estoque' }, // para estoque.html
-    { id: 'gerenciar-fila-de-producao', label: 'Permite gerenciar fila de producao do estoque' }, // para estoque.html
-    { id: 'anular-promessa-producao', label: 'Permite anular uma promessa de producao' }, // para estoque.html
-    { id: 'registrar-perda-arremate', label: 'Permite registrar uma perda em Arremates' }, // para ordens-de-arremate.html
-    { id: 'editar-itens-arquivados', label: 'Permite acrescentar/retirar um item de arquivados' } // para estoque.html
+// public/js/utils/permissoes.js
 
+// ==========================================================================
+// 1. DEFINIÇÃO DAS PERMISSÕES DISPONÍVEIS (COM CATEGORIA)
+// Esta é a fonte da verdade para todas as permissões no sistema.
+// Cada permissão tem um ID único, uma descrição (label) e uma categoria para organização.
+// ==========================================================================
+
+export const permissoesDisponiveis = [
+    // --- ACESSO GERAL ---
+    { id: 'acesso-dashboard', label: 'Acesso ao Dashboard de Produção', categoria: 'Acesso Geral' },
+    { id: 'acesso-admin-geral', label: 'Acesso Geral à Área Administrativa', categoria: 'Acesso Geral' },
+    { id: 'acesso-home', label: 'Acesso à Home Administrativa', categoria: 'Acesso Geral' },
+    
+    // --- USUÁRIOS E PERMISSÕES ---
+    { id: 'acesso-usuarios-cadastrados', label: 'Ver Tela de Usuários Cadastrados', categoria: 'Usuários e Permissões' },
+    { id: 'acesso-cadastrar-usuario', label: 'Ver Tela de Cadastrar Usuário', categoria: 'Usuários e Permissões' },
+    { id: 'acesso-permissoes-usuarios', label: 'Ver Tela de Gerenciar Permissões', categoria: 'Usuários e Permissões' },
+    { id: 'acesso-cadastrar-usuarios', label: 'Ação: Cadastrar novos usuários', categoria: 'Usuários e Permissões' },
+    { id: 'editar-usuarios', label: 'Ação: Editar dados de usuários', categoria: 'Usuários e Permissões' },
+    { id: 'excluir-usuarios', label: 'Ação: Excluir usuários', categoria: 'Usuários e Permissões' },
+    { id: 'gerenciar-permissoes', label: 'Ação: Alterar permissões individuais', categoria: 'Usuários e Permissões' },
+
+    // --- PRODUTOS, KITS E MATÉRIAS-PRIMAS ---
+    { id: 'acesso-cadastrar-produto', label: 'Ver Tela de Cadastro de Produtos', categoria: 'Produtos e Kits' },
+    { id: 'ver-lista-produtos', label: 'Ação: Visualizar lista de produtos (API)', categoria: 'Produtos e Kits' },
+    { id: 'gerenciar-produtos', label: 'Ação: Criar e editar produtos/kits', categoria: 'Produtos e Kits' },
+    { id: 'cadastrar-produto', label: 'Ação: Cadastrar Produto (específico)', categoria: 'Produtos e Kits' },
+
+    // --- PRODUÇÃO (OPs E CORTES) ---
+    { id: 'acesso-ordens-de-producao', label: 'Ver Tela de Ordens de Produção', categoria: 'Produção e Cortes' },
+    { id: 'acesso-gerenciar-producao', label: 'Ver Tela de Gerenciar Produção', categoria: 'Produção e Cortes' },
+    { id: 'criar-op', label: 'Ação: Criar Ordens de Produção', categoria: 'Produção e Cortes' },
+    { id: 'editar-op', label: 'Ação: Editar Ordens de Produção', categoria: 'Produção e Cortes' },
+    { id: 'finalizar-op', label: 'Ação: Finalizar uma OP', categoria: 'Produção e Cortes' },
+    { id: 'cancelar-op', label: 'Ação: Cancelar uma OP', categoria: 'Produção e Cortes' },
+    { id: 'lancar-producao', label: 'Ação: Lançar etapas de produção em uma OP', categoria: 'Produção e Cortes' },
+    { id: 'registrar-corte', label: 'Ação: Registrar novo corte de tecido', categoria: 'Produção e Cortes' },
+    { id: 'marcar-como-cortado', label: 'Ação: Mover corte para "cortado"', categoria: 'Produção e Cortes' },
+    { id: 'excluir-corte-pendente', label: 'Ação: Excluir pedido de corte pendente', categoria: 'Produção e Cortes' },
+    { id: 'excluir-estoque-corte', label: 'Ação: Excluir corte do estoque', categoria: 'Produção e Cortes' },
+
+    // --- ARREMATE E EMBALAGEM ---
+    { id: 'acesso-ordens-de-arremates', label: 'Ver Tela de Ordens de Arremate', categoria: 'Arremate e Embalagem' },
+    { id: 'acesso-embalagem-de-produtos', label: 'Ver Tela de Embalagem', categoria: 'Arremate e Embalagem' },
+    { id: 'lancar-arremate', label: 'Ação: Registrar novo arremate', categoria: 'Arremate e Embalagem' },
+    { id: 'registrar-perda-arremate', label: 'Ação: Registrar uma perda no arremate', categoria: 'Arremate e Embalagem' },
+    { id: 'lancar-embalagem', label: 'Ação: Registrar embalagem de produtos', categoria: 'Arremate e Embalagem' },
+    { id: 'lancar-embalagem-unidade', label: 'Ação: Lançar embalagem de unidade', categoria: 'Arremate e Embalagem' },
+    { id: 'montar-kit', label: 'Ação: Montar/desmontar kits', categoria: 'Arremate e Embalagem' },
+
+    // --- ESTOQUE ---
+    { id: 'acesso-estoque', label: 'Ver Tela de Estoque', categoria: 'Estoque' },
+    { id: 'gerenciar-estoque', label: 'Ação: Gerenciar Estoque (Geral)', categoria: 'Estoque' },
+    { id: 'ajustar-saldo', label: 'Ação: Dar Entrada, Saída e Balanço', categoria: 'Estoque' },
+    { id: 'gerenciar-fila-de-producao', label: 'Ação: Gerenciar fila de produção', categoria: 'Estoque' },
+    { id: 'anular-promessa-producao', label: 'Ação: Anular promessa de produção', categoria: 'Estoque' },
+    { id: 'gerenciar-niveis-alerta-estoque', label: 'Ação: Gerenciar níveis de alerta', categoria: 'Estoque' },
+    { id: 'arquivar-produto-do-estoque', label: 'Ação: Arquivar um produto', categoria: 'Estoque' },
+    { id: 'editar-itens-arquivados', label: 'Ação: Editar/retirar itens arquivados', categoria: 'Estoque' },
+    
+    // --- FINANCEIRO E RELATÓRIOS ---
+    { id: 'acesso-precificacao', label: 'Ver Tela de Precificação', categoria: 'Financeiro e Relatórios' },
+    { id: 'acesso-relatorio-de-comissao', label: 'Ver Relatório de Comissão', categoria: 'Financeiro e Relatórios' },
+    { id: 'acesso-relatorio-de-assinaturas', label: 'Ver Relatório de Assinaturas', categoria: 'Financeiro e Relatórios' },
+    { id: 'acesso-producao-geral-costura', label: 'Ver Produção Geral (Costureiras)', categoria: 'Financeiro e Relatórios' },
+    { id: 'gerenciar-precificacao', label: 'Ação: Editar configurações de precificação', categoria: 'Financeiro e Relatórios' },
+    { id: 'confirmar-pagamento-comissao', label: 'Ação: Marcar comissões como pagas', categoria: 'Financeiro e Relatórios' },
+
+    // --- CONFIGURAÇÕES ---
+    { id: 'acesso-ponto-por-processo', label: 'Ver Tela de Pontos por Processo', categoria: 'Configurações' },
+
+    // --- AÇÕES ESPECÍFICAS DE USUÁRIOS FINAIS ---
+    { id: 'assinar-producao-costureira', label: 'Ação: Costureira assina sua produção', categoria: 'Ações Específicas do Usuário' },
+    { id: 'assinar-producao-tiktik', label: 'Ação: TikTik assina sua produção de OP', categoria: 'Ações Específicas do Usuário' },
+    { id: 'assinar-arremate-tiktik', label: 'Ação: TikTik assina seus arremates', categoria: 'Ações Específicas do Usuário' },
+    { id: 'ver-proprias-producoes', label: 'Permite ver as próprias produções', categoria: 'Ações Específicas do Usuário' },
+    { id: 'ver-proprios-arremates', label: 'Permite ver os próprios arremates', categoria: 'Ações Específicas do Usuário' },
 ];
 
-// Apenas o tipo 'admin' terá permissões padrão
+
+// ==========================================================================
+// 2. PERMISSÕES PADRÃO POR TIPO DE USUÁRIO
+// Mapeia um "tipo" de usuário para um array de IDs de permissão que ele recebe por padrão.
+// ==========================================================================
+
 export const permissoesPorTipo = {
-    supervisor: [],
-    lider_setor: [],
+    // Perfis de produção (acesso focado)
+    costureira: [
+        'acesso-dashboard',
+        'assinar-producao-costureira',
+        'ver-proprias-producoes'
+    ],
     tiktik: [
-        'acesso-dashboard-tiktik',
-        'ver-proprias-producoes',
-        'assinar-propria-producao-tiktik',
-        'assinar-proprio-arremate'
+        'acesso-dashboard',
+        'assinar-producao-tiktik',
+        'assinar-arremate-tiktik',
+        'ver-proprios-arremates',
+        'ver-proprias-producoes'
     ],
     cortador: [],
-    costureira: [
-        'acesso-costureira-dashboard',
-        'ver-proprias-producoes',
-        'assinar-propria-producao-costureira'
-    ],
-    admin: [
-        'acesso-admin-geral', 
-        'acesso-home',
-        'acesso-costureira-dashboard', // Admin também pode acessar a dashboard
-        'acesso-cadastrar-usuarios',
-        'acesso-ordens-de-producao',
-        'acesso-cadastrar-produto',
-        'acesso-embalagem-de-produtos',
-        'acesso-gerenciar-producao',
-        'acesso-cadastrar-usuario',
-        'acesso-usuarios-cadastrados',
-        'acesso-permissoes-usuarios',
-        'acesso-relatorio-de-assinaturas',
-        'acesso-relatorio-de-comissao',
-        'acesso-producao-geral-costura', 
-        'acesso-ponto-por-processo',
-        'criar-op',
-        'editar-op',
-        'editar-usuarios',
-        'excluir-usuarios',
-        'gerenciar-permissoes',
-        'editar-registro-producao',
-        'excluir-registro-producao',
-        'lancar-producao',
-        'embalar-produto',
-        'lancar-arremate',
-        'acesso-estoque',
-        'confirmar-pagamento-comissao',
-        'lancar-embalagem-unidade',
-        'montar-kit',
-        'lancar-embalagem',
-        'gerenciar-produtos',
-        'gerenciar-estoque',
-        'ver-lista-produtos',
-        'acesso-ordens-de-arremates',
-        'gerenciar-precificacao',
-        'acesso-precificacao',
-        'gerenciar-niveis-alerta-estoque',
-        'ajustar-saldo',
-        'arquivar-produto-do-estoque',
-        'gerenciar-fila-de-producao',
-        'anular-promessa-producao',
-        'registrar-perda-arremate',
-        'editar-itens-arquivados' 
 
-        
-    ]
+    // Perfis de gestão/administração (acesso amplo)
+    lider_setor: [
+        'acesso-admin-geral',
+        'acesso-home',
+        'acesso-ordens-de-producao',
+        'acesso-ordens-de-arremates',
+        'acesso-estoque',
+    ],
+    supervisor: [
+        'acesso-admin-geral',
+        'acesso-home',
+        'acesso-usuarios-cadastrados',
+        'acesso-ordens-de-producao',
+        'acesso-ordens-de-arremates',
+        'acesso-estoque',
+        'acesso-relatorio-de-comissao',
+    ],
+
+    // Admin tem acesso a tudo, sempre.
+    admin: permissoesDisponiveis.map(p => p.id)
 };
+
+
+// ==========================================================================
+// 3. ESTRUTURA CATEGORIZADA PARA O FRONTEND
+// Esta função agrupa as permissões pela propriedade 'categoria'.
+// O resultado é um objeto como: { "Acesso Geral": [perm1, perm2], "Produção": [perm3, perm4] }
+// Isso facilita muito a criação dos grupos na interface (como o acordeão).
+// ==========================================================================
+
+export const permissoesCategorizadas = permissoesDisponiveis.reduce((acc, permissao) => {
+    // Se uma permissão não tiver categoria, ela vai para um grupo 'Outras'.
+    const categoria = permissao.categoria || 'Outras'; 
+    
+    // Se a categoria ainda não existe no nosso acumulador, cria um array para ela.
+    if (!acc[categoria]) {
+        acc[categoria] = [];
+    }
+    
+    // Adiciona a permissão atual ao array da sua categoria.
+    acc[categoria].push(permissao);
+    
+    return acc;
+}, {});
+
+
+// ==========================================================================
+// 4. UTILITÁRIOS (Não precisa mudar)
+// Um Set é uma estrutura de dados otimizada para verificações rápidas de "existe ou não existe".
+// Útil para validar se um ID de permissão é válido no sistema.
+// ==========================================================================
+
+export const permissoesValidas = new Set(permissoesDisponiveis.map(p => p.id));

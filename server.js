@@ -26,6 +26,8 @@ import niveisEstoqueRouter from './api/niveis-estoque.js';
 import uploadRouter from './api/upload.js';
 import promessasRouter from './api/producao-promessas.js';
 import embalagensRouter from './api/embalagens.js';
+import dashboardRouter from './api/dashboard.js';
+
 
 const app = express();
 console.log('Aplicação Express inicializada.');
@@ -60,7 +62,8 @@ const routers = {
     canaisVendaRouter,
     precificacaoConfigRouter,
     niveisEstoqueRouter,
-    embalagensRouter
+    embalagensRouter,
+    dashboardRouter
 };
 for (const routerName in routers) {
     if (!routers[routerName] || typeof routers[routerName] !== 'function') {
@@ -90,6 +93,7 @@ app.use('/api/niveis-estoque', niveisEstoqueRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/producao-promessas', promessasRouter);
 app.use('/api/embalagens', embalagensRouter);
+app.use('/api/dashboard', dashboardRouter);
 
 app.get('/api/ping', (req, res) => res.status(200).json({ message: 'pong do server.js' }));
 console.log("Rota /api/ping configurada.");
@@ -113,7 +117,7 @@ app.get('/admin/home.html', (req, res) => serveHtmlFile('admin/home.html', res))
 app.get('/admin/ordens-de-producao.html', (req, res) => serveHtmlFile('admin/ordens-de-producao.html', res));
 app.get('/admin/ponto-por-processo.html', (req, res) => serveHtmlFile('admin/ponto-por-processo.html', res));
 app.get('/costureira/dashboard.html', (req, res) => serveHtmlFile('costureira/dashboard.html', res));
-
+app.get('/dashboard/dashboard.html', (req, res) => serveHtmlFile('dashboard/dashboard.html', res));
 
 app.use((err, req, res, next) => { /* ... seu error handler global ... */
     console.error("[server.js] Erro não tratado:", err.stack || err.message || err);

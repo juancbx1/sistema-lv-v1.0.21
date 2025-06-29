@@ -21,8 +21,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   const permissoesDoUsuarioLogado = auth.permissoes || [];
-  console.log('[admin-usuarios-cadastrados] Permissões do usuário logado:', permissoesDoUsuarioLogado);
-
   const listaEl = document.getElementById('usuariosLista');
   const filtroTipoEl = document.getElementById('filtroTipoUsuario');
   const loadingSpinnerEl = document.getElementById('loadingSpinner');
@@ -98,6 +96,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         </label>
       `).join('');
 
+      // *** A MUDANÇA ESTÁ AQUI ***
+      // A condição agora é tiposAtuais.includes('costureira') || tiposAtuais.includes('tiktik')
       card.innerHTML = `
         <div class="usuario-info">
           <p><span>Nome:</span> <strong class="uc-nome-usuario">${usuario.nome}</strong></p>
@@ -118,13 +118,14 @@ document.addEventListener('DOMContentLoaded', async () => {
           </p>
           
           <p><span>Nível:</span> 
-            ${tiposAtuais.includes('costureira') ? `
+            ${(tiposAtuais.includes('costureira') || tiposAtuais.includes('tiktik')) ? `
               <span class="uc-dado-texto uc-nivel-texto">Nível ${usuario.nivel || 'N/A'}</span>
               <select class="uc-select-edit uc-nivel-select" style="display: none;" ${!permissoesDoUsuarioLogado.includes('editar-usuarios') ? 'disabled' : ''}>
-                <option value="1" ${usuario.nivel === 1 ? 'selected' : ''}>Nível 1 (Reta)</option>
-                <option value="2" ${usuario.nivel === 2 ? 'selected' : ''}>Nível 2 (Reta ou Overloque)</option>
-                <option value="3" ${usuario.nivel === 3 ? 'selected' : ''}>Nível 3 (Reta ou Galoneira)</option>
-                <option value="4" ${usuario.nivel === 4 ? 'selected' : ''}>Nível 4 (Todas)</option>
+                <option value="" ${!usuario.nivel ? 'selected' : ''}>Sem Nível</option>
+                <option value="1" ${usuario.nivel === 1 ? 'selected' : ''}>Nível 1</option>
+                <option value="2" ${usuario.nivel === 2 ? 'selected' : ''}>Nível 2</option>
+                <option value="3" ${usuario.nivel === 3 ? 'selected' : ''}>Nível 3</option>
+                <option value="4" ${usuario.nivel === 4 ? 'selected' : ''}>Nível 4</option>
               </select>
             ` : '<span class="uc-dado-texto">-</span>'}
           </p>
@@ -176,19 +177,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       const nivelTexto = card.querySelector('.uc-nivel-texto');
       const nivelSelect = card.querySelector('.uc-nivel-select');
       
-      // Guardar valores originais para o botão cancelar
       let originalNomeUsuario, originalEmail, originalTipos = [], originalNivel;
 
       if (btnEditar) {
         btnEditar.addEventListener('click', () => {
-          // Guardar valores atuais
           originalNomeUsuario = nomeUsuarioTexto.textContent;
           originalEmail = emailTexto.textContent;
           if (tiposContainer) {
               originalTipos = Array.from(tiposContainer.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
           }
           if (nivelSelect) originalNivel = nivelSelect.value;
-
 
           nomeUsuarioTexto.style.display = 'none';
           nomeUsuarioInput.style.display = 'inline-block';
@@ -197,7 +195,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           
           tiposTexto.style.display = 'none';
           if (tiposContainer) {
-            tiposContainer.style.display = 'flex'; // ou 'block' dependendo do seu CSS
+            tiposContainer.style.display = 'flex';
             tiposContainer.classList.add('editando');
             tiposContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = false);
           }
@@ -211,13 +209,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           btnEditar.style.display = 'none';
           btnSalvar.style.display = 'inline-flex';
           btnCancelar.style.display = 'inline-flex';
-          if(btnExcluir) btnExcluir.style.display = 'none'; // Esconde excluir durante edição
+          if(btnExcluir) btnExcluir.style.display = 'none';
         });
       }
 
       if (btnCancelar) {
         btnCancelar.addEventListener('click', () => {
-            // Restaurar valores
             nomeUsuarioInput.value = originalNomeUsuario;
             emailInput.value = originalEmail;
             if (tiposContainer) {
@@ -227,7 +224,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             if (nivelSelect) nivelSelect.value = originalNivel;
 
-            // Alternar visibilidade
             nomeUsuarioTexto.style.display = 'inline-block';
             nomeUsuarioInput.style.display = 'none';
             emailTexto.style.display = 'inline-block';
@@ -253,7 +249,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
       }
 
-
       if (btnSalvar) {
         btnSalvar.addEventListener('click', async () => {
           const payload = { id: usuarioId };
@@ -274,25 +269,31 @@ document.addEventListener('DOMContentLoaded', async () => {
           let novosTipos = [];
           if (tiposContainer) {
               novosTipos = Array.from(tiposContainer.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-              // Compara arrays (precisa ser mais robusto se a ordem não importar, mas para simples adição/remoção funciona)
               if (JSON.stringify(novosTipos.sort()) !== JSON.stringify(originalTipos.sort())) {
                   payload.tipos = novosTipos;
                   mudancasFeitas = true;
               }
           }
+          
+          // *** INÍCIO DA CORREÇÃO ***
+          // Precisamos saber os tipos que ESTÃO SENDO SALVOS (novosTipos), não os tipos antigos.
+          const tiposParaSalvar = payload.tipos || originalTipos;
 
-          if (nivelSelect && tiposAtuais.includes('costureira')) { // Só envia nível se for costureira
-            const novoNivel = parseInt(nivelSelect.value);
-            if (String(novoNivel) !== String(originalNivel)) { // Compara como string se originalNivel puder ser string
+          if (nivelSelect && (tiposParaSalvar.includes('costureira') || tiposParaSalvar.includes('tiktik'))) {
+            // Usa os tipos que estão sendo salvos para decidir se envia o nível.
+            const novoNivel = nivelSelect.value === "" ? null : parseInt(nivelSelect.value); // Converte "" para null
+            const nivelOriginalNumerico = originalNivel === "" ? null : parseInt(originalNivel);
+            
+            if (novoNivel !== nivelOriginalNumerico) {
                 payload.nivel = novoNivel;
                 mudancasFeitas = true;
             }
           }
+          // *** FIM DA CORREÇÃO ***
 
           if (!mudancasFeitas) {
             alert("Nenhuma alteração detectada.");
-            // Simplesmente reverte a UI para o modo de visualização
-            btnCancelar.click(); // Simula o clique no cancelar para reverter a UI
+            btnCancelar.click();
             return;
           }
           
@@ -305,7 +306,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             if (response.ok) {
               alert('Usuário atualizado com sucesso!');
-              await carregarUsuariosCadastrados(); // Recarrega a lista para refletir as mudanças
+              await carregarUsuariosCadastrados();
             } else {
               const errorData = await response.json().catch(() => ({error: `Erro HTTP ${response.status}`}));
               console.error("Erro ao salvar:", errorData);
@@ -316,8 +317,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             alert('Erro no servidor ao atualizar usuário.');
           } finally {
             loadingSpinnerEl.style.display = 'none';
-            // A UI será atualizada por carregarUsuariosCadastrados se sucesso
-            // Se falhar, o usuário pode tentar de novo ou cancelar
           }
         });
       }
@@ -334,9 +333,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               });
               if (response.ok) {
                 alert('Usuário excluído com sucesso!');
-                // Remove o card da UI imediatamente ou recarrega a lista
-                // card.remove(); // Opção 1: remover direto
-                await carregarUsuariosCadastrados(); // Opção 2: recarregar (mais seguro para paginação)
+                await carregarUsuariosCadastrados();
               } else {
                 const errorData = await response.json().catch(() => ({error: `Erro HTTP ${response.status}`}));
                 alert(`Erro ao excluir usuário: ${errorData.error || 'Tente novamente.'}`);

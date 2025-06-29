@@ -1,18 +1,18 @@
 // public/js/admin-permissoes-usuarios.js
 import { verificarAutenticacao } from '/js/utils/auth.js';
-// Importa as definições de permissões do frontend para saber o 'label' e agrupar
-import { permissoesDisponiveis, permissoesPorTipo } from '/js/utils/permissoes.js'; 
+// NOVO: Importa a estrutura categorizada e as permissões por tipo
+import { permissoesCategorizadas, permissoesPorTipo } from '/js/utils/permissoes.js'; 
 
-// --- Variáveis Globais ---
-let usuarioLogadoPermissoes = null;
-let todosOsUsuariosCache = []; // Cache da lista de usuários
-let usuarioSelecionadoParaPermissoes = null; // { id, nome, nome_usuario, permissoes_individuais: [] }
-let permissoesOriginaisDoUsuario = []; // Para detectar mudanças
+// --- Variáveis de Estado da Página ---
+let todosOsUsuariosCache = [];
+let usuarioSelecionado = null;
+let permissoesAlteradas = false;
 
-// Referências a elementos DOM principais (serão atribuídas no DOMContentLoaded)
-let filtroUsuarioInput, listaUsuariosElement, nomeUsuarioPermissoesEl,
+// --- Referências a Elementos do DOM ---
+let filtroUsuarioInput, listaUsuariosEl, nomeUsuarioPermissoesEl,
     permissoesCheckboxesContainerEl, salvarPermissoesBtnEl;
 
+// --- Funções Utilitárias (Mantidas do seu código original) ---
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
@@ -25,87 +25,90 @@ function debounce(func, wait) {
     };
 }
 
-// --- Funções Utilitárias (Popup) ---
 function mostrarPopupPermissoes(mensagem, tipo = 'info', duracao = 4000) {
-    // Adapte sua função de popup global ou use a que definimos para estoque/precificação
-    // com as classes pu-popup-mensagem e pu-popup-overlay
     const popupId = `popup-perm-${Date.now()}`;
     const popup = document.createElement('div');
     popup.id = popupId;
     popup.className = `pu-popup-mensagem popup-${tipo}`; 
     const overlay = document.createElement('div');
-    overlay.id = `overlay-${popupId}`;
     overlay.className = 'pu-popup-overlay';
     popup.innerHTML = `<p>${mensagem}</p><button>OK</button>`;
-    popup.querySelector('button').onclick = () => { 
+    
+    const closePopup = () => {
         popup.style.animation = 'pu-fadeOutPopup 0.3s forwards'; 
         overlay.style.animation = 'pu-fadeOutOverlayPopup 0.3s forwards';
         setTimeout(() => { popup.remove(); overlay.remove(); }, 300);
     };
+
+    popup.querySelector('button').onclick = closePopup;
+    overlay.onclick = closePopup;
+    
     document.body.appendChild(overlay);
     document.body.appendChild(popup);
+    
     if (duracao > 0) {
         setTimeout(() => {
             const el = document.getElementById(popupId);
-            if (el) {
-                el.style.animation = 'pu-fadeOutPopup 0.3s forwards';
-                const ov = document.getElementById(`overlay-${popupId}`);
-                if (ov) ov.style.animation = 'pu-fadeOutOverlayPopup 0.3s forwards';
-                setTimeout(() => { el.remove(); if (ov) ov.remove(); }, 300);
-            }
+            if (el) closePopup();
         }, duracao);
     }
 }
 
-// Em public/js/admin-permissoes-usuarios.js
-
 async function fetchPermissoesAPI(endpoint, options = {}) {
+    // 1. Obter o token de autenticação do localStorage.
     const token = localStorage.getItem('token');
 
-    // Se não há token, e não é uma chamada GET pública (o que não temos nesta API de permissões)
-    // impede a chamada e redireciona.
+    // 2. Verificação de Segurança (Fail-Fast): Se não houver token, interrompe a requisição
+    // antes mesmo de tentar contato com o servidor.
     if (!token) {
-        mostrarPopupPermissoes('Erro de autenticação. Faça login novamente.', 'erro');
-        // Atraso para o popup ser visível antes do redirecionamento
+        mostrarPopupPermissoes('Erro de autenticação. Por favor, faça login novamente.', 'erro');
+        // Atraso para o popup ser visível antes do redirecionamento.
         setTimeout(() => {
-            localStorage.removeItem('token'); // Limpa o token antigo
-            localStorage.removeItem('usuarioLogado'); // Limpa dados do usuário se houver
-            localStorage.removeItem('permissoes'); // Limpa cache de permissões
-            window.location.href = '/login.html'; // Sua página de login principal
+            // Limpa qualquer dado de sessão antigo para garantir um login limpo.
+            localStorage.clear(); 
+            window.location.href = '/login.html'; // Redireciona para a página de login.
         }, 1500);
+        // Lança um erro para parar a execução da função que chamou a API.
         throw new Error('Token não encontrado, acesso não autorizado.');
     }
 
+    // 3. Configuração dos Headers Padrão para todas as requisições.
     const defaultHeaders = {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
     };
 
+    // 4. Mescla as opções padrão com as opções específicas passadas para a função.
+    // Isso permite sobrescrever ou adicionar headers e outras configurações conforme necessário.
     const finalOptions = {
-        ...options, // Permite sobrescrever method, body, etc.
+        ...options,
         headers: {
             ...defaultHeaders,
-            ...options.headers, // Permite adicionar ou sobrescrever headers específicos
+            ...options.headers,
         },
     };
 
-    // Adiciona cache-busting para GET requests se não for especificado de outra forma
+    // 5. Prevenção de Cache (Cache Busting): Para requisições GET, adiciona um parâmetro
+    // com o timestamp atual para garantir que o navegador não use uma resposta antiga do cache.
     let url = `/api${endpoint}`;
-    if ((!finalOptions.method || finalOptions.method.toUpperCase() === 'GET')) {
+    if (!finalOptions.method || finalOptions.method.toUpperCase() === 'GET') {
         url += url.includes('?') ? `&_=${Date.now()}` : `?_=${Date.now()}`;
     }
 
     try {
+        // 6. Executa a requisição fetch.
         const response = await fetch(url, finalOptions);
 
+        // 7. Tratamento de Respostas de Erro (qualquer status fora da faixa 200-299).
         if (!response.ok) {
             let errorData = { error: `Erro HTTP ${response.status} - ${response.statusText}` };
+            
+            // Tenta obter detalhes do erro do corpo da resposta, que geralmente vem em JSON.
             try {
-                // Tenta parsear o corpo do erro como JSON
                 const jsonError = await response.json();
-                errorData = jsonError || errorData; // Usa o erro do JSON se disponível
+                errorData = jsonError || errorData;
             } catch (e) {
-                // Se não for JSON, tenta ler como texto
+                // Se o corpo do erro não for JSON, tenta lê-lo como texto.
                 try {
                     const textError = await response.text();
                     if (textError) errorData.error = textError;
@@ -114,284 +117,291 @@ async function fetchPermissoesAPI(endpoint, options = {}) {
             
             console.error(`[fetchPermissoesAPI] Erro ${response.status} em ${endpoint}:`, errorData);
 
-            // Tratamento específico para erros de autenticação/autorização
-            if (response.status === 401) { // Unauthorized - problema com o token (inválido, expirado)
+            // 7a. Tratamento específico para erro 401 (Não Autorizado):
+            // Isso significa que o token é inválido, expirado ou ausente. A identidade do usuário é desconhecida.
+            // A ação correta é forçar um novo login.
+            if (response.status === 401) {
                 mostrarPopupPermissoes(errorData.error || 'Sessão inválida ou expirada. Faça login novamente.', 'erro');
-                // Atraso para o popup ser visível antes do redirecionamento
                 setTimeout(() => {
-                    localStorage.removeItem('token');
-                    localStorage.removeItem('usuarioLogado');
-                    localStorage.removeItem('permissoes');
+                    localStorage.clear();
                     window.location.href = '/login.html';
                 }, 1500);
-            } else if (response.status === 403) { // Forbidden - usuário autenticado, mas sem permissão para a ação
-                // O popup já deve ser mostrado pela função que chamou a API e tratou o erro 403
-                // Mas podemos ter um fallback aqui se a função chamadora não tratar.
-                // mostrarPopupPermissoes(errorData.error || 'Você não tem permissão para realizar esta ação.', 'erro');
-            }
-            // Para outros erros, o popup será mostrado pela função que chamou fetchPermissoesAPI
-            
+            } 
+            // 7b. Tratamento para erro 403 (Proibido - Forbidden):
+            // O token é válido, o servidor sabe quem é o usuário, mas ele não tem permissão para esta ação específica.
+            // A função que chamou a API deve tratar este caso e mostrar a mensagem de erro apropriada.
+
+            // 8. Cria e lança um objeto de erro enriquecido para ser capturado pela função chamadora.
             const err = new Error(errorData.error || `Erro ${response.status}`);
-            err.status = response.status; // Adiciona o status ao objeto de erro
-            err.data = errorData; // Adiciona os dados completos do erro
-            throw err; // Re-lança o erro para ser tratado pela função chamadora
+            err.status = response.status; // Adiciona o status HTTP ao erro.
+            err.data = errorData;         // Adiciona os dados completos do erro.
+            throw err;
         }
 
-        // Se a resposta for 204 No Content (comum para DELETE bem-sucedido sem corpo de resposta)
-        // ou se for um método DELETE (mesmo que retorne 200 com corpo, mas geralmente é 204)
-        if (response.status === 204 || finalOptions.method === 'DELETE') {
-            return { success: true, message: 'Operação realizada com sucesso.' }; // Retorna um objeto de sucesso
+        // 9. Tratamento de Respostas de Sucesso.
+        // Se a resposta for 204 (No Content), comum em requisições DELETE, não há corpo para ser lido.
+        if (response.status === 204) {
+            return { success: true, message: 'Operação realizada com sucesso.' };
         }
         
-        return await response.json(); // Para GET, POST, PUT que retornam corpo JSON
+        // Para outras respostas de sucesso (200, 201), retorna o corpo da resposta em formato JSON.
+        return await response.json();
 
     } catch (error) {
+        // 10. Tratamento de Erros de Rede ou Falhas na Requisição.
+        // Este bloco 'catch' captura erros como falha de conexão, servidor offline, ou os erros que lançamos no bloco `if (!response.ok)`.
         console.error(`[fetchPermissoesAPI] Falha geral ao acessar ${url}:`, error);
-        // A função chamadora é responsável por mostrar o popup específico do seu contexto,
-        // a menos que seja um erro crítico de token já tratado acima.
-        // Se não for um erro de status (ex: erro de rede), mostra um popup genérico.
-        if (!error.status && !error.message.toLowerCase().includes('token')) { 
-            mostrarPopupPermissoes(`Erro de comunicação com o servidor ao tentar acessar ${endpoint}. Verifique sua conexão.`, 'erro');
+
+        // Se o erro não for um erro de status HTTP (que já foi tratado acima),
+        // provavelmente é um problema de rede.
+        if (!error.status) { 
+            mostrarPopupPermissoes('Erro de comunicação com o servidor. Verifique sua conexão e tente novamente.', 'erro');
         }
-        throw error; // Re-lança o erro para ser tratado pela função que chamou
+        
+        // Re-lança o erro para que a função que chamou a API saiba que a operação falhou
+        // e possa tomar as ações necessárias (ex: parar um spinner, reabilitar um botão).
+        throw error;
     }
 }
 
+// --- Funções Principais da Página (Refatoradas) ---
 
-// 1. Buscar e Renderizar Lista de Usuários
+// 1. Carregar e Renderizar Lista de Usuários
 async function carregarListaUsuarios() {
-    if (!listaUsuariosElement) return;
-    listaUsuariosElement.innerHTML = '<li class="pu-spinner">Carregando usuários...</li>';
+    listaUsuariosEl.innerHTML = '<li class="pu-spinner">Carregando usuários...</li>';
     try {
-        const usuarios = await fetchPermissoesAPI('/usuarios'); // API GET /api/usuarios
-        todosOsUsuariosCache = usuarios || [];
+        // Seu backend já retorna as permissões totais para cada usuário, o que é perfeito!
+        todosOsUsuariosCache = await fetchPermissoesAPI('/usuarios');
         renderizarListaUsuarios(todosOsUsuariosCache);
     } catch (error) {
-        listaUsuariosElement.innerHTML = '<li style="color:red; text-align:center;">Erro ao carregar usuários.</li>';
+        listaUsuariosEl.innerHTML = '<li style="color:red; text-align:center;">Erro ao carregar usuários.</li>';
     }
 }
 
-function renderizarListaUsuarios(usuariosParaRenderizar) {
-    if (!listaUsuariosElement) return;
-    listaUsuariosElement.innerHTML = ''; // Limpa
-    if (usuariosParaRenderizar.length === 0) {
-        listaUsuariosElement.innerHTML = '<li style="text-align:center; color: var(--pu-cor-cinza-texto-secundario);">Nenhum usuário encontrado.</li>';
+function renderizarListaUsuarios(usuarios) {
+    listaUsuariosEl.innerHTML = '';
+    if (!usuarios || usuarios.length === 0) {
+        listaUsuariosEl.innerHTML = '<li>Nenhum usuário encontrado.</li>';
         return;
     }
-
-    usuariosParaRenderizar.sort((a, b) => a.nome.localeCompare(b.nome)); // Ordena por nome
-
-    usuariosParaRenderizar.forEach(usuario => {
+    usuarios.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(usuario => {
         const li = document.createElement('li');
-        li.textContent = `${usuario.nome} (${usuario.nome_usuario || 'N/A'})`;
+        li.textContent = usuario.nome;
         li.dataset.userId = usuario.id;
-        li.addEventListener('click', () => selecionarUsuarioParaPermissoes(usuario.id));
-        listaUsuariosElement.appendChild(li);
+        li.addEventListener('click', () => selecionarUsuario(usuario));
+        listaUsuariosEl.appendChild(li);
     });
 }
 
-// 2. Filtrar Lista de Usuários
+// 2. Filtrar Usuários
 function filtrarUsuarios() {
-    if (!filtroUsuarioInput || !todosOsUsuariosCache) return;
     const termo = filtroUsuarioInput.value.toLowerCase();
-    const usuariosFiltrados = todosOsUsuariosCache.filter(u => 
-        u.nome.toLowerCase().includes(termo) || 
-        (u.nome_usuario && u.nome_usuario.toLowerCase().includes(termo))
-    );
-    renderizarListaUsuarios(usuariosFiltrados);
-    // Limpa a área de permissões se a busca resultar em nenhum usuário selecionado
-    if (!usuariosFiltrados.some(u => u.id === usuarioSelecionadoParaPermissoes?.id)) {
-        limparAreaPermissoes();
-    }
+    const filtrados = todosOsUsuariosCache.filter(u => u.nome.toLowerCase().includes(termo));
+    renderizarListaUsuarios(filtrados);
 }
 
-// 3. Selecionar Usuário e Carregar Suas Permissões
-async function selecionarUsuarioParaPermissoes(userId) {
-    // Remove a classe 'active' de todos os LIs e adiciona ao clicado
-    if (listaUsuariosElement) {
-        Array.from(listaUsuariosElement.children).forEach(li => li.classList.remove('active'));
-        const liSelecionado = listaUsuariosElement.querySelector(`li[data-user-id="${userId}"]`);
-        if (liSelecionado) liSelecionado.classList.add('active');
-    }
-
-    usuarioSelecionadoParaPermissoes = todosOsUsuariosCache.find(u => u.id == userId);
-    if (!usuarioSelecionadoParaPermissoes) {
-        limparAreaPermissoes();
-        return;
-    }
-
-    if (nomeUsuarioPermissoesEl) {
-        nomeUsuarioPermissoesEl.textContent = `Editando permissões para: ${usuarioSelecionadoParaPermissoes.nome}`;
-    }
-
-    // As permissões que vêm de /api/usuarios no GET podem ser as individuais ou as totais.
-    // Para esta tela, precisamos das permissões INDIVIDUAIS que foram explicitamente dadas
-    // (aquelas que não vêm do tipo de usuário).
-    // Se a sua API GET /usuarios já retorna as individuais na propriedade 'permissoes', ótimo.
-    // Caso contrário, pode ser necessário buscar o usuário individualmente:
-    // const usuarioDetalhado = await fetchPermissoesAPI(`/usuarios/${userId}`); // Se tiver essa rota que retorna detalhes
-    // permissoesOriginaisDoUsuario = usuarioDetalhado.permissoes_individuais || [];
+// 3. Selecionar um Usuário
+function selecionarUsuario(usuario) {
+    usuarioSelecionado = usuario;
     
-    // Assumindo que `usuarioSelecionadoParaPermissoes.permissoes` contém as permissões individuais
-    // Se `permissoes` no objeto `usuario` são as totais, você precisaria calcular as individuais
-    // subtraindo as permissões do tipo. Por simplicidade, vamos assumir que `usuarioSelecionadoParaPermissoes.permissoes`
-    // são as permissões individuais que podem ser diretamente gerenciadas/salvas.
-    permissoesOriginaisDoUsuario = Array.isArray(usuarioSelecionadoParaPermissoes.permissoes) 
-        ? [...usuarioSelecionadoParaPermissoes.permissoes] 
-        : [];
-
-    renderizarCheckboxesPermissoes(permissoesOriginaisDoUsuario);
-    if (salvarPermissoesBtnEl) salvarPermissoesBtnEl.disabled = true; // Desabilita salvar até haver mudança
-}
-
-function limparAreaPermissoes() {
-    if (nomeUsuarioPermissoesEl) nomeUsuarioPermissoesEl.textContent = 'Selecione um usuário para ver/editar permissões';
-    if (permissoesCheckboxesContainerEl) permissoesCheckboxesContainerEl.innerHTML = '<p style="text-align:center; color: var(--pu-cor-cinza-texto-secundario);">As permissões para o usuário selecionado aparecerão aqui.</p>';
-    if (salvarPermissoesBtnEl) salvarPermissoesBtnEl.disabled = true;
-    usuarioSelecionadoParaPermissoes = null;
-    permissoesOriginaisDoUsuario = [];
-}
-
-// 4. Renderizar Checkboxes de Permissões (Agrupados)
-function renderizarCheckboxesPermissoes(permissoesAtuaisDoUsuario = []) {
-    if (!permissoesCheckboxesContainerEl) return;
-    permissoesCheckboxesContainerEl.innerHTML = ''; // Limpa
-
-    // Agrupar permissoesDisponiveis por uma nova propriedade 'grupo' se você adicionar ao permissoes.js
-    // Ex: { id: 'criar-op', label: 'Criar Ordem de Produção', grupo: 'Ordens de Produção' }
-    const grupos = {};
-    permissoesDisponiveis.forEach(p => {
-        const grupoNome = p.grupo || 'Outras Permissões'; // Fallback para grupo
-        if (!grupos[grupoNome]) {
-            grupos[grupoNome] = [];
-        }
-        grupos[grupoNome].push(p);
+    // Atualiza a classe 'active' na lista
+    Array.from(listaUsuariosEl.children).forEach(li => {
+        li.classList.toggle('active', li.dataset.userId == usuario.id);
     });
 
-    for (const nomeGrupo in grupos) {
-        const divGrupo = document.createElement('div');
-        divGrupo.className = 'pu-grupo-permissao';
-        
-        const tituloGrupo = document.createElement('h4');
-        tituloGrupo.className = 'pu-grupo-permissao-titulo';
-        tituloGrupo.textContent = nomeGrupo;
-        divGrupo.appendChild(tituloGrupo);
+    nomeUsuarioPermissoesEl.textContent = `Editando permissões para: ${usuario.nome}`;
+    renderizarCheckboxesPermissoes(usuario); // Passa o objeto do usuário inteiro
+    salvarPermissoesBtnEl.disabled = true;
+    permissoesAlteradas = false;
+}
 
-        const gridPermissoes = document.createElement('div');
-        gridPermissoes.className = 'pu-permissoes-grid';
+// 4. RENDERIZAR CHECKBOXES (AGORA COMO UM ACORDEÃO INTERATIVO)
+function renderizarCheckboxesPermissoes(usuario) {
+    permissoesCheckboxesContainerEl.innerHTML = ''; // Limpa a área
 
-        grupos[nomeGrupo].sort((a,b) => a.label.localeCompare(b.label)).forEach(permissao => {
-            const divItem = document.createElement('div');
-            divItem.className = 'pu-permissao-item';
-            
+    // Calcula as permissões que vêm do 'tipo' do usuário (ex: 'admin')
+    const permissoesBase = new Set();
+    (usuario.tipos || []).forEach(tipo => {
+        (permissoesPorTipo[tipo] || []).forEach(p => permissoesBase.add(p));
+    });
+
+    // Cria o container principal do acordeão
+    const acordeaoContainer = document.createElement('div');
+    acordeaoContainer.className = 'pu-acordeao-container';
+
+    // Ordena as categorias em ordem alfabética para consistência
+    const categoriasOrdenadas = Object.keys(permissoesCategorizadas).sort();
+
+    // Itera sobre as categorias ORDENADAS para criar cada item do acordeão
+    for (const categoria of categoriasOrdenadas) {
+        const permissoesDaCategoria = permissoesCategorizadas[categoria];
+
+        // Cria o item do acordeão (que contém título e conteúdo)
+        const itemEl = document.createElement('div');
+        itemEl.className = 'pu-acordeao-item';
+
+        // Cria o título clicável
+        const tituloEl = document.createElement('div');
+        tituloEl.className = 'pu-acordeao-titulo';
+        tituloEl.textContent = categoria; // Ex: "Usuários e Permissões"
+
+        // Cria o container para o conteúdo (que será expandido/recolhido)
+        const conteudoEl = document.createElement('div');
+        conteudoEl.className = 'pu-acordeao-conteudo';
+
+        // Cria a grid para organizar os checkboxes
+        const gridEl = document.createElement('div');
+        gridEl.className = 'pu-permissoes-grid';
+
+        // Adiciona cada permissão da categoria na grid
+        permissoesDaCategoria.sort((a,b) => a.label.localeCompare(b.label)).forEach(permissao => {
+            const permissaoItemEl = document.createElement('div');
+            permissaoItemEl.className = 'pu-permissao-item';
+
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.id = `perm-${permissao.id}`;
-            checkbox.value = permissao.id;
-            checkbox.checked = permissoesAtuaisDoUsuario.includes(permissao.id);
-            checkbox.addEventListener('change', () => {
-                if (salvarPermissoesBtnEl) salvarPermissoesBtnEl.disabled = false; // Habilita ao mudar
-            });
+            checkbox.dataset.permissaoId = permissao.id;
 
+            // Lógica de checked e disabled (sem alterações aqui)
+            checkbox.checked = (usuario.permissoes || []).includes(permissao.id);
+            const ePermissaoBase = permissoesBase.has(permissao.id);
+            if (ePermissaoBase) {
+                checkbox.disabled = true;
+                permissaoItemEl.title = `Permissão herdada do(s) tipo(s): ${usuario.tipos.join(', ')}`;
+            }
+            
             const label = document.createElement('label');
             label.htmlFor = `perm-${permissao.id}`;
             label.textContent = permissao.label;
-            
-            divItem.appendChild(checkbox);
-            divItem.appendChild(label);
-            gridPermissoes.appendChild(divItem);
+
+            permissaoItemEl.appendChild(checkbox);
+            permissaoItemEl.appendChild(label);
+            gridEl.appendChild(permissaoItemEl);
         });
-        divGrupo.appendChild(gridPermissoes);
-        permissoesCheckboxesContainerEl.appendChild(divGrupo);
+
+        // Monta a estrutura: grid dentro do conteúdo, título e conteúdo dentro do item
+        conteudoEl.appendChild(gridEl);
+        itemEl.appendChild(tituloEl);
+        itemEl.appendChild(conteudoEl);
+        
+        // Adiciona o item completo ao container do acordeão
+        acordeaoContainer.appendChild(itemEl);
+
+        // --- LÓGICA DE INTERATIVIDADE DO ACORDEÃO ---
+        tituloEl.addEventListener('click', () => {
+            // Verifica se o item clicado já está ativo
+            const isActive = itemEl.classList.contains('active');
+
+            // Opcional: Fecha todos os outros itens abertos para ter apenas um aberto por vez
+            // Comente a linha abaixo se quiser permitir múltiplos itens abertos simultaneamente
+            acordeaoContainer.querySelectorAll('.pu-acordeao-item.active').forEach(openItem => openItem.classList.remove('active'));
+
+            // Alterna o estado 'active' do item clicado
+            if (!isActive) {
+                itemEl.classList.add('active');
+            }
+            
+            // Anima a abertura/fechamento dos conteúdos
+            acordeaoContainer.querySelectorAll('.pu-acordeao-conteudo').forEach(content => {
+                const parentItem = content.closest('.pu-acordeao-item');
+                if (parentItem.classList.contains('active')) {
+                    // Se o item está ativo, define a max-height para a altura real do conteúdo para animar a abertura
+                    content.style.maxHeight = content.scrollHeight + 'px';
+                    content.style.padding = '0 15px'; // Restaura o padding
+                } else {
+                    // Se não, define a max-height para 0 para animar o fechamento
+                    content.style.maxHeight = '0';
+                    content.style.padding = '0 15px';
+                }
+            });
+        });
     }
+
+    // Adiciona o acordeão completo à página
+    permissoesCheckboxesContainerEl.appendChild(acordeaoContainer);
+
+    // Adiciona o listener de 'change' para habilitar o botão de salvar
+    permissoesCheckboxesContainerEl.addEventListener('change', () => {
+        permissoesAlteradas = true;
+        salvarPermissoesBtnEl.disabled = false;
+    });
 }
 
-// 5. Salvar Permissões Alteradas
-async function salvarPermissoes() {
-    if (!usuarioSelecionadoParaPermissoes || !permissoesCheckboxesContainerEl || !salvarPermissoesBtnEl) return;
 
-    const permissoesSelecionadas = [];
-    permissoesCheckboxesContainerEl.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
-        permissoesSelecionadas.push(cb.value);
-    });
+// 5. SALVAR PERMISSÕES (A CORREÇÃO DO BUG ACONTECE AQUI)
+async function handleSalvarPermissoes() {
+    if (!usuarioSelecionado || !permissoesAlteradas) return;
 
     salvarPermissoesBtnEl.disabled = true;
-    salvarPermissoesBtnEl.innerHTML = '<i class="fas fa-spinner fa-spin pu-spinner-btn-interno"></i> Salvando...';
+    salvarPermissoesBtnEl.innerHTML = '<span class="pu-spinner-btn-interno"></span> Salvando...';
+
+    // Coleta APENAS as permissões INDIVIDUAIS (marcadas e que NÃO estão desabilitadas)
+    const permissoesIndividuaisParaSalvar = [];
+    permissoesCheckboxesContainerEl.querySelectorAll('input[type="checkbox"]:not(:disabled)').forEach(cb => {
+        if (cb.checked) {
+            permissoesIndividuaisParaSalvar.push(cb.dataset.permissaoId);
+        }
+    });
 
     try {
-        // A API PUT /api/usuarios/batch espera um array de usuários.
-        // Aqui estamos salvando para um único usuário, então podemos usar PUT /api/usuarios
-        // que espera um objeto de usuário no corpo, incluindo o array 'permissoes' (individuais).
-        // Ou, se você quer usar a rota /batch, seria um array com um único usuário.
-
-        // Usando PUT /api/usuarios (assumindo que ela aceita a atualização de 'permissoes')
-        const payload = {
-            id: usuarioSelecionadoParaPermissoes.id,
-            permissoes: permissoesSelecionadas // Estas são as permissões INDIVIDUAIS
-        };
-        // Se sua API PUT /usuarios não atualiza o campo 'permissoes', você precisará
-        // da rota PUT /api/usuarios/batch ou uma rota específica para permissões.
-        // Vamos assumir que PUT /usuarios/batch é a preferida e adaptamos o payload.
-        
-        const payloadBatch = [{
-            id: usuarioSelecionadoParaPermissoes.id,
-            permissoes: permissoesSelecionadas
-        }];
-
-        await fetchPermissoesAPI('/usuarios/batch', { // Endpoint da API de lote
+        // Usamos a rota PUT /api/usuarios que é mais simples para um único usuário
+        const usuarioAtualizado = await fetchPermissoesAPI('/usuarios', {
             method: 'PUT',
-            body: JSON.stringify(payloadBatch) 
+            body: JSON.stringify({
+                id: usuarioSelecionado.id,
+                permissoes: permissoesIndividuaisParaSalvar // A API já espera as permissões individuais
+            })
         });
 
-        mostrarPopupPermissoes('Permissões salvas com sucesso!', 'sucesso');
-        permissoesOriginaisDoUsuario = [...permissoesSelecionadas]; // Atualiza o original para o novo estado salvo
-        salvarPermissoesBtnEl.disabled = true; // Desabilita novamente após salvar
+        // --- A CORREÇÃO DO BUG 1 ---
+        // 1. Atualizamos o objeto do usuário no nosso cache com os dados novos do backend
+        const indice = todosOsUsuariosCache.findIndex(u => u.id === usuarioAtualizado.id);
+        if (indice !== -1) {
+            // A sua API retorna 'permissoes_totais', vamos renomear para 'permissoes'
+            // para manter a consistência com o que a lista inicial espera.
+            usuarioAtualizado.permissoes = usuarioAtualizado.permissoes_totais; 
+            delete usuarioAtualizado.permissoes_totais;
+            
+            // Atualiza o cache e a variável de estado
+            todosOsUsuariosCache[indice] = { ...todosOsUsuariosCache[indice], ...usuarioAtualizado };
+            usuarioSelecionado = todosOsUsuariosCache[indice];
+        }
         
-        // Opcional: Recarregar a lista de usuários para refletir quaisquer mudanças (se a API de usuários retornar o usuário atualizado)
-        // await carregarListaUsuarios(); 
-        // E re-selecionar o usuário para atualizar o cache local dele
-        // const usuarioAtualizado = todosOsUsuariosCache.find(u => u.id === usuarioSelecionadoParaPermissoes.id);
-        // if(usuarioAtualizado) usuarioSelecionadoParaPermissoes = usuarioAtualizado;
-
+        // 2. Renderizamos as permissões novamente com os dados atualizados
+        renderizarCheckboxesPermissoes(usuarioSelecionado);
+        
+        mostrarPopupPermissoes('Permissões salvas com sucesso!', 'sucesso');
+        permissoesAlteradas = false; // Reseta o estado de alteração
+        salvarPermissoesBtnEl.disabled = true; // Desabilita o botão até a próxima mudança
 
     } catch (error) {
-        mostrarPopupPermissoes(`Erro ao salvar permissões: ${error.message}`, 'erro');
-        salvarPermissoesBtnEl.disabled = false; // Reabilita em caso de erro
+        mostrarPopupPermissoes(`Erro ao salvar: ${error.message || 'Verifique o console.'}`, 'erro');
+        salvarPermissoesBtnEl.disabled = false; // Reabilita o botão em caso de erro
     } finally {
         salvarPermissoesBtnEl.innerHTML = '<i class="fas fa-save"></i> Salvar Permissões Alteradas';
     }
 }
 
-
-// --- Inicialização ---
+// --- Inicialização da Página ---
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        const auth = await verificarAutenticacao('admin/permissoes-usuarios.html', ['acesso-permissoes-usuarios']);
-        if (!auth) {
-             // verificarAutenticacao já deve redirecionar
-            return; 
-        }
-        usuarioLogadoPermissoes = auth.usuario;
+        await verificarAutenticacao('admin/permissoes-usuarios.html', ['acesso-permissoes-usuarios']);
         document.body.classList.add('autenticado');
 
         // Atribuir elementos DOM
         filtroUsuarioInput = document.getElementById('filtroUsuarioPermissoes');
-        listaUsuariosElement = document.getElementById('listaUsuariosParaPermissao');
+        listaUsuariosEl = document.getElementById('listaUsuariosParaPermissao');
         nomeUsuarioPermissoesEl = document.getElementById('nomeUsuarioPermissoes');
         permissoesCheckboxesContainerEl = document.getElementById('permissoesCheckboxesContainer');
         salvarPermissoesBtnEl = document.getElementById('salvarPermissoesBtn');
 
         await carregarListaUsuarios();
 
-        if (filtroUsuarioInput) {
-            filtroUsuarioInput.addEventListener('input', debounce(filtrarUsuarios, 300));
-        }
-        if (salvarPermissoesBtnEl) {
-            salvarPermissoesBtnEl.addEventListener('click', salvarPermissoes);
-        }
+        filtroUsuarioInput.addEventListener('input', debounce(filtrarUsuarios, 300));
+        salvarPermissoesBtnEl.addEventListener('click', handleSalvarPermissoes);
 
     } catch (error) {
         console.error("Erro na inicialização da página de permissões:", error);
-        mostrarPopupPermissoes("Erro crítico ao carregar a página.", "erro");
     }
 });

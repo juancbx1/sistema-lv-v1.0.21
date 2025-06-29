@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="pt-BR"> 
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meu Dashboard</title>
+    <!-- O CSS e o JS apontarão para os novos arquivos unificados -->
+    <link rel="stylesheet" href="/dashboard/dashboard.css"> 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+</head>
+
+<body class="ds-body"> <!-- Classe genérica 'ds-body' -->
+    
+    <!-- Header -->
+    <header class="ds-cabecalho-pagina">
+        <h1 id="saudacaoUsuario">Carregando...</h1>
+        <div class="ds-info-usuario">
+            <!-- Este span será mostrado ou escondido pelo JS -->
+            <span id="nivelUsuarioContainer" class="ds-nivel-destaque" style="display: none;">
+                Nível: <span id="nivelValor"><i class="fas fa-trophy"></i> N/A</span>
+            </span>
+            <button id="logoutBtn" class="ds-btn ds-btn-perigo">
+                <i class="fas fa-sign-out-alt"></i> Sair
+            </button>
+        </div>
+    </header> 
+
+    <!-- Conteúdo do Dashboard -->
+    <div class="ds-container-principal">
+        <section class="ds-cards-grid">
+            
+            <!-- Card Alcance de Meta -->
+            <div class="ds-card ds-card-meta">
+                <h2 class="ds-card-titulo">Minha Meta Semanal</h2>
+                <div class="ds-meta-controles">
+                    <select id="metaSelect" class="ds-select" disabled></select>
+                    <button id="editarMetaBtn" class="ds-btn ds-btn-outline-primario">
+                        <i class="fas fa-edit"></i> Editar Meta
+                    </button>
+                </div>
+                <div class="ds-progresso-secao">
+                    <div class="ds-progresso-container">
+                        <div class="ds-barra-progresso">
+                            <div id="progressoBarra" class="ds-barra-progresso-preenchimento"></div>
+                        </div>
+                        <p class="ds-pontos-destaque">Pontos: <span id="pontosFeitos">0</span></p>
+                    </div>
+                    <p id="pontosFaltantes" class="ds-texto-apoio">Calculando...</p>
+                    <p id="comissaoGarantida" class="ds-comissao-info" style="display: none;">Comissão já garantida: <span id="valorComissao" class="ds-valor-destaque">R$ 0,00</span></p>
+                    <p id="semMetaBatida" class="ds-sem-meta" style="display: block;">Continue produzindo para alcançar sua meta!</p>
+                </div>
+            </div>
+
+            <!-- Card Produção do Dia -->
+            <div class="ds-card ds-card-producao-dia">
+                <h2 class="ds-card-titulo">Pontos do Dia</h2>
+                <canvas id="graficoProducaoDia"></canvas>
+            </div>
+            
+            <!-- Card Andamento do Ciclo Atual -->
+            <div class="ds-card ds-card-andamento-ciclo">
+                <h2 class="ds-card-titulo" id="tituloAndamentoCiclo">Sua Jornada no Ciclo</h2>
+                <div class="ds-carrossel-ciclo-container">
+                    <button class="ds-carrossel-ciclo-nav ds-carrossel-ciclo-prev" id="cicloCarrosselPrev" aria-label="Semana Anterior">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <div class="ds-carrossel-ciclo-viewport" id="cicloCarrosselViewport">
+                        <div class="ds-carrossel-ciclo-slider" id="cicloCarrosselSlider">
+                            <!-- Slides serão injetados pelo JS -->
+                        </div>
+                    </div>
+                    <button class="ds-carrossel-ciclo-nav ds-carrossel-ciclo-next" id="cicloCarrosselNext" aria-label="Próxima Semana">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+                <div class="ds-carrossel-ciclo-indicadores" id="cicloCarrosselIndicadores"></div>
+                <p id="cicloCarregandoMsg" class="ds-texto-apoio" style="text-align:center; margin-top:15px;">Carregando informações do ciclo...</p>
+            </div>
+
+            <!-- Card Assinatura de Atividades -->
+            <div class="ds-card ds-card-assinatura">
+                <h2 class="ds-card-titulo">Assinaturas Pendentes</h2>
+                <p class="ds-assinatura-descricao">Revise e confirme suas atividades para garantir a precisão dos registros e pagamentos.</p>
+                <button id="btnConferirAssinaturas" class="ds-btn ds-btn-primario">
+                    <i class="fas fa-check-double"></i> Conferir Pendências
+                </button>
+            </div>
+
+            <!-- Card Detalhamento de Atividades (ocupa a largura total) -->
+            <div class="ds-card ds-card-detalhamento ds-card-full-width">
+                <h2 class="ds-card-titulo">Detalhamento das Atividades</h2>
+                <div class="ds-filtros-container">
+                    <div class="ds-filtro-item">
+                        <span id="filtroDia" class="ds-filtro-texto active">Filtrar por Dia</span>
+                        <input type="text" id="datepickerDia" class="ds-input ds-datepicker" placeholder="Selecione o dia">
+                    </div>
+                    <div class="ds-filtro-item">
+                        <span id="filtroSemana" class="ds-filtro-texto">Filtrar por Semana</span>
+                        <span id="datepickerSemanaDisplay" class="ds-input ds-datepicker-display">Selecione a semana</span>
+                        <input type="text" id="datepickerSemana" class="ds-datepicker-oculto">
+                    </div>
+                </div>
+                <p id="totalAtividades" class="ds-total-atividades">TOTAL DE ATIVIDADES (QTD): 0</p>
+                <div class="ds-atividades-wrapper">
+                    <ul id="listaAtividades" class="ds-atividades-lista"></ul>
+                </div>
+                <div id="paginacaoContainer" class="ds-paginacao">
+                    <button id="btnAnterior" class="ds-btn ds-btn-outline-primario">
+                        <i class="fas fa-chevron-left"></i> Anterior
+                    </button>
+                    <div id="paginacaoNumeros" class="ds-paginacao-numeros"></div>
+                    <button id="btnProximo" class="ds-btn ds-btn-outline-primario">
+                        Próximo <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+            
+        </section>
+    </div>
+
+    <!-- Popup de Mensagem (será usado para avisos, erros, etc.) -->
+    <div id="popupGenerico" class="ds-popup-overlay">
+        <div class="ds-popup-mensagem">
+            <i id="popupIcone" class="fas ds-popup-icone"></i>
+            <p id="popupMensagemTexto"></p>
+            <button id="popupBotaoOk" class="ds-btn ds-btn-primario">OK</button>
+        </div>
+    </div>
+    
+    <!-- Modal de Assinatura (será gerado dinamicamente pelo JS) -->
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/i18n/datepicker-pt-BR.js"></script>
+    <script src="/dashboard/dashboard.js" type="module"></script> <!-- Aponta para o novo JS unificado -->
+
+</body>
+</html>

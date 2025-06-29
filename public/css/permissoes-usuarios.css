@@ -164,6 +164,15 @@ body.autenticado { visibility: visible; }
     flex-grow: 1;
 }
 
+.pu-permissao-item input[type="checkbox"]:disabled + label {
+    color: var(--pu-cor-cinza-texto-secundario);
+    cursor: not-allowed;
+}
+
+.pu-permissao-item[title] {
+    cursor: help; /* Mostra um cursor de ajuda ao passar o mouse sobre o item */
+}
+
 /* Botão Salvar */
 .pu-acoes-rodape {
     margin-top: 25px;
@@ -187,6 +196,98 @@ body.autenticado { visibility: visible; }
 .pu-btn-primario { background-color: var(--pu-cor-azul-primario); }
 .pu-btn-primario:hover { background-color: var(--pu-cor-azul-hover); }
 .pu-btn:disabled { background-color: #ccc; cursor: not-allowed; }
+
+/* ==========================================================================
+   ESTILOS PARA O ACORDEÃO DE PERMISSÕES
+   ========================================================================== */
+
+/* Remove a borda e o padding do grupo antigo, pois o acordeão terá seu próprio estilo */
+.pu-grupo-permissao {
+    margin-bottom: 0;
+    padding: 0;
+    border: none;
+    background-color: transparent;
+}
+
+/* Container do acordeão */
+.pu-acordeao-container {
+    border: 1px solid var(--pu-cor-cinza-borda);
+    border-radius: var(--pu-raio-borda-card);
+    overflow: hidden; /* Garante que os cantos arredondados sejam aplicados */
+}
+
+/* Cada item do acordeão (título + conteúdo) */
+.pu-acordeao-item {
+    border-bottom: 1px solid var(--pu-cor-cinza-borda);
+}
+.pu-acordeao-item:last-child {
+    border-bottom: none; /* Remove a borda do último item */
+}
+
+/* Título clicável do acordeão (categoria da permissão) */
+.pu-acordeao-titulo {
+    background-color: #f8f9fa;
+    padding: 12px 15px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+    color: var(--pu-cor-azul-escuro);
+    transition: background-color 0.2s ease;
+}
+
+.pu-acordeao-titulo:hover {
+    background-color: #e9ecef;
+}
+
+/* Ícone de seta (indicador de expandido/recolhido) */
+.pu-acordeao-titulo::after {
+    content: '\f078'; /* Ícone de seta para baixo (Font Awesome) */
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    transition: transform 0.3s ease;
+    font-size: 0.8em;
+}
+
+/* Quando o acordeão está ativo (expandido), a seta aponta para cima */
+.pu-acordeao-item.active .pu-acordeao-titulo::after {
+    transform: rotate(180deg);
+}
+
+/* Container do conteúdo (onde ficam os checkboxes) */
+.pu-acordeao-conteudo {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out, padding 0.3s ease-out;
+    background-color: var(--pu-cor-branco);
+    padding: 0 15px; /* Padding será aplicado quando expandido */
+}
+
+/* A grid de permissões agora fica dentro do conteúdo do acordeão */
+.pu-permissoes-grid {
+    padding: 15px 0; /* Espaçamento interno para a grid */
+    display: grid;
+    /* Usa colunas CSS para se adaptar ao espaço disponível */
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
+
+.pu-permissao-item {
+    font-size: 0.9rem;
+    padding: 6px 8px; /* Padding menor para itens mais compactos */
+    background-color: #fdfdfd;
+}
+
+/* Melhoria de UX: Estilo para permissões herdadas (desabilitadas) */
+.pu-permissao-item input[type="checkbox"]:disabled + label {
+    color: var(--pu-cor-cinza-texto-secundario);
+    cursor: not-allowed;
+}
+
+.pu-permissao-item[title] {
+    cursor: help;
+}
 
 /*------------------------------------*\
     #UTILITÁRIOS (Spinner, Popups com prefixo PU-)

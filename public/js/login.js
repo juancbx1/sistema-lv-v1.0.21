@@ -18,6 +18,30 @@ function limparErro(input) {
   errorMessage.style.display = 'none';
 }
 
+/**
+ * Função centralizada para decidir a URL de redirecionamento.
+ * @param {object} usuario - O objeto do usuário com tipos e permissões.
+ * @returns {string} A URL para a qual o usuário deve ser redirecionado.
+ */
+function decidirRedirecionamento(usuario) {
+  const permissoes = usuario.permissoes || [];
+
+  if (permissoes.includes('acesso-admin-geral')) {
+    // Se tem acesso geral ao admin, vai para a home do admin.
+    return '/admin/home.html';
+  } else if (permissoes.includes('acesso-dashboard')) {
+    // Se não tem acesso admin, mas tem acesso ao dashboard, vai para o dashboard.
+    return '/dashboard/dashboard.html';
+  } else {
+    // Fallback: Se não tem nenhuma das permissões principais, vai para acesso negado
+    // ou para a página de login (o que pode causar um loop, então acesso-negado é melhor).
+    // No entanto, um usuário válido deve ter pelo menos uma dessas.
+    // Redirecionar para a home do admin como um fallback seguro se tiver qualquer outra permissão.
+    console.warn(`Usuário ${usuario.nome_usuario} não tem permissão 'acesso-admin-geral' nem 'acesso-dashboard'. Verifique as permissões por tipo.`);
+    return '/admin/acesso-negado.html'; 
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   const loginForm = document.getElementById('loginForm');
   const nomeUsuarioInput = document.getElementById('nomeUsuario');
@@ -27,50 +51,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   const spinner = loginBtn.querySelector('.loading-spinner');
   const togglePassword = document.querySelector('.toggle-password');
 
-  // Habilitar o botão após o carregamento
   loginBtn.disabled = false;
 
-  // Verificar se já existe um token válido
- const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token');
   const keepLoggedIn = localStorage.getItem('keepLoggedIn') === 'true';
 
   if (token && keepLoggedIn) {
     try {
-      console.log('Verificando token existente...');
       const response = await fetch('/api/usuarios/me', {
         headers: { 'Authorization': `Bearer ${token}` },
       });
-      console.log('Resposta /api/usuarios/me (verificação token existente):', response.status, response.statusText);
+      
       if (response.ok) {
         let usuarioLogado = await response.json();
-        console.log('Usuário ANTES da sincronização (token existente):', JSON.parse(JSON.stringify(usuarioLogado)));
         usuarioLogado = await sincronizarPermissoesUsuario(usuarioLogado);
-        console.log('Usuário DEPOIS da sincronização (token existente):', JSON.parse(JSON.stringify(usuarioLogado)));
         localStorage.setItem('permissoes', JSON.stringify(usuarioLogado.permissoes || []));
 
-        const permissoesUsuario = usuarioLogado.permissoes || [];
-        const tiposUsuario = usuarioLogado.tipos || [];
-        console.log('Permissões (token existente):', permissoesUsuario);
-        console.log('Tipos (token existente):', tiposUsuario);
-
-        let redirectTo = '/home.html'; 
-
-        if (permissoesUsuario.includes('acesso-admin-geral')) {
-            redirectTo = '/admin/home.html';
-        } else if (permissoesUsuario.includes('acesso-dashboard-tiktik')) { // <<< CORRIGIDO AQUI
-            redirectTo = '/tiktik/dashboard-tiktik.html';
-        } else if (tiposUsuario.includes('costureira') && permissoesUsuario.includes('acesso-costureira-dashboard')) {
-            redirectTo = '/costureira/dashboard.html';
-        } else if (permissoesUsuario.length > 0) { 
-            redirectTo = '/admin/home.html';
-        }
+        // *** USA A NOVA FUNÇÃO DE REDIRECIONAMENTO ***
+        const redirectTo = decidirRedirecionamento(usuarioLogado);
         
-        if (!window.location.pathname.toLowerCase().includes(redirectTo.toLowerCase())) {
-            console.log(`Redirecionando (token existente) para: ${redirectTo}`);
-            window.location.href = redirectTo;
-        }
+        console.log(`[Login com Token] Redirecionando para: ${redirectTo}`);
+        window.location.href = redirectTo;
         return;
-
 
       } else {
         localStorage.removeItem('token');
@@ -83,9 +85,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-
-
-  // Toggle de visibilidade da senha
   togglePassword.addEventListener('click', () => {
     const isPassword = senhaInput.type === 'password';
     senhaInput.type = isPassword ? 'text' : 'password';
@@ -93,7 +92,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     togglePassword.classList.toggle('fa-eye-slash', !isPassword);
   });
 
-  // Submissão do formulário
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -141,29 +139,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (usuarioResponse.ok) {
           let usuarioLogado = await usuarioResponse.json();
-          console.log('Usuário ANTES da sincronização (novo login):', JSON.parse(JSON.stringify(usuarioLogado)));
           usuarioLogado = await sincronizarPermissoesUsuario(usuarioLogado);
-          console.log('Usuário DEPOIS da sincronização (novo login):', JSON.parse(JSON.stringify(usuarioLogado)));
           localStorage.setItem('permissoes', JSON.stringify(usuarioLogado.permissoes || []));
 
-          const permissoesUsuario = usuarioLogado.permissoes || [];
-          const tiposUsuario = usuarioLogado.tipos || [];
-          console.log('Permissões (novo login):', permissoesUsuario);
-          console.log('Tipos (novo login):', tiposUsuario);
-
-          let redirectTo = '/home.html';
-
-          if (permissoesUsuario.includes('acesso-admin-geral')) {
-              redirectTo = '/admin/home.html';
-          } else if (permissoesUsuario.includes('acesso-dashboard-tiktik')) { // <<< CORRIGIDO AQUI
-              redirectTo = '/tiktik/dashboard-tiktik.html';
-          } else if (tiposUsuario.includes('costureira') && permissoesUsuario.includes('acesso-costureira-dashboard')) {
-              redirectTo = '/costureira/dashboard.html';
-          } else if (permissoesUsuario.length > 0) { 
-              redirectTo = '/admin/home.html';
-          }
+          // *** USA A NOVA FUNÇÃO DE REDIRECIONAMENTO ***
+          const redirectTo = decidirRedirecionamento(usuarioLogado);
           
-          console.log(`Redirecionando (novo login) para: ${redirectTo}`);
+          console.log(`[Novo Login] Redirecionando para: ${redirectTo}`);
           window.location.href = redirectTo;
 
         } else {
@@ -171,7 +153,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           throw new Error(`Erro ao verificar usuário: ${usuarioResponse.status} - ${errorText}`);
         }
       } else {
-        const error = await response.json().catch(() => ({error: 'Erro desconhecido na resposta do login'}));
+        const error = await response.json().catch(() => ({error: 'Erro desconhecido'}));
         if (error.error === 'Usuário não encontrado') {
           mostrarErro(nomeUsuarioInput, 'Usuário não encontrado');
         } else if (error.error === 'Senha incorreta') {

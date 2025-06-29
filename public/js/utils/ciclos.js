@@ -216,24 +216,40 @@ export function getCicloAtual() {
 }
 
 export function getObjetoCicloCompletoAtual(dataReferencia = new Date()) {
-    const hojeNormalizado = new Date(dataReferencia.getFullYear(), dataReferencia.getMonth(), dataReferencia.getDate());
+    // Normaliza a data de referência para meia-noite no fuso horário local, evitando erros de "dia anterior"
+    const hoje = new Date(dataReferencia.getFullYear(), dataReferencia.getMonth(), dataReferencia.getDate());
 
-    for (const ciclo of ciclos) { // Itera sobre o array 'ciclos' exportado
-        if (ciclo.semanas && ciclo.semanas.length > 0) {
-            // Pega a data de início da primeira semana e a data de fim da última semana do ciclo
-            const inicioPrimeiraSemanaStr = ciclo.semanas[0].inicio;
-            const fimUltimaSemanaStr = ciclo.semanas[ciclo.semanas.length - 1].fim;
+    for (const ciclo of ciclos) {
+        if (!ciclo.semanas || ciclo.semanas.length === 0) continue;
 
-            const inicioCiclo = new Date(inicioPrimeiraSemanaStr);
-            inicioCiclo.setHours(0, 0, 0, 0); // Normaliza para o início do dia
+        for (let i = 0; i < ciclo.semanas.length; i++) {
+            const semana = ciclo.semanas[i];
+            
+            // Converte as strings de data para objetos Date, tratando-as como locais
+            const inicioSemana = new Date(semana.inicio + 'T00:00:00');
+            const fimSemana = new Date(semana.fim + 'T23:59:59');
 
-            const fimCiclo = new Date(fimUltimaSemanaStr);
-            fimCiclo.setHours(23, 59, 59, 999); // Normaliza para o fim do dia
-
-            if (hojeNormalizado >= inicioCiclo && hojeNormalizado <= fimCiclo) {
-                return ciclo; // Retorna o objeto do ciclo inteiro (ex: { nome: "Ciclo 5", semanas: [...] })
+            if (hoje >= inicioSemana && hoje <= fimSemana) {
+                // Encontramos a semana! Agora, criamos um objeto de resposta limpo.
+                const semanaEncontrada = {
+                    ...semana, // Copia 'inicio' e 'fim'
+                    numero_semana: i + 1, // Adiciona o número da semana
+                    // Converte para objetos Date para uso no backend
+                    inicio: inicioSemana, 
+                    fim: fimSemana
+                };
+                
+                // Retorna uma cópia do objeto do ciclo com a semana atual anexada
+                return {
+                    nome: ciclo.nome,
+                    semanas: ciclo.semanas, // Mantém a lista original de semanas
+                    semana: semanaEncontrada // Adiciona a semana atual encontrada
+                };
             }
         }
     }
-    return null; // Nenhum ciclo atual encontrado
+
+    // Se o loop terminar e não encontrar nada
+    console.warn("Nenhum ciclo ou semana ativa encontrada para a data:", hoje);
+    return null;
 }

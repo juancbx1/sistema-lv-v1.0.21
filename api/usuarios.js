@@ -350,4 +350,5 @@ router.delete('/', async (req, res) => {
     }
 });
 
+
 export default router; // Exporta o router para ser usado no seu server.js
