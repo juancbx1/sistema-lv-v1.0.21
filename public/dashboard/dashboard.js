@@ -76,13 +76,15 @@ async function carregarDadosDashboard(forceRefresh = false) {
 /**
  * Função principal que orquestra a atualização de todos os componentes da UI.
  */
-async function atualizarDashboardCompleto(forceRefresh = false) {
-    mostrarSpinnerGeral('Carregando seu desempenho...');
+async function atualizarDashboardCompleto(forceRefresh = false, mostrarSpinner = true) {
+    if (mostrarSpinner) {
+        mostrarSpinnerGeral('Carregando seu desempenho...');
+    }
     
     try {
         const dados = await carregarDadosDashboard(forceRefresh);
         if (!dados) {
-            esconderSpinnerGeral();
+            if (mostrarSpinner) esconderSpinnerGeral();
             return;
         }
 
@@ -90,18 +92,23 @@ async function atualizarDashboardCompleto(forceRefresh = false) {
         const todasAsAtividades = desempenho.atividades || [];
 
         atualizarSaudacaoEInfoUsuario(usuario);
-        // Agora o frontend é responsável por calcular os pontos da semana atual
         atualizarCardMeta(todasAsAtividades, usuario);
-        atualizarGraficoProducao(todasAsAtividades); // O gráfico filtra pelo dia atual
-        await atualizarCardAndamentoCiclo(todasAsAtividades, usuario); // O carrossel filtra por semana do ciclo
-        atualizarCardAssinatura(todasAsAtividades);
+        atualizarGraficoProducao(todasAsAtividades);
+        await atualizarCardAndamentoCiclo(usuario, todasAsAtividades);
+        atualizarBotaoAcaoAssinatura(todasAsAtividades);
+        
+        // CORREÇÃO: Colocamos a chamada de volta aqui
+        await atualizarCentralComunicacao(false); // Passamos 'false' para não mostrar o spinner interno
+        
         atualizarDetalhamentoAtividades(todasAsAtividades);
 
     } catch (error) {
         console.error('[atualizarDashboardCompleto] Erro inesperado ao atualizar a UI:', error);
         mostrarPopup('Ocorreu um erro ao exibir os dados do dashboard.', 'erro');
     } finally {
-        esconderSpinnerGeral();
+        if (mostrarSpinner) {
+            esconderSpinnerGeral();
+        }
     }
 }
 
@@ -230,11 +237,12 @@ document.addEventListener('DOMContentLoaded', async () => {
  */
 function atualizarSaudacaoEInfoUsuario(usuario) {
     const saudacaoEl = document.getElementById('saudacaoUsuario');
+    // APENAS um conjunto de elementos para o nível, agora na Action Bar
     const nivelContainerEl = document.getElementById('nivelUsuarioContainer');
     const nivelValorEl = document.getElementById('nivelValor');
 
     if (!saudacaoEl || !nivelContainerEl || !nivelValorEl) {
-        console.error("Elementos do cabeçalho não encontrados.");
+        console.error("Elementos do cabeçalho ou de nível não encontrados.");
         return;
     }
 
@@ -246,10 +254,10 @@ function atualizarSaudacaoEInfoUsuario(usuario) {
     
     saudacaoEl.textContent = `${saudacao}, ${usuario.nome}!`;
 
-    // Exibe o nível apenas se o usuário tiver um (costureira ou tiktik com nível definido)
+    // Lógica simplificada: só controla um elemento
     if (usuario.nivel) {
-        nivelValorEl.innerHTML = `<i class="fas fa-trophy"></i> ${usuario.nivel}`;
-        nivelContainerEl.style.display = 'inline-flex';
+        nivelValorEl.textContent = usuario.nivel;
+        nivelContainerEl.style.display = 'flex';
     } else {
         nivelContainerEl.style.display = 'none';
     }
@@ -258,7 +266,7 @@ function atualizarSaudacaoEInfoUsuario(usuario) {
 
 /**
  * Atualiza o card de metas, incluindo a barra de progresso e a comissão.
- * @param {number} totalPontosSemana - Total de pontos já calculado.
+ * @param {Array} todasAsAtividades - A lista completa de atividades do usuário.
  * @param {object} usuario - O objeto do usuário (para obter tipo e nível).
  */
 function atualizarCardMeta(todasAsAtividades, usuario) {
@@ -268,40 +276,55 @@ function atualizarCardMeta(todasAsAtividades, usuario) {
     const pontosFaltantesEl = document.getElementById('pontosFaltantes');
     const comissaoGarantidaEl = document.getElementById('comissaoGarantida');
     const valorComissaoEl = document.getElementById('valorComissao');
-    const semMetaBatidaEl = document.getElementById('semMetaBatida'); // Este elemento agora será apenas para o valor da comissão
+    const semMetaBatidaEl = document.getElementById('semMetaBatida');
 
-    // 1. Filtrar atividades para a semana atual
+    // 1. Obter as metas disponíveis
+    const metasDoNivel = obterMetas(usuario.tipo, usuario.nivel);
+    
+    if (!metasDoNivel || metasDoNivel.length === 0) {
+        metaSelectEl.innerHTML = '<option value="">Nenhuma meta configurada</option>';
+        metaSelectEl.disabled = true;
+        document.getElementById('editarMetaBtn').style.display = 'none';
+        progressoBarraEl.style.width = '0%';
+        pontosFeitosEl.textContent = '0';
+        comissaoGarantidaEl.style.display = 'none';
+        if(semMetaBatidaEl) semMetaBatidaEl.style.display = 'none';
+        
+        // Atualiza o status box para o estado "sem meta"
+        pontosFaltantesEl.className = 'ds-meta-status-box status-sem-meta';
+        pontosFaltantesEl.innerHTML = `
+            <i class="fas fa-info-circle ds-status-icon"></i>
+            <span class="ds-status-texto">Não há metas configuradas para seu nível.</span>
+        `;
+        return;
+    } else {
+        document.getElementById('editarMetaBtn').style.display = 'inline-flex';
+    }
+
+    // 2. Obter meta selecionada
+    const pontosMetaSalva = localStorage.getItem(`metaSelecionada_${usuario.nome}`);
+    let metaSelecionada = metasDoNivel.find(m => m.pontos_meta == pontosMetaSalva);
+    if (!metaSelecionada) {
+        metaSelecionada = metasDoNivel[0];
+        if (pontosMetaSalva) {
+            localStorage.setItem(`metaSelecionada_${usuario.nome}`, metaSelecionada.pontos_meta);
+        }
+    }
+    
+    // 3. Calcular pontos da semana
     const cicloInfo = getObjetoCicloCompletoAtual(new Date());
     let totalPontosSemana = 0;
-    
     if (cicloInfo && cicloInfo.semana) {
-        const inicioSemana = cicloInfo.semana.inicio;
-        const fimSemana = cicloInfo.semana.fim;
         const atividadesDaSemana = todasAsAtividades.filter(item => {
             const dataItem = new Date(item.data);
-            return dataItem >= inicioSemana && dataItem <= fimSemana;
+            return dataItem >= cicloInfo.semana.inicio && dataItem <= cicloInfo.semana.fim;
         });
         totalPontosSemana = atividadesDaSemana.reduce((acc, item) => acc + (parseFloat(item.pontos_gerados) || 0), 0);
     } else {
         console.warn("Nenhum ciclo/semana ativa encontrada para o cálculo de metas.");
     }
-    
-    // 2. Obter e popular as metas
-    const metasDoNivel = obterMetas(usuario.tipo, usuario.nivel);
-    if (metasDoNivel.length === 0) {
-        metaSelectEl.innerHTML = '<option value="">Nenhuma meta configurada</option>';
-        pontosFaltantesEl.textContent = 'Não há metas para seu nível.';
-        // Garante que os outros elementos estejam no estado correto
-        progressoBarraEl.style.width = '0%';
-        pontosFeitosEl.textContent = Math.round(totalPontosSemana);
-        comissaoGarantidaEl.style.display = 'none';
-        semMetaBatidaEl.style.display = 'none'; // Esconde este também
-        return;
-    }
 
-    const metaSalva = localStorage.getItem(`metaSelecionada_${usuario.nome}`);
-    let metaSelecionada = metasDoNivel.find(m => m.pontos_meta == metaSalva) || metasDoNivel[0];
-
+    // 4. Atualizar UI de progresso e select
     metaSelectEl.innerHTML = metasDoNivel.map(m => `
         <option value="${m.pontos_meta}" ${m.pontos_meta === metaSelecionada.pontos_meta ? 'selected' : ''}>
             ${m.descricao || 'Meta'}: ${m.pontos_meta} Pontos (R$ ${m.valor.toFixed(2)})
@@ -309,37 +332,47 @@ function atualizarCardMeta(todasAsAtividades, usuario) {
     `).join('');
     metaSelectEl.disabled = true;
 
-    // 3. Atualizar progresso e texto principal
     const pontosMetaAlvo = metaSelecionada.pontos_meta;
     const progressoPercentual = pontosMetaAlvo > 0 ? (totalPontosSemana / pontosMetaAlvo) * 100 : 0;
     
     progressoBarraEl.style.width = `${Math.min(progressoPercentual, 100)}%`;
     pontosFeitosEl.textContent = Math.round(totalPontosSemana);
     
+    // Lógica para o novo Status Box
     const pontosQueFaltam = pontosMetaAlvo - totalPontosSemana;
+
     if (pontosMetaAlvo > 0) {
-        pontosFaltantesEl.innerHTML = pontosQueFaltam > 0 
-            ? `Faltam <span class="highlight">${Math.ceil(pontosQueFaltam)}</span> pontos para a meta selecionada.`
-            : '<span class="ds-texto-sucesso">Parabéns, meta atingida!</span>';
+        if (pontosQueFaltam > 0) {
+            pontosFaltantesEl.className = 'ds-meta-status-box status-progresso';
+            pontosFaltantesEl.innerHTML = `
+                <i class="fas fa-flag-checkered ds-status-icon"></i>
+                <span class="ds-status-texto">Faltam <strong class="highlight">${Math.ceil(pontosQueFaltam)}</strong> pontos para a meta!</span>
+            `;
+        } else {
+            pontosFaltantesEl.className = 'ds-meta-status-box status-concluido';
+            pontosFaltantesEl.innerHTML = `
+                <i class="fas fa-check-circle ds-status-icon"></i>
+                <span class="ds-status-texto">Parabéns, meta atingida!</span>
+            `;
+        }
     } else {
-        pontosFaltantesEl.textContent = 'Selecione uma meta para ver o progresso.';
+        pontosFaltantesEl.className = 'ds-meta-status-box status-sem-meta';
+        pontosFaltantesEl.innerHTML = `
+            <i class="fas fa-info-circle ds-status-icon"></i>
+            <span class="ds-status-texto">Selecione uma meta para ver seu progresso.</span>
+        `;
     }
 
-    // 4. Lógica de comissão simplificada
+    // 5. Atualizar UI da comissão
     const resultadoComissao = calcularComissaoSemanal(totalPontosSemana, usuario.tipo, usuario.nivel);
-
-    // Esconde os dois containers por padrão
     comissaoGarantidaEl.style.display = 'none';
-    semMetaBatidaEl.style.display = 'none';
-
-    if (typeof resultadoComissao === 'number') {
-        // Se bateu alguma meta, mostra o valor da comissão
+    if(semMetaBatidaEl) semMetaBatidaEl.style.display = 'none';
+    if (typeof resultadoComissao === 'number' && resultadoComissao > 0) {
         valorComissaoEl.textContent = `R$ ${resultadoComissao.toFixed(2)}`;
-        comissaoGarantidaEl.style.display = 'block'; // Mostra o "Comissão já garantida"
+        comissaoGarantidaEl.style.display = 'block';
     }
-    // Se não bateu nenhuma meta, não fazemos nada. Nenhum dos dois textos de comissão aparecerá.
-    // A informação de "pontos faltantes" já é suficiente.
 }
+
 
 
 /**
@@ -565,24 +598,195 @@ function dragEndCiclo() {
  * Atualiza o card de assinaturas, mostrando se há pendências.
  * @param {Array} atividades - Lista completa de atividades do usuário.
  */
-function atualizarCardAssinatura(atividades) {
-    const btnConferirEl = document.getElementById('btnConferirAssinaturas');
-    if (!btnConferirEl) return;
+function atualizarBotaoAcaoAssinatura(atividades) {
+    const btnAcao = document.getElementById('btnAcaoAssinatura');
+    const badge = document.getElementById('badgeAssinatura');
+
+    if (!btnAcao || !badge) {
+        console.error("Elementos da Action Bar para assinatura não encontrados.");
+        return;
+    }
 
     const itensNaoAssinados = atividades.filter(item => item.assinada === false);
     
-    btnConferirEl.classList.remove('dt-btn-aviso', 'ds-btn-aviso', 'ds-btn-primario'); // Limpa classes antigas
-
     if (itensNaoAssinados.length > 0) {
-        btnConferirEl.classList.add('ds-btn-aviso');
-        btnConferirEl.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${itensNaoAssinados.length} Pendente(s)`;
+        badge.textContent = itensNaoAssinados.length;
+        badge.style.display = 'flex';
+        btnAcao.classList.add('tem-pendencia');
+        btnAcao.title = `${itensNaoAssinados.length} assinatura(s) pendente(s)`;
     } else {
-        btnConferirEl.classList.add('ds-btn-sucesso');
-        btnConferirEl.innerHTML = `<i class="fas fa-check-double"></i> Tudo assinado!`;
+        badge.style.display = 'none';
+        btnAcao.classList.remove('tem-pendencia');
+        btnAcao.title = 'Nenhuma assinatura pendente';
+    }
+}
+
+/**
+ * Busca os comunicados da API e atualiza o painel lateral e o badge de notificações.
+ * @param {boolean} [mostrarSpinnerNoPainel=true] - Se false, não exibe o spinner dentro do painel.
+ */
+async function atualizarCentralComunicacao(mostrarSpinnerNoPainel = true) {
+    const badgeMural = document.getElementById('badgeMural');
+    const painelBody = document.getElementById('comunicacoes-panel-body');
+
+    if (!badgeMural || !painelBody) {
+        console.error("Elementos da Central de Comunicação não encontrados.");
+        return;
+    }
+
+    if (mostrarSpinnerNoPainel) {
+        painelBody.innerHTML = '<div class="ds-spinner-container"><div class="ds-spinner"></div></div>';
+    }
+
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('/api/comunicacoes', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) {
+            badgeMural.style.display = 'none';
+            throw new Error(`Falha ao buscar comunicados. Status: ${response.status}`);
+        }
+
+        const comunicados = await response.json();
+        
+        const naoLidos = comunicados.filter(c => c && !c.lido).length;
+        if (naoLidos > 0) {
+            badgeMural.textContent = naoLidos;
+            badgeMural.style.display = 'flex';
+        } else {
+            badgeMural.style.display = 'none';
+        }
+
+        // A renderização do painel só acontece se o spinner foi mostrado.
+        // Isso evita que o conteúdo seja renderizado duas vezes desnecessariamente no carregamento inicial.
+        if (mostrarSpinnerNoPainel) {
+            if (comunicados.length === 0) {
+                painelBody.innerHTML = '<p style="text-align:center; padding: 20px;">Nenhuma comunicação no momento.</p>';
+            } else {
+                painelBody.innerHTML = comunicados.map(c => {
+                    if (!c || !c.tipo_post) {
+                        console.warn("Recebido um comunicado inválido ou sem tipo:", c);
+                        return '';
+                    }
+                    
+                    const tipoClasse = `tipo-${c.tipo_post.replace(/\s+/g, '-')}`;
+                    const lidoClasse = c.lido ? '' : 'nao-lido';
+                    const dataFormatada = new Date(c.data_criacao).toLocaleString('pt-BR', {dateStyle: 'short', timeStyle: 'short'});
+
+                    let footerHtml = '';
+                    if (c.tipo_post === 'Mural Geral') {
+                        const classeReagido = c.usuario_curtiu ? 'reagido' : '';
+                        footerHtml = `
+                            <div class="ds-comunicado-card-footer">
+                                <button class="ds-like-btn ${classeReagido}" data-action="reagir" data-id="${c.id}">
+                                    <i class="fas fa-thumbs-up"></i>
+                                    <span>Curtir</span>
+                                </button>
+                                <span class="ds-like-count">${c.total_likes > 0 ? c.total_likes : ''}</span>
+                            </div>
+                        `;
+                    }
+
+                    return `
+                        <div class="ds-comunicado-card ${tipoClasse} ${lidoClasse}" data-id="${c.id}">
+                            <div class="ds-comunicado-card-header">
+                                <strong>${c.nome_autor || 'Autor desconhecido'}</strong> em ${dataFormatada}
+                            </div>
+                            <div class="ds-comunicado-card-body">
+                                <h4>${c.titulo || 'Sem Título'}</h4>
+                                <p>${c.conteudo || 'Sem conteúdo.'}</p>
+                            </div>
+                            ${footerHtml}
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+    } catch (error) {
+        console.error('Erro ao atualizar central de comunicação:', error);
+        // Se a chamada silenciosa falhar, não mostramos um erro na tela, apenas no console.
+        if (mostrarSpinnerNoPainel) {
+            painelBody.innerHTML = '<p style="text-align:center; padding: 20px; color: red;">Erro ao carregar comunicações.</p>';
+        }
+    }
+}
+
+
+/**
+ * Envia para a API o pedido para marcar uma comunicação como lida.
+ * @param {string} id - O ID da comunicação.
+ * @param {HTMLElement} cardElement - O elemento do card para remover o destaque.
+ */
+async function marcarComoLido(id, cardElement) {
+    // Remove o destaque visual imediatamente para uma resposta rápida
+    cardElement.classList.remove('nao-lido');
+
+    // Atualiza o contador no badge
+    const badgeMural = document.getElementById('badgeMural');
+    let contagemAtual = parseInt(badgeMural.textContent, 10);
+    contagemAtual--;
+    if (contagemAtual > 0) {
+        badgeMural.textContent = contagemAtual;
+    } else {
+        badgeMural.style.display = 'none';
     }
     
-    // O evento de clique será adicionado globalmente em configurarEventListenersGerais
+    try {
+        const token = localStorage.getItem('token');
+        await fetch(`/api/comunicacoes/${id}/marcar-como-lido`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        // Não precisamos fazer mais nada em caso de sucesso, a UI já foi atualizada.
+    } catch (error) {
+        console.error(`Erro ao marcar comunicação ${id} como lida:`, error);
+        // Opcional: Adicionar a classe de volta se a API falhar
+        cardElement.classList.add('nao-lido'); 
+    }
 }
+
+/**
+ * Processa o clique no botão de like/unlike, atualizando a UI e chamando a API.
+ * @param {string} id - O ID da comunicação.
+ * @param {HTMLElement} buttonElement - O elemento do botão que foi clicado.
+ */
+async function processarReacao(id, buttonElement) {
+    const card = buttonElement.closest('.ds-comunicado-card');
+    const countElement = card.querySelector('.ds-like-count');
+    let totalLikes = parseInt(countElement.textContent || '0', 10);
+
+    // ATUALIZAÇÃO OTIMISTA DA UI: muda a aparência antes mesmo da resposta da API
+    buttonElement.classList.toggle('reagido');
+    if (buttonElement.classList.contains('reagido')) {
+        totalLikes++;
+    } else {
+        totalLikes--;
+    }
+    countElement.textContent = totalLikes > 0 ? totalLikes : '';
+    
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/api/comunicacoes/${id}/reagir`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tipo_reacao: 'like' })
+        });
+
+        if (!response.ok) throw new Error('Falha ao processar reação.');
+
+        // A API retorna o total de likes atualizado. Podemos usar para corrigir a contagem se necessário.
+        const data = await response.json();
+        countElement.textContent = data.total_likes > 0 ? data.total_likes : '';
+
+    } catch (error) {
+        console.error(`Erro ao processar reação para o post ${id}:`, error);
+        // REVERTE A MUDANÇA NA UI em caso de erro
+        buttonElement.classList.toggle('reagido');
+        alert('Não foi possível registrar sua reação. Tente novamente.');
+    }
+}
+
 
 // ==========================================================================
 // 8. FUNÇÕES DE ATUALIZAÇÃO DA UI - DETALHAMENTO E PAGINAÇÃO
@@ -732,110 +936,382 @@ function renderizarPaginacaoDetalhes(totalPaginas) {
  * @param {Array} itensNaoAssinados - Lista de atividades não assinadas.
  */
 function mostrarModalAssinatura(itensNaoAssinados) {
-    // Remove qualquer modal antigo para evitar duplicatas
     document.getElementById('ds-modal-assinatura-overlay')?.remove();
 
     const overlay = document.createElement('div');
     overlay.id = 'ds-modal-assinatura-overlay';
     overlay.className = 'ds-popup-overlay';
     
+    // ESTRUTURA HTML FINAL COM HEADER, CORPO (SCROLL) E FOOTER (FIXO)
     overlay.innerHTML = `
         <div class="ds-modal-assinatura-content">
-            <h2 class="ds-modal-titulo">Assinaturas Pendentes</h2>
-            <button class="ds-btn-fechar-modal" title="Fechar">X</button>
-            <div class="ds-select-all-container">
-                <input type="checkbox" id="selectAllCheckboxes">
-                <label for="selectAllCheckboxes">Selecionar Todas</label>
+            <div class="ds-modal-header-static">
+                <h2 class="ds-modal-titulo">Conferência de Atividades</h2>
+                <button class="ds-btn-fechar-modal" title="Fechar">X</button>
+                <div class="ds-modal-tabs">
+                    <button class="ds-modal-tab-btn ativo" data-tab="assinar">Assinar Pendências</button>
+                    <button class="ds-modal-tab-btn" data-tab="corrigir">Reportar Problema</button>
+                </div>
             </div>
-            <ul class="ds-lista-assinatura"></ul>
-            <button id="btnAssinarSelecionados" class="ds-btn ds-btn-sucesso" disabled>Assinar Selecionados</button>
+
+            <div class="ds-modal-body-scrollable">
+                <div class="ds-modal-tab-content ativo" id="tab-content-assinar">
+                    <div class="ds-select-all-container">
+                        <input type="checkbox" id="selectAllCheckboxes">
+                        <label for="selectAllCheckboxes">Selecionar Todas</label>
+                    </div>
+                    <ul class="ds-lista-assinatura" id="lista-assinaturas-pendentes"></ul>
+                </div>
+                <div class="ds-modal-tab-content" id="tab-content-corrigir">
+                    <p>Selecione o item e o tipo de problema a ser reportado.</p>
+                    <ul id="lista-itens-para-corrigir" class="ds-lista-assinatura"></ul>
+                    <form id="formCorrecao" class="ds-form-divergencia" style="display:none; margin-top: 15px;">
+                        <div id="selecao-tipo-problema">
+                            <label for="select-tipo-divergencia">Qual o tipo do problema?</label>
+                            <select id="select-tipo-divergencia" class="ds-select">
+                                <option value="">-- Selecione o tipo --</option>
+                                <option value="Quantidade">Quantidade errada</option>
+                                <option value="Cor/Variação">Cor ou Variação errada</option>
+                                <option value="Funcionário Incorreto">Lançamento não é meu</option>
+                                <option value="Outro">Outro problema</option>
+                            </select>
+                        </div>
+                        <div id="campos-problema-container" style="display:none; flex-direction: column; gap: 15px; margin-top: 10px;"></div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="ds-modal-tab-footer">
+                <!-- Botões de ação das abas aparecerão aqui dinamicamente -->
+            </div>
         </div>
     `;
     document.body.appendChild(overlay);
-    
+
     const fecharModal = () => overlay.classList.remove('ativo');
-    
     overlay.querySelector('.ds-btn-fechar-modal').onclick = fecharModal;
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) fecharModal();
-    });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) fecharModal(); });
+    
+    const tabButtons = overlay.querySelectorAll('.ds-modal-tab-btn');
+    const tabContents = overlay.querySelectorAll('.ds-modal-tab-content');
+    const footer = overlay.querySelector('.ds-modal-tab-footer');
 
-    const listaEl = overlay.querySelector('.ds-lista-assinatura');
-    listaEl.innerHTML = itensNaoAssinados.map(item => `
-        <li>
-            <input type="checkbox" class="item-checkbox" value="${item.id_original}" data-tipo="${item.tipo_origem}">
-            <span>
-                <strong>${item.produto} ${item.variacao ? `[${item.variacao}]` : ''}</strong>
-                <em>Qtd: ${item.quantidade} - Pontos: ${(parseFloat(item.pontos_gerados) || 0).toFixed(2)} - Data: ${new Date(item.data).toLocaleDateString('pt-BR')}</em>
-            </span>
-        </li>
-    `).join('');
+    // --- LÓGICA DE RENDERIZAÇÃO E EVENTOS ---
 
-    const btnAssinar = document.getElementById('btnAssinarSelecionados');
-    const selectAll = document.getElementById('selectAllCheckboxes');
-    const checkboxes = overlay.querySelectorAll('.item-checkbox');
+    // Função para renderizar o rodapé correto para a aba ativa
+    const renderizarFooter = (tabAtiva) => {
+        footer.innerHTML = '';
+        if (tabAtiva === 'assinar') {
+            const btnAssinar = document.createElement('button');
+            btnAssinar.id = 'btnAssinarSelecionados';
+            btnAssinar.className = 'ds-btn ds-btn-sucesso';
+            btnAssinar.disabled = true;
+            btnAssinar.textContent = 'Assinar Selecionados';
+            footer.appendChild(btnAssinar);
+            configurarLogicaAssinatura();
+        } else if (tabAtiva === 'corrigir') {
+            // O formulário de correção tem seu próprio botão de submit, então o footer fica vazio
+            // ou pode ter um botão de "Limpar seleção" no futuro.
+        }
+    };
 
-    function atualizarBotaoAssinar() {
-        const selecionados = overlay.querySelectorAll('.item-checkbox:checked').length;
-        btnAssinar.disabled = selecionados === 0;
-        btnAssinar.innerHTML = selecionados > 0 
-            ? `<i class="fas fa-check-square"></i> Assinar ${selecionados} Item(ns)`
-            : 'Assinar Selecionados';
-    }
+    // Função para configurar os eventos da aba de assinatura
+    const configurarLogicaAssinatura = () => {
+        const btnAssinar = document.getElementById('btnAssinarSelecionados');
+        if (!btnAssinar) return;
+        
+        const selectAll = document.getElementById('selectAllCheckboxes');
+        const checkboxes = overlay.querySelectorAll('#lista-assinaturas-pendentes .item-checkbox:not(:disabled)');
+        
+        const atualizarBotaoAssinar = () => {
+            const selecionados = overlay.querySelectorAll('#lista-assinaturas-pendentes .item-checkbox:checked').length;
+            btnAssinar.disabled = selecionados === 0;
+            btnAssinar.innerHTML = selecionados > 0 ? `<i class="fas fa-check-square"></i> Assinar ${selecionados} Item(ns)` : 'Assinar Selecionados';
+        };
 
-    selectAll.onchange = () => {
-        checkboxes.forEach(cb => cb.checked = selectAll.checked);
+        selectAll.onchange = () => { checkboxes.forEach(cb => cb.checked = selectAll.checked); atualizarBotaoAssinar(); };
+        checkboxes.forEach(cb => cb.onchange = atualizarBotaoAssinar);
+        
+       btnAssinar.onclick = async () => {
+            const itensParaAssinar = Array.from(checkboxes).filter(cb => cb.checked).map(cb => ({ id: cb.value, tipo: cb.dataset.tipo }));
+            btnAssinar.disabled = true;
+            btnAssinar.innerHTML = '<div class="ds-spinner" style="width:1em;height:1em;border-width:2px;"></div> Processando...';
+            
+            await executarAssinatura(itensParaAssinar);
+            fecharModal();
+            
+            // CORREÇÃO: Passamos 'false' como terceiro argumento para não mostrar o spinner
+            await atualizarDashboardCompleto(true, false); 
+        };
         atualizarBotaoAssinar();
     };
 
-    checkboxes.forEach(cb => cb.onchange = atualizarBotaoAssinar);
+    // Listener para troca de abas
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            tabButtons.forEach(btn => btn.classList.remove('ativo'));
+            button.classList.add('ativo');
+            const tabId = `tab-content-${button.dataset.tab}`;
+            tabContents.forEach(content => {
+                const parentScrollable = content.closest('.ds-modal-body-scrollable');
+                if (parentScrollable) parentScrollable.scrollTop = 0;
+                content.classList.toggle('ativo', content.id === tabId);
+            });
+            renderizarFooter(button.dataset.tab);
+        });
+    });
 
-    btnAssinar.onclick = async () => {
-        const itensParaAssinar = Array.from(checkboxes)
-            .filter(cb => cb.checked)
-            .map(cb => ({ id: cb.value, tipo: cb.dataset.tipo }));
-        
-        btnAssinar.disabled = true;
-        btnAssinar.innerHTML = '<div class="ds-spinner" style="width:1em;height:1em;border-width:2px;"></div> Processando...';
-        
-        await executarAssinatura(itensParaAssinar);
-        fecharModal();
-        await atualizarDashboardCompleto(true); // Força a recarga total dos dados
-    };
+    // --- LÓGICA DE PREENCHIMENTO DAS LISTAS ---
 
-    // Adiciona a classe 'ativo' para o modal aparecer com a transição
+    // Preenche a lista da ABA 1 (Assinar)
+    const listaAssinaturaEl = document.getElementById('lista-assinaturas-pendentes');
+    if (itensNaoAssinados.length > 0) {
+        listaAssinaturaEl.innerHTML = itensNaoAssinados.map(item => {
+            const isReportado = item.divergencia_pendente;
+            const classeBloqueado = isReportado ? 'bloqueado-por-divergencia' : '';
+            const tipoRegistro = item.tipo_origem === 'OP' ? 'OP' : 'AR';
+            return `
+                <li class="${classeBloqueado}">
+                    <input type="checkbox" class="item-checkbox" value="${item.id_original}" data-tipo="${item.tipo_origem}" ${isReportado ? 'disabled' : ''}>
+                    <span>
+                        <strong>${item.produto} ${item.variacao ? `[${item.variacao}]` : ''}</strong>
+                        <em>${isReportado ? 'Bloqueado - Aguardando análise do supervisor.' : `Qtd: ${item.quantidade} - Tipo: ${tipoRegistro} - Data: ${new Date(item.data).toLocaleDateString('pt-BR')}`}</em>
+                    </span>
+                </li>`;
+        }).join('');
+    } else {
+        document.querySelector('#tab-content-assinar .ds-select-all-container').style.display = 'none';
+        listaAssinaturaEl.innerHTML = `<p style="text-align:center; padding: 40px 20px;">Nenhuma pendência encontrada.</p>`;
+    }
+
+    // Preenche a lista da ABA 2 (Corrigir)
+    const listaCorrecaoEl = document.getElementById('lista-itens-para-corrigir');
+    if (itensNaoAssinados.length > 0) {
+        listaCorrecaoEl.innerHTML = itensNaoAssinados.map((item, index) => {
+            const isReportado = item.divergencia_pendente;
+            const classeReportado = isReportado ? 'divergencia-reportada' : '';
+            const tipoRegistro = item.tipo_origem === 'OP' ? 'OP' : 'AR';
+            return `
+                <li data-index="${index}" class="${classeReportado}">
+                    <input type="radio" name="item-para-corrigir" id="corr-item-${index}" value="${index}" ${isReportado ? 'disabled' : ''}>
+                    <label for="corr-item-${index}" style="width:100%; cursor:inherit;">
+                        <span>
+                            <strong>${item.produto} ${item.variacao ? `[${item.variacao}]` : ''}</strong>
+                            <em>Qtd: ${item.quantidade} - Tipo: ${tipoRegistro} - Data: ${new Date(item.data).toLocaleDateString('pt-BR')}</em>
+                        </span>
+                    </label>
+                    ${isReportado ? '<span class="aviso-divergencia"><i class="fas fa-hourglass-half"></i>Aguardando Análise</span>' : ''}
+                </li>`;
+        }).join('');
+    } else {
+        document.getElementById('tab-content-corrigir').innerHTML = `<p style="text-align:center; padding: 40px 20px;">Nenhuma pendência para corrigir.</p>`;
+    }
+
+    // --- LÓGICA DO FORMULÁRIO DE CORREÇÃO ---
+    const formCorrecao = document.getElementById('formCorrecao');
+    const selectTipoDivergencia = document.getElementById('select-tipo-divergencia');
+    const camposProblemaContainer = document.getElementById('campos-problema-container');
+    
+    let itemSelecionadoParaCorrecao = null;
+    listaCorrecaoEl.addEventListener('click', (e) => {
+        const li = e.target.closest('li');
+        if (!li || li.classList.contains('divergencia-reportada')) {
+            formCorrecao.style.display = 'none'; return;
+        }
+        listaCorrecaoEl.querySelectorAll('li').forEach(item => item.classList.remove('selecionado'));
+        li.classList.add('selecionado');
+        const radio = li.querySelector('input[type="radio"]');
+        if (radio) radio.checked = true;
+        const selectedIndex = li.dataset.index;
+        itemSelecionadoParaCorrecao = itensNaoAssinados[selectedIndex];
+        formCorrecao.style.display = 'flex';
+        selectTipoDivergencia.value = '';
+        camposProblemaContainer.style.display = 'none';
+        camposProblemaContainer.innerHTML = '';
+    });
+
+    selectTipoDivergencia.addEventListener('change', () => {
+        const tipo = selectTipoDivergencia.value;
+        camposProblemaContainer.style.display = 'none';
+        camposProblemaContainer.innerHTML = '';
+        if (!tipo || !itemSelecionadoParaCorrecao) return;
+        let formHtml = '';
+        if (tipo === 'Quantidade') {
+            formHtml = `
+                <div class="ds-info-item"><strong>Qtd. Original Lançada:</strong> ${itemSelecionadoParaCorrecao.quantidade}</div>
+                <div>
+                    <label for="input-qtd-correta">Qual a quantidade correta?</label>
+                    <input type="number" id="input-qtd-correta" class="ds-input" required min="0">
+                </div>`;
+        }
+        formHtml += `
+            <div>
+                <label for="input-obs-correcao">Observação (obrigatório):</label>
+                <textarea id="input-obs-correcao" class="ds-input" rows="3" required placeholder="Descreva o problema em detalhes. Ex: A cor lançada foi 'Preto' mas a correta é 'Azul'."></textarea>
+            </div>
+            <button type="submit" class="ds-btn ds-btn-aviso">Enviar para Correção</button>`;
+        camposProblemaContainer.innerHTML = formHtml;
+        camposProblemaContainer.style.display = 'flex';
+    });
+
+    formCorrecao.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const radioChecked = listaCorrecaoEl.querySelector('input[type="radio"]:checked');
+        if (!radioChecked || !itemSelecionadoParaCorrecao) {
+            mostrarPopup('Por favor, selecione um item da lista para corrigir.', 'aviso'); return;
+        }
+        const btnEnviar = formCorrecao.querySelector('button[type="submit"]');
+        btnEnviar.disabled = true;
+        btnEnviar.innerHTML = '<div class="ds-spinner" style="width:1em;height:1em;border-width:2px;"></div> Enviando...';
+        
+        const payload = {
+            id_registro: itemSelecionadoParaCorrecao.id_original,
+            tipo_registro: itemSelecionadoParaCorrecao.tipo_origem.toLowerCase() === 'op' ? 'producao' : 'arremate',
+            tipo_divergencia: selectTipoDivergencia.value,
+            observacao: document.getElementById('input-obs-correcao').value,
+            quantidade_original: itemSelecionadoParaCorrecao.quantidade,
+            quantidade_correta_reportada: document.getElementById('input-qtd-correta')?.value || null,
+        };
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch('/api/divergencias/reportar', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Falha ao enviar o reporte.');
+            
+            mostrarPopup(data.message || 'Reporte enviado com sucesso!', 'sucesso');
+            fecharModal();
+
+            // CORREÇÃO: Passamos 'false' como segundo argumento para não mostrar o spinner
+            await atualizarDashboardCompleto(true, false);
+
+        } catch (error) {
+            console.error('[formCorrecao.submit] Erro:', error);
+            mostrarPopup(error.message, 'erro');
+        } finally {
+            btnEnviar.disabled = false;
+            btnEnviar.innerHTML = 'Enviar para Correção';
+        }
+    });
+
+    // --- INICIALIZAÇÃO FINAL ---
+    renderizarFooter('assinar');
     requestAnimationFrame(() => overlay.classList.add('ativo'));
 }
 
 /**
- * Envia as assinaturas para a API.
+ * Coleta informações sobre o dispositivo e, opcionalmente, a geolocalização.
+ * @returns {Promise<object>} Uma promessa que resolve para um objeto com os dados coletados.
+ */
+function coletarDadosDeAssinatura() {
+    return new Promise((resolve) => {
+        // 1. Coleta os dados síncronos imediatamente
+        const dados = {
+            timestamp_iso: new Date().toISOString(),
+            fuso_horario: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            user_agent: navigator.userAgent,
+            resolucao_tela: `${window.screen.width}x${window.screen.height}`,
+            geolocalizacao: null // Inicia como nulo
+        };
+
+        // 2. Tenta obter a geolocalização de forma assíncrona
+        if ('geolocation' in navigator) {
+            navigator.geolocation.getCurrentPosition(
+                // Callback de sucesso
+                (position) => {
+                    dados.geolocalizacao = {
+                        latitude: position.coords.latitude,
+                        longitude: position.coords.longitude,
+                        precisao: position.coords.accuracy,
+                        timestamp: new Date(position.timestamp).toISOString()
+                    };
+                    resolve(dados);
+                },
+                // Callback de erro
+                (error) => {
+                    console.warn('Erro ao obter geolocalização:', error.message);
+                    dados.geolocalizacao = { error: error.message }; // Registra o erro
+                    resolve(dados);
+                },
+                // Opções
+                {
+                    enableHighAccuracy: true, // Tenta obter a localização mais precisa possível
+                    timeout: 5000,          // Tempo máximo de espera: 5 segundos
+                    maximumAge: 0           // Força a obtenção de uma nova localização
+                }
+            );
+        } else {
+            // Se o navegador não suporta geolocalização
+            console.warn('Geolocalização não é suportada por este navegador.');
+            dados.geolocalizacao = { error: 'Não suportado pelo navegador' };
+            resolve(dados);
+        }
+    });
+}
+
+/**
+ * Envia as assinaturas para a API, incluindo os dados de evidência.
  * @param {Array} itensParaAssinar - Array de objetos {id, tipo}.
  */
 async function executarAssinatura(itensParaAssinar) {
     const token = localStorage.getItem('token');
-    const producoesOP = itensParaAssinar.filter(i => i.tipo === 'OP').map(i => i.id);
+    
+    // Separa os IDs por tipo
+    const producoesOP = itensParaAssinar.filter(i => i.tipo === 'OP' || i.tipo === 'producao').map(i => i.id);
     const arremates = itensParaAssinar.filter(i => i.tipo === 'Arremate').map(i => i.id);
 
     try {
+        // Coleta os dados de assinatura ANTES de qualquer chamada à API
+        const dadosColetados = await coletarDadosDeAssinatura();
+        const tipoUsuario = dadosDashboardCache.usuario.tipo;
+
+        // Assinatura de Produções (Costureira ou TikTik)
         if (producoesOP.length > 0) {
-            // A API de produções espera um ID de cada vez
+            let endpoint, body;
             for (const id of producoesOP) {
-                const res = await fetch('/api/producoes', {
+                if (tipoUsuario === 'costureira') {
+                    endpoint = '/api/producoes';
+                    body = { id: id, assinada: true, dadosColetados: dadosColetados };
+                } else if (tipoUsuario === 'tiktik') {
+                    endpoint = '/api/producoes/assinar-tiktik-op';
+                    body = { id_producao_op: id, dadosColetados: dadosColetados };
+                } else {
+                    // Caso de segurança, não deveria acontecer
+                    continue;
+                }
+
+                const res = await fetch(endpoint, {
                     method: 'PUT',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: id, assinada: true }) // Endpoint genérico de PUT
+                    body: JSON.stringify(body)
                 });
-                if (!res.ok) throw new Error(`Falha ao assinar produção OP ID ${id}`);
+
+                if (!res.ok) {
+                    const errorData = await res.json();
+                    throw new Error(`Falha ao assinar produção ID ${id}: ${errorData.error}`);
+                }
             }
         }
+
+        // Assinatura de Arremates (TikTik)
         if (arremates.length > 0) {
             const res = await fetch('/api/arremates/assinar-lote', {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids_arremates: arremates })
+                body: JSON.stringify({ 
+                    ids_arremates: arremates, 
+                    dadosColetados: dadosColetados 
+                })
             });
-            if (!res.ok) throw new Error('Falha ao assinar lote de arremates.');
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(`Falha ao assinar lote de arremates: ${errorData.error}`);
+            }
         }
+        
         mostrarPopup('Atividades assinadas com sucesso!', 'sucesso');
     } catch (error) {
         console.error('[executarAssinatura] Erro:', error);
@@ -849,6 +1325,8 @@ async function executarAssinatura(itensParaAssinar) {
 // ==========================================================================
 
 function configurarEventListenersGerais() {
+    console.log("DEBUG: Configurando todos os Event Listeners...");
+
     // Listener para o botão de Logout
     document.getElementById('logoutBtn')?.addEventListener('click', logout);
 
@@ -857,7 +1335,6 @@ function configurarEventListenersGerais() {
         const metaSelectEl = document.getElementById('metaSelect');
         const editarMetaBtnEl = document.getElementById('editarMetaBtn');
         if (!metaSelectEl || !editarMetaBtnEl || !usuarioLogado) return;
-
         if (metaSelectEl.disabled) {
             metaSelectEl.disabled = false;
             editarMetaBtnEl.innerHTML = '<i class="fas fa-save"></i> Confirmar';
@@ -867,24 +1344,133 @@ function configurarEventListenersGerais() {
             editarMetaBtnEl.innerHTML = '<i class="fas fa-edit"></i> Editar Meta';
             const novaMetaPontos = metaSelectEl.value;
             localStorage.setItem(`metaSelecionada_${usuarioLogado.nome}`, novaMetaPontos);
-            
             if (dadosDashboardCache) {
-                // A função `atualizarCardMeta` já foi corrigida para filtrar os dados da semana
                 atualizarCardMeta(dadosDashboardCache.desempenho.atividades, dadosDashboardCache.usuario);
             }
             mostrarPopup('Sua meta foi atualizada!', 'sucesso');
         }
     });
 
-    // Listener para o botão Conferir Assinaturas
-    document.getElementById('btnConferirAssinaturas')?.addEventListener('click', () => {
+    // Listener para o botão de Ação de Assinatura
+    document.getElementById('btnAcaoAssinatura')?.addEventListener('click', () => {
         const naoAssinados = dadosDashboardCache?.desempenho?.atividades.filter(item => !item.assinada) || [];
         if (naoAssinados.length > 0) {
             mostrarModalAssinatura(naoAssinados);
         } else {
-            mostrarPopup('Parabéns! Todas as suas atividades já estão assinadas.', 'info');
+            mostrarPopup('Você não tem nenhuma assinatura pendente. Parabéns!', 'sucesso');
         }
     });
+
+    // --- DEBUD E CORREÇÃO DA CENTRAL DE COMUNICAÇÃO ---
+    console.log("DEBUG: Procurando elementos da Central de Comunicação...");
+    const btnAcaoMural = document.getElementById('btnAcaoMural');
+    const overlayComunicacoes = document.getElementById('comunicacoes-overlay');
+    const btnFecharPanel = document.getElementById('fechar-panel-comunicacoes');
+    const painelBody = document.getElementById('comunicacoes-panel-body');
+
+    if (btnAcaoMural && overlayComunicacoes && btnFecharPanel && painelBody) {
+        console.log("DEBUG: Elementos da Central de Comunicação ENCONTRADOS. Adicionando listeners...");
+
+        const togglePanelComunicacoes = (abrir = true) => {
+            console.log(`DEBUG: togglePanelComunicacoes chamado com abrir = ${abrir}`);
+            if (abrir) {
+                overlayComunicacoes.classList.add('ativo');
+            } else {
+                overlayComunicacoes.classList.remove('ativo');
+            }
+        };
+
+        btnAcaoMural.addEventListener('click', () => {
+            console.log("DEBUG: Botão do Mural (megafone) clicado!");
+            
+            // CHAMA A FUNÇÃO PARA BUSCAR OS DADOS
+            atualizarCentralComunicacao();
+            
+            // ABRE O PAINEL
+            togglePanelComunicacoes(true);
+        });
+
+        btnFecharPanel.addEventListener('click', () => togglePanelComunicacoes(false));
+        
+        overlayComunicacoes.addEventListener('click', (e) => {
+            if (e.target === overlayComunicacoes) {
+                togglePanelComunicacoes(false);
+            }
+        });
+
+        painelBody.addEventListener('click', (e) => {
+            // Tenta encontrar um botão de like que foi clicado
+            const likeButton = e.target.closest('button[data-action="reagir"]');
+            if (likeButton) {
+                const idComunicacao = likeButton.dataset.id;
+                processarReacao(idComunicacao, likeButton);
+                return; // Encerra a função aqui, pois a ação foi de like
+            }
+
+            // Se não foi um clique no botão de like, verifica se foi no card não lido
+            const cardNaoLido = e.target.closest('.ds-comunicado-card.nao-lido');
+            if (cardNaoLido) {
+                const idComunicacao = cardNaoLido.dataset.id;
+                marcarComoLido(idComunicacao, cardNaoLido);
+                return; // Encerra a função aqui
+            }
+        });
+    } else {
+        // Se algum elemento não for encontrado, este log nos dirá qual é.
+        console.error("DEBUG: FALHA! Um ou mais elementos da Central de Comunicação não foram encontrados no DOM.");
+        console.log({btnAcaoMural, overlayComunicacoes, btnFecharPanel, painelBody});
+    }
+
+    // --- Listeners para o modal de Ponto de Atenção ---
+    // (O resto do código desta seção permanece o mesmo)
+    const modalPA = document.getElementById('modal-ponto-atencao');
+    const btnNovoPA = document.getElementById('btn-novo-ponto-atencao');
+    const btnCancelarPA = document.getElementById('btn-cancelar-pa');
+    const formPA = document.getElementById('form-ponto-atencao');
+
+    const fecharModalPA = () => modalPA.classList.remove('ativo');
+    const abrirModalPA = () => modalPA.classList.add('ativo');
+
+    if (modalPA && btnNovoPA && btnCancelarPA && formPA) {
+        btnNovoPA.addEventListener('click', abrirModalPA);
+        btnCancelarPA.addEventListener('click', fecharModalPA);
+        modalPA.addEventListener('click', (e) => {
+            if (e.target === modalPA) fecharModalPA();
+        });
+
+        formPA.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btnSubmit = formPA.querySelector('button[type="submit"]');
+            btnSubmit.disabled = true;
+            btnSubmit.innerHTML = '<div class="ds-spinner" style="width:1em;height:1em;border-width:2px;"></div> Enviando...';
+
+            const titulo = document.getElementById('input-pa-titulo').value;
+            const conteudo = document.getElementById('textarea-pa-conteudo').value;
+
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch('/api/comunicacoes', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ titulo, conteudo })
+                });
+
+                if (!response.ok) throw new Error('Falha ao enviar Ponto de Atenção.');
+                
+                mostrarPopup('Ponto de Atenção enviado com sucesso!', 'sucesso');
+                formPA.reset();
+                fecharModalPA();
+                togglePanelComunicacoes(false);
+                await atualizarCentralComunicacao();
+
+            } catch (error) {
+                mostrarPopup(error.message, 'erro');
+            } finally {
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = 'Enviar';
+            }
+        });
+    }
 
     // Configuração dos Filtros de Data com jQuery Datepicker
     const datepickerDiaEl = $('#datepickerDia');
@@ -910,12 +1496,9 @@ function configurarEventListenersGerais() {
             dateFormat: 'dd/mm/yy',
             onSelect: (dateText) => {
                 dataSelecionadaSemana = datepickerSemanaEl.datepicker('getDate');
-                // *** A LÓGICA CORRIGIDA ESTÁ AQUI ***
                 if (dataSelecionadaSemana) {
-                    // A nova função formatarData cuidará de encontrar o início e o fim corretos
                     $('#datepickerSemanaDisplay').text(`${formatarData(dataSelecionadaSemana, 'inicioSemana')} - ${formatarData(dataSelecionadaSemana, 'fimSemana')}`);
                 }
-                // *** FIM DA CORREÇÃO ***
                 filtroAtivo = 'semana';
                 paginaAtualDetalhes = 1;
                 document.getElementById('filtroSemana').classList.add('active');
@@ -925,8 +1508,6 @@ function configurarEventListenersGerais() {
                 }
             }
         });
-
-        // Seta o texto inicial do display da semana
         if (dadosDashboardCache && dadosDashboardCache.periodo) {
             dataSelecionadaSemana = new Date(dadosDashboardCache.periodo.inicio);
             $('#datepickerSemanaDisplay').text(`${formatarData(dataSelecionadaSemana, 'inicioSemana')} - ${formatarData(dataSelecionadaSemana, 'fimSemana')}`);
@@ -969,8 +1550,6 @@ function configurarEventListenersGerais() {
 
     document.getElementById('btnProximo')?.addEventListener('click', () => {
         if (dadosDashboardCache) {
-            // A validação para não passar do limite é feita dentro de renderizarPaginacaoDetalhes
-            // que desabilita o botão, então este clique é seguro.
             paginaAtualDetalhes++;
             atualizarDetalhamentoAtividades(dadosDashboardCache.desempenho.atividades);
         }

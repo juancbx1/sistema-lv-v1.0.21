@@ -27,6 +27,9 @@ import uploadRouter from './api/upload.js';
 import promessasRouter from './api/producao-promessas.js';
 import embalagensRouter from './api/embalagens.js';
 import dashboardRouter from './api/dashboard.js';
+import auditoriaRouter from './api/auditoria.js';
+import comunicacoesRouter from './api/comunicacoes.js';
+import ticketsRouter from './api/tickets.js'; 
 
 
 const app = express();
@@ -63,7 +66,10 @@ const routers = {
     precificacaoConfigRouter,
     niveisEstoqueRouter,
     embalagensRouter,
-    dashboardRouter
+    dashboardRouter,
+    auditoriaRouter,
+    comunicacoesRouter,
+    ticketsRouter
 };
 for (const routerName in routers) {
     if (!routers[routerName] || typeof routers[routerName] !== 'function') {
@@ -94,6 +100,10 @@ app.use('/api/upload', uploadRouter);
 app.use('/api/producao-promessas', promessasRouter);
 app.use('/api/embalagens', embalagensRouter);
 app.use('/api/dashboard', dashboardRouter);
+app.use('/api/auditoria', auditoriaRouter);
+app.use('/api/comunicacoes', comunicacoesRouter);
+app.use('/api/tickets', ticketsRouter);
+
 
 app.get('/api/ping', (req, res) => res.status(200).json({ message: 'pong do server.js' }));
 console.log("Rota /api/ping configurada.");

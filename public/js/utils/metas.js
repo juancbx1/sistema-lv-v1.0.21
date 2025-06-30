@@ -5,28 +5,28 @@ const metasConfig = {
     // Metas para o tipo 'costureira'
     costureira: {
         1: [
-            { pontos_meta: 2175, valor: 40, descricao: "Meta 1" },
-            { pontos_meta: 2375, valor: 50, descricao: "Meta 2" },
-            { pontos_meta: 2575, valor: 70, descricao: "Meta 3" },
-            { pontos_meta: 3075, valor: 110, descricao: "Meta 4" }
+            { pontos_meta: 2175, valor: 40, descricao: "Meta Bronze" },
+            { pontos_meta: 2375, valor: 50, descricao: "Meta Prata" },
+            { pontos_meta: 2575, valor: 70, descricao: "Meta Ouro" },
+            { pontos_meta: 3075, valor: 110, descricao: "Meta Diamante" }
         ],
         2: [
-            { pontos_meta: 2050, valor: 50, descricao: "Meta 1" },
-            { pontos_meta: 2200, valor: 70, descricao: "Meta 2" },
-            { pontos_meta: 2400, valor: 90, descricao: "Meta 3" },
-            { pontos_meta: 2925, valor: 130, descricao: "Meta 4" }
+            { pontos_meta: 2050, valor: 50, descricao: "Meta Bronze" },
+            { pontos_meta: 2200, valor: 70, descricao: "Meta Prata" },
+            { pontos_meta: 2400, valor: 90, descricao: "Meta Ouro" },
+            { pontos_meta: 2975, valor: 130, descricao: "Meta Diamante" }
         ],
         3: [
-            { pontos_meta: 1900, valor: 45, descricao: "Meta 1" },
-            { pontos_meta: 2100, valor: 75, descricao: "Meta 2" },
-            { pontos_meta: 2200, valor: 95, descricao: "Meta 3" },
-            { pontos_meta: 2300, valor: 115, descricao: "Meta 4" },
+            { pontos_meta: 1900, valor: 45, descricao: "Meta Bronze" },
+            { pontos_meta: 2100, valor: 75, descricao: "Meta Prata" },
+            { pontos_meta: 2200, valor: 95, descricao: "Meta Ouro" },
+            { pontos_meta: 2300, valor: 115, descricao: "Meta Diamante" },
         ],
         4: [
-            { pontos_meta: 1600, valor: 90, descricao: "Meta 1" },
-            { pontos_meta: 1900, valor: 110, descricao: "Meta 2" },
-            { pontos_meta: 2200, valor: 130, descricao: "Meta 3" },
-            { pontos_meta: 2300, valor: 150, descricao: "Meta 4" },
+            { pontos_meta: 1600, valor: 90, descricao: "Meta Bronze" },
+            { pontos_meta: 1900, valor: 110, descricao: "Meta Prata" },
+            { pontos_meta: 2200, valor: 130, descricao: "Meta Ouro" },
+            { pontos_meta: 2300, valor: 150, descricao: "Meta Diamante" },
         ]
     },
     // Metas para o tipo 'tiktik' - AGORA COM NÍVEIS

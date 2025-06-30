@@ -308,8 +308,9 @@ router.put('/:id_arremate/registrar-embalagem', async (req, res) => {
 
 //ENDPOINT PARA TIKTIK ASSINAR UM LOTE DE ARREMATES
 router.put('/assinar-lote', async (req, res) => {
-    const { usuarioLogado } = req; // Do token (Tiktik)
-    const { ids_arremates } = req.body; // Espera um array de IDs
+    const { usuarioLogado } = req;
+    // NOVO: Recebe o objeto 'dadosColetados'
+    const { ids_arremates, dadosColetados } = req.body;
     let dbClient;
 
     if (!Array.isArray(ids_arremates) || ids_arremates.length === 0) {
@@ -320,46 +321,57 @@ router.put('/assinar-lote', async (req, res) => {
         dbClient = await pool.connect();
         const permissoesUsuario = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
 
-        // Verificar se o usuário é um Tiktik e tem permissão para assinar seus arremates
-        // (Você pode criar uma permissão específica como 'assinar-proprio-arremate')
-        if (!permissoesUsuario.includes('assinar-proprio-arremate')) { // CRIE ESSA PERMISSÃO
+        // Assumi que você criará esta permissão
+        if (!permissoesUsuario.includes('assinar-arremate-tiktik')) {
              return res.status(403).json({ error: 'Permissão negada para assinar arremates.' });
         }
 
-        // Garantir que todos os arremates pertencem ao Tiktik logado antes de atualizar
-        // Isso é uma camada extra de segurança, embora a query de UPDATE também filtre.
-        const checkOwnerQuery = `
-            SELECT id FROM arremates 
-            WHERE id = ANY($1::int[]) AND usuario_tiktik != $2; 
-        `;
-        // Converte para INT se seus IDs são numéricos. Se forem UUIDs/TEXT, ajuste o ::int[]
-        const nonOwnedArremates = await dbClient.query(checkOwnerQuery, [ids_arremates, usuarioLogado.nome]);
+        // Inicia a transação
+        await dbClient.query('BEGIN');
 
-        if (nonOwnedArremates.rows.length > 0) {
-            return res.status(403).json({ 
-                error: 'Alguns dos arremates selecionados não pertencem a você ou não existem.',
-                detalhes: nonOwnedArremates.rows.map(r => r.id)
-            });
-        }
-        
+        // 1. Atualiza todos os arremates do lote para 'assinada = true'
         const updateResult = await dbClient.query(
-            'UPDATE arremates SET assinada = TRUE WHERE id = ANY($1::int[]) AND usuario_tiktik = $2 RETURNING id, assinada',
-            // Ajuste $1::int[] para $1::text[] se seus IDs de arremate forem strings/UUIDs
+            `UPDATE arremates SET assinada = TRUE 
+             WHERE id = ANY($1::int[]) 
+             AND usuario_tiktik = $2 
+             AND assinada = FALSE -- Garante que não estamos re-assinando
+             RETURNING id, assinada`,
             [ids_arremates, usuarioLogado.nome] 
         );
 
         if (updateResult.rowCount === 0) {
-            return res.status(404).json({ error: 'Nenhum arremate foi atualizado. Verifique os IDs ou se já estavam assinados.' });
+            // Se nenhum registro foi atualizado, pode ser que já estivessem assinados ou não pertencem ao usuário.
+            // Não é um erro, então não damos rollback, apenas informamos.
+            await dbClient.query('COMMIT'); // Finaliza a transação vazia
+            return res.status(200).json({ 
+                message: 'Nenhum arremate novo foi assinado. Eles podem já ter sido assinados ou os IDs são inválidos.',
+                atualizados: []
+            });
         }
         
-        // Se precisar retornar todos os arremates atualizados, pode fazer um SELECT depois.
-        // Por ora, uma mensagem de sucesso e a contagem.
+        // 2. Para cada arremate que foi efetivamente atualizado, insere um log
+        const idsAtualizados = updateResult.rows.map(r => r.id);
+        const logInsertPromises = idsAtualizados.map(arremateId => {
+            return dbClient.query(
+                `INSERT INTO log_assinaturas (id_usuario, id_arremate, dados_coletados) VALUES ($1, $2, $3)`,
+                [usuarioLogado.id, arremateId, dadosColetados || null]
+            );
+        });
+
+        // Executa todas as inserções de log em paralelo
+        await Promise.all(logInsertPromises);
+
+        // Confirma a transação
+        await dbClient.query('COMMIT');
+        
         res.status(200).json({ 
             message: `${updateResult.rowCount} arremate(s) assinado(s) com sucesso.`,
             atualizados: updateResult.rows 
         });
 
     } catch (error) {
+        // Se der erro, desfaz a transação
+        if (dbClient) await dbClient.query('ROLLBACK');
         console.error('[API /arremates/assinar-lote PUT] Erro:', error.message);
         res.status(500).json({ error: 'Erro interno ao assinar arremates.', details: error.message });
     } finally {

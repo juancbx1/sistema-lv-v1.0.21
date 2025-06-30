@@ -102,6 +102,13 @@ body.ds-body.autenticado {
     gap: 15px;
 }
 
+.ds-info-usuario-principal {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap; /* Para telas menores */
+}
+
 .ds-cabecalho-pagina h1 {
     font-size: 1.7rem;
     color: var(--ds-cor-azul-escuro);
@@ -114,26 +121,85 @@ body.ds-body.autenticado {
     gap: 20px;
 }
 
-.ds-nivel-destaque {
-    font-size: 0.9rem;
-    font-weight: 500;
-    color: var(--ds-cor-texto-principal);
-    background-color: var(--ds-cor-cinza-claro-fundo);
-    padding: 6px 12px;
-    border-radius: var(--ds-raio-borda);
-    display: inline-flex;
+/* A Nova Barra de Ações */
+.ds-action-bar {
+    display: flex;
     align-items: center;
-    gap: 8px;
-    border: 1px solid var(--ds-cor-cinza-borda);
+    gap: 12px;
 }
 
-.ds-nivel-destaque #nivelValor {
+.ds-action-btn {
+    position: relative;
+    background-color: transparent;
+    border: 2px solid var(--ds-cor-cinza-borda);
+    color: var(--ds-cor-cinza-texto-secundario);
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease-in-out;
+}
+
+.ds-action-btn:hover:not(:disabled) {
+    background-color: var(--ds-cor-primaria);
+    border-color: var(--ds-cor-primaria);
+    color: var(--ds-cor-branco);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.ds-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: var(--ds-cor-cinza-claro-fundo);
+}
+
+/* Badge de Notificação */
+.ds-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background-color: var(--ds-cor-perigo);
+    color: var(--ds-cor-branco);
+    border-radius: 50%;
+    min-width: 22px;
+    height: 22px;
+    font-size: 0.8rem;
     font-weight: bold;
-    color: var(--ds-cor-primaria);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--ds-cor-branco);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 
-.ds-nivel-destaque .fa-trophy {
-    color: var(--ds-cor-aviso);
+/* Badge específico para assinatura quando tiver pendência */
+#btnAcaoAssinatura.tem-pendencia .fa-file-signature {
+    animation: ds-shake 0.8s cubic-bezier(.36,.07,.19,.97) both;
+}
+#btnAcaoAssinatura.tem-pendencia .ds-badge {
+    background-color: var(--ds-cor-aviso);
+    color: var(--ds-cor-texto-botao-escuro);
+}
+
+@keyframes ds-shake {
+  10%, 90% { transform: translate3d(-1px, 0, 0) rotate(-1deg); }
+  20%, 80% { transform: translate3d(2px, 0, 0) rotate(2deg); }
+  30%, 50%, 70% { transform: translate3d(-3px, 0, 0) rotate(-3deg); }
+  40%, 60% { transform: translate3d(3px, 0, 0) rotate(3deg); }
+}
+
+/* Ajustes no Botão Sair para caber na Action Bar */
+.ds-btn-sair {
+    padding: 8px 12px;
+}
+
+.ds-btn-sair .ds-btn-texto-logout {
+    display: none; /* Esconde o texto por padrão */
 }
 
 
@@ -347,6 +413,59 @@ body.ds-body.autenticado {
     color: var(--ds-cor-texto-principal);
 }
 
+/*  Estilos para o Status Box da Meta */
+.ds-meta-status-box {
+    margin-top: 15px;
+    padding: 12px 15px;
+    border-radius: var(--ds-raio-borda);
+    border: 1px solid; /* Cor definida pela classe de status */
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 1rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.ds-meta-status-box .ds-status-icon {
+    font-size: 1.5rem;
+}
+
+.ds-meta-status-box .ds-status-texto .highlight {
+    font-weight: 700;
+    font-size: 1.1em;
+}
+
+/* Variação: Em Progresso */
+.ds-meta-status-box.status-progresso {
+    background-color: #fffbeb;
+    border-color: var(--ds-cor-aviso);
+    color: #926c00;
+}
+.ds-meta-status-box.status-progresso .ds-status-icon {
+    color: var(--ds-cor-aviso-hover);
+}
+
+/* Variação: Concluído */
+.ds-meta-status-box.status-concluido {
+    background-color: #f0fdf4;
+    border-color: var(--ds-cor-sucesso);
+    color: #15803d;
+}
+.ds-meta-status-box.status-concluido .ds-status-icon {
+    color: var(--ds-cor-sucesso);
+}
+
+/* Variação: Sem meta (ou erro) */
+.ds-meta-status-box.status-sem-meta {
+    background-color: var(--ds-cor-cinza-claro-fundo);
+    border-color: var(--ds-cor-cinza-borda);
+    color: var(--ds-cor-cinza-texto-secundario);
+}
+.ds-meta-status-box.status-sem-meta .ds-status-icon {
+    color: var(--ds-cor-cinza-texto-secundario);
+}
+
 
 /* --- Card Produção do Dia --- */
 .ds-card-producao-dia canvas { /* ID: graficoProducaoDia */
@@ -474,23 +593,22 @@ body.ds-body.autenticado {
     transform: scale(1.1);
 }
 
+.ds-action-level {
+    display: none; /* O JS controlará a exibição */
+    align-items: center;
+    gap: 6px;
+    font-weight: bold;
+    color: var(--ds-cor-aviso-hover);
+    border: 2px solid var(--ds-cor-cinza-borda);
+    padding: 0 12px;
+    height: 40px;
+    border-radius: 20px;
+    background-color: var(--ds-cor-branco);
+    transition: all 0.2s ease;
+}
 
-/* --- Card de Assinatura --- */
-.ds-card-assinatura {
-    justify-content: space-between; /* Para empurrar o botão para baixo */
-}
-.ds-assinatura-descricao {
-    font-size: 1rem;
-    color: var(--ds-cor-cinza-texto-secundario);
-    margin-bottom: 20px;
-    line-height: 1.7;
-}
-.ds-card-assinatura .ds-btn {
-    width: 100%;
-    margin-top: auto; /* Empurra o botão para a parte de baixo do card */
-    padding-top: 12px;
-    padding-bottom: 12px;
-    font-size: 1rem;
+.ds-action-level .fa-trophy {
+    color: var(--ds-cor-aviso);
 }
 
 
@@ -732,6 +850,7 @@ body.ds-body.autenticado {
 
 
 /* --- Modal de Assinatura (Gerado via JS) --- */
+/* Regra 1: O container principal do modal */
 .ds-modal-assinatura-content {
     background: var(--ds-cor-branco);
     padding: var(--ds-padding-card);
@@ -740,10 +859,22 @@ body.ds-body.autenticado {
     width: 100%;
     box-shadow: 0 5px 20px rgba(0,0,0,0.2);
     max-height: 90vh;
-    position: relative;
     display: flex;
     flex-direction: column;
+    overflow: hidden; /* IMPORTANTE: Impede que o modal em si crie uma barra de rolagem */
 }
+
+/* Regra 2: O corpo scrollável */
+.ds-modal-body-scrollable {
+    overflow-y: auto; /* A barra de rolagem principal agora vive AQUI */
+    flex-grow: 1;
+    display: flex; /* Este div também precisa ser flex para gerenciar as abas */
+    flex-direction: column;
+    padding-right: 10px;
+    margin-right: -10px;
+}
+
+
 .ds-modal-titulo {
     font-size: 1.6rem; margin-bottom: 20px; text-align: center;
     border-bottom: 1px solid var(--ds-cor-cinza-claro-fundo); padding-bottom: 15px;
@@ -768,10 +899,16 @@ body.ds-body.autenticado {
     width: 20px; height: 20px; accent-color: var(--ds-cor-primaria); cursor: pointer;
 }
 .ds-lista-assinatura {
-    list-style: none; padding: 0; margin: 0;
-    overflow-y: auto; flex-grow: 1;
-    border: 1px solid var(--ds-cor-cinza-borda); border-radius: var(--ds-raio-borda);
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    overflow-y: auto; /* Adiciona scroll quando a lista é longa */
+    flex-grow: 1; /* FAZ A LISTA OCUPAR O ESPAÇO DISPONÍVEL, EMPURRANDO O RODAPÉ */
+    border: 1px solid var(--ds-cor-cinza-borda);
+    border-radius: var(--ds-raio-borda);
+    margin-top: 15px; /* Adiciona um espaço acima da lista */
 }
+
 .ds-lista-assinatura li {
     padding: 12px 15px; border-bottom: 1px solid var(--ds-cor-cinza-claro-fundo);
     display: flex; align-items: center; gap: 12px;
@@ -797,23 +934,365 @@ body.ds-body.autenticado {
     border-top-color: var(--ds-cor-branco);
 }
 
+.ds-modal-tabs {
+    display: flex;
+    border-bottom: 2px solid var(--ds-cor-cinza-claro-fundo);
+    margin-bottom: 20px;
+}
+
+.ds-modal-tab-btn {
+    padding: 12px 20px;
+    cursor: pointer;
+    background-color: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--ds-cor-cinza-texto-secundario);
+    transition: all 0.2s ease;
+    margin-bottom: -2px; /* Alinha com a borda principal */
+}
+
+.ds-modal-tab-btn:hover {
+    color: var(--ds-cor-primaria);
+}
+
+.ds-modal-tab-btn.ativo {
+    color: var(--ds-cor-primaria);
+    border-bottom-color: var(--ds-cor-primaria);
+}
+
+.ds-modal-tab-content {
+    display: none; /* Conteúdo das abas fica escondido por padrão */
+}
+
+.ds-modal-tab-content.ativo {
+    display: flex; /* MUDANÇA: Usa flexbox */
+    flex-direction: column; /* Organiza os itens em coluna */
+    flex-grow: 1; /* Faz a aba ocupar todo o espaço disponível */
+    overflow: hidden; /* Garante que o conteúdo da aba não vaze */
+}
+
+/*  Estilo para o rodapé fixo da aba */
+.ds-modal-tab-footer {
+    padding-top: 15px; /* Espaço acima do botão */
+    margin-top: auto; /* Magia do flexbox: empurra o rodapé para o final */
+    border-top: 1px solid var(--ds-cor-cinza-claro-fundo);
+}
+
+.ds-modal-tab-footer .ds-btn {
+    width: 100%; /* Faz o botão ocupar a largura total */
+}
+
+/* Estilos para o formulário de divergência */
+.ds-form-divergencia {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.ds-form-divergencia .ds-info-item {
+    background-color: var(--ds-cor-cinza-claro-fundo);
+    padding: 10px;
+    border-radius: var(--ds-raio-borda);
+    font-weight: 500;
+}
+
+.ds-form-divergencia label {
+    font-weight: 600;
+    margin-bottom: -5px; /* aproxima o label do input */
+}
+
+/*  Estilos para a lista de itens a corrigir */
+#lista-itens-para-corrigir {
+    list-style: none;
+    padding: 0;
+    margin: 15px 0;
+    max-height: 250px; /* Altura máxima antes de scrollar */
+    overflow-y: auto;
+    border: 1px solid var(--ds-cor-cinza-borda);
+    border-radius: var(--ds-raio-borda);
+}
+
+#lista-itens-para-corrigir li {
+    padding: 12px 15px;
+    border-bottom: 1px solid var(--ds-cor-cinza-claro-fundo);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+#lista-itens-para-corrigir li:last-child {
+    border-bottom: none;
+}
+
+#lista-itens-para-corrigir li:hover {
+    background-color: rgba(var(--ds-cor-primaria-rgb), 0.05);
+}
+
+#lista-itens-para-corrigir input[type="radio"] {
+    margin: 0;
+    width: 18px;
+    height: 18px;
+    accent-color: var(--ds-cor-primaria);
+    flex-shrink: 0; /* Impede que o radio button encolha */
+}
+
+/* Estilo para quando um item é selecionado */
+#lista-itens-para-corrigir li.selecionado {
+    background-color: rgba(var(--ds-cor-primaria-rgb), 0.1);
+    border-left: 4px solid var(--ds-cor-primaria);
+    padding-left: 11px; /* Compensa a borda */
+}
+
+/* Estilo para item com divergência já reportada */
+#lista-itens-para-corrigir li.divergencia-reportada {
+    background-color: #fff1f2; /* Fundo rosado claro */
+    color: var(--ds-cor-perigo);
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+#lista-itens-para-corrigir li.divergencia-reportada:hover {
+    background-color: #ffe4e6; /* Um pouco mais escuro no hover */
+}
+
+#lista-itens-para-corrigir li.divergencia-reportada input[type="radio"] {
+    display: none; /* Esconde o radio button */
+}
+
+/* Adiciona um ícone e texto de aviso */
+#lista-itens-para-corrigir li.divergencia-reportada .aviso-divergencia {
+    font-weight: bold;
+    font-style: italic;
+    margin-left: auto; /* Empurra para a direita */
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/*  Estilo para item BLOQUEADO na lista de ASSINATURA */
+.ds-lista-assinatura li.bloqueado-por-divergencia {
+    background-color: #fff1f2; /* Mesmo fundo rosado da outra aba */
+    color: var(--ds-cor-perigo);
+    opacity: 0.7;
+    cursor: not-allowed;
+    position: relative;
+    padding-left: 20px; /* Espaço para o ícone */
+}
+
+.ds-lista-assinatura li.bloqueado-por-divergencia input[type="checkbox"] {
+    display: none; /* Esconde o checkbox de assinatura */
+}
+
+/* Ícone e texto de aviso para o item bloqueado */
+.ds-lista-assinatura li.bloqueado-por-divergencia::before {
+    content: "\f023"; /* Ícone de cadeado do FontAwesome */
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1rem;
+    color: var(--ds-cor-perigo);
+    margin-left: -12px;
+}
+
+.ds-lista-assinatura li.bloqueado-por-divergencia span strong {
+    color: var(--ds-cor-perigo); /* Deixa o título do produto vermelho também */
+}
+
+.ds-lista-assinatura li.bloqueado-por-divergencia span em {
+    font-weight: bold; /* Deixa o texto de status em negrito */
+}
+
+/*------------------------------------*\
+    #NOVO: ESTILOS DO PAINEL LATERAL
+\*------------------------------------*/
+.ds-side-panel-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(var(--ds-cor-azul-escuro-rgb), 0.6);
+    z-index: 9000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0s 0.3s linear;
+}
+.ds-side-panel-overlay.ativo {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.3s ease, visibility 0s 0s linear;
+}
+
+.ds-side-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 100%;
+    max-width: 450px; /* Largura do painel no desktop */
+    height: 100%;
+    background-color: var(--ds-cor-fundo-pagina);
+    box-shadow: -5px 0 20px rgba(0,0,0,0.2);
+    transform: translateX(100%);
+    transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    display: flex;
+    flex-direction: column;
+}
+.ds-side-panel-overlay.ativo .ds-side-panel {
+    transform: translateX(0);
+}
+
+.ds-side-panel-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--ds-cor-cinza-borda);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--ds-cor-branco);
+    flex-shrink: 0;
+}
+.ds-side-panel-header h3 {
+    font-size: 1.3rem;
+    color: var(--ds-cor-azul-escuro);
+}
+.ds-btn-fechar-panel {
+    background: none;
+    border: none;
+    font-size: 2rem;
+    color: var(--ds-cor-cinza-texto-secundario);
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 5px;
+    transition: color 0.2s, transform 0.2s;
+}
+.ds-btn-fechar-panel:hover {
+    color: var(--ds-cor-perigo);
+    transform: scale(1.1);
+}
+
+.ds-side-panel-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+.ds-side-panel-footer {
+    padding: 15px 20px;
+    border-top: 1px solid var(--ds-cor-cinza-borda);
+    background-color: var(--ds-cor-branco);
+    flex-shrink: 0;
+}
+.ds-side-panel-footer .ds-btn {
+    width: 100%;
+}
+
+/* Estilos para os cards de comunicação */
+.ds-comunicado-card {
+    background-color: var(--ds-cor-branco);
+    border-radius: var(--ds-raio-borda);
+    margin-bottom: 15px;
+    border: 1px solid var(--ds-cor-cinza-borda);
+    border-left: 5px solid; /* Cor definida pelo tipo */
+    overflow: hidden;
+}
+.ds-comunicado-card-header {
+    padding: 12px 15px;
+    background-color: var(--ds-cor-cinza-fundo-alt);
+    font-size: 0.85rem;
+    color: var(--ds-cor-cinza-texto-secundario);
+}
+.ds-comunicado-card-body {
+    padding: 15px;
+}
+.ds-comunicado-card-body h4 {
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+}
+.ds-comunicado-card-body p {
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+/* Cores por tipo de comunicado */
+.ds-comunicado-card.tipo-MuralGeral { border-left-color: var(--ds-cor-info); }
+.ds-comunicado-card.tipo-Ponto-de-Atencao { border-left-color: var(--ds-cor-aviso); }
+.ds-comunicado-card.tipo-Resposta-Supervisor { border-left-color: var(--ds-cor-sucesso); }
+
+/* Destaque para não lido */
+.ds-comunicado-card.nao-lido {
+    box-shadow: 0 0 10px rgba(var(--ds-cor-primaria-rgb), 0.3);
+}
+
+/* NOVO: Estilos para a seção de reações do card */
+.ds-comunicado-card-footer {
+    padding: 8px 15px;
+    border-top: 1px solid var(--ds-cor-cinza-claro-fundo);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ds-like-btn {
+    background: none;
+    border: none;
+    color: var(--ds-cor-cinza-texto);
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    border-radius: var(--ds-raio-borda);
+    transition: all 0.2s ease;
+}
+
+.ds-like-btn:hover {
+    background-color: rgba(var(--ds-cor-primaria-rgb), 0.1);
+    color: var(--ds-cor-primaria);
+}
+
+.ds-like-btn.reagido {
+    color: var(--ds-cor-primaria); /* Cor do botão quando já foi curtido */
+    font-weight: bold;
+}
+
+.ds-like-btn.reagido .fa-thumbs-up {
+    /* Opcional: Animação quando curte */
+    animation: ds-like-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.ds-like-count {
+    font-size: 0.9rem;
+    color: var(--ds-cor-cinza-texto);
+}
+
+@keyframes ds-like-pop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.3); }
+    100% { transform: scale(1); }
+}
 
 /* ==========================================================================
    10. Media Queries para Responsividade
    ========================================================================== */
-/* Telas de Desktop (Largura Média) */
+
+/* Telas de Desktop (Largura Média) - A partir de 1024px para baixo */
 @media (max-width: 1024px) {
     .ds-container-principal {
         padding: 20px;
     }
     .ds-cards-grid {
-        /* Garante que em telas um pouco menores, os cards ainda tenham espaço */
         grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
     }
 }
 
-
-/* Tablets e Telas Menores */
+/* Tablets e Telas Menores - A partir de 768px para baixo */
 @media (max-width: 768px) {
     .ds-container-principal {
         padding: 15px;
@@ -821,8 +1300,17 @@ body.ds-body.autenticado {
     .ds-cabecalho-pagina {
         flex-direction: column;
         align-items: flex-start;
-        gap: 12px;
+        gap: 15px;
     }
+    .ds-info-usuario-principal {
+        width: 100%; 
+    }
+    .ds-action-bar {
+        width: 100%;
+        justify-content: space-between; 
+    }
+    /* AS REGRAS .ds-nivel-desktop e .ds-action-level-mobile foram REMOVIDAS daqui */
+
     .ds-cabecalho-pagina h1 {
         font-size: 1.5rem;
     }
@@ -836,20 +1324,40 @@ body.ds-body.autenticado {
         gap: 15px;
     }
     .ds-atividades-lista .ds-atividade-item {
-        /* Garante que os detalhes fiquem em duas colunas se houver espaço */
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     }
 }
 
-
-/* Celulares Maiores (Paisagem) e Telas Pequenas */
+/* Celulares Maiores (Paisagem) e Telas Pequenas - A partir de 480px para baixo */
 @media (max-width: 480px) {
-    .ds-cabecalho-pagina h1 {
-        font-size: 1.4rem;
+    .ds-cabecalho-pagina {
+        gap: 12px;
     }
-    .ds-btn {
-        padding: 10px 16px;
+    .ds-cabecalho-pagina h1 {
+        font-size: 1.3rem;
+    }
+    .ds-action-bar {
+        gap: 8px;
+    }
+    .ds-action-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 1.1rem;
+    }
+    .ds-action-level-mobile {
+        height: 40px;
+    }
+    .ds-badge {
+        min-width: 20px;
+        height: 20px;
+        font-size: 0.75rem;
+    }
+    .ds-btn-sair {
+        padding: 6px 10px;
         font-size: 0.9rem;
+    }
+    .ds-btn-sair .ds-btn-texto-logout {
+        display: none;
     }
     .ds-card {
         padding: 18px;
@@ -857,8 +1365,6 @@ body.ds-body.autenticado {
     .ds-card-titulo {
         font-size: 1.25rem;
     }
-
-    /* Card de Meta */
     .ds-progresso-container {
         flex-direction: column;
         align-items: stretch;
@@ -867,36 +1373,40 @@ body.ds-body.autenticado {
     .ds-pontos-destaque {
         text-align: center;
     }
-
-    /* Carrossel do Ciclo */
     .ds-carrossel-ciclo-nav {
-        display: none !important; /* Esconde as setas de navegação */
+        display: none !important;
     }
     .ds-carrossel-ciclo-viewport {
-        margin: 0; /* Viewport ocupa todo o espaço */
+        margin: 0;
     }
-
-    /* Card de Detalhamento */
     .ds-atividades-lista .ds-atividade-item {
-        grid-template-columns: 1fr; /* Força uma única coluna para os detalhes */
+        grid-template-columns: 1fr;
     }
     .ds-paginacao .ds-btn {
-        display: none; /* Esconde botões "Anterior" e "Próximo" */
+        display: none;
     }
 }
 
-
-/* Celulares Padrão (Retrato) - FOCO PRINCIPAL */
+/* Celulares Padrão (Retrato) - A partir de 414px para baixo */
 @media (max-width: 414px) {
     .ds-container-principal {
         padding: 12px;
     }
     .ds-cabecalho-pagina h1 {
-        font-size: 1.3rem;
+        font-size: 1.2rem;
     }
-    .ds-btn {
-        padding: 9px 14px;
+    .ds-nivel-destaque {
+        padding: 5px 10px;
         font-size: 0.85rem;
+    }
+    .ds-action-btn, .ds-action-level-mobile {
+        height: 38px;
+    }
+    .ds-action-btn {
+        font-size: 1rem;
+    }
+    .ds-action-level-mobile {
+        padding: 0 10px;
     }
     .ds-card {
         padding: 15px;
@@ -905,8 +1415,6 @@ body.ds-body.autenticado {
         font-size: 1.2rem;
         margin-bottom: 15px;
     }
-
-    /* Card de Meta */
     .ds-barra-progresso {
         height: 18px;
     }
@@ -919,14 +1427,12 @@ body.ds-body.autenticado {
     .ds-comissao-info, .ds-sem-meta {
         font-size: 0.9rem;
     }
-
-    /* Card de Detalhamento */
     .ds-total-atividades {
         font-size: 1rem;
         padding: 8px 12px;
     }
     .ds-atividades-wrapper {
-        max-height: 300px; /* Reduz um pouco a altura máxima da lista */
+        max-height: 300px;
     }
     .ds-atividades-lista .ds-atividade-item {
         padding: 12px;
@@ -939,13 +1445,6 @@ body.ds-body.autenticado {
         min-width: 35px;
         font-size: 0.9rem;
     }
-
-    /* Card de Assinatura (Botão) */
-    .ds-card-assinatura .ds-btn {
-        font-size: 1rem;
-    }
-
-    /* Modal de Assinatura (se aberto) */
     .ds-modal-assinatura-content {
         padding: 15px;
         max-height: 85vh;

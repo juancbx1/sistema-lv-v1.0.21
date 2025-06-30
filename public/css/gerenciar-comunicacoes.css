@@ -1,0 +1,208 @@
+/* public/css/gerenciar-comunicacoes.css */
+
+/*------------------------------------*\
+    #VARIÁVEIS GLOBAIS (GC = Gerenciar Comunicações)
+\*------------------------------------*/
+:root {
+    --gc-cor-fundo-pagina: #f4f6f8;
+    --gc-cor-texto: #333;
+    --gc-cor-branco: #ffffff;
+    --gc-cor-azul-escuro: #2c3e50;
+    --gc-cor-azul-primario: #3498db;
+    --gc-cor-azul-hover: #2980b9;
+    --gc-cor-cinza-texto: #7f8c8d;
+    --gc-cor-cinza-borda: #dcdfe4;
+    --gc-cor-cinza-fundo-alt: #f8f9fa;
+    --gc-cor-vermelho-perigo: #e74c3c;
+    --gc-sombra-padrao: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --gc-raio-borda: 8px;
+}
+
+/*------------------------------------*\
+    #LAYOUT E BODY
+\*------------------------------------*/
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--gc-cor-fundo-pagina);
+    color: var(--gc-cor-texto);
+    line-height: 1.6;
+    visibility: hidden;
+    margin-left: 250px;
+    transition: margin-left 0.3s ease;
+}
+body.autenticado { visibility: visible; }
+
+.container-gc {
+    padding: 25px;
+}
+
+.gc-cabecalho-pagina {
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid var(--gc-cor-azul-primario);
+}
+.gc-cabecalho-pagina h1 {
+    font-size: 2rem;
+    color: var(--gc-cor-azul-escuro);
+    font-weight: 600;
+}
+
+.gc-card {
+    background-color: var(--gc-cor-branco);
+    border-radius: var(--gc-raio-borda);
+    padding: 25px;
+    box-shadow: var(--gc-sombra-padrao);
+    margin-bottom: 30px;
+}
+
+.gc-titulo-secao {
+    font-size: 1.6rem;
+    color: var(--gc-cor-azul-escuro);
+    margin-bottom: 20px;
+    font-weight: 500;
+}
+
+/*------------------------------------*\
+    #FORMULÁRIO E COMPONENTES
+\*------------------------------------*/
+.gc-form .gc-form-grupo {
+    margin-bottom: 20px;
+}
+.gc-form label {
+    display: block;
+    font-size: 0.9rem;
+    color: var(--gc-cor-cinza-texto);
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+.gc-input, .gc-textarea {
+    width: 100%;
+    padding: 10px 14px;
+    font-size: 0.95rem;
+    border: 1px solid var(--gc-cor-cinza-borda);
+    border-radius: 5px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.gc-input:focus, .gc-textarea:focus {
+    outline: none;
+    border-color: var(--gc-cor-azul-primario);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+}
+.gc-textarea {
+    resize: vertical;
+    min-height: 120px;
+}
+
+.gc-form-grupo-horizontal {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 25px;
+}
+
+.gc-checkbox-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.gc-checkbox-wrapper input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--gc-cor-azul-primario);
+}
+.gc-checkbox-wrapper label {
+    margin-bottom: 0;
+    cursor: pointer;
+}
+
+.gc-btn {
+    padding: 10px 22px;
+    font-size: 1rem;
+    font-weight: 500;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.gc-btn-primario {
+    background-color: var(--gc-cor-azul-primario);
+    color: var(--gc-cor-branco);
+}
+.gc-btn-primario:hover:not(:disabled) {
+    background-color: var(--gc-cor-azul-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+}
+.gc-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/*------------------------------------*\
+    #LISTA DE COMUNICADOS ENVIADOS
+\*------------------------------------*/
+.gc-comunicado-item {
+    padding: 15px;
+    border: 1px solid var(--gc-cor-cinza-borda);
+    border-radius: var(--gc-raio-borda);
+    margin-bottom: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.gc-comunicado-info h4 {
+    font-size: 1.1rem;
+    margin-bottom: 5px;
+}
+.gc-comunicado-info .meta {
+    font-size: 0.85rem;
+    color: var(--gc-cor-cinza-texto);
+}
+.gc-comunicado-info .fixado-tag {
+    background-color: var(--gc-cor-laranja-aviso);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    margin-left: 10px;
+}
+.gc-comunicado-actions .gc-btn {
+    background: transparent;
+    color: var(--gc-cor-vermelho-perigo);
+    padding: 5px 8px;
+}
+.gc-comunicado-actions .gc-btn:hover {
+    background-color: #fdecea;
+}
+
+/*------------------------------------*\
+    #RESPONSIVIDADE
+\*------------------------------------*/
+@media (max-width: 1024px) {
+    body {
+        margin-left: 0;
+    }
+}
+@media (max-width: 768px) {
+    .container-gc {
+        padding: 15px;
+    }
+    .gc-cabecalho-pagina h1 {
+        font-size: 1.6rem;
+    }
+    .gc-card {
+        padding: 20px;
+    }
+    .gc-form-grupo-horizontal {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 20px;
+    }
+    .gc-btn-primario {
+        width: 100%;
+        justify-content: center;
+    }
+}

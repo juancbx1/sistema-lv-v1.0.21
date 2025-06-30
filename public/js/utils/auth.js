@@ -129,14 +129,15 @@ export async function verificarAutenticacao(pagina, permissoesRequeridas = [], m
 
 
 export function logout() {
-  console.log('[logout] Removendo dados de sessão e redirecionando para /index.html');
+  console.log('--- LOGOUT INICIADO ---');
+  // O 'usuarioLogado' pode não estar disponível globalmente aqui, então tentamos pegar o nome de outra forma
+  // ou simplesmente mostramos todas as chaves para depuração.
+  console.log('Chaves no localStorage ANTES do logout:', Object.keys(localStorage));
+
   localStorage.removeItem('token');
   localStorage.removeItem('permissoes');
-  // Limpa também qualquer outro dado de sessão que possa existir
-  Object.keys(localStorage).forEach(key => {
-    if (key.startsWith('metaSelecionada_')) {
-      localStorage.removeItem(key);
-    }
-  });
+
+  console.log('Chaves no localStorage DEPOIS de remover itens de sessão:', Object.keys(localStorage));
+  console.log('--- REDIRECIONANDO PARA LOGIN ---');
   window.location.href = '/index.html';
 }

@@ -254,14 +254,9 @@ router.put('/', async (req, res) => {
     let dbClient;
     try {
         dbClient = await pool.connect();
-        const permissoesCompletasDoUsuarioLogado = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
+        const permissoesDoUsuario = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
         
-        const { id, quantidade, edicoes, assinada, funcionario } = req.body; // Desestruturação
-
-        // ***** NOVOS LOGS DETALHADOS *****
-        console.log(`[API Producoes PUT] req.body recebido:`, JSON.stringify(req.body));
-        console.log(`[API Producoes PUT] Valores desestruturados: id=${id} (tipo: ${typeof id}), quantidade=${quantidade} (tipo: ${typeof quantidade}), edicoes=${edicoes} (tipo: ${typeof edicoes}), assinada=${assinada} (tipo: ${typeof assinada})`);
-        // ***** FIM DOS NOVOS LOGS *****
+        const { id, quantidade, edicoes, assinada, funcionario, dadosColetados } = req.body;
 
         if (!id) {
             return res.status(400).json({ error: 'ID da produção é obrigatório.' });
@@ -270,90 +265,65 @@ router.put('/', async (req, res) => {
             return res.status(400).json({ error: 'Nenhum campo para atualizar fornecido.' });
         }
 
-        const producaoResult = await dbClient.query('SELECT funcionario FROM producoes WHERE id = $1', [id]);
+        const producaoResult = await dbClient.query('SELECT funcionario, assinada FROM producoes WHERE id = $1', [id]);
         if (producaoResult.rows.length === 0) {
             return res.status(404).json({ error: 'Produção não encontrada para atualização.' });
         }
-        const funcionarioDaProducao = producaoResult.rows[0].funcionario;
+
+        const { funcionario: funcionarioDaProducao, assinada: jaAssinada } = producaoResult.rows[0];
         const nomeUsuarioLogado = usuarioLogado.nome || usuarioLogado.nome_usuario;
         
         const isOwner = funcionarioDaProducao === nomeUsuarioLogado;
-        // Condição para 'apenas assinar': 'assinada' deve ser explicitamente true, e os outros campos de dados não devem estar presentes
         const isAttemptingToSignOnly = (assinada === true && quantidade === undefined && edicoes === undefined);
+        const podeEditarGeral = permissoesDoUsuario.includes('editar-registro-producao');
+        // CORREÇÃO: Usando o nome padronizado da permissão
+        const podeAssinarPropria = permissoesDoUsuario.includes('assinar-producao-costureira');
 
-        console.log(`[API Producoes PUT] Detalhes para decisão: isOwner=${isOwner}, isAttemptingToSignOnly=${isAttemptingToSignOnly}, temPermissaoAssinar=${permissoesCompletasDoUsuarioLogado.includes('assinar-propria-producao-costureira')}, temPermissaoEditarGeral=${permissoesCompletasDoUsuarioLogado.includes('editar-registro-producao')}`);
+        // Estrutura if/else if/else para garantir que apenas um caminho seja seguido
 
-        let podeProsseguir = false;
-        let acaoPermitida = null;
-
-        if (permissoesCompletasDoUsuarioLogado.includes('editar-registro-producao')) {
-            podeProsseguir = true;
-            acaoPermitida = 'editar_tudo';
-            console.log(`[API Producoes PUT] Acesso 'editar_tudo' permitido para user: ${nomeUsuarioLogado} via 'editar-registro-producao'.`);
-        } else if (
-            isOwner &&
-            isAttemptingToSignOnly && // Usa a nova variável combinada
-            permissoesCompletasDoUsuarioLogado.includes('assinar-propria-producao-costureira')
-        ) {
-            podeProsseguir = true;
-            acaoPermitida = 'apenas_assinar';
-            console.log(`[API Producoes PUT] Acesso 'apenas_assinar' permitido para costureira ${nomeUsuarioLogado}.`);
-        }
-
-        if (!podeProsseguir) {
-            // O console.warn anterior já mostrava os dados, podemos mantê-lo ou usar o novo log de detalhes acima
-            console.warn(`[API Producoes PUT] Permissão REALMENTE negada. (Ver log 'Detalhes para decisão' acima)`);
-            return res.status(403).json({ error: 'Permissão negada para alterar este registro de produção.' });
-        }
-
-        const updateFields = [];
-        const updateValues = [];
-        let paramIndex = 1;
-
-        if (acaoPermitida === 'editar_tudo') {
-            if (quantidade !== undefined) {
-                updateFields.push(`quantidade = $${paramIndex++}`);
-                updateValues.push(quantidade);
+        // CASO 1: É o dono tentando assinar e tem permissão para isso
+        if (isOwner && isAttemptingToSignOnly && podeAssinarPropria) {
+            if (jaAssinada) {
+                return res.status(400).json({ error: 'Este item já foi assinado.' });
             }
-            if (edicoes !== undefined) {
-                updateFields.push(`edicoes = $${paramIndex++}`);
-                updateValues.push(JSON.stringify(edicoes)); // Lembre de converter para JSON se for um objeto/array
-            }
+            await dbClient.query('BEGIN');
+            const updateResult = await dbClient.query(`UPDATE producoes SET assinada = TRUE WHERE id = $1 RETURNING *`, [id]);
+            await dbClient.query(`INSERT INTO log_assinaturas (id_usuario, id_producao, dados_coletados) VALUES ($1, $2, $3)`, [usuarioLogado.id, id, dadosColetados || null]);
+            await dbClient.query('COMMIT');
+            return res.status(200).json(updateResult.rows[0]);
+        } 
+        
+        // CASO 2: É um admin/supervisor tentando editar de forma geral
+        else if (podeEditarGeral) {
+            // Este caso cobre edições de quantidade, funcionário, etc. que não são apenas uma assinatura.
+            // (A lógica interna para construir a query de update permanece a mesma)
+            const updateFields = [];
+            const updateValues = [];
+            let paramIndex = 1;
+            if (quantidade !== undefined) { updateFields.push(`quantidade = $${paramIndex++}`); updateValues.push(quantidade); }
+            if (edicoes !== undefined) { updateFields.push(`edicoes = $${paramIndex++}`); updateValues.push(JSON.stringify(edicoes)); }
+            if (funcionario !== undefined && funcionario.trim() !== '') { updateFields.push(`funcionario = $${paramIndex++}`); updateValues.push(funcionario); }
             if (assinada !== undefined) {
                 updateFields.push(`assinada = $${paramIndex++}`);
                 updateValues.push(assinada);
+                if (assinada === true && !jaAssinada) {
+                    await dbClient.query(`INSERT INTO log_assinaturas (id_usuario, id_producao, dados_coletados) VALUES ($1, $2, $3)`, [usuarioLogado.id, id, { origem: 'admin_edit' }]);
+                }
             }
-            
-            if (funcionario !== undefined && funcionario.trim() !== '') {
-                updateFields.push(`funcionario = $${paramIndex++}`);
-                updateValues.push(funcionario);
-            }
-
-        } else if (acaoPermitida === 'apenas_assinar') {
-            if (assinada === true) { // Garante que está realmente assinando
-                updateFields.push(`assinada = $${paramIndex++}`);
-                updateValues.push(true);
-            } else {
-                console.error("[API Producoes PUT] Erro lógico: 'apenas_assinar' permitido, mas 'assinada' não é true no body.");
-                return res.status(400).json({ error: "Dados inválidos para assinatura (campo 'assinada' esperado como true)." });
-            }
-        }
-
-         if (updateFields.length === 0) {
-            return res.status(400).json({ error: "Nenhum campo válido para atualização." });
+            if (updateFields.length === 0) return res.status(400).json({ error: "Nenhum campo válido para atualização." });
+            updateValues.push(id); 
+            const queryUpdate = `UPDATE producoes SET ${updateFields.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
+            const result = await dbClient.query(queryUpdate, updateValues);
+            return res.status(200).json(result.rows[0]);
         }
         
-        updateValues.push(id); 
-        const queryUpdate = `UPDATE producoes SET ${updateFields.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
-        
-        const result = await dbClient.query(queryUpdate, updateValues);
-        
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: "Produção não encontrada após verificações (não deveria acontecer)." });
+        // CASO 3: Nenhuma das condições acima foi atendida, então a permissão é negada.
+        else {
+            return res.status(403).json({ error: 'Permissão negada para alterar este registro de produção.' });
         }
-        res.status(200).json(result.rows[0]);
 
     } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
         console.error('[router/producoes PUT] Erro:', error.message, error.stack ? error.stack.substring(0,500):"");
         res.status(500).json({ error: 'Erro ao atualizar produção.', details: error.message });
     } finally {
@@ -397,8 +367,9 @@ router.delete('/', async (req, res) => {
 
 //ENDPOINT PARA TIKTIK ASSINAR UMA OP (PRODUÇÃO)
 router.put('/assinar-tiktik-op', async (req, res) => {
-    const { usuarioLogado } = req; 
-    const { id_producao_op } = req.body;
+    const { usuarioLogado } = req;
+    // NOVO: Recebe o objeto 'dadosColetados'
+    const { id_producao_op, dadosColetados } = req.body;
     let dbClient;
 
     if (!id_producao_op) {
@@ -408,16 +379,14 @@ router.put('/assinar-tiktik-op', async (req, res) => {
     try {
         dbClient = await pool.connect();
         const permissoesUsuario = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
-
-        // Verificar se o usuário é um Tiktik e tem permissão para assinar suas próprias OPs
-        // (Você pode criar uma permissão específica como 'assinar-propria-op-tiktik')
-        // Por agora, vamos verificar se ele é o funcionário da OP.
-        if (!permissoesUsuario.includes('assinar-propria-producao-tiktik')) { // CRIE ESSA PERMISSÃO
+        
+        // Assumi que você criará esta permissão como planejado
+        if (!permissoesUsuario.includes('assinar-producao-tiktik')) {
              return res.status(403).json({ error: 'Permissão negada para assinar esta produção de OP.' });
         }
 
         const producaoResult = await dbClient.query(
-            'SELECT funcionario FROM producoes WHERE id = $1',
+            'SELECT funcionario, assinada_por_tiktik FROM producoes WHERE id = $1',
             [id_producao_op]
         );
 
@@ -425,23 +394,37 @@ router.put('/assinar-tiktik-op', async (req, res) => {
             return res.status(404).json({ error: 'Produção da OP não encontrada.' });
         }
 
-        const funcionarioDaProducao = producaoResult.rows[0].funcionario;
-        if (funcionarioDaProducao !== usuarioLogado.nome) {
+        const { funcionario, assinada_por_tiktik } = producaoResult.rows[0];
+        if (funcionario !== usuarioLogado.nome) {
             return res.status(403).json({ error: 'Você só pode assinar produções de OP feitas por você.' });
         }
+        if (assinada_por_tiktik) {
+            return res.status(400).json({ error: 'Esta produção de OP já foi assinada por você.' });
+        }
 
+        // Inicia a transação
+        await dbClient.query('BEGIN');
+        
+        // 1. Atualiza a produção
         const updateResult = await dbClient.query(
             'UPDATE producoes SET assinada_por_tiktik = TRUE WHERE id = $1 RETURNING *',
             [id_producao_op]
         );
+        
+        // 2. Insere o log da assinatura
+        await dbClient.query(
+            'INSERT INTO log_assinaturas (id_usuario, id_producao, dados_coletados) VALUES ($1, $2, $3)',
+            [usuarioLogado.id, id_producao_op, dadosColetados || null]
+        );
 
-        if (updateResult.rowCount === 0) {
-            // Isso não deveria acontecer se a verificação acima passou, mas é uma segurança
-            return res.status(404).json({ error: 'Falha ao atualizar assinatura da produção da OP (não encontrada após verificação).' });
-        }
+        // Confirma a transação
+        await dbClient.query('COMMIT');
+
         res.status(200).json({ message: 'Produção da OP assinada com sucesso pelo Tiktik.', producao: updateResult.rows[0] });
 
     } catch (error) {
+        // Se der erro, desfaz a transação
+        if (dbClient) await dbClient.query('ROLLBACK');
         console.error('[API /producoes/assinar-tiktik-op PUT] Erro:', error.message);
         res.status(500).json({ error: 'Erro interno ao assinar produção da OP.', details: error.message });
     } finally {

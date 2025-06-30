@@ -1,0 +1,475 @@
+/* public/css/conferencia.css */
+
+/*------------------------------------*\
+    #VARIÁVEIS GLOBAIS (CA = Conferência Auditoria)
+\*------------------------------------*/
+:root {
+    --ca-cor-fundo-pagina: #f4f6f8;
+    --ca-cor-texto-principal: #333;
+    --ca-cor-branco: #ffffff;
+    --ca-cor-azul-escuro: #2c3e50;
+    --ca-cor-azul-primario: #3498db;
+    --ca-cor-azul-hover: #2980b9;
+    --ca-cor-verde-sucesso: #27ae60;
+    --ca-cor-vermelho-perigo: #e74c3c;
+    --ca-cor-laranja-aviso: #f39c12;
+    --ca-cor-cinza-texto: #7f8c8d;
+    --ca-cor-cinza-borda: #dcdfe4;
+    --ca-cor-cinza-fundo-alt: #f8f9fa;
+    --ca-sombra-padrao: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --ca-raio-borda: 8px;
+}
+
+/*------------------------------------*\
+    #RESET BÁSICO E ESTILOS DE BODY
+\*------------------------------------*/
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    font-size: 16px;
+}
+
+/* 
+   Esta regra é a principal para a integração com o menu lateral.
+   Ela será sobrescrita pela media query em telas menores.
+*/
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--ca-cor-fundo-pagina);
+    color: var(--ca-cor-texto-principal);
+    line-height: 1.6;
+    visibility: hidden; 
+    margin-left: 250px; /* <<<<< A REGRA-CHAVE PARA O MENU DESKTOP */
+    transition: margin-left 0.3s ease;
+}
+
+body.autenticado {
+    visibility: visible;
+}
+
+/*------------------------------------*\
+    #LAYOUT PRINCIPAL
+\*------------------------------------*/
+.container-ca {
+    padding: 25px;
+}
+
+.ca-cabecalho-pagina {
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid var(--ca-cor-azul-primario);
+}
+
+.ca-cabecalho-pagina h1 {
+    font-size: 2rem;
+    color: var(--ca-cor-azul-escuro);
+    font-weight: 600;
+}
+
+.ca-card {
+    background-color: var(--ca-cor-branco);
+    border-radius: var(--ca-raio-borda);
+    padding: 25px;
+    box-shadow: var(--ca-sombra-padrao);
+    margin-bottom: 30px;
+}
+
+/*------------------------------------*\
+    #COMPONENTES COMUNS (Abas, Filtros, Botões)
+\*------------------------------------*/
+
+/* Abas de Navegação */
+.ca-tabs-container {
+    display: flex;
+    border-bottom: 2px solid #e0e0e0;
+    margin-bottom: 25px;
+}
+
+.ca-tab-btn {
+    padding: 12px 25px;
+    cursor: pointer;
+    background-color: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--ca-cor-cinza-texto);
+    transition: all 0.2s ease;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: -2px;
+}
+
+.ca-tab-btn:hover {
+    color: var(--ca-cor-azul-primario);
+}
+
+.ca-tab-btn.active {
+    color: var(--ca-cor-azul-primario);
+    border-bottom-color: var(--ca-cor-azul-primario);
+}
+
+.ca-tab-badge {
+    background-color: var(--ca-cor-vermelho-perigo);
+    color: white;
+    border-radius: 10px;
+    padding: 2px 7px;
+    font-size: 0.8rem;
+    font-weight: bold;
+}
+
+.ca-btn-secundario {
+    background-color: var(--ca-cor-cinza-texto);
+}
+.ca-btn-secundario:hover {
+    background-color: #5e6d6e;
+}
+.ca-btn-sucesso {
+    background-color: var(--ca-cor-verde-sucesso);
+}
+.ca-btn-sucesso:hover {
+    background-color: #229954; /* verde mais escuro */
+}
+
+/* Painéis de Conteúdo das Abas */
+.ca-tab-panel {
+    display: none;
+}
+.ca-tab-panel.active {
+    display: block;
+    animation: ca-fadeIn 0.5s ease;
+}
+@keyframes ca-fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Filtros */
+.ca-filtros-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 20px;
+    align-items: flex-end;
+    padding: 15px;
+    background-color: var(--ca-cor-cinza-fundo-alt);
+    border-radius: var(--ca-raio-borda);
+}
+
+.ca-form-grupo {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.ca-form-grupo label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--ca-cor-cinza-texto);
+}
+
+.ca-input, .ca-select {
+    padding: 8px 12px;
+    font-size: 0.95rem;
+    border: 1px solid var(--ca-cor-cinza-borda);
+    border-radius: 5px;
+}
+.ca-input:focus, .ca-select:focus {
+    outline: none;
+    border-color: var(--ca-cor-azul-primario);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+}
+
+.ca-btn {
+    padding: 8px 18px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ca-cor-branco);
+}
+.ca-btn-primario { background-color: var(--ca-cor-azul-primario); }
+.ca-btn-primario:hover { background-color: var(--ca-cor-azul-hover); }
+
+/*------------------------------------*\
+    #ABA DIVERGÊNCIAS
+\*------------------------------------*/
+.ca-divergencia-card {
+    background-color: #fff;
+    border: 1px solid #e0e0e0;
+    border-left: 5px solid var(--ca-cor-laranja-aviso);
+    border-radius: var(--ca-raio-borda);
+    padding: 20px;
+    margin-bottom: 15px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 15px 25px;
+    transition: box-shadow 0.2s ease;
+}
+.ca-divergencia-card:hover {
+    box-shadow: var(--ca-sombra-padrao);
+}
+
+.ca-divergencia-card.status-Resolvida { border-left-color: var(--ca-cor-verde-sucesso); }
+.ca-divergencia-card.status-Recusada { border-left-color: var(--ca-cor-vermelho-perigo); }
+.ca-divergencia-card.status-Em.Análise { border-left-color: var(--ca-cor-azul-primario); }
+
+.ca-divergencia-info { grid-column: 1 / 2; }
+.ca-divergencia-actions { grid-column: 2 / 3; grid-row: 1 / 3; display: flex; flex-direction: column; gap: 10px; justify-content: center; }
+
+.ca-divergencia-header { font-size: 1.1rem; margin-bottom: 10px; color: var(--ca-cor-azul-escuro); }
+.ca-divergencia-header strong { color: var(--ca-cor-azul-primario); }
+
+.ca-divergencia-details p { margin: 5px 0; color: #333; }
+.ca-divergencia-details strong { color: #000; }
+.ca-divergencia-details .original-value { text-decoration: line-through; color: #888; }
+.ca-divergencia-details .reported-value { color: var(--ca-cor-laranja-aviso); font-weight: bold; }
+
+.ca-divergencia-obs { font-style: italic; background-color: #f5f5f5; padding: 10px; border-radius: 5px; margin-top: 10px; }
+.ca-divergencia-footer { font-size: 0.85rem; color: #777; margin-top: 15px; border-top: 1px dashed #ddd; padding-top: 10px; }
+
+/*------------------------------------*\
+    #ABA LOGS & MODAIS
+\*------------------------------------*/
+.ca-tabela-wrapper {
+    overflow-x: auto;
+    width: 100%;
+}
+.ca-tabela-estilizada {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    min-width: 700px;
+}
+.ca-tabela-estilizada th, .ca-tabela-estilizada td {
+    padding: 12px 15px;
+    border-bottom: 1px solid var(--ca-cor-cinza-borda);
+    text-align: left;
+    vertical-align: middle;
+}
+.ca-tabela-estilizada th {
+    background-color: var(--ca-cor-cinza-fundo-alt);
+    font-weight: 600;
+}
+.ca-tabela-estilizada tbody tr:hover {
+    background-color: #f5f8fa;
+}
+
+/*------------------------------------*\
+    #ABA LOGS & MODAIS
+\*------------------------------------*/
+
+/* ... (estilos da tabela .ca-tabela-estilizada) ... */
+
+/* Estilos Completos para o Modal */
+.popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(44, 62, 80, 0.75); /* Fundo escuro semi-transparente */
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0s 0.3s linear;
+}
+
+.popup-overlay.active {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.3s ease, visibility 0s 0s linear;
+}
+
+.popup-mensagem { /* Classe usada como base para o conteúdo do modal */
+    background: var(--ca-cor-branco);
+    padding: 25px 30px;
+    border-radius: var(--ca-raio-borda);
+    max-width: 500px;
+    width: 100%;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+    transform: scale(0.95);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    position: relative;
+}
+
+.popup-overlay.active .popup-mensagem {
+    transform: scale(1);
+    opacity: 1;
+}
+
+/* Título e Botão de Fechar do Modal */
+.ca-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 15px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--ca-cor-cinza-borda);
+}
+
+.ca-modal-header h3 {
+    font-size: 1.4rem;
+    color: var(--ca-cor-azul-escuro);
+    margin: 0;
+}
+
+.ca-modal-close-btn {
+    background: transparent;
+    border: none;
+    font-size: 1.8rem;
+    color: var(--ca-cor-cinza-texto);
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 5px;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+.ca-modal-close-btn:hover {
+    color: var(--ca-cor-vermelho-perigo);
+    transform: rotate(90deg);
+}
+
+/* Formulário dentro do Modal */
+.ca-modal-form { 
+    display: flex; 
+    flex-direction: column; 
+    gap: 15px; 
+}
+.ca-modal-form label { 
+    font-weight: 600; 
+    color: #555;
+    font-size: 0.9rem;
+}
+.ca-modal-textarea { 
+    min-height: 80px; 
+    width: 100%;
+    resize: vertical;
+    padding: 8px 12px;
+    font-size: 0.95rem;
+    border: 1px solid var(--ca-cor-cinza-borda);
+    border-radius: 5px;
+}
+.ca-modal-textarea:focus {
+    outline: none;
+    border-color: var(--ca-cor-azul-primario);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+}
+
+/* Rodapé do Modal com Botões de Ação */
+.ca-modal-footer { 
+    display: flex; 
+    justify-content: flex-end; 
+    gap: 10px; 
+    margin-top: 25px; 
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+}
+
+/* Reutilizando as classes de botão .ca-btn */
+.ca-modal-footer .ca-btn-secundario {
+    background-color: var(--ca-cor-cinza-texto);
+}
+.ca-modal-footer .ca-btn-secundario:hover {
+    background-color: #5e6d6e;
+}
+.ca-modal-footer .ca-btn-sucesso {
+    background-color: var(--ca-cor-verde-sucesso);
+}
+.ca-modal-footer .ca-btn-sucesso:hover {
+    background-color: #229954;
+}
+.ca-modal-footer .ca-btn-perigo {
+    background-color: var(--ca-cor-vermelho-perigo);
+}
+.ca-modal-footer .ca-btn-perigo:hover {
+    background-color: #c0392b;
+}
+
+/* Estilos para o modal de detalhes do log */
+.ca-log-details {
+    text-align: left;
+    font-size: 0.9rem;
+}
+.ca-log-details p {
+    margin-bottom: 8px;
+    word-break: break-word; /* Para quebrar o user-agent longo */
+}
+.ca-log-details strong {
+    color: var(--ca-cor-azul-escuro);
+    display: inline-block;
+    min-width: 120px; /* Alinha os valores */
+}
+
+
+.popup-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background-color: rgba(0,0,0,0.6); z-index: 1000;
+    display: flex; justify-content: center; align-items: center;
+}
+.popup-mensagem {
+    background: white; padding: 25px; border-radius: var(--ca-raio-borda);
+    max-width: 500px; width: 90%;
+}
+.ca-modal-form { display: flex; flex-direction: column; gap: 15px; }
+.ca-modal-form label { font-weight: bold; }
+.ca-modal-textarea { min-height: 80px; width: 100%; /* Herda de .ca-input */ }
+.ca-modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+
+/*------------------------------------*\
+    #RESPONSIVIDADE
+\*------------------------------------*/
+@media (max-width: 1024px) {
+    body {
+        margin-left: 0; /* <<<<< REMOVE A MARGEM, pois o menu lateral está escondido */
+    }
+
+    .hamburger-menu {
+        display: flex; /* <<<<< MOSTRA o ícone do hambúrguer */
+    }
+    
+    .container-ca {
+        padding: 15px;
+        margin-top: 60px; /* Adiciona espaço no topo para não ficar atrás do hambúrguer */
+    }
+    
+    .ca-cabecalho-pagina h1 { font-size: 1.8rem; }
+}
+
+@media (max-width: 768px) {
+    .ca-cabecalho-pagina h1 { font-size: 1.6rem; }
+    .ca-tabs-container { overflow-x: auto; }
+    .ca-tab-btn { padding: 10px 15px; font-size: 1rem; }
+
+    .ca-divergencia-card {
+        grid-template-columns: 1fr;
+    }
+    .ca-divergencia-actions {
+        grid-row: auto;
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+    }
+}
+
+@media (max-width: 480px) {
+    .container-ca { padding: 10px; margin-top: 50px; }
+    .ca-cabecalho-pagina h1 { font-size: 1.4rem; }
+    .ca-card { padding: 15px; }
+    .ca-filtros-container { flex-direction: column; align-items: stretch; }
+}

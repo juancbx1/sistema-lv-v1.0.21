@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciar Comunicações</title>
+    <link rel="stylesheet" href="/css/menu-lateral.css">
+    <link rel="stylesheet" href="/css/gerenciar-comunicacoes.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body class="admin-body">
+
+    <div class="hamburger-menu">
+        <i class="fas fa-bars"></i>
+        <i class="fas fa-times"></i>
+    </div>
+
+    <main class="container-gc">
+        <div class="gc-cabecalho-pagina">
+            <h1>Gerenciar Comunicações</h1>
+        </div>
+
+        <section class="gc-card">
+            <h2 class="gc-titulo-secao">Criar Novo Comunicado</h2>
+            <form id="form-novo-comunicado" class="gc-form">
+                <div class="gc-form-grupo">
+                    <label for="input-gc-titulo">Título do Comunicado</label>
+                    <input type="text" id="input-gc-titulo" class="gc-input" placeholder="Ex: Aviso de Feriado" required>
+                </div>
+                <div class="gc-form-grupo">
+                    <label for="textarea-gc-conteudo">Conteúdo da Mensagem</label>
+                    <textarea id="textarea-gc-conteudo" class="gc-textarea" rows="8" placeholder="Escreva a mensagem completa aqui..." required></textarea>
+                </div>
+                <div class="gc-form-grupo-horizontal">
+                    <div class="gc-checkbox-wrapper">
+                        <input type="checkbox" id="check-gc-fixado">
+                        <label for="check-gc-fixado">Fixar este comunicado no topo?</label>
+                    </div>
+                    <button type="submit" id="btn-enviar-comunicado" class="gc-btn gc-btn-primario">
+                        <i class="fas fa-paper-plane"></i> Enviar Comunicado
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <section class="gc-card">
+            <h2 class="gc-titulo-secao">Comunicados Enviados</h2>
+            <div id="lista-comunicados-enviados" class="gc-lista-container">
+                <div class="spinner">Carregando comunicados...</div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Scripts -->
+    <script src="/js/utils/auth.js" type="module"></script>
+    <script src="/js/carregar-menu-lateral.js" type="module"></script>
+    <script src="/js/admin-gerenciar-comunicacoes.js" type="module"></script>
+</body>
+</html>

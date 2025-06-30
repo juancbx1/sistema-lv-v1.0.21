@@ -29,7 +29,6 @@ export const permissoesDisponiveis = [
 
     // --- PRODUÇÃO (OPs E CORTES) ---
     { id: 'acesso-ordens-de-producao', label: 'Ver Tela de Ordens de Produção', categoria: 'Produção e Cortes' },
-    { id: 'acesso-gerenciar-producao', label: 'Ver Tela de Gerenciar Produção', categoria: 'Produção e Cortes' },
     { id: 'criar-op', label: 'Ação: Criar Ordens de Produção', categoria: 'Produção e Cortes' },
     { id: 'editar-op', label: 'Ação: Editar Ordens de Produção', categoria: 'Produção e Cortes' },
     { id: 'finalizar-op', label: 'Ação: Finalizar uma OP', categoria: 'Produção e Cortes' },
@@ -39,6 +38,13 @@ export const permissoesDisponiveis = [
     { id: 'marcar-como-cortado', label: 'Ação: Mover corte para "cortado"', categoria: 'Produção e Cortes' },
     { id: 'excluir-corte-pendente', label: 'Ação: Excluir pedido de corte pendente', categoria: 'Produção e Cortes' },
     { id: 'excluir-estoque-corte', label: 'Ação: Excluir corte do estoque', categoria: 'Produção e Cortes' },
+
+    // --- GERENCIAR PRODUÇÃO ---
+    { id: 'acesso-gerenciar-producao', label: 'Ver Tela de Gerenciar Produção', categoria: 'Gerenciar Produção' },
+    { id: 'editar-registro-producao', label: 'Permite Editar Produção', categoria: 'Gerenciar Produção' },
+    { id: 'excluir-registro-producao', label: 'Permite Excluir Produção', categoria: 'Gerenciar Produção' },
+
+
 
     // --- ARREMATE E EMBALAGEM ---
     { id: 'acesso-ordens-de-arremates', label: 'Ver Tela de Ordens de Arremate', categoria: 'Arremate e Embalagem' },
@@ -62,13 +68,14 @@ export const permissoesDisponiveis = [
     // --- FINANCEIRO E RELATÓRIOS ---
     { id: 'acesso-precificacao', label: 'Ver Tela de Precificação', categoria: 'Financeiro e Relatórios' },
     { id: 'acesso-relatorio-de-comissao', label: 'Ver Relatório de Comissão', categoria: 'Financeiro e Relatórios' },
-    { id: 'acesso-relatorio-de-assinaturas', label: 'Ver Relatório de Assinaturas', categoria: 'Financeiro e Relatórios' },
+    { id: 'acesso-conferencia-e-auditoria', label: 'Ver Conferencia e Auditoria', categoria: 'Financeiro e Relatórios' },
     { id: 'acesso-producao-geral-costura', label: 'Ver Produção Geral (Costureiras)', categoria: 'Financeiro e Relatórios' },
     { id: 'gerenciar-precificacao', label: 'Ação: Editar configurações de precificação', categoria: 'Financeiro e Relatórios' },
     { id: 'confirmar-pagamento-comissao', label: 'Ação: Marcar comissões como pagas', categoria: 'Financeiro e Relatórios' },
 
     // --- CONFIGURAÇÕES ---
     { id: 'acesso-ponto-por-processo', label: 'Ver Tela de Pontos por Processo', categoria: 'Configurações' },
+    { id: 'gerenciar-comunicacoes', label: 'Ver Tela Gerenciar Comunicações', categoria: 'Configurações' },
 
     // --- AÇÕES ESPECÍFICAS DE USUÁRIOS FINAIS ---
     { id: 'assinar-producao-costureira', label: 'Ação: Costureira assina sua produção', categoria: 'Ações Específicas do Usuário' },
@@ -87,16 +94,10 @@ export const permissoesDisponiveis = [
 export const permissoesPorTipo = {
     // Perfis de produção (acesso focado)
     costureira: [
-        'acesso-dashboard',
-        'assinar-producao-costureira',
-        'ver-proprias-producoes'
+        
     ],
     tiktik: [
-        'acesso-dashboard',
-        'assinar-producao-tiktik',
-        'assinar-arremate-tiktik',
-        'ver-proprios-arremates',
-        'ver-proprias-producoes'
+        
     ],
     cortador: [],
 
@@ -116,6 +117,7 @@ export const permissoesPorTipo = {
         'acesso-ordens-de-arremates',
         'acesso-estoque',
         'acesso-relatorio-de-comissao',
+        'gerenciar-comunicacoes' 
     ],
 
     // Admin tem acesso a tudo, sempre.
