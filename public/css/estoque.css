@@ -23,7 +23,7 @@
 
 /* Reset Básico e Body */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { font-size: 16px; }
+html { font-size: 16px; touch-action: manipulation; }
 body {
     font-family: var(--es-font-principal);
     background-color: var(--es-cor-fundo-pagina);
@@ -32,6 +32,7 @@ body {
     visibility: hidden; 
     margin-left: 250px; 
     transition: margin-left 0.3s ease;
+    touch-action: manipulation;
 }
 body.autenticado { visibility: visible; }
 @media (max-width: 1024px) { body { margin-left: 0; } }
