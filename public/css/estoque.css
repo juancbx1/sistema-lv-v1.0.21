@@ -468,7 +468,7 @@ body.autenticado { visibility: visible; }
     cursor: pointer; 
     font-size: 0.95rem; 
     color: var(--es-cor-branco);
-    background: #d1d1d1;
+    background: #3498db;
     display: inline-flex; 
     align-items: center; 
     gap: 6px; 
@@ -557,6 +557,7 @@ body.autenticado { visibility: visible; }
     top: 50%; 
     left: 50%;
     transform: translate(-50%, -50%);
+    background-color: var(--es-cor-branco);
     padding: 25px 30px; 
     border-radius: var(--es-raio-borda-card); /* Usa variável de raio do estoque */
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
@@ -619,6 +620,21 @@ body.autenticado { visibility: visible; }
     color: var(--es-cor-vermelho-perigo); 
     border-left-color: var(--es-cor-vermelho-perigo); 
 }
+
+/* Estilo para o popup de confirmação perigosa */
+.es-popup-mensagem.popup-perigo {
+    background-color: #fff; /* Fundo branco */
+    color: var(--es-cor-vermelho-perigo); /* Texto principal em vermelho para indicar perigo */
+    border-left-color: var(--es-cor-vermelho-perigo);
+}
+
+/* NOVO: Estilo para o popup informativo padrão */
+.es-popup-mensagem.popup-info {
+    background-color: #eaf2f8; /* Azul bem claro */
+    color: var(--es-cor-azul-primario); 
+    border-left-color: var(--es-cor-azul-primario); 
+}
+
 .es-popup-mensagem.popup-aviso { 
     background-color: #fff4e0; /* Laranja bem claro */
     color: var(--es-cor-laranja-aviso); 
@@ -640,6 +656,8 @@ body.autenticado { visibility: visible; }
 .es-popup-mensagem button:hover { 
     background-color: #4a617a; /* Cor de hover para o botão OK */
 }
+
+
 
 .hidden { display: none !important; }
 
@@ -1919,6 +1937,292 @@ body.autenticado { visibility: visible; }
     animation: es-spin 1.2s linear infinite;
 }
 
+
+/*------------------------------------*\
+    # MÓDULO DE INVENTÁRIO
+\*------------------------------------*/
+
+/* Estilo para o container dos botões de ação principais */
+.es-botoes-acao-container {
+    display: flex;
+    gap: 15px;
+    margin-left: auto; /* Empurra o container para a direita */
+}
+
+/* Estilo base compartilhado para os botões de ação */
+.es-btn-acao {
+    width: 75px;
+    height: 50px;
+    border: none;
+    border-radius: var(--es-raio-borda-card);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.es-btn-acao:hover:not(:disabled) {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.es-btn-acao i {
+    font-size: 1.2rem; /* Tamanho do ícone */
+}
+
+/* Estilo único para o botão de Separação (SEP) */
+.es-btn-acao-sep {
+    background-color: var(--es-cor-azul-primario);
+    color: var(--es-cor-branco);
+}
+.es-btn-acao-sep:hover:not(:disabled) {
+    background-color: var(--es-cor-azul-hover);
+}
+
+/* Estilo único para o botão de Inventário (INV) */
+.es-btn-acao-inv {
+    background-color: #314b63;
+    color: var(--es-cor-branco);
+}
+.es-btn-acao-inv:hover:not(:disabled) {
+    background-color: #219d53; /* Verde um pouco mais escuro */
+}
+
+/* Estilo para quando o botão de inventário estiver com permissão negada */
+.es-btn-acao-inv.permissao-negada {
+    background-color: #e9ecef;
+    color: #adb5bd;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+.es-btn-acao-inv.permissao-negada:hover {
+    transform: none;
+}
+
+/* Estilos para a tela inicial do inventário */
+.inventario-home-botoes {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    text-align: center;
+    padding: 20px;
+    border-bottom: 1px solid var(--es-cor-cinza-borda);
+    margin-bottom: 20px;
+}
+
+#containerInventarioEmAndamento p {
+    margin-bottom: 10px;
+    font-weight: 500;
+    color: var(--es-cor-laranja-aviso);
+}
+
+.inventario-contagem-cabecalho {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.inventario-info-sessao {
+    background-color: var(--es-cor-cinza-fundo-input);
+    padding: 8px 12px;
+    border-radius: var(--es-raio-borda-botao);
+    font-size: 0.85rem;
+    color: var(--es-cor-texto-principal);
+}
+
+.inventario-info-sessao span {
+    margin-left: 15px;
+}
+.inventario-info-sessao span:first-child {
+    margin-left: 0;
+}
+
+.inventario-filtros-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    align-items: flex-end; /* Alinha labels e inputs */
+    padding-bottom: 20px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--es-cor-cinza-borda);
+}
+
+.inventario-filtros-dinamicos {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    flex-grow: 3; /* Ocupa mais espaço */
+}
+
+.inventario-filtros-visualizacao {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    margin-bottom: 20px;
+}
+.inventario-filtros-visualizacao > label {
+    font-weight: 600;
+}
+
+.es-form-grupo-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.es-form-grupo-checkbox label {
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.inventario-itens-list-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.inventario-item-card {
+    display: grid;
+    grid-template-columns: 60px 1fr 1fr 150px;
+    gap: 15px;
+    align-items: center;
+    background-color: var(--es-cor-branco);
+    padding: 10px;
+    border-radius: var(--es-raio-borda-input);
+    border: 1px solid var(--es-cor-cinza-borda);
+    border-left-width: 5px;
+    transition: background-color 0.3s, border-color 0.3s;
+}
+
+/* Destaque visual para itens modificados/divergentes */
+.inventario-item-card.modificado {
+    background-color: #fffbeb; /* Amarelo bem claro */
+    border-color: var(--es-cor-laranja-aviso);
+}
+
+.inventario-item-img {
+    width: 60px;
+    height: 60px;
+    border-radius: 4px;
+    object-fit: cover;
+}
+
+.inventario-item-info .nome-produto {
+    font-weight: 600;
+}
+.inventario-item-info .variante-produto {
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+.inventario-item-info .sku-produto {
+    font-size: 0.8rem;
+    color: #95a5a6;
+    margin-top: 5px;
+}
+
+.inventario-item-saldos {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    text-align: center;
+}
+
+.saldo-bloco .label {
+    font-size: 0.8rem;
+    color: #6c757d;
+    text-transform: uppercase;
+}
+.saldo-bloco .valor {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+.saldo-bloco .valor.sistema {
+    color: var(--es-cor-texto-principal);
+}
+
+.inventario-item-input-container .es-input {
+    text-align: center;
+    font-size: 1rem;
+    font-weight: 500;
+    max-width: 120px;
+    padding: 10px;
+    border-width: 2px;
+}
+
+.inventario-rodape-acoes {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 30px;
+    padding: 20px; /* Aumenta o padding para quando não estiver flutuando */
+    border-top: 1px solid var(--es-cor-cinza-borda);
+    transition: all 0.3s ease-in-out; /* Adiciona transição suave */
+}
+
+/* NOVO: Estilo para quando o rodapé se torna flutuante */
+.inventario-rodape-acoes.flutuante {
+    position: fixed;
+    bottom: 0;
+    left: 250px; /* Alinha com o menu lateral em telas grandes */
+    right: 0;
+    background-color: rgba(255, 255, 255, 0.95); /* Fundo branco com leve transparência */
+    backdrop-filter: blur(5px); /* Efeito de vidro fosco para navegadores modernos */
+    -webkit-backdrop-filter: blur(5px);
+    padding: 15px 50px; /* Padding ajustado para o modo flutuante */
+    margin-top: 0;
+    border-top: 1px solid var(--es-cor-cinza-borda);
+    box-shadow: 0 -4px 15px rgba(0,0,0,0.08);
+    z-index: 99; /* Garante que fique acima do conteúdo */
+    animation: es-fadeInUp-rodape 0.4s ease-out; /* Animação de entrada */
+}
+
+/* Animação para o rodapé flutuante */
+@keyframes es-fadeInUp-rodape {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+
+.diferenca-positiva {
+    color: var(--es-cor-verde-sucesso);
+    font-weight: 700;
+}
+.diferenca-negativa {
+    color: var(--es-cor-vermelho-perigo);
+    font-weight: 700;
+}
+
+.inventario-detalhes-meta {
+    display: flex;
+    justify-content: space-around;
+    flex-wrap: wrap;
+    gap: 15px;
+    background-color: var(--es-cor-cinza-fundo-input);
+    padding: 10px 15px;
+    border-radius: var(--es-raio-borda-input);
+    margin-top: -10px;
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+}
+
+
+
+
 /* Responsividade */
 
 @media (max-width: 1024px) { /* Tablets */
@@ -1927,13 +2231,28 @@ body.autenticado { visibility: visible; }
     }
 
     .fila-card-status-badge {
-    text-align: center;
+        text-align: center;
+        font-size: 0.6rem;
+        color: #314B63;
+    }
+
+    .es-tabela-estilizada {
     font-size: 1rem;
+    }
+
+    .es-tabela-estilizada th {
+        font-size: 1rem;
     }
 
 .es-movimento-grid {
         grid-template-columns: 1fr; /* Uma única coluna em telas menores */
     }
+
+    .inventario-rodape-acoes.flutuante {
+        left: 0; /* Ocupa a tela inteira em telas menores sem menu lateral fixo */
+    }
+
+
 }
 
 @media (max-width: 768px) {
@@ -2040,6 +2359,29 @@ body.autenticado { visibility: visible; }
     background-color: #fff5f5; /* Fundo levemente avermelhado */
     border-left: 4px solid var(--es-cor-vermelho-perigo);
 }
+
+/* inventario */
+
+.inventario-item-card {
+        grid-template-columns: 60px 1fr; /* Duas colunas: imagem e resto */
+        grid-template-rows: auto auto auto; /* 3 linhas */
+        gap: 5px 15px;
+    }
+    .inventario-item-img {
+        grid-row: 1 / 4; /* Imagem ocupa todas as 3 linhas */
+    }
+    .inventario-item-info { grid-row: 1 / 2; }
+    .inventario-item-saldos { grid-row: 2 / 3; justify-content: flex-start; }
+    .inventario-item-input-container { grid-row: 3 / 4; }
+
+    .inventario-rodape-acoes.flutuante {
+        padding: 15px 20px; /* Menos padding lateral no mobile */
+    }
+    .fila-card-status-badge {
+        text-align: center;
+        font-size: 0.6rem;
+        color: #314B63;
+    }
 
 }
 
@@ -2201,9 +2543,9 @@ body.autenticado { visibility: visible; }
         font-size: 0.85rem; 
         padding: 8px 10px;
     }
-    .es-btn {
-        font-size: 0.8rem; 
-        padding: 7px 12px; /* Botões menores */
+        .es-btn {
+        font-size: 0.8rem;
+        padding: 6px 6px;
     }
     .es-input-busca {
         font-size: 0.85rem;

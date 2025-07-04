@@ -24,11 +24,21 @@
     </div>
 
     <div class="es-cabecalho-pagina">
-        <h1>Controle de Estoque</h1>
-        <button id="btnIniciarSeparacao" class="es-btn-acao-principal">
-            <i class="fas fa-box-open"></i> Nova Separação
-        </button>
+        <h1>Estoque</h1>
+        
+        <!-- NOVOS BOTÕES DE AÇÃO -->
+        <div class="es-botoes-acao-container">
+            <button id="btnIniciarSeparacao" class="es-btn-acao es-btn-acao-sep" title="Nova Separação de Pedidos">
+                <i class="fas fa-box-open"></i>
+                <span>SEP</span>
+            </button>
+            <button id="btnRealizarInventario" class="es-btn-acao es-btn-acao-inv" title="Realizar Inventário de Estoque">
+                <i class="fas fa-clipboard-check"></i>
+                <span>INV</span>
+            </button>
+        </div>
     </div>
+
 
     <!-- CARDS DE ALERTA E BOTÕES DE AÇÃO -->
     <div class="es-card" style="margin-bottom: 20px;">
@@ -295,6 +305,116 @@
         </div>
         </section>
 
+        <!-- =============================================== -->
+    <!-- ### INÍCIO - NOVA VIEW DE INVENTÁRIO ### -->
+    <!-- =============================================== -->
+    <section id="inventarioView" class="hidden">
+        
+        <div id="inventarioLoadingOverlay" class="es-pagina-loading-overlay hidden">
+            <div class="es-spinner"></div>
+        </div>
+
+        <div class="es-cabecalho-pagina">
+            <h1>Inventário de Estoque</h1>
+            <button id="btnVoltarDoInventario" class="es-btn es-btn-secundario" style="margin-left: auto;">
+                <i class="fas fa-arrow-left"></i> Voltar ao Estoque
+            </button>
+        </div>
+
+        <!-- TELA INICIAL: Onde o usuário decide o que fazer -->
+        <div id="inventarioHome" class="es-card">
+            <h2 class="es-titulo-secao">Gerenciar Inventário</h2>
+            <div class="inventario-home-botoes">
+                <button id="btnIniciarNovoInventario" class="es-btn es-btn-primario">
+                    <i class="fas fa-plus-circle"></i> Iniciar Novo Inventário
+                </button>
+                <div id="containerInventarioEmAndamento" class="hidden">
+                    <p>Há um inventário em andamento.</p>
+                    <button id="btnContinuarInventario" class="es-btn es-btn-sucesso">
+                        <i class="fas fa-play-circle"></i> Continuar Contagem
+                    </button>
+                </div>
+            </div>
+            
+            <h3 class="es-titulo-secao" style="margin-top: 30px; font-size: 1.2rem;">Histórico de Inventários</h3>
+            <div class="es-tabela-wrapper">
+                <table class="es-tabela-estilizada">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Status</th>
+                            <th>Iniciado em</th>
+                            <th>Finalizado em</th>
+                            <th>Responsável</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaHistoricoInventarioBody">
+                        <!-- Histórico será preenchido pelo JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TELA DE CONTAGEM: Onde a mágica acontece -->
+        <div id="inventarioContagem" class="hidden">
+            <div class="es-card">
+                <div class="inventario-contagem-cabecalho">
+                    <h2 class="es-titulo-secao">Contagem de Itens</h2>
+                    <div class="inventario-info-sessao">
+                        <span>Sessão: <strong id="inventarioSessaoId">#</strong></span>
+                        <span>Iniciada em: <strong id="inventarioSessaoData">--/--/----</strong></span>
+                    </div>
+                </div>
+
+                <!-- ÁREA DE FILTROS -->
+                <div class="inventario-filtros-container">
+                    <div class="es-form-grupo" style="flex-grow: 2;">
+                        <label for="invFiltroProduto">Filtrar por Produto</label>
+                        <select id="invFiltroProduto" class="es-select"></select>
+                    </div>
+                    <!-- Container para filtros de variação que serão criados dinamicamente -->
+                    <div id="invFiltrosVariacoesContainer" class="inventario-filtros-dinamicos"></div>
+                    <div class="es-form-grupo">
+                        <label for="invBuscaSku">Buscar por SKU</label>
+                        <input type="text" id="invBuscaSku" class="es-input" placeholder="Digite ou escaneie o SKU...">
+                    </div>
+                </div>
+                
+                <!-- Filtros de Visualização -->
+                <div class="inventario-filtros-visualizacao">
+                    <label>Mostrar:</label>
+                    <div class="es-form-grupo-checkbox">
+                        <input type="radio" id="radioVerTodos" name="filtroContagem" value="todos" checked>
+                        <label for="radioVerTodos">Todos</label>
+                    </div>
+                    <div class="es-form-grupo-checkbox">
+                        <input type="radio" id="radioVerNaoContados" name="filtroContagem" value="nao_contados">
+                        <label for="radioVerNaoContados">Não Contados</label>
+                    </div>
+                    <div class="es-form-grupo-checkbox">
+                        <input type="radio" id="radioVerDivergentes" name="filtroContagem" value="divergentes">
+                        <label for="radioVerDivergentes">Com Divergência</label>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- CONTAINER PARA A LISTA DE ITENS A SEREM CONTADOS -->
+            <div id="inventarioItensContainer" class="inventario-itens-list-container">
+                <!-- Os cards de contagem de itens serão inseridos aqui pelo JS -->
+            </div>
+            
+            <div class="inventario-rodape-acoes">
+                 <button id="btnRevisarInventario" class="es-btn es-btn-primario" disabled>
+                    <i class="fas fa-check-double"></i> Revisar e Finalizar
+                </button>
+            </div>
+        </div>
+
+    </section>
+    <!-- ### FIM - NOVA VIEW DE INVENTÁRIO ### -->
+
     </main>
 
 
@@ -436,6 +556,74 @@
                         </tr>
                     </thead>
                     <tbody id="tabelaItensArquivadosBody">
+                        <!-- Conteúdo será preenchido pelo JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+         <!-- MODAL PARA REVISÃO DO INVENTÁRIO -->
+    <div id="modalRevisaoInventario" class="es-modal" style="display: none;">
+        <div class="es-modal-conteudo" style="max-width: 800px;">
+            <button class="botao-fechar es-btn-perigo" id="fecharModalRevisaoInventario" title="Fechar">X</button>
+            <h3>Revisão do Inventário</h3>
+            <p style="text-align:center; margin-top: -10px; margin-bottom: 20px; color: #6c757d;">
+                Confira as divergências encontradas. Somente estes itens terão o saldo de estoque ajustado.
+            </p>
+
+            <div class="es-tabela-wrapper" style="max-height: 60vh; overflow-y: auto;">
+                <table class="es-tabela-estilizada">
+                    <thead>
+                        <tr>
+                            <th>Produto / Variação</th>
+                            <th style="text-align: center;">Sistema</th>
+                            <th style="text-align: center;">Contado</th>
+                            <th style="text-align: center;">Diferença</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaRevisaoInventarioBody">
+                        <!-- Conteúdo será preenchido pelo JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="es-form-botoes" style="margin-top: 25px;">
+                <button type="button" class="es-btn es-btn-secundario" id="cancelarRevisaoInventario">Voltar para Contagem</button>
+                <button type="button" class="es-btn es-btn-sucesso" id="btnConfirmarFinalizacaoInventario">
+                    <i class="fas fa-check-circle"></i> Confirmar e Ajustar Estoque
+                </button>
+            </div>
+        </div>
+    </div>
+
+     <!-- MODAL PARA DETALHES DE INVENTÁRIO FINALIZADO -->
+    <div id="modalDetalhesInventario" class="es-modal" style="display: none;">
+        <div class="es-modal-conteudo" style="max-width: 800px;">
+            <button class="botao-fechar es-btn-perigo" id="fecharModalDetalhesInventario" title="Fechar">X</button>
+            <h3 id="detalhesInventarioTitulo">Detalhes do Inventário #</h3>
+            
+            <div class="inventario-detalhes-meta">
+                <div><strong>Responsável:</strong> <span id="detalhesInventarioResponsavel"></span></div>
+                <div><strong>Início:</strong> <span id="detalhesInventarioInicio"></span></div>
+                <div><strong>Fim:</strong> <span id="detalhesInventarioFim"></span></div>
+            </div>
+
+            <p style="text-align:center; margin-top: 15px; margin-bottom: 20px; color: #6c757d; font-size: 0.9em;">
+                Abaixo estão listadas apenas as divergências que resultaram em ajustes no estoque.
+            </p>
+
+            <div class="es-tabela-wrapper" style="max-height: 50vh; overflow-y: auto;">
+                <table class="es-tabela-estilizada">
+                    <thead>
+                        <tr>
+                            <th>Produto / Variação</th>
+                            <th style="text-align: center;">Estoque Anterior</th>
+                            <th style="text-align: center;">Contado</th>
+                            <th style="text-align: center;">Ajuste</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaDetalhesInventarioBody">
                         <!-- Conteúdo será preenchido pelo JS -->
                     </tbody>
                 </table>

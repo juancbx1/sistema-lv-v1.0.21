@@ -38,6 +38,9 @@ let produtoEmDetalheSeparacao = null;
 // --- VARIÁVEIS PARA O MÓDULO DE FILA DE PRODUCAO ---
 let promessasDeProducaoCache = [];
 
+// --- VARIÁVEIS PARA O MÓDULO DE INVENTÁRIO ---
+let sessaoInventarioAtiva = null; // Guarda os dados da sessão de inventário em andamento
+let limparListenerRodape = null; // <<< NOVA VARIÁVEL GLOBAL
 
 
 // --- FUNÇÃO DE POPUP DE MENSAGEM (Sem alterações) ---
@@ -1644,11 +1647,17 @@ async function salvarMovimentoManualEstoque() {
 
 // --- LÓGICA DE ROTEAMENTO (HASHCHANGE) ---
 function handleHashChangeEstoque() {
+    if (typeof limparListenerRodape === 'function') {
+        limparListenerRodape();
+        limparListenerRodape = null; // Reseta a variável para a próxima vez
+    }
+
     const mainView = document.getElementById('mainViewEstoque');
     const movimentoView = document.getElementById('editarEstoqueMovimentoView');
-    const separacaoView = document.getElementById('separacaoView'); 
+    const separacaoView = document.getElementById('separacaoView');
+    const inventarioView = document.getElementById('inventarioView'); // <<< NOVO
 
-    if (!mainView || !movimentoView || !separacaoView) {
+    if (!mainView || !movimentoView || !separacaoView || !inventarioView) { // <<< NOVO
         console.error("[handleHashChangeEstoque] Uma ou mais views não encontradas.");
         return;
     }
@@ -1657,11 +1666,25 @@ function handleHashChangeEstoque() {
     mainView.style.display = 'none'; mainView.classList.remove('hidden');
     movimentoView.style.display = 'none'; movimentoView.classList.remove('hidden');
     separacaoView.style.display = 'none'; separacaoView.classList.remove('hidden');
+    inventarioView.style.display = 'none'; inventarioView.classList.remove('hidden'); // <<< NOVO
 
     const hash = window.location.hash;
 
+    if (hash.startsWith('#inventario')) {
+    inventarioView.style.display = 'block';
+    
+    // Rota para a tela de contagem de uma sessão específica
+    if (hash.includes('/contagem/')) {
+        const idSessao = hash.split('/contagem/')[1];
+        mostrarTelaDeContagem(idSessao); // Função que vamos criar
+    } 
+    // Rota para a home do inventário
+    else {
+        prepararViewInventario();
+    }
+}
     // Rota para a nova view de movimento
-    if (hash === '#editar-estoque-movimento') {
+    else if (hash === '#editar-estoque-movimento') {
         if (!itemEstoqueSelecionado) {
             console.warn("Tentativa de acessar #editar-estoque-movimento sem um item selecionado. Redirecionando.");
             window.location.hash = ''; // Volta para a lista
@@ -2410,6 +2433,591 @@ async function inicializarPaginaEstoque() {
     console.log('[Estoque inicializarPaginaEstoque] Concluído.');
 }
 
+// =========================================================================
+// ### INÍCIO - MÓDULO DE INVENTÁRIO ###
+// =========================================================================
+
+async function prepararViewInventario() {
+    console.log('[prepararViewInventario] Preparando a view de inventário...');
+    
+    // Garante que a tela de contagem esteja oculta e a tela inicial visível
+    document.getElementById('inventarioHome').classList.remove('hidden');
+    document.getElementById('inventarioContagem').classList.add('hidden');
+    
+    const historicoBody = document.getElementById('tabelaHistoricoInventarioBody');
+    const btnIniciarNovo = document.getElementById('btnIniciarNovoInventario');
+    const containerEmAndamento = document.getElementById('containerInventarioEmAndamento');
+
+    // Mostra um spinner enquanto carrega
+    historicoBody.innerHTML = `<tr><td colspan="6" style="text-align:center;"><div class="es-spinner"></div> Carregando histórico...</td></tr>`;
+    btnIniciarNovo.disabled = true;
+    containerEmAndamento.classList.add('hidden');
+
+    try {
+        // Chama a nossa nova API
+        const dadosSessoes = await fetchEstoqueAPI('/inventario/sessoes');
+
+        // Lógica para controlar os botões com base na resposta da API
+        if (dadosSessoes.sessaoEmAndamento) {
+            sessaoInventarioAtiva = dadosSessoes.sessaoEmAndamento;
+            btnIniciarNovo.classList.add('hidden'); // Esconde o botão de iniciar novo
+            containerEmAndamento.classList.remove('hidden'); // Mostra o de continuar
+        } else {
+            sessaoInventarioAtiva = null;
+            btnIniciarNovo.classList.remove('hidden'); // Mostra o botão de iniciar
+            containerEmAndamento.classList.add('hidden'); // Esconde o de continuar
+        }
+        
+        // Renderiza a tabela de histórico
+        renderizarHistoricoInventario(dadosSessoes.historico);
+
+    } catch (error) {
+        console.error('[prepararViewInventario] Erro ao buscar sessões:', error);
+        historicoBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">Falha ao carregar histórico.</td></tr>`;
+        mostrarPopupEstoque('Não foi possível carregar os dados do inventário.', 'erro');
+    } finally {
+        btnIniciarNovo.disabled = false; // Reabilita o botão em qualquer cenário
+    }
+}
+
+async function iniciarNovoInventario() {
+    console.log('[iniciarNovoInventario] Tentando iniciar novo inventário...');
+    const btn = document.getElementById('btnIniciarNovoInventario');
+    const overlay = document.getElementById('inventarioLoadingOverlay');
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Iniciando...';
+    overlay.classList.remove('hidden');
+
+    try {
+        const resultado = await fetchEstoqueAPI('/inventario/iniciar', {
+            method: 'POST',
+            body: JSON.stringify({ observacoes: 'Inventário iniciado via sistema web.' }) // Podemos adicionar um campo de observação depois
+        });
+
+        sessaoInventarioAtiva = resultado.sessao;
+        mostrarPopupEstoque(`Novo inventário #${sessaoInventarioAtiva.id} iniciado com ${resultado.totalItens} itens.`, 'sucesso');
+        
+        window.location.hash = `#inventario/contagem/${sessaoInventarioAtiva.id}`;
+
+    } catch (error) {
+        console.error('[iniciarNovoInventario] Erro:', error);
+        // A API já retorna um erro 409 se houver um inventário em andamento.
+        const mensagem = error.data?.error || error.message || 'Erro desconhecido ao iniciar inventário.';
+        mostrarPopupEstoque(mensagem, 'erro');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-plus-circle"></i> Iniciar Novo Inventário';
+        overlay.classList.add('hidden');
+    }
+}
+
+function renderizarHistoricoInventario(sessoes) {
+    const tbody = document.getElementById('tabelaHistoricoInventarioBody');
+    tbody.innerHTML = '';
+
+    if (!sessoes || sessoes.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;">Nenhum inventário finalizado encontrado.</td></tr>`;
+        return;
+    }
+
+    sessoes.forEach(sessao => {
+        const tr = tbody.insertRow();
+
+        let statusClass = '';
+        switch (sessao.status.toUpperCase()) {
+            case 'FINALIZADO':
+                statusClass = 'status-ok'; // Reutilizaremos alguma classe de status existente se possível
+                break;
+            case 'CANCELADO': // Se um dia implementarmos
+                statusClass = 'status-urgente';
+                break;
+            default:
+                statusClass = 'status-baixo';
+        }
+        
+        // Formata as datas para exibição
+        const dataInicio = new Date(sessao.data_inicio).toLocaleString('pt-BR');
+        const dataFim = sessao.data_fim ? new Date(sessao.data_fim).toLocaleString('pt-BR') : '-';
+
+        tr.innerHTML = `
+            <td data-label="ID">#${sessao.id}</td>
+            <td data-label="Status"><span class="fila-card-status-badge ${statusClass}">${sessao.status}</span></td>
+            <td data-label="Iniciado em">${dataInicio}</td>
+            <td data-label="Finalizado em">${dataFim}</td>
+            <td data-label="Responsável">${sessao.usuario_responsavel || 'N/A'}</td>
+            <td data-label="Ações" style="text-align:center;">
+            <button class="es-btn es-btn-secundario" onclick="abrirModalDetalhesInventario(${sessao.id})">
+                <i class="fas fa-eye"></i> Ver
+            </button>
+            </td>
+        `;
+    });
+}
+
+async function abrirModalDetalhesInventario(idSessao) {
+    const modal = document.getElementById('modalDetalhesInventario');
+    const tbody = document.getElementById('tabelaDetalhesInventarioBody');
+    
+    // Mostra o modal e um spinner
+    modal.style.display = 'flex';
+    tbody.innerHTML = `<tr><td colspan="4"><div class="es-spinner"></div></td></tr>`;
+    
+    try {
+        const dados = await fetchEstoqueAPI(`/inventario/sessoes/${idSessao}`);
+        const { sessao, itens } = dados;
+
+        // Preenche o cabeçalho do modal
+        document.getElementById('detalhesInventarioTitulo').textContent = `Detalhes do Inventário #${sessao.id}`;
+        document.getElementById('detalhesInventarioResponsavel').textContent = sessao.usuario_responsavel;
+        document.getElementById('detalhesInventarioInicio').textContent = new Date(sessao.data_inicio).toLocaleString('pt-BR');
+        document.getElementById('detalhesInventarioFim').textContent = new Date(sessao.data_fim).toLocaleString('pt-BR');
+        
+        // Filtra para mostrar apenas itens com divergência
+        const itensDivergentes = itens.filter(item => item.quantidade_contada !== null && item.quantidade_contada !== item.quantidade_sistema);
+
+        tbody.innerHTML = ''; // Limpa o spinner
+        if (itensDivergentes.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;">Nenhuma divergência foi encontrada neste inventário.</td></tr>`;
+            return;
+        }
+
+        itensDivergentes.forEach(item => {
+            const tr = tbody.insertRow();
+            const diferenca = item.quantidade_contada - item.quantidade_sistema;
+            const classeDiferenca = diferenca > 0 ? 'diferenca-positiva' : 'diferenca-negativa';
+            const sinal = diferenca > 0 ? '+' : '';
+
+            tr.innerHTML = `
+                <td>
+                    <strong>${item.produto_nome}</strong><br>
+                    <small>${item.variante_nome}</small>
+                </td>
+                <td style="text-align: center;">${item.quantidade_sistema}</td>
+                <td style="text-align: center;">${item.quantidade_contada}</td>
+                <td style="text-align: center;" class="${classeDiferenca}">${sinal}${diferenca}</td>
+            `;
+        });
+
+    } catch (error) {
+        console.error('Erro ao buscar detalhes do inventário:', error);
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:red;">Falha ao carregar detalhes.</td></tr>`;
+    }
+}
+
+function fecharModalDetalhesInventario() {
+    document.getElementById('modalDetalhesInventario').style.display = 'none';
+}
+
+// Anexa a nova função ao window para que o onclick no HTML funcione
+window.abrirModalDetalhesInventario = abrirModalDetalhesInventario;
+
+
+// Guarda o cache dos itens da sessão atual para evitar buscas repetidas
+let itensSessaoInventarioCache = [];
+
+async function mostrarTelaDeContagem(idSessao) {
+    console.log(`[mostrarTelaDeContagem] Carregando contagem para sessão #${idSessao}`);
+
+    document.getElementById('inventarioHome').classList.add('hidden');
+    document.getElementById('inventarioContagem').classList.remove('hidden');
+    
+    const container = document.getElementById('inventarioItensContainer');
+    const overlay = document.getElementById('inventarioLoadingOverlay');
+    overlay.classList.remove('hidden');
+    container.innerHTML = `<div class="es-spinner"></div> Carregando itens...`;
+
+    try {
+        // AGORA USANDO A API REAL
+        const dadosSessao = await fetchEstoqueAPI(`/inventario/sessoes/${idSessao}`);
+        
+        sessaoInventarioAtiva = dadosSessao.sessao; // Salva a sessão ativa globalmente
+        itensSessaoInventarioCache = dadosSessao.itens; // Salva os itens no cache local
+
+        // Preenche o cabeçalho
+        document.getElementById('inventarioSessaoId').textContent = `#${sessaoInventarioAtiva.id}`;
+        document.getElementById('inventarioSessaoData').textContent = new Date(sessaoInventarioAtiva.data_inicio).toLocaleDateString('pt-BR');
+
+        // Verifica se algum item na sessão já foi contado
+        const temItensContados = itensSessaoInventarioCache.some(item => item.quantidade_contada !== null);
+        document.getElementById('btnRevisarInventario').disabled = !temItensContados;
+
+        // Renderiza os itens
+        renderizarItensDeContagem(itensSessaoInventarioCache);
+        
+        // Adiciona os listeners aos inputs de contagem (MUITO IMPORTANTE)
+        adicionarListenersContagem();
+        
+        // Configura os filtros com base nos itens carregados
+        configurarFiltrosInventario();
+
+         // A função retorna uma função de limpeza, que guardamos na variável global
+        limparListenerRodape = gerenciarRodapeAcoesFixo();
+
+
+    } catch (error) {
+        console.error(`[mostrarTelaDeContagem] Erro:`, error);
+        container.innerHTML = `<p style="color:red; text-align:center;">Erro ao carregar itens da sessão de inventário.</p>`;
+        // Oferece uma forma de voltar em caso de erro
+        setTimeout(() => { window.location.hash = '#inventario'; }, 3000);
+    } finally {
+        overlay.classList.add('hidden');
+    }
+}
+
+function renderizarItensDeContagem(itens) {
+    const container = document.getElementById('inventarioItensContainer');
+    container.innerHTML = '';
+
+    if (!itens || itens.length === 0) {
+        container.innerHTML = `<p style="text-align:center;">Nenhum item para contar nesta sessão.</p>`;
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    itens.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'inventario-item-card';
+        
+        // Adiciona a classe 'modificado' se a quantidade contada for diferente da do sistema
+        if (item.quantidade_contada !== null && item.quantidade_contada !== item.quantidade_sistema) {
+            div.classList.add('modificado');
+        }
+
+        div.innerHTML = `
+            <img src="${item.imagem || '/img/placeholder-image.png'}" alt="${item.produto_nome}" class="inventario-item-img" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">
+            
+            <div class="inventario-item-info">
+                <div class="nome-produto">${item.produto_nome}</div>
+                <div class="variante-produto">${item.variante_nome}</div>
+                <div class="sku-produto">SKU: ${item.produto_ref_id}</div>
+            </div>
+
+            <div class="inventario-item-saldos">
+                <div class="saldo-bloco">
+                    <div class="label">ATUAL</div>
+                    <div class="valor sistema">${item.quantidade_sistema}</div>
+                </div>
+            </div>
+
+            <div class="inventario-item-input-container">
+                <input 
+                    type="number" 
+                    class="es-input input-contagem" 
+                    value="${item.quantidade_contada !== null ? item.quantidade_contada : ''}"
+                    placeholder="nova qtde"
+                    min="0"
+                    data-ref-id="${item.produto_ref_id}">
+            </div>
+        `;
+        fragment.appendChild(div);
+    });
+
+    container.appendChild(fragment);
+}
+
+function adicionarListenersContagem() {
+    const container = document.getElementById('inventarioItensContainer');
+    const btnRevisar = document.getElementById('btnRevisarInventario'); // <<< Pega a referência do botão aqui
+    
+    // Usando delegação de eventos para performance
+    container.addEventListener('input', debounce(async (event) => {
+        if (event.target.classList.contains('input-contagem')) {
+            const input = event.target;
+            const produtoRefId = input.dataset.refId;
+            const quantidadeStr = input.value;
+
+            // Não faz nada se o campo estiver vazio
+            if (quantidadeStr.trim() === '') {
+                return;
+            }
+            
+            const quantidade = parseInt(quantidadeStr, 10);
+
+            // Validação simples no frontend
+            if (isNaN(quantidade) || quantidade < 0) {
+                input.style.borderColor = 'red'; // Feedback visual de erro
+                return;
+            }
+            
+            input.style.borderColor = ''; // Reseta o feedback visual
+            input.disabled = true; // Desabilita o input enquanto salva
+
+            try {
+                await fetchEstoqueAPI(`/inventario/sessoes/${sessaoInventarioAtiva.id}/contar`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        produto_ref_id: produtoRefId,
+                        quantidade_contada: quantidade
+                    })
+                });
+
+                // *** LÓGICA CORRIGIDA E ADICIONADA AQUI ***
+                // Se o botão de revisão ainda estiver desabilitado, habilita-o.
+                // Isso acontecerá apenas na primeira vez que uma contagem for salva com sucesso.
+                if (btnRevisar.disabled) {
+                    btnRevisar.disabled = false;
+                    mostrarPopupEstoque('Contagem salva. Você já pode revisar e finalizar o inventário.', 'info', 3000);
+                }
+                // ********************************************
+
+                // Atualiza o cache local para refletir a contagem
+                const itemCache = itensSessaoInventarioCache.find(i => i.produto_ref_id === produtoRefId);
+                if (itemCache) {
+                    itemCache.quantidade_contada = quantidade;
+                    // Atualiza o visual do card (adiciona/remove classe 'modificado')
+                    const card = input.closest('.inventario-item-card');
+                    if (itemCache.quantidade_contada !== itemCache.quantidade_sistema) {
+                        card.classList.add('modificado');
+                    } else {
+                        card.classList.remove('modificado');
+                    }
+                }
+
+            } catch (error) {
+                console.error('Erro ao salvar contagem:', error);
+                mostrarPopupEstoque(`Falha ao salvar a contagem para ${produtoRefId}`, 'erro');
+                input.style.borderColor = 'red';
+            } finally {
+                input.disabled = false; // Reabilita o input
+            }
+        }
+    }, 700)); // Espera 800ms após o usuário parar de digitar para salvar
+}
+
+function configurarFiltrosInventario() {
+    // Referências aos elementos de filtro
+    const filtroProdutoSelect = document.getElementById('invFiltroProduto');
+    const filtrosVariacoesContainer = document.getElementById('invFiltrosVariacoesContainer');
+    const buscaSkuInput = document.getElementById('invBuscaSku');
+    const containerFiltrosVisualizacao = document.querySelector('.inventario-filtros-visualizacao');
+
+    // Limpa filtros anteriores para evitar duplicação
+    filtroProdutoSelect.innerHTML = '';
+    filtrosVariacoesContainer.innerHTML = '';
+    buscaSkuInput.value = '';
+
+    // --- 1. Popular o filtro de Produto Principal ---
+    const nomesDeProdutos = [...new Set(itensSessaoInventarioCache.map(item => item.produto_nome))].sort();
+    
+    let optionsHtml = '<option value="">-- Todos os Produtos --</option>';
+    nomesDeProdutos.forEach(nome => {
+        optionsHtml += `<option value="${nome}">${nome}</option>`;
+    });
+    filtroProdutoSelect.innerHTML = optionsHtml;
+
+    // --- 2. Adicionar Event Listeners ---
+    filtroProdutoSelect.addEventListener('change', aplicarFiltrosInventario);
+    buscaSkuInput.addEventListener('input', debounce(aplicarFiltrosInventario, 350));
+    
+    // Listener para os filtros de rádio (visualização)
+    containerFiltrosVisualizacao.addEventListener('change', (event) => {
+        if (event.target.name === 'filtroContagem') {
+            aplicarFiltrosInventario();
+        }
+    });
+
+    // Listener para os filtros de variação (que serão criados dinamicamente)
+    filtrosVariacoesContainer.addEventListener('change', (event) => {
+        if (event.target.tagName === 'SELECT') {
+            aplicarFiltrosInventario();
+        }
+    });
+
+    // Listener especial para o filtro de produto, que cria os filtros de variação
+    filtroProdutoSelect.addEventListener('change', () => {
+        const produtoSelecionado = filtroProdutoSelect.value;
+        criarFiltrosDeVariacao(produtoSelecionado);
+        aplicarFiltrosInventario(); // Aplica todos os filtros novamente
+    });
+}
+
+function criarFiltrosDeVariacao(produtoNome) {
+    const container = document.getElementById('invFiltrosVariacoesContainer');
+    container.innerHTML = ''; // Limpa os filtros de variação antigos
+
+    if (!produtoNome) {
+        return; // Se o usuário selecionar "Todos os Produtos", não há filtros de variação
+    }
+
+    // Encontra a definição de um produto para saber a estrutura das variações
+    const produtoDef = todosOsProdutosCadastrados.find(p => p.nome === produtoNome);
+    if (!produtoDef || !produtoDef.variacoes || produtoDef.variacoes.length === 0) {
+        return; // Produto sem variações definidas
+    }
+
+    // Pega todos os itens da sessão que pertencem a este produto
+    const itensDoProduto = itensSessaoInventarioCache.filter(i => i.produto_nome === produtoNome);
+
+    produtoDef.variacoes.forEach((variacaoDef, index) => {
+        // Coleta todos os valores únicos para esta variação (ex: todas as cores)
+        const valoresUnicos = [...new Set(
+            itensDoProduto.map(item => {
+                const partes = item.variante_nome.split(' | ');
+                return partes[index] ? partes[index].trim() : null;
+            }).filter(Boolean) // Remove nulos ou vazios
+        )].sort();
+
+        if (valoresUnicos.length > 1) { // Só cria o filtro se houver mais de uma opção
+            const formGrupo = document.createElement('div');
+            formGrupo.className = 'es-form-grupo';
+            
+            formGrupo.innerHTML = `
+                <label for="invFiltroVar-${variacaoDef.chave}">${variacaoDef.chave}</label>
+                <select id="invFiltroVar-${variacaoDef.chave}" class="es-select filtro-variacao-inv" data-variacao-index="${index}">
+                    <option value="">-- Todos os ${variacaoDef.chave}s --</option>
+                    ${valoresUnicos.map(val => `<option value="${val}">${val}</option>`).join('')}
+                </select>
+            `;
+            container.appendChild(formGrupo);
+        }
+    });
+}
+
+function aplicarFiltrosInventario() {
+    // Pega os valores atuais de todos os filtros
+    const produtoFiltro = document.getElementById('invFiltroProduto').value;
+    const skuFiltro = document.getElementById('invBuscaSku').value.toLowerCase();
+    const filtroVisualizacao = document.querySelector('input[name="filtroContagem"]:checked').value;
+
+    let itensFiltrados = [...itensSessaoInventarioCache];
+
+    // 1. Filtro por Produto Principal
+    if (produtoFiltro) {
+        itensFiltrados = itensFiltrados.filter(item => item.produto_nome === produtoFiltro);
+    }
+
+    // 2. Filtro por Variações Dinâmicas
+    document.querySelectorAll('.filtro-variacao-inv').forEach(select => {
+        const valor = select.value;
+        const index = parseInt(select.dataset.variacaoIndex, 10);
+        if (valor) {
+            itensFiltrados = itensFiltrados.filter(item => {
+                const partes = item.variante_nome.split(' | ');
+                return partes[index] && partes[index].trim() === valor;
+            });
+        }
+    });
+
+    // 3. Filtro por SKU
+    if (skuFiltro) {
+        itensFiltrados = itensFiltrados.filter(item => item.produto_ref_id.toLowerCase().includes(skuFiltro));
+    }
+
+    // 4. Filtro de Visualização
+    switch (filtroVisualizacao) {
+        case 'nao_contados':
+            itensFiltrados = itensFiltrados.filter(item => item.quantidade_contada === null);
+            break;
+        case 'divergentes':
+            itensFiltrados = itensFiltrados.filter(item => item.quantidade_contada !== null && item.quantidade_contada !== item.quantidade_sistema);
+            break;
+        // O caso 'todos' já é o padrão, não precisa de filtro.
+    }
+
+    // Re-renderiza a lista com os itens filtrados
+    renderizarItensDeContagem(itensFiltrados);
+}
+
+function abrirModalRevisao() {
+    const modal = document.getElementById('modalRevisaoInventario');
+    const tbody = document.getElementById('tabelaRevisaoInventarioBody');
+    tbody.innerHTML = ''; // Limpa a tabela
+
+    // Filtra apenas os itens com divergência
+    const itensDivergentes = itensSessaoInventarioCache.filter(
+        item => item.quantidade_contada !== null && item.quantidade_contada !== item.quantidade_sistema
+    );
+
+    if (itensDivergentes.length === 0) {
+        mostrarPopupEstoque('Nenhuma divergência encontrada. Não há nada a ajustar.', 'info');
+        return;
+    }
+
+    itensDivergentes.forEach(item => {
+        const tr = tbody.insertRow();
+        const diferenca = item.quantidade_contada - item.quantidade_sistema;
+        const classeDiferenca = diferenca > 0 ? 'diferenca-positiva' : 'diferenca-negativa';
+        const sinal = diferenca > 0 ? '+' : '';
+
+        tr.innerHTML = `
+            <td>
+                <strong>${item.produto_nome}</strong><br>
+                <small>${item.variante_nome}</small>
+            </td>
+            <td style="text-align: center;">${item.quantidade_sistema}</td>
+            <td style="text-align: center;">${item.quantidade_contada}</td>
+            <td style="text-align: center;" class="${classeDiferenca}">${sinal}${diferenca}</td>
+        `;
+    });
+
+    modal.style.display = 'flex';
+}
+
+function fecharModalRevisao() {
+    document.getElementById('modalRevisaoInventario').style.display = 'none';
+}
+
+async function finalizarInventario() {
+    const btn = document.getElementById('btnConfirmarFinalizacaoInventario');
+    const confirmado = await mostrarPopupConfirmacao(
+        'Tem certeza que deseja finalizar este inventário?<br>Os saldos de estoque dos itens listados serão <b>permanentemente ajustados</b>.',
+        'perigo'
+    );
+
+    if (!confirmado) return;
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Finalizando...';
+
+    try {
+        const resultado = await fetchEstoqueAPI(`/inventario/sessoes/${sessaoInventarioAtiva.id}/finalizar`, {
+            method: 'POST'
+        });
+
+        mostrarPopupEstoque(resultado.message, 'sucesso');
+        
+        // Limpa o cache de estoque para forçar a recarga na próxima vez que a tela principal for vista
+        saldosEstoqueGlobaisCompletos = [];
+        
+        // Limpa a sessão ativa e volta para a home do inventário
+        sessaoInventarioAtiva = null;
+        fecharModalRevisao();
+        window.location.hash = '#inventario'; // Volta para a home do inventário que irá recarregar
+
+    } catch (error) {
+        console.error('Erro ao finalizar inventário:', error);
+        mostrarPopupEstoque(`Falha ao finalizar: ${error.data?.details || error.message}`, 'erro');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check-circle"></i> Confirmar e Ajustar Estoque';
+    }
+}
+
+function gerenciarRodapeAcoesFixo() {
+    const rodape = document.getElementById('inventarioContagem').querySelector('.inventario-rodape-acoes');
+    const containerItens = document.getElementById('inventarioItensContainer');
+    
+    if (!rodape || !containerItens) return;
+
+    const gatilhoPosicao = containerItens.offsetTop;
+
+    const handleScroll = () => {
+        if (window.scrollY > gatilhoPosicao) {
+            rodape.classList.add('flutuante');
+        } else {
+            rodape.classList.remove('flutuante');
+        }
+    };
+    
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+        window.removeEventListener('scroll', handleScroll);
+        rodape.classList.remove('flutuante');
+    };
+}
+
 
 function setupEventListenersEstoque() {
     console.log('[Estoque setupEventListenersEstoque] Configurando listeners...');
@@ -2563,7 +3171,47 @@ function setupEventListenersEstoque() {
         });
     }
 
+    // --- LÓGICA DE PERMISSÃO E AÇÃO PARA O BOTÃO DE INVENTÁRIO ---
+    const btnRealizarInventario = document.getElementById('btnRealizarInventario');
+    if (btnRealizarInventario) {
+        if (permissoesGlobaisEstoque.includes('fazer-inventario')) {
+            btnRealizarInventario.addEventListener('click', () => {
+                window.location.hash = '#inventario';
+            });
+        } else {
+            btnRealizarInventario.classList.add('permissao-negada');
+            btnRealizarInventario.disabled = true; // Desabilita semanticamente
+            btnRealizarInventario.addEventListener('click', (e) => {
+                e.preventDefault(); // Garante que nenhuma ação padrão ocorra
+                mostrarPopupEstoque('Você não tem permissão para realizar inventários.', 'aviso');
+            });
+        }
+    }
 
+    // Listener para o botão de voltar do inventário
+    document.getElementById('btnVoltarDoInventario')?.addEventListener('click', () => {
+        // Adicionar lógica de confirmação se houver trabalho não salvo
+        window.location.hash = '#';
+    });
+
+    // Listener para iniciar um novo inventário
+    document.getElementById('btnIniciarNovoInventario')?.addEventListener('click', iniciarNovoInventario);
+
+    document.getElementById('btnContinuarInventario')?.addEventListener('click', () => {
+    if (sessaoInventarioAtiva) {
+        window.location.hash = `#inventario/contagem/${sessaoInventarioAtiva.id}`;
+        mostrarPopupEstoque(`Continuando inventário #${sessaoInventarioAtiva.id}. Tela de contagem a ser implementada.`, 'info');
+    } else {
+        mostrarPopupEstoque('Nenhuma sessão de inventário ativa encontrada para continuar.', 'erro');
+    }
+    });
+
+    document.getElementById('btnRevisarInventario')?.addEventListener('click', abrirModalRevisao);
+    document.getElementById('fecharModalRevisaoInventario')?.addEventListener('click', fecharModalRevisao);
+    document.getElementById('cancelarRevisaoInventario')?.addEventListener('click', fecharModalRevisao);
+    document.getElementById('btnConfirmarFinalizacaoInventario')?.addEventListener('click', finalizarInventario);
+
+    document.getElementById('fecharModalDetalhesInventario')?.addEventListener('click', fecharModalDetalhesInventario);
 
 }
 

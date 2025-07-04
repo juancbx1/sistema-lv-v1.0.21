@@ -64,7 +64,9 @@ export const permissoesDisponiveis = [
     { id: 'gerenciar-niveis-alerta-estoque', label: 'Ação: Gerenciar níveis de alerta', categoria: 'Estoque' },
     { id: 'arquivar-produto-do-estoque', label: 'Ação: Arquivar um produto', categoria: 'Estoque' },
     { id: 'editar-itens-arquivados', label: 'Ação: Editar/retirar itens arquivados', categoria: 'Estoque' },
-    
+    { id: 'fazer-inventario', label: 'Ação: Permite Realizar Inventário', categoria: 'Estoque' },
+
+
     // --- FINANCEIRO E RELATÓRIOS ---
     { id: 'acesso-precificacao', label: 'Ver Tela de Precificação', categoria: 'Financeiro e Relatórios' },
     { id: 'acesso-relatorio-de-comissao', label: 'Ver Relatório de Comissão', categoria: 'Financeiro e Relatórios' },
