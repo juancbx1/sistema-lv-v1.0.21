@@ -30,7 +30,6 @@ import dashboardRouter from './api/dashboard.js';
 import auditoriaRouter from './api/auditoria.js';
 import comunicacoesRouter from './api/comunicacoes.js';
 import ticketsRouter from './api/tickets.js';
-import perfisRouter from './api/perfis.js'; 
 import inventarioRouter from './api/inventario.js';
 
 
@@ -72,7 +71,6 @@ const routers = {
     auditoriaRouter,
     comunicacoesRouter,
     ticketsRouter,
-    perfisRouter,
     inventarioRouter
 
 };
@@ -108,8 +106,7 @@ app.use('/api/dashboard', dashboardRouter);
 app.use('/api/auditoria', auditoriaRouter);
 app.use('/api/comunicacoes', comunicacoesRouter);
 app.use('/api/tickets', ticketsRouter);
-app.use('/api/perfis', perfisRouter);
-app.use('/api/inventario', inventarioRouter);
+app.use('/api/inventario', inventarioRouter)
 
 
 app.get('/api/ping', (req, res) => res.status(200).json({ message: 'pong do server.js' }));
