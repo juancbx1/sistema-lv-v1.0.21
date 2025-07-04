@@ -2362,13 +2362,22 @@ body.autenticado { visibility: visible; }
 
 /* inventario */
 
-.inventario-item-card {
+ .inventario-item-card {
         grid-template-columns: 60px 1fr; /* Duas colunas: imagem e resto */
         grid-template-rows: auto auto auto; /* 3 linhas */
         gap: 5px 15px;
     }
+    
+    /* ### CORREÇÃO PARA O FILTRO VAZANDO ### */
+    .inventario-filtros-visualizacao {
+        flex-wrap: wrap; /* Permite que os itens quebrem para a próxima linha */
+        gap: 15px;       /* Opcional: Reduz um pouco o espaçamento para otimizar o espaço */
+    }
+    /* ####################################### */
+
     .inventario-item-img {
         grid-row: 1 / 4; /* Imagem ocupa todas as 3 linhas */
+    
     }
     .inventario-item-info { grid-row: 1 / 2; }
     .inventario-item-saldos { grid-row: 2 / 3; justify-content: flex-start; }
