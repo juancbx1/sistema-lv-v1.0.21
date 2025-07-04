@@ -278,11 +278,24 @@
                         <option value="baixo">Baixo</option>
                     </select>
                 </div>
+                
+                <!-- ### NOVO FILTRO DE PRODUTO ### -->
+                <div id="filtrosFilaProduto" class="es-form-grupo">
+                    <label for="filtroFilaProdutoSelect">Filtrar por Produto</label>
+                    <select id="filtroFilaProdutoSelect" class="es-select">
+                        <option value="">Todos os Produtos</option>
+                        <!-- Opções serão populadas pelo JS -->
+                    </select>
+                </div>
+                <!-- ############################### -->
+
                 <div id="filtrosFilaDinamicos">
                     <!-- Filtros dinâmicos (cor, tamanho, etc.) serão inseridos aqui -->
                 </div>
                 <button id="limparFiltrosFilaBtn" class="es-btn es-btn-perigo" style="align-self: flex-end;">Limpar</button>
             </div>
+
+
 
             <button id="btnSalvarPrioridades" class="es-btn es-btn-primario hidden">
                 <i class="fas fa-save"></i> Salvar Ordem da Fila

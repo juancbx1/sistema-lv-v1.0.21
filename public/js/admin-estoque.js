@@ -856,6 +856,19 @@ async function mostrarViewFilaProducao() {
         // Busca as promessas ativas do backend
         promessasDeProducaoCache = await fetchEstoqueAPI('/producao-promessas');
         
+        // ### LÓGICA PARA POPULAR O NOVO FILTRO ###
+        const filtroProdutoSelect = document.getElementById('filtroFilaProdutoSelect');
+        const nomesDeProdutos = [...new Set(todosOsProdutosCadastrados.map(p => p.nome))].sort();
+        
+        // Preserva a opção "Todos" e adiciona as outras
+        filtroProdutoSelect.innerHTML = `<option value="">Todos os Produtos</option>`;
+        nomesDeProdutos.forEach(nome => {
+            filtroProdutoSelect.innerHTML += `<option value="${nome}">${nome}</option>`;
+        });
+        // Adiciona o listener para reagir a mudanças
+        filtroProdutoSelect.addEventListener('change', renderizarFilaDeProducao);
+        // #########################################
+
         // Renderiza as duas abas
         renderizarFilaDeProducao();
         renderizarPromessasEmProducao();
@@ -933,6 +946,7 @@ function renderizarFilaDeProducao() {
 
     // 1. Pega os valores dos filtros da fila
     const statusFiltro = document.getElementById('filtroFilaStatusSelect').value;
+    const produtoFiltro = document.getElementById('filtroFilaProdutoSelect').value; // <<< LÊ O NOVO FILTRO
     const filtrosDinamicosFila = {};
     document.querySelectorAll('.filtro-dinamico-fila').forEach(select => {
         if (select.value) {
@@ -954,6 +968,14 @@ function renderizarFilaDeProducao() {
         });
 
     // 3. Aplica os filtros
+    if (produtoFiltro) {
+        itensFiltrados = itensFiltrados.filter(config => {
+            // Precisamos encontrar o nome do produto a partir do produto_ref_id
+            const itemSaldo = saldosEstoqueGlobaisCompletos.find(s => s.produto_ref_id === config.produto_ref_id);
+            return itemSaldo && itemSaldo.produto_nome === produtoFiltro;
+        });
+    }
+
     if (statusFiltro) {
         itensFiltrados = itensFiltrados.filter(config => {
             const itemSaldo = saldosEstoqueGlobaisCompletos.find(s => s.produto_ref_id === config.produto_ref_id);
@@ -3054,6 +3076,7 @@ function setupEventListenersEstoque() {
     document.getElementById('filtroFilaStatusSelect')?.addEventListener('change', renderizarFilaDeProducao);
     document.getElementById('limparFiltrosFilaBtn')?.addEventListener('click', () => {
     document.getElementById('filtroFilaStatusSelect').value = '';
+    document.getElementById('filtroFilaProdutoSelect').value = '';
     document.querySelectorAll('.filtro-dinamico-fila').forEach(s => s.value = '');
     renderizarFilaDeProducao();
     });

@@ -1691,8 +1691,14 @@ body.autenticado { visibility: visible; }
     margin-left: 15px;
 }
 
-.fila-card-status-badge.status-urgente { background-color: var(--es-cor-vermelho-urgente); }
-.fila-card-status-badge.status-baixo { background-color: var(--es-cor-laranja-aviso); }
+.fila-card-status-badge.status-urgente { 
+    background-color: var(--es-cor-vermelho-urgente);
+    color: var(--es-cor-branco);
+}
+.fila-card-status-badge.status-baixo { 
+    background-color: var(--es-cor-laranja-aviso);
+    color: var(--es-cor-branco); 
+}
 
 /* Estilo para o Overlay de carregamento da página inteira */
 .es-pagina-loading-overlay {
@@ -2552,9 +2558,9 @@ body.autenticado { visibility: visible; }
         font-size: 0.85rem; 
         padding: 8px 10px;
     }
-        .es-btn {
+    .es-btn {
         font-size: 0.8rem;
-        padding: 6px 6px;
+        padding: 7px 10px;
     }
     .es-input-busca {
         font-size: 0.85rem;
