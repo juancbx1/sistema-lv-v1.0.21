@@ -1,0 +1,803 @@
+/*==========================================================================
+   1. VARIÁVEIS E BASE
+   ========================================================================== */
+:root {
+    --fc-cor-fundo-pagina: #f4f6f8;
+    --fc-cor-fundo-card: #ffffff;
+    --fc-cor-texto-principal: #333;
+    --fc-cor-texto-secundario: #6c757d;
+    --fc-cor-borda: #e9ecef;
+    --fc-cor-primaria: #3498db;
+    --fc-cor-primaria-hover: #2980b9;
+    --fc-cor-secundaria: #7f8c8d;
+    --fc-cor-secundaria-hover: #6c7a7b;
+    --fc-cor-receita: #27ae60;
+    --fc-cor-despesa: #e74c3c;
+    --fc-cor-aviso: #f39c12;
+    --fc-font-principal: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    --fc-sombra-padrao: 0 3px 8px rgba(0, 0, 0, 0.05);
+    --fc-raio-borda: 8px;
+}
+
+html { touch-action: manipulation; }
+body {
+    font-family: var(--fc-font-principal);
+    background-color: var(--fc-cor-fundo-pagina);
+    color: var(--fc-cor-texto-principal);
+    margin-left: 250px;
+    transition: margin-left 0.3s ease;
+    touch-action: manipulation;
+}
+.hidden { display: none !important; }
+
+/* ==========================================================================
+   2. LAYOUT PRINCIPAL E NAVEGAÇÃO
+   ========================================================================== */
+.fc-main-container { padding: 30px; max-width: 1600px; margin: 0 auto; }
+.fc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.fc-header h1 { font-size: 2rem; font-weight: 600; }
+.fc-card { 
+    background-color: var(--fc-cor-fundo-card); 
+    border-radius: var(--fc-raio-borda); 
+    padding: 15px; 
+    box-shadow: var(--fc-sombra-padrao); 
+    border: 1px solid var(--fc-cor-borda); 
+}
+.fc-section-title { font-size: 1.5rem; color: #2c3e50; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid var(--fc-cor-borda); font-weight: 500; }
+
+/* Abas */
+.fc-tabs-container { 
+    display: flex; 
+    border-bottom: 1px solid var(--fc-cor-borda); 
+    margin: 0 10px 5px 0; 
+
+}
+.fc-tab-btn { padding: 12px 25px; cursor: pointer; border: none; background-color: transparent; border-bottom: 3px solid transparent; font-size: 1rem; font-weight: 500; color: var(--fc-cor-texto-secundario); transition: all 0.2s; display: flex; align-items: center; gap: 8px; }
+.fc-tab-btn:hover { color: var(--fc-cor-primaria); }
+.fc-tab-btn.active { color: var(--fc-cor-primaria); border-bottom-color: var(--fc-cor-primaria); }
+.fc-tabs-content { padding-top: 25px; }
+.fc-tab-panel { display: none; }
+.fc-tab-panel.active {
+    display: block; /* Mantém como padrão para outras abas */
+    animation: fc-fadeIn 0.4s;
+}
+/* NOVA REGRA ESPECÍFICA PARA O PAINEL DO DASHBOARD */
+#tab-dashboard.active {
+    display: grid;
+    gap: 30px; /* Espaço entre a seção de saldos e a de alertas */
+}
+
+@keyframes fc-fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.fc-content-wrapper {
+    background-color: var(--fc-cor-fundo-card);
+    border-radius: var(--fc-raio-borda);
+    padding: 25px;
+    box-shadow: var(--fc-sombra-padrao);
+    border: 1px solid var(--fc-cor-borda);
+}
+
+.fc-placeholder-container {
+    padding: 20px;
+    text-align: center;
+}
+
+.fc-spinner {
+    display: flex; 
+    justify-content: center; 
+    align-items: center;
+    padding: 25px; 
+    font-size: 0.9rem; 
+    color: var(--fc-cor-texto-secundario);
+    gap: 10px;
+}
+.fc-spinner::before {
+    content: ''; 
+    display: inline-block; 
+    width: 22px;
+    height: 22px;
+    border: 3px solid var(--fc-cor-borda);
+    border-top-color: var(--fc-cor-primaria);
+    border-radius: 50%; 
+    animation: fc-spin 1s linear infinite;
+}
+
+/* Esqueleto para os cards */
+.skeleton {
+    animation: skeleton-loading 1s linear infinite alternate;
+}
+@keyframes skeleton-loading {
+    from { background-color: #f0f3f5; }
+    to { background-color: #e9ecef; }
+}
+
+.skeleton-card {
+    height: 120px; /* Altura similar à de um card real */
+    border-radius: var(--fc-raio-borda);
+}
+
+/* ==========================================================================
+   3. DASHBOARD
+   ========================================================================== */
+.fc-section-container { 
+    margin-bottom: 30px; 
+}
+.fc-dashboard-grid { 
+    gap: 20px; 
+}
+.fc-alertas-grid {
+    display: grid; /* E aqui para os alertas */
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.fc-saldos-grid {
+    display: grid; /* Mantemos o grid aqui para o layout interno do saldo */
+    grid-template-columns: 1fr;
+}
+.fc-saldo-consolidado-card { background-color: #f8f9fa; border-radius: var(--fc-raio-borda); padding: 20px 25px; border: 1px solid var(--fc-cor-borda); }
+.fc-saldo-consolidado-card .total-label { font-size: 1rem; font-weight: 600; color: var(--fc-cor-texto-secundario); text-transform: uppercase; margin: 0; }
+.fc-saldo-consolidado-card .total-valor { font-size: 2.5rem; font-weight: 700; color: var(--fc-cor-primaria); margin-bottom: 15px; line-height: 1.2; }
+.fc-saldo-lista { list-style: none; padding-left: 0; margin: 0; }
+.fc-saldo-lista-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; font-size: 0.95rem; border-top: 1px solid var(--fc-cor-borda); }
+.fc-saldo-lista-item .nome-conta { font-weight: 500; }
+.fc-alerta-card { display: flex; flex-direction: column; justify-content: space-between; background-color: var(--fc-cor-fundo-card); border-radius: var(--fc-raio-borda); padding: 20px; box-shadow: var(--fc-sombra-padrao); border-left: 5px solid; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; text-decoration: none; color: inherit; }
+.fc-alerta-card:hover { transform: translateY(-5px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); }
+.fc-alerta-card .titulo { font-size: 1rem; font-weight: 700; text-transform: uppercase; display: flex; align-items: center; gap: 10px; }
+.fc-alerta-card .dados-principais { text-align: right; margin: 15px 0; }
+.fc-alerta-card .contador { font-size: 2.5rem; font-weight: 700; line-height: 1; }
+.fc-alerta-card .label-contador { font-size: 0.9rem; color: var(--fc-cor-texto-secundario); }
+.fc-alerta-card .total-valor { font-size: 1.1rem; font-weight: 500; text-align: right; margin-top: 5px; }
+.fc-alerta-card.pagar-hoje { border-left-color: var(--fc-cor-despesa); }
+.fc-alerta-card.pagar-hoje .titulo, .fc-alerta-card.pagar-hoje .contador { color: var(--fc-cor-despesa); }
+.fc-alerta-card.pagar-3d { 
+    border-left-color: var(--fc-cor-aviso); 
+    margin: 10px 0;
+}
+.fc-alerta-card.pagar-3d .titulo, .fc-alerta-card.pagar-3d .contador { color: var(--fc-cor-aviso); }
+.fc-alerta-card.pagar-5d { border-left-color: var(--fc-cor-secundaria); }
+.fc-alerta-card.pagar-5d .titulo, .fc-alerta-card.pagar-5d .contador { color: var(--fc-cor-secundaria); }
+
+/* ==========================================================================
+   4. AGENDA E LANÇAMENTOS
+   ========================================================================== */
+.fc-agenda-cards-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; }
+.fc-agenda-card { 
+    display: flex; 
+    flex-direction: column; 
+    background-color: #fff; 
+    border-radius: var(--fc-raio-borda); 
+    border-left: 5px solid; 
+    box-shadow: var(--fc-sombra-padrao); 
+    padding: 15px;
+    margin: 15px 0;
+}
+.fc-agenda-card.pagar { border-left-color: var(--fc-cor-despesa); }
+.fc-agenda-card.receber { border-left-color: var(--fc-cor-receita); }
+.fc-agenda-card.atrasado .vencimento { color: var(--fc-cor-despesa); font-weight: 700; }
+.fc-agenda-card .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.fc-agenda-card .info { flex-grow: 1; }
+.fc-agenda-card .descricao { font-size: 1.1rem; font-weight: 600; margin-bottom: 5px; }
+.fc-agenda-card .valor { font-size: 1.2rem; font-weight: 700; white-space: nowrap; }
+.fc-agenda-card.pagar .valor { color: var(--fc-cor-despesa); }
+.fc-agenda-card.receber .valor { color: var(--fc-cor-receita); }
+.fc-agenda-card .footer { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; font-size: 0.9rem; color: var(--fc-cor-texto-secundario); }
+
+.fc-lancamentos-cards-container {
+    display: grid;
+    grid-template-columns: 1fr; /* Por padrão, um card por linha */
+    gap: 15px;
+}
+
+.fc-lancamento-card {
+    display: grid;
+    grid-template-areas:
+        "header actions"
+        "details actions"
+        "status actions"; /* NOVA ÁREA DE STATUS */
+    grid-template-columns: 1fr auto; /* Coluna da esquerda flexível, direita automática */
+    grid-template-rows: auto auto auto; /* Linhas com altura automática */
+    gap: 5px 15px;
+    background-color: var(--fc-cor-fundo-card);
+    border-radius: var(--fc-raio-borda);
+    border-left: 5px solid;
+    box-shadow: var(--fc-sombra-padrao);
+    padding: 15px;
+}
+
+/* Cores da borda */
+.fc-lancamento-card.receita { border-left-color: var(--fc-cor-receita); }
+.fc-lancamento-card.despesa { border-left-color: var(--fc-cor-despesa); }
+
+/* Área do cabeçalho com descrição e valor */
+.fc-lancamento-card .header {
+    grid-area: header;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 15px;
+}
+.fc-lancamento-card .descricao {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+.fc-lancamento-card .valor {
+    font-size: 1.2rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.fc-lancamento-card.receita .valor { color: var(--fc-cor-receita); }
+.fc-lancamento-card.despesa .valor { color: var(--fc-cor-despesa); }
+
+/* Área de detalhes com informações secundárias */
+.fc-lancamento-card .details {
+    grid-area: details;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px 15px; /* Espaçamento vertical e horizontal */
+    font-size: 0.85rem;
+    color: var(--fc-cor-texto-secundario);
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--fc-cor-borda);
+}
+.fc-lancamento-card .detail-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* Área de ações com os botões */
+.fc-lancamento-card .actions {
+    grid-area: actions;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 10px;
+}
+.fc-lancamento-card .actions .fc-btn-icon {
+    width: 36px;
+    height: 36px;
+    font-size: 0.9rem;
+}
+
+/* Estilo para um lançamento aguardando aprovação */
+.fc-lancamento-card.pendente {
+    border-left-color: var(--fc-cor-texto-secundario); /* Borda cinza */
+    background-color: #f8f9fa; /* Fundo levemente acinzentado */
+}
+
+/* Adiciona um ícone e texto de status no rodapé do card */
+.fc-lancamento-card .status-pendente {
+    grid-area: status; /* ASSOCIA À NOVA ÁREA DE GRID */
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--fc-cor-texto-secundario);
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--fc-cor-borda);
+}
+
+/* ==========================================================================
+   5. TELA DE CONFIGURAÇÕES
+   ========================================================================== */
+.fc-config-layout { display: flex; gap: 30px; }
+.fc-config-menu { flex: 0 0 220px; }
+.fc-config-menu-item { display: block; padding: 12px 15px; border-radius: 6px; text-decoration: none; color: var(--fc-cor-texto-secundario); font-weight: 500; margin-bottom: 5px; transition: all 0.2s; }
+.fc-config-menu-item:hover { background-color: #e9ecef; color: var(--fc-cor-texto-principal); }
+.fc-config-menu-item.active { background-color: var(--fc-cor-primaria); color: #fff; }
+.fc-config-content { flex-grow: 1; }
+.fc-config-panel { display: none; }
+.fc-config-panel.active { display: block; }
+.fc-table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.fc-table-title { font-size: 1.2rem; font-weight: 600; margin: 0; }
+.fc-grupo-acordeao .grupo-header { background-color: #f8f9fa; padding: 10px 15px; font-weight: 600; border: 1px solid var(--fc-cor-borda); border-radius: 6px; margin-top: 15px; }
+.fc-grupo-acordeao .categorias-lista td { padding-left: 30px; }
+
+/* ==========================================================================
+   6. COMPONENTES GERAIS
+   ========================================================================== */
+.fc-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 18px; font-size: 0.9rem; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; transition: all 0.2s; color: #fff; }
+.fc-btn-primario { background-color: var(--fc-cor-primaria); }
+.fc-btn-primario:hover { background-color: var(--fc-cor-primaria-hover); }
+.fc-btn-secundario { background-color: var(--fc-cor-secundaria); }
+.fc-btn-secundario:hover { background-color: var(--fc-cor-secundaria-hover); }
+.fc-btn-outline { background-color: transparent; color: var(--fc-cor-primaria); border: 1px solid var(--fc-cor-primaria); }
+.fc-btn-outline:hover { background-color: var(--fc-cor-primaria); color: #fff; }
+.fc-btn-icon { background: none; border: none; color: var(--fc-cor-texto-secundario); font-size: 1.4rem; cursor: pointer; padding: 5px 10px; border-radius: 50%; }
+.fc-btn-icon:hover { color: var(--fc-cor-primaria); background-color: #e9ecef; }
+.fc-btn-icon.fechar { background-color: var(--fc-cor-despesa); color: #fff; width: 32px; height: 32px; font-size: 1rem; line-height: 1; }
+.fc-btn-icon.fechar:hover { background-color: #c0392b; }
+.fc-btn-disabled { background-color: #e9ecef !important; color: #adb5bd !important; border-color: #dee2e6 !important; cursor: not-allowed !important; opacity: 0.8; }
+.fc-fab { position: fixed; bottom: 25px; right: 25px; width: 60px; height: 60px; border-radius: 50%; background-color: var(--fc-cor-primaria); color: #fff; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.25); z-index: 1000; cursor: pointer; transition: transform 0.2s, background-color 0.2s; }
+.fc-fab:hover { transform: scale(1.1); background-color: var(--fc-cor-primaria-hover); }
+.fc-modal { 
+    display: none; 
+    position: fixed; 
+    z-index: 1050; 
+    left: 0; 
+    top: 0; 
+    width: 100%; 
+    height: 100%; 
+    background-color: rgba(0,0,0,0.5); 
+    justify-content: center; 
+    align-items: center; 
+}
+.fc-modal-content { 
+    background-color: var(--fc-cor-fundo-card); 
+    padding: 25px; 
+    border-radius: var(--fc-raio-borda); 
+    width: 80%; 
+    max-width: 500px; 
+    position: relative; 
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.5); 
+}
+.fc-modal-close { position: absolute; top: -15px; right: -15px; width: 32px; height: 32px; border-radius: 50%; background-color: var(--fc-cor-despesa); color: #fff; border: 2px solid #fff; cursor: pointer; font-size: 1rem; line-height: 1; display: flex; align-items: center; justify-content: center; }
+.fc-modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--fc-cor-borda); }
+.fc-form-group { margin-bottom: 1rem; }
+.fc-form-group label { display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--fc-cor-texto-secundario); }
+.fc-input, .fc-select { 
+    width: 90%; 
+    padding: 10px 12px; 
+    font-size: 1rem; 
+    border: 1px solid #ced4da; 
+    border-radius: 6px; 
+}
+.fc-autocomplete-container { position: relative; } /* ... autocomplete styles ... */
+.fc-tabela-container { overflow-x: auto; }
+.fc-tabela-estilizada { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.fc-tabela-estilizada th, .fc-tabela-estilizada td { padding: 12px 15px; border-bottom: 1px solid var(--fc-cor-borda); text-align: left; vertical-align: middle; }
+.fc-tabela-estilizada th { background-color: #f8f9fa; font-weight: 600; color: #2c3e50; text-transform: uppercase; font-size: 0.8rem; }
+.fc-tabela-estilizada tr:last-child td { border-bottom: none; }
+
+.fc-btn-atualizar {
+    background-color: transparent;
+    color: var(--fc-cor-primaria);
+    border: 1px solid var(--fc-cor-borda);
+    border-radius: 50px;
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.fc-btn-atualizar:hover:not(:disabled) {
+    background-color: var(--fc-cor-primaria);
+    color: #fff;
+    border-color: var(--fc-cor-primaria);
+}
+.fc-btn-atualizar:disabled i {
+    animation: fc-spin 1.2s linear infinite;
+}
+@keyframes fc-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+
+.fc-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background-color: var(--fc-cor-despesa);
+    color: #fff;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--fc-cor-fundo-card);
+}
+.fc-header-actions .fc-btn-icon {
+    position: relative; /* Necessário para o badge se posicionar corretamente */
+}
+
+/* Adicionar na seção 4. AGENDA E LANÇAMENTOS (ou crie uma nova) */
+.fc-aprovacao-card {
+    background-color: #fff;
+    border: 1px solid var(--fc-cor-borda);
+    border-left: 5px solid var(--fc-cor-aviso);
+    border-radius: var(--fc-raio-borda);
+    margin-bottom: 20px;
+    box-shadow: var(--fc-sombra-padrao);
+}
+.fc-aprovacao-card .meta-info {
+    padding: 10px 15px;
+    background-color: #f8f9fa;
+    font-size: 0.85rem;
+    color: var(--fc-cor-texto-secundario);
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--fc-cor-borda);
+}
+.fc-aprovacao-card .dados-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    padding: 20px;
+}
+.fc-aprovacao-card .dados-bloco h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    font-size: 0.9rem;
+    color: var(--fc-cor-texto-secundario);
+}
+.fc-aprovacao-card .dados-bloco.exclusao h4 {
+    color: var(--fc-cor-despesa);
+}
+.fc-aprovacao-card .dados-bloco ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 0.9rem;
+}
+.fc-aprovacao-card .dados-bloco .alterado {
+    background-color: #fff3cd; /* Fundo amarelo para destacar */
+    font-weight: bold;
+}
+.fc-aprovacao-card .acoes-aprovacao {
+    padding: 15px;
+    border-top: 1px solid var(--fc-cor-borda);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.fc-lancamento-card .descricao-wrapper {
+    display: flex;
+    flex-direction: column;
+}
+.fc-lancamento-card .lancamento-id {
+    font-size: 0.75rem;
+    color: var(--fc-cor-texto-secundario);
+    font-weight: 500;
+}
+.fc-lancamento-card .status-placeholder {
+    min-height: 20px; /* Garante que o card mantenha a altura mesmo sem status */
+    grid-area: status;
+}
+
+/* ==========================================================================
+   9. POPUPS PERSONALIZADOS
+   ========================================================================== */
+.fc-popup-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; 
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.4);
+    z-index: 2000;
+    animation: fc-fadeIn 0.3s ease;
+}
+
+.fc-popup-mensagem {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: var(--fc-cor-fundo-card);
+    padding: 25px 30px;
+    border-radius: var(--fc-raio-borda);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    z-index: 2001;
+    max-width: 480px;
+    width: 80%;
+    text-align: center;
+    border-left: 5px solid;
+    animation: fc-slideIn 0.3s ease-out;
+}
+
+/* Animações */
+@keyframes fc-fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fc-fadeOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes fc-slideIn { from { opacity: 0; transform: translate(-50%, -60%); } to { opacity: 1; transform: translate(-50%, -50%); } }
+@keyframes fc-slideOut { to { opacity: 0; transform: translate(-50%, -60%); } }
+
+.fc-popup-mensagem p {
+    font-size: 1.05rem;
+    line-height: 1.5;
+    margin-bottom: 20px;
+    font-weight: 500;
+}
+
+/* Cores por tipo */
+.fc-popup-mensagem.popup-sucesso { border-left-color: var(--fc-cor-receita); }
+.fc-popup-mensagem.popup-erro { border-left-color: var(--fc-cor-despesa); }
+.fc-popup-mensagem.popup-aviso { border-left-color: var(--fc-cor-aviso); }
+.fc-popup-mensagem.popup-info { border-left-color: var(--fc-cor-primaria); }
+
+.fc-popup-mensagem .botoes-container {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-top: 10px;
+}
+
+.fc-popup-mensagem .fc-form-group {
+    text-align: left;
+    margin: 15px 0;
+}
+.fc-popup-mensagem .fc-input {
+    width: 100%;
+}
+
+/* ==========================================================================
+   10. FILTROS E PAGINAÇÃO
+   ========================================================================== */
+.fc-filtros-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 25px;
+    padding: 20px;
+    background-color: #f8f9fa;
+    border: 1px solid var(--fc-cor-borda);
+    border-radius: var(--fc-raio-borda);
+}
+
+.fc-filtros-container {
+    /* ... estilos existentes ... */
+    /* Animação de "acordeão" */
+    max-height: 0;
+    overflow: hidden;
+    padding: 0;
+    margin: -15px 0 20px 0;
+    border-width: 0;
+    transition: max-height 0.4s ease-out, padding 0.4s ease-out, margin 0.4s ease-out, border-width 0.4s ease-out;
+}
+
+.fc-filtros-container .fc-form-group {
+    margin-bottom: 0;
+}
+
+.fc-paginacao-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin-top: 25px;
+    padding: 10px 0;
+}
+
+.fc-paginacao-container .fc-btn {
+    padding: 8px 16px;
+}
+
+.fc-paginacao-container .pagination-current {
+    font-size: 0.9rem;
+    color: var(--fc-cor-texto-secundario);
+    font-weight: 500;
+}
+
+.fc-filtros-container .button-container {
+    display: flex;
+    justify-content: flex-end; /* Alinha o botão à direita no desktop */
+    align-items: center;
+    grid-column: 1 / -1; /* Garante que o container ocupe toda a largura */
+}
+
+#btnLimparFiltros {
+    background-color: var(--fc-cor-texto-secundario);
+    padding: 8px 15px; /* Um pouco menor que os botões primários */
+}
+
+.fc-busca-e-filtros-linha {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+
+.fc-filtros-container:not(.hidden) {
+    max-height: 400px; /* Altura máxima para o container aberto */
+    padding: 20px;
+    border-width: 1px;
+}
+
+/* ==========================================================================
+   11. PAINEL DE NOTIFICAÇÕES
+   ========================================================================== */
+.fc-notificacoes-painel {
+    position: absolute;
+    top: 75px;
+    right: 30px;
+    width: 450px; /* << NOVA LARGURA PADRÃO PARA DESKTOP/IPAD */
+    max-width: 90vw; /* Garante que não vaze em telas estreitas */
+    background-color: var(--fc-cor-fundo-card);
+    border-radius: var(--fc-raio-borda);
+    box-shadow: 0 5px 25px rgba(0,0,0,0.15);
+    z-index: 1100;
+    border: 1px solid var(--fc-cor-borda);
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: none;
+}
+
+.fc-notificacoes-painel:not(.hidden) {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.fc-notificacoes-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    border-bottom: 1px solid var(--fc-cor-borda);
+}
+.fc-notificacoes-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.fc-link-btn {
+    background: none;
+    border: none;
+    color: var(--fc-cor-primaria);
+    font-size: 0.8rem;
+    cursor: pointer;
+    font-weight: 500;
+}
+.fc-link-btn:hover {
+    text-decoration: underline;
+}
+
+.fc-notificacoes-lista {
+    max-height: 400px;
+    overflow-y: auto;
+}
+.fc-notificacoes-lista .sem-notificacoes {
+    padding: 20px;
+    text-align: center;
+    color: var(--fc-cor-texto-secundario);
+}
+
+.fc-notificacao-item {
+    display: flex;
+    gap: 15px;
+    padding: 15px;
+    border-bottom: 1px solid var(--fc-cor-borda);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.fc-notificacao-item:hover {
+    background-color: #f8f9fa;
+}
+.fc-notificacao-item:last-child {
+    border-bottom: none;
+}
+.fc-notificacao-item.nao-lida {
+    background-color: #eaf2f8; /* Fundo azul claro para não lidas */
+}
+
+.fc-notificacao-item .icone {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+.fc-notificacao-item .icone.sucesso { color: var(--fc-cor-receita); }
+.fc-notificacao-item .icone.rejeicao { color: var(--fc-cor-despesa); }
+.fc-notificacao-item .icone.info { color: var(--fc-cor-primaria); }
+
+.fc-notificacao-item .conteudo .mensagem {
+    font-size: 0.9rem;
+    line-height: 1.4;
+    margin-bottom: 5px;
+}
+.fc-notificacao-item .conteudo .data {
+    font-size: 0.75rem;
+    color: var(--fc-cor-texto-secundario);
+}
+
+/* ==========================================================================
+   12. HISTÓRICO DE AUDITORIA
+   ========================================================================== */
+.fc-log-card {
+    display: flex;
+    gap: 15px;
+    padding: 15px 0;
+    border-bottom: 1px solid var(--fc-cor-borda);
+}
+.fc-log-card:last-child {
+    border-bottom: none;
+}
+
+.fc-log-card .icone {
+    font-size: 1.2rem;
+    color: var(--fc-cor-texto-secundario);
+    width: 30px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.fc-log-card .conteudo .detalhes {
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+.fc-log-card .conteudo .meta {
+    font-size: 0.8rem;
+    color: var(--fc-cor-texto-secundario);
+    margin-top: 5px;
+}
+
+/* ==========================================================================
+    11. RESPONSIVIDADE
+   ========================================================================== */
+@media (max-width: 1024px) { body { margin-left: 0; } }
+@media (max-width: 768px) {
+    .fc-main-container { padding: 15px; }
+    .fc-header h1 { font-size: 1.5rem; }
+    .fc-tabs-container { overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+    .fc-tab-btn { flex-shrink: 0; }
+    .fc-saldos-grid, .fc-alertas-grid, .fc-agenda-cards-container { grid-template-columns: 1fr; }
+    .fc-config-layout { flex-direction: column; }
+    .fc-config-menu { flex: 1; display: flex; overflow-x: auto; border-bottom: 1px solid var(--fc-cor-borda); margin-bottom: 20px; }
+    .fc-config-menu-item { flex-shrink: 0; }
+    #modal-lancamento .fc-form-row { flex-direction: column; gap: 0; }
+    #modal-lancamento .fc-form-row .fc-form-group { margin-bottom: 1rem; }
+    /* Tabela Responsiva */
+    .fc-tabela-container .fc-tabela-estilizada thead { display: none; }
+    .fc-tabela-container .fc-tabela-estilizada tr { display: block; border: 1px solid var(--fc-cor-borda); border-radius: var(--fc-raio-borda); padding: 15px; margin-bottom: 15px; }
+    .fc-tabela-container .fc-tabela-estilizada td { display: flex; justify-content: space-between; padding: 10px 0; text-align: right; border-bottom: 1px dotted #e9ecef; }
+    .fc-tabela-container .fc-tabela-estilizada td:last-child { border-bottom: none; }
+    .fc-tabela-container .fc-tabela-estilizada td::before { content: attr(data-label); font-weight: 600; text-align: left; margin-right: 15px; color: var(--fc-cor-texto-principal); }
+    .fc-filtros-container {
+        grid-template-columns: 1fr 1fr; /* Força duas colunas em telas de tablet */
+    }
+
+    /* Garante que o campo de busca ocupe a largura total */
+    .fc-filtros-container .fc-form-group.full-width {
+        grid-column: 1 / -1;
+    }
+    .fc-filtros-container .button-container {
+        justify-content: stretch; /* Ocupa toda a largura */
+    }
+    #btnLimparFiltros {
+        width: 100%; /* Botão ocupa 100% da largura no mobile */
+        justify-content: center;
+    }
+    .fc-content-wrapper {
+    padding: 10px;
+    
+}
+
+}
+@media (max-width: 480px) {
+    .fc-main-container { padding: 10px; }
+    .fc-header h1 { font-size: 1.3rem; }
+    .fc-tab-btn { padding: 10px 15px; font-size: 0.9rem; }
+    .fc-btn { padding: 8px 12px; font-size: 0.85rem; }
+    .fc-fab { width: 55px; height: 55px; right: 15px; bottom: 15px; }
+    .fc-alerta-card .contador { font-size: 2rem; }
+    .fc-alerta-card .total-valor { font-size: 1rem; }
+    .fc-modal-content { padding: 15px; }
+    .fc-filtros-container {
+        grid-template-columns: 1fr; /* Força UMA coluna no mobile */
+    }
+
+    .fc-busca-e-filtros-linha {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    align-items: center;
+    margin-bottom: 20px;
+    }
+    .fc-notificacoes-painel {
+        width: 350px; /* << LARGURA AJUSTADA PARA MOBILE */
+        right: 10px; /* Aproxima um pouco mais da borda */
+    }
+
+}
+@media (max-width: 414px) {
+    .fc-header h1 { font-size: 1.2rem; }
+    .fc-saldo-consolidado-card .total-valor { font-size: 2.2rem; }
+    .fc-saldo-lista-item { font-size: 0.9rem; }
+}

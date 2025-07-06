@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financeiro</title>
+    <link rel="stylesheet" href="/css/menu-lateral.css">
+    <link rel="stylesheet" href="/css/financeiro.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+</head>
+<body>
+    <div class="hamburger-menu">
+        <i class="fas fa-bars"></i>
+        <i class="fas fa-times"></i>
+    </div>
+
+    <main class="fc-main-container">
+    <!-- CONTAINER PAI QUE ENGLOBA TODO O CONTEÚDO DO MÓDULO -->
+    <div class="fc-content-wrapper">
+
+        <!-- HEADER UNIFICADO E GLOBAL -->
+        <header class="fc-header">
+            <h1 id="tituloPrincipal">Controle Financeiro</h1>
+            <div class="fc-header-actions">
+                <button id="btnIrParaAprovacoes" class="fc-btn-icon" title="Aprovações Pendentes">
+                    <i class="fas fa-bell"></i>
+                    <span id="badgeAprovacoes" class="fc-badge hidden">0</span>
+                </button>
+                <!-- NOVO BOTÃO DE NOTIFICAÇÕES -->
+                <button id="btnNotificacoes" class="fc-btn-icon" title="Notificações">
+                    <i class="fas fa-inbox"></i>
+                    <span id="badgeNotificacoes" class="fc-badge hidden">0</span>
+                </button>
+                <!-- NOVO BOTÃO DE HISTÓRICO -->
+                <button id="btnIrParaHistorico" class="fc-btn-icon" title="Histórico de Auditoria">
+                    <i class="fas fa-history"></i>
+                </button>
+                <button id="btnToggleConfiguracoes" class="fc-btn-icon" title="Configurações">
+                    <i class="fas fa-cog"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- =============================================== -->
+        <!-- TELA 1: CONTEÚDO PRINCIPAL (DASHBOARD E ABAS)   -->
+        <!-- =============================================== -->
+        <section id="viewPrincipal">
+            <div class="fc-tabs-container">
+                <button class="fc-tab-btn active" data-tab="dashboard">
+                    <i class="fas fa-chart-pie"></i> Dashboard
+                </button>
+                <button class="fc-tab-btn" data-tab="lancamentos">
+                    <i class="fas fa-exchange-alt"></i> Lançamentos
+                </button>
+                <button class="fc-tab-btn" data-tab="agenda">
+                    <i class="fas fa-calendar-alt"></i> Agenda
+                </button>
+            </div>
+
+            <div class="fc-tabs-content">
+                <!-- PAINEL DA ABA 1: DASHBOARD -->
+                <div id="tab-dashboard" class="fc-tab-panel active">
+                    <!-- PLACEHOLDER INICIAL -->
+                    <div id="saldosContainer" class="fc-section-container">
+                        <div class="fc-dashboard-grid fc-saldos-grid">
+                            <div class="skeleton skeleton-card"></div>
+                        </div>
+                    </div>
+                    <div id="alertasContainer" class="fc-section-container">
+                        <div class="fc-dashboard-grid fc-alertas-grid">
+                            <div class="skeleton skeleton-card"></div>
+                            <div class="skeleton skeleton-card"></div>
+                            <div class="skeleton skeleton-card"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PAINEL DA ABA 2: LANÇAMENTOS (PRESERVA SUA ESTRUTURA CORRETA) -->
+                <div id="tab-lancamentos" class="fc-tab-panel">
+                    <div class="fc-section-container">
+                        <header class="fc-table-header">
+                            <h2 class="fc-section-title" style="border:0; margin:0;">Histórico de Lançamentos</h2>
+                            <button id="btnAtualizarLancamentos" class="fc-btn-atualizar">
+                                <i class="fas fa-sync-alt"></i> Atualizar
+                            </button>
+                        </header>
+                        <div class="fc-busca-e-filtros-linha">
+                            <div class="fc-form-group" style="flex-grow: 1;">
+                                <input type="text" id="filtroBuscaRapida" class="fc-input" placeholder="Buscar por #ID (ex #15), descrição, ou favorecido...">
+                            </div>
+                            <button id="btnToggleFiltrosAvancados" class="fc-btn fc-btn-outline">
+                                <i class="fas fa-filter"></i> Filtros Avançados
+                            </button>
+                        </div>
+                        <form id="filtrosLancamentos" class="fc-filtros-container hidden">
+                            <div class="fc-form-group">
+                                <label for="filtroDataInicio">Data Início</label>
+                                <input type="date" id="filtroDataInicio" class="fc-input">
+                            </div>
+                            <div class="fc-form-group">
+                                <label for="filtroDataFim">Data Fim</label>
+                                <input type="date" id="filtroDataFim" class="fc-input">
+                            </div>
+                            <div class="fc-form-group">
+                                <label for="filtroTipo">Tipo</label>
+                                <select id="filtroTipo" class="fc-select">
+                                    <option value="">Todos</option>
+                                    <option value="RECEITA">Receita</option>
+                                    <option value="DESPESA">Despesa</option>
+                                </select>
+                            </div>
+                            <div class="fc-form-group">
+                                <label for="filtroConta">Conta</label>
+                                <select id="filtroConta" class="fc-select"></select>
+                            </div>
+                            <div class="fc-form-group full-width button-container">
+                                <button type="button" id="btnLimparFiltros" class="fc-btn fc-btn-secundario">
+                                    <i class="fas fa-times-circle"></i> Limpar Filtros
+                                </button>
+                            </div>
+                        </form>
+                        <div id="cardsLancamentosContainer" class="fc-lancamentos-cards-container"></div>
+                        <div id="paginacaoLancamentosContainer" class="fc-paginacao-container"></div>
+                    </div>
+                </div>
+
+                <!-- PAINEL DA ABA 3: AGENDA -->
+                <div id="tab-agenda" class="fc-tab-panel">
+                    <div class="fc-section-container">
+                        <header class="fc-table-header">
+                            <h2 class="fc-section-title" style="border:0; margin:0;">Contas a Pagar/Receber</h2>
+                            <button id="btnAgendarNovaConta" class="fc-btn fc-btn-primario">
+                                <i class="fas fa-plus"></i> Agendar Novo
+                            </button>
+                        </header>
+                        <div id="agendaContainer"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =============================================== -->
+        <!-- TELA 2: CONFIGURAÇÕES (COMEÇA OCULTA)           -->
+        <!-- =============================================== -->
+        <section id="configuracoesView" class="hidden">
+            <div class="fc-config-layout">
+                <nav class="fc-config-menu">
+                    <a href="#" class="fc-config-menu-item active" data-config="contas">Contas Bancárias</a>
+                    <a href="#" class="fc-config-menu-item" data-config="favorecidos">Favorecidos</a>
+                    <a href="#" class="fc-config-menu-item" data-config="categorias">Categorias e Grupos</a>
+                </nav>
+                <div class="fc-config-content">
+                    <div id="config-contas" class="fc-config-panel active"></div>
+                    <div id="config-favorecidos" class="fc-config-panel"></div>
+                    <div id="config-categorias" class="fc-config-panel"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =============================================== -->
+        <!-- TELA 3: APROVAÇÕES PENDENTES (COMEÇA OCULTA)    -->
+        <!-- =============================================== -->
+        <section id="aprovacoesView" class="hidden">
+            <div id="aprovacoesContainer"></div>
+        </section>
+
+                <!-- =============================================== -->
+        <!-- TELA 4: HISTÓRICO DE AUDITORIA (COMEÇA OCULTA)   -->
+        <!-- =============================================== -->
+        <section id="historicoView" class="hidden">
+            <div class="fc-card">
+                <h2 class="fc-section-title">Histórico de Atividades do Módulo</h2>
+                <div id="historicoContainer">
+                    <!-- Cards de log de auditoria serão inseridos aqui -->
+                </div>
+            </div>
+        </section>
+
+    </div> <!-- FIM do fc-content-wrapper -->
+</main>
+
+     <!-- PAINEL DE NOTIFICAÇÕES DROPDOWN (COMEÇA OCULTO) -->
+    <div id="painelNotificacoes" class="fc-notificacoes-painel hidden">
+        <header class="fc-notificacoes-header">
+            <h3>Notificações</h3>
+            <button id="btnMarcarTodasComoLidas" class="fc-link-btn">Marcar todas como lidas</button>
+        </header>
+        <div id="listaNotificacoes" class="fc-notificacoes-lista">
+            <!-- As notificações serão inseridas aqui pelo JS -->
+            <p class="sem-notificacoes">Nenhuma notificação nova.</p>
+        </div>
+    </div>
+
+
+    <!-- Botão FAB e Scripts -->
+    <button id="btnNovoLancamento" class="fc-fab" title="Novo Lançamento">
+        <i class="fas fa-plus"></i>
+    </button>
+    <script src="/js/admin-financeiro.js" type="module"></script>
+    <script src="/js/carregar-menu-lateral.js" type="module"></script>
+</body>
+</html>

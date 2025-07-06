@@ -66,6 +66,16 @@ export const permissoesDisponiveis = [
     { id: 'editar-itens-arquivados', label: 'Ação: Editar/retirar itens arquivados', categoria: 'Estoque' },
     { id: 'fazer-inventario', label: 'Ação: Permite Realizar Inventário', categoria: 'Estoque' },
 
+    // --- FINANCEIRO (CONTROLE DE CAIXA) ---
+    { id: 'acesso-financeiro', label: 'Acesso ao Módulo Financeiro (Caixa)', categoria: 'Financeiro (Controle de Caixa)' },
+    { id: 'visualizar-financeiro', label: 'Visualizar dashboard e extratos', categoria: 'Financeiro (Controle de Caixa)' },
+    { id: 'lancar-transacao', label: 'Ação: Lançar novas receitas e despesas', categoria: 'Financeiro (Controle de Caixa)' },
+    { id: 'editar-transacao', label: 'Ação: Editar lançamentos financeiros', categoria: 'Financeiro (Controle de Caixa)' },
+    { id: 'aprovar-pagamento', label: 'Ação: Dar baixa em contas a pagar/receber', categoria: 'Financeiro (Controle de Caixa)' },
+    { id: 'gerenciar-contas', label: 'Ação: Criar e editar contas bancárias', categoria: 'Financeiro (Controle de Caixa)' },
+    { id: 'gerenciar-categorias', label: 'Ação: Criar e editar categorias financeiras', categoria: 'Financeiro (Controle de Caixa)' },
+    { id: 'visualizar-relatorios', label: 'Ação: Gerar relatórios financeiros', categoria: 'Financeiro (Controle de Caixa)' },
+    { id: 'aprovar-alteracao-financeira', label: 'Ação: Aprovar/Rejeitar edições e exclusões', categoria: 'Financeiro (Controle de Caixa)' },
 
     // --- FINANCEIRO E RELATÓRIOS ---
     { id: 'acesso-precificacao', label: 'Ver Tela de Precificação', categoria: 'Financeiro e Relatórios' },
@@ -75,6 +85,7 @@ export const permissoesDisponiveis = [
     { id: 'gerenciar-precificacao', label: 'Ação: Editar configurações de precificação', categoria: 'Financeiro e Relatórios' },
     { id: 'confirmar-pagamento-comissao', label: 'Ação: Marcar comissões como pagas', categoria: 'Financeiro e Relatórios' },
 
+    
     // --- CONFIGURAÇÕES ---
     { id: 'acesso-ponto-por-processo', label: 'Ver Tela de Pontos por Processo', categoria: 'Configurações' },
     { id: 'gerenciar-comunicacoes', label: 'Ver Tela Gerenciar Comunicações', categoria: 'Configurações' },

@@ -31,6 +31,7 @@ import auditoriaRouter from './api/auditoria.js';
 import comunicacoesRouter from './api/comunicacoes.js';
 import ticketsRouter from './api/tickets.js';
 import inventarioRouter from './api/inventario.js';
+import financeiroRouter from './api/financeiro.js';
 
 
 const app = express();
@@ -71,7 +72,8 @@ const routers = {
     auditoriaRouter,
     comunicacoesRouter,
     ticketsRouter,
-    inventarioRouter
+    inventarioRouter,
+    financeiroRouter
 
 };
 for (const routerName in routers) {
@@ -107,7 +109,7 @@ app.use('/api/auditoria', auditoriaRouter);
 app.use('/api/comunicacoes', comunicacoesRouter);
 app.use('/api/tickets', ticketsRouter);
 app.use('/api/inventario', inventarioRouter)
-
+app.use('/api/financeiro', financeiroRouter);
 
 app.get('/api/ping', (req, res) => res.status(200).json({ message: 'pong do server.js' }));
 console.log("Rota /api/ping configurada.");
