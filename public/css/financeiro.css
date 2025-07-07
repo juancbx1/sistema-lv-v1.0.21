@@ -43,7 +43,14 @@ body {
     box-shadow: var(--fc-sombra-padrao); 
     border: 1px solid var(--fc-cor-borda); 
 }
-.fc-section-title { font-size: 1.5rem; color: #2c3e50; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid var(--fc-cor-borda); font-weight: 500; }
+.fc-section-title { 
+    font-size: 1.1rem; 
+    color: #2c3e50; 
+    margin-bottom: 20px; 
+    padding-bottom: 10px; 
+    border-bottom: 1px solid var(--fc-cor-borda); 
+    font-weight: 500; 
+}
 
 /* Abas */
 .fc-tabs-container { 
@@ -52,6 +59,13 @@ body {
     margin: 0 10px 5px 0; 
 
 }
+
+.fc-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px; /* Espaçamento padrão para desktop */
+}
+
 .fc-tab-btn { padding: 12px 25px; cursor: pointer; border: none; background-color: transparent; border-bottom: 3px solid transparent; font-size: 1rem; font-weight: 500; color: var(--fc-cor-texto-secundario); transition: all 0.2s; display: flex; align-items: center; gap: 8px; }
 .fc-tab-btn:hover { color: var(--fc-cor-primaria); }
 .fc-tab-btn.active { color: var(--fc-cor-primaria); border-bottom-color: var(--fc-cor-primaria); }
@@ -156,6 +170,32 @@ body {
 .fc-alerta-card.pagar-3d .titulo, .fc-alerta-card.pagar-3d .contador { color: var(--fc-cor-aviso); }
 .fc-alerta-card.pagar-5d { border-left-color: var(--fc-cor-secundaria); }
 .fc-alerta-card.pagar-5d .titulo, .fc-alerta-card.pagar-5d .contador { color: var(--fc-cor-secundaria); }
+
+#graficoContainer {
+    position: relative; /* ESSENCIAL para a Chart.js */
+    height: 400px; /* Altura fixa para o container do gráfico */
+    width: 100%;
+}
+
+#saldosContainer, #alertasContainer {
+    width: 100%; /* Garante que não ultrapassem a largura do pai */
+}
+
+/* Encontre a regra #graficoContainer e garanta que ela esteja assim */
+#graficoContainer {
+    position: relative; 
+    height: 400px;
+    width: 100%; /* Garante que o container do gráfico se ajuste ao card pai */
+    max-width: 100%; /* Impede que o canvas interno force o container a crescer */
+}
+
+/* Adicione também esta regra para o container geral dos painéis de abas */
+.fc-tabs-content {
+    width: 100%;
+    overflow: hidden; /* Previne qualquer vazamento de conteúdo filho */
+}
+
+
 
 /* ==========================================================================
    4. AGENDA E LANÇAMENTOS
@@ -463,6 +503,76 @@ body {
     grid-area: status;
 }
 
+.fc-segmented-control {
+    display: flex;
+    border: 1px solid var(--fc-cor-primaria);
+    border-radius: 6px;
+    overflow: hidden;
+}
+.fc-segment-btn {
+    flex-grow: 1;
+    padding: 10px;
+    background-color: transparent;
+    border: none;
+    color: var(--fc-cor-primaria);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+.fc-segment-btn:not(:last-child) {
+    border-right: 1px solid var(--fc-cor-primaria);
+}
+.fc-segment-btn.active {
+    background-color: var(--fc-cor-primaria);
+    color: #fff;
+}
+
+/* Regra geral para formulários dentro de modais */
+.fc-modal-content form {
+    max-height: calc(85vh - 150px); /* Um pouco mais de altura disponível */
+    overflow-y: auto; /* Adiciona scroll SÓ se necessário */
+    padding: 5px 15px 5px 5px; /* Adiciona um respiro para a barra de rolagem */
+    margin-right: -15px; /* Compensa o padding para manter o alinhamento */
+}
+
+/* Garante que a barra de rolagem tenha uma aparência mais sutil (opcional) */
+.fc-modal-content form::-webkit-scrollbar {
+  width: 8px;
+}
+.fc-modal-content form::-webkit-scrollbar-thumb {
+  background: #ccc; 
+  border-radius: 4px;
+}
+
+
+.fc-parcela-manual-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--fc-cor-texto-secundario);
+    padding: 0 5px 5px 5px;
+    border-bottom: 1px solid var(--fc-cor-borda);
+    margin-bottom: 5px;
+}
+.fc-parcela-manual-linha {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.fc-parcela-manual-linha .fc-input {
+    flex-grow: 1;
+}
+.fc-parcela-manual-linha .remover-parcela-btn {
+    background: none;
+    border: none;
+    color: var(--fc-cor-despesa);
+    cursor: pointer;
+    font-size: 1.1rem;
+}
+
+
 /* ==========================================================================
    9. POPUPS PERSONALIZADOS
    ========================================================================== */
@@ -767,7 +877,11 @@ body {
     .fc-content-wrapper {
     padding: 10px;
     
-}
+    }
+
+    #graficoContainer {
+        height: 300px; /* Uma altura menor para o mobile */
+    }
 
 }
 @media (max-width: 480px) {
@@ -795,9 +909,44 @@ body {
         right: 10px; /* Aproxima um pouco mais da borda */
     }
 
+     .fc-header-actions {
+        display: flex; /* Garante o comportamento flex */
+        align-items: center;
+        gap: 8px; /* Reduz o espaço entre os ícones para telas menores */
+    }
+
+    .fc-header-actions .fc-btn-icon {
+        padding: 5px; /* Padding igual em todos os lados para manter o formato */
+        font-size: 1.1rem;
+    }
+
+        .fc-badge {
+        width: 16px;
+        height: 16px;
+        font-size: 0.6rem;
+        top: -8px;
+        right: -6px;
+    }
+
+    
 }
 @media (max-width: 414px) {
-    .fc-header h1 { font-size: 1.2rem; }
+    .fc-header h1 { 
+        font-size: 1.1rem; 
+    }
+    .fc-header-actions .fc-btn-icon {
+        /* Diminui um pouco o padding e o tamanho da fonte dos ícones */
+        padding: 5px 8px;
+        font-size: 1rem;
+    }
     .fc-saldo-consolidado-card .total-valor { font-size: 2.2rem; }
     .fc-saldo-lista-item { font-size: 0.9rem; }
+
+    .fc-input, .fc-select {
+    width: 90%;
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    }
 }

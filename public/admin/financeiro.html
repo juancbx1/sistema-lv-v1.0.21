@@ -7,6 +7,8 @@
     <link rel="stylesheet" href="/css/menu-lateral.css">
     <link rel="stylesheet" href="/css/financeiro.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 </head>
 <body>
     <div class="hamburger-menu">
@@ -60,7 +62,6 @@
             <div class="fc-tabs-content">
                 <!-- PAINEL DA ABA 1: DASHBOARD -->
                 <div id="tab-dashboard" class="fc-tab-panel active">
-                    <!-- PLACEHOLDER INICIAL -->
                     <div id="saldosContainer" class="fc-section-container">
                         <div class="fc-dashboard-grid fc-saldos-grid">
                             <div class="skeleton skeleton-card"></div>
@@ -73,9 +74,17 @@
                             <div class="skeleton skeleton-card"></div>
                         </div>
                     </div>
-                </div>
+                    <!-- SEÇÃO DO GRÁFICO MOVIDA PARA DENTRO DO PAINEL DO DASHBOARD -->
+                    <div class="fc-card" style="margin-top: 30px;">
+                        <h2 class="fc-section-title">Fluxo de Caixa (Últimas 5 Semanas)</h2>
+                        <div id="graficoContainer">
+                            <div id="graficoEsqueleto" class="skeleton skeleton-card"></div>
+                            <canvas id="graficoFluxoCaixa" class="hidden"></canvas>
+                        </div>
+                    </div>
+                </div> <!-- Fim do #tab-dashboard -->
 
-                <!-- PAINEL DA ABA 2: LANÇAMENTOS (PRESERVA SUA ESTRUTURA CORRETA) -->
+                <!-- PAINEL DA ABA 2: LANÇAMENTOS -->
                 <div id="tab-lancamentos" class="fc-tab-panel">
                     <div class="fc-section-container">
                         <header class="fc-table-header">
@@ -127,7 +136,7 @@
                 <!-- PAINEL DA ABA 3: AGENDA -->
                 <div id="tab-agenda" class="fc-tab-panel">
                     <div class="fc-section-container">
-                        <header class="fc-table-header">
+                         <header class="fc-table-header">
                             <h2 class="fc-section-title" style="border:0; margin:0;">Contas a Pagar/Receber</h2>
                             <button id="btnAgendarNovaConta" class="fc-btn fc-btn-primario">
                                 <i class="fas fa-plus"></i> Agendar Novo

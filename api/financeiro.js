@@ -61,6 +61,13 @@ async function registrarLog(dbClient, idUsuario, nomeUsuario, acao, dados) {
                 dadosAlterados = { depois: dados.lancamento };
                 break;
             }
+            case 'CRIACAO_LOTE_AGENDAMENTO': {
+                const { lote } = dados;
+                const valorFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lote.valor);
+                detalhes = `Criou o lote de agendamento #${lote.id} ("${lote.descricao}") com ${lote.parcelas} parcelas, totalizando ${valorFormatado}.`;
+                dadosAlterados = dados;
+                break;
+            }
             case 'EDICAO_DIRETA_LANCAMENTO': {
                 const info = await getInfo(dados.depois);
                 detalhes = `Editou diretamente o lançamento #${dados.depois.id} para o valor de ${formatCurrency(dados.depois.valor)} na categoria "${info.nomeCategoria}".`;
@@ -894,6 +901,76 @@ router.post('/contas-agendadas/:id/baixar', async (req, res) => {
     }
 });
 
+// POST /api/financeiro/contas-agendadas/lote - Cria múltiplas parcelas
+router.post('/contas-agendadas/lote', async (req, res) => {
+    if (!req.permissoesUsuario.includes('lancar-transacao')) {
+        return res.status(403).json({ error: 'Permissão negada para agendar contas.' });
+    }
+
+    const { descricao_lote, valor_total, parcelas } = req.body;
+    if (!descricao_lote || !valor_total || !Array.isArray(parcelas) || parcelas.length === 0) {
+        return res.status(400).json({ error: 'Dados inválidos para agendamento em lote.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        await dbClient.query('BEGIN'); // INICIA A TRANSAÇÃO
+
+        // 1. Cria o registro do Lote principal
+        const loteQuery = `
+            INSERT INTO fc_lotes_agendamento (descricao_lote, valor_total, id_usuario_criacao)
+            VALUES ($1, $2, $3) RETURNING id;
+        `;
+        const loteResult = await dbClient.query(loteQuery, [descricao_lote, valor_total, req.usuarioLogado.id]);
+        const novoLoteId = loteResult.rows[0].id;
+
+        // 2. Itera sobre cada parcela e a insere no banco, vinculando ao Lote
+        for (const parcela of parcelas) {
+            const { id_categoria, id_contato, tipo, descricao, valor, data_vencimento } = parcela;
+            // Validação de cada parcela
+            if (!id_categoria || !tipo || !descricao || !valor || !data_vencimento) {
+                throw new Error(`Dados incompletos para uma das parcelas: ${descricao}`);
+            }
+
+            const parcelaQuery = `
+                INSERT INTO fc_contas_agendadas 
+                    (id_lote, id_categoria, id_contato, tipo, descricao, valor, data_vencimento, id_usuario_agendamento)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+            `;
+            await dbClient.query(parcelaQuery, [
+                novoLoteId,
+                id_categoria,
+                id_contato || null,
+                tipo,
+                descricao,
+                valor,
+                data_vencimento,
+                req.usuarioLogado.id
+            ]);
+        }
+        
+        // 3. Registra um único log de auditoria para a criação do lote
+        await registrarLog(
+            dbClient,
+            req.usuarioLogado.id,
+            req.usuarioLogado.nome,
+            'CRIACAO_LOTE_AGENDAMENTO',
+            { lote: { id: novoLoteId, descricao: descricao_lote, parcelas: parcelas.length, valor: valor_total } }
+        );
+
+        await dbClient.query('COMMIT'); // FINALIZA A TRANSAÇÃO
+        res.status(201).json({ message: `${parcelas.length} parcelas agendadas com sucesso no lote #${novoLoteId}.` });
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK'); // DESFAZ TUDO EM CASO DE ERRO
+        console.error("[API POST /contas-agendadas/lote] Erro:", error);
+        res.status(500).json({ error: 'Erro ao agendar parcelas.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
 // GET /api/financeiro/aprovacoes-pendentes
 router.get('/aprovacoes-pendentes', async (req, res) => {
     console.log('[API GET /aprovacoes-pendentes] Rota acessada.');
@@ -1102,6 +1179,45 @@ router.get('/logs', async (req, res) => {
     } catch (error) {
         console.error("[API GET /logs] Erro:", error);
         res.status(500).json({ error: 'Erro ao buscar histórico de auditoria.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+router.get('/grafico-fluxo-caixa', async (req, res) => {
+    if (!req.permissoesUsuario.includes('visualizar-financeiro')) {
+        return res.status(403).json({ error: 'Permissão negada.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        
+        // Esta query agrupa os lançamentos dos últimos 30 dias por semana
+        const query = `
+            WITH semanas AS (
+                SELECT generate_series(
+                    date_trunc('week', current_date - interval '4 weeks'),
+                    date_trunc('week', current_date),
+                    '1 week'
+                )::date as semana_inicio
+            )
+            SELECT
+                to_char(s.semana_inicio, 'DD/MM') || ' - ' || to_char(s.semana_inicio + interval '6 days', 'DD/MM') as label_semana,
+                COALESCE(SUM(l.valor) FILTER (WHERE l.tipo = 'RECEITA'), 0) as total_receitas,
+                COALESCE(SUM(l.valor) FILTER (WHERE l.tipo = 'DESPESA'), 0) as total_despesas
+            FROM semanas s
+            LEFT JOIN fc_lancamentos l ON date_trunc('week', l.data_transacao) = s.semana_inicio
+            GROUP BY s.semana_inicio
+            ORDER BY s.semana_inicio;
+        `;
+
+        const result = await dbClient.query(query);
+        res.status(200).json(result.rows);
+
+    } catch (error) {
+        console.error('[API GET /grafico-fluxo-caixa] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar dados do gráfico.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }

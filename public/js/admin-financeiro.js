@@ -450,8 +450,11 @@ async function salvarGrupo(event) {
         }
         mostrarPopupFinanceiro('Grupo salvo com sucesso!', 'sucesso');
         fecharModal();
+        
+        // Re-renderiza as duas listas, pois uma mudança no grupo afeta a exibição das categorias
         renderizarTabelaGrupos();
-        renderizarTabelaCategorias(); // Atualiza as categorias pois o nome do grupo pode ter mudado
+        renderizarTabelaCategoriasAgrupadas(); // <<< CORREÇÃO: Chama a função correta
+
     } catch (error) {}
 }
 
@@ -595,9 +598,9 @@ function renderizarCardsLancamentos() {
         } else if (isPendenteExclusao) {
             statusHTML = `<div class="status-pendente"><i class="fas fa-trash-alt"></i> <span>Aguardando aprovação para exclusão</span></div>`;
         } else if (isEditadoAprovado) {
-            statusHTML = `<div class="status-pendente" style="color: var(--fc-cor-receita);"><i class="fas fa-check-circle"></i> <span>Edição Aprovada</span></div>`;
+            statusHTML = `<div class="status-pendente" style="color: #2980b9;"><i class="fas fa-check-circle"></i> <span>Edição Aprovada</span></div>`;
         } else if (isEdicaoRejeitada) {
-            statusHTML = `<div class="status-pendente" style="color: var(--fc-cor-despesa);"><i class="fas fa-times-circle"></i> <span>Edição Rejeitada</span></div>`;
+            statusHTML = `<div class="status-pendente" style="color: #ff8a0c;"><i class="fas fa-times-circle"></i> <span>Edição Rejeitada</span></div>`;
         } else {
             // Placeholder para manter o alinhamento vertical dos cards
             statusHTML = `<div class="status-placeholder"></div>`;
@@ -1096,7 +1099,10 @@ async function salvarCategoria(event) {
         }
         mostrarPopupFinanceiro('Categoria salva com sucesso!', 'sucesso');
         fecharModal();
-        renderizarTabelaCategorias();
+        
+        // Re-renderiza a lista agrupada
+        renderizarTabelaCategoriasAgrupadas(); // <<< CORREÇÃO: Chama a função correta
+
     } catch (error) {}
 }
 
@@ -1287,73 +1293,187 @@ async function carregarContasAgendadas() {
 }
 
 
-function abrirModalAgendamento(agendamento = null) {
-    // Lógica para editar um agendamento pode ser feita aqui depois
-    itemEmEdicao = agendamento;
-    const titulo = "Agendar Conta a Pagar/Receber";
-    
+function abrirModalAgendamento() {
+    itemEmEdicao = null; // Este modal é apenas para criar novos agendamentos
+    const titulo = "Novo Agendamento";
+    const hoje = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+
     const modalHTML = `
-        <div id="modal-financeiro" class="fc-modal" style="display: flex;">
-            <div class="fc-modal-content">
-                <button id="fecharModal" class="fc-modal-close">×</button>
-                <h3 class="fc-section-title" style="text-align:center;">${titulo}</h3>
-                <form id="formAgendamento" style="margin-top:20px;">
+        <div id="modal-agendamento" class="fc-modal" style="display: flex;">
+            <div class="fc-modal-content" style="max-width: 650px;">
+                <button id="fecharModal" class="fc-modal-close"><i class="fas fa-times"></i></button>
+                <h3 class="fc-section-title" style="text-align:center; border:0; margin-bottom: 20px;">${titulo}</h3>
+                
+                <div class="fc-form-group">
+                    <label>Como deseja agendar?</label>
+                    <div class="fc-segmented-control">
+                        <button class="fc-segment-btn active" data-tipo-agendamento="unico">Lançamento Único</button>
+                        <button class="fc-segment-btn" data-tipo-agendamento="lote">Parcelamento / Recorrência</button>
+                    </div>
+                </div>
+
+                <!-- FORMULÁRIO PARA LANÇAMENTO ÚNICO -->
+                <form id="formAgendamentoUnico">
+                    <!-- Conteúdo do formulário único será preenchido pelo JS -->
+                </form>
+
+                <!-- FORMULÁRIO PARA PARCELAMENTO / RECORRÊNCIA -->
+                <form id="formAgendamentoLote" class="hidden">
                     <div class="fc-form-group">
-                        <label for="ag_tipo">Tipo*</label>
-                        <select id="ag_tipo" class="fc-select" required>
-                            <option value="">Selecione...</option>
-                            <option value="A_PAGAR">A Pagar</option>
-                            <option value="A_RECEBER">A Receber</option>
+                        <label for="lote_descricao">Descrição Geral (Ex: Compra de Tecidos, Aluguel 2025)*</label>
+                        <input type="text" id="lote_descricao" class="fc-input" required>
+                    </div>
+                    <div class="fc-form-group">
+                        <label for="lote_favorecido_busca">Favorecido*</label>
+                        <div class="fc-autocomplete-container">
+                            <input type="text" id="lote_favorecido_busca" class="fc-input" placeholder="Digite para buscar..." autocomplete="off" required>
+                            <div id="lote_favorecido_resultados" class="fc-autocomplete-results" style="display: none;"></div>
+                        </div>
+                        <input type="hidden" id="lote_favorecido_id">
+                    </div>
+                     <div class="fc-form-row">
+                        <div class="fc-form-group">
+                            <label for="lote_tipo">Tipo*</label>
+                            <select id="lote_tipo" class="fc-select" required>
+                                <option value="">Selecione...</option>
+                                <option value="A_PAGAR">A Pagar</option>
+                                <option value="A_RECEBER">A Receber</option>
+                            </select>
+                        </div>
+                        <div class="fc-form-group">
+                            <label for="lote_categoria">Categoria*</label>
+                            <select id="lote_categoria" class="fc-select" required><option value="">Selecione o tipo</option></select>
+                        </div>
+                    </div>
+
+                    <hr style="margin: 20px 0;">
+
+                    <div class="fc-form-group">
+                        <label for="lote_metodo_divisao">Método de Divisão*</label>
+                        <select id="lote_metodo_divisao" class="fc-select">
+                            <option value="fixo">Parcelar em X vezes com intervalo fixo</option>
+                            <option value="manual">Definir parcelas manualmente</option>
                         </select>
                     </div>
-                     <div class="fc-form-group">
-                        <label for="ag_descricao">Descrição*</label>
-                        <input type="text" id="ag_descricao" class="fc-input" required placeholder="Ex: Aluguel, Comissão Shopee">
-                    </div>
-                    <div class="fc-form-group">
-                        <label for="ag_valor">Valor (R$)*</label>
-                        <input type="number" id="ag_valor" class="fc-input" step="0.01" min="0.01" required>
-                    </div>
-                    <div class="fc-form-group">
-                        <label for="ag_vencimento">Data de Vencimento*</label>
-                        <input type="date" id="ag_vencimento" class="fc-input" required>
-                    </div>
-                    <div class="fc-form-group">
-                        <label for="ag_categoria">Categoria*</label>
-                        <select id="ag_categoria" class="fc-select" required><option value="">Selecione o tipo primeiro</option></select>
-                    </div>
-                    <div class="fc-form-group">
-                        <label for="ag_contato_busca">Favorecido / Cliente</label>
-                        <div class="fc-autocomplete-container">
-                            <input type="text" id="ag_contato_busca" class="fc-input" placeholder="Digite para buscar..." autocomplete="off">
-                            <div id="ag_contato_resultados" class="fc-autocomplete-results" style="display: none;"></div>
+
+                    <!-- CONTAINER PARA AS OPÇÕES DO MÉTODO FIXO -->
+                    <div id="opcoes_metodo_fixo">
+                         <div class="fc-form-row">
+                            <div class="fc-form-group">
+                                <label for="lote_valor_total">Valor Total (R$)*</label>
+                                <input type="number" id="lote_valor_total" class="fc-input" step="0.01" min="0.01">
+                            </div>
+                            <div class="fc-form-group">
+                                <label for="lote_num_parcelas">Nº de Parcelas*</label>
+                                <input type="number" id="lote_num_parcelas" class="fc-input" min="2" value="2">
+                            </div>
                         </div>
-                        <input type="hidden" id="ag_contato_id">
+                        <div class="fc-form-row">
+                             <div class="fc-form-group">
+                                <label for="lote_data_primeira_parcela">Venc. da 1ª Parcela*</label>
+                                <input type="date" id="lote_data_primeira_parcela" class="fc-input" value="${hoje}">
+                            </div>
+                            <div class="fc-form-group">
+                                <label for="lote_intervalo_tipo">Intervalo*</label>
+                                <select id="lote_intervalo_tipo" class="fc-select">
+                                    <option value="days">Dias</option>
+                                    <option value="weeks">Semanas</option>
+                                    <option value="months" selected>Meses</option>
+                                </select>
+                            </div>
+                             <div class="fc-form-group">
+                                <label for="lote_intervalo_valor">A cada*</label>
+                                <input type="number" id="lote_intervalo_valor" class="fc-input" min="1" value="1">
+                            </div>
+                        </div>
+                         <button type="button" id="btnGerarPrevia" class="fc-btn fc-btn-outline" style="width:100%; margin-top:10px;">Gerar Pré-visualização</button>
                     </div>
-                    <div class="fc-modal-footer">
-                        <button type="button" id="btnCancelarModal" class="fc-btn fc-btn-secundario">Cancelar</button>
-                        <button type="submit" class="fc-btn fc-btn-primario">Salvar Agendamento</button>
+
+                    <!-- CONTAINER PARA AS OPÇÕES DO MÉTODO MANUAL -->
+                    <div id="opcoes_metodo_manual" class="hidden">
+                        <div class="fc-parcela-manual-header">
+                            <span>Data de Vencimento</span>
+                            <span>Valor da Parcela (R$)</span>
+                            <span></span>
+                        </div>
+                        <div id="grade_parcelas_manuais"></div>
+                        <button type="button" id="btnAdicionarParcelaManual" class="fc-btn fc-btn-outline" style="margin-top: 10px;"><i class="fas fa-plus"></i> Adicionar Parcela</button>
+                        <div id="resumo_parcelas_manuais" style="text-align: right; margin-top: 10px; font-weight: bold;"></div>
                     </div>
+
+                    <div id="lote_previa_container" style="margin-top: 15px;"></div>
                 </form>
+
+                <div class="fc-modal-footer">
+                    <button type="button" id="btnCancelarModal" class="fc-btn fc-btn-secundario">Cancelar</button>
+                    <button type="submit" id="btnSalvarAgendamento" class="fc-btn fc-btn-primario" form="formAgendamentoUnico">Agendar</button>
+                </div>
             </div>
         </div>
     `;
     document.body.insertAdjacentHTML('beforeend', modalHTML);
-    configurarListenersModal('formAgendamento', salvarAgendamento);
-    
-    // Filtra as categorias com base no tipo selecionado
-    document.getElementById('ag_tipo').addEventListener('change', (e) => {
-        const tipoSelecionado = e.target.value === 'A_PAGAR' ? 'DESPESA' : 'RECEITA';
-        const selectCategoria = document.getElementById('ag_categoria');
-        const categoriasFiltradas = categoriasCache.filter(cat => gruposCache.find(g => g.id === cat.id_grupo)?.tipo === tipoSelecionado);
-        selectCategoria.innerHTML = '<option value="">Selecione...</option>' + categoriasFiltradas.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+
+    const formUnico = document.getElementById('formAgendamentoUnico');
+    const formLote = document.getElementById('formAgendamentoLote');
+    const btnSalvar = document.getElementById('btnSalvarAgendamento');
+
+    document.querySelectorAll('.fc-segment-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelector('.fc-segment-btn.active').classList.remove('active');
+            btn.classList.add('active');
+            const tipo = btn.dataset.tipoAgendamento;
+
+            formUnico.classList.toggle('hidden', tipo !== 'unico');
+            formLote.classList.toggle('hidden', tipo !== 'lote');
+
+            if (tipo === 'lote') {
+                btnSalvar.setAttribute('form', 'formAgendamentoLote');
+                btnSalvar.textContent = 'Agendar Parcelas';
+            } else {
+                btnSalvar.setAttribute('form', 'formAgendamentoUnico');
+                btnSalvar.textContent = 'Agendar';
+            }
+        });
     });
-    // Lógica do autocomplete (reutilizada)
+
+    formUnico.innerHTML = `
+        <div class="fc-form-group"><label>Descrição*</label><input type="text" id="unico_descricao" class="fc-input" required></div>
+        <div class="fc-form-group"><label>Valor (R$)*</label><input type="number" id="unico_valor" class="fc-input" step="0.01" min="0.01" required></div>
+        <div class="fc-form-group"><label>Vencimento*</label><input type="date" id="unico_vencimento" class="fc-input" required value="${hoje}"></div>
+        <!-- Campos de categoria e favorecido para lançamento único podem ser adicionados aqui se necessário -->
+    `;
+
+    configurarListenersModal('formAgendamentoUnico', salvarAgendamento);
+    configurarListenersModal('formAgendamentoLote', gerarEconfirmarLote);
+
+    document.getElementById('lote_tipo').addEventListener('change', (e) => {
+        const tipo = e.target.value === 'A_PAGAR' ? 'DESPESA' : 'RECEITA';
+        const catSelect = document.getElementById('lote_categoria');
+        const categoriasFiltradas = categoriasCache.filter(c => gruposCache.find(g => g.id === c.id_grupo)?.tipo === tipo);
+        catSelect.innerHTML = '<option value="">Selecione...</option>' + categoriasFiltradas.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+    });
+    
     setupAutocomplete(
-        document.getElementById('ag_contato_busca'),
-        document.getElementById('ag_contato_resultados'),
-        document.getElementById('ag_contato_id')
+        document.getElementById('lote_favorecido_busca'),
+        document.getElementById('lote_favorecido_resultados'),
+        document.getElementById('lote_favorecido_id')
     );
+
+    const metodoSelect = document.getElementById('lote_metodo_divisao');
+    const opcoesFixo = document.getElementById('opcoes_metodo_fixo');
+    const opcoesManual = document.getElementById('opcoes_metodo_manual');
+
+    metodoSelect.addEventListener('change', () => {
+        opcoesFixo.classList.toggle('hidden', metodoSelect.value !== 'fixo');
+        opcoesManual.classList.toggle('hidden', metodoSelect.value !== 'manual');
+
+        if (metodoSelect.value === 'manual' && document.querySelectorAll('#grade_parcelas_manuais .fc-parcela-manual-linha').length === 0) {
+            adicionarLinhaParcelaManual();
+        }
+    });
+
+    document.getElementById('btnAdicionarParcelaManual').addEventListener('click', () => adicionarLinhaParcelaManual());
+    document.getElementById('btnGerarPrevia')?.addEventListener('click', gerarPreviaLote);
 }
 
 async function salvarAgendamento(event) {
@@ -1968,6 +2088,7 @@ async function inicializarPaginaFinanceiro() {
 
         // 3. Renderiza o conteúdo de todas as seções e painéis
         renderizarDashboard(dashboardData.saldos, dashboardData.alertas);
+        renderizarGraficoFluxoCaixa();
         renderizarTabelaAgenda(); 
         prepararAbaLancamentos();
         
@@ -2062,7 +2183,6 @@ function renderizarTabelaCategoriasAgrupadas() {
     
     let podeGerenciar = permissoesGlobaisFinanceiro.includes('gerenciar-categorias');
     
-    // Agrupa as categorias por id_grupo
     const categoriasPorGrupo = categoriasCache.reduce((acc, cat) => {
         (acc[cat.id_grupo] = acc[cat.id_grupo] || []).push(cat);
         return acc;
@@ -2086,7 +2206,7 @@ function renderizarTabelaCategoriasAgrupadas() {
                         <tr>
                             <td>${cat.nome}</td>
                             <td class="td-acoes" style="text-align:right;">
-                                <button class="fc-btn-icon btn-editar-categoria ${podeGerenciar ? '' : 'fc-btn-disabled'}" data-id="${cat.id}"><i class="fas fa-pencil-alt"></i></button>
+                                <button class="fc-btn-icon btn-editar-categoria ${podeGerenciar ? '' : 'fc-btn-disabled'}" data-id="${cat.id}" title="Editar Categoria"><i class="fas fa-pencil-alt"></i></button>
                             </td>
                         </tr>
                     `).join('') || `<tr><td>Nenhuma categoria neste grupo.</td></tr>`}
@@ -2096,7 +2216,24 @@ function renderizarTabelaCategoriasAgrupadas() {
         `).join('')}
         </div>
     `;
-    // Adicionar listeners para os botões aqui
+    
+    // --- ADIÇÃO DOS LISTENERS ---
+    if (podeGerenciar) {
+        container.querySelector('#btnAdicionarGrupo')?.addEventListener('click', () => abrirModalGrupo());
+        container.querySelector('#btnAdicionarCategoria')?.addEventListener('click', () => abrirModalCategoria());
+        
+        container.querySelectorAll('.btn-editar-categoria').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = e.currentTarget.dataset.id;
+                const categoria = categoriasCache.find(c => c.id == id);
+                abrirModalCategoria(categoria);
+            });
+        });
+    } else {
+        container.querySelectorAll('.fc-btn-disabled').forEach(btn => {
+            btn.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para gerenciar categorias.', 'aviso'));
+        });
+    }
 }
 
 function mudarPainelConfig(painelAtivo) {
@@ -2284,4 +2421,237 @@ function renderizarLogsAuditoria(logs) {
         </div>
         `
     }).join('');
+}
+
+function gerarPreviaLote() {
+    const valorTotal = parseFloat(document.getElementById('lote_valor_total').value);
+    const numParcelas = parseInt(document.getElementById('lote_num_parcelas').value);
+    const primeiraData = new Date(document.getElementById('lote_data_primeira_parcela').value + 'T00:00:00');
+    const intervaloValor = parseInt(document.getElementById('lote_intervalo_valor').value);
+    const intervaloTipo = document.getElementById('lote_intervalo_tipo').value;
+    const previaContainer = document.getElementById('lote_previa_container');
+
+    if (isNaN(valorTotal) || isNaN(numParcelas) || !primeiraData || isNaN(intervaloValor)) {
+        previaContainer.innerHTML = '';
+        return null;
+    }
+
+    const valorParcela = (valorTotal / numParcelas).toFixed(2);
+    let parcelas = [];
+    let dataAtual = primeiraData;
+
+    for (let i = 1; i <= numParcelas; i++) {
+        parcelas.push({
+            parcela: i,
+            valor: valorParcela,
+            data_vencimento: new Date(dataAtual)
+        });
+
+        // Calcula a próxima data
+        if (intervaloTipo === 'days') dataAtual.setDate(dataAtual.getDate() + intervaloValor);
+        else if (intervaloTipo === 'weeks') dataAtual.setDate(dataAtual.getDate() + (intervaloValor * 7));
+        else if (intervaloTipo === 'months') dataAtual.setMonth(dataAtual.getMonth() + intervaloValor);
+    }
+    
+    // Mostra a prévia na tela
+    previaContainer.innerHTML = `
+        <h4 style="margin-top:20px; margin-bottom:10px;">Pré-visualização das Parcelas:</h4>
+        <div class="fc-tabela-container" style="max-height: 150px; overflow-y:auto;">
+            <table class="fc-tabela-estilizada">
+            ${parcelas.map(p => `<tr><td>Parcela ${p.parcela}</td><td>${p.data_vencimento.toLocaleDateString('pt-BR')}</td><td style="text-align:right;">R$ ${p.valor}</td></tr>`).join('')}
+            </table>
+        </div>
+    `;
+
+    return parcelas;
+}
+
+async function gerarEconfirmarLote(event) {
+    event.preventDefault();
+    
+    // A nova função centraliza a coleta de dados de ambos os métodos
+    const parcelasCalculadas = coletarDadosDoLote();
+    
+    if (!parcelasCalculadas || parcelasCalculadas.length === 0) {
+        mostrarPopupFinanceiro('Por favor, defina as parcelas corretamente.', 'aviso');
+        return;
+    }
+    
+    // No método manual, o valor total é a soma das parcelas
+    const valorTotalManual = parcelasCalculadas.reduce((acc, p) => acc + p.valor, 0);
+    
+    const payload = {
+        descricao_lote: document.getElementById('lote_descricao').value,
+        valor_total: parseFloat(document.getElementById('lote_valor_total')?.value) || valorTotalManual,
+        parcelas: parcelasCalculadas.map(p => ({
+            descricao: `${document.getElementById('lote_descricao').value} - Parcela ${p.parcela}/${parcelasCalculadas.length}`,
+            valor: p.valor,
+            data_vencimento: p.data_vencimento.toISOString().split('T')[0],
+            id_categoria: parseInt(document.getElementById('lote_categoria').value),
+            id_contato: parseInt(document.getElementById('lote_favorecido_id').value) || null,
+            tipo: document.getElementById('lote_tipo').value
+        }))
+    };
+
+    if (!payload.descricao_lote || !payload.parcelas[0].id_categoria) {
+        mostrarPopupFinanceiro('Descrição e Categoria são obrigatórios para o lote.', 'aviso');
+        return;
+    }
+
+    const confirmado = await mostrarPopupConfirmacao(`Você confirma o agendamento de ${payload.parcelas.length} parcelas para "${payload.descricao_lote}"?`);
+    if (!confirmado) return;
+
+    try {
+        await fetchFinanceiroAPI('/contas-agendadas/lote', { method: 'POST', body: JSON.stringify(payload) });
+        mostrarPopupFinanceiro('Parcelas agendadas com sucesso!', 'sucesso');
+        fecharModal();
+        carregarContasAgendadas();
+        atualizarBadgesHeader(); // Atualiza os badges
+    } catch (e) { /* erro já tratado */ }
+}
+
+// Função para adicionar uma nova linha na grade de parcelas manuais
+function adicionarLinhaParcelaManual(data = '', valor = '') {
+    const gradeContainer = document.getElementById('grade_parcelas_manuais');
+    const div = document.createElement('div');
+    div.className = 'fc-parcela-manual-linha';
+    div.innerHTML = `
+        <input type="date" class="fc-input parcela-data" value="${data}" required>
+        <input type="number" class="fc-input parcela-valor" step="0.01" min="0.01" placeholder="100,00" value="${valor}" required>
+        <button type="button" class="remover-parcela-btn" title="Remover Parcela"><i class="fas fa-trash"></i></button>
+    `;
+    gradeContainer.appendChild(div);
+    div.querySelector('.remover-parcela-btn').addEventListener('click', () => {
+        div.remove();
+        atualizarResumoParcelasManuais();
+    });
+    // Atualiza o resumo sempre que um valor mudar
+    div.querySelector('.parcela-valor').addEventListener('input', atualizarResumoParcelasManuais);
+}
+
+// Função para calcular e exibir o total das parcelas manuais
+function atualizarResumoParcelasManuais() {
+    const resumoContainer = document.getElementById('resumo_parcelas_manuais');
+    const todasAsParcelas = document.querySelectorAll('#grade_parcelas_manuais .parcela-valor');
+    let totalDistribuido = 0;
+    todasAsParcelas.forEach(input => {
+        totalDistribuido += parseFloat(input.value) || 0;
+    });
+    resumoContainer.innerHTML = `Total Distribuído: <strong>${formatCurrency(totalDistribuido)}</strong>`;
+}
+
+// Função para coletar os dados do formulário de lote
+function coletarDadosDoLote() {
+    const metodo = document.getElementById('lote_metodo_divisao').value;
+    
+    if (metodo === 'fixo') {
+        return gerarPreviaLote(); // Reutiliza a função que já temos
+    } else { // manual
+        const linhas = document.querySelectorAll('#grade_parcelas_manuais .fc-parcela-manual-linha');
+        if (linhas.length === 0) return null;
+        
+        let parcelasManuais = [];
+        linhas.forEach((linha, index) => {
+            parcelasManuais.push({
+                parcela: index + 1,
+                valor: parseFloat(linha.querySelector('.parcela-valor').value),
+                data_vencimento: new Date(linha.querySelector('.parcela-data').value + 'T00:00:00')
+            });
+        });
+        return parcelasManuais;
+    }
+}
+
+// Variável global para armazenar a instância do gráfico e destruí-la antes de recriar
+let graficoFluxoCaixaInstance = null;
+
+async function renderizarGraficoFluxoCaixa() {
+    const canvas = document.getElementById('graficoFluxoCaixa');
+    const esqueleto = document.getElementById('graficoEsqueleto');
+    const container = document.getElementById('graficoContainer');
+
+    if (!canvas || !esqueleto || !container) return;
+
+    // Garante que o esqueleto esteja visível e o canvas oculto durante a busca
+    esqueleto.classList.remove('hidden');
+    canvas.classList.add('hidden');
+
+    try {
+        const dadosGrafico = await fetchFinanceiroAPI('/grafico-fluxo-caixa');
+
+        if (!dadosGrafico || dadosGrafico.length === 0) {
+            container.innerHTML = `<p style="text-align:center;">Não há dados suficientes para gerar o gráfico.</p>`;
+            return;
+        }
+
+        const labels = dadosGrafico.map(d => d.label_semana);
+        const receitas = dadosGrafico.map(d => d.total_receitas);
+        const despesas = dadosGrafico.map(d => d.total_despesas);
+
+        if (graficoFluxoCaixaInstance) {
+            graficoFluxoCaixaInstance.destroy();
+        }
+
+        const ctx = canvas.getContext('2d');
+        graficoFluxoCaixaInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Receitas',
+                        data: receitas,
+                        backgroundColor: 'rgba(39, 174, 96, 0.7)',
+                        borderColor: 'rgba(39, 174, 96, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Despesas',
+                        data: despesas,
+                        backgroundColor: 'rgba(231, 76, 60, 0.7)',
+                        borderColor: 'rgba(231, 76, 60, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return 'R$ ' + value.toLocaleString('pt-BR');
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.parsed.y);
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Quando o gráfico está pronto, esconde o esqueleto e mostra o canvas
+        esqueleto.classList.add('hidden');
+        canvas.classList.remove('hidden');
+
+    } catch(e) {
+        console.error("Erro ao renderizar gráfico:", e);
+        container.innerHTML = `<p style="color:red; text-align:center;">Não foi possível carregar o gráfico.</p>`;
+    }
 }
