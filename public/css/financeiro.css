@@ -33,15 +33,20 @@ body {
 /* ==========================================================================
    2. LAYOUT PRINCIPAL E NAVEGAÇÃO
    ========================================================================== */
-.fc-main-container { padding: 30px; max-width: 1600px; margin: 0 auto; }
+.fc-main-container {
+    padding: 10px;
+    max-width: 1600px;
+    margin: 0 auto;
+}
 .fc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .fc-header h1 { font-size: 2rem; font-weight: 600; }
-.fc-card { 
-    background-color: var(--fc-cor-fundo-card); 
-    border-radius: var(--fc-raio-borda); 
-    padding: 15px; 
-    box-shadow: var(--fc-sombra-padrao); 
-    border: 1px solid var(--fc-cor-borda); 
+.fc-card {
+    background-color: var(--fc-cor-fundo-card);
+    border-radius: var(--fc-raio-borda);
+    padding: 25px;
+    box-shadow: var(--fc-sombra-padrao);
+    border: 1px solid var(--fc-cor-borda);
+    overflow: hidden; /* Adicione esta linha. Ela corta qualquer filho que tente vazar. */
 }
 .fc-section-title { 
     font-size: 1.1rem; 
@@ -53,11 +58,11 @@ body {
 }
 
 /* Abas */
-.fc-tabs-container { 
-    display: flex; 
-    border-bottom: 1px solid var(--fc-cor-borda); 
-    margin: 0 10px 5px 0; 
-
+.fc-tabs-container {
+    display: flex;
+    border-bottom: 1px solid var(--fc-cor-borda);
+    /* Adiciona o padding que estava no card, mas só nas laterais */
+    padding: 0 25px;
 }
 
 .fc-header-actions {
@@ -158,41 +163,51 @@ body {
 .fc-alerta-card:hover { transform: translateY(-5px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); }
 .fc-alerta-card .titulo { font-size: 1rem; font-weight: 700; text-transform: uppercase; display: flex; align-items: center; gap: 10px; }
 .fc-alerta-card .dados-principais { text-align: right; margin: 15px 0; }
+.fc-alerta-card .titulo,
+.fc-alerta-card .contador {
+    color: inherit; /* Faz com que herdem a cor definida no card pai */
+}
 .fc-alerta-card .contador { font-size: 2.5rem; font-weight: 700; line-height: 1; }
 .fc-alerta-card .label-contador { font-size: 0.9rem; color: var(--fc-cor-texto-secundario); }
-.fc-alerta-card .total-valor { font-size: 1.1rem; font-weight: 500; text-align: right; margin-top: 5px; }
-.fc-alerta-card.pagar-hoje { border-left-color: var(--fc-cor-despesa); }
+.fc-alerta-card .label-contador,
+.fc-alerta-card .total-valor {
+    color: var(--fc-cor-texto-secundario);
+}
+.fc-alerta-card .total-valor { 
+    font-size: 1.1rem; 
+    font-weight: 600;
+    color: var(--fc-cor-texto-principal);
+    text-align: right; 
+    margin-top: 5px; 
+}
+.fc-alerta-card.pagar-hoje { 
+    border-left-color: var(--fc-cor-despesa);
+    color: var(--fc-cor-despesa); /* Define a cor principal do texto do card */
+}
+
 .fc-alerta-card.pagar-hoje .titulo, .fc-alerta-card.pagar-hoje .contador { color: var(--fc-cor-despesa); }
 .fc-alerta-card.pagar-3d { 
-    border-left-color: var(--fc-cor-aviso); 
+    border-left-color: var(--fc-cor-aviso);
+    color: var(--fc-cor-aviso); 
     margin: 10px 0;
 }
 .fc-alerta-card.pagar-3d .titulo, .fc-alerta-card.pagar-3d .contador { color: var(--fc-cor-aviso); }
-.fc-alerta-card.pagar-5d { border-left-color: var(--fc-cor-secundaria); }
+.fc-alerta-card.pagar-5d { 
+    border-left-color: var(--fc-cor-secundaria);
+    color: var(--fc-cor-secundaria);
+}
 .fc-alerta-card.pagar-5d .titulo, .fc-alerta-card.pagar-5d .contador { color: var(--fc-cor-secundaria); }
 
-#graficoContainer {
-    position: relative; /* ESSENCIAL para a Chart.js */
-    height: 400px; /* Altura fixa para o container do gráfico */
-    width: 100%;
-}
 
 #saldosContainer, #alertasContainer {
     width: 100%; /* Garante que não ultrapassem a largura do pai */
 }
 
-/* Encontre a regra #graficoContainer e garanta que ela esteja assim */
-#graficoContainer {
-    position: relative; 
-    height: 400px;
-    width: 100%; /* Garante que o container do gráfico se ajuste ao card pai */
-    max-width: 100%; /* Impede que o canvas interno force o container a crescer */
-}
 
 /* Adicione também esta regra para o container geral dos painéis de abas */
 .fc-tabs-content {
-    width: 100%;
-    overflow: hidden; /* Previne qualquer vazamento de conteúdo filho */
+    /* Adiciona o padding que estava no card, em todas as direções */
+    padding: 25px;
 }
 
 
@@ -224,8 +239,9 @@ body {
 
 .fc-lancamentos-cards-container {
     display: grid;
-    grid-template-columns: 1fr; /* Por padrão, um card por linha */
+    grid-template-columns: 1fr;
     gap: 15px;
+    width: 100%; /* Garante que ele ocupe a largura disponível */
 }
 
 .fc-lancamento-card {
@@ -242,6 +258,8 @@ body {
     border-left: 5px solid;
     box-shadow: var(--fc-sombra-padrao);
     padding: 15px;
+     box-sizing: border-box; /* A regra mais importante para o cálculo de largura */
+    display: grid;
 }
 
 /* Cores da borda */
@@ -293,7 +311,30 @@ body {
     flex-direction: column;
     justify-content: center;
     gap: 10px;
+    align-self: stretch; /* Faz ocupar a altura toda */
+    border-left: 1px solid var(--fc-cor-borda);
+    padding-left: 10px;
 }
+.fc-lancamento-card .btn-toggle-details {
+    grid-area: status;
+    align-self: end;
+}
+.fc-lancamento-itens-container {
+    background-color: #f8f9fa;
+    padding: 10px 20px;
+    margin-top: -15px;
+    border-radius: 0 0 var(--fc-raio-borda) var(--fc-raio-borda);
+    border: 1px solid var(--fc-cor-borda);
+    border-top: none;
+}
+.fc-lancamento-itens-container ul {
+    list-style: none; padding: 0; margin: 0;
+}
+.fc-lancamento-itens-container li {
+    display: flex; justify-content: space-between; padding: 5px 0; font-size: 0.9em;
+}
+
+
 .fc-lancamento-card .actions .fc-btn-icon {
     width: 36px;
     height: 36px;
@@ -353,29 +394,95 @@ body {
 .fc-btn-disabled { background-color: #e9ecef !important; color: #adb5bd !important; border-color: #dee2e6 !important; cursor: not-allowed !important; opacity: 0.8; }
 .fc-fab { position: fixed; bottom: 25px; right: 25px; width: 60px; height: 60px; border-radius: 50%; background-color: var(--fc-cor-primaria); color: #fff; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.25); z-index: 1000; cursor: pointer; transition: transform 0.2s, background-color 0.2s; }
 .fc-fab:hover { transform: scale(1.1); background-color: var(--fc-cor-primaria-hover); }
-.fc-modal { 
-    display: none; 
-    position: fixed; 
-    z-index: 1050; 
-    left: 0; 
-    top: 0; 
-    width: 100%; 
-    height: 100%; 
-    background-color: rgba(0,0,0,0.5); 
-    justify-content: center; 
-    align-items: center; 
+.fc-modal {
+    display: none;
+    position: fixed;
+    z-index: 1050;
+    left: 0; top: 0;
+    width: 100%; height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    justify-content: center;
+    align-items: center;
+    padding: 10px 10px; /* Adiciona um respiro nas laterais no mobile */
 }
-.fc-modal-content { 
-    background-color: var(--fc-cor-fundo-card); 
-    padding: 25px; 
-    border-radius: var(--fc-raio-borda); 
-    width: 80%; 
-    max-width: 500px; 
-    position: relative; 
-    box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.5); 
+.fc-modal-content {
+    display: flex;
+    flex-direction: column;
+    background-color: var(--fc-cor-fundo-card);
+    border-radius: var(--fc-raio-borda);
+    width: 100%;
+    max-width: 700px;
+    max-height: 90vh; /* Altura máxima para não estourar a tela */
+    position: relative;
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.5);
+    padding: 10px;
+
 }
-.fc-modal-close { position: absolute; top: -15px; right: -15px; width: 32px; height: 32px; border-radius: 50%; background-color: var(--fc-cor-despesa); color: #fff; border: 2px solid #fff; cursor: pointer; font-size: 1rem; line-height: 1; display: flex; align-items: center; justify-content: center; }
-.fc-modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--fc-cor-borda); }
+.fc-modal-content h3 {
+    padding: 20px 25px 0 25px;
+    flex-shrink: 0; /* Impede que o título encolha */
+}
+.fc-modal-body {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 0 25px 20px 25px; /* Padding para o conteúdo */
+}
+
+/* Garante que os formulários dentro do corpo não tenham rolagem própria */
+.fc-modal-body form {
+    overflow-y: visible;
+}
+
+
+/* O header e o footer agora têm padding próprio */
+.fc-modal-content .fc-section-title {
+    padding: 20px 25px 0 25px;
+    margin-bottom: 15px;
+    flex-shrink: 0;
+}
+.fc-modal-footer {
+    display: flex;
+    justify-content: center;
+    padding: 10px 15px;
+    gap: 0 10px;
+    flex-shrink: 0;
+    background-color: #f8f9fa;
+}
+
+#modal-agendamento .fc-modal-content {
+    max-width: 650px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Importante */
+}
+#modal-agendamento form {
+    flex-grow: 1; /* Faz o formulário ocupar o espaço */
+    overflow-y: auto; /* Scroll SÓ no formulário */
+    padding: 5px 15px 5px 5px;
+    margin: 0 -15px 0 -5px;
+}
+.fc-modal-close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: var(--fc-cor-despesa);
+    color: #fff;
+    border: 2px solid #fff;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10; /* Garante que fique acima do conteúdo */
+}
+.fc-modal-close:hover {
+    transform: scale(1.1);
+}
+
 .fc-form-group { margin-bottom: 1rem; }
 .fc-form-group label { display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--fc-cor-texto-secundario); }
 .fc-input, .fc-select { 
@@ -385,7 +492,46 @@ body {
     border: 1px solid #ced4da; 
     border-radius: 6px; 
 }
-.fc-autocomplete-container { position: relative; } /* ... autocomplete styles ... */
+.fc-autocomplete-container { position: relative; }
+.fc-autocomplete-item.is-new {
+    font-style: italic;
+    color: var(--fc-cor-texto-secundario);
+    display: flex; /* Usa flexbox para alinhar */
+    align-items: center;
+    gap: 8px; /* Cria um espaçamento entre o ícone e o texto */
+    border-top: 1px dashed var(--fc-cor-borda); /* Adiciona um separador visual */
+}
+.fc-autocomplete-item.is-new strong {
+    color: var(--fc-cor-texto-principal); /* Destaca o nome digitado */
+}
+.fc-autocomplete-results {
+    position: absolute;
+    width: 100%;
+    background-color: var(--fc-cor-fundo-card);
+    border: 1px solid var(--fc-cor-borda);
+    border-radius: 0 0 var(--fc-raio-borda) var(--fc-raio-borda);
+    box-shadow: var(--fc-sombra-padrao);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1060; /* <-- MUITO IMPORTANTE: Garante que fique acima de outros elementos do modal */
+}
+
+.fc-autocomplete-item {
+    padding: 10px 15px;
+    cursor: pointer;
+}
+
+.fc-autocomplete-item:hover {
+    background-color: #f0f3f5;
+}
+
+.fc-autocomplete-item.is-disabled {
+    padding: 10px 15px;
+    color: var(--fc-cor-texto-secundario);
+    font-style: italic;
+    cursor: default;
+}
+
 .fc-tabela-container { overflow-x: auto; }
 .fc-tabela-estilizada { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .fc-tabela-estilizada th, .fc-tabela-estilizada td { padding: 12px 15px; border-bottom: 1px solid var(--fc-cor-borda); text-align: left; vertical-align: middle; }
@@ -843,7 +989,7 @@ body {
    ========================================================================== */
 @media (max-width: 1024px) { body { margin-left: 0; } }
 @media (max-width: 768px) {
-    .fc-main-container { padding: 15px; }
+    .fc-main-container { padding: 5px; }
     .fc-header h1 { font-size: 1.5rem; }
     .fc-tabs-container { overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
     .fc-tab-btn { flex-shrink: 0; }
@@ -879,20 +1025,49 @@ body {
     
     }
 
-    #graficoContainer {
-        height: 300px; /* Uma altura menor para o mobile */
-    }
 
 }
 @media (max-width: 480px) {
-    .fc-main-container { padding: 10px; }
+
+    .fc-content-wrapper {
+        padding: 10px; /* Reduz o padding do wrapper principal */
+        border-radius: 0; /* Remove as bordas arredondadas para um visual "full-width" */
+        border-left: none;
+        border-right: none;
+    }
+    
+    .fc-card {
+        padding: 15px 10px; /* Ajusta o padding interno dos cards */
+        box-shadow: none; /* Remove a sombra para um visual mais flat */
+        border: none;
+        border-top: 1px solid var(--fc-cor-borda);
+        border-bottom: 1px solid var(--fc-cor-borda);
+        border-radius: 0;
+        margin: 0 -10px; /* Faz o card ocupar a largura do wrapper */
+    }
+
+    .fc-header {
+        padding: 0 10px; /* Adiciona padding ao header, que agora não tem mais */
+        margin-bottom: 10px;
+    }
     .fc-header h1 { font-size: 1.3rem; }
+    .fc-tabs-container {
+        padding: 0 10px; /* Adiciona padding às abas */
+    }
+
+    /* Garante que o card de lançamento não tenha padding extra que cause vazamento */
+    .fc-lancamento-card {
+        padding: 15px 10px;
+    }
     .fc-tab-btn { padding: 10px 15px; font-size: 0.9rem; }
     .fc-btn { padding: 8px 12px; font-size: 0.85rem; }
     .fc-fab { width: 55px; height: 55px; right: 15px; bottom: 15px; }
     .fc-alerta-card .contador { font-size: 2rem; }
     .fc-alerta-card .total-valor { font-size: 1rem; }
-    .fc-modal-content { padding: 15px; }
+    .fc-modal-content {
+        max-width: 40vh;
+        max-height: 80vh;
+    }
     .fc-filtros-container {
         grid-template-columns: 1fr; /* Força UMA coluna no mobile */
     }
@@ -945,8 +1120,63 @@ body {
     .fc-input, .fc-select {
     width: 90%;
     padding: 10px 12px;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     border: 1px solid #ced4da;
     border-radius: 4px;
+    }
+
+    .fc-select{
+    font-size: 0.8rem;
+
+    }
+    .fc-modal-content {
+        max-width: 38vh;
+        max-height: 85vh;
+    }
+    .fc-header h1 {
+        font-size: 1.2rem;
+    }
+    .fc-saldo-consolidado-card .total-valor {
+        font-size: 2.2rem;
+    }
+    .fc-saldo-lista-item {
+        font-size: 0.9rem;
+    }
+    /* Reduz ainda mais o padding para telas bem estreitas */
+    .fc-content-wrapper {
+        padding: 10px 5px;
+    }
+    .fc-card {
+        margin: 0 -5px;
+    }
+}
+
+@media (max-width: 399px) {
+    .fc-lancamentos-cards-container {
+        display: block; /* Desativa o Grid e volta para o fluxo de bloco padrão */
+        gap: 0; /* O gap não funciona com display: block */
+    }
+
+    /* Substituímos o 'gap' por uma 'margin' em cada card, exceto o último */
+    .fc-lancamentos-cards-container .fc-lancamento-card-wrapper:not(:last-child) {
+        margin-bottom: 15px;
+    }
+
+    /* Outros ajustes finos para ganhar espaço */
+    .fc-lancamento-card {
+        padding: 12px;
+        gap: 5px 10px;
+    }
+
+    .fc-lancamento-card .descricao {
+        font-size: 1rem;
+    }
+    
+    .fc-lancamento-card .valor {
+        font-size: 1.1rem;
+    }
+    .fc-modal-content {
+        max-width: 45vh;
+        max-height: 85vh;
     }
 }

@@ -81,11 +81,18 @@ async function registrarLog(dbClient, idUsuario, nomeUsuario, acao, dados) {
             case 'SOLICITACAO_EXCLUSAO_LANCAMENTO':
                  detalhes = `Solicitou exclusão para o lançamento #${dados.id_lancamento}.`;
                  dadosAlterados = { solicitacao: dados.solicitacao };
-                break;
+                break;        
             case 'APROVACAO_EDICAO': {
                 const info = await getInfo(dados.solicitacao.dados_novos);
                 detalhes = `Aprovou a edição do lançamento #${dados.solicitacao.id_lancamento}, agora na categoria "${info.nomeCategoria}".`;
                 dadosAlterados = { aprovacao: dados.solicitacao };
+                break;
+            }
+            case 'CRIACAO_LANCAMENTO_DETALHADO': {
+                const { lancamento } = dados;
+                const valorFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lancamento.valor);
+                detalhes = `Criou a compra detalhada #${lancamento.id} ("${lancamento.descricao}") com ${lancamento.itens} itens, totalizando ${valorFormatado}.`;
+                dadosAlterados = dados;
                 break;
             }
             case 'APROVACAO_EXCLUSAO':
@@ -393,7 +400,7 @@ router.get('/lancamentos', async (req, res) => {
         return res.status(403).json({ error: 'Permissão negada.' });
     }
     
-    const { limit = 50, page = 1, dataInicio, dataFim, tipo, idConta, idCategoria, idFavorecido, termoBusca } = req.query;
+    const { limit = 50, page = 1, dataInicio, dataFim, tipo, idConta, termoBusca } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
     let dbClient;
@@ -420,16 +427,7 @@ router.get('/lancamentos', async (req, res) => {
             whereClauses.push(`l.id_conta_bancaria = $${paramIndex++}`);
             params.push(idConta);
         }
-        if (idCategoria) {
-            whereClauses.push(`l.id_categoria = $${paramIndex++}`);
-            params.push(idCategoria);
-        }
-        if (idFavorecido) {
-            whereClauses.push(`l.id_contato = $${paramIndex++}`);
-            params.push(idFavorecido);
-        }
         if (termoBusca) {
-            // Se a busca começa com #, trata como busca por ID
             if (termoBusca.startsWith('#')) {
                 const idNumerico = parseInt(termoBusca.substring(1), 10);
                 if (!isNaN(idNumerico)) {
@@ -437,7 +435,6 @@ router.get('/lancamentos', async (req, res) => {
                     params.push(idNumerico);
                 }
             } else {
-                // Senão, continua a busca por texto normal
                 whereClauses.push(`(l.descricao ILIKE $${paramIndex} OR fav.nome ILIKE $${paramIndex})`);
                 params.push(`%${termoBusca}%`);
                 paramIndex++;
@@ -449,14 +446,29 @@ router.get('/lancamentos', async (req, res) => {
         const baseQuery = `
             FROM fc_lancamentos l
             JOIN fc_contas_bancarias cb ON l.id_conta_bancaria = cb.id
-            JOIN fc_categorias cat ON l.id_categoria = cat.id
-            JOIN fc_grupos_financeiros g ON cat.id_grupo = g.id
+            LEFT JOIN fc_categorias cat ON l.id_categoria = cat.id
             LEFT JOIN fc_contatos fav ON l.id_contato = fav.id
             JOIN usuarios u ON l.id_usuario_lancamento = u.id
         `;
-
+        
         const query = `
-            SELECT l.*, cb.nome_conta, cat.nome as nome_categoria, g.nome as nome_grupo, u.nome as nome_usuario, fav.nome as nome_favorecido
+            SELECT 
+                l.*, 
+                cb.nome_conta,
+                cat.nome as nome_categoria,
+                u.nome as nome_usuario, 
+                fav.nome as nome_favorecido,
+                (
+                    SELECT json_agg(json_build_object(
+                        'id', li.id,
+                        'descricao_item', li.descricao_item,
+                        'valor_item', li.valor_item,
+                        'nome_categoria', cat_item.nome
+                    ))
+                    FROM fc_lancamento_itens li
+                    JOIN fc_categorias cat_item ON li.id_categoria = cat_item.id
+                    WHERE li.id_lancamento_pai = l.id
+                ) as itens
             ${baseQuery}
             ${whereString}
             ORDER BY l.data_transacao DESC, l.id DESC
@@ -465,7 +477,6 @@ router.get('/lancamentos', async (req, res) => {
         params.push(limit, offset);
         
         const countQuery = `SELECT COUNT(l.id) ${baseQuery} ${whereString};`;
-        // Os parâmetros para a contagem são os mesmos, exceto pelo limit e offset
         const countParams = params.slice(0, -2);
         
         const [result, countResult] = await Promise.all([
@@ -546,40 +557,47 @@ router.post('/lancamentos', async (req, res) => {
 
 // --- ROTAS PARA CONTATOS (CLIENTES/FORNECEDORES) ---
 router.get('/contatos', async (req, res) => {
+    // 1. A verificação de permissão é mantida, pois é uma boa prática de segurança.
     if (!req.permissoesUsuario.includes('visualizar-financeiro')) {
         return res.status(403).json({ error: 'Permissão negada.' });
     }
     
-    // Extrai o termo de busca da query string
+    // 2. Extrai o termo de busca da query string (ex: /api/financeiro/contatos?q=NomeDoCliente)
     const termoBusca = req.query.q;
     
+    // 3. NOVA LÓGICA: Se o termo de busca não for enviado ou estiver vazio,
+    // retorna imediatamente uma lista vazia. Isso é o ideal para o autocomplete,
+    // pois evita que ele mostre sugestões antes de o usuário digitar algo.
+    if (!termoBusca || termoBusca.trim() === '') {
+        return res.status(200).json([]); 
+    }
+
     let dbClient;
     try {
         dbClient = await pool.connect();
-        let query;
-        let params = [];
-        
-        // CORREÇÃO: Verifica se o termo de busca existe e não está vazio
-        if (termoBusca && termoBusca.trim() !== '') {
-            query = 'SELECT id, nome FROM fc_contatos WHERE nome ILIKE $1 AND ativo = true ORDER BY nome LIMIT 10';
-            params.push(`%${termoBusca.trim()}%`);
-        } else {
-            // Se não houver busca, a rota não deve retornar nada para o autocomplete,
-            // ou podemos retornar os mais recentes, como antes. Vamos manter o retorno dos recentes por enquanto.
-            query = 'SELECT id, nome FROM fc_contatos WHERE ativo = true ORDER BY criado_em DESC LIMIT 10';
-        }
+
+        // 4. LÓGICA SIMPLIFICADA: A query agora é única e focada apenas na busca.
+        // - `ILIKE`: Busca sem diferenciar maiúsculas/minúsculas.
+        // - `%${termo}%`: Procura o termo em qualquer parte do nome.
+        // - `ativo = true`: Garante que apenas contatos ativos sejam sugeridos.
+        const query = 'SELECT id, nome FROM fc_contatos WHERE nome ILIKE $1 AND ativo = true ORDER BY nome LIMIT 10';
+        const params = [`%${termoBusca.trim()}%`];
 
         const result = await dbClient.query(query, params);
+        
+        // Retorna os resultados encontrados para o frontend.
         res.status(200).json(result.rows);
 
     } catch (error) {
-        // Adiciona um log mais detalhado no servidor para vermos o erro exato
+        // O tratamento de erros é mantido, registrando o erro no console do servidor.
         console.error('[API GET /contatos] Erro na execução da query:', error);
         res.status(500).json({ error: 'Erro interno ao buscar favorecidos.', details: error.message });
     } finally {
+        // Garante que a conexão com o banco de dados seja sempre liberada.
         if (dbClient) dbClient.release();
     }
 });
+
 
 // Listar TODOS os contatos para a tela de gerenciamento
 router.get('/contatos/all', async (req, res) => {
@@ -599,13 +617,13 @@ router.get('/contatos/all', async (req, res) => {
 });
 
 router.post('/contatos', async (req, res) => {
-    if (!req.permissoesUsuario.includes('lancar-transacao')) { 
-        return res.status(403).json({ error: 'Permissão negada.' });
+    if (!req.permissoesUsuario.includes('criar-favorecido')) {
+        return res.status(403).json({ error: 'Permissão negada para criar novos favorecidos.' });
     }
-    const { nome, tipo } = req.body;
     
-    // CORREÇÃO E MELHORIA: Validação explícita dos tipos permitidos
-    const tiposValidos = ['CLIENTE', 'FORNECEDOR', 'FUNCIONARIO', 'AMBOS'];
+    const { nome, tipo, cpf_cnpj, observacoes } = req.body;
+    const tiposValidos = ['CLIENTE', 'FORNECEDOR', 'EMPREGADO', 'EX_EMPREGADO', 'SOCIOS', 'AMBOS'];
+    
     if (!nome || !tipo || !tiposValidos.includes(tipo)) {
         return res.status(400).json({ error: `Nome e tipo são obrigatórios. O tipo deve ser um de: ${tiposValidos.join(', ')}.` });
     }
@@ -613,16 +631,25 @@ router.post('/contatos', async (req, res) => {
     let dbClient;
     try {
         dbClient = await pool.connect();
-        const query = 'INSERT INTO fc_contatos (nome, tipo) VALUES ($1, $2) ON CONFLICT (nome) DO NOTHING RETURNING *;';
-        const result = await dbClient.query(query, [nome, tipo]);
-        
-        if (result.rows.length > 0) {
-            res.status(201).json(result.rows[0]);
-        } else {
-            const existing = await dbClient.query('SELECT id, nome FROM fc_contatos WHERE nome = $1', [nome]);
-            res.status(200).json(existing.rows[0]);
+
+        // 1. VERIFICA SE JÁ EXISTE um contato com o mesmo nome e tipo.
+        const checkQuery = 'SELECT id FROM fc_contatos WHERE nome = $1 AND tipo = $2';
+        const existingContact = await dbClient.query(checkQuery, [nome, tipo]);
+
+        // 2. SE EXISTIR, retorna um erro amigável (409 Conflict).
+        if (existingContact.rows.length > 0) {
+            return res.status(409).json({ error: 'Este contato já está cadastrado com este tipo.' });
         }
+
+        // 3. SE NÃO EXISTIR, prossegue com a criação.
+        const insertQuery = 'INSERT INTO fc_contatos (nome, tipo, cpf_cnpj, observacoes) VALUES ($1, $2, $3, $4) RETURNING *;';
+        const result = await dbClient.query(insertQuery, [nome, tipo, cpf_cnpj, observacoes]);
+        
+        res.status(201).json(result.rows[0]);
+
     } catch (error) {
+        // Este catch agora é para erros inesperados, não para duplicidade.
+        console.error('[API POST /contatos] Erro inesperado:', error);
         res.status(500).json({ error: 'Erro ao criar contato.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
@@ -636,7 +663,7 @@ router.put('/contatos/:id', async (req, res) => {
     }
     const { id } = req.params;
     const { nome, tipo, cpf_cnpj, observacoes } = req.body;
-    const tiposValidos = ['CLIENTE', 'FORNECEDOR', 'FUNCIONARIO', 'AMBOS'];
+    const tiposValidos = ['CLIENTE', 'FORNECEDOR', 'EMPREGADO', 'EX_EMPREGADO', 'SOCIOS', 'AMBOS'];
     if (!nome || !tipo || !tiposValidos.includes(tipo)) {
         return res.status(400).json({ error: 'Dados inválidos.' });
     }
@@ -778,6 +805,74 @@ router.post('/lancamentos/:id/solicitar-exclusao', async (req, res) => {
         if (dbClient) await dbClient.query('ROLLBACK');
         console.error("[API /solicitar-exclusao] Erro:", error);
         res.status(500).json({ error: 'Erro ao processar solicitação de exclusão.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+router.post('/lancamentos/detalhado', async (req, res) => {
+    if (!req.permissoesUsuario.includes('lancar-transacao')) {
+        return res.status(403).json({ error: 'Permissão negada.' });
+    }
+
+    const { dados_pai, itens_filho } = req.body;
+
+    // Validação robusta dos dados recebidos
+    if (!dados_pai || !Array.isArray(itens_filho) || itens_filho.length === 0) {
+        return res.status(400).json({ error: 'Estrutura de dados inválida para lançamento detalhado.' });
+    }
+    const { id_conta_bancaria, data_transacao, valor, descricao, id_contato } = dados_pai;
+    if (!id_conta_bancaria || !data_transacao || !valor) {
+        return res.status(400).json({ error: 'Dados do lançamento principal (conta, data, valor) são obrigatórios.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        await dbClient.query('BEGIN');
+
+        // 1. Insere o lançamento "pai" na tabela principal.
+        // Note que id_categoria é NULL, pois as categorias estão nos itens.
+        const lancamentoPaiQuery = `
+            INSERT INTO fc_lancamentos 
+                (id_conta_bancaria, tipo, valor, data_transacao, descricao, id_contato, id_usuario_lancamento)
+            VALUES ($1, 'DESPESA', $2, $3, $4, $5, $6) 
+            RETURNING id;
+        `;
+        const lancamentoPaiResult = await dbClient.query(lancamentoPaiQuery, [
+            id_conta_bancaria, valor, data_transacao, descricao, id_contato || null, req.usuarioLogado.id
+        ]);
+        const novoLancamentoId = lancamentoPaiResult.rows[0].id;
+
+        // 2. Itera sobre cada item "filho" e o insere, vinculando ao pai.
+        for (const item of itens_filho) {
+            if (!item.id_categoria || !item.valor_item) {
+                // Se algum item for inválido, desfaz toda a transação
+                throw new Error('Cada item detalhado deve ter uma categoria e um valor.');
+            }
+            const itemQuery = `
+                INSERT INTO fc_lancamento_itens (id_lancamento_pai, id_categoria, descricao_item, valor_item)
+                VALUES ($1, $2, $3, $4);
+            `;
+            await dbClient.query(itemQuery, [novoLancamentoId, item.id_categoria, item.descricao_item, item.valor_item]);
+        }
+
+        // 3. (Opcional, mas recomendado) Log de Auditoria para a criação
+        await registrarLog(
+            dbClient,
+            req.usuarioLogado.id,
+            req.usuarioLogado.nome,
+            'CRIACAO_LANCAMENTO_DETALHADO',
+            { lancamento: { id: novoLancamentoId, descricao: descricao, valor: valor, itens: itens_filho.length } }
+        );
+
+        await dbClient.query('COMMIT');
+        res.status(201).json({ message: `Compra detalhada #${novoLancamentoId} com ${itens_filho.length} itens registrada com sucesso.` });
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error("[API POST /lancamentos/detalhado] Erro:", error);
+        res.status(500).json({ error: 'Erro ao registrar compra detalhada.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }
@@ -1179,45 +1274,6 @@ router.get('/logs', async (req, res) => {
     } catch (error) {
         console.error("[API GET /logs] Erro:", error);
         res.status(500).json({ error: 'Erro ao buscar histórico de auditoria.', details: error.message });
-    } finally {
-        if (dbClient) dbClient.release();
-    }
-});
-
-router.get('/grafico-fluxo-caixa', async (req, res) => {
-    if (!req.permissoesUsuario.includes('visualizar-financeiro')) {
-        return res.status(403).json({ error: 'Permissão negada.' });
-    }
-
-    let dbClient;
-    try {
-        dbClient = await pool.connect();
-        
-        // Esta query agrupa os lançamentos dos últimos 30 dias por semana
-        const query = `
-            WITH semanas AS (
-                SELECT generate_series(
-                    date_trunc('week', current_date - interval '4 weeks'),
-                    date_trunc('week', current_date),
-                    '1 week'
-                )::date as semana_inicio
-            )
-            SELECT
-                to_char(s.semana_inicio, 'DD/MM') || ' - ' || to_char(s.semana_inicio + interval '6 days', 'DD/MM') as label_semana,
-                COALESCE(SUM(l.valor) FILTER (WHERE l.tipo = 'RECEITA'), 0) as total_receitas,
-                COALESCE(SUM(l.valor) FILTER (WHERE l.tipo = 'DESPESA'), 0) as total_despesas
-            FROM semanas s
-            LEFT JOIN fc_lancamentos l ON date_trunc('week', l.data_transacao) = s.semana_inicio
-            GROUP BY s.semana_inicio
-            ORDER BY s.semana_inicio;
-        `;
-
-        const result = await dbClient.query(query);
-        res.status(200).json(result.rows);
-
-    } catch (error) {
-        console.error('[API GET /grafico-fluxo-caixa] Erro:', error);
-        res.status(500).json({ error: 'Erro ao buscar dados do gráfico.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }

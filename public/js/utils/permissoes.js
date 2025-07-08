@@ -74,6 +74,7 @@ export const permissoesDisponiveis = [
     { id: 'aprovar-pagamento', label: 'Ação: Dar baixa em contas a pagar/receber', categoria: 'Financeiro (Controle de Caixa)' },
     { id: 'gerenciar-contas', label: 'Ação: Criar e editar contas bancárias', categoria: 'Financeiro (Controle de Caixa)' },
     { id: 'gerenciar-categorias', label: 'Ação: Criar e editar categorias financeiras', categoria: 'Financeiro (Controle de Caixa)' },
+    { id: 'criar-favorecido', label: 'Ação: Criar novos favorecidos (clientes/fornecedores)', categoria: 'Financeiro (Controle de Caixa)' },
     { id: 'visualizar-relatorios', label: 'Ação: Gerar relatórios financeiros', categoria: 'Financeiro (Controle de Caixa)' },
     { id: 'aprovar-alteracao-financeira', label: 'Ação: Aprovar/Rejeitar edições e exclusões', categoria: 'Financeiro (Controle de Caixa)' },
 

@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="/css/menu-lateral.css">
     <link rel="stylesheet" href="/css/financeiro.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 </head>
 <body>
@@ -44,109 +43,102 @@
         </header>
 
         <!-- =============================================== -->
-        <!-- TELA 1: CONTEÚDO PRINCIPAL (DASHBOARD E ABAS)   -->
-        <!-- =============================================== -->
-        <section id="viewPrincipal">
-            <div class="fc-tabs-container">
-                <button class="fc-tab-btn active" data-tab="dashboard">
-                    <i class="fas fa-chart-pie"></i> Dashboard
-                </button>
-                <button class="fc-tab-btn" data-tab="lancamentos">
-                    <i class="fas fa-exchange-alt"></i> Lançamentos
-                </button>
-                <button class="fc-tab-btn" data-tab="agenda">
-                    <i class="fas fa-calendar-alt"></i> Agenda
-                </button>
-            </div>
+<!-- TELA 1: CONTEÚDO PRINCIPAL (DASHBOARD E ABAS)   -->
+<!-- =============================================== -->
+<section id="viewPrincipal">
+    <div class="fc-tabs-container">
+        <button class="fc-tab-btn active" data-tab="dashboard">
+            <i class="fas fa-chart-pie"></i> Dashboard
+        </button>
+        <button class="fc-tab-btn" data-tab="lancamentos">
+            <i class="fas fa-exchange-alt"></i> Lançamentos
+        </button>
+        <button class="fc-tab-btn" data-tab="agenda">
+            <i class="fas fa-calendar-alt"></i> Agenda
+        </button>
+    </div>
 
-            <div class="fc-tabs-content">
-                <!-- PAINEL DA ABA 1: DASHBOARD -->
-                <div id="tab-dashboard" class="fc-tab-panel active">
-                    <div id="saldosContainer" class="fc-section-container">
-                        <div class="fc-dashboard-grid fc-saldos-grid">
-                            <div class="skeleton skeleton-card"></div>
-                        </div>
-                    </div>
-                    <div id="alertasContainer" class="fc-section-container">
-                        <div class="fc-dashboard-grid fc-alertas-grid">
-                            <div class="skeleton skeleton-card"></div>
-                            <div class="skeleton skeleton-card"></div>
-                            <div class="skeleton skeleton-card"></div>
-                        </div>
-                    </div>
-                    <!-- SEÇÃO DO GRÁFICO MOVIDA PARA DENTRO DO PAINEL DO DASHBOARD -->
-                    <div class="fc-card" style="margin-top: 30px;">
-                        <h2 class="fc-section-title">Fluxo de Caixa (Últimas 5 Semanas)</h2>
-                        <div id="graficoContainer">
-                            <div id="graficoEsqueleto" class="skeleton skeleton-card"></div>
-                            <canvas id="graficoFluxoCaixa" class="hidden"></canvas>
-                        </div>
-                    </div>
-                </div> <!-- Fim do #tab-dashboard -->
-
-                <!-- PAINEL DA ABA 2: LANÇAMENTOS -->
-                <div id="tab-lancamentos" class="fc-tab-panel">
-                    <div class="fc-section-container">
-                        <header class="fc-table-header">
-                            <h2 class="fc-section-title" style="border:0; margin:0;">Histórico de Lançamentos</h2>
-                            <button id="btnAtualizarLancamentos" class="fc-btn-atualizar">
-                                <i class="fas fa-sync-alt"></i> Atualizar
-                            </button>
-                        </header>
-                        <div class="fc-busca-e-filtros-linha">
-                            <div class="fc-form-group" style="flex-grow: 1;">
-                                <input type="text" id="filtroBuscaRapida" class="fc-input" placeholder="Buscar por #ID (ex #15), descrição, ou favorecido...">
-                            </div>
-                            <button id="btnToggleFiltrosAvancados" class="fc-btn fc-btn-outline">
-                                <i class="fas fa-filter"></i> Filtros Avançados
-                            </button>
-                        </div>
-                        <form id="filtrosLancamentos" class="fc-filtros-container hidden">
-                            <div class="fc-form-group">
-                                <label for="filtroDataInicio">Data Início</label>
-                                <input type="date" id="filtroDataInicio" class="fc-input">
-                            </div>
-                            <div class="fc-form-group">
-                                <label for="filtroDataFim">Data Fim</label>
-                                <input type="date" id="filtroDataFim" class="fc-input">
-                            </div>
-                            <div class="fc-form-group">
-                                <label for="filtroTipo">Tipo</label>
-                                <select id="filtroTipo" class="fc-select">
-                                    <option value="">Todos</option>
-                                    <option value="RECEITA">Receita</option>
-                                    <option value="DESPESA">Despesa</option>
-                                </select>
-                            </div>
-                            <div class="fc-form-group">
-                                <label for="filtroConta">Conta</label>
-                                <select id="filtroConta" class="fc-select"></select>
-                            </div>
-                            <div class="fc-form-group full-width button-container">
-                                <button type="button" id="btnLimparFiltros" class="fc-btn fc-btn-secundario">
-                                    <i class="fas fa-times-circle"></i> Limpar Filtros
-                                </button>
-                            </div>
-                        </form>
-                        <div id="cardsLancamentosContainer" class="fc-lancamentos-cards-container"></div>
-                        <div id="paginacaoLancamentosContainer" class="fc-paginacao-container"></div>
-                    </div>
-                </div>
-
-                <!-- PAINEL DA ABA 3: AGENDA -->
-                <div id="tab-agenda" class="fc-tab-panel">
-                    <div class="fc-section-container">
-                         <header class="fc-table-header">
-                            <h2 class="fc-section-title" style="border:0; margin:0;">Contas a Pagar/Receber</h2>
-                            <button id="btnAgendarNovaConta" class="fc-btn fc-btn-primario">
-                                <i class="fas fa-plus"></i> Agendar Novo
-                            </button>
-                        </header>
-                        <div id="agendaContainer"></div>
-                    </div>
+    <div class="fc-tabs-content">
+        <!-- PAINEL DA ABA 1: DASHBOARD -->
+        <div id="tab-dashboard" class="fc-tab-panel active">
+            <div id="saldosContainer" class="fc-section-container">
+                <div class="fc-dashboard-grid fc-saldos-grid">
+                    <div class="skeleton skeleton-card"></div>
                 </div>
             </div>
-        </section>
+            <div id="alertasContainer" class="fc-section-container">
+                <div class="fc-dashboard-grid fc-alertas-grid">
+                    <div class="skeleton skeleton-card"></div>
+                    <div class="skeleton skeleton-card"></div>
+                    <div class="skeleton skeleton-card"></div>
+                </div>
+            </div>
+            
+        </div>
+
+        <!-- PAINEL DA ABA 2: LANÇAMENTOS -->
+        <div id="tab-lancamentos" class="fc-tab-panel">
+            <div class="fc-section-container">
+                <header class="fc-table-header">
+                    <h2 class="fc-section-title" style="border:0; margin:0;">Histórico de Lançamentos</h2>
+                    <button id="btnAtualizarLancamentos" class="fc-btn-atualizar">
+                        <i class="fas fa-sync-alt"></i> Atualizar
+                    </button>
+                </header>
+                <div class="fc-busca-e-filtros-linha">
+                    <div class="fc-form-grupo" style="flex-grow: 1;">
+                        <input type="text" id="filtroBuscaRapida" class="fc-input" placeholder="Buscar por #ID (ex #15), descrição, ou favorecido...">
+                    </div>
+                    <button id="btnToggleFiltrosAvancados" class="fc-btn fc-btn-outline">
+                        <i class="fas fa-filter"></i> Filtros Avançados
+                    </button>
+                </div>
+                <form id="filtrosLancamentos" class="fc-filtros-container hidden">
+                    <div class="fc-form-grupo">
+                        <label for="filtroDataInicio">Data Início</label>
+                        <input type="date" id="filtroDataInicio" class="fc-input">
+                    </div>
+                    <div class="fc-form-grupo">
+                        <label for="filtroDataFim">Data Fim</label>
+                        <input type="date" id="filtroDataFim" class="fc-input">
+                    </div>
+                    <div class="fc-form-grupo">
+                        <label for="filtroTipo">Tipo</label>
+                        <select id="filtroTipo" class="fc-select">
+                            <option value="">Todos</option>
+                            <option value="RECEITA">Receita</option>
+                            <option value="DESPESA">Despesa</option>
+                        </select>
+                    </div>
+                    <div class="fc-form-grupo">
+                        <label for="filtroConta">Conta</label>
+                        <select id="filtroConta" class="fc-select"></select>
+                    </div>
+                    <div class="fc-form-grupo full-width button-container">
+                        <button type="button" id="btnLimparFiltros" class="fc-btn fc-btn-secundario">
+                            <i class="fas fa-times-circle"></i> Limpar Filtros
+                        </button>
+                    </div>
+                </form>
+                <div id="cardsLancamentosContainer" class="fc-lancamentos-cards-container"></div>
+                <div id="paginacaoLancamentosContainer" class="fc-paginacao-container"></div>
+            </div>
+        </div>
+
+        <!-- PAINEL DA ABA 3: AGENDA -->
+        <div id="tab-agenda" class="fc-tab-panel">
+            <div class="fc-section-container">
+                <header class="fc-table-header">
+                    <h2 class="fc-section-title" style="border:0; margin:0;">Contas a Pagar/Receber</h2>
+                    <button id="btnAgendarNovaConta" class="fc-btn fc-btn-primario">
+                        <i class="fas fa-plus"></i> Agendar Novo
+                    </button>
+                </header>
+                <div id="agendaContainer"></div>
+            </div>
+        </div>
+    </div>
+</section>
 
         <!-- =============================================== -->
         <!-- TELA 2: CONFIGURAÇÕES (COMEÇA OCULTA)           -->

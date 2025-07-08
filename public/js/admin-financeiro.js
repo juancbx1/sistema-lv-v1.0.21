@@ -178,7 +178,6 @@ async function fetchFinanceiroAPI(endpoint, options = {}) {
         }
         return response.status === 204 ? null : await response.json();
     } catch (error) {
-        console.error(`[fetchFinanceiroAPI] Falha em ${endpoint}:`, error);
         mostrarPopupFinanceiro(error.message, 'erro');
         throw error;
     }
@@ -572,7 +571,7 @@ async function carregarLancamentosFiltrados(page = 1, filtros = filtrosAtivos) {
 function renderizarCardsLancamentos() {
     const container = document.getElementById('cardsLancamentosContainer');
     if (!container) {
-        console.error('ERRO CRÍTICO: Container #cardsLancamentosContainer não foi encontrado no HTML.');
+        console.error('ERRO CRÍTICO: Container #cardsLancamentosContainer não encontrado no HTML.');
         return;
     }
 
@@ -581,90 +580,106 @@ function renderizarCardsLancamentos() {
         return;
     }
     
-    container.innerHTML = lancamentosCache.map(l => {
-        const tipoClasse = l.tipo.toLowerCase();
+    let html = '';
+    for (const l of lancamentosCache) {
+        const isDetalhado = l.itens && l.itens.length > 0;
+        const tipoClasse = isDetalhado ? 'despesa' : l.tipo.toLowerCase();
+        
         const isPendenteEdicao = l.status_edicao === 'PENDENTE_APROVACAO';
         const isPendenteExclusao = l.status_edicao === 'PENDENTE_EXCLUSAO';
         const isEditadoAprovado = l.status_edicao === 'EDITADO_APROVADO';
         const isEdicaoRejeitada = l.status_edicao === 'EDICAO_REJEITADA';
-        
         const isPendente = isPendenteEdicao || isPendenteExclusao;
         const classePendente = isPendente ? 'pendente' : '';
+
         const sinal = l.tipo === 'RECEITA' ? '+' : '-';
-        
+        const nomeCategoriaExibido = isDetalhado ? 'Compra Detalhada (Rateio)' : l.nome_categoria;
+
         let statusHTML = '';
         if (isPendenteEdicao) {
             statusHTML = `<div class="status-pendente"><i class="fas fa-hourglass-half"></i> <span>Aguardando aprovação para edição</span></div>`;
         } else if (isPendenteExclusao) {
             statusHTML = `<div class="status-pendente"><i class="fas fa-trash-alt"></i> <span>Aguardando aprovação para exclusão</span></div>`;
         } else if (isEditadoAprovado) {
-            statusHTML = `<div class="status-pendente" style="color: #2980b9;"><i class="fas fa-check-circle"></i> <span>Edição Aprovada</span></div>`;
+            statusHTML = `<div class="status-pendente" style="color: var(--fc-cor-receita);"><i class="fas fa-check-circle"></i> <span>Edição Aprovada</span></div>`;
         } else if (isEdicaoRejeitada) {
-            statusHTML = `<div class="status-pendente" style="color: #ff8a0c;"><i class="fas fa-times-circle"></i> <span>Edição Rejeitada</span></div>`;
+            statusHTML = `<div class="status-pendente" style="color: var(--fc-cor-despesa);"><i class="fas fa-times-circle"></i> <span>Edição Rejeitada</span></div>`;
         } else {
-            // Placeholder para manter o alinhamento vertical dos cards
             statusHTML = `<div class="status-placeholder"></div>`;
         }
 
-        return `
-        <div class="fc-lancamento-card ${tipoClasse} ${classePendente}">
-            <div class="header">
-                <div class="descricao-wrapper">
-                    <span class="lancamento-id">#${l.id}</span>
-                    <span class="descricao">${l.descricao || 'Lançamento sem descrição'}</span>
+        html += `
+            <div class="fc-lancamento-card-wrapper">
+                <div class="fc-lancamento-card ${tipoClasse} ${classePendente}">
+                    <div class="header">
+                        <div class="descricao-wrapper">
+                            <span class="lancamento-id">#${l.id}</span>
+                            <span class="descricao">${l.descricao || 'Lançamento sem descrição'}</span>
+                        </div>
+                        <span class="valor">${sinal} ${formatCurrency(l.valor)}</span>
+                    </div>
+                    <div class="details">
+                        <span class="detail-item"><i class="fas fa-calendar-day"></i> ${new Date(l.data_transacao).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>
+                        <span class="detail-item"><i class="fas fa-tag"></i> ${nomeCategoriaExibido}</span>
+                        <span class="detail-item"><i class="fas fa-university"></i> ${l.nome_conta}</span>
+                        <span class="detail-item"><i class="fas fa-user-friends"></i> ${l.nome_favorecido || '-'}</span>
+                    </div>
+                    ${statusHTML}
+                    <div class="actions">
+                        ${isDetalhado ? `<button class="fc-btn-icon btn-toggle-details" data-id="${l.id}" title="Ver Detalhes"><i class="fas fa-chevron-down"></i></button>` : ''}
+                        <button class="fc-btn-icon btn-editar-lancamento" data-id="${l.id}" title="Editar Lançamento" ${isPendente || isDetalhado ? 'disabled' : ''} ${isDetalhado ? 'title="Edição de compras detalhadas não disponível"' : ''}><i class="fas fa-pencil-alt"></i></button>
+                        <button class="fc-btn-icon btn-excluir-lancamento" data-id="${l.id}" title="Excluir Lançamento" style="color: var(--fc-cor-despesa);" ${isPendente ? 'disabled' : ''}><i class="fas fa-trash"></i></button>
+                    </div>
                 </div>
-                <span class="valor">${sinal} ${formatCurrency(l.valor)}</span>
+                ${isDetalhado ? `
+                <div class="fc-lancamento-itens-container hidden" id="itens-${l.id}">
+                    <ul>
+                        ${l.itens.map(item => `<li><span>${item.nome_categoria}: ${item.descricao_item || ''}</span> <span>${formatCurrency(item.valor_item)}</span></li>`).join('')}
+                    </ul>
+                </div>
+                ` : ''}
             </div>
-            <div class="details">
-                <span class="detail-item"><i class="fas fa-calendar-day"></i> ${new Date(l.data_transacao).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>
-                <span class="detail-item"><i class="fas fa-tag"></i> ${l.nome_categoria}</span>
-                <span class="detail-item"><i class="fas fa-university"></i> ${l.nome_conta}</span>
-                <span class="detail-item"><i class="fas fa-user-friends"></i> ${l.nome_favorecido || '-'}</span>
-            </div>
-            ${statusHTML}
-            <div class="actions">
-                <button class="fc-btn-icon btn-editar-lancamento" data-id="${l.id}" title="Editar Lançamento" ${isPendente ? 'disabled' : ''}><i class="fas fa-pencil-alt"></i></button>
-                <button class="fc-btn-icon btn-excluir-lancamento" data-id="${l.id}" title="Excluir Lançamento" style="color: var(--fc-cor-despesa);" ${isPendente ? 'disabled' : ''}><i class="fas fa-trash"></i></button>
-            </div>
-        </div>
         `;
-    }).join('');
+    }
+    
+    container.innerHTML = html;
 
     // Adiciona os listeners aos botões
+    container.querySelectorAll('.btn-toggle-details').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const id = e.currentTarget.dataset.id;
+            document.getElementById(`itens-${id}`).classList.toggle('hidden');
+            e.currentTarget.querySelector('i').classList.toggle('fa-chevron-down');
+            e.currentTarget.querySelector('i').classList.toggle('fa-chevron-up');
+        });
+    });
+
     const podeEditar = permissoesGlobaisFinanceiro.includes('editar-transacao');
     container.querySelectorAll('.btn-editar-lancamento').forEach(btn => {
         if (!btn.disabled) {
             if (podeEditar) {
                 btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
                     const id = e.currentTarget.dataset.id;
                     const lancamento = lancamentosCache.find(l => l.id == id);
-                    if (lancamento) abrirModalLancamento(lancamento);
+                    if (lancamento) abrirModalEdicaoSimples(lancamento);
                 });
             } else {
                 btn.classList.add('fc-btn-disabled');
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    mostrarPopupFinanceiro('Você não tem permissão para editar lançamentos.', 'aviso');
-                });
+                btn.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para editar lançamentos.', 'aviso'));
             }
         }
     });
 
     container.querySelectorAll('.btn-excluir-lancamento').forEach(btn => {
         if (!btn.disabled) {
-            if (podeEditar) { // Usando a mesma permissão
+            if (podeEditar) {
                 btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
                     const id = e.currentTarget.dataset.id;
                     solicitarExclusaoLancamento(id);
                 });
             } else {
                 btn.classList.add('fc-btn-disabled');
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    mostrarPopupFinanceiro('Você não tem permissão para excluir lançamentos.', 'aviso');
-                });
+                btn.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para excluir lançamentos.', 'aviso'));
             }
         }
     });
@@ -689,150 +704,382 @@ function renderizarPaginacaoLancamentos(totalPages, currentPage) {
     });
 }
 
-function abrirModalLancamento(lancamento = null) {
-    itemEmEdicao = lancamento;
-    const titulo = lancamento ? "Editar Lançamento" : "Novo Lançamento";
+function abrirModalLancamento() {
+    // Se for uma edição, chama o modal simples. O rateio é só para criação.
+    // O parâmetro 'lancamento' foi removido pois a chamada foi simplificada.
+    itemEmEdicao = null;
+    const titulo = "Novo Lançamento";
+    
+    const modalHTML = `
+        <div id="modal-lancamento" class="fc-modal" style="display: flex;">
+            <div class="fc-modal-content">
+                <button id="fecharModal" class="fc-modal-close"><i class="fas fa-times"></i></button>
+                <h3 class="fc-section-title" style="text-align:center; border:0;">${titulo}</h3>
+                
+                <div class="fc-modal-body">
+                    <div class="fc-form-group">
+                        <label>Qual o tipo de lançamento?</label>
+                        <div class="fc-segmented-control">
+                            <button class="fc-segment-btn active" data-form-id="formLancamentoSimples">Receita / Despesa Simples</button>
+                            <button class="fc-segment-btn" data-form-id="formLancamentoDetalhado">Compra Detalhada (Rateio)</button>
+                        </div>
+                    </div>
+                    <form id="formLancamentoSimples"></form>
+                    <form id="formLancamentoDetalhado" class="hidden"></form>
+                </div>
 
-    // Lógica de data à prova de fuso horário
-    const hojeDate = new Date();
-    const fusoHorarioOffset = hojeDate.getTimezoneOffset() * 60000;
-    const hojeLocal = new Date(hojeDate.getTime() - fusoHorarioOffset);
-    const hoje = hojeLocal.toISOString().split('T')[0];
+                <div class="fc-modal-footer">
+                    <button type="button" id="btnCancelarModal" class="fc-btn fc-btn-secundario">Cancelar</button>
+                    <button type="button" id="btnSalvarModal" class="fc-btn fc-btn-primario" form="formLancamentoSimples">Salvar Lançamento</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    const modalElement = document.getElementById('modal-lancamento');
+    const formSimples = document.getElementById('formLancamentoSimples');
+    const formDetalhado = document.getElementById('formLancamentoDetalhado');
+    const btnSalvar = document.getElementById('btnSalvarModal');
+
+    // Listeners de controle do modal
+    modalElement.querySelector('.fc-modal-close').addEventListener('click', fecharModal);
+    modalElement.querySelector('#btnCancelarModal').addEventListener('click', fecharModal);
+    
+    // Listeners de SUBMIT nos formulários (a forma mais correta)
+    formSimples.addEventListener('submit', salvarLancamento);
+    formDetalhado.addEventListener('submit', salvarCompraDetalhada);
+
+    // Listener para o botão de salvar, que agora só dispara o submit do form ativo
+    btnSalvar.addEventListener('click', (e) => {
+        const formAtivoId = btnSalvar.getAttribute('form');
+        const formAtivo = document.getElementById(formAtivoId);
+        formAtivo?.requestSubmit(); // Dispara o evento 'submit' no formulário correto
+    });
+
+    // Listener para alternar entre os formulários
+    modalElement.querySelectorAll('.fc-segment-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            modalElement.querySelector('.fc-segment-btn.active').classList.remove('active');
+            btn.classList.add('active');
+            const formId = btn.dataset.formId;
+
+            formSimples.classList.toggle('hidden', formId !== 'formLancamentoSimples');
+            formDetalhado.classList.toggle('hidden', formId !== 'formLancamentoDetalhado');
+            btnSalvar.setAttribute('form', formId);
+            btnSalvar.textContent = formId === 'formLancamentoSimples' ? 'Salvar Lançamento' : 'Salvar Compra';
+        });
+    });
+
+    // Popula os formulários
+    popularFormularioSimples(formSimples);
+    popularFormularioDetalhado(formDetalhado);
+}
+
+// Preenche e gerencia o formulário de lançamento simples
+function popularFormularioSimples(formContainer, lancamento = null) {
+    if (!formContainer) return;
+
+    const hoje = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
     let tipoEdicao = '';
     if (lancamento) {
         const categoriaDoLancamento = categoriasCache.find(c => c.id === lancamento.id_categoria);
         if (categoriaDoLancamento) {
             const grupoPai = gruposCache.find(g => g.id === categoriaDoLancamento.id_grupo);
-            if (grupoPai) {
-                tipoEdicao = grupoPai.tipo;
-            }
+            if (grupoPai) tipoEdicao = grupoPai.tipo;
         }
     }
 
-    const modalHTML = `
-        <div id="modal-lancamento" class="fc-modal" style="display: flex;">
-            <div class="fc-modal-content">
-                <button id="fecharModal" class="fc-modal-close"><i class="fas fa-times"></i></button>
-                <h3 class="fc-section-title" style="text-align:center; border:0; margin-bottom: 25px;">${titulo}</h3>
-                <form id="formLancamento">
-                    
-                    <div class="fc-form-row">
-                        <div class="fc-form-group">
-                            <label for="lanc_valor">Valor (R$)*</label>
-                            <input type="number" id="lanc_valor" class="fc-input fc-input-valor" step="0.01" min="0.01" required placeholder="100,00">
-                        </div>
-                        <div class="fc-form-group">
-                            <label for="lanc_data">Data da Transação*</label>
-                            <input type="date" id="lanc_data" class="fc-input fc-input-data" required>
-                        </div>
-                    </div>
-
-                    <div class="fc-form-row">
-                        <div class="fc-form-group">
-                            <label for="lanc_tipo">Tipo*</label>
-                            <select id="lanc_tipo" class="fc-select" required ${lancamento ? 'disabled' : ''} title="${lancamento ? 'O tipo de um lançamento não pode ser alterado.' : ''}">
-                                <option value="">Selecione...</option>
-                                <option value="RECEITA">Receita</option>
-                                <option value="DESPESA">Despesa</option>
-                            </select>
-                        </div>
-                        <div class="fc-form-group">
-                            <label for="lanc_categoria">Categoria*</label>
-                            <select id="lanc_categoria" class="fc-select" required>
-                                <option value="">Selecione o tipo</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="fc-form-group">
-                        <label for="lanc_conta">Conta Bancária*</label>
-                        <select id="lanc_conta" class="fc-select" required>
-                             <option value="">Selecione...</option>
-                            ${contasCache.map(c => `<option value="${c.id}">${c.nome_conta}</option>`).join('')}
-                        </select>
-                    </div>
-
-                    <div class="fc-form-group">
-                        <label for="lanc_contato_busca" id="label-contato">Favorecido</label>
-                        <div class="fc-autocomplete-container">
-                            <input type="text" id="lanc_contato_busca" class="fc-input" placeholder="Digite para buscar..." autocomplete="off">
-                            <div id="lanc_contato_resultados" class="fc-autocomplete-results" style="display: none;"></div>
-                        </div>
-                        <input type="hidden" id="lanc_contato_id">
-                    </div>
-                    
-                    <div class="fc-form-group">
-                        <label for="lanc_descricao">Descrição / Histórico</label>
-                        <textarea id="lanc_descricao" class="fc-input" rows="2"></textarea>
-                    </div>
-
-                    <div class="fc-modal-footer">
-                         <button type="button" id="btnCancelarModal" class="fc-btn fc-btn-secundario">Cancelar</button>
-                         <button type="submit" class="fc-btn fc-btn-primario">${lancamento ? 'Salvar Alterações' : 'Salvar Lançamento'}</button>
-                    </div>
-                </form>
+    formContainer.innerHTML = `
+        <div class="fc-form-row">
+            <div class="fc-form-group">
+                <label for="lanc_valor">Valor (R$)*</label>
+                <input type="number" id="lanc_valor" class="fc-input fc-input-valor" step="0.01" min="0.01" required>
+            </div>
+            <div class="fc-form-group">
+                <label for="lanc_data">Data da Transação*</label>
+                <input type="date" id="lanc_data" class="fc-input fc-input-data" required>
             </div>
         </div>
+        <div class="fc-form-row">
+            <div class="fc-form-group">
+                <label for="lanc_tipo">Tipo*</label>
+                <select id="lanc_tipo" class="fc-select" required ${lancamento ? 'disabled' : ''}>
+                    <option value="">Selecione...</option>
+                    <option value="RECEITA">Receita</option>
+                    <option value="DESPESA">Despesa</option>
+                </select>
+            </div>
+            <div class="fc-form-group">
+                <label for="lanc_categoria">Categoria*</label>
+                <select id="lanc_categoria" class="fc-select" required>
+                    <option value="">Selecione o tipo</option>
+                </select>
+            </div>
+        </div>
+        <div class="fc-form-group">
+            <label for="lanc_conta">Conta Bancária*</label>
+            <select id="lanc_conta" class="fc-select" required>
+                <option value="">Selecione...</option>
+                ${contasCache.map(c => `<option value="${c.id}">${c.nome_conta}</option>`).join('')}
+            </select>
+        </div>
+        <div class="fc-form-group">
+            <label for="lanc_contato_busca" id="label-contato-simples">Favorecido / Pagador</label>
+                <div class="fc-autocomplete-container">
+                    <input type="text" id="lanc_contato_busca" class="fc-input fc-autocomplete-input" placeholder="Digite para buscar..." autocomplete="off">
+                    <div id="lanc_contato_resultados" class="fc-autocomplete-results hidden"></div>
+                    <input type="hidden" id="lanc_contato_id" class="fc-autocomplete-id">
+                </div>
+        <div class="fc-form-group">
+            <label for="lanc_descricao">Descrição / Histórico</label>
+            <textarea id="lanc_descricao" class="fc-input" rows="2"></textarea>
+        </div>
     `;
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
-    configurarListenersModal('formLancamento', salvarLancamento);
-    
-    const tipoSelect = document.getElementById('lanc_tipo');
-    const categoriaSelect = document.getElementById('lanc_categoria');
-    const labelContato = document.getElementById('label-contato');
+
+    const tipoSelect = formContainer.querySelector('#lanc_tipo');
+    const categoriaSelect = formContainer.querySelector('#lanc_categoria');
+    const labelContato = formContainer.querySelector('#label-contato-simples');
 
     const atualizarCamposPorTipo = (tipo) => {
         if (!tipo) {
             categoriaSelect.innerHTML = '<option value="">Selecione o tipo</option>';
-            labelContato.textContent = 'Favorecido / Pagador';
+            if(labelContato) labelContato.textContent = 'Favorecido / Pagador';
             return;
         }
-        labelContato.textContent = tipo === 'RECEITA' ? 'Pagador' : 'Favorecido';
+        if(labelContato) labelContato.textContent = tipo === 'RECEITA' ? 'Pagador / Cliente' : 'Favorecido';
         
-        const categoriasFiltradas = categoriasCache.filter(cat => {
-            const grupoPai = gruposCache.find(g => g.id === cat.id_grupo);
-            return grupoPai?.tipo === tipo;
-        });
-
+        const categoriasFiltradas = categoriasCache.filter(c => gruposCache.find(g => g.id === c.id_grupo)?.tipo === tipo);
         categoriaSelect.innerHTML = '<option value="">Selecione...</option>' + categoriasFiltradas.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
     };
-    
+
     tipoSelect.addEventListener('change', (e) => atualizarCamposPorTipo(e.target.value));
     
-    // Preenche os valores se estiver editando
     if (lancamento) {
-        document.getElementById('lanc_valor').value = lancamento.valor;
-        document.getElementById('lanc_data').value = lancamento.data_transacao.split('T')[0];
+        formContainer.querySelector('#lanc_valor').value = lancamento.valor;
+        formContainer.querySelector('#lanc_data').value = lancamento.data_transacao.split('T')[0];
         tipoSelect.value = tipoEdicao;
-        document.getElementById('lanc_conta').value = lancamento.id_conta_bancaria;
-        document.getElementById('lanc_contato_busca').value = lancamento.nome_favorecido || '';
-        document.getElementById('lanc_contato_id').value = lancamento.id_contato || '';
-        document.getElementById('lanc_descricao').value = lancamento.descricao || '';
+        formContainer.querySelector('#lanc_conta').value = lancamento.id_conta_bancaria;
+        formContainer.querySelector('#lanc_contato_busca').value = lancamento.nome_favorecido || '';
+        formContainer.querySelector('#lanc_contato_id').value = lancamento.id_contato || '';
+        formContainer.querySelector('#lanc_descricao').value = lancamento.descricao || '';
     } else {
-        // Define a data de hoje para novos lançamentos
-        document.getElementById('lanc_data').value = hoje;
+        formContainer.querySelector('#lanc_data').value = hoje;
     }
-    
-    // Chama a função para popular as categorias com base no tipo pré-selecionado
+
     atualizarCamposPorTipo(tipoSelect.value);
 
-    // Se estiver editando, agora que as opções existem, seleciona a categoria correta
     if (lancamento) {
         categoriaSelect.value = lancamento.id_categoria;
     }
 
-    setupAutocomplete(
-        document.getElementById('lanc_contato_busca'),
-        document.getElementById('lanc_contato_resultados'),
-        document.getElementById('lanc_contato_id')
-    );
+}
+
+
+// Preenche e gerencia o formulário de compra detalhada
+function popularFormularioDetalhado(formContainer) {
+    if (!formContainer) return;
+
+    // Lógica de data à prova de fuso horário
+    const hojeDate = new Date();
+    const fusoHorarioOffset = hojeDate.getTimezoneOffset() * 60000;
+    const hojeLocal = new Date(hojeDate.getTime() - fusoHorarioOffset);
+    const hoje = hojeLocal.toISOString().split('T')[0];
+    
+    // Cria o HTML interno do formulário
+    formContainer.innerHTML = `
+        <div class="fc-form-row">
+            <div class="fc-form-group">
+                <label for="det_data">Data da Compra*</label>
+                <input type="date" id="det_data" class="fc-input" value="${hoje}" required>
+            </div>
+            <div class="fc-form-group">
+                <label for="det_valor_total">Valor Total da Nota (R$)*</label>
+                <input type="number" id="det_valor_total" class="fc-input" step="0.01" min="0.01" required placeholder="300,00">
+            </div>
+        </div>
+        <div class="fc-form-row">
+            <div class="fc-form-group">
+                <label for="det_conta">Conta Bancária*</label>
+                <select id="det_conta" class="fc-select" required></select>
+            </div>
+            <div class="fc-form-group">
+                <label for="det_favorecido_busca">Fornecedor*</label>
+                <div class="fc-autocomplete-container">
+                    <input type="text" id="det_favorecido_busca" class="fc-input fc-autocomplete-input" placeholder="Digite para buscar..." autocomplete="off" required>
+                    <div id="det_favorecido_resultados" class="fc-autocomplete-results hidden"></div>
+                    <input type="hidden" id="det_favorecido_id" class="fc-autocomplete-id">
+                </div>
+        </div>
+        <div class="fc-form-group">
+            <label for="det_descricao">Descrição Geral (NF, etc)*</label>
+            <input type="text" id="det_descricao" class="fc-input" required>
+        </div>
+        <hr style="margin: 20px 0;">
+        <h4 class="fc-section-title" style="font-size: 1.1rem; border:0; margin-bottom: 10px;">Itens da Compra (Rateio)</h4>
+        <div class="fc-parcela-manual-header">
+            <span>Categoria do Item*</span>
+            <span>Descrição do Item</span>
+            <span>Valor (R$)*</span>
+            <span></span>
+        </div>
+        <div id="grade_itens_compra"></div>
+        <button type="button" id="btnAdicionarItemCompra" class="fc-btn fc-btn-outline" style="margin-top: 10px;"><i class="fas fa-plus"></i> Adicionar Item</button>
+        <div id="resumo_rateio" style="text-align: right; margin-top: 10px; font-weight: bold;"></div>
+    `;
+    
+    // Popula o select de contas bancárias
+    formContainer.querySelector('#det_conta').innerHTML = '<option value="">Selecione...</option>' + contasCache.map(c => `<option value="${c.id}">${c.nome_conta}</option>`).join('');
+    
+    // Adiciona a primeira linha de item na grade
+    adicionarLinhaItemCompra();
+
+    // Configura os listeners específicos deste formulário
+    formContainer.querySelector('#btnAdicionarItemCompra').addEventListener('click', adicionarLinhaItemCompra);
+    formContainer.querySelector('#det_valor_total').addEventListener('input', atualizarResumoRateio);
+    
+}
+
+// Adiciona uma nova linha de item na grade de rateio
+function adicionarLinhaItemCompra() {
+    const gradeContainer = document.getElementById('grade_itens_compra');
+    const div = document.createElement('div');
+    div.className = 'fc-parcela-manual-linha'; // Reutilizando o estilo do parcelamento
+
+    // Cria o select de categorias de DESPESA
+    const categoriasDespesa = categoriasCache.filter(c => gruposCache.find(g => g.id === c.id_grupo)?.tipo === 'DESPESA');
+    const optionsCategoria = categoriasDespesa.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+
+    div.innerHTML = `
+        <select class="fc-select item-categoria" required><option value="">Selecione Categoria...</option>${optionsCategoria}</select>
+        <input type="text" class="fc-input item-descricao" placeholder="Descrição do item (opcional)">
+        <input type="number" class="fc-input item-valor" step="0.01" min="0.01" placeholder="Valor" required>
+        <button type="button" class="remover-parcela-btn"><i class="fas fa-trash"></i></button>
+    `;
+    gradeContainer.appendChild(div);
+
+    div.querySelector('.remover-parcela-btn').addEventListener('click', () => {
+        div.remove();
+        atualizarResumoRateio();
+    });
+    div.querySelector('.item-valor').addEventListener('input', atualizarResumoRateio);
+}
+
+// Atualiza o resumo dos valores dos itens
+function atualizarResumoRateio() {
+    const resumoContainer = document.getElementById('resumo_rateio');
+    const valorTotalNota = parseFloat(document.getElementById('det_valor_total').value) || 0;
+    let totalItens = 0;
+    document.querySelectorAll('#grade_itens_compra .item-valor').forEach(input => {
+        totalItens += parseFloat(input.value) || 0;
+    });
+    
+    const diferenca = valorTotalNota - totalItens;
+    const corDiferenca = Math.abs(diferenca) < 0.01 ? 'var(--fc-cor-receita)' : 'var(--fc-cor-despesa)';
+
+    resumoContainer.innerHTML = `
+        <span>Soma dos Itens: <strong>${formatCurrency(totalItens)}</strong></span> | 
+        <span style="color: ${corDiferenca};">Diferença: <strong>${formatCurrency(diferenca)}</strong></span>
+    `;
+}
+
+async function salvarCompraDetalhada(event) {
+    event.preventDefault();
+
+    // --- NOVA VALIDAÇÃO DO FAVORECIDO ---
+    const favorecidoId = document.getElementById('det_favorecido_id').value;
+    const favorecidoNome = document.getElementById('det_favorecido_busca').value;
+
+    if (!favorecidoId && favorecidoNome.trim() !== '') {
+        mostrarPopupFinanceiro('Fornecedor inválido. Por favor, selecione um item da lista ou clique em "+ Criar novo".', 'erro');
+        return;
+    }
+    // O campo é obrigatório no formulário (required no HTML), então essa verificação cobre o caso de estar vazio
+    if (!favorecidoId) {
+        mostrarPopupFinanceiro('O campo "Fornecedor" é obrigatório. Selecione um item da lista.', 'erro');
+        return;
+    }
+
+    const valorTotalNota = parseFloat(document.getElementById('det_valor_total').value);
+    let totalItens = 0;
+    const itens_filho = [];
+
+    const linhasDeItens = document.querySelectorAll('#grade_itens_compra .fc-parcela-manual-linha');
+    let algumItemInvalido = false;
+
+    linhasDeItens.forEach(linha => {
+        const valorItem = parseFloat(linha.querySelector('.item-valor').value);
+        const idCategoria = parseInt(linha.querySelector('.item-categoria').value);
+
+        if (!idCategoria || !valorItem || valorItem <= 0) {
+            algumItemInvalido = true;
+        }
+
+        totalItens += valorItem;
+        itens_filho.push({
+            id_categoria: idCategoria,
+            descricao_item: linha.querySelector('.item-descricao').value,
+            valor_item: valorItem
+        });
+    });
+
+    if (algumItemInvalido) {
+        mostrarPopupFinanceiro('Todos os itens devem ter uma categoria e um valor válido.', 'erro');
+        return;
+    }
+
+    if (Math.abs(valorTotalNota - totalItens) > 0.01) {
+        mostrarPopupFinanceiro('A soma dos itens não bate com o valor total da nota. Diferença: ' + formatCurrency(valorTotalNota - totalItens), 'erro');
+        return;
+    }
+
+    const payload = {
+        dados_pai: {
+            valor: valorTotalNota,
+            data_transacao: document.getElementById('det_data').value,
+            id_conta_bancaria: parseInt(document.getElementById('det_conta').value),
+            id_contato: parseInt(favorecidoId),
+            descricao: document.getElementById('det_descricao').value,
+        },
+        itens_filho: itens_filho
+    };
+
+    // Validação final dos dados do "pai"
+    if (!payload.dados_pai.data_transacao || !payload.dados_pai.id_conta_bancaria) {
+        mostrarPopupFinanceiro('Data da compra e conta bancária são obrigatórios.', 'erro');
+        return;
+    }
+
+    try {
+        await fetchFinanceiroAPI('/lancamentos/detalhado', { method: 'POST', body: JSON.stringify(payload) });
+        mostrarPopupFinanceiro('Compra detalhada registrada com sucesso!', 'sucesso');
+        fecharModal();
+        
+        // Recarrega os dados para atualizar a interface
+        carregarLancamentosFiltrados();
+        atualizarBadgesHeader();
+        carregarDadosDashboard();
+
+    } catch(e) {
+        // erro já tratado pela fetchFinanceiroAPI
+    }
 }
 
 
 async function salvarLancamento(event) {
     event.preventDefault();
 
+    // --- NOVA VALIDAÇÃO DO FAVORECIDO ---
+    const favorecidoId = document.getElementById('lanc_contato_id').value;
+    const favorecidoNome = document.getElementById('lanc_contato_busca').value;
+    // Se o campo de busca tem texto, mas nenhum ID foi selecionado, mostra erro.
+    if (!favorecidoId && favorecidoNome.trim() !== '') {
+        mostrarPopupFinanceiro('Favorecido/Pagador inválido. Por favor, selecione um item da lista ou clique em "+ Criar novo".', 'erro');
+        return;
+    }
+
+    // Lógica de alerta de data para novos lançamentos
     if (!itemEmEdicao) {
         const dataTransacaoInput = document.getElementById('lanc_data').value;
         const hoje = new Date();
@@ -851,7 +1098,7 @@ async function salvarLancamento(event) {
         id_categoria: parseInt(document.getElementById('lanc_categoria').value),
         id_conta_bancaria: parseInt(document.getElementById('lanc_conta').value),
         descricao: document.getElementById('lanc_descricao').value,
-        id_contato: parseInt(document.getElementById('lanc_contato_id').value) || null,
+        id_contato: parseInt(favorecidoId) || null
     };
 
     if (!payload.valor || !payload.id_categoria || !payload.id_conta_bancaria) {
@@ -862,13 +1109,14 @@ async function salvarLancamento(event) {
     try {
         let responseMessage = '';
         if (itemEmEdicao) {
+            // FLUXO DE EDIÇÃO
             const response = await fetchFinanceiroAPI(`/lancamentos/${itemEmEdicao.id}`, { method: 'PUT', body: JSON.stringify(payload) });
             responseMessage = response.message || 'Alterações salvas com sucesso!';
-            // SE UMA SOLICITAÇÃO FOI CRIADA, ATUALIZE O BADGE!
             if (response.message.includes('aguardando aprovação')) {
                 atualizarBadgesHeader();
             }
         } else {
+            // FLUXO DE CRIAÇÃO
             payload.tipo = document.getElementById('lanc_tipo').value;
             if (!payload.tipo) {
                 mostrarPopupFinanceiro('O campo "Tipo" é obrigatório.', 'aviso');
@@ -881,16 +1129,10 @@ async function salvarLancamento(event) {
         mostrarPopupFinanceiro(responseMessage, 'sucesso');
         fecharModal();
         
-        // CORREÇÃO: Atualiza os dados e renderiza a aba de lançamentos novamente
-        // Mantendo o usuário na mesma tela.
-        await carregarLancamentosFiltrados(filtrosAtivos.page || 1, filtrosAtivos);
-        carregarLogsAuditoria(); // Atualiza a aba de histórico
-        atualizarBadgesHeader(); // Garante que todos os badges estão corretos
-        
-        // Também atualiza os dados do dashboard em segundo plano
-        fetchFinanceiroAPI('/dashboard').then(dashboardData => {
-        renderizarDashboard(dashboardData.saldos, dashboardData.alertas);
-        });
+        // Atualiza a interface
+        carregarLancamentosFiltrados(filtrosAtivos.page || 1);
+        atualizarBadgesHeader();
+        carregarDadosDashboard();
 
     } catch (error) {
         // fetchFinanceiroAPI já mostra o erro
@@ -1206,7 +1448,9 @@ function abrirModalContatoGerenciamento(contato = null) {
                             <option value="">Selecione...</option>
                             <option value="CLIENTE" ${contato?.tipo === 'CLIENTE' ? 'selected' : ''}>Cliente</option>
                             <option value="FORNECEDOR" ${contato?.tipo === 'FORNECEDOR' ? 'selected' : ''}>Fornecedor</option>
-                            <option value="FUNCIONARIO" ${contato?.tipo === 'FUNCIONARIO' ? 'selected' : ''}>Funcionário</option>
+                            <option value="EMPREGADO" ${contato?.tipo === 'EMPREGADO' ? 'selected' : ''}>Funcionário</option>
+                            <option value="EX_EMPREGADO" ${contato?.tipo === 'EX_EMPREGADO' ? 'selected' : ''}>Ex-Funcionário</option>
+                            <option value="SOCIOS" ${contato?.tipo === 'SOCIOS' ? 'selected' : ''}>Sócios</option>
                             <option value="AMBOS" ${contato?.tipo === 'AMBOS' ? 'selected' : ''}>Ambos</option>
                         </select>
                     </div>
@@ -1300,7 +1544,7 @@ function abrirModalAgendamento() {
 
     const modalHTML = `
         <div id="modal-agendamento" class="fc-modal" style="display: flex;">
-            <div class="fc-modal-content" style="max-width: 650px;">
+            <div class="fc-modal-content">
                 <button id="fecharModal" class="fc-modal-close"><i class="fas fa-times"></i></button>
                 <h3 class="fc-section-title" style="text-align:center; border:0; margin-bottom: 20px;">${titulo}</h3>
                 
@@ -1453,11 +1697,6 @@ function abrirModalAgendamento() {
         catSelect.innerHTML = '<option value="">Selecione...</option>' + categoriasFiltradas.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
     });
     
-    setupAutocomplete(
-        document.getElementById('lote_favorecido_busca'),
-        document.getElementById('lote_favorecido_resultados'),
-        document.getElementById('lote_favorecido_id')
-    );
 
     const metodoSelect = document.getElementById('lote_metodo_divisao');
     const opcoesFixo = document.getElementById('opcoes_metodo_fixo');
@@ -1546,70 +1785,92 @@ async function salvarBaixa(event) {
     } catch(e) {}
 }
 
+function renderizarResultadosAutocomplete(resultados, termoBusca, resultadosDiv, buscaInput, idInput) {
+    // 1. Limpa os resultados anteriores
+    resultadosDiv.innerHTML = '';
+    let encontrouResultados = false;
 
-function setupAutocomplete(buscaInput, resultadosDiv, idInput) {
-    // Esta função centraliza a lógica do autocomplete para ser reutilizada
-    const renderizarResultados = (resultados) => {
-        resultadosDiv.innerHTML = '';
-        if (resultados.length > 0) {
-            resultados.forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'fc-autocomplete-item';
-                div.textContent = item.nome;
-                div.dataset.id = item.id;
-                div.addEventListener('click', () => {
-                    buscaInput.value = item.nome;
-                    idInput.value = item.id;
-                    resultadosDiv.style.display = 'none';
-                });
-                resultadosDiv.appendChild(div);
+    // 2. Adiciona os resultados encontrados na lista
+    if (resultados.length > 0) {
+        encontrouResultados = true;
+        resultados.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'fc-autocomplete-item';
+            div.textContent = item.nome;
+            div.dataset.id = item.id;
+            div.addEventListener('mousedown', (e) => { // 'mousedown' é melhor que 'click' aqui
+                e.preventDefault();
+                buscaInput.value = item.nome;
+                idInput.value = item.id;
+                resultadosDiv.classList.add('hidden');
             });
-        }
+            resultadosDiv.appendChild(div);
+        });
+    }
+
+    // 3. Lógica para o botão "+ Criar novo"
+    const existeExato = resultados.some(r => r.nome.toLowerCase() === termoBusca.toLowerCase());
+    if (termoBusca && !existeExato) {
+        encontrouResultados = true;
+        const divNovo = document.createElement('div');
+        divNovo.className = 'fc-autocomplete-item is-new'; // a classe 'is-new' já existe no seu CSS
+        divNovo.innerHTML = `<i class="fas fa-plus-circle"></i> <span>Criar novo: <strong>"${termoBusca}"</strong></span>`;
         
-        const termoBusca = buscaInput.value.trim();
-        const existeExato = resultados.some(r => r.nome.toLowerCase() === termoBusca.toLowerCase());
-        if (termoBusca && !existeExato) {
-            const divNovo = document.createElement('div');
-            divNovo.className = 'fc-autocomplete-item is-new';
-            divNovo.innerHTML = `+ Criar novo: "<strong>${termoBusca}</strong>"`;
-            divNovo.addEventListener('click', async () => {
-                const tipo = prompt(`Qual o tipo do novo contato "${termoBusca}"?\n(CLIENTE, FORNECEDOR, FUNCIONARIO, AMBOS)`, 'FORNECEDOR');
-                if (tipo && ['CLIENTE', 'FORNECEDOR', 'FUNCIONARIO', 'AMBOS'].includes(tipo.toUpperCase())) {
-                    try {
-                        const novoContato = await fetchFinanceiroAPI('/contatos', {
-                            method: 'POST',
-                            body: JSON.stringify({ nome: termoBusca, tipo: tipo.toUpperCase() })
-                        });
-                        buscaInput.value = novoContato.nome;
-                        idInput.value = novoContato.id;
-                        contatosGerenciamentoCache.push(novoContato); // Adiciona ao cache
-                        resultadosDiv.style.display = 'none';
-                    } catch (e) {}
-                } else if(tipo) { alert('Tipo inválido.'); }
-            });
-            resultadosDiv.appendChild(divNovo);
-        }
-        resultadosDiv.style.display = (resultadosDiv.childElementCount > 0) ? 'block' : 'none';
-    };
+        divNovo.addEventListener('mousedown', async (e) => {
+        e.preventDefault();
+        resultadosDiv.classList.add('hidden'); // Esconde a lista em ambos os casos
 
-    buscaInput.addEventListener('input', debounce(async () => {
-        const termo = buscaInput.value;
-        idInput.value = '';
-        if (termo.length < 2) {
-            resultadosDiv.style.display = 'none';
-            return;
-        }
-        try {
-            const resultados = await fetchFinanceiroAPI(`/contatos?q=${encodeURIComponent(termo)}`);
-            renderizarResultados(resultados);
-        } catch (e) {}
-    }, 300));
+        // ==========================================================
+        // =====> VERIFICAÇÃO DE PERMISSÃO <=====
+        // ==========================================================
+        if (permissoesGlobaisFinanceiro.includes('criar-favorecido')) {
+            // --- FLUXO PARA USUÁRIO COM PERMISSÃO ---
+            const tipo = await mostrarPopupComInput(
+                `Qual o tipo do novo contato "${termoBusca}"?`,
+                'Digite CLIENTE, FORNECEDOR, EMPREGADO, SOCIOS, EX_EMPREGADO ou AMBOS'
+            );
 
-    document.addEventListener('click', (e) => {
-        if (!buscaInput.contains(e.target)) {
-            resultadosDiv.style.display = 'none';
+            if (tipo && ['CLIENTE', 'FORNECEDOR', 'EMPREGADO', 'EX_EMPREGADO', 'SOCIOS', 'AMBOS'].includes(tipo.toUpperCase())) {
+                try {
+                    const novoContato = await fetchFinanceiroAPI('/contatos', {
+                        method: 'POST',
+                        body: JSON.stringify({ nome: termoBusca, tipo: tipo.toUpperCase() })
+                    });
+                    buscaInput.value = novoContato.nome;
+                    idInput.value = novoContato.id;
+                    if (!contatosGerenciamentoCache.find(c => c.id === novoContato.id)) {
+                        contatosGerenciamentoCache.push(novoContato);
+                    }
+                    mostrarPopupFinanceiro(`Contato "${novoContato.nome}" criado com sucesso!`, 'sucesso');
+                } catch (err) {
+                    // O fetchFinanceiroAPI já lida com o erro
+                }
+            } else if (tipo !== null) { // se for null, o usuário cancelou
+                mostrarPopupFinanceiro('Tipo inválido. A operação foi cancelada.', 'aviso');
+            }
+
+        } else {
+            // --- FLUXO PARA USUÁRIO SEM PERMISSÃO ---
+            mostrarPopupFinanceiro(
+                'Você não tem permissão para criar novos favorecidos. Por favor, contate um administrador.',
+                'aviso'
+            );
         }
     });
+
+    resultadosDiv.appendChild(divNovo); // Esta linha continua igual, fora do listener
+    }
+
+    // 4. Mensagem de "Nenhum resultado"
+    if (!encontrouResultados) {
+        const divNenhum = document.createElement('div');
+        divNenhum.className = 'fc-autocomplete-item is-disabled';
+        divNenhum.textContent = 'Nenhum contato encontrado.';
+        resultadosDiv.appendChild(divNenhum);
+    }
+    
+    // 5. Decide se mostra ou esconde a caixa de resultados
+    resultadosDiv.classList.remove('hidden');
 }
 
 // --- Função Utilitária para Modais ---
@@ -1630,7 +1891,6 @@ function configurarListenersModal(formId, submitCallback) {
 
     document.getElementById(formId)?.addEventListener('submit', submitCallback);
 }
-
 
 async function carregarDadosDashboard() {
     const dashboardContent = document.getElementById('dashboard-content');
@@ -1716,8 +1976,6 @@ async function carregarAprovacoesPendentes() {
         const solicitacoes = await fetchFinanceiroAPI('/aprovacoes-pendentes');
         
         // Log para confirmar que os dados chegaram no frontend
-        console.log("Dados recebidos da API de aprovações:", solicitacoes);
-
         renderizarCardsAprovacao(solicitacoes);
     } catch (error) {
         // ESTE É O LOG MAIS IMPORTANTE
@@ -1913,22 +2171,19 @@ function mudarAba(abaAtiva) {
 
 function setupEventListenersFinanceiro() {
     // --- NAVEGAÇÃO PRINCIPAL (ABAS E VIEWS) ---
-
     document.querySelectorAll('.fc-tab-btn').forEach(btn => {
         btn.addEventListener('click', () => mudarAba(btn.dataset.tab));
     });
 
-    // Botão que alterna entre Configurações (engrenagem) e Fechar (X)
     const btnToggleConfig = document.getElementById('btnToggleConfiguracoes');
     btnToggleConfig?.addEventListener('click', () => {
         if (btnToggleConfig.classList.contains('fechar')) {
-            gerenciarNavegacaoPrincipal('main'); // Se for 'X', sempre volta pro main
+            gerenciarNavegacaoPrincipal('main');
         } else {
-            gerenciarNavegacaoPrincipal('config'); // Se for engrenagem, vai para config
+            gerenciarNavegacaoPrincipal('config');
         }
     });
 
-    // Botão de Aprovações (sino)
     const btnAprovacoes = document.getElementById('btnIrParaAprovacoes');
     if (permissoesGlobaisFinanceiro.includes('aprovar-alteracao-financeira')) {
         btnAprovacoes?.addEventListener('click', () => gerenciarNavegacaoPrincipal('aprovacoes'));
@@ -1937,7 +2192,6 @@ function setupEventListenersFinanceiro() {
         btnAprovacoes?.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para acessar esta área.', 'aviso'));
     }
 
-    // Botão de Histórico
     const btnHistorico = document.getElementById('btnIrParaHistorico');
     if (permissoesGlobaisFinanceiro.includes('aprovar-alteracao-financeira')) {
         btnHistorico?.addEventListener('click', () => gerenciarNavegacaoPrincipal('historico'));
@@ -1945,8 +2199,7 @@ function setupEventListenersFinanceiro() {
         btnHistorico?.classList.add('fc-btn-disabled');
         btnHistorico?.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para ver o histórico.', 'aviso'));
     }
-    
-    // Menu lateral da tela de Configurações
+
     document.querySelector('.fc-config-menu')?.addEventListener('click', (e) => {
         if (e.target.matches('.fc-config-menu-item')) {
             e.preventDefault();
@@ -1954,9 +2207,53 @@ function setupEventListenersFinanceiro() {
         }
     });
 
-    // --- BOTÕES DE AÇÃO GLOBAIS (FAB E AGENDA) ---
+    // --- LÓGICA DE AUTOCOMPLETE CORRIGIDA E REFINADA ---
+    document.addEventListener('input', debounce(async (e) => {
+        if (e.target.matches('.fc-autocomplete-input')) {
+            const buscaInput = e.target;
+            const container = buscaInput.closest('.fc-autocomplete-container');
+            if (!container) return;
 
-    // Botão Flutuante para Novo Lançamento
+            const resultadosDiv = container.querySelector('.fc-autocomplete-results');
+            const idInput = container.querySelector('.fc-autocomplete-id'); // Agora vai encontrar!
+            if (!resultadosDiv || !idInput) return;
+
+            const termo = buscaInput.value.trim();
+            idInput.value = '';
+
+            if (termo.length < 2) {
+                resultadosDiv.innerHTML = '';
+                resultadosDiv.classList.add('hidden');
+                return;
+            }
+            try {
+                const resultados = await fetchFinanceiroAPI(`/contatos?q=${encodeURIComponent(termo)}`);
+                renderizarResultadosAutocomplete(resultados, termo, resultadosDiv, buscaInput, idInput);
+            } catch (err) {
+                console.error("Falha na busca do autocomplete:", err);
+            }
+        }
+    }, 150));
+    
+    document.addEventListener('focusout', (e) => {
+        if (e.relatedTarget && e.target.closest('.fc-autocomplete-container')?.contains(e.relatedTarget)) {
+          return;
+        }
+        document.querySelectorAll('.fc-autocomplete-results').forEach(div => {
+            div.classList.add('hidden');
+        });
+    });
+    
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.fc-autocomplete-container')) {
+            document.querySelectorAll('.fc-autocomplete-results').forEach(div => {
+               div.classList.add('hidden');
+            });
+        }
+    });
+
+
+    // --- BOTÕES DE AÇÃO GLOBAIS (FAB E AGENDA) ---
     const btnNovoLancamento = document.getElementById('btnNovoLancamento');
     if (permissoesGlobaisFinanceiro.includes('lancar-transacao')) {
         btnNovoLancamento?.addEventListener('click', () => abrirModalLancamento());
@@ -1965,7 +2262,6 @@ function setupEventListenersFinanceiro() {
         btnNovoLancamento?.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para criar lançamentos.', 'aviso'));
     }
 
-    // Botão para Agendar Novo na aba Agenda
     const btnAgendar = document.getElementById('btnAgendarNovaConta');
     if(permissoesGlobaisFinanceiro.includes('lancar-transacao')) {
         btnAgendar?.addEventListener('click', () => abrirModalAgendamento());
@@ -1979,20 +2275,17 @@ function setupEventListenersFinanceiro() {
     btnNotificacoes?.addEventListener('click', (e) => {
         e.stopPropagation();
         const painel = document.getElementById('painelNotificacoes');
-        const estaOculto = painel.classList.contains('hidden');
-        
-        // Esconde outros painéis flutuantes se houver
-        // (no futuro podemos ter um de perfil, etc)
-
-        if (estaOculto) {
+        painel.classList.toggle('hidden');
+        if (!painel.classList.contains('hidden')) {
             carregarNotificacoes();
-            painel.classList.remove('hidden');
-        } else {
-            painel.classList.add('hidden');
         }
     });
 
-    // Listener para fechar o painel de notificações se clicar fora
+    document.getElementById('btnMarcarTodasComoLidas')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        marcarTodasComoLidas();
+    });
+
     document.addEventListener('click', (e) => {
         const painel = document.getElementById('painelNotificacoes');
         const btn = document.getElementById('btnNotificacoes');
@@ -2001,44 +2294,27 @@ function setupEventListenersFinanceiro() {
         }
     });
 
-
     // --- DELEGAÇÃO DE EVENTOS PARA A ABA LANÇAMENTOS ---
     const tabLancamentos = document.getElementById('tab-lancamentos');
     if (tabLancamentos) {
-        // Listener para o botão de ATUALIZAR
         tabLancamentos.addEventListener('click', (e) => {
-            const btn = e.target.closest('#btnAtualizarLancamentos');
-            if (btn) {
-                btn.disabled = true;
-                carregarLancamentosFiltrados(filtrosAtivos.page || 1).finally(() => {
-                    btn.disabled = false;
-                });
+            if (e.target.closest('#btnAtualizarLancamentos')) {
+                carregarLancamentosFiltrados(filtrosAtivos.page || 1);
             }
-        });
-        
-        // Listener para mostrar/esconder filtros avançados
-        tabLancamentos.addEventListener('click', (e) => {
             if (e.target.closest('#btnToggleFiltrosAvancados')) {
                 document.getElementById('filtrosLancamentos').classList.toggle('hidden');
             }
-        });
-
-        // Listener para Limpar Filtros
-        tabLancamentos.addEventListener('click', (e) => {
             if (e.target.closest('#btnLimparFiltros')) {
-                const filtrosForm = document.getElementById('filtrosLancamentos');
-                filtrosForm.reset();
+                document.getElementById('filtrosLancamentos').reset();
                 document.getElementById('filtroBuscaRapida').value = '';
                 filtrosAtivos = {};
-                prepararAbaLancamentos();
+                carregarLancamentosFiltrados(1);
             }
         });
-        
-        // Listener único para todos os inputs de filtro
+
         tabLancamentos.addEventListener('input', debounce((e) => {
             if (e.target.closest('#filtrosLancamentos') || e.target.matches('#filtroBuscaRapida')) {
-                const filtrosForm = document.getElementById('filtrosLancamentos');
-                const formData = new FormData(filtrosForm);
+                const formData = new FormData(document.getElementById('filtrosLancamentos'));
                 filtrosAtivos = Object.fromEntries(formData.entries());
                 filtrosAtivos.termoBusca = document.getElementById('filtroBuscaRapida').value.trim();
                 for (const key in filtrosAtivos) { if (!filtrosAtivos[key]) delete filtrosAtivos[key]; }
@@ -2052,22 +2328,50 @@ function setupEventListenersFinanceiro() {
 async function inicializarPaginaFinanceiro() {
     console.log('[Financeiro] Inicializando página...');
     
+    // Configura listeners e estado inicial da UI que não dependem de dados
+    setupEventListenersFinanceiro();
+    gerenciarNavegacaoPrincipal('main');
+    mudarAba('dashboard');
+    mudarPainelConfig('contas');
+    
     try {
-        // A busca por aprovações agora é separada para não travar a carga inicial para usuários comuns
-        let aprovacoesPendentes = [];
-        if (permissoesGlobaisFinanceiro.includes('aprovar-alteracao-financeira')) {
-            aprovacoesPendentes = await fetchFinanceiroAPI('/aprovacoes-pendentes');
-        }
+        // =================================================================
+        // PASSO 1: CARREGA O ESSENCIAL E RENDERIZA O DASHBOARD PRIMEIRO
+        // =================================================================
+        console.log('[Financeiro] Carregando dados do dashboard...');
+        const dashboardData = await fetchFinanceiroAPI('/dashboard');
+        renderizarDashboard(dashboardData.saldos, dashboardData.alertas);
+        console.log('[Financeiro] Dashboard renderizado.');
 
-        const [configData, dashboardData, lancamentosData, contasAgendadasData, contatosData] = await Promise.all([
+        // =================================================================
+        // PASSO 2: CARREGA O RESTO DOS DADOS EM PARALELO
+        // =================================================================
+        console.log('[Financeiro] Carregando dados secundários...');
+        
+        // Prepara um array de promessas para o Promise.all
+        const promessasDeDados = [
             fetchFinanceiroAPI('/configuracoes'),
-            fetchFinanceiroAPI('/dashboard'),
             fetchFinanceiroAPI('/lancamentos?limit=50'),
             fetchFinanceiroAPI('/contas-agendadas?status=PENDENTE'),
-            fetchFinanceiroAPI('/contatos/all')
-        ]);
-        
-        // 1. Armazena todos os dados nos caches
+            fetchFinanceiroAPI('/contatos/all'),
+            // LÓGICA DE PERMISSÃO REINTEGRADA AQUI:
+            // A busca por aprovações pendentes é condicional.
+            // Se o usuário não tiver permissão, resolvemos a promessa com um array vazio.
+            permissoesGlobaisFinanceiro.includes('aprovar-alteracao-financeira')
+                ? fetchFinanceiroAPI('/aprovacoes-pendentes')
+                : Promise.resolve([])
+        ];
+
+        // Executa todas as buscas em paralelo
+        const [
+            configData, 
+            lancamentosData, 
+            contasAgendadasData, 
+            contatosData,
+            aprovacoesPendentes // <<< O resultado da busca condicional
+        ] = await Promise.all(promessasDeDados);
+
+        // Armazena os dados nos caches globais
         contasCache = configData.contas;
         gruposCache = configData.grupos;
         categoriasCache = configData.categorias;
@@ -2076,7 +2380,12 @@ async function inicializarPaginaFinanceiro() {
         contatosGerenciamentoCache = contatosData;
         filtrosAtivos.total = lancamentosData.total;
         
-        // 2. Atualiza os badges do header
+        console.log('[Financeiro] Dados secundários carregados.');
+
+        // =================================================================
+        // PASSO 3: ATUALIZA OS BADGES DO HEADER COM OS DADOS JÁ CARREGADOS
+        // =================================================================
+        // Atualiza o badge de aprovações com os dados que acabaram de chegar
         const badgeAprovacoes = document.getElementById('badgeAprovacoes');
         if (badgeAprovacoes && aprovacoesPendentes.length > 0) {
             badgeAprovacoes.textContent = aprovacoesPendentes.length;
@@ -2084,26 +2393,17 @@ async function inicializarPaginaFinanceiro() {
         } else if (badgeAprovacoes) {
             badgeAprovacoes.classList.add('hidden');
         }
-        await atualizarBadgesHeader(); // Busca e atualiza o badge de notificações pessoais
+        // A função atualizarBadgesHeader agora pode focar apenas nas notificações pessoais
+        await atualizarBadgesHeader();
 
-        // 3. Renderiza o conteúdo de todas as seções e painéis
-        renderizarDashboard(dashboardData.saldos, dashboardData.alertas);
-        renderizarGraficoFluxoCaixa();
-        renderizarTabelaAgenda(); 
+        // =================================================================
+        // PASSO 4: RENDERIZA OS COMPONENTES SECUNDÁRIOS
+        // =================================================================
+        renderizarTabelaAgenda();
         prepararAbaLancamentos();
-        
-        // Renderiza o conteúdo da tela de configurações (que começa oculta)
         renderizarTabelaContas();
         renderizarContatosGerenciamento();
         renderizarTabelaCategoriasAgrupadas();
-        
-        // 4. Configura todos os event listeners
-        setupEventListenersFinanceiro();
-        
-        // 5. Define o estado visual inicial da interface
-        gerenciarNavegacaoPrincipal('main');
-        mudarAba('dashboard'); 
-        mudarPainelConfig('contas');
         
         console.log('[Financeiro] Página inicializada com sucesso.');
 
@@ -2122,11 +2422,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         permissoesGlobaisFinanceiro = auth.permissoes || [];
         usuarioLogadoFinanceiro = auth.usuario;
 
+        // Adiciona a classe para remover o estado de 'loading' ou mostrar o conteúdo
         document.body.classList.add('autenticado');
-        await inicializarPaginaFinanceiro();
+        
+        // Chama a função de inicialização principal
+        inicializarPaginaFinanceiro();
 
     } catch (error) {
         console.error('[Financeiro DOMContentLoaded] Erro:', error);
+        // Você pode adicionar um feedback de erro na própria página aqui se desejar
     }
 });
 
@@ -2324,18 +2628,11 @@ async function marcarTodasComoLidas() {
     try {
         await fetchFinanceiroAPI('/notificacoes/marcar-todas-como-lidas', { method: 'POST' });
         
-        // Atualiza a interface
-        document.querySelectorAll('.fc-notificacao-item.nao-lida').forEach(item => {
-            item.classList.remove('nao-lida');
-        });
-
-        // Zera o contador do badge
+        // CORREÇÃO: Recarrega a lista para mostrar o novo estado
+        carregarNotificacoes(); 
+        
         const badge = document.getElementById('badgeNotificacoes');
         if (badge) badge.classList.add('hidden');
-
-        // Atualiza o contador do badge
-        atualizarBadgesHeader(); 
-
     } catch(e) {
         mostrarPopupFinanceiro('Erro ao marcar todas as notificações.', 'erro');
     }
@@ -2559,99 +2856,5 @@ function coletarDadosDoLote() {
             });
         });
         return parcelasManuais;
-    }
-}
-
-// Variável global para armazenar a instância do gráfico e destruí-la antes de recriar
-let graficoFluxoCaixaInstance = null;
-
-async function renderizarGraficoFluxoCaixa() {
-    const canvas = document.getElementById('graficoFluxoCaixa');
-    const esqueleto = document.getElementById('graficoEsqueleto');
-    const container = document.getElementById('graficoContainer');
-
-    if (!canvas || !esqueleto || !container) return;
-
-    // Garante que o esqueleto esteja visível e o canvas oculto durante a busca
-    esqueleto.classList.remove('hidden');
-    canvas.classList.add('hidden');
-
-    try {
-        const dadosGrafico = await fetchFinanceiroAPI('/grafico-fluxo-caixa');
-
-        if (!dadosGrafico || dadosGrafico.length === 0) {
-            container.innerHTML = `<p style="text-align:center;">Não há dados suficientes para gerar o gráfico.</p>`;
-            return;
-        }
-
-        const labels = dadosGrafico.map(d => d.label_semana);
-        const receitas = dadosGrafico.map(d => d.total_receitas);
-        const despesas = dadosGrafico.map(d => d.total_despesas);
-
-        if (graficoFluxoCaixaInstance) {
-            graficoFluxoCaixaInstance.destroy();
-        }
-
-        const ctx = canvas.getContext('2d');
-        graficoFluxoCaixaInstance = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: 'Receitas',
-                        data: receitas,
-                        backgroundColor: 'rgba(39, 174, 96, 0.7)',
-                        borderColor: 'rgba(39, 174, 96, 1)',
-                        borderWidth: 1
-                    },
-                    {
-                        label: 'Despesas',
-                        data: despesas,
-                        backgroundColor: 'rgba(231, 76, 60, 0.7)',
-                        borderColor: 'rgba(231, 76, 60, 1)',
-                        borderWidth: 1
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: function(value) {
-                                return 'R$ ' + value.toLocaleString('pt-BR');
-                            }
-                        }
-                    }
-                },
-                plugins: {
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                let label = context.dataset.label || '';
-                                if (label) {
-                                    label += ': ';
-                                }
-                                if (context.parsed.y !== null) {
-                                    label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.parsed.y);
-                                }
-                                return label;
-                            }
-                        }
-                    }
-                }
-            }
-        });
-
-        // Quando o gráfico está pronto, esconde o esqueleto e mostra o canvas
-        esqueleto.classList.add('hidden');
-        canvas.classList.remove('hidden');
-
-    } catch(e) {
-        console.error("Erro ao renderizar gráfico:", e);
-        container.innerHTML = `<p style="color:red; text-align:center;">Não foi possível carregar o gráfico.</p>`;
     }
 }
