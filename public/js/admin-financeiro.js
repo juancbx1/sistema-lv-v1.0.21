@@ -183,6 +183,16 @@ async function fetchFinanceiroAPI(endpoint, options = {}) {
     }
 }
 
+function formatarCategoriaComGrupo(categoriaId) {
+    const categoria = categoriasCache.find(c => c.id == categoriaId);
+    if (!categoria) return 'Categoria Inválida';
+
+    const grupo = gruposCache.find(g => g.id == categoria.id_grupo);
+    // Se o grupo não for encontrado, retorna apenas o nome da categoria.
+    if (!grupo) return categoria.nome;
+
+    return `${categoria.nome} [ ${grupo.nome} ]`;
+}
 
 // --- Funções de Renderização ---
 
@@ -309,12 +319,10 @@ function abrirModalConta(conta = null) {
 }
 
 function fecharModal() {
-    const modal = document.querySelector('.fc-modal');
-    if (modal) {
-        // Chama a função para remover o listener antes de remover o modal
-        fecharModalListenerRemover();
-        fecharModalListenerRemover = () => {}; // Reseta a variável
-        modal.remove();
+    // Encontra QUALQUER modal que esteja aberto
+    const modalAberto = document.querySelector('.fc-modal');
+    if (modalAberto) {
+        modalAberto.remove();
     }
     itemEmEdicao = null;
 }
@@ -516,6 +524,22 @@ function renderizarDashboard(saldos, alertas) {
     `;
 }
 
+async function atualizarSaldosDashboard() {
+    console.log('[Dashboard] Solicitando atualização de saldos...');
+    try {
+        // 1. Busca apenas os dados mais recentes do dashboard
+        const dashboardData = await fetchFinanceiroAPI('/dashboard');
+        
+        // 2. Chama a função que já existe para redesenhar o dashboard
+        renderizarDashboard(dashboardData.saldos, dashboardData.alertas);
+        
+        console.log('[Dashboard] Saldos atualizados na tela com sucesso.');
+    } catch (error) {
+        // Se falhar, não quebra a aplicação, apenas avisa no console.
+        console.error('[Dashboard] Falha ao tentar atualizar os saldos:', error);
+    }
+}
+
 function prepararAbaLancamentos() {
     // Esta função agora só prepara os dados e dispara a primeira busca.
     // Os listeners serão configurados apenas uma vez na inicialização.
@@ -549,10 +573,10 @@ function prepararAbaLancamentos() {
 async function carregarLancamentosFiltrados(page = 1, filtros = filtrosAtivos) {
     const tabelaContainer = document.getElementById('cardsLancamentosContainer');
     if (!tabelaContainer) return;
-    tabelaContainer.innerHTML = `<div class="fc-spinner">Buscando lançamentos...</div>`;
+    tabelaContainer.innerHTML = `<div class="fc-spinner"><span>Buscando lançamentos...</span></div>`;
 
-    // Usa os filtros recebidos como parâmetro
-    const params = new URLSearchParams({ page, ...filtros });
+    const limit = 8;
+    const params = new URLSearchParams({ page, limit, ...filtros });
     
     try {
         const data = await fetchFinanceiroAPI(`/lancamentos?${params.toString()}`);
@@ -575,15 +599,70 @@ function renderizarCardsLancamentos() {
         return;
     }
 
-    if (lancamentosCache.length === 0) {
+    if (!lancamentosCache || lancamentosCache.length === 0) {
         container.innerHTML = '<p style="text-align:center; padding: 20px;">Nenhum lançamento encontrado para os filtros selecionados.</p>';
         return;
     }
-    
-    let html = '';
+
+    // Conjunto para rastrear IDs de transferências já renderizadas e evitar duplicidade
+    const idsTransferenciaRenderizados = new Set();
+    let htmlFinal = '';
+
+    // Itera sobre cada lançamento recebido da API
     for (const l of lancamentosCache) {
+        // Se este ID já foi processado como parte de um par de transferência, pula para o próximo
+        if (idsTransferenciaRenderizados.has(l.id)) {
+            continue;
+        }
+
+        const categoria = categoriasCache.find(c => c.id === l.id_categoria);
+        const isTransferencia = categoria?.nome === 'Transferência entre Contas' && l.id_transferencia_vinculada;
+
+        // --- LÓGICA PARA RENDERIZAR O CARD DE TRANSFERÊNCIA ---
+        if (isTransferencia) {
+            const par = lancamentosCache.find(p => p.id === l.id_transferencia_vinculada);
+
+            // Se o par não foi encontrado no lote atual de dados, renderiza como um card normal para não sumir
+            if (!par) {
+                 // (O código para renderizar card normal está mais abaixo, ele vai cair lá)
+            } else {
+                // Marca ambos os IDs para não serem renderizados individualmente
+                idsTransferenciaRenderizados.add(l.id);
+                idsTransferenciaRenderizados.add(par.id);
+
+                const lancamentoOrigem = l.tipo === 'DESPESA' ? l : par;
+                const lancamentoDestino = l.tipo === 'RECEITA' ? l : par;
+
+                htmlFinal += `
+                <div class="fc-lancamento-card-wrapper">
+                    <div class="fc-lancamento-card transferencia">
+                        <div class="header">
+                            <div class="descricao-wrapper">
+                                <span class="lancamento-id">#${lancamentoOrigem.id} / #${lancamentoDestino.id}</span>
+                                <span class="descricao">Transferência entre Contas</span>
+                            </div>
+                            <span class="valor">${formatCurrency(l.valor)}</span>
+                        </div>
+                        <div class="details transferencia-details">
+                            <span class="detail-item de"><strong>DE:</strong> <i class="fas fa-university"></i> ${lancamentoOrigem.nome_conta}</span>
+                            <i class="fas fa-long-arrow-alt-right arrow"></i>
+                            <span class="detail-item para"><strong>PARA:</strong> <i class="fas fa-university"></i> ${lancamentoDestino.nome_conta}</span>
+                            <span class="detail-item data"><i class="fas fa-calendar-day"></i> ${new Date(l.data_transacao).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>
+                        </div>
+                        <div class="actions">
+                            <!-- Ações para transferência podem ser adicionadas no futuro, como "Estornar" -->
+                        </div>
+                    </div>
+                </div>
+                `;
+                continue; // Pula para o próximo item do loop
+            }
+        }
+        
+        // --- LÓGICA PARA RENDERIZAR CARDS NORMAIS (RECEITA, DESPESA, DETALHADO) ---
+        // Esta parte é a sua lógica original, totalmente preservada e funcional.
         const isDetalhado = l.itens && l.itens.length > 0;
-        const tipoClasse = isDetalhado ? 'despesa' : l.tipo.toLowerCase();
+        const tipoClasse = isDetalhado ? 'despesa' : (l.tipo ? l.tipo.toLowerCase() : '');
         
         const isPendenteEdicao = l.status_edicao === 'PENDENTE_APROVACAO';
         const isPendenteExclusao = l.status_edicao === 'PENDENTE_EXCLUSAO';
@@ -593,7 +672,7 @@ function renderizarCardsLancamentos() {
         const classePendente = isPendente ? 'pendente' : '';
 
         const sinal = l.tipo === 'RECEITA' ? '+' : '-';
-        const nomeCategoriaExibido = isDetalhado ? 'Compra Detalhada (Rateio)' : l.nome_categoria;
+        const nomeCategoriaExibido = isDetalhado ? 'Compra Detalhada (Rateio)' : (l.id_categoria ? formatarCategoriaComGrupo(l.id_categoria) : 'Sem Categoria');
 
         let statusHTML = '';
         if (isPendenteEdicao) {
@@ -608,7 +687,7 @@ function renderizarCardsLancamentos() {
             statusHTML = `<div class="status-placeholder"></div>`;
         }
 
-        html += `
+        htmlFinal += `
             <div class="fc-lancamento-card-wrapper">
                 <div class="fc-lancamento-card ${tipoClasse} ${classePendente}">
                     <div class="header">
@@ -634,7 +713,7 @@ function renderizarCardsLancamentos() {
                 ${isDetalhado ? `
                 <div class="fc-lancamento-itens-container hidden" id="itens-${l.id}">
                     <ul>
-                        ${l.itens.map(item => `<li><span>${item.nome_categoria}: ${item.descricao_item || ''}</span> <span>${formatCurrency(item.valor_item)}</span></li>`).join('')}
+                        ${l.itens.map(item => `<li><span>${formatarCategoriaComGrupo(item.id_categoria)}: ${item.descricao_item || ''}</span> <span>${formatCurrency(item.valor_item)}</span></li>`).join('')}
                     </ul>
                 </div>
                 ` : ''}
@@ -642,15 +721,17 @@ function renderizarCardsLancamentos() {
         `;
     }
     
-    container.innerHTML = html;
+    container.innerHTML = htmlFinal;
 
-    // Adiciona os listeners aos botões
+    // --- ADICIONA OS LISTENERS NOVAMENTE ---
+    // Esta parte é crucial e garante que os botões dos cards normais continuem funcionando.
     container.querySelectorAll('.btn-toggle-details').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const id = e.currentTarget.dataset.id;
             document.getElementById(`itens-${id}`).classList.toggle('hidden');
-            e.currentTarget.querySelector('i').classList.toggle('fa-chevron-down');
-            e.currentTarget.querySelector('i').classList.toggle('fa-chevron-up');
+            const icon = e.currentTarget.querySelector('i');
+            icon.classList.toggle('fa-chevron-down');
+            icon.classList.toggle('fa-chevron-up');
         });
     });
 
@@ -779,27 +860,28 @@ function abrirModalLancamento() {
 // Preenche e gerencia o formulário de lançamento simples
 function popularFormularioSimples(formContainer, lancamento = null) {
     if (!formContainer) return;
-
     const hoje = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
-    let tipoEdicao = '';
+    // Se estamos editando, descobrimos o tipo (RECEITA/DESPESA) a partir da categoria
+    let tipoOriginal = '';
     if (lancamento) {
         const categoriaDoLancamento = categoriasCache.find(c => c.id === lancamento.id_categoria);
         if (categoriaDoLancamento) {
             const grupoPai = gruposCache.find(g => g.id === categoriaDoLancamento.id_grupo);
-            if (grupoPai) tipoEdicao = grupoPai.tipo;
+            if (grupoPai) tipoOriginal = grupoPai.tipo;
         }
     }
-
+    
+    // Gera o HTML do formulário
     formContainer.innerHTML = `
         <div class="fc-form-row">
             <div class="fc-form-group">
                 <label for="lanc_valor">Valor (R$)*</label>
-                <input type="number" id="lanc_valor" class="fc-input fc-input-valor" step="0.01" min="0.01" required>
+                <input type="number" id="lanc_valor" class="fc-input fc-input-valor" step="0.01" min="0.01" required value="${lancamento?.valor || ''}">
             </div>
             <div class="fc-form-group">
                 <label for="lanc_data">Data da Transação*</label>
-                <input type="date" id="lanc_data" class="fc-input fc-input-data" required>
+                <input type="date" id="lanc_data" class="fc-input fc-input-data" required value="${lancamento ? lancamento.data_transacao.split('T')[0] : hoje}">
             </div>
         </div>
         <div class="fc-form-row">
@@ -807,8 +889,8 @@ function popularFormularioSimples(formContainer, lancamento = null) {
                 <label for="lanc_tipo">Tipo*</label>
                 <select id="lanc_tipo" class="fc-select" required ${lancamento ? 'disabled' : ''}>
                     <option value="">Selecione...</option>
-                    <option value="RECEITA">Receita</option>
-                    <option value="DESPESA">Despesa</option>
+                    <option value="RECEITA" ${tipoOriginal === 'RECEITA' ? 'selected' : ''}>Receita</option>
+                    <option value="DESPESA" ${tipoOriginal === 'DESPESA' ? 'selected' : ''}>Despesa</option>
                 </select>
             </div>
             <div class="fc-form-group">
@@ -822,19 +904,21 @@ function popularFormularioSimples(formContainer, lancamento = null) {
             <label for="lanc_conta">Conta Bancária*</label>
             <select id="lanc_conta" class="fc-select" required>
                 <option value="">Selecione...</option>
-                ${contasCache.map(c => `<option value="${c.id}">${c.nome_conta}</option>`).join('')}
+                ${contasCache.map(c => `<option value="${c.id}" ${lancamento?.id_conta_bancaria == c.id ? 'selected' : ''}>${c.nome_conta}</option>`).join('')}
             </select>
         </div>
         <div class="fc-form-group">
             <label for="lanc_contato_busca" id="label-contato-simples">Favorecido / Pagador</label>
-                <div class="fc-autocomplete-container">
-                    <input type="text" id="lanc_contato_busca" class="fc-input fc-autocomplete-input" placeholder="Digite para buscar..." autocomplete="off">
-                    <div id="lanc_contato_resultados" class="fc-autocomplete-results hidden"></div>
-                    <input type="hidden" id="lanc_contato_id" class="fc-autocomplete-id">
-                </div>
+            <div class="fc-autocomplete-container">
+                <input type="text" id="lanc_contato_busca" class="fc-input fc-autocomplete-input" placeholder="Digite para buscar..." autocomplete="off" value="${lancamento?.nome_favorecido || ''}">
+                <span class="fc-autocomplete-status-icon"></span>
+                <div id="lanc_contato_resultados" class="fc-autocomplete-results hidden"></div>
+                <input type="hidden" id="lanc_contato_id" class="fc-autocomplete-id" value="${lancamento?.id_contato || ''}">
+            </div>
+        </div>
         <div class="fc-form-group">
             <label for="lanc_descricao">Descrição / Histórico</label>
-            <textarea id="lanc_descricao" class="fc-input" rows="2"></textarea>
+            <textarea id="lanc_descricao" class="fc-input" rows="2">${lancamento?.descricao || ''}</textarea>
         </div>
     `;
 
@@ -842,6 +926,7 @@ function popularFormularioSimples(formContainer, lancamento = null) {
     const categoriaSelect = formContainer.querySelector('#lanc_categoria');
     const labelContato = formContainer.querySelector('#label-contato-simples');
 
+    // Essa função interna continua perfeita
     const atualizarCamposPorTipo = (tipo) => {
         if (!tipo) {
             categoriaSelect.innerHTML = '<option value="">Selecione o tipo</option>';
@@ -851,29 +936,35 @@ function popularFormularioSimples(formContainer, lancamento = null) {
         if(labelContato) labelContato.textContent = tipo === 'RECEITA' ? 'Pagador / Cliente' : 'Favorecido';
         
         const categoriasFiltradas = categoriasCache.filter(c => gruposCache.find(g => g.id === c.id_grupo)?.tipo === tipo);
-        categoriaSelect.innerHTML = '<option value="">Selecione...</option>' + categoriasFiltradas.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+
+        const categoriasAgrupadas = categoriasFiltradas.reduce((acc, categoria) => {
+            const idGrupo = categoria.id_grupo;
+            if (!acc[idGrupo]) { acc[idGrupo] = []; }
+            acc[idGrupo].push(categoria);
+            return acc;
+        }, {});
+
+        let optionsHTML = '<option value="">Selecione...</option>';
+        for (const idGrupo in categoriasAgrupadas) {
+            const grupo = gruposCache.find(g => g.id == idGrupo);
+            optionsHTML += `<optgroup label="${grupo ? grupo.nome : 'Sem Grupo'}">`;
+            categoriasAgrupadas[idGrupo].forEach(categoria => {
+                optionsHTML += `<option value="${categoria.id}">${categoria.nome} [ ${grupo ? grupo.nome : ''} ]</option>`;
+            });
+            optionsHTML += `</optgroup>`;
+        }
+        categoriaSelect.innerHTML = optionsHTML;
     };
 
     tipoSelect.addEventListener('change', (e) => atualizarCamposPorTipo(e.target.value));
     
-    if (lancamento) {
-        formContainer.querySelector('#lanc_valor').value = lancamento.valor;
-        formContainer.querySelector('#lanc_data').value = lancamento.data_transacao.split('T')[0];
-        tipoSelect.value = tipoEdicao;
-        formContainer.querySelector('#lanc_conta').value = lancamento.id_conta_bancaria;
-        formContainer.querySelector('#lanc_contato_busca').value = lancamento.nome_favorecido || '';
-        formContainer.querySelector('#lanc_contato_id').value = lancamento.id_contato || '';
-        formContainer.querySelector('#lanc_descricao').value = lancamento.descricao || '';
-    } else {
-        formContainer.querySelector('#lanc_data').value = hoje;
-    }
-
+    // Dispara a função para popular as categorias com base no tipo do lançamento
     atualizarCamposPorTipo(tipoSelect.value);
 
+    // Se for uma edição, seleciona a categoria correta após as opções serem carregadas
     if (lancamento) {
         categoriaSelect.value = lancamento.id_categoria;
     }
-
 }
 
 
@@ -881,13 +972,11 @@ function popularFormularioSimples(formContainer, lancamento = null) {
 function popularFormularioDetalhado(formContainer) {
     if (!formContainer) return;
 
-    // Lógica de data à prova de fuso horário
     const hojeDate = new Date();
     const fusoHorarioOffset = hojeDate.getTimezoneOffset() * 60000;
     const hojeLocal = new Date(hojeDate.getTime() - fusoHorarioOffset);
     const hoje = hojeLocal.toISOString().split('T')[0];
     
-    // Cria o HTML interno do formulário
     formContainer.innerHTML = `
         <div class="fc-form-row">
             <div class="fc-form-group">
@@ -908,9 +997,11 @@ function popularFormularioDetalhado(formContainer) {
                 <label for="det_favorecido_busca">Fornecedor*</label>
                 <div class="fc-autocomplete-container">
                     <input type="text" id="det_favorecido_busca" class="fc-input fc-autocomplete-input" placeholder="Digite para buscar..." autocomplete="off" required>
+                    <span class="fc-autocomplete-status-icon"></span>
                     <div id="det_favorecido_resultados" class="fc-autocomplete-results hidden"></div>
                     <input type="hidden" id="det_favorecido_id" class="fc-autocomplete-id">
                 </div>
+            </div>
         </div>
         <div class="fc-form-group">
             <label for="det_descricao">Descrição Geral (NF, etc)*</label>
@@ -918,64 +1009,127 @@ function popularFormularioDetalhado(formContainer) {
         </div>
         <hr style="margin: 20px 0;">
         <h4 class="fc-section-title" style="font-size: 1.1rem; border:0; margin-bottom: 10px;">Itens da Compra (Rateio)</h4>
-        <div class="fc-parcela-manual-header">
+        
+        <div class="fc-rateio-header">
             <span>Categoria do Item*</span>
             <span>Descrição do Item</span>
             <span>Valor (R$)*</span>
-            <span></span>
+            <span>Ação</span>
         </div>
+        
         <div id="grade_itens_compra"></div>
+        
         <button type="button" id="btnAdicionarItemCompra" class="fc-btn fc-btn-outline" style="margin-top: 10px;"><i class="fas fa-plus"></i> Adicionar Item</button>
         <div id="resumo_rateio" style="text-align: right; margin-top: 10px; font-weight: bold;"></div>
     `;
     
-    // Popula o select de contas bancárias
-    formContainer.querySelector('#det_conta').innerHTML = '<option value="">Selecione...</option>' + contasCache.map(c => `<option value="${c.id}">${c.nome_conta}</option>`).join('');
+    // --- A LINHA CRÍTICA QUE ESTAVA FALTANDO ---
+    // Preenche o select de contas bancárias a partir do cache.
+    const selectConta = formContainer.querySelector('#det_conta');
+    if (selectConta) {
+        selectConta.innerHTML = '<option value="">Selecione...</option>' + contasCache.map(c => `<option value="${c.id}">${c.nome_conta}</option>`).join('');
+    }
     
     // Adiciona a primeira linha de item na grade
     adicionarLinhaItemCompra();
 
-    // Configura os listeners específicos deste formulário
+    // Adiciona os listeners de evento
     formContainer.querySelector('#btnAdicionarItemCompra').addEventListener('click', adicionarLinhaItemCompra);
     formContainer.querySelector('#det_valor_total').addEventListener('input', atualizarResumoRateio);
-    
+}
+
+/**
+ * Define o status visual de um campo de autocomplete.
+ * @param {HTMLInputElement} inputElement - O elemento do input de busca.
+ * @param {'success' | 'error' | 'clear'} status - O estado a ser definido.
+ */
+function setAutocompleteStatus(inputElement, status) {
+    const container = inputElement.closest('.fc-autocomplete-container');
+    if (!container) return;
+
+    const iconSpan = container.querySelector('.fc-autocomplete-status-icon');
+    if (!iconSpan) return;
+
+    // Limpa classes e conteúdo anteriores
+    iconSpan.className = 'fc-autocomplete-status-icon';
+    iconSpan.innerHTML = '';
+
+    switch (status) {
+        case 'success':
+            iconSpan.innerHTML = '<i class="fas fa-check-circle"></i>';
+            iconSpan.style.color = 'var(--fc-cor-receita)';
+            iconSpan.classList.add('visible');
+            break;
+        case 'error':
+            iconSpan.innerHTML = '<i class="fas fa-times-circle"></i>';
+            iconSpan.style.color = 'var(--fc-cor-despesa)';
+            iconSpan.classList.add('visible');
+            break;
+        case 'clear':
+            // Não faz nada, o ícone simplesmente some (sem a classe 'visible')
+            break;
+    }
 }
 
 // Adiciona uma nova linha de item na grade de rateio
 function adicionarLinhaItemCompra() {
     const gradeContainer = document.getElementById('grade_itens_compra');
+    if (!gradeContainer) return;
+    
     const div = document.createElement('div');
-    div.className = 'fc-parcela-manual-linha'; // Reutilizando o estilo do parcelamento
+    div.className = 'fc-rateio-linha'; 
 
-    // Cria o select de categorias de DESPESA
     const categoriasDespesa = categoriasCache.filter(c => gruposCache.find(g => g.id === c.id_grupo)?.tipo === 'DESPESA');
-    const optionsCategoria = categoriasDespesa.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+    const categoriasAgrupadas = categoriasDespesa.reduce((acc, categoria) => {
+        const idGrupo = categoria.id_grupo;
+        if (!acc[idGrupo]) { acc[idGrupo] = []; }
+        acc[idGrupo].push(categoria);
+        return acc;
+    }, {});
+
+    let optionsCategoria = '<option value="">Selecione Categoria...</option>';
+    for (const idGrupo in categoriasAgrupadas) {
+        const grupo = gruposCache.find(g => g.id == idGrupo);
+        optionsCategoria += `<optgroup label="${grupo ? grupo.nome : 'Sem Grupo'}">`;
+        categoriasAgrupadas[idGrupo].forEach(categoria => {
+            optionsCategoria += `<option value="${categoria.id}">${categoria.nome} [ ${grupo ? grupo.nome : ''} ]</option>`;
+        });
+        optionsCategoria += `</optgroup>`;
+    }
 
     div.innerHTML = `
-        <select class="fc-select item-categoria" required><option value="">Selecione Categoria...</option>${optionsCategoria}</select>
+        <select class="fc-select item-categoria" required>${optionsCategoria}</select>
         <input type="text" class="fc-input item-descricao" placeholder="Descrição do item (opcional)">
         <input type="number" class="fc-input item-valor" step="0.01" min="0.01" placeholder="Valor" required>
-        <button type="button" class="remover-parcela-btn"><i class="fas fa-trash"></i></button>
+        <button type="button" class="remover-item-btn"><i class="fas fa-trash"></i></button>
     `;
     gradeContainer.appendChild(div);
 
-    div.querySelector('.remover-parcela-btn').addEventListener('click', () => {
+    div.querySelector('.remover-item-btn').addEventListener('click', () => {
         div.remove();
         atualizarResumoRateio();
     });
+    
     div.querySelector('.item-valor').addEventListener('input', atualizarResumoRateio);
 }
 
 // Atualiza o resumo dos valores dos itens
 function atualizarResumoRateio() {
     const resumoContainer = document.getElementById('resumo_rateio');
-    const valorTotalNota = parseFloat(document.getElementById('det_valor_total').value) || 0;
+    if (!resumoContainer) return;
+
+    const valorTotalNotaInput = document.getElementById('det_valor_total');
+    if (!valorTotalNotaInput) return;
+
+    const valorTotalNota = parseFloat(valorTotalNotaInput.value) || 0;
+    
     let totalItens = 0;
     document.querySelectorAll('#grade_itens_compra .item-valor').forEach(input => {
         totalItens += parseFloat(input.value) || 0;
     });
     
     const diferenca = valorTotalNota - totalItens;
+    // Usamos uma pequena tolerância para evitar erros de ponto flutuante
     const corDiferenca = Math.abs(diferenca) < 0.01 ? 'var(--fc-cor-receita)' : 'var(--fc-cor-despesa)';
 
     resumoContainer.innerHTML = `
@@ -987,32 +1141,45 @@ function atualizarResumoRateio() {
 async function salvarCompraDetalhada(event) {
     event.preventDefault();
 
-    // --- NOVA VALIDAÇÃO DO FAVORECIDO ---
+    // --- Validação do Fornecedor ---
     const favorecidoId = document.getElementById('det_favorecido_id').value;
     const favorecidoNome = document.getElementById('det_favorecido_busca').value;
-
     if (!favorecidoId && favorecidoNome.trim() !== '') {
         mostrarPopupFinanceiro('Fornecedor inválido. Por favor, selecione um item da lista ou clique em "+ Criar novo".', 'erro');
         return;
     }
-    // O campo é obrigatório no formulário (required no HTML), então essa verificação cobre o caso de estar vazio
     if (!favorecidoId) {
-        mostrarPopupFinanceiro('O campo "Fornecedor" é obrigatório. Selecione um item da lista.', 'erro');
+        mostrarPopupFinanceiro('O campo "Fornecedor" é obrigatório.', 'erro');
         return;
     }
 
-    const valorTotalNota = parseFloat(document.getElementById('det_valor_total').value);
+    // --- Validação dos Valores (A LÓGICA CORRIGIDA) ---
+    const valorTotalNotaInput = document.getElementById('det_valor_total');
+    const valorTotalNota = parseFloat(valorTotalNotaInput.value) || 0;
+    
+    if (valorTotalNota <= 0) {
+        mostrarPopupFinanceiro('O valor total da nota deve ser maior que zero.', 'erro');
+        return;
+    }
+
+    // RECALCULA A SOMA DOS ITENS NO MOMENTO DE SALVAR
+    // Esta é a parte mais importante. Não confiamos em valores antigos.
     let totalItens = 0;
     const itens_filho = [];
+    const linhasDeItens = document.querySelectorAll('#grade_itens_compra .fc-rateio-linha');
+    
+    if (linhasDeItens.length === 0) {
+        mostrarPopupFinanceiro('É necessário adicionar pelo menos um item na compra.', 'erro');
+        return;
+    }
 
-    const linhasDeItens = document.querySelectorAll('#grade_itens_compra .fc-parcela-manual-linha');
     let algumItemInvalido = false;
-
     linhasDeItens.forEach(linha => {
-        const valorItem = parseFloat(linha.querySelector('.item-valor').value);
+        const valorItemInput = linha.querySelector('.item-valor');
+        const valorItem = parseFloat(valorItemInput.value) || 0;
         const idCategoria = parseInt(linha.querySelector('.item-categoria').value);
 
-        if (!idCategoria || !valorItem || valorItem <= 0) {
+        if (!idCategoria || valorItem <= 0) {
             algumItemInvalido = true;
         }
 
@@ -1025,15 +1192,17 @@ async function salvarCompraDetalhada(event) {
     });
 
     if (algumItemInvalido) {
-        mostrarPopupFinanceiro('Todos os itens devem ter uma categoria e um valor válido.', 'erro');
+        mostrarPopupFinanceiro('Todos os itens da compra devem ter uma categoria e um valor válido (maior que zero).', 'erro');
         return;
     }
 
+    // COMPARAÇÃO FINAL com uma pequena tolerância para erros de ponto flutuante
     if (Math.abs(valorTotalNota - totalItens) > 0.01) {
-        mostrarPopupFinanceiro('A soma dos itens não bate com o valor total da nota. Diferença: ' + formatCurrency(valorTotalNota - totalItens), 'erro');
+        mostrarPopupFinanceiro(`A soma dos itens (${formatCurrency(totalItens)}) não bate com o valor total da nota (${formatCurrency(valorTotalNota)}). Diferença: ${formatCurrency(valorTotalNota - totalItens)}`, 'erro');
         return;
     }
 
+    // --- Monta o Payload para a API ---
     const payload = {
         dados_pai: {
             valor: valorTotalNota,
@@ -1045,21 +1214,20 @@ async function salvarCompraDetalhada(event) {
         itens_filho: itens_filho
     };
 
-    // Validação final dos dados do "pai"
     if (!payload.dados_pai.data_transacao || !payload.dados_pai.id_conta_bancaria) {
         mostrarPopupFinanceiro('Data da compra e conta bancária são obrigatórios.', 'erro');
         return;
     }
 
+    // --- Envia para a API ---
     try {
         await fetchFinanceiroAPI('/lancamentos/detalhado', { method: 'POST', body: JSON.stringify(payload) });
         mostrarPopupFinanceiro('Compra detalhada registrada com sucesso!', 'sucesso');
         fecharModal();
         
-        // Recarrega os dados para atualizar a interface
         carregarLancamentosFiltrados();
+        atualizarSaldosDashboard();
         atualizarBadgesHeader();
-        carregarDadosDashboard();
 
     } catch(e) {
         // erro já tratado pela fetchFinanceiroAPI
@@ -1132,7 +1300,7 @@ async function salvarLancamento(event) {
         // Atualiza a interface
         carregarLancamentosFiltrados(filtrosAtivos.page || 1);
         atualizarBadgesHeader();
-        carregarDadosDashboard();
+        atualizarSaldosDashboard();
 
     } catch (error) {
         // fetchFinanceiroAPI já mostra o erro
@@ -1283,6 +1451,47 @@ function renderizarContatosGerenciamento() {
             btn.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para gerenciar favorecidos.', 'aviso'));
         });
     }
+}
+
+function abrirModalEdicaoSimples(lancamento) {
+    // Guarda a referência do item que está sendo editado
+    itemEmEdicao = lancamento;
+    const titulo = "Editar Lançamento Simples";
+
+    // Cria o HTML do modal, já focado em edição
+    const modalHTML = `
+        <div id="modal-lancamento" class="fc-modal" style="display: flex;">
+            <div class="fc-modal-content">
+                <button id="fecharModal" class="fc-modal-close"><i class="fas fa-times"></i></button>
+                <h3 class="fc-section-title" style="text-align:center; border:0;">${titulo}</h3>
+                
+                <div class="fc-modal-body">
+                    <!-- O formulário de edição é sempre o simples -->
+                    <form id="formLancamentoSimples"></form>
+                </div>
+
+                <div class="fc-modal-footer">
+                    <button type="button" id="btnCancelarModal" class="fc-btn fc-btn-secundario">Cancelar</button>
+                    <button type="submit" id="btnSalvarModal" class="fc-btn fc-btn-primario" form="formLancamentoSimples">Salvar Alterações</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    // Pega a referência do formulário que acabamos de criar
+    const formSimples = document.getElementById('formLancamentoSimples');
+    
+    // Popula o formulário com os dados do lançamento
+    // O `true` no final indica que é uma edição
+    popularFormularioSimples(formSimples, lancamento);
+
+    // Adiciona os listeners de controle
+    document.getElementById('fecharModal').addEventListener('click', fecharModal);
+    document.getElementById('btnCancelarModal').addEventListener('click', fecharModal);
+    
+    // Liga o formulário à função de salvar
+    formSimples.addEventListener('submit', salvarLancamento);
 }
 
 function abrirModalCategoria(categoria = null) {
@@ -1691,10 +1900,31 @@ function abrirModalAgendamento() {
     configurarListenersModal('formAgendamentoLote', gerarEconfirmarLote);
 
     document.getElementById('lote_tipo').addEventListener('change', (e) => {
-        const tipo = e.target.value === 'A_PAGAR' ? 'DESPESA' : 'RECEITA';
-        const catSelect = document.getElementById('lote_categoria');
-        const categoriasFiltradas = categoriasCache.filter(c => gruposCache.find(g => g.id === c.id_grupo)?.tipo === tipo);
-        catSelect.innerHTML = '<option value="">Selecione...</option>' + categoriasFiltradas.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+    const tipo = e.target.value === 'A_PAGAR' ? 'DESPESA' : 'RECEITA';
+    const catSelect = document.getElementById('lote_categoria');
+    
+    const categoriasFiltradas = categoriasCache.filter(c => gruposCache.find(g => g.id === c.id_grupo)?.tipo === tipo);
+
+    const categoriasAgrupadas = categoriasFiltradas.reduce((acc, categoria) => {
+        const idGrupo = categoria.id_grupo;
+        if (!acc[idGrupo]) {
+            acc[idGrupo] = [];
+        }
+        acc[idGrupo].push(categoria);
+        return acc;
+    }, {});
+
+    let optionsHTML = '<option value="">Selecione...</option>';
+    for (const idGrupo in categoriasAgrupadas) {
+        const grupo = gruposCache.find(g => g.id == idGrupo);
+        optionsHTML += `<optgroup label="${grupo ? grupo.nome : 'Sem Grupo'}">`;
+        categoriasAgrupadas[idGrupo].forEach(categoria => {
+            optionsHTML += `<option value="${categoria.id}">${categoria.nome} [ ${grupo ? grupo.nome : ''} ]</option>`;
+        });
+        optionsHTML += `</optgroup>`;
+    }
+    
+    catSelect.innerHTML = optionsHTML;
     });
     
 
@@ -1781,28 +2011,31 @@ async function salvarBaixa(event) {
         mostrarPopupFinanceiro('Baixa realizada com sucesso!', 'sucesso');
         fecharModal();
         carregarContasAgendadas(); // Recarrega a lista da agenda
-        carregarDadosDashboard(); // Recarrega os lançamentos do dashboard
+        atualizarSaldosDashboard();
     } catch(e) {}
 }
 
 function renderizarResultadosAutocomplete(resultados, termoBusca, resultadosDiv, buscaInput, idInput) {
     // 1. Limpa os resultados anteriores
     resultadosDiv.innerHTML = '';
-    let encontrouResultados = false;
+    let encontrouAlgoParaMostrar = false;
 
     // 2. Adiciona os resultados encontrados na lista
     if (resultados.length > 0) {
-        encontrouResultados = true;
+        encontrouAlgoParaMostrar = true;
         resultados.forEach(item => {
             const div = document.createElement('div');
             div.className = 'fc-autocomplete-item';
             div.textContent = item.nome;
             div.dataset.id = item.id;
-            div.addEventListener('mousedown', (e) => { // 'mousedown' é melhor que 'click' aqui
+            div.addEventListener('mousedown', (e) => {
                 e.preventDefault();
                 buscaInput.value = item.nome;
                 idInput.value = item.id;
                 resultadosDiv.classList.add('hidden');
+                
+                // --- FEEDBACK POSITIVO AO SELECIONAR ---
+                setAutocompleteStatus(buscaInput, 'success');
             });
             resultadosDiv.appendChild(div);
         });
@@ -1811,58 +2044,64 @@ function renderizarResultadosAutocomplete(resultados, termoBusca, resultadosDiv,
     // 3. Lógica para o botão "+ Criar novo"
     const existeExato = resultados.some(r => r.nome.toLowerCase() === termoBusca.toLowerCase());
     if (termoBusca && !existeExato) {
-        encontrouResultados = true;
+        encontrouAlgoParaMostrar = true;
         const divNovo = document.createElement('div');
-        divNovo.className = 'fc-autocomplete-item is-new'; // a classe 'is-new' já existe no seu CSS
+        divNovo.className = 'fc-autocomplete-item is-new';
         divNovo.innerHTML = `<i class="fas fa-plus-circle"></i> <span>Criar novo: <strong>"${termoBusca}"</strong></span>`;
         
+        // ==========================================================
+        // =====> ESTE É O BLOCO COMPLETO DO LISTENER DE CRIAÇÃO <=====
+        // ==========================================================
         divNovo.addEventListener('mousedown', async (e) => {
-        e.preventDefault();
-        resultadosDiv.classList.add('hidden'); // Esconde a lista em ambos os casos
+            e.preventDefault();
+            resultadosDiv.classList.add('hidden');
 
-        // ==========================================================
-        // =====> VERIFICAÇÃO DE PERMISSÃO <=====
-        // ==========================================================
-        if (permissoesGlobaisFinanceiro.includes('criar-favorecido')) {
-            // --- FLUXO PARA USUÁRIO COM PERMISSÃO ---
-            const tipo = await mostrarPopupComInput(
-                `Qual o tipo do novo contato "${termoBusca}"?`,
-                'Digite CLIENTE, FORNECEDOR, EMPREGADO, SOCIOS, EX_EMPREGADO ou AMBOS'
-            );
+            if (permissoesGlobaisFinanceiro.includes('criar-favorecido')) {
+                const tipo = await mostrarPopupComInput(
+                    `Qual o tipo do novo contato "${termoBusca}"?`,
+                    'Ex: CLIENTE, FORNECEDOR, EMPREGADO, etc.'
+                );
 
-            if (tipo && ['CLIENTE', 'FORNECEDOR', 'EMPREGADO', 'EX_EMPREGADO', 'SOCIOS', 'AMBOS'].includes(tipo.toUpperCase())) {
-                try {
-                    const novoContato = await fetchFinanceiroAPI('/contatos', {
-                        method: 'POST',
-                        body: JSON.stringify({ nome: termoBusca, tipo: tipo.toUpperCase() })
-                    });
-                    buscaInput.value = novoContato.nome;
-                    idInput.value = novoContato.id;
-                    if (!contatosGerenciamentoCache.find(c => c.id === novoContato.id)) {
-                        contatosGerenciamentoCache.push(novoContato);
+                if (tipo && ['CLIENTE', 'FORNECEDOR', 'EMPREGADO', 'EX_EMPREGADO', 'SOCIOS', 'AMBOS'].includes(tipo.toUpperCase())) {
+                    try {
+                        const novoContato = await fetchFinanceiroAPI('/contatos', {
+                            method: 'POST',
+                            body: JSON.stringify({ nome: termoBusca, tipo: tipo.toUpperCase() })
+                        });
+                        buscaInput.value = novoContato.nome;
+                        idInput.value = novoContato.id;
+                        if (!contatosGerenciamentoCache.find(c => c.id === novoContato.id)) {
+                            contatosGerenciamentoCache.push(novoContato);
+                        }
+                        mostrarPopupFinanceiro(`Contato "${novoContato.nome}" criado com sucesso!`, 'sucesso');
+                        
+                        // --- FEEDBACK POSITIVO AO CRIAR ---
+                        setAutocompleteStatus(buscaInput, 'success');
+                        
+                    } catch (err) {
+                        // O fetchFinanceiroAPI já lida com o erro, mas podemos limpar o status
+                        setAutocompleteStatus(buscaInput, 'error');
                     }
-                    mostrarPopupFinanceiro(`Contato "${novoContato.nome}" criado com sucesso!`, 'sucesso');
-                } catch (err) {
-                    // O fetchFinanceiroAPI já lida com o erro
+                } else if (tipo !== null) {
+                    mostrarPopupFinanceiro('Tipo inválido. A operação foi cancelada.', 'aviso');
+                    setAutocompleteStatus(buscaInput, 'error');
+                } else {
+                    // Usuário cancelou o popup, então limpamos o status
+                     setAutocompleteStatus(buscaInput, 'clear');
                 }
-            } else if (tipo !== null) { // se for null, o usuário cancelou
-                mostrarPopupFinanceiro('Tipo inválido. A operação foi cancelada.', 'aviso');
+            } else {
+                mostrarPopupFinanceiro(
+                    'Você não tem permissão para criar novos favorecidos. Por favor, contate um administrador.',
+                    'aviso'
+                );
+                setAutocompleteStatus(buscaInput, 'error');
             }
-
-        } else {
-            // --- FLUXO PARA USUÁRIO SEM PERMISSÃO ---
-            mostrarPopupFinanceiro(
-                'Você não tem permissão para criar novos favorecidos. Por favor, contate um administrador.',
-                'aviso'
-            );
-        }
-    });
-
-    resultadosDiv.appendChild(divNovo); // Esta linha continua igual, fora do listener
+        });
+        resultadosDiv.appendChild(divNovo);
     }
 
     // 4. Mensagem de "Nenhum resultado"
-    if (!encontrouResultados) {
+    if (!encontrouAlgoParaMostrar) {
         const divNenhum = document.createElement('div');
         divNenhum.className = 'fc-autocomplete-item is-disabled';
         divNenhum.textContent = 'Nenhum contato encontrado.';
@@ -1932,40 +2171,69 @@ function atualizarBotaoConfig(emViewSecundaria) {
 
 // Função para alternar entre a tela principal (com abas) e a tela de configurações
 function gerenciarNavegacaoPrincipal(view) {
+    // Referências aos principais contêineres de tela
     const viewPrincipal = document.getElementById('viewPrincipal');
     const configView = document.getElementById('configuracoesView');
     const aprovacoesView = document.getElementById('aprovacoesView');
-    const historicoView = document.getElementById('historicoView'); // NOVA VIEW
+    const historicoView = document.getElementById('historicoView');
+    const btnConfig = document.getElementById('btnToggleConfiguracoes');
 
-    // Esconde todas as telas secundárias
-    viewPrincipal.classList.add('hidden');
+    // 1. Esconde todas as telas secundárias por padrão
     configView.classList.add('hidden');
     aprovacoesView.classList.add('hidden');
     historicoView.classList.add('hidden');
     
-    // Mostra a tela principal por padrão
+    // Mostra a tela principal
     viewPrincipal.classList.remove('hidden');
-    atualizarBotaoConfig(false); // Garante que o botão seja a engrenagem
+    
+    // 2. Reseta o botão de configurações para o estado padrão (engrenagem)
+    if (btnConfig) {
+        btnConfig.title = 'Configurações';
+        btnConfig.querySelector('i').className = 'fas fa-cog';
+        btnConfig.classList.remove('fechar');
+    }
 
-    document.getElementById('tituloPrincipal').textContent = 'Controle Financeiro';
+    // 3. Lida com a view específica que foi solicitada
+    switch (view) {
+        case 'config':
+            viewPrincipal.classList.add('hidden');
+            configView.classList.remove('hidden');
+            btnConfig.querySelector('i').className = 'fas fa-times'; // Muda para 'X'
+            btnConfig.classList.add('fechar');
+            btnConfig.title = 'Fechar Configurações';
+            atualizarBreadcrumbs(['Configurações']);
+            break;
 
-    if (view === 'config') {
-        viewPrincipal.classList.add('hidden');
-        configView.classList.remove('hidden');
-        atualizarBotaoConfig(true, 'config');
-        document.getElementById('tituloPrincipal').textContent = 'Configurações';
-    } else if (view === 'aprovacoes') {
-        viewPrincipal.classList.add('hidden');
-        aprovacoesView.classList.remove('hidden');
-        atualizarBotaoConfig(true, 'aprovacoes');
-        document.getElementById('tituloPrincipal').textContent = 'Aprovações Pendentes';
-        carregarAprovacoesPendentes();
-    } else if (view === 'historico') { // NOVA LÓGICA
-        viewPrincipal.classList.add('hidden');
-        historicoView.classList.remove('hidden');
-        atualizarBotaoConfig(true, 'historico');
-        document.getElementById('tituloPrincipal').textContent = 'Histórico de Atividades';
-        carregarLogsAuditoria();
+        case 'aprovacoes':
+            viewPrincipal.classList.add('hidden');
+            aprovacoesView.classList.remove('hidden');
+            btnConfig.querySelector('i').className = 'fas fa-times'; // Muda para 'X'
+            btnConfig.classList.add('fechar');
+            btnConfig.title = 'Fechar Aprovações';
+            atualizarBreadcrumbs(['Aprovações Pendentes']);
+            carregarAprovacoesPendentes(); // Carrega os dados desta tela
+            break;
+
+        case 'historico':
+            viewPrincipal.classList.add('hidden');
+            historicoView.classList.remove('hidden');
+            btnConfig.querySelector('i').className = 'fas fa-times'; // Muda para 'X'
+            btnConfig.classList.add('fechar');
+            btnConfig.title = 'Fechar Histórico';
+            atualizarBreadcrumbs(['Histórico de Atividades']);
+            carregarLogsAuditoria(); // Carrega os dados desta tela
+            break;
+
+        default: // 'main' ou qualquer outro valor
+            // Quando voltamos para a tela principal, o breadcrumb deve refletir a aba que está ativa.
+            const abaAtivaEl = document.querySelector('.fc-tab-btn.active');
+            if (abaAtivaEl) {
+                const nomeAba = abaAtivaEl.querySelector('.fc-tab-text').textContent.trim();
+                atualizarBreadcrumbs([nomeAba]);
+            } else {
+                atualizarBreadcrumbs(['Dashboard']); // Fallback seguro
+            }
+            break;
     }
 }
 
@@ -2006,9 +2274,14 @@ function renderizarCardsAprovacao(solicitacoes) {
             case 'data_transacao':
                 const dataStr = String(valor).split('T')[0];
                 return new Date(dataStr + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'});
+
+            // ==========================================================
+            // =====> AQUI ESTÁ A ALTERAÇÃO <=====
+            // Agora usamos a função central para formatar a categoria.
+            // ==========================================================
             case 'id_categoria':
-                const categoria = categoriasCache.find(c => c.id == valor);
-                return categoria ? categoria.nome : `<span style="color:var(--fc-cor-despesa);">ID ${valor} (inválido)</span>`;
+                return formatarCategoriaComGrupo(valor);
+
             case 'id_conta_bancaria':
                 const conta = contasCache.find(c => c.id == valor);
                 return conta ? conta.nome_conta : `<span style="color:var(--fc-cor-despesa);">ID ${valor} (inválido)</span>`;
@@ -2016,6 +2289,7 @@ function renderizarCardsAprovacao(solicitacoes) {
                 const contato = contatosGerenciamentoCache.find(c => c.id == valor);
                 return contato ? contato.nome : '-';
             default:
+                // Para o campo 'descricao', garantimos que não fique em branco.
                 return valor || '-';
         }
     };
@@ -2036,17 +2310,19 @@ function renderizarCardsAprovacao(solicitacoes) {
             // Compara com o bloco de referência para destacar mudanças
             if (dadosComparacaoSeguros && typeof dadosComparacaoSeguros === 'object') {
                 const valorComparacao = dadosComparacaoSeguros[chave] ?? null;
+                // Usamos JSON.stringify para comparar valores, o que funciona bem para números e strings simples.
                 if (JSON.stringify(valor) !== JSON.stringify(valorComparacao)) {
                     classe = 'alterado';
                     // Se for o bloco "PARA", mostra o valor antigo riscado
                     if (isBlocoNovo) {
                         const valorAntigoFormatado = formatarValorExibicao(chave, valorComparacao);
-                        valorFormatado = `${valorFormatado} <span style="text-decoration: line-through; color: #999; font-size: 0.9em;">(${valorAntigoFormatado})</span>`;
+                        valorFormatado = `${valorFormatado} <span class="valor-antigo">(${valorAntigoFormatado})</span>`;
                     }
                 }
             }
             
-            const label = chave.replace('id_', '').replace(/_/g, ' ');
+            // Traduz a chave para um label mais amigável
+            const label = chave.replace('id_', '').replace(/_/g, ' ').replace('data transacao', 'data');
             html += `<li class="${classe}"><strong>${label}:</strong> <span class="valor-item">${valorFormatado}</span></li>`;
         }
         
@@ -2111,7 +2387,7 @@ async function aprovarSolicitacao(id) {
         carregarLogsAuditoria();
         // Recarrega os dados do dashboard e dos lançamentos em segundo plano
         // para refletir a alteração ou exclusão que foi aprovada.
-        carregarDadosDashboard();
+        atualizarSaldosDashboard();
         carregarLancamentosFiltrados(1, filtrosAtivos);
 
     } catch(e) {
@@ -2144,6 +2420,23 @@ async function rejeitarSolicitacao(id) {
     }
 }
 
+function atualizarBreadcrumbs(partes) {
+    const container = document.getElementById('breadcrumbContainer');
+    if (!container) return;
+
+    let html = '<a href="/admin/financeiro.html">Financeiro</a>';
+    partes.forEach((parte, index) => {
+        html += `<span class="separator">></span>`;
+        if (index === partes.length - 1) {
+            html += `<span class="active">${parte}</span>`; // Última parte é ativa
+        } else {
+            // No futuro, podemos adicionar links aqui se necessário
+            html += `<span>${parte}</span>`;
+        }
+    });
+    container.innerHTML = html;
+}
+
 // Função para trocar entre as abas (Dashboard, Lançamentos, Agenda)
 function mudarAba(abaAtiva) {
     // Atualiza o visual dos botões e painéis
@@ -2153,6 +2446,10 @@ function mudarAba(abaAtiva) {
     document.querySelectorAll('.fc-tab-panel').forEach(panel => {
         panel.classList.toggle('active', panel.id === `tab-${abaAtiva}`);
     });
+    
+     // Adicione esta linha para atualizar o breadcrumb
+    const nomeAba = abaAtiva.charAt(0).toUpperCase() + abaAtiva.slice(1);
+    atualizarBreadcrumbs([nomeAba]);
 
     // Renderiza o conteúdo da aba que se tornou ativa
     switch (abaAtiva) {
@@ -2168,6 +2465,151 @@ function mudarAba(abaAtiva) {
             break;
     }
 }
+
+async function abrirModalTransferencia() {
+    itemEmEdicao = null;
+    const titulo = "Transferir Dinheiro Entre Contas";
+    const hoje = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+
+    // Verifica se há contas suficientes para a operação
+    if (contasCache.length < 2) {
+        mostrarPopupFinanceiro('Você precisa ter pelo menos duas contas bancárias cadastradas para realizar uma transferência.', 'aviso');
+        return;
+    }
+
+    // --- BUSCA OS DADOS MAIS RECENTES, INCLUINDO SALDOS ---
+    let contasComSaldos = [];
+    try {
+        // Mostra um spinner temporário para o usuário saber que algo está acontecendo
+        const spinnerDiv = document.createElement('div');
+        spinnerDiv.className = 'fc-popup-overlay';
+        spinnerDiv.innerHTML = `<div class="fc-spinner" style="background:white; padding:20px; border-radius:8px;"><span>Calculando saldos...</span></div>`;
+        document.body.appendChild(spinnerDiv);
+
+        // A chamada à API que já é rápida e otimizada
+        const dashboardData = await fetchFinanceiroAPI('/dashboard');
+        
+        // A fonte da verdade para o nosso modal será a resposta da API
+        contasComSaldos = dashboardData.saldos;
+        
+        document.body.removeChild(spinnerDiv);
+    } catch (error) {
+        // Remove o spinner em caso de erro também
+        const spinnerDiv = document.querySelector('.fc-popup-overlay');
+        if (spinnerDiv) document.body.removeChild(spinnerDiv);
+        
+        mostrarPopupFinanceiro('Não foi possível obter os saldos das contas. Tente novamente.', 'erro');
+        return;
+    }
+
+    // --- Monta o HTML do Modal usando os dados FRESCOS de 'contasComSaldos' ---
+    const modalHTML = `
+        <div id="modal-transferencia" class="fc-modal" style="display: flex;">
+            <div class="fc-modal-content">
+                <button id="fecharModal" class="fc-modal-close"><i class="fas fa-times"></i></button>
+                <h3 class="fc-section-title" style="text-align:center; border:0;">${titulo}</h3>
+                <div class="fc-modal-body">
+                    <form id="formTransferencia">
+                        <div class="fc-form-group">
+                            <label for="transf_valor">Valor da Transferência (R$)*</label>
+                            <input type="number" id="transf_valor" class="fc-input" step="0.01" min="0.01" required>
+                        </div>
+                        <div class="fc-form-group">
+                            <label for="transf_data">Data da Transferência*</label>
+                            <input type="date" id="transf_data" class="fc-input" value="${hoje}" required>
+                        </div>
+                        <div class="fc-form-group">
+                            <label for="transf_conta_origem">SAINDO DE (Origem)*</label>
+                            <select id="transf_conta_origem" class="fc-select" required>
+                                <option value="">Selecione a conta de saída...</option>
+                                ${contasComSaldos.map(c => `<option value="${c.id}">${c.nome_conta} (Saldo: ${formatCurrency(c.saldo_atual)})</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="fc-form-group">
+                            <label for="transf_conta_destino">INDO PARA (Destino)*</label>
+                            <select id="transf_conta_destino" class="fc-select" required>
+                                <option value="">Selecione a conta de entrada...</option>
+                                ${contasComSaldos.map(c => `<option value="${c.id}">${c.nome_conta}</option>`).join('')}
+                            </select>
+                        </div>
+                         <div class="fc-form-group">
+                            <label for="transf_descricao">Descrição / Observação</label>
+                            <textarea id="transf_descricao" class="fc-input" rows="2" placeholder="Ex: Cobertura de despesas"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="fc-modal-footer">
+                    <button type="button" id="btnCancelarModal" class="fc-btn fc-btn-secundario">Cancelar</button>
+                    <button type="button" id="btnConfirmarTransferencia" class="fc-btn fc-btn-primario">Confirmar Transferência</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    // --- Lógica de Validação Inteligente do Select ---
+    const selectOrigem = document.getElementById('transf_conta_origem');
+    const selectDestino = document.getElementById('transf_conta_destino');
+
+    const atualizarDestino = () => {
+        const idOrigem = selectOrigem.value;
+        Array.from(selectDestino.options).forEach(opt => opt.disabled = false);
+        if (idOrigem) {
+            const optParaDesabilitar = selectDestino.querySelector(`option[value="${idOrigem}"]`);
+            if (optParaDesabilitar) optParaDesabilitar.disabled = true;
+        }
+        if (selectDestino.value === idOrigem) {
+            selectDestino.value = '';
+        }
+    };
+
+    selectOrigem.addEventListener('change', atualizarDestino);
+
+    // --- Listeners de Controle ---
+    document.getElementById('fecharModal').addEventListener('click', fecharModal);
+    document.getElementById('btnCancelarModal').addEventListener('click', fecharModal);
+    document.getElementById('btnConfirmarTransferencia').addEventListener('click', salvarTransferencia);
+}
+
+async function salvarTransferencia() {
+    // Encontra o ID da nossa categoria especial de transferência
+    const categoriaTransferencia = categoriasCache.find(c => c.nome === 'Transferência entre Contas');
+    if (!categoriaTransferencia) {
+        mostrarPopupFinanceiro('Erro: Categoria "Transferência entre Contas" não encontrada. Por favor, cadastre-a nas configurações.', 'erro');
+        return;
+    }
+
+    const payload = {
+        id_conta_origem: document.getElementById('transf_conta_origem').value,
+        id_conta_destino: document.getElementById('transf_conta_destino').value,
+        valor: parseFloat(document.getElementById('transf_valor').value),
+        data_transacao: document.getElementById('transf_data').value,
+        descricao: document.getElementById('transf_descricao').value,
+        id_categoria_transferencia: categoriaTransferencia.id
+    };
+
+    // Validação no frontend antes de enviar
+    if (!payload.id_conta_origem || !payload.id_conta_destino || !payload.valor) {
+        mostrarPopupFinanceiro('Por favor, preencha todos os campos obrigatórios (*).', 'aviso');
+        return;
+    }
+    
+    try {
+        await fetchFinanceiroAPI('/transferencias', { method: 'POST', body: JSON.stringify(payload) });
+        
+        mostrarPopupFinanceiro('Transferência realizada com sucesso!', 'sucesso');
+        fecharModal();
+        
+        // Atualiza o dashboard e a lista de lançamentos
+        atualizarSaldosDashboard();
+        carregarLancamentosFiltrados();
+        
+    } catch (error) {
+        // O fetchFinanceiroAPI já mostra o erro
+    }
+}
+
+
 
 function setupEventListenersFinanceiro() {
     // --- NAVEGAÇÃO PRINCIPAL (ABAS E VIEWS) ---
@@ -2207,22 +2649,45 @@ function setupEventListenersFinanceiro() {
         }
     });
 
+            // Listener para o menu "Mais Ações" no mobile
+        const btnMaisAcoes = document.getElementById('btnMaisAcoes');
+        const menuMaisAcoes = document.getElementById('menuMaisAcoesDropdown');
+
+        btnMaisAcoes?.addEventListener('click', (e) => {
+            e.stopPropagation(); // Impede que o click feche o menu imediatamente
+            menuMaisAcoes.classList.toggle('hidden');
+        });
+
+        // Listener para fechar o dropdown se clicar fora
+        document.addEventListener('click', (e) => {
+            if (!btnMaisAcoes?.contains(e.target) && !menuMaisAcoes?.contains(e.target)) {
+                menuMaisAcoes?.classList.add('hidden');
+            }
+        });
+
+        // Listener para o botão de pagamentos desativado
+        document.getElementById('btnPagamentosFuncionarios')?.addEventListener('click', () => {
+            mostrarPopupFinanceiro('Esta funcionalidade está em desenvolvimento.', 'info');
+        });
+
     // --- LÓGICA DE AUTOCOMPLETE CORRIGIDA E REFINADA ---
     document.addEventListener('input', debounce(async (e) => {
         if (e.target.matches('.fc-autocomplete-input')) {
             const buscaInput = e.target;
+            
+            // Limpa o status ao começar a digitar
+            setAutocompleteStatus(buscaInput, 'clear');
+
             const container = buscaInput.closest('.fc-autocomplete-container');
             if (!container) return;
-
             const resultadosDiv = container.querySelector('.fc-autocomplete-results');
-            const idInput = container.querySelector('.fc-autocomplete-id'); // Agora vai encontrar!
+            const idInput = container.querySelector('.fc-autocomplete-id');
             if (!resultadosDiv || !idInput) return;
 
-            const termo = buscaInput.value.trim();
-            idInput.value = '';
+            idInput.value = ''; // Limpa o ID, forçando uma nova seleção
 
+            const termo = buscaInput.value.trim();
             if (termo.length < 2) {
-                resultadosDiv.innerHTML = '';
                 resultadosDiv.classList.add('hidden');
                 return;
             }
@@ -2233,15 +2698,23 @@ function setupEventListenersFinanceiro() {
                 console.error("Falha na busca do autocomplete:", err);
             }
         }
-    }, 150));
+    }, 150)); // Mantém o debounce rápido
+
     
     document.addEventListener('focusout', (e) => {
-        if (e.relatedTarget && e.target.closest('.fc-autocomplete-container')?.contains(e.relatedTarget)) {
-          return;
+        if (e.target.matches('.fc-autocomplete-input')) {
+            const buscaInput = e.target;
+            const container = buscaInput.closest('.fc-autocomplete-container');
+            if (!container) return;
+            const idInput = container.querySelector('.fc-autocomplete-id');
+
+            // Se o campo tem texto MAS nenhum ID foi selecionado, mostra erro.
+            if (buscaInput.value.trim() !== '' && !idInput.value) {
+                setAutocompleteStatus(buscaInput, 'error');
+            } else if (buscaInput.value.trim() === '') {
+                setAutocompleteStatus(buscaInput, 'clear');
+            }
         }
-        document.querySelectorAll('.fc-autocomplete-results').forEach(div => {
-            div.classList.add('hidden');
-        });
     });
     
     document.addEventListener('click', (e) => {
@@ -2251,6 +2724,9 @@ function setupEventListenersFinanceiro() {
             });
         }
     });
+
+    // Listener para o novo botão de transferência
+    document.getElementById('btnNovaTransferencia')?.addEventListener('click', abrirModalTransferencia);
 
 
     // --- BOTÕES DE AÇÃO GLOBAIS (FAB E AGENDA) ---
@@ -2351,7 +2827,7 @@ async function inicializarPaginaFinanceiro() {
         // Prepara um array de promessas para o Promise.all
         const promessasDeDados = [
             fetchFinanceiroAPI('/configuracoes'),
-            fetchFinanceiroAPI('/lancamentos?limit=50'),
+            fetchFinanceiroAPI('/lancamentos?limit=8'),
             fetchFinanceiroAPI('/contas-agendadas?status=PENDENTE'),
             fetchFinanceiroAPI('/contatos/all'),
             // LÓGICA DE PERMISSÃO REINTEGRADA AQUI:
@@ -2455,6 +2931,7 @@ function renderizarTabelaAgenda() {
             <div class="header">
                 <div class="info">
                     <div class="descricao">${c.descricao}</div>
+                    <div class="categoria-agenda">${c.id_categoria ? formatarCategoriaComGrupo(c.id_categoria) : ''}</div>
                     <div class="vencimento">Vence em: ${vencimento.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</div>
                 </div>
                 <div class="valor">R$ ${parseFloat(c.valor).toFixed(2)}</div>

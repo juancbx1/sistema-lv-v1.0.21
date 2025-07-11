@@ -463,7 +463,8 @@ router.get('/lancamentos', async (req, res) => {
                         'id', li.id,
                         'descricao_item', li.descricao_item,
                         'valor_item', li.valor_item,
-                        'nome_categoria', cat_item.nome
+                        'nome_categoria', cat_item.nome,
+                        'id_categoria', li.id_categoria
                     ))
                     FROM fc_lancamento_itens li
                     JOIN fc_categorias cat_item ON li.id_categoria = cat_item.id
@@ -1274,6 +1275,64 @@ router.get('/logs', async (req, res) => {
     } catch (error) {
         console.error("[API GET /logs] Erro:", error);
         res.status(500).json({ error: 'Erro ao buscar histórico de auditoria.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+router.post('/transferencias', async (req, res) => {
+    // Validação de permissão (vamos usar 'lancar-transacao' por enquanto)
+    if (!req.permissoesUsuario.includes('lancar-transacao')) {
+        return res.status(403).json({ error: 'Permissão negada para realizar transferências.' });
+    }
+
+    const { id_conta_origem, id_conta_destino, valor, data_transacao, descricao, id_categoria_transferencia } = req.body;
+
+    // Validação dos dados recebidos
+    if (!id_conta_origem || !id_conta_destino || !valor || !data_transacao || !id_categoria_transferencia) {
+        return res.status(400).json({ error: 'Todos os campos são obrigatórios.' });
+    }
+    if (id_conta_origem === id_conta_destino) {
+        return res.status(400).json({ error: 'A conta de origem e destino não podem ser a mesma.' });
+    }
+    if (valor <= 0) {
+        return res.status(400).json({ error: 'O valor da transferência deve ser positivo.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        await dbClient.query('BEGIN'); // Inicia a transação
+
+        // 1. Cria o lançamento de SAÍDA (Despesa)
+        const saidaQuery = `
+            INSERT INTO fc_lancamentos (id_conta_bancaria, id_categoria, tipo, valor, data_transacao, descricao, id_usuario_lancamento)
+            VALUES ($1, $2, 'DESPESA', $3, $4, $5, $6) RETURNING id;
+        `;
+        const descricaoSaida = `Transferência para conta destino. ${descricao || ''}`;
+        const resSaida = await dbClient.query(saidaQuery, [id_conta_origem, id_categoria_transferencia, valor, data_transacao, descricaoSaida, req.usuarioLogado.id]);
+        const idLancamentoSaida = resSaida.rows[0].id;
+
+        // 2. Cria o lançamento de ENTRADA (Receita)
+        const entradaQuery = `
+            INSERT INTO fc_lancamentos (id_conta_bancaria, id_categoria, tipo, valor, data_transacao, descricao, id_usuario_lancamento)
+            VALUES ($1, $2, 'RECEITA', $3, $4, $5, $6) RETURNING id;
+        `;
+        const descricaoEntrada = `Transferência da conta de origem. ${descricao || ''}`;
+        const resEntrada = await dbClient.query(entradaQuery, [id_conta_destino, id_categoria_transferencia, valor, data_transacao, descricaoEntrada, req.usuarioLogado.id]);
+        const idLancamentoEntrada = resEntrada.rows[0].id;
+
+        // 3. ATUALIZA os dois lançamentos para VINCULÁ-LOS
+        await dbClient.query('UPDATE fc_lancamentos SET id_transferencia_vinculada = $1 WHERE id = $2', [idLancamentoEntrada, idLancamentoSaida]);
+        await dbClient.query('UPDATE fc_lancamentos SET id_transferencia_vinculada = $1 WHERE id = $2', [idLancamentoSaida, idLancamentoEntrada]);
+
+        await dbClient.query('COMMIT'); // Confirma a transação
+        res.status(201).json({ message: 'Transferência realizada com sucesso!' });
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK'); // Desfaz tudo em caso de erro
+        console.error('[API POST /transferencias] Erro:', error);
+        res.status(500).json({ error: 'Erro ao processar transferência.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }
