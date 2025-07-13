@@ -263,43 +263,47 @@ function abrirModalConta(conta = null) {
     const modalHTML = `
         <div id="modal-financeiro" class="fc-modal" style="display: flex;">
             <div class="fc-modal-content">
-                <button id="fecharModal" class="fc-modal-close">×</button>
+                <button id="fecharModal" class="fc-modal-close">X</button>
                 <h3 class="fc-section-title" style="text-align:center;">${titulo}</h3>
-                <form id="formContaBancaria" style="margin-top:20px;">
-                    <div class="fc-form-group">
-                        <label for="nome_conta">Nome da Conta*</label>
-                        <input type="text" id="nome_conta" class="fc-input" required value="${conta?.nome_conta || ''}">
-                    </div>
-                    <div class="fc-form-group">
-                        <label for="banco">Banco</label>
-                        <input type="text" id="banco" class="fc-input" value="${conta?.banco || ''}">
-                    </div>
-                    <div class="fc-form-group">
-                        <label for="agencia">Agência</label>
-                        <input type="text" id="agencia" class="fc-input" value="${conta?.agencia || ''}">
-                    </div>
-                    <div class="fc-form-group">
-                        <label for="numero_conta">Número da Conta</label>
-                        <input type="text" id="numero_conta" class="fc-input" value="${conta?.numero_conta || ''}">
-                    </div>
-                     <div class="fc-form-group">
-                        <label for="saldo_inicial">Saldo Inicial (R$)</label>
-                        <input type="number" id="saldo_inicial" class="fc-input" step="0.01" value="${conta?.saldo_inicial || '0.00'}" ${conta ? 'disabled' : ''} title="${conta ? 'O saldo inicial não pode ser alterado após a criação.' : ''}">
-                    </div>
-                    ${conta ? `
-                    <div class="fc-form-group">
-                        <label for="conta_ativa">Status</label>
-                        <select id="conta_ativa" class="fc-select">
-                            <option value="true" ${conta.ativo ? 'selected' : ''}>Ativa</option>
-                            <option value="false" ${!conta.ativo ? 'selected' : ''}>Inativa</option>
-                        </select>
-                    </div>
-                    ` : ''}
-                    <div class="fc-modal-footer">
-                         <button type="button" id="btnCancelarModal" class="fc-btn fc-btn-secundario">Cancelar</button>
-                         <button type="submit" class="fc-btn fc-btn-primario">Salvar</button>
-                    </div>
-                </form>
+                
+                <div class="fc-modal-body">
+                    <form id="formContaBancaria">
+                        <div class="fc-form-group">
+                            <label for="nome_conta">Nome da Conta*</label>
+                            <input type="text" id="nome_conta" class="fc-input" required value="${conta?.nome_conta || ''}">
+                        </div>
+                        <div class="fc-form-group">
+                            <label for="banco">Banco</label>
+                            <input type="text" id="banco" class="fc-input" value="${conta?.banco || ''}">
+                        </div>
+                        <div class="fc-form-group">
+                            <label for="agencia">Agência</label>
+                            <input type="text" id="agencia" class="fc-input" value="${conta?.agencia || ''}">
+                        </div>
+                        <div class="fc-form-group">
+                            <label for="numero_conta">Número da Conta</label>
+                            <input type="text" id="numero_conta" class="fc-input" value="${conta?.numero_conta || ''}">
+                        </div>
+                         <div class="fc-form-group">
+                            <label for="saldo_inicial">Saldo Inicial (R$)</label>
+                            <input type="number" id="saldo_inicial" class="fc-input" step="0.01" value="${conta?.saldo_inicial || '0.00'}" ${conta ? 'disabled' : ''} title="${conta ? 'O saldo inicial não pode ser alterado após a criação.' : ''}">
+                        </div>
+                        ${conta ? `
+                        <div class="fc-form-group">
+                            <label for="conta_ativa">Status</label>
+                            <select id="conta_ativa" class="fc-select">
+                                <option value="true" ${conta.ativo ? 'selected' : ''}>Ativa</option>
+                                <option value="false" ${!conta.ativo ? 'selected' : ''}>Inativa</option>
+                            </select>
+                        </div>
+                        ` : ''}
+                    </form>
+                </div>
+
+                <div class="fc-modal-footer">
+                     <button type="button" id="btnCancelarModal" class="fc-btn fc-btn-secundario">Cancelar</button>
+                     <button type="submit" class="fc-btn fc-btn-primario" form="formContaBancaria">Salvar</button>
+                </div>
             </div>
         </div>
     `;
@@ -311,10 +315,10 @@ function abrirModalConta(conta = null) {
     document.getElementById('modal-financeiro')?.addEventListener('click', (e) => {
         if (e.target.id === 'modal-financeiro') fecharModal();
     });
-    // O mais importante: Captura o evento de submit e o previne
+    // Adiciona o atributo 'form' ao botão de submit para funcionar fora do form e captura o evento
     document.getElementById('formContaBancaria')?.addEventListener('submit', (event) => {
         event.preventDefault(); // Impede o recarregamento da página
-        salvarConta(); // Chama a função de salvar SEM passar o evento
+        salvarConta(event); // Chama a função de salvar PASSANDO o evento
     });
 }
 
@@ -327,14 +331,23 @@ function fecharModal() {
     itemEmEdicao = null;
 }
 
-async function salvarConta() { // Sem o parâmetro 'event'
+async function salvarConta(event) {
+    const form = event.target;
+    const btnSalvar = form.closest('.fc-modal-content').querySelector('.fc-btn-primario');
+    if (!btnSalvar) return;
+    const textoOriginalBtn = btnSalvar.innerHTML;
+
     const payload = {
         nome_conta: document.getElementById('nome_conta').value,
         banco: document.getElementById('banco').value,
         agencia: document.getElementById('agencia').value,
         numero_conta: document.getElementById('numero_conta').value,
     };
+
     try {
+        btnSalvar.disabled = true;
+        btnSalvar.innerHTML = `<i class="fas fa-spinner fc-btn-spinner"></i> Salvando...`;
+
         if (itemEmEdicao) {
             payload.ativo = document.getElementById('conta_ativa').value === 'true';
             const updatedConta = await fetchFinanceiroAPI(`/contas/${itemEmEdicao.id}`, { method: 'PUT', body: JSON.stringify(payload) });
@@ -350,6 +363,11 @@ async function salvarConta() { // Sem o parâmetro 'event'
         renderizarTabelaContas();
     } catch (error) {
         // fetchFinanceiroAPI já lida com o erro
+    } finally {
+        if (btnSalvar) {
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = textoOriginalBtn;
+        }
     }
 }
 
@@ -412,26 +430,30 @@ function abrirModalGrupo(grupo = null) {
     const modalHTML = `
         <div id="modal-financeiro" class="fc-modal" style="display: flex;">
             <div class="fc-modal-content">
-                <button id="fecharModal" class="fc-modal-close">×</button>
+                <button id="fecharModal" class="fc-modal-close">X</button>
                 <h3 class="fc-section-title" style="text-align:center;">${titulo}</h3>
-                <form id="formGrupoFinanceiro" style="margin-top:20px;">
-                    <div class="fc-form-group">
-                        <label for="grupo_nome">Nome do Grupo*</label>
-                        <input type="text" id="grupo_nome" class="fc-input" required value="${grupo?.nome || ''}">
-                    </div>
-                    <div class="fc-form-group">
-                        <label for="grupo_tipo">Tipo*</label>
-                        <select id="grupo_tipo" class="fc-select" required>
-                            <option value="">Selecione...</option>
-                            <option value="RECEITA" ${grupo?.tipo === 'RECEITA' ? 'selected' : ''}>Receita</option>
-                            <option value="DESPESA" ${grupo?.tipo === 'DESPESA' ? 'selected' : ''}>Despesa</option>
-                        </select>
-                    </div>
-                    <div class="fc-modal-footer">
-                         <button type="button" id="btnCancelarModal" class="fc-btn fc-btn-secundario">Cancelar</button>
-                         <button type="submit" class="fc-btn fc-btn-primario">Salvar</button>
-                    </div>
-                </form>
+
+                <div class="fc-modal-body">
+                    <form id="formGrupoFinanceiro">
+                        <div class="fc-form-group">
+                            <label for="grupo_nome">Nome do Grupo*</label>
+                            <input type="text" id="grupo_nome" class="fc-input" required value="${grupo?.nome || ''}">
+                        </div>
+                        <div class="fc-form-group">
+                            <label for="grupo_tipo">Tipo*</label>
+                            <select id="grupo_tipo" class="fc-select" required>
+                                <option value="">Selecione...</option>
+                                <option value="RECEITA" ${grupo?.tipo === 'RECEITA' ? 'selected' : ''}>Receita</option>
+                                <option value="DESPESA" ${grupo?.tipo === 'DESPESA' ? 'selected' : ''}>Despesa</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="fc-modal-footer">
+                     <button type="button" id="btnCancelarModal" class="fc-btn fc-btn-secundario">Cancelar</button>
+                     <button type="submit" class="fc-btn fc-btn-primario" form="formGrupoFinanceiro">Salvar</button>
+                </div>
             </div>
         </div>
     `;
@@ -441,12 +463,21 @@ function abrirModalGrupo(grupo = null) {
 
 async function salvarGrupo(event) {
     event.preventDefault();
+    
+    const form = event.target;
+    const btnSalvar = form.closest('.fc-modal-content').querySelector('button[type="submit"]');
+    if (!btnSalvar) return;
+    const textoOriginalBtn = btnSalvar.innerHTML;
+
     const payload = {
         nome: document.getElementById('grupo_nome').value,
         tipo: document.getElementById('grupo_tipo').value,
     };
 
     try {
+        btnSalvar.disabled = true;
+        btnSalvar.innerHTML = `<i class="fas fa-spinner fc-btn-spinner"></i> Salvando...`;
+
         if (itemEmEdicao) {
             const updated = await fetchFinanceiroAPI(`/grupos/${itemEmEdicao.id}`, { method: 'PUT', body: JSON.stringify(payload) });
             const index = gruposCache.findIndex(g => g.id === itemEmEdicao.id);
@@ -458,11 +489,17 @@ async function salvarGrupo(event) {
         mostrarPopupFinanceiro('Grupo salvo com sucesso!', 'sucesso');
         fecharModal();
         
-        // Re-renderiza as duas listas, pois uma mudança no grupo afeta a exibição das categorias
         renderizarTabelaGrupos();
-        renderizarTabelaCategoriasAgrupadas(); // <<< CORREÇÃO: Chama a função correta
+        renderizarTabelaCategoriasAgrupadas();
 
-    } catch (error) {}
+    } catch (error) {
+        // fetchFinanceiroAPI já lida com o erro
+    } finally {
+        if (btnSalvar) {
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = textoOriginalBtn;
+        }
+    }
 }
 
 function renderizarDashboard(saldos, alertas) {
@@ -473,28 +510,39 @@ function renderizarDashboard(saldos, alertas) {
         console.error("Um ou mais containers do dashboard não foram encontrados.");
         return;
     }
-
-    // A função formatCurrency agora é global e não precisa ser declarada aqui.
     
-    // 1. Lógica e HTML para o Card de Saldo Consolidado
+    // Calcula o saldo total consolidado
     const saldoTotal = saldos.reduce((acc, conta) => acc + parseFloat(conta.saldo_atual), 0);
+
+    // Gera o HTML do novo dashboard
     saldosContainer.innerHTML = `
-        <div class="fc-saldo-consolidado-card">
+        <!-- 1. Card de Resumo Total -->
+        <div class="fc-resumo-total-card">
             <p class="total-label">Saldo Total Consolidado</p>
             <h2 class="total-valor">${formatCurrency(saldoTotal)}</h2>
-            <ul class="fc-saldo-lista">
-                ${saldos.length > 0 ? saldos.map(conta => `
-                    <li class="fc-saldo-lista-item">
-                        <span class="nome-conta">${conta.nome_conta}</span>
-                        <span class="valor-saldo">${formatCurrency(conta.saldo_atual)}</span>
-                    </li>
-                `).join('') : '<li class="fc-saldo-lista-item">Nenhuma conta bancária ativa.</li>'}
-            </ul>
+        </div>
+
+        <!-- 2. Grade de Cartões de Conta -->
+        <div class="fc-contas-grid">
+            ${saldos.length > 0 ? saldos.map((conta, index) => {
+                const corIndex = (index % 5) + 1;
+                return `
+                <div class="fc-conta-card cor-${corIndex}">
+                    <!-- Adicionamos esta div wrapper -->
+                    <div class="nome-banco-wrapper">
+                        <p class="nome-conta">${conta.nome_conta}</p>
+                        <p class="info-banco">${conta.banco || 'Conta Interna'}</p>
+                    </div>
+                    <p class="saldo-conta">${formatCurrency(conta.saldo_atual)}</p>
+                </div>
+                `
+            }).join('') : '<p>Nenhuma conta bancária ativa para exibir.</p>'}
         </div>
     `;
 
-    // 2. Lógica e HTML para os Cards de Alerta (Hoje, 3 dias, 5 dias)
+    // A lógica para renderizar os cards de alerta continua a mesma de antes.
     alertasContainer.innerHTML = `
+        <h3 class="fc-section-title" style="margin-top: 20px; border-bottom: none; text-align:center;">Alertas e Contas Próximas</h3>
         <div class="fc-dashboard-grid fc-alertas-grid">
             <a href="#" data-filtro-vencimento="hoje" class="fc-alerta-card pagar-hoje">
                 <div class="titulo"><i class="fas fa-exclamation-circle"></i> A Pagar Hoje</div>
@@ -604,13 +652,10 @@ function renderizarCardsLancamentos() {
         return;
     }
 
-    // Conjunto para rastrear IDs de transferências já renderizadas e evitar duplicidade
     const idsTransferenciaRenderizados = new Set();
     let htmlFinal = '';
 
-    // Itera sobre cada lançamento recebido da API
     for (const l of lancamentosCache) {
-        // Se este ID já foi processado como parte de um par de transferência, pula para o próximo
         if (idsTransferenciaRenderizados.has(l.id)) {
             continue;
         }
@@ -618,15 +663,12 @@ function renderizarCardsLancamentos() {
         const categoria = categoriasCache.find(c => c.id === l.id_categoria);
         const isTransferencia = categoria?.nome === 'Transferência entre Contas' && l.id_transferencia_vinculada;
 
-        // --- LÓGICA PARA RENDERIZAR O CARD DE TRANSFERÊNCIA ---
         if (isTransferencia) {
             const par = lancamentosCache.find(p => p.id === l.id_transferencia_vinculada);
 
-            // Se o par não foi encontrado no lote atual de dados, renderiza como um card normal para não sumir
             if (!par) {
-                 // (O código para renderizar card normal está mais abaixo, ele vai cair lá)
+                // Se não encontrar o par, renderiza como card normal (cairá na lógica abaixo)
             } else {
-                // Marca ambos os IDs para não serem renderizados individualmente
                 idsTransferenciaRenderizados.add(l.id);
                 idsTransferenciaRenderizados.add(par.id);
 
@@ -650,17 +692,14 @@ function renderizarCardsLancamentos() {
                             <span class="detail-item data"><i class="fas fa-calendar-day"></i> ${new Date(l.data_transacao).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>
                         </div>
                         <div class="actions">
-                            <!-- Ações para transferência podem ser adicionadas no futuro, como "Estornar" -->
                         </div>
                     </div>
                 </div>
                 `;
-                continue; // Pula para o próximo item do loop
+                continue;
             }
         }
         
-        // --- LÓGICA PARA RENDERIZAR CARDS NORMAIS (RECEITA, DESPESA, DETALHADO) ---
-        // Esta parte é a sua lógica original, totalmente preservada e funcional.
         const isDetalhado = l.itens && l.itens.length > 0;
         const tipoClasse = isDetalhado ? 'despesa' : (l.tipo ? l.tipo.toLowerCase() : '');
         
@@ -682,7 +721,8 @@ function renderizarCardsLancamentos() {
         } else if (isEditadoAprovado) {
             statusHTML = `<div class="status-pendente" style="color: var(--fc-cor-receita);"><i class="fas fa-check-circle"></i> <span>Edição Aprovada</span></div>`;
         } else if (isEdicaoRejeitada) {
-            statusHTML = `<div class="status-pendente" style="color: var(--fc-cor-despesa);"><i class="fas fa-times-circle"></i> <span>Edição Rejeitada</span></div>`;
+            const motivo = l.motivo_rejeicao ? ` Motivo: ${l.motivo_rejeicao}` : '';
+            statusHTML = `<div class="status-pendente" style="color: var(--fc-cor-despesa);"><i class="fas fa-times-circle"></i> <span>Solicitação Rejeitada.${motivo}</span></div>`;
         } else {
             statusHTML = `<div class="status-placeholder"></div>`;
         }
@@ -723,8 +763,6 @@ function renderizarCardsLancamentos() {
     
     container.innerHTML = htmlFinal;
 
-    // --- ADICIONA OS LISTENERS NOVAMENTE ---
-    // Esta parte é crucial e garante que os botões dos cards normais continuem funcionando.
     container.querySelectorAll('.btn-toggle-details').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const id = e.currentTarget.dataset.id;
@@ -1038,6 +1076,7 @@ function popularFormularioDetalhado(formContainer) {
     formContainer.querySelector('#det_valor_total').addEventListener('input', atualizarResumoRateio);
 }
 
+
 /**
  * Define o status visual de um campo de autocomplete.
  * @param {HTMLInputElement} inputElement - O elemento do input de busca.
@@ -1141,86 +1180,87 @@ function atualizarResumoRateio() {
 async function salvarCompraDetalhada(event) {
     event.preventDefault();
 
-    // --- Validação do Fornecedor ---
-    const favorecidoId = document.getElementById('det_favorecido_id').value;
-    const favorecidoNome = document.getElementById('det_favorecido_busca').value;
-    if (!favorecidoId && favorecidoNome.trim() !== '') {
-        mostrarPopupFinanceiro('Fornecedor inválido. Por favor, selecione um item da lista ou clique em "+ Criar novo".', 'erro');
-        return;
-    }
-    if (!favorecidoId) {
-        mostrarPopupFinanceiro('O campo "Fornecedor" é obrigatório.', 'erro');
-        return;
-    }
+    const btnSalvar = event.target.closest('.fc-modal-content').querySelector('.fc-btn-primario');
+    if (!btnSalvar) return;
+    const textoOriginalBtn = btnSalvar.innerHTML;
 
-    // --- Validação dos Valores (A LÓGICA CORRIGIDA) ---
-    const valorTotalNotaInput = document.getElementById('det_valor_total');
-    const valorTotalNota = parseFloat(valorTotalNotaInput.value) || 0;
-    
-    if (valorTotalNota <= 0) {
-        mostrarPopupFinanceiro('O valor total da nota deve ser maior que zero.', 'erro');
-        return;
-    }
-
-    // RECALCULA A SOMA DOS ITENS NO MOMENTO DE SALVAR
-    // Esta é a parte mais importante. Não confiamos em valores antigos.
-    let totalItens = 0;
-    const itens_filho = [];
-    const linhasDeItens = document.querySelectorAll('#grade_itens_compra .fc-rateio-linha');
-    
-    if (linhasDeItens.length === 0) {
-        mostrarPopupFinanceiro('É necessário adicionar pelo menos um item na compra.', 'erro');
-        return;
-    }
-
-    let algumItemInvalido = false;
-    linhasDeItens.forEach(linha => {
-        const valorItemInput = linha.querySelector('.item-valor');
-        const valorItem = parseFloat(valorItemInput.value) || 0;
-        const idCategoria = parseInt(linha.querySelector('.item-categoria').value);
-
-        if (!idCategoria || valorItem <= 0) {
-            algumItemInvalido = true;
+    try {
+        // --- Validação do Fornecedor ---
+        const favorecidoId = document.getElementById('det_favorecido_id').value;
+        const favorecidoNome = document.getElementById('det_favorecido_busca').value;
+        if (!favorecidoId && favorecidoNome.trim() !== '') {
+            mostrarPopupFinanceiro('Fornecedor inválido. Por favor, selecione um item da lista ou clique em "+ Criar novo".', 'erro');
+            return;
+        }
+        if (!favorecidoId) {
+            mostrarPopupFinanceiro('O campo "Fornecedor" é obrigatório.', 'erro');
+            return;
         }
 
-        totalItens += valorItem;
-        itens_filho.push({
-            id_categoria: idCategoria,
-            descricao_item: linha.querySelector('.item-descricao').value,
-            valor_item: valorItem
+        // --- Validação dos Valores ---
+        const valorTotalNotaInput = document.getElementById('det_valor_total');
+        const valorTotalNota = parseFloat(valorTotalNotaInput.value) || 0;
+        
+        if (valorTotalNota <= 0) {
+            mostrarPopupFinanceiro('O valor total da nota deve ser maior que zero.', 'erro');
+            return;
+        }
+
+        let totalItens = 0;
+        const itens_filho = [];
+        const linhasDeItens = document.querySelectorAll('#grade_itens_compra .fc-rateio-linha');
+        
+        if (linhasDeItens.length === 0) {
+            mostrarPopupFinanceiro('É necessário adicionar pelo menos um item na compra.', 'erro');
+            return;
+        }
+
+        let algumItemInvalido = false;
+        linhasDeItens.forEach(linha => {
+            const valorItem = parseFloat(linha.querySelector('.item-valor').value) || 0;
+            const idCategoria = parseInt(linha.querySelector('.item-categoria').value);
+            if (!idCategoria || valorItem <= 0) {
+                algumItemInvalido = true;
+            }
+            totalItens += valorItem;
+            itens_filho.push({
+                id_categoria: idCategoria,
+                descricao_item: linha.querySelector('.item-descricao').value,
+                valor_item: valorItem
+            });
         });
-    });
 
-    if (algumItemInvalido) {
-        mostrarPopupFinanceiro('Todos os itens da compra devem ter uma categoria e um valor válido (maior que zero).', 'erro');
-        return;
-    }
+        if (algumItemInvalido) {
+            mostrarPopupFinanceiro('Todos os itens da compra devem ter uma categoria e um valor válido (maior que zero).', 'erro');
+            return;
+        }
 
-    // COMPARAÇÃO FINAL com uma pequena tolerância para erros de ponto flutuante
-    if (Math.abs(valorTotalNota - totalItens) > 0.01) {
-        mostrarPopupFinanceiro(`A soma dos itens (${formatCurrency(totalItens)}) não bate com o valor total da nota (${formatCurrency(valorTotalNota)}). Diferença: ${formatCurrency(valorTotalNota - totalItens)}`, 'erro');
-        return;
-    }
+        // VALIDAÇÃO REFINADA: Verifica se a diferença absoluta é maior que 0.01 (1 centavo)
+        if (Math.abs(valorTotalNota - totalItens) > 0.01) {
+            mostrarPopupFinanceiro(`A soma dos itens (${formatCurrency(totalItens)}) não corresponde ao valor total da nota (${formatCurrency(valorTotalNota)}). Verifique a diferença de ${formatCurrency(valorTotalNota - totalItens)}.`, 'erro');
+            return;
+        }
 
-    // --- Monta o Payload para a API ---
-    const payload = {
-        dados_pai: {
-            valor: valorTotalNota,
-            data_transacao: document.getElementById('det_data').value,
-            id_conta_bancaria: parseInt(document.getElementById('det_conta').value),
-            id_contato: parseInt(favorecidoId),
-            descricao: document.getElementById('det_descricao').value,
-        },
-        itens_filho: itens_filho
-    };
+        // --- Monta o Payload para a API ---
+        const payload = {
+            dados_pai: {
+                valor: valorTotalNota, // Usa o valor total da nota como a fonte da verdade
+                data_transacao: document.getElementById('det_data').value,
+                id_conta_bancaria: parseInt(document.getElementById('det_conta').value),
+                id_contato: parseInt(favorecidoId),
+                descricao: document.getElementById('det_descricao').value,
+            },
+            itens_filho: itens_filho
+        };
 
-    if (!payload.dados_pai.data_transacao || !payload.dados_pai.id_conta_bancaria) {
-        mostrarPopupFinanceiro('Data da compra e conta bancária são obrigatórios.', 'erro');
-        return;
-    }
+        if (!payload.dados_pai.data_transacao || !payload.dados_pai.id_conta_bancaria) {
+            mostrarPopupFinanceiro('Data da compra e conta bancária são obrigatórios.', 'erro');
+            return;
+        }
+        
+        btnSalvar.disabled = true;
+        btnSalvar.innerHTML = `<i class="fas fa-spinner fc-btn-spinner"></i> Salvando...`;
 
-    // --- Envia para a API ---
-    try {
         await fetchFinanceiroAPI('/lancamentos/detalhado', { method: 'POST', body: JSON.stringify(payload) });
         mostrarPopupFinanceiro('Compra detalhada registrada com sucesso!', 'sucesso');
         fecharModal();
@@ -1231,64 +1271,73 @@ async function salvarCompraDetalhada(event) {
 
     } catch(e) {
         // erro já tratado pela fetchFinanceiroAPI
+    } finally {
+        if (btnSalvar) {
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = textoOriginalBtn;
+        }
     }
 }
 
 
 async function salvarLancamento(event) {
     event.preventDefault();
-
-    // --- NOVA VALIDAÇÃO DO FAVORECIDO ---
-    const favorecidoId = document.getElementById('lanc_contato_id').value;
-    const favorecidoNome = document.getElementById('lanc_contato_busca').value;
-    // Se o campo de busca tem texto, mas nenhum ID foi selecionado, mostra erro.
-    if (!favorecidoId && favorecidoNome.trim() !== '') {
-        mostrarPopupFinanceiro('Favorecido/Pagador inválido. Por favor, selecione um item da lista ou clique em "+ Criar novo".', 'erro');
-        return;
-    }
-
-    // Lógica de alerta de data para novos lançamentos
-    if (!itemEmEdicao) {
-        const dataTransacaoInput = document.getElementById('lanc_data').value;
-        const hoje = new Date();
-        const dataTransacaoDate = new Date(dataTransacaoInput + 'T00:00:00');
-        hoje.setHours(0, 0, 0, 0);
-        if (dataTransacaoDate.getTime() !== hoje.getTime()) {
-            const dataFormatada = dataTransacaoDate.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-            const confirmado = await mostrarPopupConfirmacao(`Atenção: a data da transação (${dataFormatada}) é diferente da data de hoje. Deseja continuar?`);
-            if (!confirmado) return;
-        }
-    }
-
-    const payload = {
-        valor: parseFloat(document.getElementById('lanc_valor').value),
-        data_transacao: document.getElementById('lanc_data').value,
-        id_categoria: parseInt(document.getElementById('lanc_categoria').value),
-        id_conta_bancaria: parseInt(document.getElementById('lanc_conta').value),
-        descricao: document.getElementById('lanc_descricao').value,
-        id_contato: parseInt(favorecidoId) || null
-    };
-
-    if (!payload.valor || !payload.id_categoria || !payload.id_conta_bancaria) {
-        mostrarPopupFinanceiro('Por favor, preencha todos os campos obrigatórios (*).', 'aviso');
-        return;
-    }
+    
+    const btnSalvar = event.target.closest('.fc-modal-content').querySelector('.fc-btn-primario');
+    if (!btnSalvar) return; // Segurança
+    const textoOriginalBtn = btnSalvar.innerHTML;
 
     try {
+        const favorecidoId = document.getElementById('lanc_contato_id').value;
+        const favorecidoNome = document.getElementById('lanc_contato_busca').value;
+        if (!favorecidoId && favorecidoNome.trim() !== '') {
+            mostrarPopupFinanceiro('Favorecido/Pagador inválido. Por favor, selecione um item da lista ou clique em "+ Criar novo".', 'erro');
+            return;
+        }
+
+        if (!itemEmEdicao) {
+            const dataTransacaoInput = document.getElementById('lanc_data').value;
+            const hoje = new Date();
+            const dataTransacaoDate = new Date(dataTransacaoInput + 'T00:00:00');
+            hoje.setHours(0, 0, 0, 0);
+            if (dataTransacaoDate.getTime() !== hoje.getTime()) {
+                const dataFormatada = dataTransacaoDate.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+                const confirmado = await mostrarPopupConfirmacao(`Atenção: a data da transação (${dataFormatada}) é diferente da data de hoje. Deseja continuar?`);
+                if (!confirmado) return;
+            }
+        }
+
+        const payload = {
+            valor: parseFloat(document.getElementById('lanc_valor').value),
+            data_transacao: document.getElementById('lanc_data').value,
+            id_categoria: parseInt(document.getElementById('lanc_categoria').value),
+            id_conta_bancaria: parseInt(document.getElementById('lanc_conta').value),
+            descricao: document.getElementById('lanc_descricao').value,
+            id_contato: parseInt(favorecidoId) || null
+        };
+
+        if (!payload.valor || !payload.id_categoria || !payload.id_conta_bancaria) {
+            mostrarPopupFinanceiro('Por favor, preencha todos os campos obrigatórios (*).', 'aviso');
+            return;
+        }
+
+        // Desabilita o botão e mostra o spinner ANTES da chamada à API
+        btnSalvar.disabled = true;
+        btnSalvar.innerHTML = `<i class="fas fa-spinner fc-btn-spinner"></i> Salvando...`;
+
         let responseMessage = '';
         if (itemEmEdicao) {
-            // FLUXO DE EDIÇÃO
             const response = await fetchFinanceiroAPI(`/lancamentos/${itemEmEdicao.id}`, { method: 'PUT', body: JSON.stringify(payload) });
             responseMessage = response.message || 'Alterações salvas com sucesso!';
             if (response.message.includes('aguardando aprovação')) {
                 atualizarBadgesHeader();
             }
         } else {
-            // FLUXO DE CRIAÇÃO
             payload.tipo = document.getElementById('lanc_tipo').value;
             if (!payload.tipo) {
                 mostrarPopupFinanceiro('O campo "Tipo" é obrigatório.', 'aviso');
-                return;
+                // O bloco finally abaixo cuidará de reabilitar o botão
+                throw new Error("Tipo de lançamento não selecionado");
             }
             await fetchFinanceiroAPI('/lancamentos', { method: 'POST', body: JSON.stringify(payload) });
             responseMessage = 'Lançamento salvo com sucesso!';
@@ -1297,13 +1346,22 @@ async function salvarLancamento(event) {
         mostrarPopupFinanceiro(responseMessage, 'sucesso');
         fecharModal();
         
-        // Atualiza a interface
         carregarLancamentosFiltrados(filtrosAtivos.page || 1);
         atualizarBadgesHeader();
         atualizarSaldosDashboard();
 
     } catch (error) {
-        // fetchFinanceiroAPI já mostra o erro
+        // Se o erro for o que criamos, não mostramos popup, pois ele já foi exibido.
+        if (error.message !== "Tipo de lançamento não selecionado") {
+            // fetchFinanceiroAPI já mostra o erro para falhas de API
+            console.error("Erro em salvarLancamento:", error);
+        }
+    } finally {
+        // Reabilita o botão no final, independentemente do resultado
+        if (btnSalvar) {
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = textoOriginalBtn;
+        }
     }
 }
 
@@ -1311,17 +1369,28 @@ async function solicitarExclusaoLancamento(id) {
     const lancamento = lancamentosCache.find(l => l.id == id);
     if (!lancamento) return;
 
-    const confirmado = await mostrarPopupConfirmacao(`Tem certeza que deseja solicitar a exclusão do lançamento "${lancamento.descricao || 'sem descrição'}" no valor de ${formatCurrency(lancamento.valor)}?`);
-    if (!confirmado) return;
+    // 1. Pede a justificativa para o usuário
+    const justificativa = await mostrarPopupComInput(
+        `Por que você deseja solicitar a exclusão do lançamento "${lancamento.descricao || 'sem descrição'}"?`,
+        'Motivo da solicitação (obrigatório)'
+    );
+
+    // 2. Se o usuário cancelar ou não digitar nada, interrompe a ação
+    if (!justificativa || justificativa.trim() === '') {
+        mostrarPopupFinanceiro('A solicitação foi cancelada, pois é necessário fornecer um motivo.', 'aviso');
+        return;
+    }
 
     try {
+        // 3. Envia a justificativa no corpo da requisição para a API
         const response = await fetchFinanceiroAPI(`/lancamentos/${id}/solicitar-exclusao`, {
-            method: 'POST'
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ justificativa: justificativa.trim() })
         });
         mostrarPopupFinanceiro(response.message, 'sucesso');
-        // ATUALIZE O BADGE APÓS A SOLICITAÇÃO
+        
         atualizarBadgesHeader();
-        // Recarrega os dados para atualizar o status do card
         carregarLancamentosFiltrados(filtrosAtivos.page || 1);
     } catch (error) {
         // fetchFinanceiroAPI já mostra o erro
@@ -1483,7 +1552,6 @@ function abrirModalEdicaoSimples(lancamento) {
     const formSimples = document.getElementById('formLancamentoSimples');
     
     // Popula o formulário com os dados do lançamento
-    // O `true` no final indica que é uma edição
     popularFormularioSimples(formSimples, lancamento);
 
     // Adiciona os listeners de controle
@@ -1506,25 +1574,29 @@ function abrirModalCategoria(categoria = null) {
     const modalHTML = `
         <div id="modal-financeiro" class="fc-modal" style="display: flex;">
             <div class="fc-modal-content">
-                <button id="fecharModal" class="fc-modal-close">×</button>
+                <button id="fecharModal" class="fc-modal-close">X</button>
                 <h3 class="fc-section-title" style="text-align:center;">${titulo}</h3>
-                <form id="formCategoria" style="margin-top:20px;">
-                    <div class="fc-form-group">
-                        <label for="categoria_nome">Nome da Categoria*</label>
-                        <input type="text" id="categoria_nome" class="fc-input" required value="${categoria?.nome || ''}">
-                    </div>
-                    <div class="fc-form-group">
-                        <label for="categoria_id_grupo">Grupo Financeiro*</label>
-                        <select id="categoria_id_grupo" class="fc-select" required>
-                            <option value="">Selecione...</option>
-                            ${gruposCache.map(g => `<option value="${g.id}" ${categoria?.id_grupo === g.id ? 'selected' : ''}>${g.nome} (${g.tipo})</option>`).join('')}
-                        </select>
-                    </div>
-                    <div class="fc-modal-footer">
-                         <button type="button" id="btnCancelarModal" class="fc-btn fc-btn-secundario">Cancelar</button>
-                         <button type="submit" class="fc-btn fc-btn-primario">Salvar</button>
-                    </div>
-                </form>
+                
+                <div class="fc-modal-body">
+                    <form id="formCategoria">
+                        <div class="fc-form-group">
+                            <label for="categoria_nome">Nome da Categoria*</label>
+                            <input type="text" id="categoria_nome" class="fc-input" required value="${categoria?.nome || ''}">
+                        </div>
+                        <div class="fc-form-group">
+                            <label for="categoria_id_grupo">Grupo Financeiro*</label>
+                            <select id="categoria_id_grupo" class="fc-select" required>
+                                <option value="">Selecione...</option>
+                                ${gruposCache.map(g => `<option value="${g.id}" ${categoria?.id_grupo === g.id ? 'selected' : ''}>${g.nome} (${g.tipo})</option>`).join('')}
+                            </select>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="fc-modal-footer">
+                     <button type="button" id="btnCancelarModal" class="fc-btn fc-btn-secundario">Cancelar</button>
+                     <button type="submit" class="fc-btn fc-btn-primario" form="formCategoria">Salvar</button>
+                </div>
             </div>
         </div>
     `;
@@ -1534,12 +1606,21 @@ function abrirModalCategoria(categoria = null) {
 
 async function salvarCategoria(event) {
     event.preventDefault();
+
+    const form = event.target;
+    const btnSalvar = form.closest('.fc-modal-content').querySelector('button[type="submit"]');
+    if (!btnSalvar) return;
+    const textoOriginalBtn = btnSalvar.innerHTML;
+    
     const payload = {
         nome: document.getElementById('categoria_nome').value,
         id_grupo: parseInt(document.getElementById('categoria_id_grupo').value),
     };
 
     try {
+        btnSalvar.disabled = true;
+        btnSalvar.innerHTML = `<i class="fas fa-spinner fc-btn-spinner"></i> Salvando...`;
+
         if (itemEmEdicao) {
             const updated = await fetchFinanceiroAPI(`/categorias/${itemEmEdicao.id}`, { method: 'PUT', body: JSON.stringify(payload) });
             const index = categoriasCache.findIndex(c => c.id === itemEmEdicao.id);
@@ -1551,10 +1632,16 @@ async function salvarCategoria(event) {
         mostrarPopupFinanceiro('Categoria salva com sucesso!', 'sucesso');
         fecharModal();
         
-        // Re-renderiza a lista agrupada
-        renderizarTabelaCategoriasAgrupadas(); // <<< CORREÇÃO: Chama a função correta
+        renderizarTabelaCategoriasAgrupadas();
 
-    } catch (error) {}
+    } catch (error) {
+        // fetchFinanceiroAPI já lida com o erro
+    } finally {
+        if (btnSalvar) {
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = textoOriginalBtn;
+        }
+    }
 }
 
 // --- Cache para contatos ---
@@ -1644,38 +1731,42 @@ function abrirModalContatoGerenciamento(contato = null) {
     const modalHTML = `
         <div id="modal-financeiro" class="fc-modal" style="display: flex;">
             <div class="fc-modal-content">
-                <button id="fecharModal" class="fc-modal-close">×</button>
+                <button id="fecharModal" class="fc-modal-close">X</button>
                 <h3 class="fc-section-title" style="text-align:center;">${titulo}</h3>
-                <form id="formContato" style="margin-top:20px;">
-                    <div class="fc-form-group">
-                        <label for="contato_nome">Nome*</label>
-                        <input type="text" id="contato_nome" class="fc-input" required value="${contato?.nome || ''}">
-                    </div>
-                    <div class="fc-form-group">
-                        <label for="contato_tipo">Tipo*</label>
-                        <select id="contato_tipo" class="fc-select" required>
-                            <option value="">Selecione...</option>
-                            <option value="CLIENTE" ${contato?.tipo === 'CLIENTE' ? 'selected' : ''}>Cliente</option>
-                            <option value="FORNECEDOR" ${contato?.tipo === 'FORNECEDOR' ? 'selected' : ''}>Fornecedor</option>
-                            <option value="EMPREGADO" ${contato?.tipo === 'EMPREGADO' ? 'selected' : ''}>Funcionário</option>
-                            <option value="EX_EMPREGADO" ${contato?.tipo === 'EX_EMPREGADO' ? 'selected' : ''}>Ex-Funcionário</option>
-                            <option value="SOCIOS" ${contato?.tipo === 'SOCIOS' ? 'selected' : ''}>Sócios</option>
-                            <option value="AMBOS" ${contato?.tipo === 'AMBOS' ? 'selected' : ''}>Ambos</option>
-                        </select>
-                    </div>
-                    <div class="fc-form-group">
-                        <label for="contato_cpf_cnpj">CPF/CNPJ</label>
-                        <input type="text" id="contato_cpf_cnpj" class="fc-input" value="${contato?.cpf_cnpj || ''}">
-                    </div>
-                     <div class="fc-form-group">
-                        <label for="contato_obs">Observações</label>
-                        <textarea id="contato_obs" class="fc-input" rows="2">${contato?.observacoes || ''}</textarea>
-                    </div>
-                    <div class="fc-modal-footer">
-                         <button type="button" id="btnCancelarModal" class="fc-btn fc-btn-secundario">Cancelar</button>
-                         <button type="submit" class="fc-btn fc-btn-primario">Salvar</button>
-                    </div>
-                </form>
+
+                <div class="fc-modal-body">
+                    <form id="formContato">
+                        <div class="fc-form-group">
+                            <label for="contato_nome">Nome*</label>
+                            <input type="text" id="contato_nome" class="fc-input" required value="${contato?.nome || ''}">
+                        </div>
+                        <div class="fc-form-group">
+                            <label for="contato_tipo">Tipo*</label>
+                            <select id="contato_tipo" class="fc-select" required>
+                                <option value="">Selecione...</option>
+                                <option value="CLIENTE" ${contato?.tipo === 'CLIENTE' ? 'selected' : ''}>Cliente</option>
+                                <option value="FORNECEDOR" ${contato?.tipo === 'FORNECEDOR' ? 'selected' : ''}>Fornecedor</option>
+                                <option value="EMPREGADO" ${contato?.tipo === 'EMPREGADO' ? 'selected' : ''}>Funcionário</option>
+                                <option value="EX_EMPREGADO" ${contato?.tipo === 'EX_EMPREGADO' ? 'selected' : ''}>Ex-Funcionário</option>
+                                <option value="SOCIOS" ${contato?.tipo === 'SOCIOS' ? 'selected' : ''}>Sócios</option>
+                                <option value="AMBOS" ${contato?.tipo === 'AMBOS' ? 'selected' : ''}>Ambos</option>
+                            </select>
+                        </div>
+                        <div class="fc-form-group">
+                            <label for="contato_cpf_cnpj">CPF/CNPJ</label>
+                            <input type="text" id="contato_cpf_cnpj" class="fc-input" value="${contato?.cpf_cnpj || ''}">
+                        </div>
+                         <div class="fc-form-group">
+                            <label for="contato_obs">Observações</label>
+                            <textarea id="contato_obs" class="fc-input" rows="2">${contato?.observacoes || ''}</textarea>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="fc-modal-footer">
+                     <button type="button" id="btnCancelarModal" class="fc-btn fc-btn-secundario">Cancelar</button>
+                     <button type="submit" class="fc-btn fc-btn-primario" form="formContato">Salvar</button>
+                </div>
             </div>
         </div>
     `;
@@ -1685,13 +1776,23 @@ function abrirModalContatoGerenciamento(contato = null) {
 
 async function salvarContatoGerenciamento(event) {
     event.preventDefault();
+
+    const form = event.target;
+    const btnSalvar = form.closest('.fc-modal-content').querySelector('button[type="submit"]');
+    if (!btnSalvar) return;
+    const textoOriginalBtn = btnSalvar.innerHTML;
+
     const payload = {
         nome: document.getElementById('contato_nome').value,
         tipo: document.getElementById('contato_tipo').value,
         cpf_cnpj: document.getElementById('contato_cpf_cnpj').value,
         observacoes: document.getElementById('contato_obs').value,
     };
+
     try {
+        btnSalvar.disabled = true;
+        btnSalvar.innerHTML = `<i class="fas fa-spinner fc-btn-spinner"></i> Salvando...`;
+
         if (itemEmEdicao) {
             const updated = await fetchFinanceiroAPI(`/contatos/${itemEmEdicao.id}`, { method: 'PUT', body: JSON.stringify(payload) });
             const index = contatosGerenciamentoCache.findIndex(c => c.id === itemEmEdicao.id);
@@ -1703,7 +1804,14 @@ async function salvarContatoGerenciamento(event) {
         mostrarPopupFinanceiro('Contato salvo com sucesso!', 'sucesso');
         fecharModal();
         renderizarTabelaContatosGerenciamento();
-    } catch (error) {}
+    } catch (error) {
+        // fetchFinanceiroAPI já lida com o erro
+    } finally {
+        if (btnSalvar) {
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = textoOriginalBtn;
+        }
+    }
 }
 
 async function alterarStatusContato(id, statusAtual) {
@@ -1736,12 +1844,20 @@ async function alterarStatusContato(id, statusAtual) {
 // --- Funções da Agenda Financeira ---
 
 async function carregarContasAgendadas() {
+    const container = document.getElementById('agendaContainer');
+    if (!container) return;
+
+    // 1. Injeta o HTML do spinner no container
+    container.innerHTML = `<div class="fc-spinner"><span>Buscando contas agendadas...</span></div>`;
+
     try {
         const data = await fetchFinanceiroAPI('/contas-agendadas?status=PENDENTE');
         contasAgendadasCache = data;
-        renderizarTabelaAgenda();
+        // 2. A renderização substitui o spinner pelo conteúdo final
+        renderizarTabelaAgenda(); 
     } catch(e) {
-        document.getElementById('agendaContainer').innerHTML = `<p style="color: red;">Erro ao carregar agenda.</p>`;
+        // 3. Em caso de erro, a mensagem de erro também substitui o spinner
+        container.innerHTML = `<p style="color: red; text-align:center; padding: 20px;">Erro ao carregar a agenda.</p>`;
     }
 }
 
@@ -1757,105 +1873,104 @@ function abrirModalAgendamento() {
                 <button id="fecharModal" class="fc-modal-close"><i class="fas fa-times"></i></button>
                 <h3 class="fc-section-title" style="text-align:center; border:0; margin-bottom: 20px;">${titulo}</h3>
                 
-                <div class="fc-form-group">
-                    <label>Como deseja agendar?</label>
-                    <div class="fc-segmented-control">
-                        <button class="fc-segment-btn active" data-tipo-agendamento="unico">Lançamento Único</button>
-                        <button class="fc-segment-btn" data-tipo-agendamento="lote">Parcelamento / Recorrência</button>
-                    </div>
-                </div>
-
-                <!-- FORMULÁRIO PARA LANÇAMENTO ÚNICO -->
-                <form id="formAgendamentoUnico">
-                    <!-- Conteúdo do formulário único será preenchido pelo JS -->
-                </form>
-
-                <!-- FORMULÁRIO PARA PARCELAMENTO / RECORRÊNCIA -->
-                <form id="formAgendamentoLote" class="hidden">
+                <div class="fc-modal-body">
                     <div class="fc-form-group">
-                        <label for="lote_descricao">Descrição Geral (Ex: Compra de Tecidos, Aluguel 2025)*</label>
-                        <input type="text" id="lote_descricao" class="fc-input" required>
-                    </div>
-                    <div class="fc-form-group">
-                        <label for="lote_favorecido_busca">Favorecido*</label>
-                        <div class="fc-autocomplete-container">
-                            <input type="text" id="lote_favorecido_busca" class="fc-input" placeholder="Digite para buscar..." autocomplete="off" required>
-                            <div id="lote_favorecido_resultados" class="fc-autocomplete-results" style="display: none;"></div>
+                        <label>Como deseja agendar?</label>
+                        <div class="fc-segmented-control">
+                            <button class="fc-segment-btn active" data-tipo-agendamento="unico">Lançamento Único</button>
+                            <button class="fc-segment-btn" data-tipo-agendamento="lote">Parcelamento / Recorrência</button>
                         </div>
-                        <input type="hidden" id="lote_favorecido_id">
                     </div>
-                     <div class="fc-form-row">
+
+                    <form id="formAgendamentoUnico">
+                        <!-- Conteúdo do formulário único será preenchido pelo JS -->
+                    </form>
+
+                    <form id="formAgendamentoLote" class="hidden">
                         <div class="fc-form-group">
-                            <label for="lote_tipo">Tipo*</label>
-                            <select id="lote_tipo" class="fc-select" required>
-                                <option value="">Selecione...</option>
-                                <option value="A_PAGAR">A Pagar</option>
-                                <option value="A_RECEBER">A Receber</option>
-                            </select>
+                            <label for="lote_descricao">Descrição Geral (Ex: Compra de Tecidos, Aluguel 2025)*</label>
+                            <input type="text" id="lote_descricao" class="fc-input" required>
                         </div>
                         <div class="fc-form-group">
-                            <label for="lote_categoria">Categoria*</label>
-                            <select id="lote_categoria" class="fc-select" required><option value="">Selecione o tipo</option></select>
+                            <label for="lote_favorecido_busca">Favorecido*</label>
+                            <div class="fc-autocomplete-container">
+                                <input type="text" id="lote_favorecido_busca" class="fc-input fc-autocomplete-input" placeholder="Digite para buscar..." autocomplete="off" required>
+                                <span class="fc-autocomplete-status-icon"></span>
+                                <div id="lote_favorecido_resultados" class="fc-autocomplete-results hidden"></div>
+                                <input type="hidden" id="lote_favorecido_id" class="fc-autocomplete-id">
+                            </div>
                         </div>
-                    </div>
-
-                    <hr style="margin: 20px 0;">
-
-                    <div class="fc-form-group">
-                        <label for="lote_metodo_divisao">Método de Divisão*</label>
-                        <select id="lote_metodo_divisao" class="fc-select">
-                            <option value="fixo">Parcelar em X vezes com intervalo fixo</option>
-                            <option value="manual">Definir parcelas manualmente</option>
-                        </select>
-                    </div>
-
-                    <!-- CONTAINER PARA AS OPÇÕES DO MÉTODO FIXO -->
-                    <div id="opcoes_metodo_fixo">
                          <div class="fc-form-row">
                             <div class="fc-form-group">
-                                <label for="lote_valor_total">Valor Total (R$)*</label>
-                                <input type="number" id="lote_valor_total" class="fc-input" step="0.01" min="0.01">
-                            </div>
-                            <div class="fc-form-group">
-                                <label for="lote_num_parcelas">Nº de Parcelas*</label>
-                                <input type="number" id="lote_num_parcelas" class="fc-input" min="2" value="2">
-                            </div>
-                        </div>
-                        <div class="fc-form-row">
-                             <div class="fc-form-group">
-                                <label for="lote_data_primeira_parcela">Venc. da 1ª Parcela*</label>
-                                <input type="date" id="lote_data_primeira_parcela" class="fc-input" value="${hoje}">
-                            </div>
-                            <div class="fc-form-group">
-                                <label for="lote_intervalo_tipo">Intervalo*</label>
-                                <select id="lote_intervalo_tipo" class="fc-select">
-                                    <option value="days">Dias</option>
-                                    <option value="weeks">Semanas</option>
-                                    <option value="months" selected>Meses</option>
+                                <label for="lote_tipo">Tipo*</label>
+                                <select id="lote_tipo" class="fc-select" required>
+                                    <option value="">Selecione...</option>
+                                    <option value="A_PAGAR">A Pagar</option>
+                                    <option value="A_RECEBER">A Receber</option>
                                 </select>
                             </div>
-                             <div class="fc-form-group">
-                                <label for="lote_intervalo_valor">A cada*</label>
-                                <input type="number" id="lote_intervalo_valor" class="fc-input" min="1" value="1">
+                            <div class="fc-form-group">
+                                <label for="lote_categoria">Categoria*</label>
+                                <select id="lote_categoria" class="fc-select" required><option value="">Selecione o tipo</option></select>
                             </div>
                         </div>
-                         <button type="button" id="btnGerarPrevia" class="fc-btn fc-btn-outline" style="width:100%; margin-top:10px;">Gerar Pré-visualização</button>
-                    </div>
 
-                    <!-- CONTAINER PARA AS OPÇÕES DO MÉTODO MANUAL -->
-                    <div id="opcoes_metodo_manual" class="hidden">
-                        <div class="fc-parcela-manual-header">
-                            <span>Data de Vencimento</span>
-                            <span>Valor da Parcela (R$)</span>
-                            <span></span>
+                        <hr style="margin: 20px 0;">
+
+                        <div class="fc-form-group">
+                            <label for="lote_metodo_divisao">Método de Divisão*</label>
+                            <select id="lote_metodo_divisao" class="fc-select">
+                                <option value="fixo">Parcelar em X vezes com intervalo fixo</option>
+                                <option value="manual">Definir parcelas manualmente</option>
+                            </select>
                         </div>
-                        <div id="grade_parcelas_manuais"></div>
-                        <button type="button" id="btnAdicionarParcelaManual" class="fc-btn fc-btn-outline" style="margin-top: 10px;"><i class="fas fa-plus"></i> Adicionar Parcela</button>
-                        <div id="resumo_parcelas_manuais" style="text-align: right; margin-top: 10px; font-weight: bold;"></div>
-                    </div>
 
-                    <div id="lote_previa_container" style="margin-top: 15px;"></div>
-                </form>
+                        <div id="opcoes_metodo_fixo">
+                             <div class="fc-form-row">
+                                <div class="fc-form-group">
+                                    <label for="lote_valor_total">Valor Total (R$)*</label>
+                                    <input type="number" id="lote_valor_total" class="fc-input" step="0.01" min="0.01">
+                                </div>
+                                <div class="fc-form-group">
+                                    <label for="lote_num_parcelas">Nº de Parcelas*</label>
+                                    <input type="number" id="lote_num_parcelas" class="fc-input" min="2" value="2">
+                                </div>
+                            </div>
+                            <div class="fc-form-row">
+                                 <div class="fc-form-group">
+                                    <label for="lote_data_primeira_parcela">Venc. da 1ª Parcela*</label>
+                                    <input type="date" id="lote_data_primeira_parcela" class="fc-input" value="${hoje}">
+                                </div>
+                                <div class="fc-form-group">
+                                    <label for="lote_intervalo_tipo">Intervalo*</label>
+                                    <select id="lote_intervalo_tipo" class="fc-select">
+                                        <option value="days">Dias</option>
+                                        <option value="weeks">Semanas</option>
+                                        <option value="months" selected>Meses</option>
+                                    </select>
+                                </div>
+                                 <div class="fc-form-group">
+                                    <label for="lote_intervalo_valor">A cada*</label>
+                                    <input type="number" id="lote_intervalo_valor" class="fc-input" min="1" value="1">
+                                </div>
+                            </div>
+                             <button type="button" id="btnGerarPrevia" class="fc-btn fc-btn-outline" style="width:100%; margin-top:10px;">Gerar Pré-visualização</button>
+                        </div>
+
+                        <div id="opcoes_metodo_manual" class="hidden">
+                            <div class="fc-parcela-manual-header">
+                                <span>Data de Vencimento</span>
+                                <span>Valor da Parcela (R$)</span>
+                                <span></span>
+                            </div>
+                            <div id="grade_parcelas_manuais"></div>
+                            <button type="button" id="btnAdicionarParcelaManual" class="fc-btn fc-btn-outline" style="margin-top: 10px;"><i class="fas fa-plus"></i> Adicionar Parcela</button>
+                            <div id="resumo_parcelas_manuais" style="text-align: right; margin-top: 10px; font-weight: bold;"></div>
+                        </div>
+
+                        <div id="lote_previa_container" style="margin-top: 15px;"></div>
+                    </form>
+                </div>
 
                 <div class="fc-modal-footer">
                     <button type="button" id="btnCancelarModal" class="fc-btn fc-btn-secundario">Cancelar</button>
@@ -1869,10 +1984,16 @@ function abrirModalAgendamento() {
     const formUnico = document.getElementById('formAgendamentoUnico');
     const formLote = document.getElementById('formAgendamentoLote');
     const btnSalvar = document.getElementById('btnSalvarAgendamento');
+    const modalElement = document.getElementById('modal-agendamento');
 
-    document.querySelectorAll('.fc-segment-btn').forEach(btn => {
+    // Listener para fechar o modal
+    modalElement.querySelector('#fecharModal').addEventListener('click', fecharModal);
+    modalElement.querySelector('#btnCancelarModal').addEventListener('click', fecharModal);
+
+    // Listener para trocar entre as abas do modal
+    modalElement.querySelectorAll('.fc-segment-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            document.querySelector('.fc-segment-btn.active').classList.remove('active');
+            modalElement.querySelector('.fc-segment-btn.active').classList.remove('active');
             btn.classList.add('active');
             const tipo = btn.dataset.tipoAgendamento;
 
@@ -1889,45 +2010,105 @@ function abrirModalAgendamento() {
         });
     });
 
+    // Popula o formulário de Agendamento Único (que agora vai ter mais campos)
     formUnico.innerHTML = `
-        <div class="fc-form-group"><label>Descrição*</label><input type="text" id="unico_descricao" class="fc-input" required></div>
-        <div class="fc-form-group"><label>Valor (R$)*</label><input type="number" id="unico_valor" class="fc-input" step="0.01" min="0.01" required></div>
-        <div class="fc-form-group"><label>Vencimento*</label><input type="date" id="unico_vencimento" class="fc-input" required value="${hoje}"></div>
-        <!-- Campos de categoria e favorecido para lançamento único podem ser adicionados aqui se necessário -->
+        <div class="fc-form-group">
+            <label for="ag_tipo">Tipo de Agendamento*</label>
+            <select id="ag_tipo" class="fc-select" required>
+                <option value="">Selecione...</option>
+                <option value="A_PAGAR">A Pagar</option>
+                <option value="A_RECEBER">A Receber</option>
+            </select>
+        </div>
+        <div class="fc-form-group">
+            <label for="ag_descricao">Descrição*</label>
+            <input type="text" id="ag_descricao" class="fc-input" required>
+        </div>
+        <div class="fc-form-group">
+            <label for="ag_valor">Valor (R$)*</label>
+            <input type="number" id="ag_valor" class="fc-input" step="0.01" min="0.01" required>
+        </div>
+        <div class="fc-form-group">
+            <label for="ag_vencimento">Data de Vencimento*</label>
+            <input type="date" id="ag_vencimento" class="fc-input" required value="${hoje}">
+        </div>
+        <div class="fc-form-group">
+            <label for="ag_categoria">Categoria*</label>
+            <select id="ag_categoria" class="fc-select" required><option value="">Selecione o tipo</option></select>
+        </div>
+        <div class="fc-form-group">
+            <label for="ag_contato_busca">Favorecido / Pagador</label>
+            <div class="fc-autocomplete-container">
+                <input type="text" id="ag_contato_busca" class="fc-input fc-autocomplete-input" placeholder="Digite para buscar..." autocomplete="off">
+                <span class="fc-autocomplete-status-icon"></span>
+                <div id="ag_contato_resultados" class="fc-autocomplete-results hidden"></div>
+                <input type="hidden" id="ag_contato_id" class="fc-autocomplete-id">
+            </div>
+        </div>
     `;
 
-    configurarListenersModal('formAgendamentoUnico', salvarAgendamento);
-    configurarListenersModal('formAgendamentoLote', gerarEconfirmarLote);
+    // Adiciona o listener para popular as categorias no form único
+    document.getElementById('ag_tipo').addEventListener('change', (e) => {
+        const tipoSelecionado = e.target.value;
+        const tipoGrupo = tipoSelecionado === 'A_PAGAR' ? 'DESPESA' : 'RECEITA';
+        const selectCategoria = document.getElementById('ag_categoria');
+        
+        const categoriasFiltradas = categoriasCache.filter(c => gruposCache.find(g => g.id === c.id_grupo)?.tipo === tipoGrupo);
+        const categoriasAgrupadas = categoriasFiltradas.reduce((acc, cat) => {
+            (acc[cat.id_grupo] = acc[cat.id_grupo] || []).push(cat);
+            return acc;
+        }, {});
 
-    document.getElementById('lote_tipo').addEventListener('change', (e) => {
-    const tipo = e.target.value === 'A_PAGAR' ? 'DESPESA' : 'RECEITA';
-    const catSelect = document.getElementById('lote_categoria');
-    
-    const categoriasFiltradas = categoriasCache.filter(c => gruposCache.find(g => g.id === c.id_grupo)?.tipo === tipo);
-
-    const categoriasAgrupadas = categoriasFiltradas.reduce((acc, categoria) => {
-        const idGrupo = categoria.id_grupo;
-        if (!acc[idGrupo]) {
-            acc[idGrupo] = [];
+        let optionsHTML = '<option value="">Selecione...</option>';
+        for (const idGrupo in categoriasAgrupadas) {
+            const grupo = gruposCache.find(g => g.id == idGrupo);
+            optionsHTML += `<optgroup label="${grupo ? grupo.nome : 'Sem Grupo'}">`;
+            categoriasAgrupadas[idGrupo].forEach(categoria => {
+                // Adicionamos o nome do grupo ao lado do nome da categoria
+                optionsHTML += `<option value="${categoria.id}">${categoria.nome} [ ${grupo ? grupo.nome : ''} ]</option>`;
+            });
+            optionsHTML += `</optgroup>`;
         }
-        acc[idGrupo].push(categoria);
-        return acc;
-    }, {});
+        selectCategoria.innerHTML = optionsHTML;
+    });
 
-    let optionsHTML = '<option value="">Selecione...</option>';
-    for (const idGrupo in categoriasAgrupadas) {
-        const grupo = gruposCache.find(g => g.id == idGrupo);
-        optionsHTML += `<optgroup label="${grupo ? grupo.nome : 'Sem Grupo'}">`;
-        categoriasAgrupadas[idGrupo].forEach(categoria => {
-            optionsHTML += `<option value="${categoria.id}">${categoria.nome} [ ${grupo ? grupo.nome : ''} ]</option>`;
-        });
-        optionsHTML += `</optgroup>`;
-    }
+    // Adiciona os listeners de submit
+    formUnico.addEventListener('submit', salvarAgendamento);
+    formLote.addEventListener('submit', gerarEconfirmarLote);
     
-    catSelect.innerHTML = optionsHTML;
+    // Liga o botão de Salvar para disparar o submit do formulário ativo
+    btnSalvar.addEventListener('click', () => {
+        const formAtivoId = btnSalvar.getAttribute('form');
+        document.getElementById(formAtivoId)?.requestSubmit();
+    });
+
+    // Listeners para o formulário de Lote (parcelamento)
+    document.getElementById('lote_tipo').addEventListener('change', (e) => {
+        const tipo = e.target.value === 'A_PAGAR' ? 'DESPESA' : 'RECEITA';
+        const catSelect = document.getElementById('lote_categoria');
+        
+        const categoriasFiltradas = categoriasCache.filter(c => gruposCache.find(g => g.id === c.id_grupo)?.tipo === tipo);
+
+        const categoriasAgrupadas = categoriasFiltradas.reduce((acc, categoria) => {
+            const idGrupo = categoria.id_grupo;
+            if (!acc[idGrupo]) acc[idGrupo] = [];
+            acc[idGrupo].push(categoria);
+            return acc;
+        }, {});
+
+        let optionsHTML = '<option value="">Selecione...</option>';
+        for (const idGrupo in categoriasAgrupadas) {
+            const grupo = gruposCache.find(g => g.id == idGrupo);
+            optionsHTML += `<optgroup label="${grupo ? grupo.nome : 'Sem Grupo'}">`;
+            categoriasAgrupadas[idGrupo].forEach(categoria => {
+                // Adicionamos o nome do grupo ao lado do nome da categoria
+                optionsHTML += `<option value="${categoria.id}">${categoria.nome} [ ${grupo ? grupo.nome : ''} ]</option>`;
+            });
+            optionsHTML += `</optgroup>`;
+        }
+        catSelect.innerHTML = optionsHTML;
     });
     
-
     const metodoSelect = document.getElementById('lote_metodo_divisao');
     const opcoesFixo = document.getElementById('opcoes_metodo_fixo');
     const opcoesManual = document.getElementById('opcoes_metodo_manual');
@@ -1947,6 +2128,12 @@ function abrirModalAgendamento() {
 
 async function salvarAgendamento(event) {
     event.preventDefault();
+
+    const form = event.target;
+    const btnSalvar = form.closest('.fc-modal-content').querySelector('#btnSalvarAgendamento');
+    if (!btnSalvar) return;
+    const textoOriginalBtn = btnSalvar.innerHTML;
+
     const payload = {
         tipo: document.getElementById('ag_tipo').value,
         descricao: document.getElementById('ag_descricao').value,
@@ -1955,44 +2142,64 @@ async function salvarAgendamento(event) {
         id_categoria: parseInt(document.getElementById('ag_categoria').value),
         id_contato: parseInt(document.getElementById('ag_contato_id').value) || null,
     };
+
+    if (!payload.tipo || !payload.descricao || !payload.valor || !payload.data_vencimento || !payload.id_categoria) {
+        mostrarPopupFinanceiro('Por favor, preencha todos os campos obrigatórios (*).', 'aviso');
+        return;
+    }
+    
     try {
+        btnSalvar.disabled = true;
+        btnSalvar.innerHTML = `<i class="fas fa-spinner fc-btn-spinner"></i> Agendando...`;
+
         await fetchFinanceiroAPI('/contas-agendadas', { method: 'POST', body: JSON.stringify(payload) });
         mostrarPopupFinanceiro('Conta agendada com sucesso!', 'sucesso');
         fecharModal();
         carregarContasAgendadas(); // Recarrega a lista
-    } catch(e) {}
+    } catch(e) {
+        // fetchFinanceiroAPI já trata o erro
+    } finally {
+        if(btnSalvar) {
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = textoOriginalBtn;
+        }
+    }
 }
 
 function abrirModalBaixa(conta) {
     itemEmEdicao = conta;
     const hojeDate = new Date();
-    const fusoHorarioOffset = hojeDate.getTimezoneOffset() * 60000; // offset em milissegundos
+    const fusoHorarioOffset = hojeDate.getTimezoneOffset() * 60000;
     const hojeLocal = new Date(hojeDate.getTime() - fusoHorarioOffset);
     const hoje = hojeLocal.toISOString().split('T')[0];
 
     const modalHTML = `
         <div id="modal-financeiro" class="fc-modal" style="display: flex;">
             <div class="fc-modal-content">
-                <button id="fecharModal" class="fc-modal-close">×</button>
+                <button id="fecharModal" class="fc-modal-close">X</button>
                 <h3 class="fc-section-title" style="text-align:center;">Dar Baixa em Conta</h3>
-                <p style="text-align:center; margin-top:-15px; margin-bottom:20px;"><strong>${conta.descricao}</strong> - R$ ${parseFloat(conta.valor).toFixed(2)}</p>
-                <form id="formBaixa" style="margin-top:20px;">
-                    <div class="fc-form-group">
-                        <label for="baixa_data">Data do Pagamento/Recebimento*</label>
-                        <input type="date" id="baixa_data" class="fc-input" required value="${hoje}">
-                    </div>
-                    <div class="fc-form-group">
-                        <label for="baixa_conta">Conta Bancária de Origem/Destino*</label>
-                        <select id="baixa_conta" class="fc-select" required>
-                            <option value="">Selecione...</option>
-                            ${contasCache.map(c => `<option value="${c.id}">${c.nome_conta}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div class="fc-modal-footer">
-                        <button type="button" id="btnCancelarModal" class="fc-btn fc-btn-secundario">Cancelar</button>
-                        <button type="submit" class="fc-btn fc-btn-primario">Confirmar Baixa</button>
-                    </div>
-                </form>
+                <p style="text-align:center; margin-top:-15px; margin-bottom:20px;"><strong>${conta.descricao}</strong> - ${formatCurrency(conta.valor)}</p>
+
+                <div class="fc-modal-body">
+                    <form id="formBaixa">
+                        <div class="fc-form-group">
+                            <label for="baixa_data">Data do Pagamento/Recebimento*</label>
+                            <input type="date" id="baixa_data" class="fc-input" required value="${hoje}">
+                        </div>
+                        <div class="fc-form-group">
+                            <label for="baixa_conta">Conta Bancária de Origem/Destino*</label>
+                            <select id="baixa_conta" class="fc-select" required>
+                                <option value="">Selecione...</option>
+                                ${contasCache.map(c => `<option value="${c.id}">${c.nome_conta}</option>`).join('')}
+                            </select>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="fc-modal-footer">
+                    <button type="button" id="btnCancelarModal" class="fc-btn fc-btn-secundario">Cancelar</button>
+                    <button type="submit" class="fc-btn fc-btn-primario" form="formBaixa">Confirmar Baixa</button>
+                </div>
             </div>
         </div>
     `;
@@ -2002,17 +2209,39 @@ function abrirModalBaixa(conta) {
 
 async function salvarBaixa(event) {
     event.preventDefault();
+
+    const form = event.target;
+    const btnSalvar = form.closest('.fc-modal-content').querySelector('button[type="submit"]');
+    if (!btnSalvar) return;
+    const textoOriginalBtn = btnSalvar.innerHTML;
+    
     const payload = {
         data_transacao: document.getElementById('baixa_data').value,
         id_conta_bancaria: parseInt(document.getElementById('baixa_conta').value),
     };
+
+    if (!payload.data_transacao || !payload.id_conta_bancaria) {
+        mostrarPopupFinanceiro('Por favor, preencha todos os campos obrigatórios.', 'aviso');
+        return;
+    }
+
     try {
+        btnSalvar.disabled = true;
+        btnSalvar.innerHTML = `<i class="fas fa-spinner fc-btn-spinner"></i> Confirmando...`;
+
         await fetchFinanceiroAPI(`/contas-agendadas/${itemEmEdicao.id}/baixar`, { method: 'POST', body: JSON.stringify(payload) });
         mostrarPopupFinanceiro('Baixa realizada com sucesso!', 'sucesso');
         fecharModal();
-        carregarContasAgendadas(); // Recarrega a lista da agenda
+        carregarContasAgendadas();
         atualizarSaldosDashboard();
-    } catch(e) {}
+    } catch(e) {
+        // fetchFinanceiroAPI já trata o erro
+    } finally {
+        if(btnSalvar) {
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = textoOriginalBtn;
+        }
+    }
 }
 
 function renderizarResultadosAutocomplete(resultados, termoBusca, resultadosDiv, buscaInput, idInput) {
@@ -2026,7 +2255,10 @@ function renderizarResultadosAutocomplete(resultados, termoBusca, resultadosDiv,
         resultados.forEach(item => {
             const div = document.createElement('div');
             div.className = 'fc-autocomplete-item';
-            div.textContent = item.nome;
+            
+            // Alteramos aqui para usar innerHTML e adicionar o tipo
+            div.innerHTML = `${item.nome} <span class="fc-autocomplete-tipo">[${item.tipo}]</span>`;
+            
             div.dataset.id = item.id;
             div.addEventListener('mousedown', (e) => {
                 e.preventDefault();
@@ -2034,7 +2266,6 @@ function renderizarResultadosAutocomplete(resultados, termoBusca, resultadosDiv,
                 idInput.value = item.id;
                 resultadosDiv.classList.add('hidden');
                 
-                // --- FEEDBACK POSITIVO AO SELECIONAR ---
                 setAutocompleteStatus(buscaInput, 'success');
             });
             resultadosDiv.appendChild(div);
@@ -2274,14 +2505,8 @@ function renderizarCardsAprovacao(solicitacoes) {
             case 'data_transacao':
                 const dataStr = String(valor).split('T')[0];
                 return new Date(dataStr + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'});
-
-            // ==========================================================
-            // =====> AQUI ESTÁ A ALTERAÇÃO <=====
-            // Agora usamos a função central para formatar a categoria.
-            // ==========================================================
             case 'id_categoria':
                 return formatarCategoriaComGrupo(valor);
-
             case 'id_conta_bancaria':
                 const conta = contasCache.find(c => c.id == valor);
                 return conta ? conta.nome_conta : `<span style="color:var(--fc-cor-despesa);">ID ${valor} (inválido)</span>`;
@@ -2289,12 +2514,11 @@ function renderizarCardsAprovacao(solicitacoes) {
                 const contato = contatosGerenciamentoCache.find(c => c.id == valor);
                 return contato ? contato.nome : '-';
             default:
-                // Para o campo 'descricao', garantimos que não fique em branco.
                 return valor || '-';
         }
     };
 
-    // Função interna para gerar o HTML dos detalhes. Agora ela recebe o contexto (se é o bloco 'DE' ou 'PARA')
+    // Função interna para gerar o HTML dos detalhes
     const gerarHtmlDetalhes = (dados, dadosComparacao = null, isBlocoNovo = false) => {
         const dadosSeguros = dados || {};
         const dadosComparacaoSeguros = dadosComparacao || {};
@@ -2307,13 +2531,10 @@ function renderizarCardsAprovacao(solicitacoes) {
             let valorFormatado = formatarValorExibicao(chave, valor);
             let classe = '';
             
-            // Compara com o bloco de referência para destacar mudanças
             if (dadosComparacaoSeguros && typeof dadosComparacaoSeguros === 'object') {
                 const valorComparacao = dadosComparacaoSeguros[chave] ?? null;
-                // Usamos JSON.stringify para comparar valores, o que funciona bem para números e strings simples.
                 if (JSON.stringify(valor) !== JSON.stringify(valorComparacao)) {
                     classe = 'alterado';
-                    // Se for o bloco "PARA", mostra o valor antigo riscado
                     if (isBlocoNovo) {
                         const valorAntigoFormatado = formatarValorExibicao(chave, valorComparacao);
                         valorFormatado = `${valorFormatado} <span class="valor-antigo">(${valorAntigoFormatado})</span>`;
@@ -2321,7 +2542,6 @@ function renderizarCardsAprovacao(solicitacoes) {
                 }
             }
             
-            // Traduz a chave para um label mais amigável
             const label = chave.replace('id_', '').replace(/_/g, ' ').replace('data transacao', 'data');
             html += `<li class="${classe}"><strong>${label}:</strong> <span class="valor-item">${valorFormatado}</span></li>`;
         }
@@ -2334,12 +2554,23 @@ function renderizarCardsAprovacao(solicitacoes) {
         const dadosNovos = s.dados_novos;
         const ehEdicao = s.tipo_solicitacao === 'EDICAO';
 
+        // Bloco HTML para a justificativa do solicitante
+        const justificativaHTML = s.justificativa_solicitante ? `
+            <div class="justificativa-solicitante">
+                <strong>Justificativa do Solicitante:</strong>
+                <p>${s.justificativa_solicitante}</p>
+            </div>
+        ` : '';
+
         return `
         <div class="fc-aprovacao-card">
             <div class="meta-info">
                 <span>Solicitado por: <strong>${s.nome_solicitante}</strong></span>
                 <span>Em: ${new Date(s.data_solicitacao).toLocaleString('pt-BR')}</span>
             </div>
+            
+            ${justificativaHTML}
+
             <div class="dados-container">
                 <div class="dados-bloco">
                     <h4>DE (Dados Originais)</h4>
@@ -2447,7 +2678,6 @@ function mudarAba(abaAtiva) {
         panel.classList.toggle('active', panel.id === `tab-${abaAtiva}`);
     });
     
-     // Adicione esta linha para atualizar o breadcrumb
     const nomeAba = abaAtiva.charAt(0).toUpperCase() + abaAtiva.slice(1);
     atualizarBreadcrumbs([nomeAba]);
 
@@ -2460,8 +2690,8 @@ function mudarAba(abaAtiva) {
             prepararAbaLancamentos();
             break;
         case 'agenda':
-            // Renderiza o conteúdo da agenda.
-            renderizarTabelaAgenda();
+            // Agora chama a função que carrega os dados e mostra o spinner
+            carregarContasAgendadas(); 
             break;
     }
 }
@@ -2480,21 +2710,16 @@ async function abrirModalTransferencia() {
     // --- BUSCA OS DADOS MAIS RECENTES, INCLUINDO SALDOS ---
     let contasComSaldos = [];
     try {
-        // Mostra um spinner temporário para o usuário saber que algo está acontecendo
         const spinnerDiv = document.createElement('div');
         spinnerDiv.className = 'fc-popup-overlay';
         spinnerDiv.innerHTML = `<div class="fc-spinner" style="background:white; padding:20px; border-radius:8px;"><span>Calculando saldos...</span></div>`;
         document.body.appendChild(spinnerDiv);
 
-        // A chamada à API que já é rápida e otimizada
         const dashboardData = await fetchFinanceiroAPI('/dashboard');
-        
-        // A fonte da verdade para o nosso modal será a resposta da API
         contasComSaldos = dashboardData.saldos;
         
         document.body.removeChild(spinnerDiv);
     } catch (error) {
-        // Remove o spinner em caso de erro também
         const spinnerDiv = document.querySelector('.fc-popup-overlay');
         if (spinnerDiv) document.body.removeChild(spinnerDiv);
         
@@ -2508,6 +2733,7 @@ async function abrirModalTransferencia() {
             <div class="fc-modal-content">
                 <button id="fecharModal" class="fc-modal-close"><i class="fas fa-times"></i></button>
                 <h3 class="fc-section-title" style="text-align:center; border:0;">${titulo}</h3>
+                
                 <div class="fc-modal-body">
                     <form id="formTransferencia">
                         <div class="fc-form-group">
@@ -2538,6 +2764,7 @@ async function abrirModalTransferencia() {
                         </div>
                     </form>
                 </div>
+
                 <div class="fc-modal-footer">
                     <button type="button" id="btnCancelarModal" class="fc-btn fc-btn-secundario">Cancelar</button>
                     <button type="button" id="btnConfirmarTransferencia" class="fc-btn fc-btn-primario">Confirmar Transferência</button>
@@ -2572,44 +2799,51 @@ async function abrirModalTransferencia() {
 }
 
 async function salvarTransferencia() {
-    // Encontra o ID da nossa categoria especial de transferência
-    const categoriaTransferencia = categoriasCache.find(c => c.nome === 'Transferência entre Contas');
-    if (!categoriaTransferencia) {
-        mostrarPopupFinanceiro('Erro: Categoria "Transferência entre Contas" não encontrada. Por favor, cadastre-a nas configurações.', 'erro');
-        return;
-    }
+    const btnSalvar = document.getElementById('btnConfirmarTransferencia');
+    if (!btnSalvar) return;
+    const textoOriginalBtn = btnSalvar.innerHTML;
 
-    const payload = {
-        id_conta_origem: document.getElementById('transf_conta_origem').value,
-        id_conta_destino: document.getElementById('transf_conta_destino').value,
-        valor: parseFloat(document.getElementById('transf_valor').value),
-        data_transacao: document.getElementById('transf_data').value,
-        descricao: document.getElementById('transf_descricao').value,
-        id_categoria_transferencia: categoriaTransferencia.id
-    };
-
-    // Validação no frontend antes de enviar
-    if (!payload.id_conta_origem || !payload.id_conta_destino || !payload.valor) {
-        mostrarPopupFinanceiro('Por favor, preencha todos os campos obrigatórios (*).', 'aviso');
-        return;
-    }
-    
     try {
+        const categoriaTransferencia = categoriasCache.find(c => c.nome === 'Transferência entre Contas');
+        if (!categoriaTransferencia) {
+            mostrarPopupFinanceiro('Erro: Categoria "Transferência entre Contas" não encontrada. Por favor, cadastre-a nas configurações.', 'erro');
+            return;
+        }
+
+        const payload = {
+            id_conta_origem: document.getElementById('transf_conta_origem').value,
+            id_conta_destino: document.getElementById('transf_conta_destino').value,
+            valor: parseFloat(document.getElementById('transf_valor').value),
+            data_transacao: document.getElementById('transf_data').value,
+            descricao: document.getElementById('transf_descricao').value,
+            id_categoria_transferencia: categoriaTransferencia.id
+        };
+
+        if (!payload.id_conta_origem || !payload.id_conta_destino || !payload.valor) {
+            mostrarPopupFinanceiro('Por favor, preencha todos os campos obrigatórios (*).', 'aviso');
+            return;
+        }
+
+        btnSalvar.disabled = true;
+        btnSalvar.innerHTML = `<i class="fas fa-spinner fc-btn-spinner"></i> Transferindo...`;
+        
         await fetchFinanceiroAPI('/transferencias', { method: 'POST', body: JSON.stringify(payload) });
         
         mostrarPopupFinanceiro('Transferência realizada com sucesso!', 'sucesso');
         fecharModal();
         
-        // Atualiza o dashboard e a lista de lançamentos
         atualizarSaldosDashboard();
         carregarLancamentosFiltrados();
         
     } catch (error) {
         // O fetchFinanceiroAPI já mostra o erro
+    } finally {
+        if (btnSalvar) {
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = textoOriginalBtn;
+        }
     }
 }
-
-
 
 function setupEventListenersFinanceiro() {
     // --- NAVEGAÇÃO PRINCIPAL (ABAS E VIEWS) ---
@@ -2675,7 +2909,6 @@ function setupEventListenersFinanceiro() {
         if (e.target.matches('.fc-autocomplete-input')) {
             const buscaInput = e.target;
             
-            // Limpa o status ao começar a digitar
             setAutocompleteStatus(buscaInput, 'clear');
 
             const container = buscaInput.closest('.fc-autocomplete-container');
@@ -2684,7 +2917,7 @@ function setupEventListenersFinanceiro() {
             const idInput = container.querySelector('.fc-autocomplete-id');
             if (!resultadosDiv || !idInput) return;
 
-            idInput.value = ''; // Limpa o ID, forçando uma nova seleção
+            idInput.value = '';
 
             const termo = buscaInput.value.trim();
             if (termo.length < 2) {
@@ -2698,7 +2931,7 @@ function setupEventListenersFinanceiro() {
                 console.error("Falha na busca do autocomplete:", err);
             }
         }
-    }, 150)); // Mantém o debounce rápido
+    }, 150)); 
 
     
     document.addEventListener('focusout', (e) => {
@@ -2708,7 +2941,6 @@ function setupEventListenersFinanceiro() {
             if (!container) return;
             const idInput = container.querySelector('.fc-autocomplete-id');
 
-            // Se o campo tem texto MAS nenhum ID foi selecionado, mostra erro.
             if (buscaInput.value.trim() !== '' && !idInput.value) {
                 setAutocompleteStatus(buscaInput, 'error');
             } else if (buscaInput.value.trim() === '') {
@@ -2725,7 +2957,6 @@ function setupEventListenersFinanceiro() {
         }
     });
 
-    // Listener para o novo botão de transferência
     document.getElementById('btnNovaTransferencia')?.addEventListener('click', abrirModalTransferencia);
 
 
@@ -2789,6 +3020,12 @@ function setupEventListenersFinanceiro() {
         });
 
         tabLancamentos.addEventListener('input', debounce((e) => {
+            // VERIFICAÇÃO CRÍTICA: Ignora eventos de input que não foram
+            // gerados por uma ação direta do usuário (como o .reset() do formulário).
+            if (!e.isTrusted) {
+                return;
+            }
+
             if (e.target.closest('#filtrosLancamentos') || e.target.matches('#filtroBuscaRapida')) {
                 const formData = new FormData(document.getElementById('filtrosLancamentos'));
                 filtrosAtivos = Object.fromEntries(formData.entries());
@@ -2808,43 +3045,46 @@ async function inicializarPaginaFinanceiro() {
     setupEventListenersFinanceiro();
     gerenciarNavegacaoPrincipal('main');
     mudarAba('dashboard');
-    mudarPainelConfig('contas');
-    
+    mudarPainelConfig('contas'); // Isso pode ser ajustado, mas por enquanto ok
+
+    // FASE 1: Carregamento Rápido do Dashboard
     try {
-        // =================================================================
-        // PASSO 1: CARREGA O ESSENCIAL E RENDERIZA O DASHBOARD PRIMEIRO
-        // =================================================================
-        console.log('[Financeiro] Carregando dados do dashboard...');
+        console.log('[Financeiro] Fase 1: Carregando dados do dashboard...');
+        // Mostra um "esqueleto" de carregamento enquanto busca os dados
+        const saldosContainer = document.getElementById('saldosContainer');
+        if (saldosContainer) {
+            saldosContainer.innerHTML = `
+                <div class="fc-resumo-total-card" style="height: 100px; background-color: #f0f0f0;"></div>
+                <div class="fc-contas-grid">
+                    <div class="fc-conta-card" style="height: 160px; background-color: #f0f0f0;"></div>
+                    <div class="fc-conta-card" style="height: 160px; background-color: #f0f0f0;"></div>
+                </div>
+            `;
+        }
+        
         const dashboardData = await fetchFinanceiroAPI('/dashboard');
         renderizarDashboard(dashboardData.saldos, dashboardData.alertas);
-        console.log('[Financeiro] Dashboard renderizado.');
+        console.log('[Financeiro] Fase 1: Dashboard renderizado.');
+    } catch (error) {
+        console.error('Erro ao carregar dados do dashboard:', error);
+        const saldosContainer = document.getElementById('saldosContainer');
+        if(saldosContainer) saldosContainer.innerHTML = `<p style="color:red; text-align:center;">Falha ao carregar saldos.</p>`;
+    }
 
-        // =================================================================
-        // PASSO 2: CARREGA O RESTO DOS DADOS EM PARALELO
-        // =================================================================
-        console.log('[Financeiro] Carregando dados secundários...');
-        
-        // Prepara um array de promessas para o Promise.all
+    // FASE 2: Carregamento em Segundo Plano do Restante dos Dados
+    // Esta parte executa sem bloquear a interação do usuário com o dashboard
+    console.log('[Financeiro] Fase 2: Carregando dados secundários em segundo plano...');
+    try {
         const promessasDeDados = [
             fetchFinanceiroAPI('/configuracoes'),
-            fetchFinanceiroAPI('/lancamentos?limit=8'),
-            fetchFinanceiroAPI('/contas-agendadas?status=PENDENTE'),
+            fetchFinanceiroAPI('/lancamentos?limit=8'), // Busca a primeira página de lançamentos
             fetchFinanceiroAPI('/contatos/all'),
-            // LÓGICA DE PERMISSÃO REINTEGRADA AQUI:
-            // A busca por aprovações pendentes é condicional.
-            // Se o usuário não tiver permissão, resolvemos a promessa com um array vazio.
-            permissoesGlobaisFinanceiro.includes('aprovar-alteracao-financeira')
-                ? fetchFinanceiroAPI('/aprovacoes-pendentes')
-                : Promise.resolve([])
         ];
 
-        // Executa todas as buscas em paralelo
         const [
             configData, 
             lancamentosData, 
-            contasAgendadasData, 
-            contatosData,
-            aprovacoesPendentes // <<< O resultado da busca condicional
+            contatosData
         ] = await Promise.all(promessasDeDados);
 
         // Armazena os dados nos caches globais
@@ -2852,42 +3092,29 @@ async function inicializarPaginaFinanceiro() {
         gruposCache = configData.grupos;
         categoriasCache = configData.categorias;
         lancamentosCache = lancamentosData.lancamentos;
-        contasAgendadasCache = contasAgendadasData;
         contatosGerenciamentoCache = contatosData;
         filtrosAtivos.total = lancamentosData.total;
         
-        console.log('[Financeiro] Dados secundários carregados.');
+        console.log('[Financeiro] Fase 2: Dados secundários carregados.');
 
-        // =================================================================
-        // PASSO 3: ATUALIZA OS BADGES DO HEADER COM OS DADOS JÁ CARREGADOS
-        // =================================================================
-        // Atualiza o badge de aprovações com os dados que acabaram de chegar
-        const badgeAprovacoes = document.getElementById('badgeAprovacoes');
-        if (badgeAprovacoes && aprovacoesPendentes.length > 0) {
-            badgeAprovacoes.textContent = aprovacoesPendentes.length;
-            badgeAprovacoes.classList.remove('hidden');
-        } else if (badgeAprovacoes) {
-            badgeAprovacoes.classList.add('hidden');
-        }
-        // A função atualizarBadgesHeader agora pode focar apenas nas notificações pessoais
-        await atualizarBadgesHeader();
-
-        // =================================================================
-        // PASSO 4: RENDERIZA OS COMPONENTES SECUNDÁRIOS
-        // =================================================================
-        renderizarTabelaAgenda();
-        prepararAbaLancamentos();
-        renderizarTabelaContas();
-        renderizarContatosGerenciamento();
+        // FASE 3: Renderiza os componentes que dependem dos dados secundários
+        // Essas funções são rápidas pois os dados já estão em cache
+        prepararAbaLancamentos(); // Popula os filtros da aba e faz a primeira renderização dos cards
+        renderizarTabelaContas(); // Popula a tabela na tela de configurações
         renderizarTabelaCategoriasAgrupadas();
-        
-        console.log('[Financeiro] Página inicializada com sucesso.');
+        renderizarTabelaContatosGerenciamento();
 
     } catch (error) {
-        console.error('Erro crítico na inicialização:', error);
-        const mainContainer = document.querySelector('.fc-main-container');
-        if (mainContainer) mainContainer.innerHTML = `<div class="fc-card" style="border-left: 5px solid var(--fc-cor-despesa);">Erro crítico ao carregar dados iniciais. Verifique o console.</div>`;
+        console.error('Erro ao carregar dados secundários:', error);
+        mostrarPopupFinanceiro('Erro ao carregar alguns dados da página. Tente recarregar.', 'erro');
     }
+
+    // FASE 4: Carregamentos assíncronos finais (não críticos)
+    // Eles rodam por último e atualizam a interface quando terminam
+    atualizarBadgesHeader(); // Busca notificações e aprovações
+    carregarContasAgendadas(); // Busca os dados da agenda
+
+    console.log('[Financeiro] Página inicializada com sucesso.');
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -2920,41 +3147,128 @@ function renderizarTabelaAgenda() {
         return;
     }
 
-    container.innerHTML = contasAgendadasCache.map(c => {
-        const hoje = new Date(); hoje.setHours(0,0,0,0);
-        const vencimento = new Date(c.data_vencimento.split('T')[0] + 'T00:00:00');
-        const isAtrasado = vencimento < hoje;
-        const tipoClasse = c.tipo === 'A_PAGAR' ? 'pagar' : 'receber';
+    // 1. LÓGICA DE AGRUPAMENTO (sem alteração)
+    const contasAgrupadas = contasAgendadasCache.reduce((acc, conta) => {
+        const chave = conta.id_lote || `avulso_${conta.id}`;
+        if (!acc[chave]) {
+            acc[chave] = [];
+        }
+        acc[chave].push(conta);
+        return acc;
+    }, {});
 
-        return `
-        <div class="fc-agenda-card ${tipoClasse} ${isAtrasado ? 'atrasado' : ''}">
-            <div class="header">
-                <div class="info">
-                    <div class="descricao">${c.descricao}</div>
-                    <div class="categoria-agenda">${c.id_categoria ? formatarCategoriaComGrupo(c.id_categoria) : ''}</div>
-                    <div class="vencimento">Vence em: ${vencimento.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</div>
+    // 2. LÓGICA DE RENDERIZAÇÃO (com as alterações)
+    let htmlFinal = '';
+    for (const chave in contasAgrupadas) {
+        const itensDoGrupo = contasAgrupadas[chave];
+
+        if (itensDoGrupo.length === 1 && !itensDoGrupo[0].id_lote) {
+            // RENDERIZA CARD AVULSO (igual antes)
+            const c = itensDoGrupo[0];
+            const hoje = new Date(); hoje.setHours(0,0,0,0);
+            const vencimento = new Date(c.data_vencimento.split('T')[0] + 'T00:00:00');
+            const isAtrasado = vencimento < hoje;
+            const tipoClasse = c.tipo === 'A_PAGAR' ? 'pagar' : 'receber';
+
+            htmlFinal += `
+            <div class="fc-agenda-card ${tipoClasse} ${isAtrasado ? 'atrasado' : ''}">
+                <div class="header">
+                    <div class="info">
+                        <div class="descricao">${c.descricao}</div>
+                        <div class="categoria-agenda">${c.id_categoria ? formatarCategoriaComGrupo(c.id_categoria) : ''}</div>
+                        <div class="vencimento">Vence em: ${vencimento.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</div>
+                    </div>
+                    <div class="valor">${formatCurrency(c.valor)}</div>
                 </div>
-                <div class="valor">R$ ${parseFloat(c.valor).toFixed(2)}</div>
-            </div>
-            <div class="footer">
-                <span class="favorecido">Favorecido: ${c.nome_favorecido || '-'}</span>
-                <button class="fc-btn fc-btn-primario btn-dar-baixa ${podeBaixar ? '' : 'fc-btn-disabled'}" data-id="${c.id}">
-                    <i class="fas fa-check"></i> Baixar
-                </button>
-            </div>
-        </div>`
-    }).join('');
+                <div class="footer">
+                    <span class="favorecido">Favorecido: ${c.nome_favorecido || '-'}</span>
+                    <button class="fc-btn fc-btn-primario btn-dar-baixa ${podeBaixar ? '' : 'fc-btn-disabled'}" data-id="${c.id}">
+                        <i class="fas fa-check"></i> Baixar
+                    </button>
+                </div>
+            </div>`;
+        } else {
+            // RENDERIZA CARD DE GRUPO
+            const primeiroItem = itensDoGrupo[0];
+            const totalParcelas = itensDoGrupo.length;
+            const valorTotalGrupo = itensDoGrupo.reduce((soma, item) => soma + parseFloat(item.valor), 0);
+            const descricaoGrupo = primeiroItem.descricao.split(' - Parcela')[0] || 'Lote de Parcelas';
 
+            htmlFinal += `
+            <div class="fc-agenda-grupo">
+                <div class="fc-agenda-grupo-header" data-grupo-id="${chave}">
+                    <div class="info-principal">
+                        <span class="icone-grupo"><i class="fas fa-layer-group"></i></span>
+                        <div>
+                            <p class="descricao-grupo">${descricaoGrupo}</p>
+                        </div>
+                    </div>
+                    <div class="resumo-grupo">
+                        <span>${totalParcelas} parcelas</span>
+                        <span class="total-grupo">${formatCurrency(valorTotalGrupo)}</span>
+                        <span class="toggle-icon"><i class="fas fa-chevron-down"></i></span>
+                    </div>
+                </div>
+                <div class="fc-agenda-parcelas-lista" id="lista-${chave}">
+                    ${itensDoGrupo.sort((a, b) => new Date(a.data_vencimento) - new Date(b.data_vencimento)).map(c => {
+                        const hoje = new Date(); hoje.setHours(0,0,0,0);
+                        const vencimento = new Date(c.data_vencimento.split('T')[0] + 'T00:00:00');
+                        const isAtrasado = vencimento < hoje;
+                        const tipoClasse = c.tipo === 'A_PAGAR' ? 'pagar' : 'receber';
+                        return `
+                        <div class="fc-agenda-card ${tipoClasse} ${isAtrasado ? 'atrasado' : ''}" style="box-shadow: none; border: 1px solid #eee; margin-top: -1px;">
+                            <div class="header">
+                                <div class="info">
+                                    <div class="descricao">${c.descricao}</div>
+                                    <div class="vencimento">Vence em: ${vencimento.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</div>
+                                </div>
+                                <div class="valor">${formatCurrency(c.valor)}</div>
+                            </div>
+                            <!-- ADICIONADO: Footer com botão de baixa individual -->
+                            <div class="footer">
+                                <span class="favorecido">Favorecido: ${c.nome_favorecido || '-'}</span>
+                                <button class="fc-btn fc-btn-primario btn-dar-baixa ${podeBaixar ? '' : 'fc-btn-disabled'}" data-id="${c.id}">
+                                    <i class="fas fa-check"></i> Baixar
+                                </button>
+                            </div>
+                        </div>`
+                    }).join('')}
+                </div>
+            </div>`;
+        }
+    }
+
+    container.innerHTML = htmlFinal;
+
+    // 3. ADICIONA LISTENERS DE EVENTO (SIMPLIFICADO)
+    
+    // Este listener agora funciona para TODOS os botões de baixa, sejam avulsos ou de parcelas.
     container.querySelectorAll('.btn-dar-baixa').forEach(btn => {
-        if(podeBaixar) {
+        if (!btn.classList.contains('fc-btn-disabled')) {
             btn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Impede que o clique no botão também feche/abra o acordeão.
                 const id = e.currentTarget.dataset.id;
                 const conta = contasAgendadasCache.find(c => c.id == id);
-                abrirModalBaixa(conta);
+                if (conta) abrirModalBaixa(conta);
             });
-        } else {
-            btn.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para dar baixa em contas.', 'aviso'));
         }
+    });
+
+    // Listener para expandir/recolher grupos
+    container.querySelectorAll('.fc-agenda-grupo-header').forEach(header => {
+        header.addEventListener('click', () => {
+            header.classList.toggle('expandido');
+            const grupoId = header.dataset.grupoId;
+            document.getElementById(`lista-${grupoId}`).classList.toggle('expandido');
+        });
+    });
+    
+    // Listener genérico para botões desabilitados
+    container.querySelectorAll('.fc-btn-disabled').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            mostrarPopupFinanceiro('Você não tem permissão para realizar esta ação.', 'aviso');
+        });
     });
 }
 
@@ -3086,16 +3400,24 @@ function renderizarNotificacoes(notificacoes) {
 }
 
 async function marcarComoLida(id) {
+    const item = document.querySelector(`.fc-notificacao-item[data-id="${id}"]`);
+    if (!item || !item.classList.contains('nao-lida')) return; // Não faz nada se já foi lida
+
     try {
         await fetchFinanceiroAPI(`/notificacoes/${id}/marcar-como-lida`, { method: 'POST' });
         
-        // Atualiza a interface sem precisar de uma nova chamada à API
-        const item = document.querySelector(`.fc-notificacao-item[data-id="${id}"]`);
-        item?.classList.remove('nao-lida');
+        item.classList.remove('nao-lida');
         
         // Atualiza o contador do badge
-        atualizarBadgesHeader(); 
-
+        const badge = document.getElementById('badgeNotificacoes');
+        if (badge && !badge.classList.contains('hidden')) {
+            let count = parseInt(badge.textContent, 10) - 1;
+            if (count > 0) {
+                badge.textContent = count;
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
     } catch(e) {
         mostrarPopupFinanceiro('Erro ao marcar notificação.', 'erro');
     }
@@ -3105,9 +3427,10 @@ async function marcarTodasComoLidas() {
     try {
         await fetchFinanceiroAPI('/notificacoes/marcar-todas-como-lidas', { method: 'POST' });
         
-        // CORREÇÃO: Recarrega a lista para mostrar o novo estado
-        carregarNotificacoes(); 
-        
+        // Remove a classe de todas e esconde o badge
+        document.querySelectorAll('.fc-notificacao-item.nao-lida').forEach(item => {
+            item.classList.remove('nao-lida');
+        });
         const badge = document.getElementById('badgeNotificacoes');
         if (badge) badge.classList.add('hidden');
     } catch(e) {
@@ -3243,45 +3566,58 @@ function gerarPreviaLote() {
 async function gerarEconfirmarLote(event) {
     event.preventDefault();
     
-    // A nova função centraliza a coleta de dados de ambos os métodos
-    const parcelasCalculadas = coletarDadosDoLote();
-    
-    if (!parcelasCalculadas || parcelasCalculadas.length === 0) {
-        mostrarPopupFinanceiro('Por favor, defina as parcelas corretamente.', 'aviso');
-        return;
-    }
-    
-    // No método manual, o valor total é a soma das parcelas
-    const valorTotalManual = parcelasCalculadas.reduce((acc, p) => acc + p.valor, 0);
-    
-    const payload = {
-        descricao_lote: document.getElementById('lote_descricao').value,
-        valor_total: parseFloat(document.getElementById('lote_valor_total')?.value) || valorTotalManual,
-        parcelas: parcelasCalculadas.map(p => ({
-            descricao: `${document.getElementById('lote_descricao').value} - Parcela ${p.parcela}/${parcelasCalculadas.length}`,
-            valor: p.valor,
-            data_vencimento: p.data_vencimento.toISOString().split('T')[0],
-            id_categoria: parseInt(document.getElementById('lote_categoria').value),
-            id_contato: parseInt(document.getElementById('lote_favorecido_id').value) || null,
-            tipo: document.getElementById('lote_tipo').value
-        }))
-    };
-
-    if (!payload.descricao_lote || !payload.parcelas[0].id_categoria) {
-        mostrarPopupFinanceiro('Descrição e Categoria são obrigatórios para o lote.', 'aviso');
-        return;
-    }
-
-    const confirmado = await mostrarPopupConfirmacao(`Você confirma o agendamento de ${payload.parcelas.length} parcelas para "${payload.descricao_lote}"?`);
-    if (!confirmado) return;
+    const form = event.target;
+    const btnSalvar = form.closest('.fc-modal-content').querySelector('#btnSalvarAgendamento');
+    if (!btnSalvar) return;
+    const textoOriginalBtn = btnSalvar.innerHTML;
 
     try {
+        const parcelasCalculadas = coletarDadosDoLote();
+        
+        if (!parcelasCalculadas || parcelasCalculadas.length === 0) {
+            mostrarPopupFinanceiro('Por favor, defina as parcelas corretamente.', 'aviso');
+            return;
+        }
+        
+        const valorTotalManual = parcelasCalculadas.reduce((acc, p) => acc + p.valor, 0);
+        
+        const payload = {
+            descricao_lote: document.getElementById('lote_descricao').value,
+            valor_total: parseFloat(document.getElementById('lote_valor_total')?.value) || valorTotalManual,
+            parcelas: parcelasCalculadas.map(p => ({
+                descricao: `${document.getElementById('lote_descricao').value} - Parcela ${p.parcela}/${parcelasCalculadas.length}`,
+                valor: p.valor,
+                data_vencimento: p.data_vencimento.toISOString().split('T')[0],
+                id_categoria: parseInt(document.getElementById('lote_categoria').value),
+                id_contato: parseInt(document.getElementById('lote_favorecido_id').value) || null,
+                tipo: document.getElementById('lote_tipo').value
+            }))
+        };
+
+        if (!payload.descricao_lote || !payload.parcelas[0].id_categoria) {
+            mostrarPopupFinanceiro('Descrição e Categoria são obrigatórios para o lote.', 'aviso');
+            return;
+        }
+
+        const confirmado = await mostrarPopupConfirmacao(`Você confirma o agendamento de ${payload.parcelas.length} parcelas para "${payload.descricao_lote}"?`);
+        if (!confirmado) return;
+
+        btnSalvar.disabled = true;
+        btnSalvar.innerHTML = `<i class="fas fa-spinner fc-btn-spinner"></i> Agendando...`;
+
         await fetchFinanceiroAPI('/contas-agendadas/lote', { method: 'POST', body: JSON.stringify(payload) });
         mostrarPopupFinanceiro('Parcelas agendadas com sucesso!', 'sucesso');
         fecharModal();
         carregarContasAgendadas();
-        atualizarBadgesHeader(); // Atualiza os badges
-    } catch (e) { /* erro já tratado */ }
+        atualizarBadgesHeader();
+    } catch (e) { 
+        // erro já tratado pela fetchFinanceiroAPI
+    } finally {
+        if (btnSalvar) {
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = textoOriginalBtn;
+        }
+    }
 }
 
 // Função para adicionar uma nova linha na grade de parcelas manuais

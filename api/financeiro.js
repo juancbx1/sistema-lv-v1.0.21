@@ -394,6 +394,7 @@ router.put('/categorias/:id', async (req, res) => {
     }
 });
 
+
 // --- ROTAS PARA LANÇAMENTOS (FERRAMENTA 2) ---
 router.get('/lancamentos', async (req, res) => {
     if (!req.permissoesUsuario.includes('visualizar-financeiro')) {
@@ -558,17 +559,13 @@ router.post('/lancamentos', async (req, res) => {
 
 // --- ROTAS PARA CONTATOS (CLIENTES/FORNECEDORES) ---
 router.get('/contatos', async (req, res) => {
-    // 1. A verificação de permissão é mantida, pois é uma boa prática de segurança.
+    // A verificação de permissão é mantida, pois é uma boa prática de segurança.
     if (!req.permissoesUsuario.includes('visualizar-financeiro')) {
         return res.status(403).json({ error: 'Permissão negada.' });
     }
     
-    // 2. Extrai o termo de busca da query string (ex: /api/financeiro/contatos?q=NomeDoCliente)
     const termoBusca = req.query.q;
     
-    // 3. NOVA LÓGICA: Se o termo de busca não for enviado ou estiver vazio,
-    // retorna imediatamente uma lista vazia. Isso é o ideal para o autocomplete,
-    // pois evita que ele mostre sugestões antes de o usuário digitar algo.
     if (!termoBusca || termoBusca.trim() === '') {
         return res.status(200).json([]); 
     }
@@ -577,24 +574,18 @@ router.get('/contatos', async (req, res) => {
     try {
         dbClient = await pool.connect();
 
-        // 4. LÓGICA SIMPLIFICADA: A query agora é única e focada apenas na busca.
-        // - `ILIKE`: Busca sem diferenciar maiúsculas/minúsculas.
-        // - `%${termo}%`: Procura o termo em qualquer parte do nome.
-        // - `ativo = true`: Garante que apenas contatos ativos sejam sugeridos.
-        const query = 'SELECT id, nome FROM fc_contatos WHERE nome ILIKE $1 AND ativo = true ORDER BY nome LIMIT 10';
+        // Alteramos a query para selecionar também a coluna 'tipo'
+        const query = 'SELECT id, nome, tipo FROM fc_contatos WHERE nome ILIKE $1 AND ativo = true ORDER BY nome LIMIT 10';
         const params = [`%${termoBusca.trim()}%`];
 
         const result = await dbClient.query(query, params);
         
-        // Retorna os resultados encontrados para o frontend.
         res.status(200).json(result.rows);
 
     } catch (error) {
-        // O tratamento de erros é mantido, registrando o erro no console do servidor.
         console.error('[API GET /contatos] Erro na execução da query:', error);
         res.status(500).json({ error: 'Erro interno ao buscar favorecidos.', details: error.message });
     } finally {
-        // Garante que a conexão com o banco de dados seja sempre liberada.
         if (dbClient) dbClient.release();
     }
 });
@@ -721,7 +712,7 @@ router.put('/lancamentos/:id', async (req, res) => {
     }
 
     const { id } = req.params;
-    const novosDados = req.body;
+    const novosDados = req.body; // O corpo agora contém apenas os novos dados do lançamento
     
     let dbClient;
     try {
@@ -735,15 +726,17 @@ router.put('/lancamentos/:id', async (req, res) => {
         }
         
         const lancamentoOriginal = lancamentoOriginalRes.rows[0];
-        const agora = new Date();
-        const dataCriacao = new Date(lancamentoOriginal.criado_em);
-        const diffHoras = (agora - dataCriacao) / (1000 * 60 * 60);
-
-        // Se o usuário for um admin/gerente, ele sempre solicita aprovação.
-        // Se for um usuário comum, ele pode editar diretamente dentro do prazo.
-        if (diffHoras <= 1 && !req.permissoesUsuario.includes('aprovar-alteracao-financeira')) {
+        
+        if (req.permissoesUsuario.includes('aprovar-alteracao-financeira')) {
+            // FLUXO DO ADMIN: Edita diretamente
+            console.log(`[Lançamento #${id}] Edição direta por usuário com permissão: ${req.usuarioLogado.nome}`);
             const { valor, data_transacao, id_categoria, id_conta_bancaria, descricao, id_contato } = novosDados;
-            const updatedResult = await dbClient.query(`UPDATE fc_lancamentos SET valor=$1, data_transacao=$2, id_categoria=$3, id_conta_bancaria=$4, descricao=$5, id_contato=$6 WHERE id = $7 RETURNING *;`, [valor, data_transacao, id_categoria, id_conta_bancaria, descricao, id_contato, id]);
+            
+            const queryUpdate = `
+                UPDATE fc_lancamentos 
+                SET valor=$1, data_transacao=$2, id_categoria=$3, id_conta_bancaria=$4, descricao=$5, id_contato=$6, status_edicao='OK', motivo_rejeicao=NULL 
+                WHERE id = $7 RETURNING *;`;
+            const updatedResult = await dbClient.query(queryUpdate, [valor, data_transacao, id_categoria, id_conta_bancaria, descricao, id_contato, id]);
             
             await registrarLog(dbClient, req.usuarioLogado.id, req.usuarioLogado.nome, 'EDICAO_DIRETA_LANCAMENTO', { antes: lancamentoOriginal, depois: updatedResult.rows[0] });
             
@@ -753,8 +746,15 @@ router.put('/lancamentos/:id', async (req, res) => {
                 lancamento: updatedResult.rows[0]
             });
         } else {
-            const solRes = await dbClient.query(`INSERT INTO fc_solicitacoes_alteracao (id_lancamento, tipo_solicitacao, dados_antigos, dados_novos, id_usuario_solicitante) VALUES ($1, 'EDICAO', $2, $3, $4) RETURNING *;`, [id, JSON.stringify(lancamentoOriginal), JSON.stringify(novosDados), req.usuarioLogado.id]);
-            await dbClient.query(`UPDATE fc_lancamentos SET status_edicao = 'PENDENTE_APROVACAO' WHERE id = $1`, [id]);
+            // FLUXO DO USUÁRIO COMUM: Sempre solicita aprovação
+            console.log(`[Lançamento #${id}] Solicitação de edição por usuário comum: ${req.usuarioLogado.nome}`);
+            const solRes = await dbClient.query(
+                `INSERT INTO fc_solicitacoes_alteracao 
+                    (id_lancamento, tipo_solicitacao, dados_antigos, dados_novos, id_usuario_solicitante) 
+                 VALUES ($1, 'EDICAO', $2, $3, $4) RETURNING *;`, 
+                [id, JSON.stringify(lancamentoOriginal), JSON.stringify(novosDados), req.usuarioLogado.id]
+            );
+            await dbClient.query(`UPDATE fc_lancamentos SET status_edicao = 'PENDENTE_APROVACAO', motivo_rejeicao=NULL WHERE id = $1`, [id]);
             
             await registrarLog(dbClient, req.usuarioLogado.id, req.usuarioLogado.nome, 'SOLICITACAO_EDICAO_LANCAMENTO', { id_lancamento: id, solicitacao: solRes.rows[0] });
             
@@ -772,40 +772,59 @@ router.put('/lancamentos/:id', async (req, res) => {
 
 router.post('/lancamentos/:id/solicitar-exclusao', async (req, res) => {
     if (!req.permissoesUsuario.includes('editar-transacao')) {
-        return res.status(403).json({ error: 'Permissão negada.' });
+        return res.status(403).json({ error: 'Permissão negada para solicitar exclusão.' });
     }
     const { id } = req.params;
+    const { justificativa } = req.body;
+
     let dbClient;
     try {
         dbClient = await pool.connect();
         await dbClient.query('BEGIN');
 
         const lancamentoOriginalRes = await dbClient.query('SELECT * FROM fc_lancamentos WHERE id = $1 FOR UPDATE', [id]);
-        if (lancamentoOriginalRes.rows.length === 0) throw new Error('Lançamento não encontrado.');
+        if (lancamentoOriginalRes.rows.length === 0) {
+            await dbClient.query('ROLLBACK');
+            return res.status(404).json({ error: 'Lançamento não encontrado.' });
+        }
         
         const lancamentoOriginal = lancamentoOriginalRes.rows[0];
-        const agora = new Date();
-        const dataCriacao = new Date(lancamentoOriginal.criado_em);
-        const diffHoras = (agora - dataCriacao) / (1000 * 60 * 60);
 
-        if (diffHoras <= 1 && !req.permissoesUsuario.includes('aprovar-alteracao-financeira')) {
+        if (req.permissoesUsuario.includes('aprovar-alteracao-financeira')) {
+            console.log(`[ADMIN FLOW] Tentando excluir diretamente o lançamento #${id}...`);
             await registrarLog(dbClient, req.usuarioLogado.id, req.usuarioLogado.nome, 'EXCLUSAO_DIRETA_LANCAMENTO', { lancamento: lancamentoOriginal });
+
+            // PASSO 1: Desvincular de contas agendadas (se houver vínculo)
+            await dbClient.query("UPDATE fc_contas_agendadas SET id_lancamento_efetivado = NULL, status = 'PENDENTE' WHERE id_lancamento_efetivado = $1", [id]);
+            
+            // PASSO 2: Deletar itens filhos (rateio)
+            await dbClient.query('DELETE FROM fc_lancamento_itens WHERE id_lancamento_pai = $1', [id]);
+            
+            // PASSO 3: Deletar o lançamento pai
             await dbClient.query('DELETE FROM fc_lancamentos WHERE id = $1', [id]);
+            
             await dbClient.query('COMMIT');
-            return res.status(200).json({ message: 'Lançamento excluído com sucesso.' });
+            return res.status(200).json({ message: 'Lançamento excluído com sucesso. A conta agendada original, se existir, voltou a ficar pendente.' });
         } else {
-            const solRes = await dbClient.query(`INSERT INTO fc_solicitacoes_alteracao (id_lancamento, tipo_solicitacao, dados_antigos, id_usuario_solicitante) VALUES ($1, 'EXCLUSAO', $2, $3) RETURNING *;`, [id, JSON.stringify(lancamentoOriginal), req.usuarioLogado.id]);
-            await dbClient.query(`UPDATE fc_lancamentos SET status_edicao = 'PENDENTE_EXCLUSAO' WHERE id = $1`, [id]);
-            
+            // FLUXO DO USUÁRIO COMUM (sem alteração)
+            console.log(`[USER FLOW] Solicitação de exclusão para o lançamento #${id}...`);
+            if (!justificativa || justificativa.trim() === '') {
+                await dbClient.query('ROLLBACK');
+                return res.status(400).json({ error: 'A justificativa é obrigatória para solicitar a exclusão.' });
+            }
+            await dbClient.query("UPDATE fc_lancamentos SET status_edicao = 'PENDENTE_EXCLUSAO', motivo_rejeicao = NULL WHERE id = $1", [id]);
+            const solRes = await dbClient.query(
+                `INSERT INTO fc_solicitacoes_alteracao (id_lancamento, tipo_solicitacao, dados_antigos, id_usuario_solicitante, justificativa_solicitante) VALUES ($1, 'EXCLUSAO', $2, $3, $4) RETURNING *;`, 
+                [id, JSON.stringify(lancamentoOriginal), req.usuarioLogado.id, justificativa.trim()]
+            );
             await registrarLog(dbClient, req.usuarioLogado.id, req.usuarioLogado.nome, 'SOLICITACAO_EXCLUSAO_LANCAMENTO', { id_lancamento: id, solicitacao: solRes.rows[0] });
-            
             await dbClient.query('COMMIT');
             return res.status(202).json({ message: 'Solicitação de exclusão enviada para aprovação.' });
         }
     } catch (error) {
         if (dbClient) await dbClient.query('ROLLBACK');
-        console.error("[API /solicitar-exclusao] Erro:", error);
-        res.status(500).json({ error: 'Erro ao processar solicitação de exclusão.', details: error.message });
+        console.error(`[API /solicitar-exclusao] ERRO CRÍTICO no processamento da exclusão do lançamento #${id}:`, error);
+        res.status(500).json({ error: 'Erro interno ao processar solicitação de exclusão.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }
@@ -1117,15 +1136,16 @@ router.post('/aprovacoes/:id/aprovar', async (req, res) => {
     }
     const { id } = req.params;
     let dbClient;
+    let idLancamento;
+
     try {
         dbClient = await pool.connect();
         await dbClient.query('BEGIN');
 
         const solRes = await dbClient.query("SELECT * FROM fc_solicitacoes_alteracao WHERE id = $1 AND status = 'PENDENTE' FOR UPDATE", [id]);
-        if (solRes.rows.length === 0) throw new Error('Solicitação não encontrada ou já processada.');
+        if (solRes.rows.length === 0) throw new Error(`Solicitação #${id} não encontrada ou já processada.`);
         const solicitacao = solRes.rows[0];
-
-        await dbClient.query("UPDATE fc_solicitacoes_alteracao SET status = 'APROVADO', id_usuario_aprovador = $1, data_decisao = NOW() WHERE id = $2", [req.usuarioLogado.id, id]);
+        idLancamento = solicitacao.id_lancamento;
 
         let acaoLog = '';
         let mensagemNotificacao = '';
@@ -1133,15 +1153,30 @@ router.post('/aprovacoes/:id/aprovar', async (req, res) => {
         if (solicitacao.tipo_solicitacao === 'EDICAO') {
             acaoLog = 'APROVACAO_EDICAO';
             const { valor, data_transacao, id_categoria, id_conta_bancaria, descricao, id_contato } = solicitacao.dados_novos;
-            await dbClient.query(`UPDATE fc_lancamentos SET valor=$1, data_transacao=$2, id_categoria=$3, id_conta_bancaria=$4, descricao=$5, id_contato=$6, status_edicao='EDITADO_APROVADO' WHERE id = $7;`, [valor, data_transacao, id_categoria, id_conta_bancaria, descricao, id_contato, solicitacao.id_lancamento]);
-            mensagemNotificacao = `Sua edição para o lançamento <strong>#${solicitacao.id_lancamento} ("${solicitacao.dados_antigos.descricao || 'sem descrição'}")</strong> foi APROVADA.`;
+            await dbClient.query(
+                `UPDATE fc_lancamentos SET valor=$1, data_transacao=$2, id_categoria=$3, id_conta_bancaria=$4, descricao=$5, id_contato=$6, status_edicao='EDITADO_APROVADO', motivo_rejeicao=NULL WHERE id = $7;`, 
+                [valor, data_transacao, id_categoria, id_conta_bancaria, descricao, id_contato, idLancamento]
+            );
+            mensagemNotificacao = `Sua edição para o lançamento <strong>#${idLancamento}</strong> foi APROVADA.`;
         
         } else if (solicitacao.tipo_solicitacao === 'EXCLUSAO') {
             acaoLog = 'APROVACAO_EXCLUSAO';
-            await dbClient.query('DELETE FROM fc_lancamentos WHERE id = $1', [solicitacao.id_lancamento]);
-            mensagemNotificacao = `Sua solicitação para excluir o lançamento <strong>#${solicitacao.id_lancamento} ("${solicitacao.dados_antigos.descricao || 'sem descrição'}")</strong> foi APROVADA.`;
+            
+            // PASSO 1: Desvincular de contas agendadas (se houver vínculo)
+            await dbClient.query("UPDATE fc_contas_agendadas SET id_lancamento_efetivado = NULL, status = 'PENDENTE' WHERE id_lancamento_efetivado = $1", [idLancamento]);
+
+            // PASSO 2: Deletar os itens filhos (rateio)
+            await dbClient.query('DELETE FROM fc_lancamento_itens WHERE id_lancamento_pai = $1', [idLancamento]);
+            
+            // PASSO 3: Deletar o lançamento pai
+            await dbClient.query('DELETE FROM fc_lancamentos WHERE id = $1', [idLancamento]);
+            
+            mensagemNotificacao = `Sua solicitação para excluir o lançamento <strong>#${idLancamento}</strong> foi APROVADA.`;
         }
 
+        // Atualiza a solicitação para APROVADO
+        await dbClient.query("UPDATE fc_solicitacoes_alteracao SET status = 'APROVADO', id_usuario_aprovador = $1, data_decisao = NOW() WHERE id = $2", [req.usuarioLogado.id, id]);
+        
         await dbClient.query("INSERT INTO fc_notificacoes (id_usuario_destino, tipo, mensagem) VALUES ($1, 'SUCESSO', $2);", [solicitacao.id_usuario_solicitante, mensagemNotificacao]);
         
         await registrarLog(dbClient, req.usuarioLogado.id, req.usuarioLogado.nome, acaoLog, { solicitacao });
@@ -1150,8 +1185,8 @@ router.post('/aprovacoes/:id/aprovar', async (req, res) => {
         res.status(200).json({ message: 'Solicitação aprovada com sucesso.' });
     } catch (error) {
         if (dbClient) await dbClient.query('ROLLBACK');
-        console.error("[API /aprovacoes/aprovar] Erro:", error);
-        res.status(500).json({ error: 'Erro ao aprovar solicitação.', details: error.message });
+        console.error(`[API /aprovacoes/aprovar] ERRO CRÍTICO ao aprovar solicitação #${id} para lançamento #${idLancamento}:`, error);
+        res.status(500).json({ error: 'Erro interno ao aprovar solicitação.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }
@@ -1177,10 +1212,17 @@ router.post('/aprovacoes/:id/rejeitar', async (req, res) => {
         if (solRes.rows.length === 0) throw new Error('Solicitação não encontrada ou já processada.');
         const solicitacao = solRes.rows[0];
 
-        const novoStatusLancamento = solicitacao.tipo_solicitacao === 'EDICAO' ? 'EDICAO_REJEITADA' : 'OK';
-        await dbClient.query("UPDATE fc_lancamentos SET status_edicao = $1 WHERE id = $2", [novoStatusLancamento, solicitacao.id_lancamento]);
+        // Atualiza o lançamento para o status 'EDICAO_REJEITADA' e salva o motivo da rejeição
+        await dbClient.query(
+            "UPDATE fc_lancamentos SET status_edicao = 'EDICAO_REJEITADA', motivo_rejeicao = $1 WHERE id = $2", 
+            [motivo.trim(), solicitacao.id_lancamento]
+        );
 
-        await dbClient.query("UPDATE fc_solicitacoes_alteracao SET status = 'REJEITADO', id_usuario_aprovador = $1, motivo_rejeicao = $2, data_decisao = NOW() WHERE id = $3", [req.usuarioLogado.id, motivo.trim(), id]);
+        // Atualiza a solicitação para 'REJEITADO'
+        await dbClient.query(
+            "UPDATE fc_solicitacoes_alteracao SET status = 'REJEITADO', id_usuario_aprovador = $1, motivo_rejeicao = $2, data_decisao = NOW() WHERE id = $3", 
+            [req.usuarioLogado.id, motivo.trim(), id]
+        );
         
         const mensagemNotificacao = `Sua solicitação para alterar o lançamento <strong>#${solicitacao.id_lancamento} ("${solicitacao.dados_antigos.descricao || 'sem descrição'}")</strong> foi REJEITADA. Motivo: ${motivo.trim()}`;
         await dbClient.query("INSERT INTO fc_notificacoes (id_usuario_destino, tipo, mensagem) VALUES ($1, 'REJEICAO', $2);", [solicitacao.id_usuario_solicitante, mensagemNotificacao]);

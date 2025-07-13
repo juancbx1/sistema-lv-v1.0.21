@@ -287,16 +287,96 @@ body {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 }
-.fc-saldos-grid {
-    display: grid;
-    grid-template-columns: 1fr;
+
+/* Card de Resumo Simples (apenas o total) */
+.fc-resumo-total-card {
+    background-color: var(--fc-cor-fundo-card);
+    border: 1px solid var(--fc-cor-borda);
+    border-radius: var(--fc-raio-borda);
+    padding: 20px 25px;
+    text-align: center;
 }
-.fc-saldo-consolidado-card { background-color: #f8f9fa; border-radius: var(--fc-raio-borda); padding: 20px 25px; border: 1px solid var(--fc-cor-borda); }
-.fc-saldo-consolidado-card .total-label { font-size: 1rem; font-weight: 600; color: var(--fc-cor-texto-secundario); text-transform: uppercase; margin: 0; }
-.fc-saldo-consolidado-card .total-valor { font-size: 2.5rem; font-weight: 700; color: var(--fc-cor-primaria); margin-bottom: 15px; line-height: 1.2; }
-.fc-saldo-lista { list-style: none; padding-left: 0; margin: 0; }
-.fc-saldo-lista-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; font-size: 0.95rem; border-top: 1px solid var(--fc-cor-borda); }
-.fc-saldo-lista-item .nome-conta { font-weight: 500; }
+.fc-resumo-total-card .total-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--fc-cor-texto-secundario);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 5px;
+}
+.fc-resumo-total-card .total-valor {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--fc-cor-texto-principal);
+    line-height: 1.2;
+}
+
+/* Container para a grade de cartões de conta */
+.fc-contas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+}
+
+/* Estilo base para cada "cartão de conta" */
+.fc-conta-card {
+    color: #fff;
+    border-radius: 12px; /* Bordas mais arredondadas para parecer um cartão */
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 160px; /* Altura fixa para todos os cartões */
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+.fc-conta-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+/* Nome da Conta (ex: Conta Corrente) */
+.fc-conta-card .nome-conta {
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+/* Informações secundárias (Banco) */
+.fc-conta-card .info-banco {
+    font-size: 0.85rem;
+    opacity: 0.8;
+}
+
+/* Saldo da conta, posicionado no final */
+.fc-conta-card .saldo-conta {
+    font-size: 1.7rem;
+    font-weight: 700;
+    text-align: right;
+    letter-spacing: -0.5px;
+}
+
+/* Ícone decorativo no canto */
+.fc-conta-card::after {
+    content: '\f1f0'; /* Ícone de "wifi" do FontAwesome (pode ser \f09d para cartão) */
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    font-size: 1.5rem;
+    opacity: 0.5;
+}
+
+/* Paleta de cores para os cartões */
+.fc-conta-card.cor-1 { background: linear-gradient(135deg, #485461 0%, #28313b 100%); }
+.fc-conta-card.cor-2 { background: linear-gradient(135deg, #6c5ce7 0%, #4834d4 100%); }
+.fc-conta-card.cor-3 { background: linear-gradient(135deg, #1dd1a1 0%, #10ac84 100%); } /* Um verde diferente */
+.fc-conta-card.cor-4 { background: linear-gradient(135deg, #54a0ff 0%, #2e86de 100%); } /* Um azul diferente */
+.fc-conta-card.cor-5 { background: linear-gradient(135deg, #ff9f43 0%, #f39c12 100%); } /* Um laranja diferente */
+
+
 .fc-alerta-card { display: flex; flex-direction: column; justify-content: space-between; background-color: var(--fc-cor-fundo-card); border-radius: var(--fc-raio-borda); padding: 20px; box-shadow: var(--fc-sombra-padrao); border-left: 5px solid; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; text-decoration: none; color: inherit; }
 .fc-alerta-card:hover { transform: translateY(-5px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); }
 .fc-alerta-card .titulo { font-size: 1rem; font-weight: 700; text-transform: uppercase; display: flex; align-items: center; gap: 10px; }
@@ -360,6 +440,21 @@ body {
 .fc-aprovacao-card .dados-bloco .valor-antigo { text-decoration: line-through; color: #999; font-size: 0.9em; margin-left: 5px; }
 .fc-aprovacao-card .acoes-aprovacao { padding: 15px; border-top: 1px solid var(--fc-cor-borda); display: flex; justify-content: flex-end; gap: 10px; }
 
+/* Bloco para exibir a justificativa na tela de aprovação */
+.justificativa-solicitante {
+    padding: 10px 15px;
+    background-color: #fcf8e3; /* Um amarelo bem claro */
+    border-bottom: 1px solid var(--fc-cor-borda);
+    font-size: 0.9rem;
+}
+.justificativa-solicitante strong {
+    color: #8a6d3b;
+}
+.justificativa-solicitante p {
+    margin: 5px 0 0 0;
+    font-style: italic;
+}
+
 .fc-btn-atualizar {
     background-color: transparent;
     color: var(--fc-cor-primaria);
@@ -383,6 +478,93 @@ body {
     animation: fc-spin 1.2s linear infinite;
 }
 @keyframes fc-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* ESTILOS PARA AGENDA AGRUPADA */
+
+/* Container para um grupo de parcelas (header + lista) */
+.fc-agenda-grupo {
+    background-color: #fff;
+    border-radius: var(--fc-raio-borda);
+    margin-bottom: 15px;
+    box-shadow: var(--fc-sombra-padrao);
+    border: 1px solid var(--fc-cor-borda);
+}
+
+/* Header do grupo (o card mestre clicável) */
+.fc-agenda-grupo-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    gap: 15px; /* Adiciona um espaço entre os itens */
+}
+.fc-agenda-grupo-header:hover {
+    background-color: #f8f9fa;
+}
+
+.fc-agenda-grupo-header .info-principal {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    min-width: 0; 
+}
+
+.fc-agenda-grupo-header .icone-grupo {
+    font-size: 1.5rem;
+    color: var(--fc-cor-texto-secundario);
+}
+.fc-agenda-grupo-header .descricao-grupo {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.fc-agenda-grupo-header .resumo-grupo {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    font-size: 0.9rem;
+    color: var(--fc-cor-texto-secundario);
+    flex-shrink: 0; /* Impede que este elemento seja esmagado */
+}
+
+.fc-agenda-grupo-header .total-grupo {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: #e74c3c;;
+}
+
+.fc-agenda-grupo-header .toggle-icon {
+    font-size: 1rem;
+    color: var(--fc-cor-primaria);
+    transition: transform 0.3s ease;
+}
+.fc-agenda-grupo-header.expandido .toggle-icon {
+    transform: rotate(180deg);
+}
+
+
+/* Container da lista de parcelas (começa oculto) */
+.fc-agenda-parcelas-lista {
+    padding: 0 15px 15px 15px;
+    border-top: 1px solid var(--fc-cor-borda);
+    background-color: #fdfdfd;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease-in-out;
+}
+.fc-agenda-parcelas-lista.expandido {
+    max-height: 600px; /* Altura máxima da lista, pode ajustar */
+    overflow-y: auto;
+}
+
+/* Ações para o grupo (Baixa em lote) */
+.fc-agenda-grupo-acoes {
+    padding-bottom: 15px;
+    display: flex;
+    justify-content: flex-end;
+}
 
 
 /* ==========================================================================
@@ -437,6 +619,19 @@ body {
 .fc-btn-outline { background-color: transparent; color: var(--fc-cor-primaria); border: 1px solid var(--fc-cor-primaria); }
 .fc-btn-outline:hover { background-color: var(--fc-cor-primaria); color: #fff; }
 .fc-btn-disabled { background-color: #e9ecef !important; color: #adb5bd !important; border-color: #dee2e6 !important; cursor: not-allowed !important; opacity: 0.8; }
+/* Novo: Estilo para o spinner dentro do botão */
+.fc-btn .fc-btn-spinner {
+    animation: fc-spin 1s linear infinite;
+}
+
+/* Novo: Garante que o botão desabilitado com spinner mantenha a aparência correta */
+.fc-btn:disabled {
+    background-color: #e9ecef !important;
+    color: #adb5bd !important;
+    border-color: #dee2e6 !important;
+    cursor: not-allowed !important;
+    opacity: 0.8;
+}
 .fc-fab {
     width: 60px;
     height: 60px;
@@ -489,11 +684,51 @@ body {
     box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.5); 
     padding:10px;
 }
-.fc-modal-content .fc-section-title { padding: 20px 25px 0 25px; margin-bottom: 15px; flex-shrink: 0; }
-.fc-modal-body { flex-grow: 1; overflow-y: auto; padding: 0 25px 20px 25px; }
-.fc-modal-footer { display: flex; justify-content: center; padding: 15px 25px; gap: 10px; flex-shrink: 0; background-color: #f8f9fa; border-top: 1px solid var(--fc-cor-borda); }
-.fc-modal-close { position: absolute; top: 15px; right: 15px; width: 32px; height: 32px; border-radius: 50%; background-color: transparent; color: var(--fc-cor-texto-secundario); border: none; cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; z-index: 10; transition: background-color 0.2s, color 0.2s; }
-.fc-modal-close:hover { background-color: #f0f3f5; color: var(--fc-cor-despesa); }
+.fc-modal-content .fc-section-title {
+    padding: 20px 25px 0 25px; /* Espaçamento do título */
+    margin-bottom: 15px;      /* Espaço abaixo do título */
+    flex-shrink: 0;           /* Impede que o header encolha */
+}
+.fc-modal-close { 
+    position: absolute; 
+    top: 15px; 
+    right: 15px; 
+    width: 32px; 
+    height: 32px; 
+    border-radius: 50%; 
+    background-color: transparent; 
+    color: var(--fc-cor-texto-secundario); 
+    border: none; cursor: pointer; 
+    font-size: 1.2rem; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    z-index: 10; 
+    transition: background-color 0.2s, color 0.2s; 
+}
+
+.fc-modal-close:hover { 
+    background-color: #f0f3f5; 
+    color: var(--fc-cor-despesa); 
+}
+
+
+.fc-modal-body {
+    flex-grow: 1;              /* Faz o corpo ocupar todo o espaço vertical disponível */
+    overflow-y: auto;          /* Adiciona a barra de rolagem APENAS AQUI quando necessário */
+    padding: 0 25px 20px 25px; /* Espaçamento interno para o conteúdo */
+}
+
+.fc-modal-footer { 
+    display: flex; 
+    justify-content: center;   /* Centraliza os botões */
+    padding: 15px 25px;       /* Espaçamento do rodapé */
+    gap: 10px; 
+    border-top: 1px solid var(--fc-cor-borda); 
+    flex-shrink: 0;           /* Impede que o rodapé encolha */
+    background-color: #f8f9fa; /* Um leve fundo para destacar a área de ações */
+}
+
 
 /* --- Forms & Inputs --- */
 .fc-form-group { margin-bottom: 1rem; }
@@ -523,6 +758,13 @@ body {
 .fc-autocomplete-item.is-new { font-style: italic; color: var(--fc-cor-texto-secundario); display: flex; align-items: center; gap: 8px; border-top: 1px dashed var(--fc-cor-borda); }
 .fc-autocomplete-item.is-new strong { color: var(--fc-cor-texto-principal); }
 .fc-autocomplete-item.is-disabled { padding: 10px 15px; color: var(--fc-cor-texto-secundario); font-style: italic; cursor: default; }
+.fc-autocomplete-item .fc-autocomplete-tipo {
+    color: var(--fc-cor-texto-secundario);
+    font-size: 0.9em;
+    margin-left: 5px;
+    font-style: italic;
+}
+
 
 /* --- Tabelas --- */
 .fc-tabela-container { overflow-x: auto; }
@@ -769,6 +1011,14 @@ body {
 /* ==========================================================================
    9. RESPONSIVIDADE
    ========================================================================== */
+/* Media query para limitar as colunas em telas maiores que 1400px, por exemplo. */
+@media (min-width: 1400px) {
+    .fc-contas-grid {
+        /* Força a grade a ter no máximo 4 colunas */
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
 @media (max-width: 1024px) { 
     body { margin-left: 0; } 
 }
@@ -814,6 +1064,60 @@ body {
         background-color: #fff5f5;
         border-radius: var(--fc-raio-borda);
     }
+
+    /* NOVAS REGRAS PARA OS CARDS NO MOBILE */
+    .fc-contas-grid {
+        /* No mobile, voltamos para uma única coluna */
+        grid-template-columns: 1fr;
+        gap: 15px; /* Reduz o espaçamento entre os cards */
+    }
+
+    .fc-conta-card {
+        /* MUITO IMPORTANTE: Removemos a altura fixa */
+        height: auto; 
+        /* Layout de linha para alinhar tudo horizontalmente */
+        flex-direction: row; 
+        padding: 15px;
+        align-items: center; /* Centraliza verticalmente */
+    }
+
+    /* Agrupa o nome e o banco à esquerda */
+    .fc-conta-card .nome-banco-wrapper {
+        flex-grow: 1; /* Faz este grupo ocupar o espaço disponível */
+    }
+
+    .fc-conta-card .nome-conta {
+        font-size: 1rem; /* Diminui o nome da conta */
+    }
+
+    .fc-conta-card .info-banco {
+        font-size: 0.8rem; /* Diminui a info do banco */
+    }
+
+    .fc-conta-card .saldo-conta {
+        font-size: 1.2rem; /* Diminui o tamanho do saldo */
+        white-space: nowrap; /* Impede que o saldo quebre a linha */
+        text-align: right;
+        flex-shrink: 0; /* Impede que o saldo encolha */
+        margin-left: 10px;
+    }
+    
+    /* Esconde o ícone decorativo para ganhar espaço */
+    .fc-conta-card::after {
+        display: none;
+    }
+
+    .fc-agenda-grupo-header {
+        flex-direction: column; /* Empilha os itens verticalmente */
+        align-items: stretch; /* Faz os itens ocuparem a largura toda */
+    }
+
+    .fc-agenda-grupo-header .resumo-grupo {
+        justify-content: space-between; /* Espalha os itens do resumo */
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px dashed var(--fc-cor-borda);
+    }
 }
 
 @media (max-width: 480px) {
@@ -826,7 +1130,8 @@ body {
     .fc-fab { width: 55px; height: 55px; right: 15px; bottom: 15px; }
     .fc-notificacoes-painel { width: 95vw; right: 2.5vw; }
     .fc-modal-content {
-        max-width: 40vh;
+        width: 85vw;
+        max-width: 95vw; /* Garante que o modal use quase toda a tela */
         max-height: 85vh;
         padding:10px;
     }
