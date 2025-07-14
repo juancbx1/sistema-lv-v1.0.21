@@ -147,11 +147,98 @@ router.get('/me', async (req, res) => {
     }
 });
 
+router.put('/me/avatar', async (req, res) => {
+    // O middleware de autenticação deste router já deve ter verificado o token
+    // e adicionado 'req.usuarioLogado'
+    const { id: usuarioId } = req.usuarioLogado;
+    const { avatarUrl } = req.body;
+    let dbClient;
+
+    if (!avatarUrl || typeof avatarUrl !== 'string') {
+        return res.status(400).json({ error: 'A URL do avatar (avatarUrl) é obrigatória e deve ser uma string.' });
+    }
+
+    try {
+        dbClient = await pool.connect();
+
+        const queryText = `
+            UPDATE usuarios
+            SET avatar_url = $1
+            WHERE id = $2
+            RETURNING id, nome, email, avatar_url;
+        `;
+
+        const result = await dbClient.query(queryText, [avatarUrl, usuarioId]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Usuário não encontrado para atualizar.' });
+        }
+
+        res.status(200).json({
+            message: 'Avatar atualizado com sucesso!',
+            usuario: result.rows[0]
+        });
+
+    } catch (error) {
+        console.error('[API PUT /me/avatar] Erro na rota:', error);
+        res.status(500).json({ error: 'Erro interno do servidor ao atualizar o avatar.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// NOVA ROTA PUT para definir o badge em destaque do usuário
+router.put('/me/badge', async (req, res) => {
+    const { id: usuarioId } = req.usuarioLogado;
+    const { badgeId } = req.body; // Recebe o ID da conquista escolhida
+    let dbClient;
+
+    try {
+        dbClient = await pool.connect();
+
+        // Segurança (Opcional, mas recomendado): Verificar se o usuário realmente possui essa conquista
+        if (badgeId) { // Se for null, significa que o usuário quer remover o badge
+            const checkQuery = 'SELECT 1 FROM usuario_conquistas WHERE id_usuario = $1 AND id_conquista = $2';
+            const checkResult = await dbClient.query(checkQuery, [usuarioId, badgeId]);
+            if (checkResult.rowCount === 0) {
+                return res.status(403).json({ error: 'Permissão negada. Você não possui esta conquista.' });
+            }
+        }
+        
+        // Atualiza a coluna na tabela de usuários
+        const queryText = `
+            UPDATE usuarios
+            SET badge_destaque_id = $1
+            WHERE id = $2
+            RETURNING id, badge_destaque_id;
+        `;
+        const result = await dbClient.query(queryText, [badgeId, usuarioId]);
+
+        res.status(200).json({ message: 'Badge em destaque atualizado!', usuario: result.rows[0] });
+
+    } catch (error) {
+        console.error('[API PUT /me/badge] Erro na rota:', error);
+        res.status(500).json({ error: 'Erro interno ao atualizar o badge.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
 // GET /api/usuarios
 router.get('/', async (req, res) => {
     const { dbCliente } = req;
     try {
-        const result = await dbCliente.query('SELECT id, nome, nome_usuario, email, tipos, nivel, permissoes FROM usuarios ORDER BY nome ASC');
+        const query = `
+            SELECT 
+                u.id, u.nome, u.nome_usuario, u.email, u.tipos, u.nivel, u.permissoes, 
+                u.salario_fixo, u.valor_passagem_diaria, u.desconto_vt_percentual,
+                u.elegivel_pagamento, u.id_contato_financeiro,
+                c.nome AS nome_contato_financeiro
+            FROM usuarios u
+            LEFT JOIN fc_contatos c ON u.id_contato_financeiro = c.id
+            ORDER BY u.nome ASC
+        `;
+        const result = await dbCliente.query(query);
         res.status(200).json(result.rows);
     } catch (error) {
         console.error('[router/usuarios GET] Erro:', error);
@@ -169,27 +256,64 @@ router.post('/', async (req, res) => {
         if (!permissoesUsuarioAtual.includes('acesso-cadastrar-usuarios')) {
             return res.status(403).json({ error: 'Permissão negada para criar usuários' });
         }
-        const { nome, nomeUsuario, email, senha, tipos, nivel } = req.body;
+        
+        const { nome, nomeUsuario, email, senha, tipos, nivel, salario_fixo, valor_passagem_diaria, desconto_vt_percentual } = req.body;
         if (!nome || !nomeUsuario || !email || !senha || !tipos) {
             return res.status(400).json({ error: "Campos nome, nomeUsuario, email, senha e tipos são obrigatórios." });
         }
-        const senhaHash = await bcrypt.hash(senha, 10);
         
-        // As permissões individuais são salvas como um array vazio inicialmente,
-        // as permissões efetivas virão dos tipos e da função getPermissoesCompletasUsuarioDB.
-        const result = await dbCliente.query(
-            'INSERT INTO usuarios (nome, nome_usuario, email, senha, tipos, nivel, permissoes) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, nome, nome_usuario, email, tipos, nivel',
-            [nome, nomeUsuario, email, senhaHash, tipos || [], nivel || null, []] 
-        );
-        
-        let novoUsuario = result.rows[0];
-        // Calcula e adiciona as permissões completas ao usuário recém-criado antes de retornar
-        novoUsuario.permissoes = await getPermissoesCompletasUsuarioDB(dbCliente, novoUsuario.id);
+        // Inicia a transação
+        await dbCliente.query('BEGIN');
 
-        res.status(201).json(novoUsuario);
+        // 1. Cria o usuário principal
+        const senhaHash = await bcrypt.hash(senha, 10);
+        const userResult = await dbCliente.query(
+            'INSERT INTO usuarios (nome, nome_usuario, email, senha, tipos, nivel, salario_fixo, valor_passagem_diaria, desconto_vt_percentual, permissoes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id',
+            [nome, nomeUsuario, email, senhaHash, tipos, nivel, salario_fixo, valor_passagem_diaria, desconto_vt_percentual, []] 
+        );
+        const novoUsuarioId = userResult.rows[0].id;
+
+        // 2. Lida com o contato financeiro, se for um empregado
+        const ehEmpregado = tipos.includes('costureira') || tipos.includes('tiktik');
+        if (ehEmpregado) {
+            let contatoId;
+
+            // 2a. Tenta encontrar um contato existente com o mesmo nome e tipo
+            const existingContactRes = await dbCliente.query(
+                "SELECT id FROM fc_contatos WHERE nome = $1 AND tipo = 'EMPREGADO' LIMIT 1",
+                [nome]
+            );
+
+            if (existingContactRes.rows.length > 0) {
+                // Se encontrou, usa o ID existente
+                contatoId = existingContactRes.rows[0].id;
+                console.log(`[API Usuarios POST] Contato financeiro encontrado para "${nome}". Vinculando ID: ${contatoId}`);
+            } else {
+                // Se não encontrou, cria um novo contato
+                const newContactRes = await dbCliente.query(
+                    "INSERT INTO fc_contatos (nome, tipo, ativo) VALUES ($1, 'EMPREGADO', TRUE) RETURNING id",
+                    [nome]
+                );
+                contatoId = newContactRes.rows[0].id;
+                console.log(`[API Usuarios POST] Nenhum contato financeiro encontrado. Criando novo para "${nome}". ID: ${contatoId}`);
+            }
+
+            // 2b. Vincula o ID do contato (existente ou novo) ao usuário
+            await dbCliente.query(
+                "UPDATE usuarios SET id_contato_financeiro = $1 WHERE id = $2",
+                [contatoId, novoUsuarioId]
+            );
+        }
+        
+        await dbCliente.query('COMMIT');
+        
+        const finalUserRes = await dbCliente.query('SELECT * FROM usuarios WHERE id = $1', [novoUsuarioId]);
+        res.status(201).json(finalUserRes.rows[0]);
+
     } catch (error) {
+        if (dbCliente) await dbCliente.query('ROLLBACK');
         console.error('[router/usuarios POST] Erro:', error);
-        if (error.code === '23505') { // Conflito/duplicidade
+        if (error.code === '23505') {
              res.status(409).json({ error: 'Usuário ou email já cadastrado.', details: error.detail });
         } else {
             res.status(500).json({ error: 'Erro ao criar usuário', details: error.message });
@@ -207,7 +331,15 @@ router.put('/', async (req, res) => {
         if (!permissoesUsuarioAtual.includes('editar-usuarios')) {
             return res.status(403).json({ error: 'Permissão negada para editar usuários' });
         }
-        const { id, nome, nomeUsuario, email, tipos, nivel, permissoes: permissoesIndividuais } = req.body; // 'permissoes' aqui são as individuais
+        
+        const { 
+            id, nome, nomeUsuario, email, tipos, nivel, 
+            salario_fixo, valor_passagem_diaria, desconto_vt_percentual, 
+            elegivel_pagamento, 
+            id_contato_financeiro, // <<< Recebemos o campo do frontend
+            permissoes: permissoesIndividuais 
+        } = req.body;
+
         if (!id) {
             return res.status(400).json({ error: "O ID do usuário é obrigatório para atualização." });
         }
@@ -219,41 +351,34 @@ router.put('/', async (req, res) => {
         if (nome !== undefined) { fieldsToUpdate.push(`nome = $${paramIndex++}`); values.push(nome); }
         if (nomeUsuario !== undefined) { fieldsToUpdate.push(`nome_usuario = $${paramIndex++}`); values.push(nomeUsuario); }
         if (email !== undefined) { fieldsToUpdate.push(`email = $${paramIndex++}`); values.push(email); }
+        if (tipos !== undefined) { fieldsToUpdate.push(`tipos = $${paramIndex++}`); values.push(tipos); }
+        if (nivel !== undefined) { fieldsToUpdate.push(`nivel = $${paramIndex++}`); values.push(nivel); }
+        if (salario_fixo !== undefined) { fieldsToUpdate.push(`salario_fixo = $${paramIndex++}`); values.push(salario_fixo); }
+        if (valor_passagem_diaria !== undefined) { fieldsToUpdate.push(`valor_passagem_diaria = $${paramIndex++}`); values.push(valor_passagem_diaria); }
+        if (desconto_vt_percentual !== undefined) { fieldsToUpdate.push(`desconto_vt_percentual = $${paramIndex++}`); values.push(desconto_vt_percentual); }
+        if (elegivel_pagamento !== undefined) { fieldsToUpdate.push(`elegivel_pagamento = $${paramIndex++}`); values.push(elegivel_pagamento); }
         
-        if (tipos !== undefined) { 
-            if (Array.isArray(tipos)) {
-                fieldsToUpdate.push(`tipos = $${paramIndex++}`); values.push(tipos); 
-            } else {
-                console.warn("[API Usuários PUT] 'tipos' recebido para update não é um array:", tipos);
-                // Não atualiza tipos se não for array para evitar erro
-            }
-        }
-        
-        if (nivel !== undefined) { 
-            const nivelFinal = (nivel === '' || nivel === undefined || isNaN(parseInt(nivel))) ? null : parseInt(nivel);
-            fieldsToUpdate.push(`nivel = $${paramIndex++}`); values.push(nivelFinal); 
+        // <<< A LÓGICA QUE FALTAVA ESTÁ AQUI >>>
+        if (id_contato_financeiro !== undefined) {
+            // Permite salvar tanto um número de ID quanto null (para desvincular)
+            fieldsToUpdate.push(`id_contato_financeiro = $${paramIndex++}`);
+            values.push(id_contato_financeiro);
         }
 
-        // Se 'permissoesIndividuais' for enviado, atualiza a coluna 'permissoes' do usuário no DB
-        // Estas são as permissões que *não* vêm automaticamente do tipo.
         if (permissoesIndividuais !== undefined) {
-            if (Array.isArray(permissoesIndividuais)) {
-                fieldsToUpdate.push(`permissoes = $${paramIndex++}`);
-                // Filtra para garantir que apenas permissões válidas conhecidas pelo sistema sejam salvas
-                values.push(permissoesIndividuais.filter(p => backendPermissoesValidas.has(p)));
-            } else {
-                 console.warn("[API Usuários PUT] 'permissoes' (individuais) recebido para update não é um array:", permissoesIndividuais);
-            }
+            const permissoesValidas = permissoesIndividuais.filter(p => backendPermissoesValidas.has(p));
+            fieldsToUpdate.push(`permissoes = $${paramIndex++}`);
+            values.push(permissoesValidas);
         }
-
 
         if (fieldsToUpdate.length === 0) {
-            return res.status(400).json({ error: "Nenhum campo fornecido para atualização." });
+            // Embora o frontend não deva permitir isso, é uma boa segurança.
+            return res.status(400).json({ error: "Nenhuma alteração detectada para salvar." });
         }
 
-        values.push(id); // Para o WHERE id = $X
+        values.push(id);
 
-        const queryText = `UPDATE usuarios SET ${fieldsToUpdate.join(', ')} WHERE id = $${paramIndex} RETURNING id, nome, nome_usuario, email, tipos, nivel, permissoes AS permissoes_individuais`;
+        const queryText = `UPDATE usuarios SET ${fieldsToUpdate.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
         
         const result = await dbCliente.query(queryText, values);
 
@@ -262,15 +387,14 @@ router.put('/', async (req, res) => {
         }
         
         let usuarioAtualizado = result.rows[0];
-        // Recalcula e adiciona as permissões totais (baseadas em tipo + individuais) ao usuário atualizado
+        // Adiciona permissões totais para consistência da resposta
         usuarioAtualizado.permissoes_totais = await getPermissoesCompletasUsuarioDB(dbCliente, usuarioAtualizado.id);
-        // Renomeia permissoes_individuais para algo mais claro ou remove se não for enviar de volta
-        // delete usuarioAtualizado.permissoes_individuais; 
 
         res.status(200).json(usuarioAtualizado);
+
     } catch (error) {
         console.error('[router/usuarios PUT] Erro:', error);
-         if (error.code === '23505') { // Conflito/duplicidade
+        if (error.code === '23505') {
              res.status(409).json({ error: 'Nome de usuário ou email já em uso por outro usuário.', details: error.detail });
         } else {
             res.status(500).json({ error: 'Erro ao atualizar usuário', details: error.message });
@@ -351,4 +475,57 @@ router.delete('/', async (req, res) => {
 });
 
 
-export default router; // Exporta o router para ser usado no seu server.js
+// GET /api/usuarios/buscar-contatos-empregado?q=termo
+router.get('/buscar-contatos-empregado', async (req, res) => {
+    const { usuarioLogado, dbCliente } = req;
+    const termoBusca = req.query.q;
+
+    // --- LOG 1: A rota foi acionada? ---
+    console.log(`[BACKEND] Rota /buscar-contatos-empregado acionada com termo: "${termoBusca}"`);
+
+    try {
+        const permissoesUsuarioAtual = await getPermissoesCompletasUsuarioDB(dbCliente, usuarioLogado.id);
+        
+        // --- LOG 2: O usuário tem a permissão necessária? ---
+        console.log(`[BACKEND] Verificando permissão 'editar-usuarios'. Usuário tem?`, permissoesUsuarioAtual.includes('editar-usuarios'));
+
+        if (!permissoesUsuarioAtual.includes('editar-usuarios')) {
+            return res.status(403).json({ error: 'Permissão negada para buscar contatos.' });
+        }
+
+        if (!termoBusca || termoBusca.trim().length < 3) {
+            return res.status(200).json([]);
+        }
+
+        const query = `
+            SELECT id, nome, tipo 
+            FROM fc_contatos 
+            WHERE 
+                nome ILIKE $1 
+                AND tipo = 'EMPREGADO' 
+                AND ativo = true 
+            ORDER BY nome LIMIT 10
+        `;
+        const params = [`%${termoBusca.trim()}%`];
+
+        // --- LOG 3: Qual query e parâmetros estamos enviando ao banco? ---
+        console.log('[BACKEND] Executando query no banco:', query);
+        console.log('[BACKEND] Parâmetros da query:', params);
+
+        const result = await dbCliente.query(query, params);
+        
+        // --- LOG 4: O que o banco de dados retornou? ---
+        console.log(`[BACKEND] Query bem-sucedida. Encontrados ${result.rowCount} registros.`);
+        
+        res.status(200).json(result.rows);
+
+    } catch (error) {
+        // --- LOG 5: Se tudo deu errado, qual foi o erro? ---
+        console.error('[BACKEND] ERRO CRÍTICO na rota /buscar-contatos-empregado:', error);
+        res.status(500).json({ error: 'Erro interno ao buscar contatos.', details: error.message });
+    } finally {
+        if (dbCliente) dbCliente.release();
+    }
+});
+
+export default router;
