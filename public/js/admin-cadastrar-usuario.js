@@ -45,11 +45,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     tipoCheckboxes.forEach(checkbox => {
-      checkbox.addEventListener('change', () => {
-        const tiposSelecionados = Array.from(tipoCheckboxes).filter(cb => cb.checked).map(cb => cb.value);
-        nivelContainer.style.display = tiposSelecionados.includes('costureira') ? 'block' : 'none';
-      });
-    });
+  checkbox.addEventListener('change', () => {
+    const tiposSelecionados = Array.from(tipoCheckboxes).filter(cb => cb.checked).map(cb => cb.value);
+    // Mostra os campos de pagamento se for costureira OU tiktik
+    const ehFuncionario = tiposSelecionados.includes('costureira') || tiposSelecionados.includes('tiktik');
+    nivelContainer.style.display = ehFuncionario ? 'block' : 'none';
+  });
+});
 
     document.getElementById('nome').addEventListener('input', (e) => {
       e.target.value.trim().length < 2 ? mostrarErro('nome', 'O nome deve ter pelo menos 2 caracteres.') : limparErro('nome');
@@ -114,63 +116,125 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     cadastroForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
+    e.preventDefault();
 
-      const nome = document.getElementById('nome').value.trim();
-      const nomeUsuario = document.getElementById('nomeUsuario').value.trim();
-      const email = document.getElementById('email').value.trim();
-      const senha = document.getElementById('senha').value;
-      const tiposSelecionados = Array.from(tipoCheckboxes).filter(cb => cb.checked).map(cb => cb.value);
+    const nomeInput = document.getElementById('nome');
+    const nomeUsuarioInput = document.getElementById('nomeUsuario');
+    const emailInput = document.getElementById('email');
+    const senhaInput = document.getElementById('senha');
+    const tiposCheckboxes = document.querySelectorAll('input[name="tipos"]');
+    
+    const nome = nomeInput.value.trim();
+    const nomeUsuario = nomeUsuarioInput.value.trim();
+    const email = emailInput.value.trim();
+    const senha = senhaInput.value;
+    const tiposSelecionados = Array.from(tipoCheckboxes).filter(cb => cb.checked).map(cb => cb.value);
 
-      let hasError = false;
-      if (nome.length < 2) mostrarErro('nome', 'O nome deve ter pelo menos 2 caracteres.'), hasError = true;
-      if (!validarNomeUsuario(nomeUsuario)) mostrarErro('nomeUsuario', 'Nome de usuário inválido.'), hasError = true;
-      if (!validarEmail(email)) mostrarErro('email', 'Email inválido.'), hasError = true;
-      if (senha.length < 6) mostrarErro('senha', 'A senha deve ter pelo menos 6 caracteres.'), hasError = true;
-      if (tiposSelecionados.length === 0) {
-        const tiposGroup = tipoCheckboxes[0].parentElement.parentElement;
-        tiposGroup.classList.add('error');
-        tiposGroup.querySelector('.error-message').textContent = 'Selecione pelo menos um tipo.';
-        tiposGroup.querySelector('.error-message').style.display = 'block';
+    let hasError = false;
+
+    // --- Validação campo a campo ---
+    if (nome.length < 2) {
+        mostrarErro('nome', 'O nome deve ter pelo menos 2 caracteres.');
         hasError = true;
-      }
+    }
 
-      if (hasError) return;
+    if (!validarNomeUsuario(nomeUsuario)) {
+        mostrarErro('nomeUsuario', 'Nome de usuário inválido (letras, números e pontos).');
+        hasError = true;
+    }
 
-      submitBtn.disabled = true;
-      const usuario = {
+    if (!validarEmail(email)) {
+        mostrarErro('email', 'Email inválido.');
+        hasError = true;
+    }
+
+    if (senha.length < 6) {
+        mostrarErro('senha', 'A senha deve ter pelo menos 6 caracteres.');
+        hasError = true;
+    }
+
+    // <<< CORREÇÃO: Lógica de validação dos checkboxes mais segura >>>
+    const tiposContainer = document.querySelector('.tipos-container');
+    if (tiposSelecionados.length === 0) {
+        hasError = true;
+        if (tiposContainer) {
+            const formGroup = tiposContainer.closest('.cu-form-group');
+            if (formGroup) {
+                const errorMsgEl = formGroup.querySelector('.error-message');
+                if (errorMsgEl) {
+                    errorMsgEl.textContent = 'Selecione pelo menos um tipo de usuário.';
+                    errorMsgEl.style.display = 'block';
+                }
+            }
+        }
+    } else {
+        if (tiposContainer) {
+            const formGroup = tiposContainer.closest('.cu-form-group');
+            if (formGroup) {
+                const errorMsgEl = formGroup.querySelector('.error-message');
+                if (errorMsgEl) {
+                    errorMsgEl.style.display = 'none';
+                }
+            }
+        }
+    }
+
+    // Se qualquer validação falhou, interrompe a submissão
+    if (hasError) {
+        return; 
+    }
+
+    // --- Se não houver erros, continua com a submissão ---
+    submitBtn.disabled = true;
+    const btnText = submitBtn.querySelector('.btn-text');
+    const loadingSpinner = submitBtn.querySelector('.loading-spinner');
+    if (btnText) btnText.textContent = 'Cadastrando...';
+    if (loadingSpinner) loadingSpinner.style.display = 'inline-block';
+
+    const ehFuncionario = tiposSelecionados.includes('costureira') || tiposSelecionados.includes('tiktik');
+
+    const usuario = {
         nome,
         nomeUsuario,
         email,
         senha,
         tipos: tiposSelecionados,
-        nivel: tiposSelecionados.includes('costureira') ? parseInt(document.getElementById('nivel').value) || 1 : null,
-      };
+        nivel: ehFuncionario ? parseInt(document.getElementById('nivel').value) || 1 : null,
+        salario_fixo: ehFuncionario ? parseFloat(document.getElementById('salario_fixo').value) || 0 : 0,
+        valor_passagem_diaria: ehFuncionario ? parseFloat(document.getElementById('valor_passagem_diaria').value) || 0 : 0,
+        desconto_vt_percentual: ehFuncionario ? parseFloat(document.getElementById('desconto_vt_percentual').value) || 0 : 0,
+    };
 
-      try {
+    try {
         const response = await fetch('/api/usuarios', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-          body: JSON.stringify(usuario),
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+            body: JSON.stringify(usuario),
         });
 
         if (response.ok) {
-          cadastroForm.reset();
-          nivelContainer.style.display = 'none';
-          tipoCheckboxes.forEach(cb => cb.checked = false);
-          alert('Usuário cadastrado com sucesso!');
-          window.location.href = 'usuarios-cadastrados.html';
+            cadastroForm.reset();
+            nivelContainer.style.display = 'none';
+            alert('Usuário cadastrado com sucesso!');
+            window.location.href = 'usuarios-cadastrados.html';
         } else {
-          const error = await response.json();
-          alert(`Erro ao cadastrar usuário: ${error.error}`);
+            const errorData = await response.json();
+            if (errorData.details?.includes('nome_usuario')) {
+                mostrarErro('nomeUsuario', 'Este nome de usuário já está em uso.');
+            } else if (errorData.details?.includes('email')) {
+                mostrarErro('email', 'Este email já está em uso.');
+            }
+            alert(`Erro ao cadastrar usuário: ${errorData.error}`);
         }
-      } catch (error) {
+    } catch (error) {
         console.error('Erro ao cadastrar usuário:', error);
-        alert('Erro no servidor. Tente novamente mais tarde.');
-      } finally {
+        alert('Erro de conexão com o servidor. Tente novamente mais tarde.');
+    } finally {
         submitBtn.disabled = false;
-      }
-    });
+        if (btnText) btnText.textContent = 'Cadastrar Usuário';
+        if (loadingSpinner) loadingSpinner.style.display = 'none';
+    }
+});
   } catch (error) {
     console.error('[admin-cadastrar-usuario] Erro ao carregar página:', error);
     // Redirecionamento já tratado pelo verificarAutenticacao

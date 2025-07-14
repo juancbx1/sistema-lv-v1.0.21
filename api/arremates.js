@@ -72,10 +72,15 @@ router.post('/', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada para lançar arremate.' });
         }
 
-        const { op_numero, op_edit_id, produto_id, variante, quantidade_arrematada, usuario_tiktik } = req.body;
-
-        if (!op_numero || !produto_id || quantidade_arrematada === undefined || !usuario_tiktik) {
-            return res.status(400).json({ error: 'Dados incompletos: op_numero, produto_id, quantidade e tiktik são obrigatórios.' });
+        const { 
+            op_numero, op_edit_id, produto_id, variante, quantidade_arrematada, 
+            usuario_tiktik, // Nome do Tiktik
+            usuario_tiktik_id // <<< NOVO: ID do Tiktik
+        } = req.body;
+        
+        // <<< MUDANÇA: Adicionada validação para usuario_tiktik_id >>>
+        if (!op_numero || !produto_id || quantidade_arrematada === undefined || !usuario_tiktik || !usuario_tiktik_id) {
+            return res.status(400).json({ error: 'Dados incompletos: op_numero, produto_id, quantidade, tiktik e tiktik_id são obrigatórios.' });
         }
         
         const quantidadeNum = parseInt(quantidade_arrematada);
@@ -83,18 +88,12 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Quantidade arrematada deve ser um número positivo.' });
         }
 
-        // --- LÓGICA DE PONTOS CORRIGIDA ---
-        const produtoInfo = await dbClient.query('SELECT nome FROM produtos WHERE id = $1', [produto_id]);
-        if (produtoInfo.rows.length === 0) {
-            throw new Error(`Produto com ID ${produto_id} não encontrado para cálculo de pontos.`);
-        }
-        const nomeDoProduto = produtoInfo.rows[0].nome;
-
+        // --- LÓGICA DE PONTOS ---
         let valorPontoAplicado = 1.00;
         const configPontosQuery = `
-        SELECT pontos_padrao FROM configuracoes_pontos_processos
-        WHERE produto_id = $1 AND tipo_atividade = 'arremate_tiktik' AND ativo = TRUE LIMIT 1; -- USA produto_id
-    `;
+            SELECT pontos_padrao FROM configuracoes_pontos_processos
+            WHERE produto_id = $1 AND tipo_atividade = 'arremate_tiktik' AND ativo = TRUE LIMIT 1;
+        `;
         const configResult = await dbClient.query(configPontosQuery, [produto_id]);
 
         if (configResult.rows.length > 0 && configResult.rows[0].pontos_padrao !== null) {
@@ -104,13 +103,13 @@ router.post('/', async (req, res) => {
         
         const nomeDoLancador = usuarioLogado.nome || 'Sistema';
 
-        // --- INSERT CORRIGIDO ---
+        // <<< MUDANÇA: Adicionada a coluna "usuario_tiktik_id" na query INSERT >>>
         const result = await dbClient.query(
-            `INSERT INTO arremates (op_numero, op_edit_id, produto_id, variante, quantidade_arrematada, usuario_tiktik, lancado_por, valor_ponto_aplicado, pontos_gerados)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+            `INSERT INTO arremates (op_numero, op_edit_id, produto_id, variante, quantidade_arrematada, usuario_tiktik, usuario_tiktik_id, lancado_por, valor_ponto_aplicado, pontos_gerados)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
             [
                 op_numero, op_edit_id || null, parseInt(produto_id), variante || null, 
-                quantidadeNum, usuario_tiktik, nomeDoLancador,
+                quantidadeNum, usuario_tiktik, usuario_tiktik_id, nomeDoLancador,
                 valorPontoAplicado, pontosGerados
             ]
         );
@@ -128,7 +127,8 @@ router.post('/', async (req, res) => {
 // GET /api/arremates/
 router.get('/', async (req, res) => {
     const { usuarioLogado } = req;
-    const { op_numero, usuario_tiktik: queryUsuarioTiktikParam } = req.query;
+    // <<< MUDANÇA: Parâmetro do query agora é usuario_tiktik_id >>>
+    const { op_numero, usuario_tiktik_id: queryUsuarioTiktikIdParam } = req.query;
     let dbClient;
 
     try {
@@ -136,17 +136,18 @@ router.get('/', async (req, res) => {
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
         const podeAcessarEmbalagemGeral = permissoesCompletas.includes('acesso-embalagem-de-produtos');
         const podeVerPropriosArremates = permissoesCompletas.includes('ver-proprios-arremates');
-        const nomeUsuarioNoToken = usuarioLogado.nome;
+        const idUsuarioLogado = usuarioLogado.id;
 
         if (!podeAcessarEmbalagemGeral && !podeVerPropriosArremates) {
             return res.status(403).json({ error: 'Permissão negada para visualizar arremates.' });
         }
 
-        // Base da query com JOIN para buscar o nome do produto
+        // <<< MUDANÇA: Adicionada a coluna "usuario_tiktik_id" na query SELECT >>>
         const baseSelect = `
         SELECT 
             a.id, a.op_numero, a.op_edit_id, a.variante, a.quantidade_arrematada,
-            a.usuario_tiktik, a.data_lancamento, a.quantidade_ja_embalada, a.assinada,
+            a.usuario_tiktik, a.usuario_tiktik_id, -- <<< ADICIONADO
+            a.data_lancamento, a.quantidade_ja_embalada, a.assinada,
             a.valor_ponto_aplicado, a.pontos_gerados, a.lancado_por, a.tipo_lancamento,
             a.produto_id,
             p.nome AS produto
@@ -160,19 +161,20 @@ router.get('/', async (req, res) => {
         if (op_numero) {
             queryText = `${baseSelect} WHERE a.op_numero = $1 ORDER BY a.data_lancamento DESC`;
             queryParams = [String(op_numero)];
-        } else if (queryUsuarioTiktikParam) {
-            if (podeAcessarEmbalagemGeral || (podeVerPropriosArremates && queryUsuarioTiktikParam === nomeUsuarioNoToken)) {
-                queryText = `${baseSelect} WHERE a.usuario_tiktik = $1 ORDER BY a.data_lancamento DESC`;
-                queryParams = [String(queryUsuarioTiktikParam)];
+        // <<< MUDANÇA: Filtro agora usa o ID, não o nome >>>
+        } else if (queryUsuarioTiktikIdParam) {
+            if (podeAcessarEmbalagemGeral || (podeVerPropriosArremates && parseInt(queryUsuarioTiktikIdParam) === idUsuarioLogado)) {
+                queryText = `${baseSelect} WHERE a.usuario_tiktik_id = $1 ORDER BY a.data_lancamento DESC`;
+                queryParams = [parseInt(queryUsuarioTiktikIdParam)];
             } else {
                 return res.status(403).json({ error: 'Você só pode visualizar os arremates especificados ou os seus próprios.' });
             }
         } else if (podeAcessarEmbalagemGeral) {
             queryText = `${baseSelect} ORDER BY a.data_lancamento DESC`;
         } else if (podeVerPropriosArremates) {
-            if (!nomeUsuarioNoToken) return res.status(400).json({ error: "Falha ao identificar usuário para filtro." });
-            queryText = `${baseSelect} WHERE a.usuario_tiktik = $1 ORDER BY a.data_lancamento DESC`;
-            queryParams = [nomeUsuarioNoToken];
+            if (!idUsuarioLogado) return res.status(400).json({ error: "Falha ao identificar usuário para filtro." });
+            queryText = `${baseSelect} WHERE a.usuario_tiktik_id = $1 ORDER BY a.data_lancamento DESC`;
+            queryParams = [idUsuarioLogado];
         } else {
             return res.status(403).json({ error: 'Acesso a arremates não configurado corretamente.' });
         }

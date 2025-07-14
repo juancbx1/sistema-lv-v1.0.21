@@ -86,6 +86,9 @@ export const permissoesDisponiveis = [
     { id: 'gerenciar-precificacao', label: 'Ação: Editar configurações de precificação', categoria: 'Financeiro e Relatórios' },
     { id: 'confirmar-pagamento-comissao', label: 'Ação: Marcar comissões como pagas', categoria: 'Financeiro e Relatórios' },
 
+     // --- PAGAMENTOS A FUNCIONARIOS ---
+    { id: 'acessar-central-pagamentos', label: 'Acessar Central de Pagamentos à Empregados', categoria: 'Pagamentos à Empregados' },
+    { id: 'efetuar-pagamento-empregado', label: 'Acessar Pagamentos à Empregados', categoria: 'Pagamentos à Empregados' },
     
     // --- CONFIGURAÇÕES ---
     { id: 'acesso-ponto-por-processo', label: 'Ver Tela de Pontos por Processo', categoria: 'Configurações' },

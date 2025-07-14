@@ -73,13 +73,16 @@ router.post('/', async (req, res) => {
 
         const {
             id, opNumero, etapaIndex, processo, produto_id, variacao,
-            maquina, quantidade, funcionario, // 'funcionario' é o nome de quem realizou a produção
+            maquina, quantidade, 
+            funcionario, // Nome do funcionário
+            funcionario_id, // <<< NOVO: ID do funcionário
             data, lancadoPor
         } = req.body;
 
-        console.log(`[2. VALIDAÇÃO] Validando dados... Produto ID recebido: ${produto_id}, Funcionário: ${funcionario}`);
-        if (!id || !opNumero || etapaIndex === undefined || !processo || !produto_id || !funcionario || quantidade === undefined || !data || !lancadoPor) {
-            return res.status(400).json({ error: 'Dados incompletos. Todos os campos são obrigatórios, incluindo produto_id e funcionário.' });
+        console.log(`[2. VALIDAÇÃO] Validando dados... Produto ID: ${produto_id}, Funcionário ID: ${funcionario_id}`);
+        // <<< MUDANÇA: Adicionada validação para funcionario_id >>>
+        if (!id || !opNumero || etapaIndex === undefined || !processo || !produto_id || !funcionario || !funcionario_id || quantidade === undefined || !data || !lancadoPor) {
+            return res.status(400).json({ error: 'Dados incompletos. Todos os campos são obrigatórios, incluindo funcionario_id.' });
         }
         
         const parsedProdutoId = parseInt(produto_id);
@@ -88,18 +91,18 @@ router.post('/', async (req, res) => {
         }
 
         const parsedQuantidade = parseInt(quantidade, 10);
-        if (isNaN(parsedQuantidade) || parsedQuantidade < 0) { // Permitir 0 se for um lançamento de "não fez nada"
+        if (isNaN(parsedQuantidade) || parsedQuantidade < 0) {
             return res.status(400).json({ error: 'Quantidade inválida.' });
         }
         console.log('[2. VALIDAÇÃO] Dados básicos validados com sucesso.');
 
         // --- LÓGICA DE PONTOS COM TIPO DE ATIVIDADE INFERIDO ---
-        console.log(`[3. PONTOS] Iniciando cálculo de pontos para Produto ID: ${parsedProdutoId}, Processo: "${processo}", Funcionário: "${funcionario}"`);
+        console.log(`[3. PONTOS] Iniciando cálculo de pontos para Produto ID: ${parsedProdutoId}, Processo: "${processo}", Funcionário ID: "${funcionario_id}"`);
 
-        // 3a. Buscar o tipo do usuário 'funcionario' para determinar o 'tipo_atividade'
+        // <<< MUDANÇA: Busca o tipo do usuário pelo ID, não mais pelo NOME >>>
         const funcionarioInfoResult = await dbClient.query(
-            'SELECT tipos FROM usuarios WHERE nome = $1 LIMIT 1',
-            [funcionario]
+            'SELECT tipos FROM usuarios WHERE id = $1 LIMIT 1',
+            [funcionario_id]
         );
 
         let tipoAtividadeParaConfigPontos;
@@ -108,23 +111,19 @@ router.post('/', async (req, res) => {
             if (tiposFuncionario.includes('costureira')) {
                 tipoAtividadeParaConfigPontos = 'costura_op_costureira';
             } else if (tiposFuncionario.includes('tiktik')) {
-                // Assumindo que esta rota NÃO é para "arremate_tiktik", mas sim para outros processos de OP feitos por tiktiks
                 tipoAtividadeParaConfigPontos = 'processo_op_tiktik';
             } else {
-                console.warn(`[3. PONTOS] Funcionário "${funcionario}" não tem um tipo ('costureira' ou 'tiktik') definido em seus 'tipos' para determinar a atividade. Usando fallback se houver ou ponto padrão.`);
-                // Você pode definir um tipo padrão aqui ou deixar que a busca de configuração falhe (e use valorPontoAplicado = 1.00)
-                // tipoAtividadeParaConfigPontos = 'tipo_desconhecido'; // Ou algo que não encontrará config
+                console.warn(`[3. PONTOS] Funcionário ID "${funcionario_id}" não tem um tipo ('costureira' ou 'tiktik') definido em seus 'tipos' para determinar a atividade.`);
             }
         } else {
-            console.warn(`[3. PONTOS] Informações do funcionário "${funcionario}" não encontradas ou sem tipos definidos. Não é possível determinar tipo_atividade para pontos.`);
-            // Decida o comportamento: erro ou ponto padrão. Por segurança, ponto padrão.
+            console.warn(`[3. PONTOS] Informações do funcionário ID "${funcionario_id}" não encontradas ou sem tipos definidos. Não é possível determinar tipo_atividade para pontos.`);
         }
         console.log(`[3. PONTOS] Tipo de Atividade determinado para busca de pontos: "${tipoAtividadeParaConfigPontos}"`);
         
-        let valorPontoAplicado = 1.00; // Valor padrão
-        let pontosGerados = parsedQuantidade * valorPontoAplicado; // Cálculo padrão inicial
+        let valorPontoAplicado = 1.00;
+        let pontosGerados = parsedQuantidade * valorPontoAplicado;
 
-        if (tipoAtividadeParaConfigPontos && parsedQuantidade > 0) { // Só busca config se o tipo foi determinado e há quantidade
+        if (tipoAtividadeParaConfigPontos && parsedQuantidade > 0) {
             const configPontosResult = await dbClient.query(
                 `SELECT pontos_padrao FROM configuracoes_pontos_processos
                  WHERE produto_id = $1 AND processo_nome = $2 AND tipo_atividade = $3 AND ativo = TRUE LIMIT 1;`,
@@ -133,32 +132,34 @@ router.post('/', async (req, res) => {
 
             if (configPontosResult.rows.length > 0 && configPontosResult.rows[0].pontos_padrao !== null) {
                 valorPontoAplicado = parseFloat(configPontosResult.rows[0].pontos_padrao);
-                pontosGerados = parsedQuantidade * valorPontoAplicado; // Recalcula com o ponto da config
+                pontosGerados = parsedQuantidade * valorPontoAplicado;
                 console.log(`[3. PONTOS] Configuração de pontos encontrada. Valor do ponto: ${valorPontoAplicado}. Pontos gerados recalculados: ${pontosGerados}`);
             } else {
-                console.log(`[3. PONTOS] Nenhuma configuração de pontos encontrada para Produto ID: ${parsedProdutoId}, Processo: "${processo}", Tipo Atividade: "${tipoAtividadeParaConfigPontos}". Usando valor de ponto padrão: ${valorPontoAplicado}. Pontos gerados (padrão): ${pontosGerados}`);
+                console.log(`[3. PONTOS] Nenhuma configuração de pontos encontrada. Usando valor de ponto padrão: ${valorPontoAplicado}. Pontos gerados (padrão): ${pontosGerados}`);
             }
         } else if (parsedQuantidade === 0) {
-            valorPontoAplicado = 0; // Se a quantidade for zero, os pontos são zero
+            valorPontoAplicado = 0;
             pontosGerados = 0;
             console.log(`[3. PONTOS] Quantidade é 0. Pontos gerados definidos como 0.`);
         } else {
-             console.log(`[3. PONTOS] Tipo de atividade não pôde ser determinado para o funcionário '${funcionario}'. Usando valor de ponto padrão ${valorPontoAplicado}. Pontos gerados (padrão): ${pontosGerados}`);
+             console.log(`[3. PONTOS] Tipo de atividade não pôde ser determinado. Usando valor de ponto padrão ${valorPontoAplicado}. Pontos gerados (padrão): ${pontosGerados}`);
         }
         // --- FIM DA LÓGICA DE PONTOS ---
 
+        // <<< MUDANÇA: Adicionada a coluna "funcionario_id" na query INSERT >>>
         const queryText = `
             INSERT INTO producoes (
                 id, op_numero, etapa_index, processo, produto_id, variacao, maquina,
-                quantidade, funcionario, data, lancado_por, valor_ponto_aplicado, pontos_gerados
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                quantidade, funcionario, funcionario_id, data, lancado_por, valor_ponto_aplicado, pontos_gerados
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             RETURNING *;`;
         
+        // <<< MUDANÇA: Adicionado "funcionario_id" no array de valores >>>
         const values = [
             id, opNumero, etapaIndex, processo, parsedProdutoId, variacao || null, maquina,
-            parsedQuantidade, funcionario, data, lancadoPor, 
-            parseFloat(valorPontoAplicado.toFixed(2)), // Garante 2 casas decimais
-            parseFloat(pontosGerados.toFixed(2))     // Garante 2 casas decimais
+            parsedQuantidade, funcionario, funcionario_id, data, lancadoPor, 
+            parseFloat(valorPontoAplicado.toFixed(2)),
+            parseFloat(pontosGerados.toFixed(2))
         ];
 
         console.log('[4. BANCO DE DADOS] Executando query INSERT com valores:', values);
@@ -197,7 +198,7 @@ router.get('/', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada para visualizar produções.' });
         }
 
-        // << MUDANÇA: Query base com JOIN para buscar o nome do produto >>
+        // <<< MUDANÇA: Adicionada a coluna "funcionario_id" na query SELECT >>>
         const baseSelect = `
         SELECT 
             pr.id, 
@@ -208,11 +209,12 @@ router.get('/', async (req, res) => {
             pr.maquina, 
             pr.quantidade, 
             pr.funcionario, 
+            pr.funcionario_id, -- <<< ADICIONADO
             pr.data, 
             pr.lancado_por,
-            pr.valor_ponto_aplicado, -- << ADICIONADO
-            pr.pontos_gerados,       -- << ADICIONADO
-            p.nome AS produto        -- Nome do produto do JOIN
+            pr.valor_ponto_aplicado,
+            pr.pontos_gerados,
+            p.nome AS produto
         FROM producoes pr
         LEFT JOIN produtos p ON pr.produto_id = p.id
     `;
@@ -227,12 +229,13 @@ router.get('/', async (req, res) => {
         } else if (podeGerenciarTudo) {
             queryText = `${baseSelect} ORDER BY pr.data DESC`;
         } else if (podeVerProprias) {
-            const nomeFuncionario = usuarioLogado.nome;
-            if (!nomeFuncionario) {
-                return res.status(400).json({ error: "Falha ao identificar funcionário para filtro." });
+            // <<< MUDANÇA: Filtra pelo ID do usuário logado, não pelo nome >>>
+            const idFuncionario = usuarioLogado.id;
+            if (!idFuncionario) {
+                return res.status(400).json({ error: "Falha ao identificar ID do usuário para filtro." });
             }
-            queryText = `${baseSelect} WHERE pr.funcionario = $1 ORDER BY pr.data DESC`;
-            queryParams = [nomeFuncionario];
+            queryText = `${baseSelect} WHERE pr.funcionario_id = $1 ORDER BY pr.data DESC`;
+            queryParams = [idFuncionario];
         } else {
             return res.status(403).json({ error: 'Configuração de acesso inválida.' });
         }

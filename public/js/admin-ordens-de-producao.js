@@ -6,6 +6,8 @@ window.saveOPChanges = null;
 import { verificarAutenticacao } from '/js/utils/auth.js';
 import { PRODUTOS as CONST_PRODUTOS, PRODUTOSKITS as CONST_PRODUTOSKITS } from '/js/utils/prod-proc-maq.js';
 import { obterProdutos as obterProdutosDoStorage, invalidateCache as invalidateProdutosStorageCache } from '/js/utils/storage.js';
+import { fetchAPI } from '/js/utils/api-utils.js';
+
 
 // --- Variáveis Globais Essenciais ---
 let filteredOPsGlobal = []; // Para OPs filtradas/ordenadas na tabela principal
@@ -1862,28 +1864,39 @@ async function loadEtapasEdit(op, skipReload = false) {
                     }
                     row.appendChild(linkDiv);
                 }
-            } else {
-                const tipoUsuarioEtapa = await getTipoUsuarioPorProcesso(etapa.processo, op.produto_id);
-                const exigeQtd = tipoUsuarioEtapa === 'costureira' || tipoUsuarioEtapa === 'tiktik';
+            } else { // Se a etapa não for 'corte'
+            const tipoUsuarioEtapa = await getTipoUsuarioPorProcesso(etapa.processo, op.produto_id);
+            const exigeQtd = tipoUsuarioEtapa === 'costureira' || tipoUsuarioEtapa === 'tiktik';
 
-                const userSelect = document.createElement('select');
-                userSelect.className = 'select-usuario';
+            const userSelect = document.createElement('select');
+            userSelect.className = 'select-usuario';
 
-                const defaultOptText = getUsuarioPlaceholder(tipoUsuarioEtapa);
-                userSelect.add(new Option(defaultOptText, ''));
-                
-                const usuariosFiltradosParaEtapa = usuarios.filter(u => Array.isArray(u.tipos) && u.tipos.includes(tipoUsuarioEtapa));
-                usuariosFiltradosParaEtapa.forEach(u => userSelect.add(new Option(u.nome, u.nome)));
-                
-                if (etapa.usuario) {
-                    userSelect.value = etapa.usuario;
-                }
-                row.appendChild(userSelect);
-
-                if (exigeQtd) {
-                    row.appendChild(criarQuantidadeDiv(etapa, op, userSelect, false, row));
+            const defaultOptText = getUsuarioPlaceholder(tipoUsuarioEtapa);
+            userSelect.add(new Option(defaultOptText, ''));
+            
+            const usuariosFiltradosParaEtapa = usuarios.filter(u => Array.isArray(u.tipos) && u.tipos.includes(tipoUsuarioEtapa));
+            
+            // <<< CORREÇÃO PRINCIPAL AQUI: o valor da <option> agora é o ID >>>
+            usuariosFiltradosParaEtapa.forEach(u => userSelect.add(new Option(u.nome, u.id)));
+            
+            // <<< CORREÇÃO NA PRÉ-SELEÇÃO >>>
+            // Se a etapa já tem um usuário salvo (pelo nome, do formato antigo),
+            // encontramos o ID correspondente e selecionamos a option correta.
+            // Se etapa.usuario já for um ID (após o primeiro salvamento), ele também funcionará.
+            if (etapa.usuario) {
+                const usuarioDaEtapa = usuariosFiltradosParaEtapa.find(u => u.nome === etapa.usuario || u.id == etapa.usuario);
+                if (usuarioDaEtapa) {
+                    userSelect.value = usuarioDaEtapa.id;
+                } else {
+                    console.warn(`[loadEtapasEdit] Usuário salvo "${etapa.usuario}" para a etapa "${etapa.processo}" não foi encontrado na lista de usuários filtrados.`);
                 }
             }
+            row.appendChild(userSelect);
+
+            if (exigeQtd) {
+                row.appendChild(criarQuantidadeDiv(etapa, op, userSelect, false, row));
+            }
+        }
             fragment.appendChild(row);
         }
         etapasContainer.appendChild(fragment);
@@ -1963,15 +1976,25 @@ async function loadEtapasEdit(op, skipReload = false) {
     }
 }
 
-async function salvarProducao(op, etapa, etapaIndex) { // etapaIndex ainda é útil para atualizar op.etapas[etapaIndex]
-    console.log("[salvarProducao] Iniciando. Objeto OP recebido:", op, "Etapa:", etapa, "EtapaIndex:", etapaIndex);
+async function salvarProducao(op, etapa, etapaIndex) {
+    console.log("[salvarProducao] Iniciando. Etapa recebida:", etapa, "Índice:", etapaIndex);
 
     if (!op.produto_id) {
         throw new Error("ERRO CRÍTICO: Não foi possível identificar o produto da OP. Recarregue a página e tente novamente.");
     }
-    if (!etapa.usuario) {
-        throw new Error(`Funcionário não selecionado para a etapa "${etapa.processo}"`);
+    
+    // A partir de agora, 'etapa.usuario' contém o ID do funcionário vindo do select.
+    const funcionarioId = etapa.usuario ? parseInt(etapa.usuario, 10) : null;
+    if (!funcionarioId) {
+        throw new Error(`Funcionário não selecionado para a etapa "${etapa.processo}".`);
     }
+
+    // Busca o objeto completo do usuário no cache para obter o nome
+    const funcionarioObj = usuariosCache.find(u => u.id === funcionarioId);
+    if (!funcionarioObj) {
+        throw new Error(`Erro interno: Não foi possível encontrar os dados do funcionário com ID ${funcionarioId}.`);
+    }
+    const nomeFuncionario = funcionarioObj.nome;
 
     const tipoUsuario = await getTipoUsuarioPorProcesso(etapa.processo, op.produto_id);
     const exigeQtd = tipoUsuario === 'costureira' || tipoUsuario === 'tiktik';
@@ -1980,92 +2003,56 @@ async function salvarProducao(op, etapa, etapaIndex) { // etapaIndex ainda é ú
         throw new Error('A quantidade para esta etapa deve ser um número positivo.');
     }
     
-    // 2. Montagem do objeto de dados para a API
-    const produtoConfig = (await obterProdutosDoStorage()).find(p => p.id == op.produto_id);
+    const todosOsProdutos = await obterProdutosDoStorage();
+    const produtoConfig = todosOsProdutos.find(p => p.id == op.produto_id);
 
     if (!produtoConfig || !produtoConfig.etapas || !Array.isArray(produtoConfig.etapas)) {
-        console.error(`[salvarProducao] Configuração do produto (ID: ${op.produto_id}) ou suas etapas não encontradas.`);
-        // Decida como tratar: erro ou máquina padrão? Por ora, erro para forçar a correção da config.
         throw new Error(`Configuração de etapas não encontrada para o produto ID ${op.produto_id}. Verifique o cadastro do produto.`);
     }
 
-    // ***** INÍCIO DA MUDANÇA CRUCIAL *****
-    // Encontrar a configuração da etapa em produtoConfig pelo NOME DO PROCESSO
-    const etapaConfigNoProduto = produtoConfig.etapas.find(eConfig => {
-        const nomeProcessoConfig = typeof eConfig === 'object' ? eConfig.processo : eConfig;
-        return nomeProcessoConfig === etapa.processo;
-    });
-
-    let maquinaParaSalvar = null;
-    if (etapaConfigNoProduto && typeof etapaConfigNoProduto === 'object' && etapaConfigNoProduto.maquina) {
-        maquinaParaSalvar = etapaConfigNoProduto.maquina;
-    } else {
-        // Se a etapa de configuração não for encontrada ou não tiver 'maquina'
-        // OU se a 'etapa' do produto for apenas uma string de processo (sem objeto de máquina)
-        // Você precisa decidir o que fazer. Se máquina é obrigatória, lance um erro.
-        // Se pode haver etapas sem máquina e o banco permite NULL (o que não é o seu caso atual),
-        // aqui seria null. Como o banco NÃO permite null, precisamos de um valor ou um erro.
-        console.warn(`[salvarProducao] Máquina não definida na configuração do produto (ID: ${op.produto_id}) para o processo "${etapa.processo}".`);
-        // Se a máquina é absolutamente necessária e não pode ser null:
-        throw new Error(`Máquina não configurada para o processo "${etapa.processo}" do produto ID ${op.produto_id}. Verifique o cadastro do produto.`);
-        // Ou, se você tivesse um valor padrão para "Não Usa" e o banco aceitasse:
-        // maquinaParaSalvar = "Não Usa";
-    }
-    console.log(`[salvarProducao] Máquina determinada para o processo "${etapa.processo}": ${maquinaParaSalvar}`);
-    // ***** FIM DA MUDANÇA CRUCIAL *****
+    const etapaConfigNoProduto = produtoConfig.etapas.find(eConfig => (typeof eConfig === 'object' ? eConfig.processo : eConfig) === etapa.processo);
+    const maquinaParaSalvar = (etapaConfigNoProduto && typeof etapaConfigNoProduto === 'object' && etapaConfigNoProduto.maquina) ? etapaConfigNoProduto.maquina : 'Não Usa';
 
     const dados = {
         id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
         opNumero: op.numero,
-        etapaIndex, // O etapaIndex original ainda é útil para saber qual etapa da OP foi lançada
+        etapaIndex: etapaIndex,
         processo: etapa.processo,
         produto_id: op.produto_id,
         variacao: op.variante || null,
-        maquina: maquinaParaSalvar, // Usa a máquina encontrada pela busca por nome do processo
+        maquina: maquinaParaSalvar,
         quantidade: parseInt(etapa.quantidade) || 0,
-        funcionario: etapa.usuario,
-        data: new Date().toLocaleString('sv', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T'),
+        funcionario: nomeFuncionario,
+        funcionario_id: funcionarioId, // O campo obrigatório que estávamos esquecendo
+        data: new Date().toISOString(),
         lancadoPor: usuarioLogado?.nome || 'Sistema'
     };
 
     console.log("[salvarProducao] Objeto de dados pronto para ser enviado para /api/producoes:", dados);
 
-    const response = await fetch('/api/producoes', {
+    // Usando a função fetchAPI centralizada
+    const producaoSalva = await fetchAPI('/api/producoes', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(dados)
     });
 
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: `Erro HTTP ${response.status}. Tente novamente.` }));
-        console.error("[salvarProducao] API de produções retornou um erro:", errorData);
-        throw new Error(errorData.error || 'Falha ao salvar lançamento na API.');
-    }
-
-    const producaoSalva = await response.json();
-    
-    // Atualiza o objeto op.etapas[etapaIndex] localmente
+    // Atualiza o objeto op.etapas[etapaIndex] localmente para refletir o lançamento
     if (op.etapas && op.etapas[etapaIndex]) {
         op.etapas[etapaIndex] = {
-            ...op.etapas[etapaIndex], // Mantém outros dados que possam existir
-            usuario: dados.funcionario,
+            ...op.etapas[etapaIndex],
+            usuario: nomeFuncionario, // Continua salvando o nome no objeto local para exibição
             quantidade: dados.quantidade,
             lancado: true,
             ultimoLancamentoId: producaoSalva.id
         };
-    } else {
-        console.warn(`[salvarProducao] Não foi possível atualizar op.etapas[${etapaIndex}] localmente após salvar produção.`);
     }
 
-
     // Tenta salvar o objeto OP inteiro com a etapa atualizada
-    // A função saveOPChanges já deve estar ciente de produto_id
     try {
         console.log(`[salvarProducao] Tentando salvar o objeto OP inteiro (número: ${op.numero}) após lançar etapa.`);
-        await window.saveOPChanges(op); // saveOPChanges é global e usa produto_id
+        await window.saveOPChanges(op);
     } catch (errorSaveOp) {
         console.error(`[salvarProducao] Erro ao tentar salvar o objeto OP completo após lançar etapa: `, errorSaveOp);
-        // Decide se isso é um erro fatal ou apenas um aviso
         mostrarPopupMensagem(`Produção da etapa lançada, mas houve um erro ao atualizar o estado geral da OP: ${errorSaveOp.message.substring(0,100)}`, 'aviso');
     }
     
@@ -2151,34 +2138,45 @@ function criarQuantidadeDiv(etapa, op, usuarioSelect, isEtapaAtualEditavel, row)
 
 
     usuarioSelect.addEventListener('change', async () => {
-        const etapaCorretaNoModelo = op.etapas[etapaIndex];
-        if (!etapaCorretaNoModelo) {
-            console.error(`[USUARIO_SELECT_CHANGE] Etapa não encontrada no modelo op.etapas no índice ${etapaIndex} para OP ${op.numero}. Processo inicial era ${etapa.processo}`);
-            return;
+    const etapaCorretaNoModelo = op.etapas[etapaIndex];
+    if (!etapaCorretaNoModelo) {
+        console.error(`[USUARIO_SELECT_CHANGE] Etapa não encontrada no modelo op.etapas no índice ${etapaIndex}`);
+        return;
+    }
+
+    if (op.status === 'finalizado' || op.status === 'cancelada') return;
+
+    // <<< A CORREÇÃO ESTÁ AQUI >>>
+    // Pega o VALOR do select, que agora é o ID do usuário (ou uma string vazia).
+    const novoUsuarioId = usuarioSelect.value; 
+
+    // A comparação agora é entre o ID salvo e o novo ID selecionado.
+    if (etapaCorretaNoModelo.usuario != novoUsuarioId) { // Usar != para comparar string e número se necessário
+        
+        // Salva o ID diretamente no modelo de dados.
+        etapaCorretaNoModelo.usuario = novoUsuarioId;
+
+        // A lógica de limpar a quantidade quando o usuário é des-selecionado continua válida.
+        if (!novoUsuarioId && (await getTipoUsuarioPorProcesso(etapaCorretaNoModelo.processo, op.produto_id) !== 'tiktik')) {
+            etapaCorretaNoModelo.quantidade = 0;
+            if (quantidadeInput) quantidadeInput.value = '';
         }
-
-        if (op.status === 'finalizado' || op.status === 'cancelada') return;
-
-        const novoUsuario = usuarioSelect.value;
-
-        if (etapaCorretaNoModelo.usuario !== novoUsuario) {
-            etapaCorretaNoModelo.usuario = novoUsuario;
-            if (!novoUsuario && (await getTipoUsuarioPorProcesso(etapaCorretaNoModelo.processo, op.produto) !== 'tiktik')) {
-                etapaCorretaNoModelo.quantidade = 0;
-                if (quantidadeInput) quantidadeInput.value = '';
-            }
-            try {
-                console.log(`[usuarioSelect change] Salvando OP após mudança de usuário para etapa ${etapaIndex}: ${etapaCorretaNoModelo.processo}`);
-                await window.saveOPChanges(op);
-            } catch (error) {
-                console.error(`[usuarioSelect change] Erro ao salvar OP após mudar usuário para etapa ${etapaIndex}:`, error);
-                mostrarPopupMensagem('Você não tem autorização para selecionar usuário.', 'erro');
-            }
+        
+        // A lógica para salvar a OP após a mudança continua a mesma, mas não é mais estritamente necessária.
+        // Podemos otimizar isso no futuro para salvar apenas no final.
+        try {
+            console.log(`[usuarioSelect change] Salvando OP após mudança de usuário para etapa ${etapaIndex}. Novo ID: ${novoUsuarioId}`);
+            await window.saveOPChanges(op);
+        } catch (error) {
+            console.error(`[usuarioSelect change] Erro ao salvar OP após mudar usuário para etapa ${etapaIndex}:`, error);
+            mostrarPopupMensagem('Você não tem autorização para selecionar usuário.', 'erro');
         }
-        console.log(`[usuarioSelect change] Chamando atualizarVisualEtapas para OP ${op.numero} após selecionar usuário para etapa ${etapaIndex}`);
-        await atualizarVisualEtapas(op);
-        await updateFinalizarButtonState(op);
-    });
+    }
+    
+    // Atualiza o estado visual da UI
+    await atualizarVisualEtapas(op);
+    await updateFinalizarButtonState(op);
+});
 
     quantidadeInput.addEventListener('focus', () => {
         isEditingQuantidade = true;
@@ -2467,17 +2465,21 @@ function mostrarPopupEtapasFuturas(op, etapaIndexAtual, etapasFuturasParaLancar,
 
             let sucessoGeral = false;
             try {
+                // <<< CORREÇÃO CRUCIAL: Captura o ID do funcionário ANTES de qualquer lançamento >>>
+                const idFuncionarioParaLote = op.etapas[etapaIndexAtual].usuario;
+                if (!idFuncionarioParaLote || isNaN(parseInt(idFuncionarioParaLote))) {
+                    throw new Error('ID do funcionário da etapa atual é inválido para o lançamento em lote.');
+                }
+
+                // 1. Lança a etapa atual
                 console.log(`[PopupEtapas] Lançando etapa atual: ${op.etapas[etapaIndexAtual].processo}`);
+                // Passamos o objeto 'op' original, que ainda tem o ID do usuário na etapa atual
                 const sucessoAtual = await lancarEtapa(op, etapaIndexAtual, quantidadeAtual);
                 if (!sucessoAtual) {
                     throw new Error(`Falha ao lançar a etapa atual (${op.etapas[etapaIndexAtual].processo}).`);
                 }
                 
-                const funcionarioEtapaAtual = op.etapas[etapaIndexAtual].usuario;
-                if (!funcionarioEtapaAtual) {
-                     throw new Error('Funcionário da etapa atual não definido após lançamento. Não é possível prosseguir com etapas futuras.');
-                }
-
+                // 2. Lança as etapas futuras selecionadas
                 const indicesFuturosSelecionados = checkboxesInfo
                     .filter(info => info.checkboxElement.checked)
                     .map(info => info.etapaOriginalIndex);
@@ -2485,7 +2487,10 @@ function mostrarPopupEtapasFuturas(op, etapaIndexAtual, etapasFuturasParaLancar,
                 for (const idxFuturo of indicesFuturosSelecionados) {
                     if (op.etapas[idxFuturo] && !op.etapas[idxFuturo].lancado) {
                         console.log(`[PopupEtapas] Lançando etapa futura: ${op.etapas[idxFuturo].processo}`);
-                        op.etapas[idxFuturo].usuario = funcionarioEtapaAtual;
+                        
+                        // <<< CORREÇÃO: Define o mesmo ID de funcionário para a etapa futura >>>
+                        op.etapas[idxFuturo].usuario = idFuncionarioParaLote;
+                        
                         const sucessoFuturo = await lancarEtapa(op, idxFuturo, quantidadeAtual);
                         if (!sucessoFuturo) {
                             throw new Error(`Falha ao lançar a etapa futura (${op.etapas[idxFuturo].processo}).`);
@@ -3528,6 +3533,5 @@ if (opEditView) {
         }
     });
 }
-// ========================================================
 
 });

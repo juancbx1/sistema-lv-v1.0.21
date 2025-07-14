@@ -322,11 +322,15 @@ async function carregarDetalhesArremateView(agregado) {
     // Popula o select de usuários
     selectUser.innerHTML = '<option value="">Selecione o Tiktik</option>';
     const usuariosTiktik = todosOsUsuarios.filter(u => u.tipos?.includes('tiktik'));
+
     if (usuariosTiktik.length === 0) {
         selectUser.innerHTML = '<option value="">Nenhum usuário Tiktik encontrado</option>';
         selectUser.disabled = true;
     } else {
-        usuariosTiktik.forEach(user => selectUser.add(new Option(user.nome, user.nome)));
+        // <<< MUDANÇA AQUI: O valor da option agora é o ID do usuário >>>
+        usuariosTiktik.forEach(user => {
+            selectUser.add(new Option(user.nome, user.id));
+        });
     }
 
     // Configura o input de quantidade
@@ -362,14 +366,25 @@ async function lancarArremateAgregado() {
     const inputQtd = document.getElementById('inputQuantidadeArrematar');
     const btnLancar = document.getElementById('btnLancarArremateAgregado');
 
-    const usuarioTiktik = selectUser.value;
+    // <<< MUDANÇA: Agora pegamos o ID do select >>>
+    const usuarioTiktikId = parseInt(selectUser.value);
     const quantidadeTotal = parseInt(inputQtd.value);
 
-    if (!usuarioTiktik || isNaN(quantidadeTotal) || quantidadeTotal <= 0 || quantidadeTotal > arremateAgregadoEmVisualizacao.total_quantidade_pendente_arremate) {
+    // Validação
+    if (!usuarioTiktikId || isNaN(quantidadeTotal) || quantidadeTotal <= 0 || quantidadeTotal > arremateAgregadoEmVisualizacao.total_quantidade_pendente_arremate) {
         mostrarPopupMensagem('Verifique os dados. Usuário e quantidade válida são obrigatórios.', 'aviso');
         return;
     }
+
+    // <<< MUDANÇA: Buscamos o objeto completo do usuário para pegar o nome >>>
+    const usuarioSelecionado = todosOsUsuarios.find(u => u.id === usuarioTiktikId);
+    if (!usuarioSelecionado) {
+        mostrarPopupMensagem('Erro: Usuário Tiktik selecionado não foi encontrado.', 'erro');
+        return;
+    }
+    const nomeUsuarioTiktik = usuarioSelecionado.nome;
     
+    // Lógica de bloqueio para evitar cliques duplos
     const lockKey = arremateAgregadoEmVisualizacao.produto + arremateAgregadoEmVisualizacao.variante;
     if (lancamentosArremateEmAndamento.has(lockKey)) return;
     lancamentosArremateEmAndamento.add(lockKey);
@@ -385,18 +400,19 @@ async function lancarArremateAgregado() {
             if (quantidadeRestante <= 0) break;
             const qtdParaEstaOP = Math.min(quantidadeRestante, op.quantidade_pendente_nesta_op);
             if (qtdParaEstaOP > 0) {
-                // A OP vinda da API já deve ter o produto_id
                 const opCompleta = opsFinalizadasCompletas.find(opc => opc.numero === op.numero);
                 if (!opCompleta || !opCompleta.produto_id) {
                     throw new Error(`Não foi possível encontrar o ID do produto para a OP #${op.numero}.`);
                 }
 
+                // <<< MUDANÇA: O payload agora inclui tanto o nome quanto o ID >>>
                 const payload = {
                     op_numero: op.numero,
-                    produto_id: opCompleta.produto_id, // << MUDANÇA ESSENCIAL
+                    produto_id: opCompleta.produto_id,
                     variante: arremateAgregadoEmVisualizacao.variante === '-' ? null : arremateAgregadoEmVisualizacao.variante,
                     quantidade_arrematada: qtdParaEstaOP,
-                    usuario_tiktik: usuarioTiktik
+                    usuario_tiktik: nomeUsuarioTiktik,      // Nome do usuário
+                    usuario_tiktik_id: usuarioTiktikId      // ID do usuário
                 };
                 
                 await fetchFromAPI('/arremates', { method: 'POST', body: JSON.stringify(payload) });

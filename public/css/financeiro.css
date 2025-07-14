@@ -370,9 +370,17 @@ body {
 }
 
 /* Paleta de cores para os cartões */
-.fc-conta-card.cor-1 { background: linear-gradient(135deg, #485461 0%, #28313b 100%); }
-.fc-conta-card.cor-2 { background: linear-gradient(135deg, #6c5ce7 0%, #4834d4 100%); }
-.fc-conta-card.cor-3 { background: linear-gradient(135deg, #1dd1a1 0%, #10ac84 100%); } /* Um verde diferente */
+.fc-conta-card.cor-1 { 
+    background: linear-gradient(135deg, #f39c12 0%, #ab7f38 100%); 
+}
+
+.fc-conta-card.cor-2 { 
+    background: linear-gradient(135deg, #e7795c 0%, #edb760 100%); 
+}
+
+.fc-conta-card.cor-3 { 
+    background: linear-gradient(135deg, #e74c3c 0%, #810f04 100%) 
+} 
 .fc-conta-card.cor-4 { background: linear-gradient(135deg, #54a0ff 0%, #2e86de 100%); } /* Um azul diferente */
 .fc-conta-card.cor-5 { background: linear-gradient(135deg, #ff9f43 0%, #f39c12 100%); } /* Um laranja diferente */
 

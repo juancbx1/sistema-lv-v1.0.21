@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Central de Pagamentos</title>
+    <link rel="stylesheet" href="/css/central-de-pagamentos.css"> 
+    <link rel="stylesheet" href="/css/menu-lateral.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+</head>
+<body>
+    <div class="hamburger-menu">
+        <i class="fas fa-bars"></i>
+        <i class="fas fa-times"></i>
+    </div>
+
+    <main class="cpg-main-container">
+        <div class="cpg-content-wrapper">
+            <!-- HEADER: O breadcrumb agora aponta para a própria Central -->
+            <header class="cpg-header">
+                <div id="breadcrumbContainer" class="cpg-breadcrumbs">
+                    <!-- CORREÇÃO: Removido link para dashboard que não existe aqui -->
+                    <span class="active">Central de Pagamentos</span>
+                </div>
+                <div class="cpg-header-actions">
+                    <!-- Ícone de Histórico (preparado para o futuro) -->
+                    <button id="cpg-btn-historico" class="cpg-btn-icon" title="Ver Histórico de Pagamentos">
+                        <i class="fas fa-history"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- NOVA ESTRUTURA DE ABAS -->
+            <section id="viewPrincipal">
+                <div class="cpg-tabs-container">
+            <button class="cpg-tab-btn active" data-tab="comissao">
+                <i class="fas fa-percent"></i>
+                <span class="cpg-tab-text">Comissão</span>
+            </button>
+            <!-- NOVA ABA ADICIONADA -->
+            <button class="cpg-tab-btn" data-tab="bonus">
+                <i class="fas fa-star"></i>
+                <span class="cpg-tab-text">Bônus e Premiações</span>
+            </button>
+            <button class="cpg-tab-btn" data-tab="passagem">
+                <i class="fas fa-bus-alt"></i>
+                <span class="cpg-tab-text">Passagem</span>
+            </button>
+            <button class="cpg-tab-btn" data-tab="salario">
+                <i class="fas fa-file-invoice-dollar"></i>
+                <span class="cpg-tab-text">Salário</span>
+            </button>
+            <button class="cpg-tab-btn" data-tab="beneficios">
+                <i class="fas fa-gift"></i>
+                <span class="cpg-tab-text">Benefícios</span>
+            </button>
+        </div>
+
+        <div class="cpg-tabs-content">
+            
+            <!-- PAINEL DA ABA COMISSÃO (sem alterações) -->
+            <div id="tab-comissao" class="cpg-tab-panel active">
+                <div class="cpg-card">
+                    <h2 class="cpg-section-title">Cálculo de Comissão por Ciclo</h2>
+                    <div class="cpg-form-row">
+                        <div class="cpg-form-group">
+                            <label for="comissao-filtro-empregado">Empregado</label>
+                            <select id="comissao-filtro-empregado" class="cpg-select" disabled>
+                                <option value="">Carregando...</option>
+                            </select>
+                        </div>
+                        <div class="cpg-form-group">
+                            <label for="comissao-filtro-ciclo">Ciclo de Pagamento</label>
+                            <select id="comissao-filtro-ciclo" class="cpg-select" disabled>
+                                <option value="">Selecione o empregado</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="comissao-resultado-container"></div>
+                </div>
+            </div>
+
+            <!-- NOVO PAINEL DA ABA BÔNUS -->
+            <div id="tab-bonus" class="cpg-tab-panel">
+                <div class="cpg-card">
+                    <h2 class="cpg-section-title">Conceder Bônus ou Premiação</h2>
+                    <div class="cpg-form-group">
+                        <label for="bonus-filtro-empregado">Selecione o Empregado*</label>
+                        <select id="bonus-filtro-empregado" class="cpg-select" disabled>
+                            <option value="">Carregando...</option>
+                        </select>
+                    </div>
+                    <div class="cpg-form-group">
+                        <label for="bonus-valor">Valor do Bônus (R$)*</label>
+                        <input type="number" id="bonus-valor" class="cpg-input" placeholder="Ex: 150.00" step="0.01" min="0.01">
+                    </div>
+                    <div class="cpg-form-group">
+                        <label for="bonus-motivo">Motivo/Descrição do Bônus*</label>
+                        <textarea id="bonus-motivo" class="cpg-input" rows="3" placeholder="Ex: Bônus por meta extra de produção no mês de Julho"></textarea>
+                    </div>
+                    <div class="cpg-form-group">
+                        <label for="bonus-conta-debito">Debitar da Conta Financeira*</label>
+                        <select id="bonus-conta-debito" class="cpg-select" disabled>
+                            <option value="">Carregando contas...</option>
+                        </select>
+                    </div>
+                    <button id="bonus-btn-conceder" class="cpg-btn cpg-btn-primario" style="width: 100%; margin-top: 10px;">
+                        <i class="fas fa-gift"></i> Conceder Bônus
+                    </button>
+                </div>
+            </div>
+                    <!-- PAINEL DA ABA 2: PASSAGEM -->
+                    <div id="tab-passagem" class="cpg-tab-panel">
+                        <div class="cpg-card">
+                            <h2 class="cpg-section-title">Recarga de Vale Transporte</h2>
+                            <p>Em breve!</p>
+                        </div>
+                    </div>
+
+                    <!-- PAINEL DA ABA 3: SALÁRIO -->
+                    <div id="tab-salario" class="cpg-tab-panel">
+                        <div class="cpg-card">
+                             <h2 class="cpg-section-title">Pagamento de Salário Mensal</h2>
+                             <p>Em breve!</p>
+                        </div>
+                    </div>
+
+                    <!-- PAINEL DA ABA 4: BENEFÍCIOS -->
+                    <div id="tab-beneficios" class="cpg-tab-panel">
+                        <div class="cpg-card">
+                            <h2 class="cpg-section-title">Pagamento de Benefícios</h2>
+                            <p>Em breve!</p>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script src="/js/admin-central-de-pagamentos.js" type="module"></script>
+    <script src="/js/carregar-menu-lateral.js" type="module"></script>
+</body>
+</html>
