@@ -63,31 +63,42 @@ inicializarMapeamentoCategorias();
 
 // --- Middleware de Autenticação para este Módulo ---
 router.use(async (req, res, next) => {
+    // --- LOG DE ENTRADA DO MIDDLEWARE ---
+    console.log(`[PAGAMENTOS MIDDLEWARE] Rota acessada: ${req.method} ${req.originalUrl}`);
+
+    let dbClient;
     try {
         const token = req.headers.authorization?.split(' ')[1];
         if (!token) {
             return res.status(401).json({ error: 'Token não fornecido.' });
         }
+        
+        // 1. Decodifica o token para obter o ID do usuário
         req.usuarioLogado = jwt.verify(token, SECRET_KEY);
+        
+        // 2. Conecta ao banco de dados para buscar as permissões
+        dbClient = await pool.connect();
+        req.permissoesUsuario = await getPermissoesCompletasUsuarioDB(dbClient, req.usuarioLogado.id);
+        
+        // --- LOG DE SUCESSO DO MIDDLEWARE ---
+        console.log(`[PAGAMENTOS MIDDLEWARE] Permissões carregadas para o usuário ID ${req.usuarioLogado.id}.`);
 
-        const dbClient = await pool.connect();
-        try {
-            req.permissoesUsuario = await getPermissoesCompletasUsuarioDB(dbClient, req.usuarioLogado.id);
-            // Vamos criar uma permissão nova para acessar esta central
-            if (!req.permissoesUsuario.includes('acessar-central-pagamentos')) {
-                return res.status(403).json({ error: 'Permissão negada para acessar a central de pagamentos.' });
-            }
-            next();
-        } finally {
-            dbClient.release();
-        }
+        next(); // Passa para a rota específica (ex: /efetuar, /registros-dias)
+
     } catch (error) {
         let message = 'Token inválido ou expirado.';
-        if (error.name === 'TokenExpiredError') message = 'Sessão expirada. Faça login novamente.';
-        return res.status(401).json({ error: message });
+        if (error.name === 'TokenExpiredError') {
+            message = 'Sessão expirada. Faça login novamente.';
+        } else {
+            console.error('[PAGAMENTOS MIDDLEWARE] Erro:', error);
+        }
+        return res.status(401).json({ error: message, details: 'jwt_error' });
+    } finally {
+        // IMPORTANTE: O middleware libera a conexão.
+        // As rotas que o seguem precisarão de sua própria conexão.
+        if (dbClient) dbClient.release();
     }
 });
-
 
 // --- ROTA PRINCIPAL DE CÁLCULO ---
 // GET /api/pagamentos/calcular?usuario_id=123&ciclo_index=4
@@ -277,7 +288,7 @@ router.post('/efetuar', async (req, res) => {
 
     const { calculo, id_conta_debito } = req.body;
     const id_usuario_pagador = req.usuarioLogado.id;
-
+    
     if (!calculo || !calculo.detalhes || !calculo.proventos || !calculo.totais || !id_conta_debito) {
         return res.status(400).json({ error: 'Dados do cálculo ou conta de débito ausentes ou malformados.' });
     }
@@ -286,64 +297,81 @@ router.post('/efetuar', async (req, res) => {
     const { funcionario, ciclo, tipoPagamento } = detalhes;
     const id_funcionario = funcionario.id;
     const nome_funcionario = funcionario.nome;
-
+    const nomeCicloOuMotivo = ciclo.nome || '';
+    
+    // --- LOGS INICIAIS ---
+    console.log('--- INICIANDO PAGAMENTO ---');
+    console.log(`Tipo de Pagamento: ${tipoPagamento}`);
+    console.log(`Empregado: ${nome_funcionario} (ID: ${id_funcionario})`);
+    console.log(`Referência (Ciclo/Motivo): "${nomeCicloOuMotivo}"`);
+    console.log(`Valor Líquido: ${totais.totalLiquidoAPagar}`);
+    console.log('Payload completo recebido:', JSON.stringify(calculo, null, 2));
+    
     let dbClient;
     try {
         dbClient = await pool.connect();
-        // --- LOG 1: Rota acionada ---
+        
         if (tipoPagamento === 'COMISSAO') {
             const checkQuery = "SELECT id FROM historico_pagamentos_funcionarios WHERE usuario_id = $1 AND ciclo_nome = $2";
-            const checkResult = await dbClient.query(checkQuery, [id_funcionario, ciclo.nome]);
+            const checkResult = await dbClient.query(checkQuery, [id_funcionario, nomeCicloOuMotivo]);
             if (checkResult.rowCount > 0) {
-                return res.status(409).json({ error: `Pagamento de comissão para o ciclo "${ciclo.nome}" já foi registrado.` });
+                return res.status(409).json({ error: `Pagamento de comissão para o ciclo "${nomeCicloOuMotivo}" já foi registrado.` });
             }
         }
         
         await dbClient.query('BEGIN');
+        console.log("Transação BEGIN executada.");
+
         const userRes = await dbClient.query('SELECT id_contato_financeiro FROM usuarios WHERE id = $1', [id_funcionario]);
         if (userRes.rows.length === 0 || !userRes.rows[0].id_contato_financeiro) {
             throw new Error(`O empregado ${nome_funcionario} não possui um contato financeiro vinculado.`);
         }
         const id_contato_financeiro = userRes.rows[0].id_contato_financeiro;
+        console.log(`Contato Financeiro ID: ${id_contato_financeiro}`);
+        
         const dataTransacao = new Date().toISOString();
 
         const fazerLancamento = async (idCategoria, valor, descricao) => {
             if (valor <= 0) return;
-            if (!idCategoria) {
-                throw new Error(`ID de categoria para "${descricao}" não configurado. Verifique as configurações e reinicie o servidor.`);
-            }
+            if (!idCategoria) throw new Error(`ID de categoria para "${descricao}" não configurado.`);
+            
+            console.log(`Preparando para inserir no financeiro: [Valor: ${valor}, CategoriaID: ${idCategoria}, Desc: "${descricao}"]`);
+            
             await dbClient.query(
                 `INSERT INTO fc_lancamentos (id_conta_bancaria, id_categoria, tipo, valor, data_transacao, descricao, id_contato, id_usuario_lancamento) VALUES ($1, $2, 'DESPESA', $3, $4, $5, $6, $7)`,
-                [id_conta_debito, idCategoria, valor, dataTransacao, descricao, id_contato_financeiro, req.usuarioLogado.id]
+                [id_conta_debito, idCategoria, valor, dataTransacao, descricao, id_contato_financeiro, id_usuario_pagador]
             );
+            console.log("Lançamento no financeiro bem-sucedido.");
         };
 
-        // <<< LÓGICA DE LANÇAMENTO REVISADA E MAIS CLARA >>>
-        const nomeCiclo = ciclo.nome || ''; // Garante que não seja undefined
-
         if (tipoPagamento === 'COMISSAO') {
-            await fazerLancamento(CATEGORIA_MAP.COMISSAO, proventos.comissao, `Pgto Comissão (${nomeCiclo})`);
+            await fazerLancamento(CATEGORIA_MAP.COMISSAO, proventos.comissao, `Pgto Comissão (${nomeCicloOuMotivo})`);
         } else if (tipoPagamento === 'BONUS') {
-            // Para bônus, 'nomeCiclo' contém o motivo.
-            await fazerLancamento(CATEGORIA_MAP.BONUS_PREMIACOES, proventos.beneficios, `Bônus/Premiação: ${nomeCiclo}`);
+            await fazerLancamento(CATEGORIA_MAP.BONUS_PREMIACOES, proventos.beneficios, `Bônus/Premiação: ${nomeCicloOuMotivo}`);
         }
-        // (Adicione aqui a lógica para SALARIO e PASSAGENS no futuro)
         
         if (totais.totalLiquidoAPagar > 0) {
-            const cicloParaSalvar = (tipoPagamento === 'COMISSAO') ? nomeCiclo : null;
-            const descricaoParaSalvar = (tipoPagamento === 'COMISSAO') ? 'Pagamento de Comissão' : nomeCiclo; // Para bônus, é o motivo.
-
+            const cicloParaSalvar = (tipoPagamento === 'COMISSAO') ? nomeCicloOuMotivo : null;
+            const descricaoParaSalvar = (tipoPagamento === 'COMISSAO') ? 'Pagamento de Comissão' : nomeCicloOuMotivo;
+            
+            console.log(`Preparando para inserir no histórico: [Ciclo: ${cicloParaSalvar}, Desc: ${descricaoParaSalvar}]`);
+            
             await dbClient.query(
                 `INSERT INTO historico_pagamentos_funcionarios (usuario_id, ciclo_nome, descricao, valor_liquido_pago, id_usuario_pagador, detalhes_pagamento, id_conta_debito) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
                 [id_funcionario, cicloParaSalvar, descricaoParaSalvar, totais.totalLiquidoAPagar, id_usuario_pagador, JSON.stringify(calculo), id_conta_debito]
             );
+            console.log("Inserção no histórico bem-sucedida.");
         }
 
         await dbClient.query('COMMIT');
+        console.log("Transação COMMIT executada.");
+        
         res.status(201).json({ message: `Pagamento para ${nome_funcionario} efetuado com sucesso!` });
 
     } catch (error) {
         if (dbClient) await dbClient.query('ROLLBACK');
+        // Este é o log mais importante
+        console.error('[API /pagamentos/efetuar] ERRO NA TRANSAÇÃO, ROLLBACK EXECUTADO:', error);
         res.status(500).json({ error: 'Erro ao efetuar pagamento.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
@@ -378,6 +406,66 @@ router.get('/historico', async (req, res) => {
     } catch (error) {
         console.error('[API /historico] Erro:', error);
         res.status(500).json({ error: 'Erro ao buscar histórico de pagamentos.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// GET /api/pagamentos/registros-dias?usuario_id=X&inicio=YYYY-MM-DD&fim=YYYY-MM-DD
+router.get('/registros-dias', async (req, res) => {
+    // A rota agora espera que req.usuarioLogado já exista (do middleware)
+    const { usuarioLogado } = req;
+    const { usuario_id, start, end } = req.query;
+
+    if (!usuario_id || !start || !end) {
+        return res.status(400).json({ error: 'Parâmetros usuario_id, start e end são obrigatórios.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+
+        // <<< A VERIFICAÇÃO DE PERMISSÃO AGORA ACONTECE AQUI DENTRO >>>
+        const permissoesUsuario = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
+        if (!permissoesUsuario.includes('acessar-central-pagamentos')) {
+            return res.status(403).json({ error: 'Permissão negada para acessar esta funcionalidade.' });
+        }
+        
+        // O resto da lógica da rota continua a mesma
+        const query = `
+            SELECT data, status, valor_referencia, observacao 
+            FROM registro_dias_trabalhados
+            WHERE usuario_id = $1 AND data BETWEEN $2 AND $3
+        `;
+        const result = await dbClient.query(query, [usuario_id, start, end]);
+        
+        const eventos = result.rows.map(row => {
+            let color = '#7f8c8d';
+            if (row.status === 'PAGO') color = '#27ae60';
+            if (row.status === 'FALTA_NAO_JUSTIFICADA') color = '#f39c12';
+            if (row.status === 'FALTA_COMPENSAR') color = '#8e44ad';
+            if (row.status === 'COMPENSADO') color = '#bdc3c7';
+
+            return {
+                id: row.data.toISOString().split('T')[0], // Garante que a data seja string YYYY-MM-DD
+                title: row.status.replace(/_/g, ' '),
+                start: row.data,
+                allDay: true,
+                backgroundColor: color,
+                borderColor: color,
+                extendedProps: {
+                    status: row.status,
+                    valor: row.valor_referencia,
+                    observacao: row.observacao
+                }
+            };
+        });
+
+        res.status(200).json(eventos);
+
+    } catch (error) {
+        console.error('[API /registros-dias] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar registros de dias.' });
     } finally {
         if (dbClient) dbClient.release();
     }

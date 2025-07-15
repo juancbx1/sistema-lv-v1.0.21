@@ -379,9 +379,11 @@ body {
 }
 
 .fc-conta-card.cor-3 { 
-    background: linear-gradient(135deg, #e74c3c 0%, #810f04 100%) 
+    background: linear-gradient(135deg, #159d23 0%, #d7c938 100%) 
 } 
-.fc-conta-card.cor-4 { background: linear-gradient(135deg, #54a0ff 0%, #2e86de 100%); } /* Um azul diferente */
+.fc-conta-card.cor-4 { 
+    background: linear-gradient(135deg, #a32315 0%, #c0392b 100%); 
+} 
 .fc-conta-card.cor-5 { background: linear-gradient(135deg, #ff9f43 0%, #f39c12 100%); } /* Um laranja diferente */
 
 

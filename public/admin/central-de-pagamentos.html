@@ -4,11 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Central de Pagamentos</title>
+    <!-- FullCalendar CSS -->
+    <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/main.min.css' rel='stylesheet' />
+    <link href='https://cdn.jsdelivr.net/npm/@fullcalendar/daygrid@6.1.11/main.min.css' rel='stylesheet' />
     <link rel="stylesheet" href="/css/central-de-pagamentos.css"> 
     <link rel="stylesheet" href="/css/menu-lateral.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
 </head>
 <body>
+
+     <!-- SPINNER DE CARREGAMENTO GLOBAL -->
+    <div id="cpg-global-spinner" class="cpg-spinner-overlay">
+        <div class="cpg-spinner-container">
+            <div class="cpg-spinner-dots">
+                <div></div>
+                <div></div>
+                <div></div>
+            </div>
+            <span class="cpg-spinner-texto">Carregando dados...</span>
+        </div>
+    </div>
+
+
     <div class="hamburger-menu">
         <i class="fas fa-bars"></i>
         <i class="fas fa-times"></i>
@@ -111,11 +128,58 @@
             </div>
                     <!-- PAINEL DA ABA 2: PASSAGEM -->
                     <div id="tab-passagem" class="cpg-tab-panel">
-                        <div class="cpg-card">
-                            <h2 class="cpg-section-title">Recarga de Vale Transporte</h2>
-                            <p>Em breve!</p>
-                        </div>
+    <div class="cpg-card">
+        <h2 class="cpg-section-title">Pagamento de Passagens (Vale-Transporte)</h2>
+        
+        <!-- Filtro de Empregado -->
+        <div class="cpg-form-group" style="max-width: 400px; margin-bottom: 20px;">
+            <label for="passagem-filtro-empregado">Selecione o Empregado</label>
+            <select id="passagem-filtro-empregado" class="cpg-select" disabled>
+                <option value="">Carregando...</option>
+            </select>
+        </div>
+
+        <!-- Layout principal com Calendário e Ações -->
+        <div id="passagem-layout-principal" class="cpg-passagem-layout hidden">
+            <!-- Coluna do Calendário -->
+            <div class="cpg-calendario-container">
+                <div id="calendario-passagens"></div>
+                <div class="cpg-legenda-calendario">
+                    <span><i class="fas fa-circle" style="color: #27ae60;"></i> Pago</span>
+                    <span><i class="fas fa-circle" style="color: #f39c12;"></i> Falta</span>
+                    <span><i class="fas fa-circle" style="color: #8e44ad;"></i> A Compensar</span>
+                    <span><i class="fas fa-circle" style="color: #bdc3c7;"></i> Compensado</span>
+                </div>
+            </div>
+
+            <!-- Coluna de Ações e Pagamento -->
+            <div class="cpg-acoes-container">
+                <div class="cpg-card" style="background-color: #f8f9fa;">
+                    <h3 class="cpg-section-title" style="border: none; padding-bottom: 0;">Resumo do Pagamento</h3>
+                    
+                    <div id="passagem-resumo-pagamento">
+                        <p class="cpg-resumo-placeholder">Clique nos dias do calendário para selecionar as passagens a pagar.</p>
                     </div>
+
+                    <div id="passagem-area-pagamento" class="hidden">
+                        <hr style="margin: 20px 0;">
+                        <div class="cpg-form-group">
+                            <label for="passagem-conta-debito">Debitar da Conta Financeira*</label>
+                            <select id="passagem-conta-debito" class="cpg-select" required>
+                                <!-- Opções carregadas pelo JS -->
+                            </select>
+                        </div>
+                        <button id="passagem-btn-efetuar-pagamento" class="cpg-btn cpg-btn-primario" style="width: 100%; margin-top: 10px;">
+                            <i class="fas fa-check-circle"></i> Efetuar Pagamento
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <p id="passagem-mensagem-inicial">Selecione um empregado para visualizar o calendário.</p>
+    </div>
+</div>
 
                     <!-- PAINEL DA ABA 3: SALÁRIO -->
                     <div id="tab-salario" class="cpg-tab-panel">
@@ -137,6 +201,10 @@
             </section>
         </div>
     </main>
+
+     <!-- FullCalendar JS -->
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
+    <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/locales-all@6.1.11/index.global.min.js'></script>
 
     <script src="/js/admin-central-de-pagamentos.js" type="module"></script>
     <script src="/js/carregar-menu-lateral.js" type="module"></script>

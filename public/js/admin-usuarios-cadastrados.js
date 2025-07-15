@@ -2,6 +2,8 @@
 import { verificarAutenticacao } from '/js/utils/auth.js';
 import { fetchAPI } from '/js/utils/api-utils.js';
 
+let concessionariasVTCache = [];
+
 
 // Definição dos tipos de usuário disponíveis para seleção (poderia vir de permissoes.js também)
 const TIPOS_USUARIO_DISPONIVEIS = [
@@ -34,25 +36,37 @@ document.addEventListener('DOMContentLoaded', async () => {
   let todosOsUsuarios = []; // Cache dos usuários
   let usuariosFiltradosGlobal = []; // Para paginação
 
-  async function carregarUsuariosCadastrados() {
+ async function carregarUsuariosCadastrados() {
     if (!listaEl) return;
     loadingSpinnerEl.style.display = 'block';
-    listaEl.innerHTML = ''; // Limpa a lista antes de carregar
+    listaEl.innerHTML = '';
+
     try {
-      const response = await fetch('/api/usuarios', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-      });
-      if (!response.ok) throw new Error(`Erro HTTP ${response.status} ao carregar usuários.`);
-      todosOsUsuarios = await response.json();
-      todosOsUsuarios.sort((a, b) => a.nome.localeCompare(b.nome)); // Ordena por nome
-      filtrarEPaginarUsuarios();
+        // --- MUDANÇA PRINCIPAL AQUI ---
+        // Usamos Promise.all para buscar usuários e concessionárias em paralelo.
+        console.log("Iniciando busca de usuários e concessionárias...");
+
+        const [usuarios, concessionarias] = await Promise.all([
+            fetchAPI('/api/usuarios'),
+            fetchAPI('/api/financeiro/concessionarias-vt')
+        ]);
+        
+        console.log(`Busca concluída: ${usuarios.length} usuários, ${concessionarias.length} concessionárias.`);
+
+        // Armazena os resultados nos caches globais
+        todosOsUsuarios = usuarios.sort((a, b) => a.nome.localeCompare(b.nome));
+        concessionariasVTCache = concessionarias;
+
+        // Agora que AMBOS os caches estão preenchidos, podemos renderizar.
+        filtrarEPaginarUsuarios();
+
     } catch (error) {
-      console.error('[carregarUsuariosCadastrados] Erro:', error);
-      listaEl.innerHTML = '<p class="uc-erro-carregamento">Erro ao carregar usuários. Tente novamente mais tarde.</p>';
+        console.error('[carregarUsuariosCadastrados] Erro:', error);
+        listaEl.innerHTML = `<p class="uc-erro-carregamento">Erro ao carregar dados: ${error.message}. Tente recarregar a página.</p>`;
     } finally {
-      loadingSpinnerEl.style.display = 'none';
+        loadingSpinnerEl.style.display = 'none';
     }
-  }
+}
 
   function filtrarEPaginarUsuarios() {
     const filtroSelecionado = filtroTipoEl.value || '';
@@ -61,21 +75,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         : [...todosOsUsuarios];
 
     const totalPaginas = Math.ceil(usuariosFiltradosGlobal.length / usuariosPorPagina);
-    paginaAtual = Math.max(1, Math.min(paginaAtual, totalPaginas)); // Garante que a página atual é válida
+    paginaAtual = Math.max(1, Math.min(paginaAtual, totalPaginas));
 
     const inicio = (paginaAtual - 1) * usuariosPorPagina;
     const fim = inicio + usuariosPorPagina;
     const usuariosDaPagina = usuariosFiltradosGlobal.slice(inicio, fim);
 
-    renderizarCardsUsuarios(usuariosDaPagina);
+    // <<< MUDANÇA: Passamos as permissões para a função de renderização >>>
+    renderizarCardsUsuarios(usuariosDaPagina, permissoesDoUsuarioLogado);
     atualizarControlesPaginacao(totalPaginas);
-  }
+}
 
-function renderizarCardsUsuarios(usuariosParaRenderizar) {
+
+function renderizarCardsUsuarios(usuariosParaRenderizar, permissoes) {
     listaEl.innerHTML = '';
     if (usuariosParaRenderizar.length === 0) {
         listaEl.innerHTML = '<p class="uc-sem-resultados">Nenhum usuário encontrado com os filtros aplicados.</p>';
         return;
+    }
+
+    // <<< VERIFICAÇÃO DE SEGURANÇA >>>
+    if (!concessionariasVTCache || concessionariasVTCache.length === 0) {
+        console.warn("Atenção: O cache de concessionárias está vazio no momento da renderização.");
     }
 
     usuariosParaRenderizar.forEach((usuario) => {
@@ -95,11 +116,27 @@ function renderizarCardsUsuarios(usuariosParaRenderizar) {
             <label><input type="checkbox" name="tipoUsuario" value="${tipoDisp.id}" ${tiposAtuais.includes(tipoDisp.id) ? 'checked' : ''} disabled> ${tipoDisp.label}</label>
         `).join('');
 
-        // Lógica para exibir o status do vínculo financeiro
         const vinculoTexto = usuario.id_contato_financeiro 
             ? `<i class="fas fa-check-circle" style="color: #27ae60;"></i> Vinculado a: <strong>${usuario.nome_contato_financeiro || 'Contato não encontrado'}</strong>` 
             : `<i class="fas fa-exclamation-triangle" style="color: #f39c12;"></i> Não vinculado`;
         
+        // <<< LÓGICA CORRIGIDA PARA GERAR OS CHECKBOXES DE CONCESSIONÁRIAS >>>
+         const idsConcessionariasDoUsuario = Array.isArray(usuario.concessionarias_vt) ? usuario.concessionarias_vt : [];
+        const concessionariasCheckboxesHtml = concessionariasVTCache.length > 0
+            ? concessionariasVTCache.map(conc => `
+                <label>
+                    <input type="checkbox" class="uc-checkbox-edit uc-concessionaria-checkbox" 
+                           value="${conc.id}" 
+                           ${idsConcessionariasDoUsuario.includes(conc.id) ? 'checked' : ''} 
+                           disabled>
+                    ${conc.nome}
+                </label>
+            `).join('')
+            : '<span>Nenhuma concessionária cadastrada.</span>'; // Esta mensagem só deve aparecer se o cache estiver vazio.
+
+        const podeEditar = permissoes.includes('editar-usuarios');
+        const podeExcluir = permissoes.includes('excluir-usuarios');
+
         card.innerHTML = `
           <div class="usuario-info">
             <p><span>Nome:</span> <strong class="uc-nome-usuario">${usuario.nome}</strong></p>
@@ -108,40 +145,36 @@ function renderizarCardsUsuarios(usuariosParaRenderizar) {
             <p><span>Tipos:</span> <span class="uc-dado-texto uc-tipos-texto">${tiposLabels}</span><div class="uc-tipos-container" style="display: none;">${tiposCheckboxesHtml}</div></p>
             <p><span>Nível:</span> ${ehFuncionario ? `<span class="uc-dado-texto uc-nivel-texto">Nível ${usuario.nivel || 'N/A'}</span><select class="uc-select-edit uc-nivel-select" style="display: none;"><option value="" ${!usuario.nivel ? 'selected' : ''}>Sem Nível</option><option value="1" ${usuario.nivel === 1 ? 'selected' : ''}>Nível 1</option><option value="2" ${usuario.nivel === 2 ? 'selected' : ''}>Nível 2</option><option value="3" ${usuario.nivel === 3 ? 'selected' : ''}>Nível 3</option><option value="4" ${usuario.nivel === 4 ? 'selected' : ''}>Nível 4</option></select>` : '<span class="uc-dado-texto">-</span>'}</p>
             
-            <!-- Vínculo Financeiro e Elegibilidade (serão gerenciados no modo de edição) -->
             <div class="uc-financeiro-container" style="display: ${ehFuncionario ? 'block' : 'none'};">
-                <p><span>Vínculo Financeiro:</span> 
-                    <span class="uc-dado-texto uc-vinculo-financeiro-texto">${vinculoTexto}</span>
-                    <button class="uc-btn uc-btn-vincular" data-action="vincular" style="display: none; background-color: #e67e22; color: white; padding: 4px 8px; font-size: 0.8rem;">
-                        <i class="fas fa-link"></i> Vincular
-                    </button>
-                    <input type="hidden" class="uc-id-contato-input" value="${usuario.id_contato_financeiro || ''}">
-                </p>
-                <div class="uc-elegivel-container" style="display:none;">
-                    <label>
-                        <input type="checkbox" class="uc-checkbox-edit uc-elegivel-checkbox" ${usuario.elegivel_pagamento ? 'checked' : ''}>
-                        Elegível para pagamentos na Central
-                    </label>
+                <p><span>Vínculo Financeiro:</span> <span class="uc-dado-texto uc-vinculo-financeiro-texto">${vinculoTexto}</span><button class="uc-btn uc-btn-vincular" data-action="vincular" style="display: none; background-color: #e67e22; color: white; padding: 4px 8px; font-size: 0.8rem;"><i class="fas fa-link"></i> Vincular</button><input type="hidden" class="uc-id-contato-input" value="${usuario.id_contato_financeiro || ''}"></p>
+                <div class="uc-elegivel-container" style="display:none;"><label><input type="checkbox" class="uc-checkbox-edit uc-elegivel-checkbox" ${usuario.elegivel_pagamento ? 'checked' : ''}> Elegível para pagamentos na Central</label></div>
+
+                <div class="uc-concessionarias-container" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dotted #e2e8f0;">
+                    <label class="uc-dado-label">Concessionárias de VT:</label>
+                    <div class="uc-checkbox-group">
+                        ${concessionariasCheckboxesHtml}
+                    </div>
                 </div>
             </div>
             
-            <!-- Salário e Passagem (só aparece se for funcionário) -->
-            <div class="uc-pagamento-container" style="display: ${ehFuncionario ? 'block' : 'none'};">
-                <span class="uc-dado-texto uc-pagamento-texto">
-                    Salário: <strong>${(usuario.salario_fixo || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</strong> | 
-                    Passagem/Dia: <strong>${(usuario.valor_passagem_diaria || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</strong>
-                </span>
-                <div class="uc-pagamento-inputs" style="display: none;">
-                    <label>Salário Fixo Mensal</label><input type="number" class="uc-input-edit uc-salario-input" value="${usuario.salario_fixo || '0.00'}" step="0.01">
-                    <label>Valor Passagem/Dia</label><input type="number" class="uc-input-edit uc-passagem-input" value="${usuario.valor_passagem_diaria || '0.00'}" step="0.01">
-                    <label>Desconto VT (%)</label><input type="number" class="uc-input-edit uc-desconto-vt-input" value="${usuario.desconto_vt_percentual || '6.0'}" step="0.1">
-                </div>
-            </div>
+            <div class="uc-pagamento-container" style="display: ${ehFuncionario ? 'block' : 'none'};"><span class="uc-dado-texto uc-pagamento-texto">Salário: <strong>${(usuario.salario_fixo || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</strong> | Passagem/Dia: <strong>${(usuario.valor_passagem_diaria || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</strong></span>
+            <div class="uc-pagamento-inputs" style="display: none;">
+            <label>Salário Fixo Mensal</label>
+            <input type="number" class="uc-input-edit uc-salario-input" value="${usuario.salario_fixo || '0.00'}" step="0.01">
+            <label>Valor Passagem/Dia</label>
+            <input type="number" class="uc-input-edit uc-passagem-input" value="${usuario.valor_passagem_diaria || '0.00'}" step="0.01">
+            </div></div>
           </div>
           <div class="uc-card-botoes-container">
-              ${permissoesDoUsuarioLogado.includes('editar-usuarios') ? `<button class="uc-btn uc-btn-editar" data-action="editar"><i class="fas fa-edit"></i> Editar</button><button class="uc-btn uc-btn-salvar" data-action="salvar" style="display: none;"><i class="fas fa-save"></i> Salvar</button><button class="uc-btn uc-btn-cancelar" data-action="cancelar" style="display: none;"><i class="fas fa-times"></i> Cancelar</button>` : ''}
-              ${permissoesDoUsuarioLogado.includes('excluir-usuarios') ? `<button class="uc-btn uc-btn-excluir-card" data-action="excluir"><i class="fas fa-trash"></i> Excluir</button>` : ''}
-          </div>
+          ${podeEditar ? `
+              <button class="uc-btn uc-btn-editar" data-action="editar"><i class="fas fa-edit"></i> Editar</button>
+              <button class="uc-btn uc-btn-salvar" data-action="salvar" style="display: none;"><i class="fas fa-save"></i> Salvar</button>
+              <button class="uc-btn uc-btn-cancelar" data-action="cancelar" style="display: none;"><i class="fas fa-times"></i> Cancelar</button>
+            ` : ''}
+                ${podeExcluir ? `  
+              <button class="uc-btn uc-btn-excluir-card" data-action="excluir"><i class="fas fa-trash"></i> Excluir</button>
+           ` : ''}
+              </div>
         `;
         listaEl.appendChild(card);
     });
@@ -163,55 +196,26 @@ function adicionarEventosAosCards() {
         const btnCancelar = card.querySelector('.uc-btn-cancelar');
         const btnExcluir = card.querySelector('.uc-btn-excluir-card');
 
-        // Referências aos elementos de visualização (texto)
+        // Referências aos elementos
         const nomeUsuarioTexto = card.querySelector('.uc-nome-usuario-texto');
-        const emailTexto = card.querySelector('.uc-email-texto');
-        const tiposTexto = card.querySelector('.uc-tipos-texto');
-        const nivelTexto = card.querySelector('.uc-nivel-texto');
-        const vinculoTexto = card.querySelector('.uc-vinculo-financeiro-texto');
-        const pagamentoTexto = card.querySelector('.uc-pagamento-texto');
-        
-        // Referências aos elementos de edição (inputs, selects, etc.)
         const nomeUsuarioInput = card.querySelector('.uc-nome-usuario-input');
         const emailInput = card.querySelector('.uc-email-input');
         const tiposContainer = card.querySelector('.uc-tipos-container');
         const nivelSelect = card.querySelector('.uc-nivel-select');
-        const pagamentoInputsContainer = card.querySelector('.uc-pagamento-inputs');
-        const salarioInput = card.querySelector('.uc-salario-input');
-        const passagemInput = card.querySelector('.uc-passagem-input');
-        const descontoVtInput = card.querySelector('.uc-desconto-vt-input');
-        const elegivelContainer = card.querySelector('.uc-elegivel-container');
         const elegivelCheckbox = card.querySelector('.uc-elegivel-checkbox');
-        const btnVincular = card.querySelector('.uc-btn-vincular');
         const idContatoInput = card.querySelector('.uc-id-contato-input');
-        
-        // Variável para guardar o estado original ao entrar em modo de edição
-        let originalValues = {};
+        const concessionariasContainer = card.querySelector('.uc-concessionarias-container'); // Container das concessionárias
+        const btnVincular = card.querySelector('.uc-btn-vincular');
 
-        // --- Lógica completa para o botão EDITAR ---
+        // --- Lógica para o botão EDITAR ---
         if (btnEditar) {
             btnEditar.addEventListener('click', () => {
-                // Guarda o estado atual de todos os campos editáveis
-                originalValues = {
-                    nomeUsuario: nomeUsuarioInput.value,
-                    email: emailInput.value,
-                    tipos: tiposContainer ? Array.from(tiposContainer.querySelectorAll('input:checked')).map(cb => cb.value) : [],
-                    nivel: nivelSelect ? nivelSelect.value : null,
-                    salario: salarioInput ? salarioInput.value : null,
-                    passagem: passagemInput ? passagemInput.value : null,
-                    descontoVt: descontoVtInput ? descontoVtInput.value : null,
-                    elegivel: elegivelCheckbox ? elegivelCheckbox.checked : false,
-                    id_contato_financeiro: idContatoInput ? idContatoInput.value : null,
-                };
-
-                // Esconde todos os textos
+                // Esconde os textos e mostra os campos de edição
                 card.querySelectorAll('.uc-dado-texto').forEach(el => el.style.display = 'none');
-                
-                // Mostra todos os containers de edição e inputs
-                card.querySelectorAll('.uc-input-edit, .uc-select-edit, .uc-tipos-container, .uc-pagamento-inputs, .uc-btn-vincular, .uc-elegivel-container').forEach(el => {
+                card.querySelectorAll('.uc-input-edit, .uc-select-edit, .uc-pagamento-inputs, .uc-btn-vincular, .uc-elegivel-container, .uc-concessionarias-container').forEach(el => {
                     if (el) el.style.display = 'block';
                 });
-                if (tiposContainer) tiposContainer.style.display = 'flex';
+                card.querySelectorAll('.uc-tipos-container').forEach(el => el.style.display = 'flex');
                 card.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = false);
 
                 // Alterna os botões
@@ -222,51 +226,48 @@ function adicionarEventosAosCards() {
             });
         }
 
-        // --- Lógica completa para o botão VINCULAR ---
+        // --- Lógica para o botão VINCULAR ---
         if (btnVincular) {
             btnVincular.addEventListener('click', () => {
                 abrirModalVinculacao(usuarioId);
             });
         }
 
-        // --- Lógica completa para o botão CANCELAR ---
+        // --- Lógica para o botão CANCELAR ---
         if (btnCancelar) {
             btnCancelar.addEventListener('click', () => {
-                // A forma mais segura de cancelar é recarregar os dados,
-                // pois restaura tudo ao estado original do servidor.
-                // Isso evita lógicas complexas de restauração manual no frontend.
                 carregarUsuariosCadastrados();
             });
         }
         
-        // --- Lógica completa para o botão SALVAR ---
+        // --- Lógica para o botão SALVAR ---
         if (btnSalvar) {
             btnSalvar.addEventListener('click', async () => {
-                const ehFuncionario = Array.from(card.querySelectorAll('.uc-tipos-container input:checked')).some(cb => cb.value === 'costureira' || cb.value === 'tiktik');
-
+                // Monta o payload completo com todos os dados do formulário de edição
                 const payload = { 
                     id: parseInt(usuarioId),
                     nomeUsuario: nomeUsuarioInput.value.trim(),
                     email: emailInput.value.trim(),
-                    tipos: Array.from(card.querySelectorAll('.uc-tipos-container input:checked')).map(cb => cb.value),
+                    tipos: Array.from(card.querySelectorAll('.uc-tipos-container input[name="tipoUsuario"]:checked')).map(cb => cb.value),
                     elegivel_pagamento: elegivelCheckbox.checked,
-                    id_contato_financeiro: idContatoInput.value ? parseInt(idContatoInput.value) : null
+                    id_contato_financeiro: idContatoInput.value ? parseInt(idContatoInput.value) : null,
+                    // ADIÇÃO: Coleta os IDs das concessionárias marcadas
+                    concessionaria_ids: Array.from(card.querySelectorAll('.uc-concessionaria-checkbox:checked')).map(cb => parseInt(cb.value))
                 };
-
+                
+                const ehFuncionario = payload.tipos.includes('costureira') || payload.tipos.includes('tiktik');
                 if (ehFuncionario) {
+                    const salarioInput = card.querySelector('.uc-salario-input');
+                    const passagemInput = card.querySelector('.uc-passagem-input');
+                    
                     payload.nivel = nivelSelect && nivelSelect.value ? parseInt(nivelSelect.value) : null;
                     payload.salario_fixo = salarioInput ? parseFloat(salarioInput.value) || 0 : 0;
                     payload.valor_passagem_diaria = passagemInput ? parseFloat(passagemInput.value) || 0 : 0;
-                    payload.desconto_vt_percentual = descontoVtInput ? parseFloat(descontoVtInput.value) || 0 : 0;
                 }
 
                 loadingSpinnerEl.style.display = 'block';
                 try {
-                    // Usando a função fetchAPI centralizada
-                    await fetchAPI('/api/usuarios', {
-                        method: 'PUT',
-                        body: JSON.stringify(payload)
-                    });
+                    await fetchAPI('/api/usuarios', { method: 'PUT', body: JSON.stringify(payload) });
                     alert('Usuário atualizado com sucesso!');
                     await carregarUsuariosCadastrados();
                 } catch (error) {
@@ -277,16 +278,13 @@ function adicionarEventosAosCards() {
             });
         }
 
-        // --- Lógica completa para o botão EXCLUIR ---
+        // --- Lógica para o botão EXCLUIR ---
         if (btnExcluir) {
             btnExcluir.addEventListener('click', async () => {
                 if (confirm(`Tem certeza que deseja excluir o usuário "${nomeUsuarioTexto.textContent}"? Esta ação não pode ser desfeita.`)) {
                     loadingSpinnerEl.style.display = 'block';
                     try {
-                        await fetchAPI('/api/usuarios', {
-                            method: 'DELETE',
-                            body: JSON.stringify({ id: usuarioId }),
-                        });
+                        await fetchAPI('/api/usuarios', { method: 'DELETE', body: JSON.stringify({ id: usuarioId }) });
                         alert('Usuário excluído com sucesso!');
                         await carregarUsuariosCadastrados();
                     } catch (error) {

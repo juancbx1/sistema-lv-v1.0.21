@@ -6,6 +6,8 @@ import jwt from 'jsonwebtoken';
 import express from 'express';
 import { getPermissoesCompletasUsuarioDB } from './usuarios.js'; // Importe a função de permissões
 
+console.log('✅ [API Financeiro] Arquivo api/financeiro.js carregado pelo servidor.');
+
 const router = express.Router();
 const pool = new Pool({
     connectionString: process.env.POSTGRES_URL,
@@ -139,6 +141,83 @@ router.use(async (req, res, next) => {
         console.error('[router/financeiro MID] Erro no middleware:', error.message);
         const statusCode = error.statusCode || 500;
         res.status(statusCode).json({ error: error.message, details: error.details });
+    }
+});
+
+// GET /api/financeiro/concessionarias-vt
+router.get('/concessionarias-vt', async (req, res) => {
+    let dbClient;
+    try {
+        console.log("[BACKEND /concessionarias-vt] Rota acionada."); // LOG
+        dbClient = await pool.connect();
+        const result = await dbClient.query('SELECT * FROM config_concessionarias_vt ORDER BY nome');
+        
+        console.log(`[BACKEND /concessionarias-vt] Encontradas ${result.rowCount} concessionárias.`); // LOG
+        
+        res.status(200).json(result.rows);
+    } catch (error) {
+        console.error("[BACKEND /concessionarias-vt] ERRO:", error); // LOG
+        res.status(500).json({ error: 'Erro ao buscar concessionárias.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// POST /api/financeiro/concessionarias-vt
+router.post('/concessionarias-vt', async (req, res) => {
+    // Vamos criar uma permissão específica para isso
+    if (!req.permissoesUsuario.includes('gerenciar-taxas-vt')) {
+        return res.status(403).json({ error: 'Permissão negada.' });
+    }
+    const { nome, taxa_recarga_percentual } = req.body;
+    if (!nome || taxa_recarga_percentual === undefined) {
+        return res.status(400).json({ error: 'Nome e taxa são obrigatórios.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const query = `INSERT INTO config_concessionarias_vt (nome, taxa_recarga_percentual) VALUES ($1, $2) RETURNING *`;
+        const result = await dbClient.query(query, [nome, taxa_recarga_percentual]);
+        res.status(201).json(result.rows[0]);
+    } catch (error) {
+        if (error.code === '23505') { // Erro de nome único
+            return res.status(409).json({ error: 'Já existe uma concessionária com este nome.' });
+        }
+        res.status(500).json({ error: 'Erro ao criar concessionária.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// PUT /api/financeiro/concessionarias-vt/:id
+router.put('/concessionarias-vt/:id', async (req, res) => {
+    if (!req.permissoesUsuario.includes('gerenciar-taxas-vt')) {
+        return res.status(403).json({ error: 'Permissão negada.' });
+    }
+    const { id } = req.params;
+    const { nome, taxa_recarga_percentual, ativo } = req.body;
+
+    if (!nome || taxa_recarga_percentual === undefined || ativo === undefined) {
+        return res.status(400).json({ error: 'Nome, taxa e status de ativo são obrigatórios.' });
+    }
+    
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const query = `UPDATE config_concessionarias_vt SET nome = $1, taxa_recarga_percentual = $2, ativo = $3, updated_at = NOW() WHERE id = $4 RETURNING *`;
+        const result = await dbClient.query(query, [nome, taxa_recarga_percentual, ativo, id]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Concessionária não encontrada.' });
+        }
+        res.status(200).json(result.rows[0]);
+    } catch (error) {
+        if (error.code === '23505') {
+            return res.status(409).json({ error: 'Já existe uma concessionária com este nome.' });
+        }
+        res.status(500).json({ error: 'Erro ao atualizar concessionária.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
     }
 });
 

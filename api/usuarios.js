@@ -230,13 +230,20 @@ router.get('/', async (req, res) => {
     try {
         const query = `
             SELECT 
-                u.id, u.nome, u.nome_usuario, u.email, u.tipos, u.nivel, u.permissoes, 
-                u.salario_fixo, u.valor_passagem_diaria, u.desconto_vt_percentual,
-                u.elegivel_pagamento, u.id_contato_financeiro,
-                c.nome AS nome_contato_financeiro
+                u.id, u.nome, u.nome_usuario, u.email, u.tipos, u.nivel, u.permissoes,
+                u.salario_fixo, u.valor_passagem_diaria, u.elegivel_pagamento, 
+                u.id_contato_financeiro,
+                c.nome AS nome_contato_financeiro,
+                -- Agrega os IDs das concessionárias em um array, retornando um array vazio '{}' se não houver nenhum.
+                COALESCE(
+                    (SELECT array_agg(ucv.concessionaria_id) 
+                     FROM usuario_concessionaria_vt ucv 
+                     WHERE ucv.usuario_id = u.id),
+                    '{}'
+                ) AS concessionarias_vt
             FROM usuarios u
             LEFT JOIN fc_contatos c ON u.id_contato_financeiro = c.id
-            ORDER BY u.nome ASC
+            ORDER BY u.nome ASC;
         `;
         const result = await dbCliente.query(query);
         res.status(200).json(result.rows);
@@ -257,7 +264,7 @@ router.post('/', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada para criar usuários' });
         }
         
-        const { nome, nomeUsuario, email, senha, tipos, nivel, salario_fixo, valor_passagem_diaria, desconto_vt_percentual } = req.body;
+        const { nome, nomeUsuario, email, senha, tipos, nivel, salario_fixo, valor_passagem_diaria } = req.body;
         if (!nome || !nomeUsuario || !email || !senha || !tipos) {
             return res.status(400).json({ error: "Campos nome, nomeUsuario, email, senha e tipos são obrigatórios." });
         }
@@ -268,8 +275,14 @@ router.post('/', async (req, res) => {
         // 1. Cria o usuário principal
         const senhaHash = await bcrypt.hash(senha, 10);
         const userResult = await dbCliente.query(
-            'INSERT INTO usuarios (nome, nome_usuario, email, senha, tipos, nivel, salario_fixo, valor_passagem_diaria, desconto_vt_percentual, permissoes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id',
-            [nome, nomeUsuario, email, senhaHash, tipos, nivel, salario_fixo, valor_passagem_diaria, desconto_vt_percentual, []] 
+            `INSERT INTO usuarios (
+                nome, nome_usuario, email, senha, 
+                tipos, nivel, salario_fixo, valor_passagem_diaria, permissoes
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+            [
+                nome, nomeUsuario, email, senhaHash, 
+                tipos, nivel, salario_fixo, valor_passagem_diaria, []
+            ] 
         );
         const novoUsuarioId = userResult.rows[0].id;
 
@@ -332,11 +345,11 @@ router.put('/', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada para editar usuários' });
         }
         
+        // Recebemos todos os campos do corpo da requisição
         const { 
             id, nome, nomeUsuario, email, tipos, nivel, 
-            salario_fixo, valor_passagem_diaria, desconto_vt_percentual, 
-            elegivel_pagamento, 
-            id_contato_financeiro, // <<< Recebemos o campo do frontend
+            salario_fixo, valor_passagem_diaria, 
+            elegivel_pagamento, id_contato_financeiro, concessionaria_ids,
             permissoes: permissoesIndividuais 
         } = req.body;
 
@@ -344,6 +357,9 @@ router.put('/', async (req, res) => {
             return res.status(400).json({ error: "O ID do usuário é obrigatório para atualização." });
         }
 
+        await dbCliente.query('BEGIN'); // Inicia a transação
+
+        // --- 1. Lógica para atualizar a tabela 'usuarios' ---
         const fieldsToUpdate = [];
         const values = [];
         let paramIndex = 1;
@@ -355,44 +371,40 @@ router.put('/', async (req, res) => {
         if (nivel !== undefined) { fieldsToUpdate.push(`nivel = $${paramIndex++}`); values.push(nivel); }
         if (salario_fixo !== undefined) { fieldsToUpdate.push(`salario_fixo = $${paramIndex++}`); values.push(salario_fixo); }
         if (valor_passagem_diaria !== undefined) { fieldsToUpdate.push(`valor_passagem_diaria = $${paramIndex++}`); values.push(valor_passagem_diaria); }
-        if (desconto_vt_percentual !== undefined) { fieldsToUpdate.push(`desconto_vt_percentual = $${paramIndex++}`); values.push(desconto_vt_percentual); }
         if (elegivel_pagamento !== undefined) { fieldsToUpdate.push(`elegivel_pagamento = $${paramIndex++}`); values.push(elegivel_pagamento); }
-        
-        // <<< A LÓGICA QUE FALTAVA ESTÁ AQUI >>>
-        if (id_contato_financeiro !== undefined) {
-            // Permite salvar tanto um número de ID quanto null (para desvincular)
-            fieldsToUpdate.push(`id_contato_financeiro = $${paramIndex++}`);
-            values.push(id_contato_financeiro);
-        }
-
+        if (id_contato_financeiro !== undefined) { fieldsToUpdate.push(`id_contato_financeiro = $${paramIndex++}`); values.push(id_contato_financeiro); }
         if (permissoesIndividuais !== undefined) {
             const permissoesValidas = permissoesIndividuais.filter(p => backendPermissoesValidas.has(p));
             fieldsToUpdate.push(`permissoes = $${paramIndex++}`);
             values.push(permissoesValidas);
         }
 
-        if (fieldsToUpdate.length === 0) {
-            // Embora o frontend não deva permitir isso, é uma boa segurança.
-            return res.status(400).json({ error: "Nenhuma alteração detectada para salvar." });
+        if (fieldsToUpdate.length > 0) {
+            values.push(id);
+            const queryText = `UPDATE usuarios SET ${fieldsToUpdate.join(', ')} WHERE id = $${paramIndex}`;
+            await dbCliente.query(queryText, values);
         }
 
-        values.push(id);
-
-        const queryText = `UPDATE usuarios SET ${fieldsToUpdate.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
-        
-        const result = await dbCliente.query(queryText, values);
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Usuário não encontrado para atualização.' });
+        // --- 2. Lógica para atualizar a tabela 'usuario_concessionaria_vt' ---
+        if (concessionaria_ids && Array.isArray(concessionaria_ids)) {
+            await dbCliente.query('DELETE FROM usuario_concessionaria_vt WHERE usuario_id = $1', [id]);
+            if (concessionaria_ids.length > 0) {
+                const valuesClauses = concessionaria_ids.map((_, i) => `($1, $${i + 2})`).join(', ');
+                const insertVinculosQuery = `INSERT INTO usuario_concessionaria_vt (usuario_id, concessionaria_id) VALUES ${valuesClauses}`;
+                await dbCliente.query(insertVinculosQuery, [id, ...concessionaria_ids]);
+            }
         }
-        
-        let usuarioAtualizado = result.rows[0];
-        // Adiciona permissões totais para consistência da resposta
+
+        await dbCliente.query('COMMIT'); // Finaliza a transação
+
+        // Retorna o usuário atualizado para consistência no frontend
+        const finalUserRes = await dbCliente.query('SELECT * FROM usuarios WHERE id = $1', [id]);
+        let usuarioAtualizado = finalUserRes.rows[0];
         usuarioAtualizado.permissoes_totais = await getPermissoesCompletasUsuarioDB(dbCliente, usuarioAtualizado.id);
-
         res.status(200).json(usuarioAtualizado);
 
     } catch (error) {
+        if (dbCliente) await dbCliente.query('ROLLBACK');
         console.error('[router/usuarios PUT] Erro:', error);
         if (error.code === '23505') {
              res.status(409).json({ error: 'Nome de usuário ou email já em uso por outro usuário.', details: error.detail });

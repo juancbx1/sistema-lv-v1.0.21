@@ -85,6 +85,7 @@ export const permissoesDisponiveis = [
     { id: 'acesso-producao-geral-costura', label: 'Ver Produção Geral (Costureiras)', categoria: 'Financeiro e Relatórios' },
     { id: 'gerenciar-precificacao', label: 'Ação: Editar configurações de precificação', categoria: 'Financeiro e Relatórios' },
     { id: 'confirmar-pagamento-comissao', label: 'Ação: Marcar comissões como pagas', categoria: 'Financeiro e Relatórios' },
+    { id: 'gerenciar-taxas-vt', label: 'Ação: Gerenciar Concessionárias e Taxas de VT', categoria: 'Financeiro e Relatórios' },
 
      // --- PAGAMENTOS A FUNCIONARIOS ---
     { id: 'acessar-central-pagamentos', label: 'Acessar Central de Pagamentos à Empregados', categoria: 'Pagamentos à Empregados' },

@@ -3350,6 +3350,9 @@ function mudarPainelConfig(painelAtivo) {
         case 'categorias': 
             renderizarTabelaCategoriasAgrupadas(); 
             break;
+        case 'taxas-vt':
+            carregarErenderizarConcessionarias(); 
+            break;
     }
 }
 
@@ -3669,5 +3672,140 @@ function coletarDadosDoLote() {
             });
         });
         return parcelasManuais;
+    }
+}
+
+// Variável de cache para as concessionárias
+let concessionariasCache = [];
+
+// Função para buscar e renderizar as concessionárias
+async function carregarErenderizarConcessionarias() {
+    try {
+        concessionariasCache = await fetchFinanceiroAPI('/concessionarias-vt');
+        renderizarTabelaConcessionarias();
+    } catch (error) {
+        const container = document.getElementById('config-taxas-vt');
+        if (container) container.innerHTML = `<p style="color: red;">Erro ao carregar as concessionárias.</p>`;
+    }
+}
+
+// Função para renderizar a tabela
+function renderizarTabelaConcessionarias() {
+    const container = document.getElementById('config-taxas-vt');
+    if (!container) return;
+    const podeGerenciar = permissoesGlobaisFinanceiro.includes('gerenciar-taxas-vt');
+
+    container.innerHTML = `
+        <header class="fc-table-header">
+            <h3 class="fc-table-title">Concessionárias e Taxas de VT</h3>
+            <button id="btnAdicionarConcessionaria" class="fc-btn fc-btn-primario ${podeGerenciar ? '' : 'fc-btn-disabled'}" ${podeGerenciar ? '' : 'disabled'}><i class="fas fa-plus"></i> Nova</button>
+        </header>
+        <div class="fc-tabela-container">
+            <table class="fc-tabela-estilizada">
+                <thead>
+                    <tr>
+                        <th>Nome da Concessionária</th>
+                        <th>Taxa de Recarga (%)</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${concessionariasCache.map(c => `
+                        <tr>
+                            <td data-label="Nome">${c.nome}</td>
+                            <td data-label="Taxa">${c.taxa_recarga_percentual}%</td>
+                            <td data-label="Status" style="color: ${c.ativo ? 'var(--fc-cor-receita)' : 'var(--fc-cor-texto-secundario)'}; font-weight: bold;">
+                                ${c.ativo ? 'Ativa' : 'Inativa'}
+                            </td>
+                            <td data-label="Ações" class="td-acoes">
+                                <button class="fc-btn fc-btn-outline btn-editar-concessionaria" data-id="${c.id}" ${podeGerenciar ? '' : 'disabled'}><i class="fas fa-pencil-alt"></i></button>
+                            </td>
+                        </tr>
+                    `).join('') || '<tr><td colspan="4" style="text-align: center;">Nenhuma concessionária cadastrada.</td></tr>'}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    if (podeGerenciar) {
+        container.querySelector('#btnAdicionarConcessionaria').addEventListener('click', () => abrirModalConcessionaria());
+        container.querySelectorAll('.btn-editar-concessionaria').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = e.currentTarget.dataset.id;
+                const concessionaria = concessionariasCache.find(c => c.id == id);
+                abrirModalConcessionaria(concessionaria);
+            });
+        });
+    }
+}
+
+// Função para abrir o modal de criação/edição
+function abrirModalConcessionaria(item = null) {
+    const titulo = item ? 'Editar Concessionária' : 'Nova Concessionária';
+    const modalHTML = `
+        <div id="modal-concessionaria" class="fc-modal" style="display: flex;">
+            <div class="fc-modal-content">
+                <button class="fc-modal-close">X</button>
+                <h3 class="fc-section-title">${titulo}</h3>
+                <div class="fc-modal-body">
+                    <form id="formConcessionaria">
+                        <div class="fc-form-group">
+                            <label for="conc-nome">Nome*</label>
+                            <input type="text" id="conc-nome" class="fc-input" required value="${item?.nome || ''}">
+                        </div>
+                        <div class="fc-form-group">
+                            <label for="conc-taxa">Taxa de Recarga (%)*</label>
+                            <input type="number" id="conc-taxa" class="fc-input" required step="0.01" value="${item?.taxa_recarga_percentual || '5.00'}">
+                        </div>
+                        ${item ? `
+                        <div class="fc-form-group">
+                            <label for="conc-ativo">Status</label>
+                            <select id="conc-ativo" class="fc-select">
+                                <option value="true" ${item.ativo ? 'selected' : ''}>Ativa</option>
+                                <option value="false" ${!item.ativo ? 'selected' : ''}>Inativa</option>
+                            </select>
+                        </div>
+                        ` : ''}
+                    </form>
+                </div>
+                <div class="fc-modal-footer">
+                    <button class="fc-btn fc-btn-secundario" id="btn-cancelar-conc">Cancelar</button>
+                    <button class="fc-btn fc-btn-primario" id="btn-salvar-conc">Salvar</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    const fechar = () => document.getElementById('modal-concessionaria').remove();
+    document.querySelector('#modal-concessionaria .fc-modal-close').addEventListener('click', fechar);
+    document.getElementById('btn-cancelar-conc').addEventListener('click', fechar);
+    document.getElementById('btn-salvar-conc').addEventListener('click', () => salvarConcessionaria(item?.id));
+}
+
+// Função para salvar os dados
+async function salvarConcessionaria(id = null) {
+    const payload = {
+        nome: document.getElementById('conc-nome').value,
+        taxa_recarga_percentual: parseFloat(document.getElementById('conc-taxa').value),
+    };
+
+    let url = '/concessionarias-vt';
+    let method = 'POST';
+
+    if (id) {
+        url += `/${id}`;
+        method = 'PUT';
+        payload.ativo = document.getElementById('conc-ativo').value === 'true';
+    }
+
+    try {
+        await fetchFinanceiroAPI(url, { method, body: JSON.stringify(payload) });
+        mostrarPopupFinanceiro('Concessionária salva com sucesso!', 'sucesso');
+        document.getElementById('modal-concessionaria').remove();
+        carregarErenderizarConcessionarias();
+    } catch (error) {
+        // fetchFinanceiroAPI já mostra o popup de erro
     }
 }

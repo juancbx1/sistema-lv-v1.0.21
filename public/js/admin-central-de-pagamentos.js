@@ -24,6 +24,8 @@ const formatCurrency = (value) => {
 let cachedUsuarios = [];
 let cachedContasFinanceiro = [];
 let historicoComissoesPagas = [];
+let calendarioObj = null; // Armazenará a instância do FullCalendar
+let diasSelecionados = new Map(); // Armazenará os dias selecionados para pagamento
 
 
 // --- Funções de UI e Lógica ---
@@ -459,6 +461,125 @@ async function handleConcederBonus() {
     }
 }
 
+function preencherFiltroPassagem() {
+    const filtroEmpregadoEl = document.getElementById('passagem-filtro-empregado');
+    if (!filtroEmpregadoEl) return;
+
+    const empregados = cachedUsuarios.filter(u => u.elegivel_pagamento === true);
+    filtroEmpregadoEl.innerHTML = '<option value="">Selecione um empregado...</option>';
+    empregados.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(u => {
+        // Guardamos o valor da passagem no próprio option para fácil acesso
+        filtroEmpregadoEl.innerHTML += `<option value="${u.id}" data-valor-passagem="${u.valor_passagem_diaria || 0}">${u.nome}</option>`;
+    });
+    filtroEmpregadoEl.disabled = false;
+}
+
+function inicializarCalendarioParaEmpregado() {
+    const filtroEmpregadoEl = document.getElementById('passagem-filtro-empregado');
+    const empregadoId = filtroEmpregadoEl.value;
+    const calendarioContainerEl = document.getElementById('calendario-passagens');
+    const layoutPrincipalEl = document.getElementById('passagem-layout-principal');
+    const msgInicialEl = document.getElementById('passagem-mensagem-inicial');
+
+    if (!empregadoId) {
+        layoutPrincipalEl.classList.add('hidden');
+        msgInicialEl.style.display = 'block';
+        if (calendarioObj) {
+            calendarioObj.destroy();
+            calendarioObj = null;
+        }
+        return;
+    }
+
+    layoutPrincipalEl.classList.remove('hidden');
+    msgInicialEl.style.display = 'none';
+    diasSelecionados.clear();
+    atualizarResumoPagamento();
+
+    // Se o calendário já existe, destruímos para recriar.
+    // Isso é mais simples do que gerenciar fontes de eventos dinâmicas com a nossa nova abordagem.
+    if (calendarioObj) {
+        calendarioObj.destroy();
+    }
+
+    calendarioObj = new FullCalendar.Calendar(calendarioContainerEl, {
+        locale: 'pt-br',
+        initialView: 'dayGridMonth',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: ''
+        },
+        selectable: true,
+        
+        // <<< A MUDANÇA PRINCIPAL ESTÁ AQUI >>>
+        // Usamos a função 'events' que nos dá controle total.
+        events: async function(fetchInfo, successCallback, failureCallback) {
+            try {
+                // Montamos a URL com as datas que o FullCalendar nos fornece.
+                const start = fetchInfo.start.toISOString().split('T')[0];
+                const end = fetchInfo.end.toISOString().split('T')[0];
+                const url = `/api/pagamentos/registros-dias?usuario_id=${empregadoId}&start=${start}&end=${end}`;
+
+                // Usamos nossa função fetchAPI confiável!
+                const eventos = await fetchAPI(url);
+                
+                // Entregamos os eventos para o FullCalendar renderizar.
+                successCallback(eventos);
+
+            } catch (error) {
+                console.error("Erro ao buscar eventos para o calendário:", error);
+                mostrarPopupPagamentos("Não foi possível carregar os dados do calendário.", "erro");
+                failureCallback(error); // Informa o FullCalendar sobre a falha.
+            }
+        },
+
+        dateClick: function(info) {
+            if (calendarioObj.getEventById(info.dateStr)) {
+                return;
+            }
+            const cell = info.dayEl;
+            if (diasSelecionados.has(info.dateStr)) {
+                diasSelecionados.delete(info.dateStr);
+                cell.classList.remove('fc-day-selected');
+            } else {
+                diasSelecionados.set(info.dateStr, {});
+                cell.classList.add('fc-day-selected');
+            }
+            atualizarResumoPagamento();
+        }
+    });
+
+    calendarioObj.render();
+}
+
+/**
+ * Atualiza a UI do "carrinho" de pagamento de passagens.
+ */
+function atualizarResumoPagamento() {
+    const resumoContainer = document.getElementById('passagem-resumo-pagamento');
+    const areaPagamento = document.getElementById('passagem-area-pagamento');
+    const filtroEmpregadoEl = document.getElementById('passagem-filtro-empregado');
+    const optionSelecionada = filtroEmpregadoEl.options[filtroEmpregadoEl.selectedIndex];
+    const valorDiario = parseFloat(optionSelecionada.dataset.valorPassagem) || 0;
+
+    if (diasSelecionados.size === 0) {
+        resumoContainer.innerHTML = `<p class="cpg-resumo-placeholder">Clique nos dias do calendário para selecionar as passagens a pagar.</p>`;
+        areaPagamento.classList.add('hidden');
+        return;
+    }
+
+    const totalDias = diasSelecionados.size;
+    const totalPagar = totalDias * valorDiario;
+
+    resumoContainer.innerHTML = `
+        <div class="cpg-resumo-item"><span>Dias selecionados:</span> <strong>${totalDias}</strong></div>
+        <div class="cpg-resumo-item"><span>Valor diário da passagem:</span> <strong>${formatCurrency(valorDiario)}</strong></div>
+        <div class="cpg-resumo-item cpg-resumo-total"><span>Total a Pagar:</span> <span>${formatCurrency(totalPagar)}</span></div>
+    `;
+    areaPagamento.classList.remove('hidden');
+}
+
 async function abrirModalHistorico() {
     const overlay = document.createElement('div');
     overlay.className = 'cpg-modal-overlay'; // Reutilizando a classe de modal
@@ -521,10 +642,16 @@ async function abrirModalHistorico() {
 
 // --- Inicialização da Página ---
 document.addEventListener('DOMContentLoaded', async () => {
+    // Esconde o conteúdo principal e mostra o spinner global
+    const mainContent = document.querySelector('.cpg-main-container');
+    const globalSpinner = document.getElementById('cpg-global-spinner');
+    if (mainContent) mainContent.style.visibility = 'hidden';
+    if (globalSpinner) globalSpinner.style.display = 'flex';
+
     try {
         await verificarAutenticacao('central-de-pagamentos.html', ['acessar-central-pagamentos']);
 
-        const [usuarios, configFinanceiro, historicoComissoes] = await Promise.all([
+        const [usuarios, configFinanceiro, historico] = await Promise.all([
             fetchAPI('/api/usuarios'),
             fetchAPI('/api/financeiro/configuracoes'),
             fetchAPI('/api/pagamentos/historico')
@@ -532,39 +659,39 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         cachedUsuarios = usuarios;
         cachedContasFinanceiro = configFinanceiro.contas;
-        historicoComissoesPagas = historicoComissoes;
+        historicoComissoesPagas = historico;
 
         preencherFiltrosComissao();
         preencherFiltrosBonus();
+        preencherFiltroPassagem();
 
-        // --- NOVO BLOCO: SELEÇÃO ALEATÓRIA INICIAL ---
+        // --- LÓGICA DE SELEÇÃO ALEATÓRIA CORRIGIDA ---
         const filtroEmpregadoComissao = document.getElementById('comissao-filtro-empregado');
-        // Pega apenas as opções que têm um valor de ID (ignora o "Selecione...")
         const opcoesEmpregados = Array.from(filtroEmpregadoComissao.options).filter(opt => opt.value);
 
         if (opcoesEmpregados.length > 0) {
-            // Escolhe um índice aleatório
             const randomIndex = Math.floor(Math.random() * opcoesEmpregados.length);
             const empregadoAleatorio = opcoesEmpregados[randomIndex];
             
-            // Define o valor do select para o ID do empregado aleatório
             filtroEmpregadoComissao.value = empregadoAleatorio.value;
 
-            // Dispara manualmente o evento 'change' para acionar toda a cadeia de atualizações
-            // (atualizar filtro de ciclo e calcular comissão)
-            filtroEmpregadoComissao.dispatchEvent(new Event('change'));
+            // 1. Primeiro, atualizamos o filtro de ciclo.
+            atualizarFiltroCicloComissao();
+            
+            // 2. SÓ DEPOIS, chamamos o cálculo.
+            // Isso garante que o handleCalcularComissao() lerá o valor correto do filtro de ciclo.
+            handleCalcularComissao(); 
         }
-        // --- FIM DO NOVO BLOCO ---
 
     } catch (error) {
         console.error("Erro na inicialização da página:", error);
         mostrarPopupPagamentos(`Erro crítico ao carregar a página: ${error.message}`, 'erro');
+    } finally {
+        // Ao final de tudo (sucesso ou erro), esconde o spinner e mostra o conteúdo
+        if (globalSpinner) globalSpinner.style.display = 'none';
+        if (mainContent) mainContent.style.visibility = 'visible';
     }
 
-    // --- 3. Configuração de Todos os Listeners de Evento ---
-    // Esta parte agora é executada por último, garantindo que todos os elementos
-    // do HTML e os dados necessários já estejam no lugar.
-    
     // Listener para a troca de abas
     const tabsContainer = document.querySelector('.cpg-tabs-container');
     if (tabsContainer) {
@@ -600,4 +727,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (btnHistorico) {
             btnHistorico.addEventListener('click', abrirModalHistorico);
         }
+
+    const filtroEmpregadoPassagem = document.getElementById('passagem-filtro-empregado');
+    if (filtroEmpregadoPassagem) {
+        filtroEmpregadoPassagem.addEventListener('change', inicializarCalendarioParaEmpregado);
+    }
 });
