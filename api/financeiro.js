@@ -533,23 +533,28 @@ router.get('/lancamentos', async (req, res) => {
         
         const query = `
             SELECT 
-                l.*, 
-                cb.nome_conta,
-                cat.nome as nome_categoria,
-                u.nome as nome_usuario, 
-                fav.nome as nome_favorecido,
-                (
-                    SELECT json_agg(json_build_object(
-                        'id', li.id,
-                        'descricao_item', li.descricao_item,
-                        'valor_item', li.valor_item,
-                        'nome_categoria', cat_item.nome,
-                        'id_categoria', li.id_categoria
-                    ))
-                    FROM fc_lancamento_itens li
-                    JOIN fc_categorias cat_item ON li.id_categoria = cat_item.id
-                    WHERE li.id_lancamento_pai = l.id
-                ) as itens
+        l.*, 
+        cb.nome_conta,
+        cat.nome as nome_categoria,
+        u.nome as nome_usuario, 
+        fav.nome as nome_favorecido,
+        (
+            SELECT json_agg(json_build_object(
+                'id', li.id,
+                'descricao_item', li.descricao_item,
+                'valor_item', li.valor_item,
+                'id_categoria', li.id_categoria,
+                'nome_categoria', cat_item.nome,
+                'id_contato_item', li.id_contato_item,
+                'nome_contato_item', contato_item.nome
+            ))
+            FROM fc_lancamento_itens li
+            -- Join opcional para a categoria do item, caso ainda exista
+            LEFT JOIN fc_categorias cat_item ON li.id_categoria = cat_item.id
+            -- Join opcional para o contato do item (o sub-favorecido)
+            LEFT JOIN fc_contatos contato_item ON li.id_contato_item = contato_item.id
+            WHERE li.id_lancamento_pai = l.id
+        ) as itens
             ${baseQuery}
             ${whereString}
             ORDER BY l.data_transacao DESC, l.id DESC
@@ -914,15 +919,29 @@ router.post('/lancamentos/detalhado', async (req, res) => {
         return res.status(403).json({ error: 'Permissão negada.' });
     }
 
-    const { dados_pai, itens_filho } = req.body;
+    const { dados_pai, itens_filho, tipo_rateio } = req.body;
 
-    // Validação robusta dos dados recebidos
     if (!dados_pai || !Array.isArray(itens_filho) || itens_filho.length === 0) {
-        return res.status(400).json({ error: 'Estrutura de dados inválida para lançamento detalhado.' });
+        return res.status(400).json({ error: 'Estrutura de dados inválida.' });
     }
-    const { id_conta_bancaria, data_transacao, valor, descricao, id_contato } = dados_pai;
-    if (!id_conta_bancaria || !data_transacao || !valor) {
-        return res.status(400).json({ error: 'Dados do lançamento principal (conta, data, valor) são obrigatórios.' });
+    
+    // Calcula o valor total a partir da soma dos filhos
+    const valor_total_calculado = itens_filho.reduce((acc, item) => acc + parseFloat(item.valor_item || 0), 0);
+    if (valor_total_calculado <= 0) {
+        return res.status(400).json({ error: 'O valor total do lançamento deve ser maior que zero.' });
+    }
+
+    // Validações dos dados do "pai"
+    const { id_conta_bancaria, data_transacao, id_contato, id_categoria, descricao } = dados_pai;
+    if (!id_conta_bancaria || !data_transacao) {
+        return res.status(400).json({ error: 'Conta bancária e data são obrigatórios.' });
+    }
+    // Validações específicas por tipo de rateio
+    if (tipo_rateio === 'DETALHADO' && (!id_contato || !id_categoria)) {
+         return res.status(400).json({ error: 'Para rateio detalhado, o favorecido e a categoria geral são obrigatórios.' });
+    }
+     if (tipo_rateio === 'COMPRA' && !id_contato) {
+         return res.status(400).json({ error: 'Para compra detalhada, o fornecedor é obrigatório.' });
     }
 
     let dbClient;
@@ -930,48 +949,66 @@ router.post('/lancamentos/detalhado', async (req, res) => {
         dbClient = await pool.connect();
         await dbClient.query('BEGIN');
 
-        // 1. Insere o lançamento "pai" na tabela principal.
-        // Note que id_categoria é NULL, pois as categorias estão nos itens.
+        // 1. Insere o lançamento "pai"
         const lancamentoPaiQuery = `
             INSERT INTO fc_lancamentos 
-                (id_conta_bancaria, tipo, valor, data_transacao, descricao, id_contato, id_usuario_lancamento)
-            VALUES ($1, 'DESPESA', $2, $3, $4, $5, $6) 
+                (id_conta_bancaria, tipo, valor, data_transacao, descricao, id_contato, id_categoria, id_usuario_lancamento, tipo_rateio)
+            VALUES ($1, 'DESPESA', $2, $3, $4, $5, $6, $7, $8) 
             RETURNING id;
         `;
         const lancamentoPaiResult = await dbClient.query(lancamentoPaiQuery, [
-            id_conta_bancaria, valor, data_transacao, descricao, id_contato || null, req.usuarioLogado.id
+            id_conta_bancaria, valor_total_calculado, data_transacao, descricao, 
+            id_contato, 
+            // Para 'COMPRA', a categoria do pai é nula. Para 'DETALHADO', usamos a categoria geral.
+            tipo_rateio === 'COMPRA' ? null : id_categoria,
+            req.usuarioLogado.id, 
+            tipo_rateio || null
         ]);
         const novoLancamentoId = lancamentoPaiResult.rows[0].id;
 
-        // 2. Itera sobre cada item "filho" e o insere, vinculando ao pai.
+        // 2. Itera sobre cada item "filho" e o insere
         for (const item of itens_filho) {
-            if (!item.id_categoria || !item.valor_item) {
-                // Se algum item for inválido, desfaz toda a transação
-                throw new Error('Cada item detalhado deve ter uma categoria e um valor.');
+            if (!item.valor_item) {
+                throw new Error('Cada item detalhado deve ter um valor.');
             }
+            
+            // Validação de campos obrigatórios por tipo de rateio
+            if (tipo_rateio === 'COMPRA' && !item.id_categoria) {
+                 throw new Error('Cada item da compra deve ter uma categoria.');
+            }
+            if (tipo_rateio === 'DETALHADO' && !item.id_contato_item) {
+                throw new Error('Cada item do rateio deve ter um favorecido.');
+            }
+            
+            // Query de inserção agora é a mesma para ambos, mas com valores diferentes
             const itemQuery = `
-                INSERT INTO fc_lancamento_itens (id_lancamento_pai, id_categoria, descricao_item, valor_item)
-                VALUES ($1, $2, $3, $4);
+                INSERT INTO fc_lancamento_itens (id_lancamento_pai, id_categoria, descricao_item, valor_item, id_contato_item)
+                VALUES ($1, $2, $3, $4, $5);
             `;
-            await dbClient.query(itemQuery, [novoLancamentoId, item.id_categoria, item.descricao_item, item.valor_item]);
+            await dbClient.query(itemQuery, [
+                novoLancamentoId, 
+                item.id_categoria, // CORREÇÃO: Passa a categoria do item
+                item.descricao_item, 
+                item.valor_item, 
+                item.id_contato_item || null // Garante que será null se não for fornecido
+            ]);
         }
-
-        // 3. (Opcional, mas recomendado) Log de Auditoria para a criação
+        
         await registrarLog(
             dbClient,
             req.usuarioLogado.id,
             req.usuarioLogado.nome,
             'CRIACAO_LANCAMENTO_DETALHADO',
-            { lancamento: { id: novoLancamentoId, descricao: descricao, valor: valor, itens: itens_filho.length } }
+            { lancamento: { id: novoLancamentoId, descricao: descricao, valor: valor_total_calculado, itens: itens_filho.length, tipo_rateio: tipo_rateio } }
         );
 
         await dbClient.query('COMMIT');
-        res.status(201).json({ message: `Compra detalhada #${novoLancamentoId} com ${itens_filho.length} itens registrada com sucesso.` });
+        res.status(201).json({ message: `Lançamento detalhado #${novoLancamentoId} com ${itens_filho.length} itens registrado com sucesso.` });
 
     } catch (error) {
         if (dbClient) await dbClient.query('ROLLBACK');
         console.error("[API POST /lancamentos/detalhado] Erro:", error);
-        res.status(500).json({ error: 'Erro ao registrar compra detalhada.', details: error.message });
+        res.status(500).json({ error: 'Erro ao registrar lançamento detalhado.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }
@@ -989,10 +1026,15 @@ router.get('/contas-agendadas', async (req, res) => {
     try {
         dbClient = await pool.connect();
         let query = `
-            SELECT ca.*, cat.nome as nome_categoria, c.nome as nome_favorecido
+            SELECT 
+                ca.*, 
+                cat.nome as nome_categoria, 
+                c.nome as nome_favorecido,
+                u.nome as nome_usuario_agendamento -- CAMPO ADICIONADO
             FROM fc_contas_agendadas ca
             JOIN fc_categorias cat ON ca.id_categoria = cat.id
             LEFT JOIN fc_contatos c ON ca.id_contato = c.id
+            JOIN usuarios u ON ca.id_usuario_agendamento = u.id -- JOIN ADICIONADO
         `;
         const params = [];
         if (status) {
@@ -1439,7 +1481,7 @@ router.post('/transferencias', async (req, res) => {
             INSERT INTO fc_lancamentos (id_conta_bancaria, id_categoria, tipo, valor, data_transacao, descricao, id_usuario_lancamento)
             VALUES ($1, $2, 'RECEITA', $3, $4, $5, $6) RETURNING id;
         `;
-        const descricaoEntrada = `Transferência da conta de origem. ${descricao || ''}`;
+        const descricaoEntrada = `Transferência entre contas. ${descricao || ''}`;
         const resEntrada = await dbClient.query(entradaQuery, [id_conta_destino, id_categoria_transferencia, valor, data_transacao, descricaoEntrada, req.usuarioLogado.id]);
         const idLancamentoEntrada = resEntrada.rows[0].id;
 

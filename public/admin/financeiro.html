@@ -131,32 +131,32 @@
                     </button>
                 </div>
                 <form id="filtrosLancamentos" class="fc-filtros-container hidden">
-                    <div class="fc-form-grupo">
-                        <label for="filtroDataInicio">Data Início</label>
-                        <input type="date" id="filtroDataInicio" class="fc-input">
-                    </div>
-                    <div class="fc-form-grupo">
-                        <label for="filtroDataFim">Data Fim</label>
-                        <input type="date" id="filtroDataFim" class="fc-input">
-                    </div>
-                    <div class="fc-form-grupo">
-                        <label for="filtroTipo">Tipo</label>
-                        <select id="filtroTipo" class="fc-select">
-                            <option value="">Todos</option>
-                            <option value="RECEITA">Receita</option>
-                            <option value="DESPESA">Despesa</option>
-                        </select>
-                    </div>
-                    <div class="fc-form-grupo">
-                        <label for="filtroConta">Conta</label>
-                        <select id="filtroConta" class="fc-select"></select>
-                    </div>
-                    <div class="fc-form-grupo full-width button-container">
-                        <button type="button" id="btnLimparFiltros" class="fc-btn fc-btn-secundario">
-                            <i class="fas fa-times-circle"></i> Limpar Filtros
-                        </button>
-                    </div>
-                </form>
+                <div class="fc-form-grupo">
+                    <label for="filtroDataInicio">Data Início</label>
+                    <input type="date" id="filtroDataInicio" name="dataInicio" class="fc-input">
+                </div>
+                <div class="fc-form-grupo">
+                    <label for="filtroDataFim">Data Fim</label>
+                    <input type="date" id="filtroDataFim" name="dataFim" class="fc-input">
+                </div>
+                <div class="fc-form-grupo">
+                    <label for="filtroTipo">Tipo</label>
+                    <select id="filtroTipo" name="tipo" class="fc-select">
+                        <option value="">Todos</option>
+                        <option value="RECEITA">Receita</option>
+                        <option value="DESPESA">Despesa</option>
+                    </select>
+                </div>
+                <div class="fc-form-grupo">
+                    <label for="filtroConta">Conta</label>
+                    <select id="filtroConta" name="idConta" class="fc-select"></select>
+                </div>
+                <div class="fc-form-grupo full-width button-container">
+                    <button type="button" id="btnLimparFiltros" class="fc-btn fc-btn-secundario">
+                        <i class="fas fa-times-circle"></i> Limpar Filtros
+                    </button>
+                </div>
+            </form>
                 <div id="cardsLancamentosContainer" class="fc-lancamentos-cards-container"></div>
                 <div id="paginacaoLancamentosContainer" class="fc-paginacao-container"></div>
             </div>

@@ -739,6 +739,23 @@ body {
     background-color: #f8f9fa; /* Um leve fundo para destacar a área de ações */
 }
 
+/* --- Estilo para o Input de Paginação --- */
+.fc-input-paginacao {
+    width: 60px; /* Largura fixa para o campo */
+    padding: 6px 8px;
+    font-size: 0.9rem;
+    text-align: center;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    margin: 0 5px; /* Pequeno espaçamento lateral */
+}
+
+/* Remove as setinhas de número no Chrome, Safari, Edge */
+.fc-input-paginacao::-webkit-outer-spin-button,
+.fc-input-paginacao::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
 
 /* --- Forms & Inputs --- */
 .fc-form-group { margin-bottom: 1rem; }
@@ -1157,6 +1174,22 @@ body {
         width: 55px;
         height: 55px;
     }
+    .fc-paginacao-container {
+        gap: 5px;
+    }
+    .fc-paginacao-container .pagination-current {
+    font-size: 0.85rem;
+    }
+    .fc-input-paginacao {
+    width: 40px;
+    padding: 6px 8px;
+    font-size: 0.85rem;
+    }
+
+    .fc-paginacao-container .fc-btn {
+        padding: 8px 10px;
+    }
+
 }
 
 @media (max-width: 414px) {
