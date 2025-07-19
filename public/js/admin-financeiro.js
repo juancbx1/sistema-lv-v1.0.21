@@ -169,7 +169,13 @@ async function fetchFinanceiroAPI(endpoint, options = {}) {
         throw new Error('Token não encontrado');
     }
 
-    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...options.headers };
+    const headers = { 
+        'Authorization': `Bearer ${token}`, 
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache', // <<< LINHA ADICIONADA: Impede o cache
+        ...options.headers 
+    };
+    
     try {
         const response = await fetch(`/api/financeiro${endpoint}`, { ...options, headers });
         if (!response.ok) {
@@ -511,36 +517,43 @@ function renderizarDashboard(saldos, alertas) {
         return;
     }
     
-    // Calcula o saldo total consolidado
+    // 1. Calcula o saldo total consolidado
     const saldoTotal = saldos.reduce((acc, conta) => acc + parseFloat(conta.saldo_atual), 0);
 
-    // Gera o HTML do novo dashboard
+    // 2. Gera o HTML do novo dashboard
     saldosContainer.innerHTML = `
-        <!-- 1. Card de Resumo Total -->
-        <div class="fc-resumo-total-card">
-            <p class="total-label">Saldo Total Consolidado</p>
-            <h2 class="total-valor">${formatCurrency(saldoTotal)}</h2>
+        <!-- HERO SECTION: SALDO TOTAL -->
+        <div class="fc-saldo-hero">
+            <h3 class="fc-saldo-hero-title">SALDO TOTAL CONSOLIDADO</h3>
+            <h1 class="fc-saldo-hero-value">${formatCurrency(saldoTotal)}</h1>
         </div>
 
-        <!-- 2. Grade de Cartões de Conta -->
-        <div class="fc-contas-grid">
-            ${saldos.length > 0 ? saldos.map((conta, index) => {
-                const corIndex = (index % 5) + 1;
-                return `
-                <div class="fc-conta-card cor-${corIndex}">
-                    <!-- Adicionamos esta div wrapper -->
-                    <div class="nome-banco-wrapper">
-                        <p class="nome-conta">${conta.nome_conta}</p>
-                        <p class="info-banco">${conta.banco || 'Conta Interna'}</p>
-                    </div>
-                    <p class="saldo-conta">${formatCurrency(conta.saldo_atual)}</p>
+        <!-- LISTA DE CONTAS INTERATIVA -->
+        <div class="fc-resumo-contas">
+            <header class="fc-resumo-contas-header">
+                <h4 class="fc-resumo-contas-title">Resumo das Contas</h4>
+                <div class="fc-form-checkbox-wrapper">
+                    <input type="checkbox" id="chkMostrarContasZeradas">
+                    <label for="chkMostrarContasZeradas">Mostrar contas zeradas</label>
                 </div>
-                `
-            }).join('') : '<p>Nenhuma conta bancária ativa para exibir.</p>'}
+            </header>
+            <ul id="listaResumoContas" class="fc-resumo-contas-list">
+                ${saldos.length > 0 ? saldos.map(conta => {
+                    const saldo = parseFloat(conta.saldo_atual);
+                    const isZerado = Math.abs(saldo) < 0.01;
+                    // Adiciona a classe 'conta-zerada' e 'hidden' se o saldo for zero
+                    return `
+                    <li class="fc-resumo-contas-item ${isZerado ? 'conta-zerada hidden' : ''}">
+                        <span class="conta-nome"><i class="fas fa-university"></i> ${conta.nome_conta}</span>
+                        <span class="conta-saldo">${formatCurrency(saldo)}</span>
+                    </li>
+                    `;
+                }).join('') : '<li>Nenhuma conta bancária ativa para exibir.</li>'}
+            </ul>
         </div>
     `;
 
-    // A lógica para renderizar os cards de alerta continua a mesma de antes.
+    // 3. A lógica para renderizar os cards de alerta continua a mesma de antes.
     alertasContainer.innerHTML = `
         <h3 class="fc-section-title" style="margin-top: 20px; border-bottom: none; text-align:center;">Alertas e Contas Próximas</h3>
         <div class="fc-dashboard-grid fc-alertas-grid">
@@ -570,21 +583,47 @@ function renderizarDashboard(saldos, alertas) {
             </a>
         </div>
     `;
+    
+    // 4. Adiciona o listener de evento para o novo checkbox
+    const chkMostrarZeradas = document.getElementById('chkMostrarContasZeradas');
+    chkMostrarZeradas?.addEventListener('change', (e) => {
+        const isChecked = e.target.checked;
+        document.querySelectorAll('#listaResumoContas .conta-zerada').forEach(item => {
+            item.classList.toggle('hidden', !isChecked);
+        });
+    });
 }
 
 async function atualizarSaldosDashboard() {
+    const saldosContainer = document.getElementById('saldosContainer');
+    if (!saldosContainer) return;
+
     console.log('[Dashboard] Solicitando atualização de saldos...');
+    
+    // 1. Mostra o spinner IMEDIATAMENTE
+    saldosContainer.innerHTML = `
+        <div class="fc-spinner-container">
+            <div class="fc-spinner-dots">
+                <div class="dot-1"></div>
+                <div class="dot-2"></div>
+                <div class="dot-3"></div>
+            </div>
+            <span class="fc-spinner-text">Atualizando saldos...</span>
+        </div>
+    `;
+
     try {
-        // 1. Busca apenas os dados mais recentes do dashboard
+        // 2. Busca os dados da API
         const dashboardData = await fetchFinanceiroAPI('/dashboard');
         
-        // 2. Chama a função que já existe para redesenhar o dashboard
+        // 3. Renderiza o conteúdo final (substituindo o spinner)
         renderizarDashboard(dashboardData.saldos, dashboardData.alertas);
         
         console.log('[Dashboard] Saldos atualizados na tela com sucesso.');
     } catch (error) {
-        // Se falhar, não quebra a aplicação, apenas avisa no console.
+        // 4. Em caso de erro, substitui o spinner por uma mensagem de erro
         console.error('[Dashboard] Falha ao tentar atualizar os saldos:', error);
+        saldosContainer.innerHTML = `<p style="color:red; text-align:center; padding: 40px;">Não foi possível carregar os saldos. Tente novamente.</p>`;
     }
 }
 
@@ -656,8 +695,8 @@ function renderizarCardsLancamentos() {
 
     for (const l of lancamentosCache) {
         if (idsTransferenciaRenderizados.has(l.id)) continue;
-
-        const isTransferencia = l.id_transferencia_vinculada;
+        
+        const isTransferencia = l.nome_categoria === 'Transferência entre Contas' && l.id_transferencia_vinculada;
         if (isTransferencia) {
             const par = lancamentosCache.find(p => p.id === l.id_transferencia_vinculada);
             if (par) {
@@ -665,69 +704,117 @@ function renderizarCardsLancamentos() {
                 idsTransferenciaRenderizados.add(par.id);
                 const lancamentoOrigem = l.tipo === 'DESPESA' ? l : par;
                 const lancamentoDestino = l.tipo === 'RECEITA' ? l : par;
-                htmlFinal += `...`; // O HTML da transferência não muda, omitido por brevidade
+                htmlFinal += `
+                <div class="fc-lancamento-card-wrapper">
+                    <div class="fc-lancamento-card transferencia">
+                        <div class="header">
+                            <div class="descricao-wrapper">
+                                <span class="lancamento-id">#${lancamentoOrigem.id} / #${lancamentoDestino.id}</span>
+                                <span class="descricao">${l.descricao.split('.')[0] || 'Transferência entre Contas'}</span>
+                            </div>
+                            <span class="valor">${formatCurrency(l.valor)}</span>
+                        </div>
+                        <div class="details transferencia-details">
+                            <span class="detail-item de"><strong>DE:</strong> <i class="fas fa-university"></i> ${lancamentoOrigem.nome_conta}</span>
+                            <i class="fas fa-long-arrow-alt-right arrow"></i>
+                            <span class="detail-item para"><strong>PARA:</strong> <i class="fas fa-university"></i> ${lancamentoDestino.nome_conta}</span>
+                            <span class="detail-item data"><i class="fas fa-calendar-day"></i> ${new Date(l.data_transacao).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>
+                        </div>
+                        <div class="actions">
+                            <span class="detail-item" style="grid-area: status; align-self: end; font-size: 0.8rem; color: #6c757d;"><i class="fas fa-user-tie"></i> ${l.nome_usuario}</span>
+                        </div>
+                    </div>
+                </div>`;
                 continue;
             }
         }
         
         const isDetalhado = l.itens && l.itens.length > 0;
-        let nomeCategoriaExibido = l.nome_categoria || 'Sem Categoria';
-
+        let categoriaExibida = l.nome_categoria || 'Sem Categoria';
         if (isDetalhado) {
-            if (l.tipo_rateio === 'COMPRA') nomeCategoriaExibido = 'Compra Detalhada';
-            else if (l.tipo_rateio === 'DETALHADO') nomeCategoriaExibido = `Rateio: ${l.nome_categoria}`;
-            else nomeCategoriaExibido = 'Rateio (Genérico)';
+            if (l.tipo_rateio === 'COMPRA') categoriaExibida = 'Compra Detalhada';
+            else if (l.tipo_rateio === 'DETALHADO') categoriaExibida = `Rateio: ${l.nome_categoria}`;
+            else categoriaExibida = 'Rateio (Genérico)';
         }
-        
+
+        const dataHoraCriacao = new Date(l.data_lancamento).toLocaleString('pt-BR', {
+            day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+
         const tipoClasse = l.tipo ? l.tipo.toLowerCase() : '';
-        const isPendente = l.status_edicao === 'PENDENTE_APROVACAO' || l.status_edicao === 'PENDENTE_EXCLUSAO';
+        const isPendente = l.status_edicao?.startsWith('PENDENTE');
         const classePendente = isPendente ? 'pendente' : '';
-        const sinal = l.tipo === 'RECEITA' ? '+' : '-';
-        
-        let statusHTML = '';
-        if (l.status_edicao === 'PENDENTE_APROVACAO') statusHTML = `<div class="status-pendente"><i class="fas fa-hourglass-half"></i> <span>Aguardando aprovação para edição</span></div>`;
-        else if (l.status_edicao === 'PENDENTE_EXCLUSAO') statusHTML = `<div class="status-pendente"><i class="fas fa-trash-alt"></i> <span>Aguardando aprovação para exclusão</span></div>`;
-        else if (l.status_edicao === 'EDITADO_APROVADO') statusHTML = `<div class="status-pendente" style="color: var(--fc-cor-receita);"><i class="fas fa-check-circle"></i> <span>Edição Aprovada</span></div>`;
-        else if (l.status_edicao === 'EDICAO_REJEITADA') statusHTML = `<div class="status-pendente" style="color: var(--fc-cor-despesa);"><i class="fas fa-times-circle"></i> <span>Solicitação Rejeitada.${l.motivo_rejeicao ? ' Motivo: ' + l.motivo_rejeicao : ''}</span></div>`;
-        else statusHTML = `<div class="status-placeholder"></div>`;
+
+        // --- GERA O HTML DA ÁREA EXPANSÍVEL ---
+        let detalhesHtml = '';
+        if (isDetalhado) {
+            const isRateioDetalhado = l.tipo_rateio === 'DETALHADO';
+            
+            // Define o cabeçalho da tabela com base no tipo
+            const headerCols = isRateioDetalhado
+                ? ['Favorecido do Custo', 'Categoria', 'Descrição', 'Valor']
+                : ['Categoria do Item', 'Descrição', 'Valor'];
+            
+            // Gera as linhas da tabela
+            const itemRows = l.itens.map(item => `
+                <div class="item-detalhe-row">
+                    ${isRateioDetalhado ? `<div data-label="Favorecido">${item.nome_contato_item || '-'}</div>` : ''}
+                    <div data-label="Categoria">${item.nome_categoria || '-'}</div>
+                    <div data-label="Descrição">${item.descricao_item || '-'}</div>
+                    <div data-label="Valor">${formatCurrency(item.valor_item)}</div>
+                </div>
+            `).join('');
+
+            detalhesHtml = `
+                <div class="fc-lancamento-itens-container hidden" id="itens-${l.id}">
+                    <div class="item-detalhe-grid">
+                        <div class="item-detalhe-header">
+                            ${headerCols.map(col => `<div>${col}</div>`).join('')}
+                        </div>
+                        ${itemRows}
+                    </div>
+                </div>`;
+        }
+
+
+        // Garante que temos um valor padrão para o tipo de rateio
+        const tipoRateio = l.tipo_rateio || 'COMPRA';
 
         htmlFinal += `
             <div class="fc-lancamento-card-wrapper">
-                <div class="fc-lancamento-card ${tipoClasse} ${classePendente}">
-                    <div class="header">
-                        <div class="descricao-wrapper">
+                <div class="fc-lancamento-card ${tipoClasse} ${classePendente}" ${isDetalhado ? `data-rateio-tipo="${tipoRateio}"` : ''}>
+
+                    
+                    <div class="card-main-line">
+                        <div class="main-info">
                             <span class="lancamento-id">#${l.id}</span>
                             <span class="descricao">${l.descricao || 'Lançamento sem descrição'}</span>
                         </div>
-                        <span class="valor">${sinal} ${formatCurrency(l.valor)}</span>
+                        <span class="valor">${l.tipo === 'RECEITA' ? '+' : '-'} ${formatCurrency(l.valor)}</span>
                     </div>
-                    <div class="details">
-                        <span class="detail-item"><i class="fas fa-calendar-day"></i> ${new Date(l.data_transacao).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>
-                        <span class="detail-item"><i class="fas fa-tag"></i> ${nomeCategoriaExibido}</span>
-                        <span class="detail-item"><i class="fas fa-university"></i> ${l.nome_conta}</span>
-                        <span class="detail-item"><i class="fas fa-user-friends"></i> ${l.nome_favorecido || '-'}</span>
-                        <span class="detail-item"><i class="fas fa-user-plus"></i> ${l.nome_usuario || 'N/A'}</span>
+
+                    <div class="card-details">
+                        <span class="detail-item"><i class="fas fa-user-friends"></i><b>Favorecido:</b> ${l.nome_favorecido || '-'}</span>
+                        <span class="detail-item"><i class="fas fa-tag"></i><b>Categoria:</b> ${categoriaExibida}</span>
+                        <span class="detail-item"><i class="fas fa-university"></i><b>Conta:</b> ${l.nome_conta}</span>
+                        <span class="detail-item"><i class="fas fa-calendar-day"></i><b>Data Trans.:</b> ${new Date(l.data_transacao).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>
                     </div>
-                    ${statusHTML}
-                    <div class="actions">
-                        ${isDetalhado ? `<button class="fc-btn-icon btn-toggle-details" data-id="${l.id}" title="Ver Detalhes"><i class="fas fa-chevron-down"></i></button>` : ''}
-                        <button class="fc-btn-icon btn-editar-lancamento" data-id="${l.id}" title="Editar Lançamento" ${isPendente || isDetalhado ? 'disabled' : ''} ${isDetalhado ? 'title="Edição de lançamentos detalhados não disponível"' : ''}><i class="fas fa-pencil-alt"></i></button>
-                        <button class="fc-btn-icon btn-excluir-lancamento" data-id="${l.id}" title="Excluir Lançamento" style="color: var(--fc-cor-despesa);" ${isPendente ? 'disabled' : ''}><i class="fas fa-trash"></i></button>
+
+                    <div class="card-meta-line">
+                        <div class="meta-info">
+                            <span class="detail-item"><i class="fas fa-user-tie"></i><b>Criado por:</b> ${l.nome_usuario || 'N/A'}</span>
+                            <span class="detail-item"><i class="fas fa-clock"></i><b>Em:</b> ${dataHoraCriacao}</span>
+                        </div>
+                        <div class="actions">
+                            ${isDetalhado ? `<button class="fc-btn-icon btn-toggle-details" data-id="${l.id}" title="Ver Detalhes"><i class="fas fa-chevron-down"></i></button>` : ''}
+                            <button class="fc-btn-icon btn-editar-lancamento" data-id="${l.id}" title="Editar" ${isPendente ? 'disabled' : ''}><i class="fas fa-pencil-alt"></i></button>
+                            <button class="fc-btn-icon btn-excluir-lancamento" data-id="${l.id}" title="Excluir" ${isPendente ? 'disabled' : ''}><i class="fas fa-trash"></i></button>
+                        </div>
                     </div>
                 </div>
-                ${isDetalhado ? `
-                <div class="fc-lancamento-itens-container hidden" id="itens-${l.id}">
-                    <ul>
-                        ${l.itens.map(item => {
-                            if (l.tipo_rateio === 'DETALHADO') {
-                                return `<li><span>${item.nome_contato_item || 'Favorecido não encontrado'}: ${item.descricao_item || ''}</span> <span>${formatCurrency(item.valor_item)}</span></li>`;
-                            } else { // 'COMPRA' ou genérico
-                                return `<li><span>${item.nome_categoria || 'Categoria não encontrada'}: ${item.descricao_item || ''}</span> <span>${formatCurrency(item.valor_item)}</span></li>`;
-                            }
-                        }).join('')}
-                    </ul>
-                </div>` : ''}
-            </div>`;
+                ${detalhesHtml}
+            </div>
+        `;
     }
     
     container.innerHTML = htmlFinal;
@@ -749,7 +836,10 @@ function renderizarCardsLancamentos() {
                 btn.addEventListener('click', (e) => {
                     const id = e.currentTarget.dataset.id;
                     const lancamento = lancamentosCache.find(l => l.id == id);
-                    if (lancamento) abrirModalEdicaoSimples(lancamento);
+                    if (lancamento) {
+                        // Chama a função unificada, passando o lançamento para entrar em modo de edição
+                        abrirModalLancamento(lancamento); 
+                    }
                 });
             } else {
                 btn.classList.add('fc-btn-disabled');
@@ -828,20 +918,20 @@ function renderizarPaginacaoLancamentos(totalPages, currentPage) {
     });
 }
 
-function abrirModalLancamento() {
-    itemEmEdicao = null;
-    const titulo = "Novo Lançamento";
+function abrirModalLancamento(lancamento = null) {
+    itemEmEdicao = lancamento;
+    const isEditMode = !!itemEmEdicao;
+    const titulo = isEditMode ? "Editar Lançamento" : "Novo Lançamento";
     
     const modalHTML = `
         <div id="modal-lancamento" class="fc-modal" style="display: flex;">
             <div class="fc-modal-content">
                 <button id="fecharModal" class="fc-modal-close"><i class="fas fa-times"></i></button>
                 <h3 class="fc-section-title" style="text-align:center; border:0;">${titulo}</h3>
-                
                 <div class="fc-modal-body">
                     <div class="fc-form-group">
                         <label>Qual o tipo de lançamento?</label>
-                        <div class="fc-segmented-control">
+                        <div class="fc-segmented-control" ${isEditMode ? 'style="pointer-events: none; opacity: 0.6;"' : ''}>
                             <button class="fc-segment-btn active" data-form-id="formLancamentoSimples">Simples</button>
                             <button class="fc-segment-btn" data-form-id="formCompraDetalhada">Compra Detalhada</button>
                             <button class="fc-segment-btn" data-form-id="formRateioDetalhado">Rateio Detalhado</button>
@@ -851,10 +941,9 @@ function abrirModalLancamento() {
                     <form id="formCompraDetalhada" class="hidden"></form>
                     <form id="formRateioDetalhado" class="hidden"></form>
                 </div>
-
                 <div class="fc-modal-footer">
                     <button type="button" id="btnCancelarModal" class="fc-btn fc-btn-secundario">Cancelar</button>
-                    <button type="button" id="btnSalvarModal" class="fc-btn fc-btn-primario" form="formLancamentoSimples">Salvar Lançamento</button>
+                    <button type="button" id="btnSalvarModal" class="fc-btn fc-btn-primario">${isEditMode ? 'Salvar Alterações' : 'Salvar Lançamento'}</button>
                 </div>
             </div>
         </div>
@@ -866,45 +955,80 @@ function abrirModalLancamento() {
     const formCompra = document.getElementById('formCompraDetalhada');
     const formRateio = document.getElementById('formRateioDetalhado');
     const btnSalvar = document.getElementById('btnSalvarModal');
+    const btnAbas = modalElement.querySelectorAll('.fc-segment-btn');
 
-    // Listeners de controle do modal
+    const ativarAba = (formId) => {
+        btnAbas.forEach(btn => {
+            const isActive = btn.dataset.formId === formId;
+            btn.classList.toggle('active', isActive);
+            const formParaAlterar = document.getElementById(btn.dataset.formId);
+            if (formParaAlterar) formParaAlterar.classList.toggle('hidden', !isActive);
+        });
+        btnSalvar.setAttribute('form', formId);
+    };
+
+    if (isEditMode) {
+        const isDetalhado = itemEmEdicao.itens && itemEmEdicao.itens.length > 0;
+        
+        if (isDetalhado) {
+            const tipoRateio = itemEmEdicao.tipo_rateio || 'COMPRA';
+            const formId = tipoRateio === 'COMPRA' ? 'formCompraDetalhada' : 'formRateioDetalhado';
+            const formElement = document.getElementById(formId);
+            
+            ativarAba(formId);
+            
+            // <<< CORREÇÃO AQUI >>>
+            // Primeiro, popula o formulário com os dados do pai
+            if (tipoRateio === 'COMPRA') {
+                popularFormularioCompraDetalhada(formElement, itemEmEdicao);
+            } else {
+                popularFormularioRateioDetalhado(formElement, itemEmEdicao);
+            }
+            
+            // Depois, preenche os filhos (a grade)
+            const gradeContainer = formElement.querySelector('.grade-itens-rateio');
+            gradeContainer.innerHTML = ''; 
+            itemEmEdicao.itens.forEach(item => {
+                if (tipoRateio === 'COMPRA') adicionarLinhaItemCompra(gradeContainer, item);
+                else adicionarLinhaRateioDetalhado(gradeContainer, item);
+            });
+            atualizarResumoRateio(formElement);
+            if (itemEmEdicao.id_contato) setAutocompleteStatus(formElement.querySelector('.fc-autocomplete-input'), 'success');
+
+        } else { // Edição de lançamento simples
+            ativarAba('formLancamentoSimples');
+            popularFormularioSimples(formSimples, itemEmEdicao);
+        }
+    } else { // Modo de criação
+        ativarAba('formLancamentoSimples');
+        popularFormularioSimples(formSimples);
+        popularFormularioCompraDetalhada(formCompra);
+        popularFormularioRateioDetalhado(formRateio);
+    }
+
+    // Configura os listeners
     modalElement.querySelector('.fc-modal-close').addEventListener('click', fecharModal);
     modalElement.querySelector('#btnCancelarModal').addEventListener('click', fecharModal);
     
-    // Listeners de SUBMIT nos formulários
     formSimples.addEventListener('submit', salvarLancamento);
-    formCompra.addEventListener('submit', (e) => salvarCompraDetalhada(e)); // Função antiga
-    formRateio.addEventListener('submit', (e) => salvarRateioDetalhado(e)); // Função nova
+    formCompra.addEventListener('submit', (e) => salvarCompraDetalhada(e));
+    formRateio.addEventListener('submit', (e) => salvarRateioDetalhado(e));
 
-    // Listener para o botão de salvar, que agora só dispara o submit do form ativo
     btnSalvar.addEventListener('click', () => {
-        const formAtivoId = btnSalvar.getAttribute('form');
-        const formAtivo = document.getElementById(formAtivoId);
-        formAtivo?.requestSubmit();
+        document.getElementById(btnSalvar.getAttribute('form'))?.requestSubmit();
     });
 
-    // Listener para alternar entre os formulários
-    modalElement.querySelectorAll('.fc-segment-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            modalElement.querySelector('.fc-segment-btn.active').classList.remove('active');
-            btn.classList.add('active');
+    if (!isEditMode) {
+        btnAbas.forEach(btn => btn.addEventListener('click', () => {
             const formId = btn.dataset.formId;
-
-            formSimples.classList.toggle('hidden', formId !== 'formLancamentoSimples');
-            formCompra.classList.toggle('hidden', formId !== 'formCompraDetalhada');
-            formRateio.classList.toggle('hidden', formId !== 'formRateioDetalhado');
-
-            btnSalvar.setAttribute('form', formId);
+            ativarAba(formId);
+            
+            // Renomeia o botão de salvar ao trocar de aba
             if(formId === 'formLancamentoSimples') btnSalvar.textContent = 'Salvar Lançamento';
             else if(formId === 'formCompraDetalhada') btnSalvar.textContent = 'Salvar Compra';
             else btnSalvar.textContent = 'Salvar Rateio';
-        });
-    });
-
-    // Popula os 3 formulários
-    popularFormularioSimples(formSimples);
-    popularFormularioCompraDetalhada(formCompra); // Função antiga renomeada
-    popularFormularioRateioDetalhado(formRateio); // Função nova
+        }));
+    }
 }
 
 // Preenche e gerencia o formulário de lançamento simples
@@ -1019,7 +1143,7 @@ function popularFormularioSimples(formContainer, lancamento = null) {
 
 
 // Preenche e gerencia o formulário de compra detalhada
-function popularFormularioCompraDetalhada(formContainer) {
+function popularFormularioCompraDetalhada(formContainer, lancamento = null) {
     if (!formContainer) return;
 
     const textos = {
@@ -1034,31 +1158,31 @@ function popularFormularioCompraDetalhada(formContainer) {
         <div class="fc-form-row">
             <div class="fc-form-group">
                 <label for="${prefixo}_data">Data da Compra*</label>
-                <input type="date" id="${prefixo}_data" class="fc-input" value="${hoje}" required>
+                <input type="date" id="${prefixo}_data" class="fc-input" value="${lancamento ? lancamento.data_transacao.split('T')[0] : hoje}" required>
             </div>
             <div class="fc-form-group">
                 <label for="${prefixo}_valor_total">Valor Total da Nota (R$)*</label>
-                <input type="number" id="${prefixo}_valor_total" class="fc-input" step="0.01" min="0.01" required placeholder="300,00">
+                <input type="number" id="${prefixo}_valor_total" class="fc-input" step="0.01" min="0.01" required placeholder="300,00" value="${lancamento?.valor || ''}">
             </div>
         </div>
         <div class="fc-form-row">
             <div class="fc-form-group">
                 <label for="${prefixo}_conta">Conta Bancária de Saída*</label>
-                <select id="${prefixo}_conta" class="fc-select" required>${'<option value="">Selecione...</option>' + contasCache.map(c => `<option value="${c.id}">${c.nome_conta}</option>`).join('')}</select>
+                <select id="${prefixo}_conta" class="fc-select" required>${'<option value="">Selecione...</option>' + contasCache.map(c => `<option value="${c.id}" ${lancamento?.id_conta_bancaria == c.id ? 'selected' : ''}>${c.nome_conta}</option>`).join('')}</select>
             </div>
             <div class="fc-form-group">
                 <label for="${prefixo}_favorecido_busca">${textos.favorecidoLabel}</label>
                 <div class="fc-autocomplete-container">
-                    <input type="text" id="${prefixo}_favorecido_busca" class="fc-input fc-autocomplete-input" placeholder="Digite para buscar..." autocomplete="off" required>
+                    <input type="text" id="${prefixo}_favorecido_busca" class="fc-input fc-autocomplete-input" placeholder="Digite para buscar..." value="${lancamento?.nome_favorecido || ''}" autocomplete="off" required>
                     <span class="fc-autocomplete-status-icon"></span>
                     <div id="${prefixo}_favorecido_resultados" class="fc-autocomplete-results hidden"></div>
-                    <input type="hidden" id="${prefixo}_favorecido_id" class="fc-autocomplete-id">
+                    <input type="hidden" id="${prefixo}_favorecido_id" class="fc-autocomplete-id" value="${lancamento?.id_contato || ''}">
                 </div>
             </div>
         </div>
         <div class="fc-form-group">
             <label for="${prefixo}_descricao">${textos.descricaoGeralLabel}</label>
-            <input type="text" id="${prefixo}_descricao" class="fc-input" required>
+            <input type="text" id="${prefixo}_descricao" class="fc-input" required value="${lancamento?.descricao || ''}">
         </div>
         <hr style="margin: 20px 0;">
         <h4 class="fc-section-title" style="font-size: 1.1rem; border:0; margin-bottom: 10px;">${textos.tituloItens}</h4>
@@ -1074,10 +1198,87 @@ function popularFormularioCompraDetalhada(formContainer) {
     `;
     
     const gradeContainer = formContainer.querySelector(`#${prefixo}_grade_itens`);
-    adicionarLinhaItemCompra(gradeContainer);
-
+    if (!lancamento) { // Só adiciona linha em branco na criação
+        adicionarLinhaItemCompra(gradeContainer);
+    }
     formContainer.querySelector('.btn-adicionar-item-rateio').addEventListener('click', () => adicionarLinhaItemCompra(gradeContainer));
     formContainer.querySelector(`#${prefixo}_valor_total`).addEventListener('input', () => atualizarResumoRateio(formContainer));
+}
+
+// Função ajustada para receber 'lancamento' e preencher os campos
+function popularFormularioRateioDetalhado(formContainer, lancamento = null) {
+    if (!formContainer) return;
+    
+    const hoje = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+    const prefixo = formContainer.id;
+
+    const categoriasDespesa = categoriasCache.filter(c => gruposCache.find(g => g.id === c.id_grupo)?.tipo === 'DESPESA');
+    const categoriasAgrupadas = categoriasDespesa.reduce((acc, categoria) => {
+        (acc[categoria.id_grupo] = acc[categoria.id_grupo] || []).push(categoria);
+        return acc;
+    }, {});
+
+    let optionsCategoria = '<option value="">Selecione...</option>';
+    for (const idGrupo in categoriasAgrupadas) {
+        const grupo = gruposCache.find(g => g.id == idGrupo);
+        optionsCategoria += `<optgroup label="${grupo ? grupo.nome : 'Sem Grupo'}">`;
+        categoriasAgrupadas[idGrupo].forEach(categoria => {
+            const isSelected = lancamento && lancamento.id_categoria == categoria.id ? 'selected' : '';
+            optionsCategoria += `<option value="${categoria.id}" ${isSelected}>${categoria.nome} [ ${grupo.nome} ]</option>`;
+        });
+        optionsCategoria += `</optgroup>`;
+    }
+
+    formContainer.innerHTML = `
+        <h4 class="fc-section-title" style="font-size: 1.1rem; border:0; margin-bottom: 10px;">Dados do Pagamento (Guia/Fatura)</h4>
+        <div class="fc-form-row">
+            <div class="fc-form-group">
+                <label for="${prefixo}_conta">Conta de Saída*</label>
+                <select id="${prefixo}_conta" class="fc-select" required>${'<option value="">Selecione...</option>' + contasCache.map(c => `<option value="${c.id}" ${lancamento?.id_conta_bancaria == c.id ? 'selected' : ''}>${c.nome_conta}</option>`).join('')}</select>
+            </div>
+            <div class="fc-form-group">
+                <label for="${prefixo}_data">Data do Pagamento*</label>
+                <input type="date" id="${prefixo}_data" class="fc-input" value="${lancamento ? lancamento.data_transacao.split('T')[0] : hoje}" required>
+            </div>
+        </div>
+        <div class="fc-form-row">
+            <div class="fc-form-group">
+                <label for="${prefixo}_favorecido_busca">Favorecido do Pagamento (Órgão)*</label>
+                 <div class="fc-autocomplete-container">
+                    <input type="text" id="${prefixo}_favorecido_busca" class="fc-input fc-autocomplete-input" placeholder="Ex: Caixa..." value="${lancamento?.nome_favorecido || ''}" autocomplete="off" required>
+                    <span class="fc-autocomplete-status-icon"></span>
+                    <div id="${prefixo}_favorecido_resultados" class="fc-autocomplete-results hidden"></div>
+                    <input type="hidden" id="${prefixo}_favorecido_id" class="fc-autocomplete-id" value="${lancamento?.id_contato || ''}">
+                </div>
+            </div>
+            <div class="fc-form-group">
+                <label for="${prefixo}_categoria">Categoria Geral (Padrão para itens)*</label>
+                <select id="${prefixo}_categoria" class="fc-select" required>${optionsCategoria}</select>
+            </div>
+        </div>
+        <div class="fc-form-group">
+            <label for="${prefixo}_descricao">Descrição Geral*</label>
+            <input type="text" id="${prefixo}_descricao" class="fc-input" required placeholder="Ex: Guia FGTS..." value="${lancamento?.descricao || ''}">
+        </div>
+        <hr style="margin: 20px 0;">
+        <h4 class="fc-section-title" style="font-size: 1.1rem; border:0; margin-bottom: 10px;">Detalhamento dos Custos</h4>
+        <div class="fc-rateio-header" style="grid-template-columns: 2.5fr 2.5fr 2fr 130px 40px;">
+            <span>Favorecido do Custo*</span>
+            <span>Categoria do Item*</span>
+            <span>Descrição (Opcional)</span>
+            <span>Valor (R$)*</span>
+            <span>Ação</span>
+        </div>
+        <div id="${prefixo}_grade_itens" class="grade-itens-rateio"></div>
+        <button type="button" class="fc-btn fc-btn-outline btn-adicionar-item-rateio" style="margin-top: 10px;"><i class="fas fa-plus"></i> Adicionar Item</button>
+        <div id="${prefixo}_resumo_rateio" class="resumo-rateio" style="text-align: right; margin-top: 10px; font-weight: bold;"></div>
+    `;
+
+    const gradeContainer = formContainer.querySelector(`#${prefixo}_grade_itens`);
+    if (!lancamento) { // Só adiciona linha em branco na criação
+        adicionarLinhaRateioDetalhado(gradeContainer);
+    }
+    formContainer.querySelector('.btn-adicionar-item-rateio').addEventListener('click', () => adicionarLinhaRateioDetalhado(gradeContainer));
 }
 
 
@@ -1115,7 +1316,7 @@ function setAutocompleteStatus(inputElement, status) {
 }
 
 // Adiciona uma nova linha de item na grade de rateio
-function adicionarLinhaItemCompra(gradeContainer) {
+function adicionarLinhaItemCompra(gradeContainer, item = null) {
     if (!gradeContainer) return;
     
     const div = document.createElement('div');
@@ -1123,40 +1324,37 @@ function adicionarLinhaItemCompra(gradeContainer) {
 
     const categoriasDespesa = categoriasCache.filter(c => gruposCache.find(g => g.id === c.id_grupo)?.tipo === 'DESPESA');
     const categoriasAgrupadas = categoriasDespesa.reduce((acc, categoria) => {
-        const idGrupo = categoria.id_grupo;
-        if (!acc[idGrupo]) { acc[idGrupo] = []; }
-        acc[idGrupo].push(categoria);
+        (acc[categoria.id_grupo] = acc[categoria.id_grupo] || []).push(categoria);
         return acc;
     }, {});
 
-    let optionsCategoria = '<option value="">Selecione Categoria...</option>';
+    let optionsCategoria = '<option value="">Selecione...</option>';
     for (const idGrupo in categoriasAgrupadas) {
         const grupo = gruposCache.find(g => g.id == idGrupo);
-        optionsCategoria += `<optgroup label="${grupo ? grupo.nome : 'Sem Grupo'}">`;
+        optionsCategoria += `<optgroup label="${grupo.nome}">`;
         categoriasAgrupadas[idGrupo].forEach(categoria => {
-            optionsCategoria += `<option value="${categoria.id}">${categoria.nome} [ ${grupo ? grupo.nome : ''} ]</option>`;
+            const isSelected = item && item.id_categoria == categoria.id ? 'selected' : '';
+            optionsCategoria += `<option value="${categoria.id}" ${isSelected}>${categoria.nome} [ ${grupo.nome} ]</option>`;
         });
         optionsCategoria += `</optgroup>`;
     }
 
     div.innerHTML = `
         <select class="fc-select item-categoria" required>${optionsCategoria}</select>
-        <input type="text" class="fc-input item-descricao" placeholder="Descrição do item (opcional)">
-        <input type="number" class="fc-input item-valor" step="0.01" min="0.01" placeholder="Valor" required>
+        <input type="text" class="fc-input item-descricao" placeholder="Descrição" value="${item?.descricao_item || ''}">
+        <input type="number" class="fc-input item-valor" step="0.01" min="0.01" placeholder="Valor" required value="${item?.valor_item || ''}">
         <button type="button" class="remover-item-btn"><i class="fas fa-trash"></i></button>
     `;
     gradeContainer.appendChild(div);
 
-    // Atualiza o resumo quando o valor de um item muda
-    div.querySelector('.item-valor').addEventListener('input', () => atualizarResumoRateio(gradeContainer.closest('form')));
-
-    // Remove a linha e atualiza o resumo
+    const formPai = gradeContainer.closest('form');
+    div.querySelector('.item-valor').addEventListener('input', () => atualizarResumoRateio(formPai));
     div.querySelector('.remover-item-btn').addEventListener('click', () => {
-        const formPai = gradeContainer.closest('form');
         div.remove();
         atualizarResumoRateio(formPai);
     });
 }
+
 
 // Atualiza o resumo dos valores dos itens dentro de um formulário específico
 function atualizarResumoRateio(formElement) {
@@ -1188,7 +1386,6 @@ function atualizarResumoRateio(formElement) {
 
 async function salvarCompraDetalhada(event) {
     event.preventDefault();
-
     const form = event.target;
     const prefixo = form.id;
     const btnSalvar = form.closest('.fc-modal-content').querySelector('#btnSalvarModal');
@@ -1237,8 +1434,9 @@ async function salvarCompraDetalhada(event) {
                 id_conta_bancaria: parseInt(form.querySelector(`#${prefixo}_conta`).value),
                 data_transacao: form.querySelector(`#${prefixo}_data`).value,
                 id_contato: parseInt(favorecidoId),
-                id_categoria: null, // Na compra, a categoria fica nos filhos
+                id_categoria: null,
                 descricao: form.querySelector(`#${prefixo}_descricao`).value,
+                valor: valorTotalNota // O valor do pai é o total da nota
             },
             itens_filho: itens_filho
         };
@@ -1246,12 +1444,19 @@ async function salvarCompraDetalhada(event) {
         btnSalvar.disabled = true;
         btnSalvar.innerHTML = `<i class="fas fa-spinner fc-btn-spinner"></i> Salvando...`;
 
-        // Usa a mesma rota, pois o backend já foi preparado para isso
-        await fetchFinanceiroAPI('/lancamentos/detalhado', { method: 'POST', body: JSON.stringify(payload) });
+        // <<< AQUI ESTÁ A LÓGICA CORRETA >>>
+        if (itemEmEdicao) {
+            // Se estamos editando, usamos o método PUT e o ID do item
+            await fetchFinanceiroAPI(`/lancamentos/detalhado/${itemEmEdicao.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+        } else {
+            // Se não, usamos o método POST para criar
+            await fetchFinanceiroAPI('/lancamentos/detalhado', { method: 'POST', body: JSON.stringify(payload) });
+        }
         
-        mostrarPopupFinanceiro('Compra detalhada registrada com sucesso!', 'sucesso');
+        const mensagemSucesso = itemEmEdicao ? 'Compra atualizada com sucesso!' : 'Compra detalhada registrada com sucesso!';
+        mostrarPopupFinanceiro(mensagemSucesso, 'sucesso');
         fecharModal();
-        carregarLancamentosFiltrados(1);
+        carregarLancamentosFiltrados(filtrosAtivos.page || 1);
         atualizarSaldosDashboard();
 
     } catch(e) {
@@ -1264,85 +1469,8 @@ async function salvarCompraDetalhada(event) {
     }
 }
 
-
-// NOVA função para popular o formulário de RATEIO
-function popularFormularioRateioDetalhado(formContainer) {
-    if (!formContainer) return;
-    
-    const hoje = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-    const prefixo = formContainer.id;
-
-    // Gera as opções de categoria agrupadas
-    const categoriasDespesa = categoriasCache.filter(c => gruposCache.find(g => g.id === c.id_grupo)?.tipo === 'DESPESA');
-    const categoriasAgrupadas = categoriasDespesa.reduce((acc, categoria) => {
-        (acc[categoria.id_grupo] = acc[categoria.id_grupo] || []).push(categoria);
-        return acc;
-    }, {});
-
-    let optionsCategoria = '<option value="">Selecione...</option>';
-    for (const idGrupo in categoriasAgrupadas) {
-        const grupo = gruposCache.find(g => g.id == idGrupo);
-        optionsCategoria += `<optgroup label="${grupo ? grupo.nome : 'Sem Grupo'}">`;
-        categoriasAgrupadas[idGrupo].forEach(categoria => {
-            optionsCategoria += `<option value="${categoria.id}">${categoria.nome} [ ${grupo.nome} ]</option>`;
-        });
-        optionsCategoria += `</optgroup>`;
-    }
-
-    formContainer.innerHTML = `
-        <h4 class="fc-section-title" style="font-size: 1.1rem; border:0; margin-bottom: 10px;">Dados do Pagamento (Guia/Despesa)</h4>
-        <div class="fc-form-row">
-            <div class="fc-form-group">
-                <label for="${prefixo}_conta">Conta de Saída*</label>
-                <select id="${prefixo}_conta" class="fc-select" required>${'<option value="">Selecione...</option>' + contasCache.map(c => `<option value="${c.id}">${c.nome_conta}</option>`).join('')}</select>
-            </div>
-            <div class="fc-form-group">
-                <label for="${prefixo}_data">Data do Pagamento*</label>
-                <input type="date" id="${prefixo}_data" class="fc-input" value="${hoje}" required>
-            </div>
-        </div>
-        <div class="fc-form-row">
-            <div class="fc-form-group">
-                <label for="${prefixo}_favorecido_busca">Favorecido do Pagamento (Órgão)*</label>
-                 <div class="fc-autocomplete-container">
-                    <input type="text" id="${prefixo}_favorecido_busca" class="fc-input fc-autocomplete-input" placeholder="Ex: Caixa, Receita Federal..." autocomplete="off" required>
-                    <span class="fc-autocomplete-status-icon"></span>
-                    <div id="${prefixo}_favorecido_resultados" class="fc-autocomplete-results hidden"></div>
-                    <input type="hidden" id="${prefixo}_favorecido_id" class="fc-autocomplete-id">
-                </div>
-            </div>
-            <div class="fc-form-group">
-                <label for="${prefixo}_categoria">Categoria Geral (Padrão para itens)*</label>
-                <select id="${prefixo}_categoria" class="fc-select" required>${optionsCategoria}</select>
-            </div>
-        </div>
-        <div class="fc-form-group">
-            <label for="${prefixo}_descricao">Descrição Geral*</label>
-            <input type="text" id="${prefixo}_descricao" class="fc-input" required placeholder="Ex: Guia FGTS Competência 07/2025">
-        </div>
-
-        <hr style="margin: 20px 0;">
-        <h4 class="fc-section-title" style="font-size: 1.1rem; border:0; margin-bottom: 10px;">Detalhamento dos Custos</h4>
-        <div class="fc-rateio-header" style="grid-template-columns: 2.5fr 2.5fr 2fr 130px 40px;">
-            <span>Favorecido do Custo*</span>
-            <span>Categoria do Item*</span>
-            <span>Descrição (Opcional)</span>
-            <span>Valor (R$)*</span>
-            <span>Ação</span>
-        </div>
-        <div id="${prefixo}_grade_itens" class="grade-itens-rateio"></div>
-        <button type="button" class="fc-btn fc-btn-outline btn-adicionar-item-rateio" style="margin-top: 10px;"><i class="fas fa-plus"></i> Adicionar Item</button>
-        <div id="${prefixo}_resumo_rateio" class="resumo-rateio" style="text-align: right; margin-top: 10px; font-weight: bold;"></div>
-    `;
-
-    const gradeContainer = formContainer.querySelector(`#${prefixo}_grade_itens`);
-    adicionarLinhaRateioDetalhado(gradeContainer);
-
-    formContainer.querySelector('.btn-adicionar-item-rateio').addEventListener('click', () => adicionarLinhaRateioDetalhado(gradeContainer));
-}
-
-// NOVA função para adicionar uma linha na grade de RATEIO
-function adicionarLinhaRateioDetalhado(gradeContainer) {
+//  função para adicionar uma linha na grade de RATEIO
+function adicionarLinhaRateioDetalhado(gradeContainer, item = null) {
     if (!gradeContainer) return;
     
     const formPai = gradeContainer.closest('form');
@@ -1351,12 +1479,10 @@ function adicionarLinhaRateioDetalhado(gradeContainer) {
 
     const div = document.createElement('div');
     div.className = 'fc-rateio-linha'
-    // Ajustamos o grid para 5 colunas: Favorecido(2.5) | Categoria(2.5) | Descrição(2) | Valor(1) | Ação(auto)
     div.style.gridTemplateColumns = '2.5fr 2.5fr 2fr 130px 40px'; 
     
     const uniqueId = `autocomplete-item-${Date.now()}-${Math.random()}`;
 
-    // Reutiliza a mesma lógica para gerar as opções de categoria
     const categoriasDespesa = categoriasCache.filter(c => gruposCache.find(g => g.id === c.id_grupo)?.tipo === 'DESPESA');
     const categoriasAgrupadas = categoriasDespesa.reduce((acc, cat) => {
         (acc[cat.id_grupo] = acc[cat.id_grupo] || []).push(cat);
@@ -1368,7 +1494,8 @@ function adicionarLinhaRateioDetalhado(gradeContainer) {
         const grupo = gruposCache.find(g => g.id == idGrupo);
         optionsCategoria += `<optgroup label="${grupo.nome}">`;
         categoriasAgrupadas[idGrupo].forEach(categoria => {
-            const isSelected = categoria.id == categoriaGeralSelecionada ? 'selected' : '';
+            const categoriaIdParaSelecionar = item ? item.id_categoria : categoriaGeralSelecionada;
+            const isSelected = categoria.id == categoriaIdParaSelecionar ? 'selected' : '';
             optionsCategoria += `<option value="${categoria.id}" ${isSelected}>${categoria.nome} [ ${grupo.nome} ]</option>`;
         });
         optionsCategoria += `</optgroup>`;
@@ -1376,14 +1503,14 @@ function adicionarLinhaRateioDetalhado(gradeContainer) {
 
     div.innerHTML = `
         <div class="fc-autocomplete-container">
-            <input type="text" id="${uniqueId}" class="fc-input fc-autocomplete-input item-contato-busca" placeholder="Buscar funcionário/sócio..." autocomplete="off" required>
+            <input type="text" id="${uniqueId}" class="fc-input fc-autocomplete-input item-contato-busca" placeholder="Buscar..." value="${item?.nome_contato_item || ''}" required>
             <span class="fc-autocomplete-status-icon"></span>
             <div class="fc-autocomplete-results hidden"></div>
-            <input type="hidden" class="fc-autocomplete-id item-contato-id">
+            <input type="hidden" class="fc-autocomplete-id item-contato-id" value="${item?.id_contato_item || ''}">
         </div>
         <select class="fc-select item-categoria" required>${optionsCategoria}</select>
-        <input type="text" class="fc-input item-descricao" placeholder="Descrição (Opcional)">
-        <input type="number" class="fc-input item-valor" step="0.01" min="0.01" placeholder="Valor" required>
+        <input type="text" class="fc-input item-descricao" placeholder="Opcional" value="${item?.descricao_item || ''}">
+        <input type="number" class="fc-input item-valor" step="0.01" min="0.01" placeholder="Valor" required value="${item?.valor_item || ''}">
         <button type="button" class="remover-item-btn"><i class="fas fa-trash"></i></button>
     `;
     gradeContainer.appendChild(div);
@@ -1395,10 +1522,9 @@ function adicionarLinhaRateioDetalhado(gradeContainer) {
     });
 }
 
-// NOVA função para salvar o RATEIO detalhado
+//  função para salvar o RATEIO detalhado
 async function salvarRateioDetalhado(event) {
     event.preventDefault();
-
     const form = event.target;
     const prefixo = form.id;
     const btnSalvar = form.closest('.fc-modal-content').querySelector('#btnSalvarModal');
@@ -1439,7 +1565,6 @@ async function salvarRateioDetalhado(event) {
                 valor_item: valorItem,
                 id_contato_item: idContatoItem,
                 id_categoria: idCategoriaItem,
-                // AQUI ESTÁ A MUDANÇA: Coleta a descrição do item
                 descricao_item: linha.querySelector('.item-descricao').value,
             });
         });
@@ -1458,11 +1583,19 @@ async function salvarRateioDetalhado(event) {
         btnSalvar.disabled = true;
         btnSalvar.innerHTML = `<i class="fas fa-spinner fc-btn-spinner"></i> Salvando...`;
 
-        await fetchFinanceiroAPI('/lancamentos/detalhado', { method: 'POST', body: JSON.stringify(payload) });
+        // <<< AQUI ESTÁ A LÓGICA CORRETA >>>
+        if (itemEmEdicao) {
+            // Se estamos editando, usamos o método PUT e o ID do item
+            await fetchFinanceiroAPI(`/lancamentos/detalhado/${itemEmEdicao.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+        } else {
+            // Se não, usamos o método POST para criar
+            await fetchFinanceiroAPI('/lancamentos/detalhado', { method: 'POST', body: JSON.stringify(payload) });
+        }
         
-        mostrarPopupFinanceiro('Rateio detalhado registrado com sucesso!', 'sucesso');
+        const mensagemSucesso = itemEmEdicao ? 'Rateio atualizado com sucesso!' : 'Rateio detalhado registrado com sucesso!';
+        mostrarPopupFinanceiro(mensagemSucesso, 'sucesso');
         fecharModal();
-        carregarLancamentosFiltrados(1);
+        carregarLancamentosFiltrados(filtrosAtivos.page || 1);
         atualizarSaldosDashboard();
 
     } catch(e) {
@@ -1474,6 +1607,7 @@ async function salvarRateioDetalhado(event) {
         }
     }
 }
+
 
 async function salvarLancamento(event) {
     event.preventDefault();
@@ -1710,46 +1844,6 @@ function renderizarContatosGerenciamento() {
             btn.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para gerenciar favorecidos.', 'aviso'));
         });
     }
-}
-
-function abrirModalEdicaoSimples(lancamento) {
-    // Guarda a referência do item que está sendo editado
-    itemEmEdicao = lancamento;
-    const titulo = "Editar Lançamento Simples";
-
-    // Cria o HTML do modal, já focado em edição
-    const modalHTML = `
-        <div id="modal-lancamento" class="fc-modal" style="display: flex;">
-            <div class="fc-modal-content">
-                <button id="fecharModal" class="fc-modal-close"><i class="fas fa-times"></i></button>
-                <h3 class="fc-section-title" style="text-align:center; border:0;">${titulo}</h3>
-                
-                <div class="fc-modal-body">
-                    <!-- O formulário de edição é sempre o simples -->
-                    <form id="formLancamentoSimples"></form>
-                </div>
-
-                <div class="fc-modal-footer">
-                    <button type="button" id="btnCancelarModal" class="fc-btn fc-btn-secundario">Cancelar</button>
-                    <button type="submit" id="btnSalvarModal" class="fc-btn fc-btn-primario" form="formLancamentoSimples">Salvar Alterações</button>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
-
-    // Pega a referência do formulário que acabamos de criar
-    const formSimples = document.getElementById('formLancamentoSimples');
-    
-    // Popula o formulário com os dados do lançamento
-    popularFormularioSimples(formSimples, lancamento);
-
-    // Adiciona os listeners de controle
-    document.getElementById('fecharModal').addEventListener('click', fecharModal);
-    document.getElementById('btnCancelarModal').addEventListener('click', fecharModal);
-    
-    // Liga o formulário à função de salvar
-    formSimples.addEventListener('submit', salvarLancamento);
 }
 
 function abrirModalCategoria(categoria = null) {
@@ -3210,12 +3304,9 @@ function setupEventListenersFinanceiro() {
         });
 
         const formFiltros = document.getElementById('filtrosLancamentos');
-        // Adicionamos o 'e' para receber o objeto do evento
         formFiltros?.addEventListener('change', (e) => {
-            // Se o evento não foi gerado por um usuário, ignora.
-            if (!e.isTrusted) {
-                return;
-            }
+            // <<< A CORREÇÃO DA BUSCA DUPLICADA ESTÁ AQUI >>>
+            if (!e.isTrusted) return; 
             
             const formData = new FormData(formFiltros);
             filtrosAtivos = Object.fromEntries(formData.entries());
@@ -3337,6 +3428,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
         console.error('[Financeiro DOMContentLoaded] Erro:', error);
         // Você pode adicionar um feedback de erro na própria página aqui se desejar
+    }
+});
+
+// Atualiza o dashboard quando o usuário volta para a aba do navegador
+document.addEventListener('visibilitychange', () => {
+    // Verifica se a página se tornou visível novamente
+    if (document.visibilityState === 'visible') {
+        // E se o dashboard é a aba ativa no momento
+        const dashboardTab = document.getElementById('tab-dashboard');
+        if (dashboardTab && dashboardTab.classList.contains('active')) {
+            console.log('[Dashboard] Aba reativada, atualizando saldos...');
+            atualizarSaldosDashboard();
+        }
     }
 });
 

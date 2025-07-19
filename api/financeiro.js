@@ -534,6 +534,7 @@ router.get('/lancamentos', async (req, res) => {
         const query = `
             SELECT 
         l.*, 
+        l.data_lancamento,
         cb.nome_conta,
         cat.nome as nome_categoria,
         u.nome as nome_usuario, 
@@ -549,9 +550,7 @@ router.get('/lancamentos', async (req, res) => {
                 'nome_contato_item', contato_item.nome
             ))
             FROM fc_lancamento_itens li
-            -- Join opcional para a categoria do item, caso ainda exista
             LEFT JOIN fc_categorias cat_item ON li.id_categoria = cat_item.id
-            -- Join opcional para o contato do item (o sub-favorecido)
             LEFT JOIN fc_contatos contato_item ON li.id_contato_item = contato_item.id
             WHERE li.id_lancamento_pai = l.id
         ) as itens
@@ -1009,6 +1008,94 @@ router.post('/lancamentos/detalhado', async (req, res) => {
         if (dbClient) await dbClient.query('ROLLBACK');
         console.error("[API POST /lancamentos/detalhado] Erro:", error);
         res.status(500).json({ error: 'Erro ao registrar lançamento detalhado.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// PUT /api/financeiro/lancamentos/detalhado/:id - ATUALIZAR UM LANÇAMENTO DETALHADO
+router.put('/lancamentos/detalhado/:id', async (req, res) => {
+    // Usamos a mesma permissão de edição de transações simples
+    if (!req.permissoesUsuario.includes('editar-transacao')) {
+        return res.status(403).json({ error: 'Permissão negada.' });
+    }
+
+    const { id: idLancamentoPai } = req.params;
+    const { dados_pai, itens_filho, tipo_rateio } = req.body;
+
+    // Validações básicas
+    if (!idLancamentoPai || !dados_pai || !Array.isArray(itens_filho) || itens_filho.length === 0) {
+        return res.status(400).json({ error: 'Estrutura de dados inválida para atualização.' });
+    }
+    
+    // Validações dos dados do pai
+    const { id_conta_bancaria, data_transacao, id_contato, id_categoria, descricao } = dados_pai;
+    if (!id_conta_bancaria || !data_transacao) {
+        return res.status(400).json({ error: 'Conta bancária e data são obrigatórios.' });
+    }
+
+    const valor_total_calculado = itens_filho.reduce((acc, item) => acc + parseFloat(item.valor_item || 0), 0);
+    if (valor_total_calculado <= 0) {
+        return res.status(400).json({ error: 'O valor total do lançamento deve ser maior que zero.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        await dbClient.query('BEGIN'); // INICIA A TRANSAÇÃO
+
+        // 1. Apaga TODOS os itens "filho" antigos associados a este pai.
+        await dbClient.query('DELETE FROM fc_lancamento_itens WHERE id_lancamento_pai = $1', [idLancamentoPai]);
+
+        // 2. Atualiza o lançamento "pai" com os novos dados.
+        const updatePaiQuery = `
+            UPDATE fc_lancamentos 
+            SET 
+                id_conta_bancaria = $1, 
+                valor = $2, 
+                data_transacao = $3, 
+                descricao = $4, 
+                id_contato = $5, 
+                id_categoria = $6,
+                tipo_rateio = $7
+            WHERE id = $8;
+        `;
+        await dbClient.query(updatePaiQuery, [
+            id_conta_bancaria,
+            valor_total_calculado,
+            data_transacao,
+            descricao,
+            id_contato,
+            tipo_rateio === 'COMPRA' ? null : id_categoria,
+            tipo_rateio,
+            idLancamentoPai
+        ]);
+
+        // 3. Insere novamente todos os itens "filho" com os novos dados.
+        for (const item of itens_filho) {
+            const itemQuery = `
+                INSERT INTO fc_lancamento_itens (id_lancamento_pai, id_categoria, descricao_item, valor_item, id_contato_item)
+                VALUES ($1, $2, $3, $4, $5);
+            `;
+            await dbClient.query(itemQuery, [
+                idLancamentoPai, 
+                item.id_categoria,
+                item.descricao_item, 
+                item.valor_item, 
+                item.id_contato_item || null
+            ]);
+        }
+        
+        // (Opcional) Registrar log de auditoria para a edição
+        // await registrarLog(...)
+
+        await dbClient.query('COMMIT'); // FINALIZA A TRANSAÇÃO
+        res.status(200).json({ message: 'Lançamento detalhado atualizado com sucesso.' });
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK'); // DESFAZ TUDO EM CASO DE ERRO
+        console.error(`[API PUT /lancamentos/detalhado/${idLancamentoPai}] Erro:`, error);
+        res.status(500).json({ error: 'Erro ao atualizar lançamento detalhado.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }
