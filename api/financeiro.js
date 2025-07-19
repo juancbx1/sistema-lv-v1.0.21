@@ -1107,7 +1107,6 @@ router.get('/contas-agendadas', async (req, res) => {
         return res.status(403).json({ error: 'Permissão negada.' });
     }
     
-    // Filtro por status (ex: /contas-agendadas?status=PENDENTE)
     const { status } = req.query;
     let dbClient;
     try {
@@ -1117,11 +1116,27 @@ router.get('/contas-agendadas', async (req, res) => {
                 ca.*, 
                 cat.nome as nome_categoria, 
                 c.nome as nome_favorecido,
-                u.nome as nome_usuario_agendamento -- CAMPO ADICIONADO
+                u.nome as nome_usuario_agendamento,
+                -- Subquery para buscar os itens-filho em formato JSON
+                (
+                    SELECT json_agg(json_build_object(
+                        'id', i.id,
+                        'id_categoria', i.id_categoria,
+                        'nome_categoria', cat_item.nome,
+                        'id_contato_item', i.id_contato_item,
+                        'nome_contato_item', contato_item.nome,
+                        'descricao_item', i.descricao_item,
+                        'valor_item', i.valor_item
+                    ))
+                    FROM fc_contas_agendadas_itens i
+                    LEFT JOIN fc_categorias cat_item ON i.id_categoria = cat_item.id
+                    LEFT JOIN fc_contatos contato_item ON i.id_contato_item = contato_item.id
+                    WHERE i.id_conta_agendada_pai = ca.id
+                ) as itens
             FROM fc_contas_agendadas ca
-            JOIN fc_categorias cat ON ca.id_categoria = cat.id
+            LEFT JOIN fc_categorias cat ON ca.id_categoria = cat.id
             LEFT JOIN fc_contatos c ON ca.id_contato = c.id
-            JOIN usuarios u ON ca.id_usuario_agendamento = u.id -- JOIN ADICIONADO
+            JOIN usuarios u ON ca.id_usuario_agendamento = u.id
         `;
         const params = [];
         if (status) {
@@ -1133,6 +1148,7 @@ router.get('/contas-agendadas', async (req, res) => {
         const result = await dbClient.query(query, params);
         res.status(200).json(result.rows);
     } catch (error) {
+        console.error("[API GET /contas-agendadas] Erro:", error);
         res.status(500).json({ error: 'Erro ao buscar contas agendadas.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
@@ -1289,6 +1305,251 @@ router.post('/contas-agendadas/lote', async (req, res) => {
         if (dbClient) await dbClient.query('ROLLBACK'); // DESFAZ TUDO EM CASO DE ERRO
         console.error("[API POST /contas-agendadas/lote] Erro:", error);
         res.status(500).json({ error: 'Erro ao agendar parcelas.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// POST /api/financeiro/contas-agendadas/detalhado - Agendar lançamento detalhado
+router.post('/contas-agendadas/detalhado', async (req, res) => {
+    if (!req.permissoesUsuario.includes('lancar-transacao')) {
+        return res.status(403).json({ error: 'Permissão negada para agendar contas.' });
+    }
+
+    const { dados_pai, itens_filho, tipo_rateio } = req.body;
+
+    if (!dados_pai || !Array.isArray(itens_filho) || itens_filho.length === 0) {
+        return res.status(400).json({ error: 'Estrutura de dados inválida.' });
+    }
+
+    const valor_total_calculado = itens_filho.reduce((acc, item) => acc + parseFloat(item.valor_item || 0), 0);
+    const { data_vencimento, id_contato, id_categoria, descricao, tipo } = dados_pai;
+
+    if (!data_vencimento || !tipo || valor_total_calculado <= 0) {
+        return res.status(400).json({ error: 'Dados do agendamento principal são obrigatórios.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        await dbClient.query('BEGIN');
+
+        // 1. Cria o agendamento "pai"
+        const paiQuery = `
+            INSERT INTO fc_contas_agendadas 
+                (tipo, descricao, valor, data_vencimento, id_categoria, id_contato, id_usuario_agendamento, tipo_rateio)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+            RETURNING id;
+        `;
+        const paiResult = await dbClient.query(paiQuery, [
+            tipo, descricao, valor_total_calculado, data_vencimento, 
+            tipo_rateio === 'COMPRA' ? null : id_categoria, 
+            id_contato, req.usuarioLogado.id, tipo_rateio
+        ]);
+        const novoPaiId = paiResult.rows[0].id;
+
+        // 2. Insere os itens "filho"
+        for (const item of itens_filho) {
+            const itemQuery = `
+                INSERT INTO fc_contas_agendadas_itens 
+                    (id_conta_agendada_pai, id_categoria, id_contato_item, descricao_item, valor_item)
+                VALUES ($1, $2, $3, $4, $5);
+            `;
+            await dbClient.query(itemQuery, [
+                novoPaiId, item.id_categoria, item.id_contato_item || null, item.descricao_item, item.valor_item
+            ]);
+        }
+
+        await dbClient.query('COMMIT');
+        res.status(201).json({ message: `Agendamento detalhado #${novoPaiId} criado com sucesso.` });
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error("[API POST /contas-agendadas/detalhado] Erro:", error);
+        res.status(500).json({ error: 'Erro ao criar agendamento detalhado.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// DELETE /api/financeiro/contas-agendadas/:id - Excluir um agendamento
+router.delete('/contas-agendadas/:id', async (req, res) => {
+    // Qualquer usuário com permissão para lançar pode excluir um agendamento
+    if (!req.permissoesUsuario.includes('lancar-transacao')) {
+        return res.status(403).json({ error: 'Permissão negada para excluir agendamentos.' });
+    }
+    const { id } = req.params;
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        // Graças ao "ON DELETE CASCADE", só precisamos apagar o pai.
+        // O banco de dados se encarrega de apagar os filhos.
+        const result = await dbClient.query('DELETE FROM fc_contas_agendadas WHERE id = $1 AND status = \'PENDENTE\'', [id]);
+        
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Agendamento não encontrado ou já foi baixado.' });
+        }
+        
+        res.status(200).json({ message: 'Agendamento excluído com sucesso.' });
+    } catch (error) {
+        console.error(`[API DELETE /contas-agendadas/${id}] Erro:`, error);
+        res.status(500).json({ error: 'Erro ao excluir agendamento.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// PUT /api/financeiro/contas-agendadas/detalhado/:id - Editar agendamento detalhado
+router.put('/contas-agendadas/detalhado/:id', async (req, res) => {
+    if (!req.permissoesUsuario.includes('lancar-transacao')) {
+        return res.status(403).json({ error: 'Permissão negada.' });
+    }
+    const { id: idPai } = req.params;
+    const { dados_pai, itens_filho, tipo_rateio } = req.body;
+    
+    // Validações... (semelhante ao POST)
+    const valor_total_calculado = itens_filho.reduce((acc, item) => acc + parseFloat(item.valor_item || 0), 0);
+    const { data_vencimento, id_contato, id_categoria, descricao, tipo } = dados_pai;
+    if (!data_vencimento || !tipo || valor_total_calculado <= 0) {
+        return res.status(400).json({ error: 'Dados do agendamento principal são obrigatórios.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        await dbClient.query('BEGIN');
+
+        // 1. Apaga os filhos antigos
+        await dbClient.query('DELETE FROM fc_contas_agendadas_itens WHERE id_conta_agendada_pai = $1', [idPai]);
+        
+        // 2. Atualiza o pai
+        const paiQuery = `
+            UPDATE fc_contas_agendadas
+            SET tipo = $1, descricao = $2, valor = $3, data_vencimento = $4, id_categoria = $5, id_contato = $6, tipo_rateio = $7, atualizado_em = NOW()
+            WHERE id = $8 AND status = 'PENDENTE';
+        `;
+        await dbClient.query(paiQuery, [
+            tipo, descricao, valor_total_calculado, data_vencimento,
+            tipo_rateio === 'COMPRA' ? null : id_categoria,
+            id_contato, tipo_rateio, idPai
+        ]);
+
+        // 3. Reinsere os filhos
+        for (const item of itens_filho) {
+            const itemQuery = `
+                INSERT INTO fc_contas_agendadas_itens 
+                    (id_conta_agendada_pai, id_categoria, id_contato_item, descricao_item, valor_item)
+                VALUES ($1, $2, $3, $4, $5);
+            `;
+            await dbClient.query(itemQuery, [
+                idPai, item.id_categoria, item.id_contato_item || null, item.descricao_item, item.valor_item
+            ]);
+        }
+
+        await dbClient.query('COMMIT');
+        res.status(200).json({ message: 'Agendamento detalhado atualizado com sucesso.' });
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
+        res.status(500).json({ error: 'Erro ao atualizar agendamento detalhado.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// GET /api/financeiro/contas-agendadas/info/:id - Busca detalhes de um agendamento para confirmação
+router.get('/contas-agendadas/info/:id', async (req, res) => {
+    // Apenas usuários com a nova permissão podem usar esta ferramenta
+    if (!req.permissoesUsuario.includes('permite-excluir-agendamentos')) {
+        return res.status(403).json({ error: 'Permissão negada.' });
+    }
+    const { id } = req.params;
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        // Query que busca o agendamento sem filtrar pelo status 'PENDENTE'
+        const result = await dbClient.query('SELECT id, descricao, valor, status, id_lancamento_efetivado FROM fc_contas_agendadas WHERE id = $1', [id]);
+        
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Agendamento não encontrado com este ID.' });
+        }
+        
+        res.status(200).json(result.rows[0]);
+    } catch (error) {
+        console.error(`[API GET /contas-agendadas/info/${id}] Erro:`, error);
+        res.status(500).json({ error: 'Erro ao buscar informações do agendamento.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// DELETE /api/financeiro/contas-agendadas/:id/force - Exclui permanentemente um agendamento
+router.delete('/contas-agendadas/:id/force', async (req, res) => {
+    if (!req.permissoesUsuario.includes('permite-excluir-agendamentos')) {
+        return res.status(403).json({ error: 'Permissão negada.' });
+    }
+    const { id } = req.params;
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        // Deleta o agendamento-pai. O 'ON DELETE CASCADE' cuidará dos filhos.
+        // Esta query NÃO verifica o status, permitindo apagar agendamentos já baixados.
+        const result = await dbClient.query('DELETE FROM fc_contas_agendadas WHERE id = $1', [id]);
+        
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Agendamento não encontrado com este ID.' });
+        }
+        
+        res.status(200).json({ message: 'Agendamento excluído permanentemente com sucesso.' });
+    } catch (error) {
+        console.error(`[API DELETE /contas-agendadas/${id}/force] Erro:`, error);
+        res.status(500).json({ error: 'Erro ao excluir agendamento permanentemente.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// PUT /api/financeiro/lotes/:id/descricao - Atualiza a descrição de um lote de agendamento
+router.put('/lotes/:id/descricao', async (req, res) => {
+    // Apenas usuários que podem lançar podem editar a descrição
+    if (!req.permissoesUsuario.includes('lancar-transacao')) {
+        return res.status(403).json({ error: 'Permissão negada.' });
+    }
+    const { id: idLote } = req.params;
+    const { nova_descricao_base } = req.body;
+
+    if (!nova_descricao_base || nova_descricao_base.trim() === '') {
+        return res.status(400).json({ error: 'A nova descrição não pode estar vazia.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        await dbClient.query('BEGIN');
+
+        // 1. Busca todas as parcelas pendentes para reconstruir a descrição
+        const parcelasRes = await dbClient.query(
+            "SELECT id, descricao FROM fc_contas_agendadas WHERE id_lote = $1 AND status = 'PENDENTE' ORDER BY data_vencimento ASC", 
+            [idLote]
+        );
+        if (parcelasRes.rowCount === 0) {
+            throw new Error('Nenhuma parcela pendente encontrada para este lote.');
+        }
+
+        // 2. Atualiza cada parcela com a nova descrição base + número da parcela
+        const totalParcelas = parcelasRes.rowCount;
+        for (let i = 0; i < totalParcelas; i++) {
+            const parcela = parcelasRes.rows[i];
+            const novaDescricaoCompleta = `${nova_descricao_base.trim()} - Parcela ${i + 1}/${totalParcelas}`;
+            await dbClient.query('UPDATE fc_contas_agendadas SET descricao = $1 WHERE id = $2', [novaDescricaoCompleta, parcela.id]);
+        }
+
+        await dbClient.query('COMMIT');
+        res.status(200).json({ message: 'Descrição do lote atualizada com sucesso.' });
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error(`[API PUT /lotes/${idLote}/descricao] Erro:`, error);
+        res.status(500).json({ error: 'Erro ao atualizar a descrição do lote.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }

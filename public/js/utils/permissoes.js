@@ -77,6 +77,8 @@ export const permissoesDisponiveis = [
     { id: 'criar-favorecido', label: 'Ação: Criar novos favorecidos (clientes/fornecedores)', categoria: 'Financeiro (Controle de Caixa)' },
     { id: 'visualizar-relatorios', label: 'Ação: Gerar relatórios financeiros', categoria: 'Financeiro (Controle de Caixa)' },
     { id: 'aprovar-alteracao-financeira', label: 'Ação: Aprovar/Rejeitar edições e exclusões', categoria: 'Financeiro (Controle de Caixa)' },
+    { id: 'permite-excluir-agendamentos', label: 'Ação: Pode excluir agendamentos (pelo ID)', categoria: 'Financeiro (Controle de Caixa)' },
+
 
     // --- FINANCEIRO E RELATÓRIOS ---
     { id: 'acesso-precificacao', label: 'Ver Tela de Precificação', categoria: 'Financeiro e Relatórios' },

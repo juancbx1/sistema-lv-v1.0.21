@@ -164,16 +164,22 @@
 
         <!-- PAINEL DA ABA 3: AGENDA -->
         <div id="tab-agenda" class="fc-tab-panel">
-            <div class="fc-section-container">
-                <header class="fc-table-header">
-                    <h2 class="fc-section-title" style="border:0; margin:0;">Contas a Pagar/Receber</h2>
+        <div class="fc-section-container">
+            <!-- CABEÇALHO CORRETO PARA AGENDA -->
+            <header class="fc-table-header">
+                <h2 class="fc-section-title" style="border:0; margin:0;">Contas a Pagar/Receber</h2>
+                <div class="fc-header-actions" style="gap: 10px;">
+                    <button id="btnAtualizarAgenda" class="fc-btn-atualizar">
+                        <i class="fas fa-sync-alt"></i> Atualizar
+                    </button>
                     <button id="btnAgendarNovaConta" class="fc-btn fc-btn-primario">
                         <i class="fas fa-plus"></i> Agendar Novo
                     </button>
-                </header>
-                <div id="agendaContainer"></div>
-            </div>
+                </div>
+            </header>
+            <div id="agendaContainer"></div>
         </div>
+    </div>
     </div>
 </section>
 
@@ -181,21 +187,24 @@
         <!-- TELA 2: CONFIGURAÇÕES (COMEÇA OCULTA)           -->
         <!-- =============================================== -->
         <section id="configuracoesView" class="hidden">
-            <div class="fc-config-layout">
-                <nav class="fc-config-menu">
+        <div class="fc-config-layout">
+            <nav class="fc-config-menu">
                 <a href="#" class="fc-config-menu-item active" data-config="contas">Contas Bancárias</a>
                 <a href="#" class="fc-config-menu-item" data-config="favorecidos">Favorecidos</a>
                 <a href="#" class="fc-config-menu-item" data-config="categorias">Categorias e Grupos</a>
                 <a href="#" class="fc-config-menu-item" data-config="taxas-vt">Taxas de VT</a>
+                <!-- NOVA ABA AQUI -->
+                <a href="#" class="fc-config-menu-item hidden" data-config="admin-tools" id="nav-admin-tools">Ações Avançadas</a>
             </nav>
-                <div class="fc-config-content">
-                    <div id="config-contas" class="fc-config-panel active"></div>
-                    <div id="config-favorecidos" class="fc-config-panel"></div>
-                    <div id="config-categorias" class="fc-config-panel"></div>
-                    <div id="config-taxas-vt" class="fc-config-panel"></div>
-
-                </div>
+            <div class="fc-config-content">
+                <div id="config-contas" class="fc-config-panel active"></div>
+                <div id="config-favorecidos" class="fc-config-panel"></div>
+                <div id="config-categorias" class="fc-config-panel"></div>
+                <div id="config-taxas-vt" class="fc-config-panel"></div>
+                <!-- NOVO PAINEL AQUI -->
+                <div id="config-admin-tools" class="fc-config-panel"></div>
             </div>
+        </div>
         </section>
 
         <!-- =============================================== -->

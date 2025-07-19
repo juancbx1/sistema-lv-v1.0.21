@@ -290,6 +290,7 @@ body {
 
 /* --- HERO SECTION DO SALDO TOTAL --- */
 .fc-saldo-hero {
+    position: relative; /* << ADICIONADO para posicionar o botão filho */
     background-color: #f8f9fa;
     border: 1px solid var(--fc-cor-borda);
     border-radius: var(--fc-raio-borda);
@@ -311,6 +312,21 @@ body {
     color: var(--fc-cor-texto-principal);
     margin: 0;
     line-height: 1.2;
+}
+
+/* --- ESTILO PARA O BOTÃO DE ATUALIZAR SALDOS --- */
+.fc-btn-atualizar-hero {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    border-radius: 50%;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+}
+/* Garante que o ícone dentro do botão fique centralizado */
+.fc-btn-atualizar-hero i {
+    margin: 0;
 }
 
 /* --- RESUMO DAS CONTAS --- */
@@ -410,6 +426,25 @@ body {
 .fc-agenda-card.receber .valor { color: var(--fc-cor-receita); }
 .fc-agenda-card .footer { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; font-size: 0.9rem; color: var(--fc-cor-texto-secundario); }
 
+
+/* Posicionamento da setinha nos cards de agendamento (Desktop) */
+.fc-agenda-card .actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.fc-agenda-card .btn-toggle-agenda-details {
+    margin-left: 5px; /* Adiciona um espaço à esquerda */
+}
+
+.fc-agenda-card .actions-main-group {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    flex-grow: 1; /* Faz este grupo ocupar o espaço disponível */
+}
+
 .fc-lancamentos-cards-container { display: grid; grid-template-columns: 1fr; gap: 15px; }
 .fc-lancamento-card { display: grid; grid-template-areas: "header actions" "details actions" "status actions"; grid-template-columns: 1fr auto; gap: 5px 15px; background-color: var(--fc-cor-fundo-card); border-radius: var(--fc-raio-borda); border-left: 5px solid; box-shadow: var(--fc-sombra-padrao); padding: 15px; }
 .fc-lancamento-card.receita { border-left-color: var(--fc-cor-receita); }
@@ -438,6 +473,33 @@ body {
 .fc-aprovacao-card .dados-bloco .alterado { background-color: #fff3cd; font-weight: bold; border-radius: 4px; padding: 2px 5px; }
 .fc-aprovacao-card .dados-bloco .valor-antigo { text-decoration: line-through; color: #999; font-size: 0.9em; margin-left: 5px; }
 .fc-aprovacao-card .acoes-aprovacao { padding: 15px; border-top: 1px solid var(--fc-cor-borda); display: flex; justify-content: flex-end; gap: 10px; }
+
+
+/* --- ESTILOS PARA OS NOVOS CARDS DA AGENDA --- */
+.fc-agenda-card-wrapper {
+    margin-bottom: 15px;
+}
+.fc-agenda-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 15px 20px;
+    background-color: #fff;
+    border-radius: var(--fc-raio-borda);
+    border-left: 5px solid;
+    box-shadow: var(--fc-sombra-padrao);
+}
+.fc-agenda-card.pagar { border-left-color: var(--fc-cor-despesa); }
+.fc-agenda-card.receber { border-left-color: var(--fc-cor-receita); }
+.fc-agenda-card.atrasado { border-left-width: 7px; }
+.fc-agenda-card.atrasado .card-details .detail-item[data-label="Vencimento"] {
+    color: var(--fc-cor-despesa);
+    font-weight: 700;
+}
+.fc-agenda-card .card-meta-line .actions {
+    flex-wrap: nowrap; /* Impede que os botões quebrem linha */
+}
+
 
 /* --- ESTILOS PARA A ÁREA EXPANSÍVEL DO RATEIO --- */
 .fc-lancamento-itens-container {
@@ -1216,6 +1278,62 @@ body {
     }
 }
 
+/* --- ESTILO PARA BOTÕES DE ÍCONE GENÉRICOS --- */
+.fc-btn-icon {
+    width: 38px;
+    height: 38px;
+    font-size: 1rem;
+    color: var(--fc-cor-texto-secundario);
+    background-color: transparent;
+    border: 1px solid var(--fc-cor-borda);
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.fc-btn-icon:hover:not(:disabled) {
+    background-color: #f0f3f5;
+    color: var(--fc-cor-primaria);
+}
+.fc-btn-icon:disabled {
+    color: #ccc !important;
+    background-color: transparent !important;
+    cursor: not-allowed;
+}
+
+/* --- ESTILO PARA BOTÕES DE ÍCONE DISCRETOS --- */
+.fc-btn-icon-discreto {
+    background: none;
+    border: none;
+    color: var(--fc-cor-texto-secundario);
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s, color 0.2s;
+    vertical-align: middle; /* Alinha com o texto */
+    margin-left: 5px;
+}
+.fc-btn-icon-discreto:hover {
+    background-color: #e9ecef;
+    color: var(--fc-cor-primaria);
+}
+
+/* --- ESTILO PARA O CONTAINER DA DESCRIÇÃO EDITÁVEL DO LOTE --- */
+.descricao-lote-editavel {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+
 
 /* ==========================================================================
    9. RESPONSIVIDADE
@@ -1316,7 +1434,12 @@ body {
     .fc-header { padding: 8px 10px; }
     .fc-header-actions {
     margin-top: 30px;
-}
+    }
+    .fc-btn {
+        padding: 10px 12px;
+        font-size: 0.8rem;
+    }
+
     .fc-header-actions .fc-btn-icon { 
         width: 38px; 
         height: 38px; 
@@ -1403,6 +1526,42 @@ body {
         flex-direction: column; /* Empilha os botões na vertical */
         gap: 5px;
     }
+
+    
+     /* --- AJUSTES NOS BOTÕES DOS CARDS DA AGENDA PARA MOBILE --- */
+    .fc-agenda-card .card-meta-line .actions {
+        flex-direction: row; /* Alinha o grupo de botões e a setinha lado a lado */
+        align-items: flex-end; /* Alinha na base */
+    }
+
+    /* Garante que o grupo principal de botões ocupe todo o espaço à esquerda */
+    .fc-agenda-card .actions-main-group {
+        width: 100%;
+    }
+
+    .fc-agenda-card .actions-secondary {
+        display: flex; 
+        gap: 8px;
+    }
+
+    .fc-agenda-card .actions-secondary > .fc-btn {
+        flex-grow: 1;
+        width: 50%;
+    }
+    .fc-agenda-card .btn-dar-baixa {
+        width: 100%;
+    }
+        
+    /* Garante que a setinha dos cards de RATEIO AVULSO apareça */
+    .fc-agenda-card[data-rateio-tipo] .btn-toggle-agenda-details {
+        display: flex !important;
+    }
+
+    /* Garante que a setinha dos LOTES também apareça */
+    .fc-agenda-card[data-lote="true"] .btn-toggle-agenda-details {
+        display: flex !important; 
+    }
+
 }
 
 @media (max-width: 414px) {
