@@ -328,8 +328,10 @@ async function inicializarMenu() {
         // --- Configuração dos Eventos do Menu ---
 
         // Logout (Funcionalidade antiga mantida)
-        document.getElementById('mlLogoutBtn')?.addEventListener('click', () => {
-            if (confirm('Tem certeza que deseja sair?')) {
+        document.getElementById('mlLogoutBtn')?.addEventListener('click', async () => {
+            const confirmado = await mostrarPopupConfirmacao('Tem certeza que deseja sair do sistema?', 'aviso');
+            
+            if (confirmado) {
                 logout();
             }
         });
