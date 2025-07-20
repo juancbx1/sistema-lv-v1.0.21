@@ -30,7 +30,6 @@ function renderizarAcoes(permissoes) {
     }
 
     const paginasSelecionadas = gerarLinksAleatorios(permissoes);
-    console.log('[renderizarAcoes] Páginas selecionadas:', paginasSelecionadas);
     acoesMenu.innerHTML = "";
     paginasSelecionadas.forEach(pagina => {
         const link = document.createElement("a");

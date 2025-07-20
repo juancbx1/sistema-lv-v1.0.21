@@ -9,10 +9,13 @@
     "@neondatabase/serverless": "^1.0.0",
     "@vercel/blob": "^1.1.1",
     "@vercel/node": "^2.3.0",
+    "@vercel/postgres": "^0.10.0",
     "bcrypt": "^5.1.1",
+    "browser-image-compression": "^2.0.2",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2",
     "pg": "^8.14.1"
   }
 }

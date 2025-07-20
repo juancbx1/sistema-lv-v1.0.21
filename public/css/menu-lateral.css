@@ -1,292 +1,666 @@
-/* public/css/menu-lateral.css */
+/* public/css/menu-lateral.css (NOVA VERSÃO) */
 
 :root {
-    /* Cores inspiradas no seu padrão, mas podem ser ajustadas para o menu */
-    --ml-cor-fundo: #2c3e50; /* Um azul escuro para o fundo do menu */
-    --ml-cor-texto: #ecf0f1; /* Texto claro para contraste */
-    --ml-cor-texto-hover: #ffffff;
-    --ml-cor-fundo-hover: #34495e; /* Um azul um pouco mais claro para hover */
-    --ml-cor-fundo-ativo: #2980b9; /* Azul primário para o item ativo */
-    --ml-cor-borda-header: #34495e;
-    --ml-cor-icone: #bdc3c7; /* Cinza claro para ícones */
-    --ml-cor-icone-hover: #ffffff;
-    --ml-cor-logout-fundo: #c0392b; /* Vermelho para o botão sair */
-    --ml-cor-logout-fundo-hover: #e74c3c;
+    /* Paleta de Cores Claras e Profissionais */
+    --ml-cor-fundo: #f8f9fa; /* Um branco levemente acinzentado */
+    --ml-cor-borda: #dee2e6; /* Borda sutil para separações */
+    --ml-cor-texto-principal: #212529; /* Preto suave para texto principal */
+    --ml-cor-texto-secundario: #6c757d; /* Cinza para textos de menor importância */
+    --ml-cor-primaria: #007bff; /* Azul vibrante para links ativos e hover */
+    --ml-cor-primaria-hover: #0056b3; /* Azul mais escuro para hover */
+    --ml-cor-fundo-hover: #e9ecef; /* Fundo cinza claro para hover dos links */
+    --ml-cor-icone: #495057;
 
     --ml-font-principal: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    --ml-sombra-menu: 2px 0 10px rgba(0, 0, 0, 0.2);
-    --ml-raio-borda: 6px;
+    --ml-sombra-menu: 2px 0 15px rgba(0, 0, 0, 0.08);
+    --ml-raio-borda: 8px;
+    --ml-largura-menu: 260px;
 }
 
-.menu-lateral {
+.ml-menu-lateral {
     position: fixed;
     left: 0;
     top: 0;
-    width: 260px; /* Um pouco mais largo */
+    width: var(--ml-largura-menu);
     height: 100vh;
     background-color: var(--ml-cor-fundo);
-    color: var(--ml-cor-texto);
     box-shadow: var(--ml-sombra-menu);
-    overflow-y: auto;
-    z-index: 1001; /* Acima do conteúdo principal, mas abaixo de modais de página inteira */
-    transition: transform 0.3s ease-in-out;
-    display: flex;
-    flex-direction: column; /* Para organizar header, lista e logout */
-}
-
-/* Estilo da barra de rolagem (opcional, mas melhora o visual) */
-.menu-lateral::-webkit-scrollbar {
-    width: 6px;
-}
-.menu-lateral::-webkit-scrollbar-track {
-    background: var(--ml-cor-fundo);
-}
-.menu-lateral::-webkit-scrollbar-thumb {
-    background: var(--ml-cor-fundo-hover);
-    border-radius: 3px;
-}
-.menu-lateral::-webkit-scrollbar-thumb:hover {
-    background: var(--ml-cor-texto-hover);
-}
-
-
-.menu-header {
-    padding: 20px 15px;
-    border-bottom: 1px solid var(--ml-cor-borda-header);
-    text-align: center;
-    margin-bottom: 10px; /* Espaço após o header */
-}
-
-.user-info {
+    z-index: 1001;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 10px;
+    transition: transform 0.3s ease-in-out;
 }
 
-.user-photo-wrapper {
-    width: 70px;
-    height: 70px;
+/* Bloco do Usuário */
+.ml-user-block {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 20px 15px;
+    border-bottom: 1px solid var(--ml-cor-borda);
+}
+
+.ml-user-photo-wrapper {
+    position: relative;
+    width: 50px;
+    height: 50px;
     border-radius: 50%;
     overflow: hidden;
-    border: 3px solid var(--ml-cor-fundo-hover); /* Borda sutil */
-    box-shadow: 0 0 10px rgba(0,0,0,0.3);
-    cursor: pointer; /* Para indicar que pode clicar para mudar foto */
+    cursor: pointer;
+    flex-shrink: 0; /* Impede que a foto encolha */
+    border: 2px solid var(--ml-cor-borda);
 }
 
-#userPhoto {
+#mlUserPhoto {
     width: 100%;
     height: 100%;
     object-fit: cover;
 }
 
-#usuarioLogado { /* "Bem-vindo, Nome" */
-    font-size: 1rem;
-    font-weight: 500;
-    color: var(--ml-cor-texto);
-    margin-top: 5px;
+/* Overlay para indicar ação de upload */
+.ml-photo-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.4);
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    font-size: 1.2rem;
 }
-#usuarioLogado #nomeUsuario {
-    font-weight: 600;
-    display: block; /* Para que o nome fique abaixo de "Bem-vindo," se for longo */
+.ml-user-photo-wrapper:hover .ml-photo-overlay {
+    opacity: 1;
+}
+/* Estilo para o spinner de carregamento */
+#mlPhotoIcon.fa-spinner {
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 
-.menu-lateral ul {
+.ml-user-info {
+    flex-grow: 1;
+    overflow: hidden; /* Garante que o texto não quebre o layout */
+}
+
+.ml-user-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ml-cor-texto-principal);
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ml-logout-btn {
+    background: none;
+    border: none;
+    color: var(--ml-cor-texto-secundario);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 50%;
+    transition: color 0.2s ease, background-color 0.2s ease;
+}
+.ml-logout-btn:hover {
+    color: var(--ml-cor-primaria-hover);
+    background-color: var(--ml-cor-fundo-hover);
+}
+
+/* Navegação Principal */
+.ml-nav {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 15px 0;
+}
+/* Estilo da barra de rolagem */
+.ml-nav::-webkit-scrollbar { width: 6px; }
+.ml-nav::-webkit-scrollbar-track { background: transparent; }
+.ml-nav::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+.ml-nav::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
+.ml-nav ul {
     list-style: none;
     padding: 0;
     margin: 0;
-    flex-grow: 1; /* Faz a lista de links ocupar o espaço disponível */
 }
 
-.menu-lateral li {
-    margin: 0; /* Remove margem padrão do li */
+.ml-section-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--ml-cor-texto-secundario);
+    text-transform: uppercase;
+    padding: 15px 20px 5px;
+    letter-spacing: 0.5px;
 }
 
-/* Links principais e títulos de seção */
-.menu-lateral ul > li > a,
-.menu-lateral .menu-section-title {
-    color: var(--ml-cor-texto);
-    text-decoration: none;
-    padding: 12px 20px;
+.ml-nav ul li a {
     display: flex;
     align-items: center;
-    gap: 12px; /* Espaço entre ícone e texto */
+    gap: 12px;
+    padding: 10px 20px;
+    margin: 2px 10px;
     font-size: 0.95rem;
-    font-weight: 400;
-    border-left: 4px solid transparent; /* Para indicador ativo */
+    color: var(--ml-cor-texto-principal);
+    text-decoration: none;
+    border-radius: var(--ml-raio-borda);
+    border-left: 4px solid transparent;
     transition: background-color 0.2s ease, color 0.2s ease, border-left-color 0.2s ease;
 }
-.menu-lateral ul > li > a i,
-.menu-lateral .menu-section-title i { /* Ícones principais */
-    font-size: 1.1em; /* Tamanho relativo ao texto do link */
-    width: 20px; /* Largura fixa para alinhar texto */
+
+.ml-nav ul li a i {
+    font-size: 1.1em;
+    width: 20px;
     text-align: center;
     color: var(--ml-cor-icone);
     transition: color 0.2s ease;
 }
 
-.menu-lateral ul > li > a:hover,
-.menu-lateral .menu-section-title:hover {
+.ml-nav ul li a:hover {
     background-color: var(--ml-cor-fundo-hover);
-    color: var(--ml-cor-texto-hover);
-    border-left-color: var(--ml-cor-texto-hover); /* Muda a cor da borda no hover */
-}
-.menu-lateral ul > li > a:hover i,
-.menu-lateral .menu-section-title:hover i {
-    color: var(--ml-cor-icone-hover);
+    color: var(--ml-cor-texto-principal);
 }
 
-.menu-lateral ul > li > a.active { /* Link ativo */
-    background-color: var(--ml-cor-fundo-ativo);
-    color: var(--ml-cor-texto-hover);
-    font-weight: 500;
-    border-left-color: var(--ml-cor-texto-hover); /* Borda de destaque para ativo */
-}
-.menu-lateral ul > li > a.active i {
-    color: var(--ml-cor-texto-hover);
-}
-
-/* Seções Expansíveis */
-.menu-section-title {
-    cursor: pointer;
-}
-.menu-section-title::after { /* Seta para expansão */
-    content: '\f078'; /* Ícone de seta para baixo do Font Awesome */
-    font-family: 'Font Awesome 5 Free', 'FontAwesome'; /* Assegure-se que está correto */
-    font-weight: 900;
-    font-size: 0.7rem;
-    margin-left: auto; /* Empurra a seta para a direita */
-    transition: transform 0.3s ease;
-}
-.menu-section-title.expanded::after {
-    transform: rotate(-180deg); /* Seta para cima */
-}
-
-.menu-subsection {
-    display: none; /* Escondido por padrão */
-    background-color: rgba(0,0,0,0.1); /* Fundo sutil para subseção */
-    padding-left: 15px; /* Indentação para subitens */
-    overflow: hidden; /* Para animação suave */
-    max-height: 0; /* Para animação de altura */
-    transition: max-height 0.3s ease-in-out;
-}
-.menu-section-title.expanded + .menu-subsection {
-    display: block; /* JS vai controlar isso, mas é bom ter o estilo */
-    max-height: 500px; /* Altura máxima para a animação, ajuste se tiver muitos subitens */
-}
-.menu-subsection li a {
-    padding: 10px 20px 10px 25px; /* Mais padding à esquerda */
-    font-size: 0.9rem;
-    color: var(--ml-cor-texto); /* Cor do texto do subitem */
-    opacity: 0.9;
-}
-.menu-subsection li a::before { /* Bolinha para subitem */
-    content: "\f111"; /* fas fa-circle */
-    font-family: 'Font Awesome 5 Free', 'FontAwesome';
-    font-weight: 400; /* solid é 900, regular é 400 */
-    font-size: 0.5rem;
-    margin-right: 10px;
-    opacity: 0.7;
-}
-.menu-subsection li a:hover {
+.ml-nav ul li a.active {
     background-color: var(--ml-cor-fundo-hover);
-    color: var(--ml-cor-texto-hover);
-    opacity: 1;
-}
-.menu-subsection li a.active {
-    background-color: var(--ml-cor-fundo-ativo);
-    color: var(--ml-cor-texto-hover);
-    font-weight: 500;
-    opacity: 1;
-}
-.menu-subsection li a.active::before{
-    font-weight: 900; /* Círculo preenchido para ativo */
-    opacity: 1;
+    color: var(--ml-cor-primaria);
+    font-weight: 600;
+    border-left-color: var(--ml-cor-primaria);
 }
 
-
-/* Botão Sair */
-.ml-logout-wrapper { /* Novo wrapper para o botão de sair */
-    padding: 15px 20px;
-    margin-top: auto; /* Empurra para o final do menu flex column */
-    border-top: 1px solid var(--ml-cor-borda-header);
-}
-#logoutBtn.ml-logout-btn { /* ID do seu botão com nova classe */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    width: 100%; 
-    padding: 12px 15px;
-    background-color: var(--ml-cor-logout-fundo);
-    color: var(--ml-cor-branco);
-    border: none;
-    font-size: 0.95rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-    border-radius: var(--ml-raio-borda);
-}
-#logoutBtn.ml-logout-btn:hover {
-    background-color: var(--ml-cor-logout-fundo-hover);
+.ml-nav ul li a.active i {
+    color: var(--ml-cor-primaria);
 }
 
-/* Botão Hambúrguer (para telas menores) */
+/* Rodapé do Menu */
+.ml-footer {
+    padding: 15px;
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--ml-cor-texto-secundario);
+    border-top: 1px solid var(--ml-cor-borda);
+}
+
+/* ---- RESPONSIVIDADE E MENU HAMBÚRGUER (INTOCADO, COMO PEDIDO) ---- */
+
 .hamburger-menu {
     display: none; 
     position: fixed;
     top: 15px;
     left: 15px;
-    font-size: 1.5rem; /* Tamanho do ícone */
-    color: var(--ml-cor-fundo); /* Cor do ícone do hambúrguer */
-    background-color: var(--ml-cor-branco);
+    font-size: 1.5rem;
+    color: #2c3e50;
+    background-color: rgba(255, 255, 255, 0.8); /* Fundo semi-transparente */
+    backdrop-filter: blur(5px); /* Efeito de vidro fosco (para navegadores compatíveis) */
+    -webkit-backdrop-filter: blur(5px);
     padding: 8px 10px;
     border-radius: var(--ml-raio-borda);
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     cursor: pointer;
-    z-index: 1002; /* Acima do menu lateral quando fechado */
-    transition: left 0.3s ease-in-out;
+    z-index: 1002;
+    transition: left 0.3s ease-in-out, transform 0.3s ease;
 }
-.hamburger-menu .fa-bars { display: inline-block; }
-.hamburger-menu .fa-times { display: none; }
-.hamburger-menu.active .fa-bars { display: none; }
-.hamburger-menu.active .fa-times { display: inline-block; }
 
-/* Responsividade */
+/* Animação dos ícones dentro do hambúrguer */
+.hamburger-menu .fa-bars, .hamburger-menu .fa-times { transition: transform 0.3s ease, opacity 0.3s ease; }
+.hamburger-menu .fa-times { position: absolute; opacity: 0; transform: rotate(-90deg); }
+.hamburger-menu.active .fa-bars { opacity: 0; transform: rotate(90deg); }
+.hamburger-menu.active .fa-times { opacity: 1; transform: rotate(0deg); }
+
+
 @media (max-width: 1024px) {
-    body { margin-left: 0; } /* Remove a margem para o conteúdo principal ocupar tudo */
-    .menu-lateral {
-        transform: translateX(-100%); /* Esconde o menu para fora da tela */
-        box-shadow: none; /* Remove sombra quando escondido */
+    /* Ajusta a margem do body para que o conteúdo principal não fique embaixo do menu */
+    body { margin-left: 0 !important; }
+
+    .ml-menu-lateral {
+        transform: translateX(-100%);
+        box-shadow: none;
     }
-    .menu-lateral.active { /* Classe adicionada pelo JS para mostrar o menu */
+    .ml-menu-lateral.active {
         transform: translateX(0);
-        box-shadow: var(--ml-sombra-menu); /* Mostra sombra quando ativo */
+        box-shadow: var(--ml-sombra-menu);
     }
     .hamburger-menu {
-        display: block; /* Mostra o botão hambúrguer */
+        display: flex; /* Usar flex para centralizar os ícones */
+        justify-content: center;
+        align-items: center;
     }
-    .hamburger-menu.active { /* Move o hambúrguer quando o menu está aberto */
-        left: calc(260px + 15px); /* Largura do menu + um respiro */
+    .hamburger-menu.active {
+        left: calc(var(--ml-largura-menu) + 15px);
     }
 }
 
+/* --- ESTILOS PARA POPUP DE MENSAGEM DO MENU LATERAL --- */
+
+.ml-popup-mensagem {
+    position: fixed; 
+    top: 50%; 
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: var(--ml-cor-fundo); /* Usa cor do menu */
+    padding: 25px 30px; 
+    border-radius: var(--ml-raio-borda);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    z-index: 10002;
+    max-width: 480px;
+    width: 90%;
+    text-align: center; 
+    font-family: var(--ml-font-principal);
+    animation: ml-fadeInPopup 0.3s ease-out;
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center;
+    border-left: 5px solid var(--ml-cor-primaria);
+}
+.ml-popup-overlay {
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.25); 
+    backdrop-filter: blur(3px);
+    z-index: 10001; 
+    animation: ml-fadeInOverlayPopup 0.3s ease-out;
+}
+
+/* Animações com prefixo ml- */
+@keyframes ml-fadeInPopup { from { opacity: 0; transform: translate(-50%, -55%); } to { opacity: 1; transform: translate(-50%, -50%); } }
+@keyframes ml-fadeOutPopup { from { opacity: 1; transform: translate(-50%, -50%); } to { opacity: 0; transform: translate(-50%, -60%); } }
+@keyframes ml-fadeInOverlayPopup { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ml-fadeOutOverlayPopup { from { opacity: 1; } to { opacity: 0; } }
+
+.ml-popup-mensagem p { font-size: 1.05rem; line-height: 1.5; margin-bottom: 20px; font-weight: 500; color: var(--ml-cor-texto-principal); }
+
+/* Tipos de Popup */
+.ml-popup-mensagem.popup-info { border-left-color: #007bff; }
+.ml-popup-mensagem.popup-sucesso { border-left-color: #28a745; }
+.ml-popup-mensagem.popup-erro { border-left-color: #dc3545; }
+.ml-popup-mensagem.popup-aviso { border-left-color: #ffc107; }
+
+/* Botão OK (quando houver) */
+.ml-popup-mensagem button {
+    padding: 10px 28px; 
+    margin-top: 10px; 
+    background-color: var(--ml-cor-primaria);
+    color: white; 
+    border: none; 
+    border-radius: 6px;
+    cursor: pointer; 
+    font-size: 0.95rem; 
+    font-weight: 600; 
+    transition: background-color 0.2s ease;
+}
+.ml-popup-mensagem button:hover { background-color: var(--ml-cor-primaria-hover); }
+
+/* Popup de "Carregando" (sem botão) */
+.ml-popup-mensagem.popup-loading p { margin-bottom: 0; }
+.ml-popup-mensagem.popup-loading button { display: none; }
+
+/* --- ESTILO PARA O SPINNER DO HAMBÚRGUER --- */
+
+.hamburger-menu.loading .fa-bars,
+.hamburger-menu.loading .fa-times {
+    display: none !important; /* Esconde os ícones padrão */
+}
+
+.hamburger-menu.loading::after {
+    content: '';
+    display: block;
+    width: 1.2rem; /* Tamanho do spinner */
+    height: 1.2rem;
+    border: 3px solid rgba(44, 62, 80, 0.3); /* Cor do rastro do spinner */
+    border-top-color: var(--ml-cor-texto-principal); /* Cor principal do spinner */
+    border-radius: 50%;
+    animation: ml-spinner-spin 0.8s linear infinite;
+}
+
+@keyframes ml-spinner-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* --- ESTILOS PARA O MODAL DE AVATARES --- */
+
+.ml-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(5px);
+    z-index: 10010;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+.ml-modal-overlay.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.ml-modal-container {
+    background-color: var(--ml-cor-fundo);
+    border-radius: var(--ml-raio-borda);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    width: 90%;
+    max-width: 500px;
+    transform: scale(0.95);
+    transition: transform 0.3s ease;
+}
+.ml-modal-overlay.visible .ml-modal-container {
+    transform: scale(1);
+}
+
+.ml-modal-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--ml-cor-borda);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.ml-modal-header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: var(--ml-cor-texto-principal);
+}
+.ml-modal-close-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--ml-cor-texto-secundario);
+    padding: 5px;
+}
+
+.ml-modal-body {
+    padding: 20px;
+}
+
+.ml-avatar-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr); /* Sempre 3 colunas */
+    gap: 25px;
+    justify-items: center;
+}
+
+.ml-avatar-slot {
+    position: relative;
+    width: 120px; /* Largura fixa */
+    height: 120px; /* Altura fixa */
+    cursor: pointer;
+}
+
+/* O slot para adicionar novo avatar */
+.ml-avatar-slot.slot-vazio {
+    border: 3px dashed var(--ml-cor-borda);
+    border-radius: 50%; /* O próprio slot é um círculo tracejado */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 2.5rem;
+    color: var(--ml-cor-borda);
+    transition: all 0.2s ease;
+}
+.ml-avatar-slot.slot-vazio:hover {
+    color: var(--ml-cor-primaria);
+    border-color: var(--ml-cor-primaria);
+    transform: scale(1.05);
+}
+
+/* O slot que contém uma imagem */
+.ml-avatar-slot img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%; /* Garante que a imagem seja um círculo */
+    border: 4px solid transparent; /* Borda transparente por padrão */
+    transition: all 0.2s ease;
+}
+.ml-avatar-slot:hover img {
+    transform: scale(1.05);
+}
+
+/* Destaque para o avatar ativo */
+.ml-avatar-slot.ativo img {
+    border-color: var(--ml-cor-primaria);
+    box-shadow: 0 0 12px rgba(0, 123, 255, 0.7);
+}
+
+/* Botão de deletar */
+.ml-avatar-delete-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 10;
+    background-color: #dc3545;
+    color: white;
+    border: 2px solid white;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    font-size: 1rem;
+    line-height: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    opacity: 0;
+    transform: translate(25%, -25%);
+    transition: all 0.2s ease;
+}
+.ml-avatar-slot:hover .ml-avatar-delete-btn {
+    opacity: 1;
+}
+.ml-avatar-slot.ativo .ml-avatar-delete-btn {
+    display: none; /* Não pode deletar o ativo */
+}
+
+/* --- ESTILOS PARA FEEDBACK DE CARREGAMENTO NO MODAL --- */
+/* Adiciona um overlay semi-transparente sobre todo o grid para bloquear cliques */
+.ml-avatar-grid.loading {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+/* Overlay de carregamento sobre um slot individual */
+.ml-avatar-slot .loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.7);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease;
+    z-index: 5;
+}
+.ml-avatar-slot.loading .loading-overlay {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* O spinner que aparece sobre o slot */
+.ml-avatar-slot .loading-overlay::after {
+    content: '';
+    width: 30px;
+    height: 30px;
+    border: 3px solid var(--ml-cor-borda);
+    border-top-color: var(--ml-cor-primaria);
+    border-radius: 50%;
+    animation: ml-spinner-spin 1s linear infinite;
+}
+
+.ml-modal-footer {
+    padding: 15px 20px;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--ml-cor-texto-secundario);
+    background-color: #f1f3f5;
+    border-top: 1px solid var(--ml-cor-borda);
+    border-bottom-left-radius: var(--ml-raio-borda);
+    border-bottom-right-radius: var(--ml-raio-borda);
+}
+
+/* --- ESTILO PARA O SPINNER DO MODAL --- */
+.ml-modal-spinner {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 150px; /* Garante que o modal tenha altura durante o carregamento */
+}
+.ml-modal-spinner::after {
+    content: '';
+    display: block;
+    width: 40px; /* Spinner maior */
+    height: 40px;
+    border: 4px solid var(--ml-cor-borda);
+    border-top-color: var(--ml-cor-primaria);
+    border-radius: 50%;
+    animation: ml-spinner-spin 1s linear infinite; /* Reutiliza a animação do hambúrguer */
+}
+
+/* --- ESTILOS PARA BOTÕES DO POPUP DE CONFIRMAÇÃO --- */
+.ml-popup-botoes {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 10px;
+}
+.ml-popup-mensagem .ml-popup-botoes button {
+    margin-top: 0; /* Remove a margem padrão do botão de popup */
+}
+/* Botão Cancelar (aparência secundária) */
+.ml-btn-cancelar {
+    background-color: var(--ml-cor-borda) !important;
+    color: var(--ml-cor-texto-secundario) !important;
+}
+.ml-btn-cancelar:hover {
+    background-color: #ced4da !important;
+}
+/* Botão Confirmar (aparência de perigo) */
+.ml-btn-confirmar {
+    background-color: #dc3545 !important;
+}
+.ml-btn-confirmar:hover {
+    background-color: #c82333 !important;
+}
+
+/* --- RESPONSIVIDADE E MENU HAMBÚRGUER (EXISTENTE E ATUALIZADO) --- */
+
+@media (max-width: 1024px) {
+    /* Esconde o menu no desktop/tablet e mostra o hambúrguer */
+    body { margin-left: 0 !important; }
+
+    .ml-menu-lateral {
+        transform: translateX(-100%);
+        box-shadow: none;
+    }
+    .ml-menu-lateral.active {
+        transform: translateX(0);
+        box-shadow: var(--ml-sombra-menu);
+    }
+    .hamburger-menu {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    .hamburger-menu.active {
+        left: calc(var(--ml-largura-menu) + 15px);
+    }
+}
+
+/* Tablets */
 @media (max-width: 768px) {
-    .menu-lateral { width: 240px; } /* Menu um pouco mais estreito */
-    .hamburger-menu.active { left: calc(240px + 15px); }
-    .menu-lateral ul > li > a, .menu-lateral .menu-section-title { padding: 10px 15px; font-size: 0.9rem; gap: 10px;}
-    .menu-subsection li a { padding: 8px 15px 8px 30px; font-size: 0.85rem; }
-    #logoutBtn.ml-logout-btn { padding: 10px 15px; font-size: 0.9rem;}
-    .user-photo-wrapper { width: 60px; height: 60px; }
-    #usuarioLogado { font-size: 0.9rem; }
+    :root { 
+        --ml-largura-menu: 250px; /* Menu um pouco mais estreito */
+    }
+
+    /* Ajustes no Modal de Avatares */
+    .ml-modal-container {
+        max-width: 450px;
+    }
+    .ml-avatar-grid {
+        gap: 20px;
+    }
+    .ml-avatar-slot {
+        width: 110px;
+        height: 110px;
+    }
 }
 
+/* Celulares Maiores (iPhone 12 Pro, etc.) */
 @media (max-width: 480px) {
-    .menu-lateral { width: 220px; }
-    .hamburger-menu.active { left: calc(220px + 10px); }
-    .hamburger-menu { font-size: 1.3rem; padding: 6px 8px; }
+    :root { 
+        --ml-largura-menu: 240px; 
+    }
+    
+    /* Ajustes no Modal de Avatares para evitar vazamento */
+    .ml-modal-body {
+        padding: 20px 15px; /* Menos padding lateral */
+    }
+    .ml-avatar-grid {
+        gap: 15px; /* Menos espaço entre os slots */
+    }
+    .ml-avatar-slot {
+        /* O tamanho será controlado pelo grid, não mais fixo */
+        width: 100%; 
+        height: auto; /* A altura será definida pelo aspect-ratio */
+        aspect-ratio: 1 / 1; /* Garante que continue quadrado/círculo */
+    }
+    .ml-modal-header h3 {
+        font-size: 1.1rem;
+    }
 }
 
+/* Celulares Médios (iPhone XR) */
 @media (max-width: 414px) {
-    /* Ajustes finos se necessário, mas 480px deve cobrir bem */
+    .ml-avatar-grid {
+        gap: 12px;
+    }
+    .ml-modal-body {
+        padding: 15px 10px;
+    }
+}
+
+/* Celulares Pequenos (iPhone SE) */
+@media (max-width: 399px) {
+    :root { 
+        --ml-largura-menu: 100%; /* Menu ocupa a tela toda */
+        --ml-sombra-menu: none;
+    }
+    .hamburger-menu.active {
+        /* Esconde o botão de fechar quando o menu está aberto para não ficar estranho */
+        display: none;
+    }
+
+    .ml-modal-container {
+        width: 95%; /* Ocupa quase toda a largura da tela */
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    .ml-avatar-grid {
+        /* Força 2 colunas para não ficar muito pequeno */
+        grid-template-columns: repeat(2, 1fr);
+        gap: 15px;
+    }
 }

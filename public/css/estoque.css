@@ -551,7 +551,7 @@ body.autenticado { visibility: visible; }
     display: inline-block;
 }
 
-/* Popup de Mensagem Estilo Ordens/Embalagem */
+/* Popup de Mensagem */
 .es-popup-mensagem {
     position: fixed; 
     top: 50%; 

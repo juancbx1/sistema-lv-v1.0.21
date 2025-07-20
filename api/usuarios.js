@@ -114,7 +114,7 @@ router.use(async (req, res, next) => {
 router.get('/me', async (req, res) => {
     const { usuarioLogado, dbCliente } = req; // usuarioLogado tem o ID do token
     try {
-        // Busca o usuário do banco para garantir dados atualizados
+        // Busca o usuário do banco para garantir dados atualizados (seu código original)
         const result = await dbCliente.query(
             'SELECT id, nome, nome_usuario, email, tipos, nivel, permissoes FROM usuarios WHERE id = $1',
             [usuarioLogado.id]
@@ -124,9 +124,23 @@ router.get('/me', async (req, res) => {
         }
         
         let usuarioCompleto = result.rows[0];
-        // Sincroniza/calcula as permissões totais do usuário ANTES de enviar para o cliente
-        // Isso garante que o frontend receba o conjunto completo de permissões.
+        
+        // --- INÍCIO DA MODIFICAÇÃO ---
+
+        // Passo 1: Busca o avatar ativo usando a mesma conexão `dbCliente`
+        const resultAvatar = await dbCliente.query(
+            'SELECT url_blob FROM avatares_usuarios WHERE id_usuario = $1 AND ativo = TRUE LIMIT 1',
+            [usuarioLogado.id]
+        );
+        
+        // Passo 2: Adiciona a URL do avatar ao objeto de usuário
+        usuarioCompleto.avatar_url = resultAvatar.rows.length > 0 ? resultAvatar.rows[0].url_blob : null;
+        
+        // --- FIM DA MODIFICAÇÃO ---
+
+        // Sincroniza/calcula as permissões totais do usuário (seu código original)
         usuarioCompleto.permissoes = await getPermissoesCompletasUsuarioDB(dbCliente, usuarioLogado.id);
+        
         res.status(200).json(usuarioCompleto);
 
     } catch (error) {
