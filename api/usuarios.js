@@ -21,13 +21,11 @@ const SECRET_KEY = process.env.JWT_SECRET;
 const backendPermissoesValidas = new Set(frontendPermissoesDisponiveis.map(p => p.id));
 
 export async function getPermissoesCompletasUsuarioDB(dbClient, usuarioId) {
-    console.log(`[getPermissoesCompletasUsuarioDB] Buscando permissões para usuário ID: ${usuarioId}`);
     let localClient = dbClient; // Usa o cliente passado, se houver
     let clientGerenciadoLocalmente = false;
 
     try {
         if (!localClient) { // Se nenhum cliente foi passado, conecta um novo
-            console.log(`[getPermissoesCompletasUsuarioDB] Nenhum dbClient fornecido, conectando um novo.`);
             localClient = await pool.connect();
             clientGerenciadoLocalmente = true;
         }
@@ -38,7 +36,6 @@ export async function getPermissoesCompletasUsuarioDB(dbClient, usuarioId) {
             throw new Error('Usuário não encontrado no DB para buscar permissões.');
         }
         const usuarioDB = userResult.rows[0];
-        console.log(`[getPermissoesCompletasUsuarioDB] Usuário DB encontrado: Tipos=${JSON.stringify(usuarioDB.tipos)}, Permissões Individuais=${JSON.stringify(usuarioDB.permissoes)}`);
 
         const tipos = Array.isArray(usuarioDB.tipos) ? usuarioDB.tipos : (typeof usuarioDB.tipos === 'string' ? [usuarioDB.tipos] : []);
         const tipoMap = {
@@ -52,17 +49,14 @@ export async function getPermissoesCompletasUsuarioDB(dbClient, usuarioId) {
         tiposMapeados.forEach(tipoMapeado => {
             (frontendPermissoesPorTipo[tipoMapeado] || []).forEach(p => permissoesBase.add(p));
         });
-        console.log(`[getPermissoesCompletasUsuarioDB] Permissões baseadas em tipo:`, Array.from(permissoesBase));
 
         (usuarioDB.permissoes || []).forEach(p => permissoesBase.add(p));
-        console.log(`[getPermissoesCompletasUsuarioDB] Permissões após adicionar individuais do DB:`, Array.from(permissoesBase));
 
         if (isAdmin) { // Garante que admin (tipo) sempre tenha todas as permissões definidas para 'admin' em permissoesPorTipo
             (frontendPermissoesPorTipo['admin'] || []).forEach(permissao => permissoesBase.add(permissao));
         }
         
         const permissoesFinais = Array.from(permissoesBase).filter(p => backendPermissoesValidas.has(p));
-        console.log(`[getPermissoesCompletasUsuarioDB] Permissões finais filtradas para ID ${usuarioId}:`, permissoesFinais);
         return permissoesFinais;
 
     } catch (error) {
@@ -71,7 +65,6 @@ export async function getPermissoesCompletasUsuarioDB(dbClient, usuarioId) {
     } finally {
         if (clientGerenciadoLocalmente && localClient) {
             localClient.release();
-            console.log(`[getPermissoesCompletasUsuarioDB] Cliente DB local liberado.`);
         }
     }
 }
@@ -100,7 +93,6 @@ const verificarTokenOriginal = (reqOriginal) => {
 router.use(async (req, res, next) => {
     let cliente;
     try {
-        console.log(`[router/usuarios MID] Recebida ${req.method} em ${req.originalUrl}`);
         req.usuarioLogado = verificarTokenOriginal(req); // Decodifica o token
         cliente = await pool.connect();
         req.dbCliente = cliente;
@@ -135,8 +127,6 @@ router.get('/me', async (req, res) => {
         // Sincroniza/calcula as permissões totais do usuário ANTES de enviar para o cliente
         // Isso garante que o frontend receba o conjunto completo de permissões.
         usuarioCompleto.permissoes = await getPermissoesCompletasUsuarioDB(dbCliente, usuarioLogado.id);
-        
-        console.log(`[API /me] Usuário ${usuarioCompleto.nome_usuario} encontrado, permissões totais:`, usuarioCompleto.permissoes);
         res.status(200).json(usuarioCompleto);
 
     } catch (error) {
@@ -300,7 +290,6 @@ router.post('/', async (req, res) => {
             if (existingContactRes.rows.length > 0) {
                 // Se encontrou, usa o ID existente
                 contatoId = existingContactRes.rows[0].id;
-                console.log(`[API Usuarios POST] Contato financeiro encontrado para "${nome}". Vinculando ID: ${contatoId}`);
             } else {
                 // Se não encontrou, cria um novo contato
                 const newContactRes = await dbCliente.query(
@@ -308,7 +297,6 @@ router.post('/', async (req, res) => {
                     [nome]
                 );
                 contatoId = newContactRes.rows[0].id;
-                console.log(`[API Usuarios POST] Nenhum contato financeiro encontrado. Criando novo para "${nome}". ID: ${contatoId}`);
             }
 
             // 2b. Vincula o ID do contato (existente ou novo) ao usuário
@@ -492,15 +480,8 @@ router.get('/buscar-contatos-empregado', async (req, res) => {
     const { usuarioLogado, dbCliente } = req;
     const termoBusca = req.query.q;
 
-    // --- LOG 1: A rota foi acionada? ---
-    console.log(`[BACKEND] Rota /buscar-contatos-empregado acionada com termo: "${termoBusca}"`);
-
     try {
         const permissoesUsuarioAtual = await getPermissoesCompletasUsuarioDB(dbCliente, usuarioLogado.id);
-        
-        // --- LOG 2: O usuário tem a permissão necessária? ---
-        console.log(`[BACKEND] Verificando permissão 'editar-usuarios'. Usuário tem?`, permissoesUsuarioAtual.includes('editar-usuarios'));
-
         if (!permissoesUsuarioAtual.includes('editar-usuarios')) {
             return res.status(403).json({ error: 'Permissão negada para buscar contatos.' });
         }
@@ -520,19 +501,12 @@ router.get('/buscar-contatos-empregado', async (req, res) => {
         `;
         const params = [`%${termoBusca.trim()}%`];
 
-        // --- LOG 3: Qual query e parâmetros estamos enviando ao banco? ---
-        console.log('[BACKEND] Executando query no banco:', query);
-        console.log('[BACKEND] Parâmetros da query:', params);
-
         const result = await dbCliente.query(query, params);
         
-        // --- LOG 4: O que o banco de dados retornou? ---
-        console.log(`[BACKEND] Query bem-sucedida. Encontrados ${result.rowCount} registros.`);
         
         res.status(200).json(result.rows);
 
     } catch (error) {
-        // --- LOG 5: Se tudo deu errado, qual foi o erro? ---
         console.error('[BACKEND] ERRO CRÍTICO na rota /buscar-contatos-empregado:', error);
         res.status(500).json({ error: 'Erro interno ao buscar contatos.', details: error.message });
     } finally {

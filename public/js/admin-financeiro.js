@@ -3843,7 +3843,7 @@ function mudarPainelConfig(painelAtivo) {
             renderizarTabelaContas(); 
             break;
         case 'favorecidos': 
-            renderizarTabelaContatosGerenciamento(); 
+            renderizarTabelaContatosGerenciamento();
             break;
         case 'categorias': 
             renderizarTabelaCategoriasAgrupadas(); 
@@ -3851,7 +3851,6 @@ function mudarPainelConfig(painelAtivo) {
         case 'taxas-vt':
             carregarErenderizarConcessionarias(); 
             break;
-        // NOVO CASE AQUI
         case 'admin-tools':
             renderizarFerramentasAdmin();
             break;

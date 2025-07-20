@@ -282,96 +282,143 @@ router.get('/calcular', async (req, res) => {
 });
 
 router.post('/efetuar', async (req, res) => {
-    if (!req.permissoesUsuario.includes('efetuar-pagamento-empregado')) {
-        return res.status(403).json({ error: 'Permissão negada para efetuar pagamentos.' });
+    // <<<< CORREÇÃO: Leitura segura do tipo de pagamento >>>>
+    const tipoPagamento = req.body.calculo?.detalhes?.tipoPagamento;
+
+    if (!tipoPagamento) {
+        return res.status(400).json({ error: "Payload inválido. 'tipoPagamento' não encontrado nos detalhes do cálculo." });
     }
 
-    const { calculo, id_conta_debito } = req.body;
+    // Lógica de permissão refinada
+    const permissoesNecessarias = {
+        COMISSAO: 'permitir-pagar-comissao',
+        BONUS: 'permitir-conceder-bonus',
+        VALE_TRANSPORTE: 'permitir-pagar-passagens'
+    };
+    const permissaoRequerida = permissoesNecessarias[tipoPagamento];
+
+    if (!permissaoRequerida || !req.permissoesUsuario.includes(permissaoRequerida)) {
+        return res.status(403).json({ error: `Permissão negada para efetuar pagamento do tipo '${tipoPagamento}'.` });
+    }
+
+    // <<<< FIM DA CORREÇÃO DE PERMISSÃO >>>>
+
+    const { calculo, id_conta_debito, datas_pagas, valor_passagem_diaria } = req.body;
     const id_usuario_pagador = req.usuarioLogado.id;
     
-    if (!calculo || !calculo.detalhes || !calculo.proventos || !calculo.totais || !id_conta_debito) {
+    // A validação completa continua aqui para garantir a integridade dos dados
+    if (!calculo || !calculo.detalhes || !calculo.totais || !id_conta_debito) {
         return res.status(400).json({ error: 'Dados do cálculo ou conta de débito ausentes ou malformados.' });
     }
 
-    const { detalhes, proventos, totais } = calculo;
-    const { funcionario, ciclo, tipoPagamento } = detalhes;
+    const { detalhes, totais } = calculo;
+    const { funcionario, ciclo } = detalhes;
     const id_funcionario = funcionario.id;
     const nome_funcionario = funcionario.nome;
     const nomeCicloOuMotivo = ciclo.nome || '';
     
     // --- LOGS INICIAIS ---
-    console.log('--- INICIANDO PAGAMENTO ---');
+    console.log('--- [API /efetuar] INICIANDO PAGAMENTO ---');
     console.log(`Tipo de Pagamento: ${tipoPagamento}`);
     console.log(`Empregado: ${nome_funcionario} (ID: ${id_funcionario})`);
-    console.log(`Referência (Ciclo/Motivo): "${nomeCicloOuMotivo}"`);
+    console.log(`Referência: "${nomeCicloOuMotivo}"`);
     console.log(`Valor Líquido: ${totais.totalLiquidoAPagar}`);
-    console.log('Payload completo recebido:', JSON.stringify(calculo, null, 2));
     
     let dbClient;
     try {
         dbClient = await pool.connect();
         
-        if (tipoPagamento === 'COMISSAO') {
-            const checkQuery = "SELECT id FROM historico_pagamentos_funcionarios WHERE usuario_id = $1 AND ciclo_nome = $2";
-            const checkResult = await dbClient.query(checkQuery, [id_funcionario, nomeCicloOuMotivo]);
-            if (checkResult.rowCount > 0) {
-                return res.status(409).json({ error: `Pagamento de comissão para o ciclo "${nomeCicloOuMotivo}" já foi registrado.` });
-            }
-        }
-        
-        await dbClient.query('BEGIN');
-        console.log("Transação BEGIN executada.");
-
         const userRes = await dbClient.query('SELECT id_contato_financeiro FROM usuarios WHERE id = $1', [id_funcionario]);
         if (userRes.rows.length === 0 || !userRes.rows[0].id_contato_financeiro) {
             throw new Error(`O empregado ${nome_funcionario} não possui um contato financeiro vinculado.`);
         }
         const id_contato_financeiro = userRes.rows[0].id_contato_financeiro;
-        console.log(`Contato Financeiro ID: ${id_contato_financeiro}`);
+        console.log(`[API /efetuar] Contato Financeiro do Empregado ID: ${id_contato_financeiro}`);
         
-        const dataTransacao = new Date().toISOString();
+        await dbClient.query('BEGIN');
+        console.log("[API /efetuar] Transação BEGIN executada.");
 
-        const fazerLancamento = async (idCategoria, valor, descricao) => {
+        const fazerLancamento = async (idCategoria, valor, descricao, idContato) => {
             if (valor <= 0) return;
-            if (!idCategoria) throw new Error(`ID de categoria para "${descricao}" não configurado.`);
+            if (!idCategoria) throw new Error(`ID de categoria para "${descricao}" não configurado ou nulo.`);
             
-            console.log(`Preparando para inserir no financeiro: [Valor: ${valor}, CategoriaID: ${idCategoria}, Desc: "${descricao}"]`);
+            console.log(`[API /efetuar] Preparando para inserir no financeiro: [Valor: ${valor}, CategoriaID: ${idCategoria}, Desc: "${descricao}", ContatoID: ${idContato}]`);
+            const dataTransacao = new Date().toISOString();
             
             await dbClient.query(
                 `INSERT INTO fc_lancamentos (id_conta_bancaria, id_categoria, tipo, valor, data_transacao, descricao, id_contato, id_usuario_lancamento) VALUES ($1, $2, 'DESPESA', $3, $4, $5, $6, $7)`,
-                [id_conta_debito, idCategoria, valor, dataTransacao, descricao, id_contato_financeiro, id_usuario_pagador]
+                [id_conta_debito, idCategoria, valor, dataTransacao, descricao, idContato, id_usuario_pagador]
             );
-            console.log("Lançamento no financeiro bem-sucedido.");
+            console.log("[API /efetuar] Lançamento no financeiro bem-sucedido.");
         };
 
         if (tipoPagamento === 'COMISSAO') {
-            await fazerLancamento(CATEGORIA_MAP.COMISSAO, proventos.comissao, `Pgto Comissão (${nomeCicloOuMotivo})`);
+            console.log("[API /efetuar] Entrando no bloco de pagamento de COMISSÃO.");
+            const { proventos } = calculo;
+            
+            const checkQuery = "SELECT id FROM historico_pagamentos_funcionarios WHERE usuario_id = $1 AND ciclo_nome = $2";
+            const checkResult = await dbClient.query(checkQuery, [id_funcionario, nomeCicloOuMotivo]);
+            if (checkResult.rowCount > 0) {
+                return res.status(409).json({ error: `Pagamento de comissão para o ciclo "${nomeCicloOuMotivo}" já foi registrado.` });
+            }
+            
+            await fazerLancamento(CATEGORIA_MAP.COMISSAO, proventos.comissao, `Pgto Comissão (${nomeCicloOuMotivo}) para ${nome_funcionario}`, id_contato_financeiro);
+
         } else if (tipoPagamento === 'BONUS') {
-            await fazerLancamento(CATEGORIA_MAP.BONUS_PREMIACOES, proventos.beneficios, `Bônus/Premiação: ${nomeCicloOuMotivo}`);
+            console.log("[API /efetuar] Entrando no bloco de pagamento de BÔNUS.");
+            const { proventos } = calculo;
+            await fazerLancamento(CATEGORIA_MAP.BONUS_PREMIACOES, proventos.beneficios, `Bônus/Premiação: ${nomeCicloOuMotivo}`, id_contato_financeiro);
+        
+        } else if (tipoPagamento === 'VALE_TRANSPORTE') {
+            console.log("[API /efetuar] Entrando no bloco de pagamento de VALE_TRANSPORTE.");
+            if (!datas_pagas || !Array.isArray(datas_pagas) || datas_pagas.length === 0) {
+                throw new Error("A lista de 'datas_pagas' é obrigatória para o pagamento de Vale-Transporte.");
+            }
+            if (valor_passagem_diaria === undefined || valor_passagem_diaria <= 0) {
+                throw new Error("O 'valor_passagem_diaria' é obrigatório e deve ser maior que zero.");
+            }
+
+            const descricaoLancamento = `Recarga VT (${datas_pagas.length} dias)`;
+            await fazerLancamento(CATEGORIA_MAP.VALE_TRANSPORTE, totais.totalLiquidoAPagar, descricaoLancamento, id_contato_financeiro);
+
+            console.log(`[API /efetuar] Registrando ${datas_pagas.length} dias na tabela 'registro_dias_trabalhados'...`);
+            for (const data of datas_pagas) {
+                await dbClient.query(
+                    `INSERT INTO registro_dias_trabalhados (usuario_id, data, status, valor_referencia, observacao) VALUES ($1, $2, 'PAGO', $3, $4)`,
+                    [id_funcionario, data, valor_passagem_diaria, `Pagamento efetuado em lote por ${req.usuarioLogado.nome}`]
+                );
+                console.log(`  - Dia ${data} registrado para o usuário ${id_funcionario}.`);
+            }
+            console.log("[API /efetuar] Todos os dias foram registrados com sucesso.");
         }
         
         if (totais.totalLiquidoAPagar > 0) {
             const cicloParaSalvar = (tipoPagamento === 'COMISSAO') ? nomeCicloOuMotivo : null;
-            const descricaoParaSalvar = (tipoPagamento === 'COMISSAO') ? 'Pagamento de Comissão' : nomeCicloOuMotivo;
             
-            console.log(`Preparando para inserir no histórico: [Ciclo: ${cicloParaSalvar}, Desc: ${descricaoParaSalvar}]`);
+            let descricaoParaSalvar = nomeCicloOuMotivo;
+            if (tipoPagamento === 'COMISSAO') descricaoParaSalvar = 'Pagamento de Comissão';
+            if (tipoPagamento === 'VALE_TRANSPORTE') descricaoParaSalvar = `Recarga VT (${datas_pagas.length} dias)`;
+            
+            const detalhesParaSalvar = { ...calculo, datas_pagas: datas_pagas, valor_passagem_diaria: valor_passagem_diaria };
             
             await dbClient.query(
                 `INSERT INTO historico_pagamentos_funcionarios (usuario_id, ciclo_nome, descricao, valor_liquido_pago, id_usuario_pagador, detalhes_pagamento, id_conta_debito) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                [id_funcionario, cicloParaSalvar, descricaoParaSalvar, totais.totalLiquidoAPagar, id_usuario_pagador, JSON.stringify(calculo), id_conta_debito]
+                [id_funcionario, cicloParaSalvar, descricaoParaSalvar, totais.totalLiquidoAPagar, id_usuario_pagador, JSON.stringify(detalhesParaSalvar), id_conta_debito]
             );
-            console.log("Inserção no histórico bem-sucedida.");
+            console.log("[API /efetuar] Inserção no histórico bem-sucedida.");
         }
 
         await dbClient.query('COMMIT');
-        console.log("Transação COMMIT executada.");
+        console.log("[API /efetuar] Transação COMMIT executada. Operação finalizada com sucesso!");
         
         res.status(201).json({ message: `Pagamento para ${nome_funcionario} efetuado com sucesso!` });
 
     } catch (error) {
-        if (dbClient) await dbClient.query('ROLLBACK');
-        // Este é o log mais importante
-        console.error('[API /pagamentos/efetuar] ERRO NA TRANSAÇÃO, ROLLBACK EXECUTADO:', error);
+        if (dbClient) {
+            await dbClient.query('ROLLBACK');
+            console.error('[API /efetuar] ERRO NA TRANSAÇÃO, ROLLBACK EXECUTADO.');
+        }
+        console.error('[API /efetuar] DETALHES DO ERRO:', error);
         res.status(500).json({ error: 'Erro ao efetuar pagamento.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
@@ -441,14 +488,20 @@ router.get('/registros-dias', async (req, res) => {
         
         const eventos = result.rows.map(row => {
             let color = '#7f8c8d';
+            let title = row.status.replace(/_/g, ' '); // Padrão
+
             if (row.status === 'PAGO') color = '#27ae60';
-            if (row.status === 'FALTA_NAO_JUSTIFICADA') color = '#f39c12';
             if (row.status === 'FALTA_COMPENSAR') color = '#8e44ad';
             if (row.status === 'COMPENSADO') color = '#bdc3c7';
 
+            if (row.status === 'FALTA_NAO_JUSTIFICADA') {
+                color = '#f39c12';
+                title = 'FNJ'; // Abreviação para Falta Não Justificada
+            }
+
             return {
-                id: row.data.toISOString().split('T')[0], // Garante que a data seja string YYYY-MM-DD
-                title: row.status.replace(/_/g, ' '),
+                id: row.data.toISOString().split('T')[0],
+                title: title, // Usa a variável title
                 start: row.data,
                 allDay: true,
                 backgroundColor: color,
@@ -466,6 +519,253 @@ router.get('/registros-dias', async (req, res) => {
     } catch (error) {
         console.error('[API /registros-dias] Erro:', error);
         res.status(500).json({ error: 'Erro ao buscar registros de dias.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// POST /api/pagamentos/registrar-falta
+router.post('/registrar-falta', async (req, res) => {
+    // A permissão para registrar falta pode ser a mesma de efetuar pagamento
+    if (!req.permissoesUsuario.includes('efetuar-pagamento-empregado')) {
+        return res.status(403).json({ error: 'Permissão negada para registrar faltas.' });
+    }
+
+    const { usuario_id, datas } = req.body;
+    const { id: id_usuario_logado, nome: nome_usuario_logado } = req.usuarioLogado;
+
+    // --- LOGS E VALIDAÇÕES INICIAIS ---
+    console.log('--- [API /registrar-falta] INICIANDO REGISTRO DE FALTAS ---');
+    console.log(`Payload recebido: usuario_id=${usuario_id}, datas=${JSON.stringify(datas)}`);
+
+    if (!usuario_id || !Array.isArray(datas) || datas.length === 0) {
+        return res.status(400).json({ error: 'Parâmetros usuario_id e datas (array) são obrigatórios.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        await dbClient.query('BEGIN');
+        console.log('[API /registrar-falta] Transação BEGIN executada.');
+
+        for (const data of datas) {
+            // Verifica se já existe um registro para esse dia, para evitar duplicatas
+            const checkQuery = `SELECT id FROM registro_dias_trabalhados WHERE usuario_id = $1 AND data = $2`;
+            const checkResult = await dbClient.query(checkQuery, [usuario_id, data]);
+
+            if (checkResult.rowCount > 0) {
+                // Se já existe, apenas pulamos para o próximo, sem dar erro.
+                // Isso torna a operação "idempotente": rodá-la várias vezes com os mesmos dados tem o mesmo resultado.
+                console.log(`  - Dia ${data} já possui registro. Pulando.`);
+                continue; 
+            }
+
+            // Se não existe, insere o novo registro de falta
+            const insertQuery = `
+                INSERT INTO registro_dias_trabalhados (usuario_id, data, status, valor_referencia, observacao)
+                VALUES ($1, $2, 'FALTA_NAO_JUSTIFICADA', $3, $4)
+            `;
+            const observacao = `Falta registrada por: ${nome_usuario_logado}`;
+            
+            // Adicionamos o valor 0 como quarto parâmetro para o valor_referencia
+            await dbClient.query(insertQuery, [usuario_id, data, 0, observacao]);
+            console.log(`  - Falta registrada para o dia ${data}.`);
+        }
+
+        await dbClient.query('COMMIT');
+        console.log('[API /registrar-falta] Transação COMMIT executada. Operação finalizada.');
+
+        res.status(201).json({ message: 'Faltas registradas com sucesso!' });
+
+    } catch (error) {
+        if (dbClient) {
+            await dbClient.query('ROLLBACK');
+            console.error('[API /registrar-falta] ERRO NA TRANSAÇÃO, ROLLBACK EXECUTADO.');
+        }
+        console.error('[API /registrar-falta] DETALHES DO ERRO:', error);
+        res.status(500).json({ error: 'Erro ao registrar faltas.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// GET /api/pagamentos/historico-vt?usuario_id=X
+router.get('/historico-vt', async (req, res) => {
+    // Reutilizando a permissão de acesso à central
+    if (!req.permissoesUsuario.includes('acessar-central-pagamentos')) {
+        return res.status(403).json({ error: 'Permissão negada.' });
+    }
+
+    const { usuario_id } = req.query;
+    if (!usuario_id) {
+        return res.status(400).json({ error: 'O parâmetro usuario_id é obrigatório.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+
+        // Buscamos no histórico todos os pagamentos cuja descrição começa com "Recarga VT"
+        // e que não foram estornados ainda.
+        const query = `
+            SELECT 
+                id,
+                data_pagamento,
+                descricao,
+                valor_liquido_pago,
+                detalhes_pagamento,
+                estornado_em -- Coluna que vamos adicionar ao banco
+            FROM 
+                historico_pagamentos_funcionarios
+            WHERE 
+                usuario_id = $1 
+                AND descricao LIKE 'Recarga VT%'
+            ORDER BY data_pagamento DESC;
+        `;
+
+        const result = await dbClient.query(query, [usuario_id]);
+        res.status(200).json(result.rows);
+
+    } catch (error) {
+        console.error('[API /historico-vt] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar histórico de recargas de VT.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// POST /api/pagamentos/estornar-vt
+router.post('/estornar-vt', async (req, res) => {
+    // Permissão para estornar pode ser a mesma de efetuar o pagamento
+    if (!req.permissoesUsuario.includes('efetuar-pagamento-empregado')) {
+        return res.status(403).json({ error: 'Permissão negada para estornar pagamentos.' });
+    }
+
+    const { recarga_id } = req.body; // Recebe o ID do registro do histórico
+
+    // --- LOGS E VALIDAÇÕES ---
+    console.log(`--- [API /estornar-vt] INICIANDO ESTORNO PARA HISTÓRICO ID: ${recarga_id} ---`);
+    if (!recarga_id) {
+        return res.status(400).json({ error: 'O parâmetro recarga_id é obrigatório.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        await dbClient.query('BEGIN');
+        console.log('[API /estornar-vt] Transação BEGIN executada.');
+
+        // 1. Busca o registro do histórico para obter os detalhes do pagamento original
+        const historicoQuery = `
+            SELECT usuario_id, detalhes_pagamento, estornado_em 
+            FROM historico_pagamentos_funcionarios 
+            WHERE id = $1 FOR UPDATE; -- FOR UPDATE bloqueia a linha para evitar duplos estornos
+        `;
+        const historicoResult = await dbClient.query(historicoQuery, [recarga_id]);
+
+        if (historicoResult.rowCount === 0) {
+            throw new Error(`Registro de pagamento com ID ${recarga_id} não encontrado.`);
+        }
+        
+        const recarga = historicoResult.rows[0];
+        console.log('[API /estornar-vt] [DEBUG] Registro do histórico encontrado:', recarga);
+
+        if (recarga.estornado_em) {
+            throw new Error(`Este pagamento já foi estornado em ${new Date(recarga.estornado_em).toLocaleString('pt-BR')}.`);
+        }
+
+        // 2. Extrai a lista de datas pagas do JSON salvo (COM PARSE)
+        let detalhes;
+        if (typeof recarga.detalhes_pagamento === 'string') {
+            try {
+                detalhes = JSON.parse(recarga.detalhes_pagamento);
+            } catch (e) {
+                throw new Error('Falha ao analisar os detalhes do pagamento. O JSON está malformado.');
+            }
+        } else {
+            detalhes = recarga.detalhes_pagamento; // Já é um objeto
+        }
+        
+        console.log('[API /estornar-vt] [DEBUG] Detalhes do pagamento extraídos:', detalhes);
+        
+        const datasPagas = detalhes?.datas_pagas;
+        if (!datasPagas || !Array.isArray(datasPagas) || datasPagas.length === 0) {
+            throw new Error('Não foi possível encontrar a lista de dias pagos nos detalhes deste registro. Não é possível estornar.');
+        }
+        console.log(`[API /estornar-vt] Encontradas ${datasPagas.length} datas para estornar:`, datasPagas);
+        console.log(`[API /estornar-vt] ID do usuário para deleção: ${recarga.usuario_id}`);
+
+        // 3. Deleta os registros de dias da tabela de controle
+        const deleteQuery = `
+            DELETE FROM registro_dias_trabalhados 
+            WHERE usuario_id = $1 AND data = ANY($2::date[]) AND status = 'PAGO'
+        `;
+        console.log('[API /estornar-vt] [DEBUG] Executando query de DELEÇÃO...');
+        const deleteResult = await dbClient.query(deleteQuery, [recarga.usuario_id, datasPagas]);
+        console.log(`[API /estornar-vt] ${deleteResult.rowCount} dias foram removidos da tabela 'registro_dias_trabalhados'.`);
+
+        // 4. Marca o registro do histórico como estornado
+        const updateHistoricoQuery = `
+            UPDATE historico_pagamentos_funcionarios 
+            SET estornado_em = NOW() 
+            WHERE id = $1
+        `;
+        console.log('[API /estornar-vt] [DEBUG] Executando query de ATUALIZAÇÃO do histórico...');
+        await dbClient.query(updateHistoricoQuery, [recarga_id]);
+        console.log(`[API /estornar-vt] Registro de histórico ID ${recarga_id} marcado como estornado.`);
+        
+        await dbClient.query('COMMIT');
+        console.log('[API /estornar-vt] Transação COMMIT executada. Estorno finalizado com sucesso!');
+
+        res.status(200).json({ message: 'Recarga estornada e dias liberados com sucesso!' });
+
+    } catch (error) {
+        if (dbClient) {
+            await dbClient.query('ROLLBACK');
+            console.error('[API /estornar-vt] ERRO NA TRANSAÇÃO, ROLLBACK EXECUTADO.');
+        }
+        // Este é o log mais importante para depuração
+        console.error('[API /estornar-vt] DETALHES DO ERRO:', error);
+        res.status(500).json({ error: 'Erro ao processar estorno.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// POST /api/pagamentos/remover-registro-dia
+// Endpoint genérico para remover qualquer registro de dia (FNJ, Atestado, etc.)
+router.post('/remover-registro-dia', async (req, res) => {
+    if (!req.permissoesUsuario.includes('efetuar-pagamento-empregado')) {
+        return res.status(403).json({ error: 'Permissão negada para remover registros de dias.' });
+    }
+
+    const { usuario_id, data } = req.body;
+
+    console.log(`--- [API /remover-registro-dia] INICIANDO REMOÇÃO para usuário ${usuario_id} na data ${data} ---`);
+    if (!usuario_id || !data) {
+        return res.status(400).json({ error: 'Parâmetros usuario_id e data são obrigatórios.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        
+        // Simplesmente deleta a linha. Não precisa de transação para uma única operação.
+        const deleteQuery = `DELETE FROM registro_dias_trabalhados WHERE usuario_id = $1 AND data = $2`;
+        const result = await dbClient.query(deleteQuery, [usuario_id, data]);
+
+        if (result.rowCount === 0) {
+            // Isso pode acontecer se o usuário clicar rápido duas vezes. Não é um erro crítico.
+            console.log(`[API /remover-registro-dia] Nenhum registro encontrado para remover. Ação ignorada.`);
+        } else {
+            console.log(`[API /remover-registro-dia] Registro removido com sucesso.`);
+        }
+
+        res.status(200).json({ message: 'Registro de dia removido com sucesso!' });
+
+    } catch (error) {
+        console.error('[API /remover-registro-dia] DETALHES DO ERRO:', error);
+        res.status(500).json({ error: 'Erro ao remover registro de dia.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }

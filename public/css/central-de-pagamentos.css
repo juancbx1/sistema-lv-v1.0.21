@@ -437,10 +437,182 @@ body {
     background-color: rgba(52, 152, 219, 0.25) !important;
 }
 
+/* --- ESTILO PARA O CONTAINER DA DESCRIÇÃO EDITÁVEL DO LOTE --- */
+.descricao-lote-editavel {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.cpg-input:read-only {
+    background-color: #ecf0f1;
+    cursor: not-allowed;
+}
+
+/* Estilo para botões de aviso (amarelo) */
+.cpg-btn-aviso {
+    background-color: #f39c12; /* Laranja/Amarelo da sua legenda */
+    color: #fff;
+}
+.cpg-btn-aviso:hover:not(:disabled) {
+    background-color: #e67e22;
+}
+
+/* Painel de ações rápidas para o calendário */
+.cpg-passagem-acoes-rapidas {
+    text-align: center;
+    padding: 15px 0;
+    margin-top: 10px;
+    border-top: 1px dotted var(--cpg-cor-borda);
+    animation: cpg-fadeIn 0.3s;
+}
+
+/* Estilo para botões secundários */
+.cpg-btn-secundario {
+    background-color: #ecf0f1;
+    color: #7f8c8d;
+    border: 1px solid #bdc3c7;
+}
+.cpg-btn-secundario:hover:not(:disabled) {
+    background-color: #dce4e6;
+    border-color: #95a5a6;
+}
+
+/* Container para alinhar o seletor e o botão de histórico */
+.cpg-passagem-header-actions {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    margin-bottom: 20px;
+    max-width: 600px; /* Ajuste conforme necessário */
+}
+
 /* ==========================================================================
-   6. RESPONSIVIDADE
+   7. RESPONSIVIDADE (MOBILE FIRST APPROACH)
    ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Breakpoint para Tablets (Paisagem) e Desktops Menores
+   - O layout da aba Passagem vira uma coluna única.
+   -------------------------------------------------------------------------- */
+@media (max-width: 1024px) {
+    .cpg-passagem-layout {
+        /* O grid de 2 colunas (calendário | ações) se torna um grid de 1 coluna. */
+        grid-template-columns: 1fr;
+    }
+}
+
+
+/* --------------------------------------------------------------------------
+   Breakpoint para Tablets (Retrato)
+   - Remove a margem do menu lateral.
+   - Ajusta o cabeçalho e as abas.
+   -------------------------------------------------------------------------- */
 @media (max-width: 768px) {
-    .cpg-form-row { flex-direction: column; gap: 0; }
-    .cpg-dashboard-grid { grid-template-columns: 1fr; }
+    body {
+        /* Remove a margem fixa do menu lateral.
+           Isso assume que seu JS de menu-lateral.js vai controlar a visibilidade do menu. */
+        margin-left: 0;
+    }
+
+
+    .cpg-tabs-container {
+        /* Permite que as abas rolem horizontalmente em vez de quebrar a linha. */
+        overflow-x: auto;
+        justify-content: flex-start;
+        /* Adiciona um pequeno preenchimento para a barra de rolagem não ficar colada. */
+        padding-bottom: 10px; 
+        /* Esconde a barra de rolagem visualmente em navegadores Webkit (Chrome, Safari) */
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+    }
+    .cpg-tabs-container::-webkit-scrollbar {
+        display: none;
+    }
+
+    .cpg-passagem-header-actions {
+        /* Empilha o seletor de empregado e o botão de histórico. */
+        flex-direction: column;
+        align-items: stretch; /* Faz os itens ocuparem 100% da largura do container. */
+        max-width: 100%;
+    }
+
+    /* Regra que você já tinha, mantida por consistência. */
+    .cpg-form-row { 
+        flex-direction: column; 
+        gap: 0; 
+    }
+    .cpg-dashboard-grid { 
+        grid-template-columns: 1fr; 
+    }
+}
+
+
+/* --------------------------------------------------------------------------
+   Breakpoint para Celulares (480px e menores)
+   - Ajusta fontes, espaçamentos e modais para telas pequenas.
+   -------------------------------------------------------------------------- */
+@media (max-width: 480px) {
+    .cpg-main-container {
+        /* Reduz o padding geral em telas pequenas. */
+        padding: 5px;
+    }
+
+    .cpg-card,
+    .cpg-tabs-content {
+        /* Reduz o padding interno dos cards e do conteúdo das abas. */
+        padding: 15px;
+    }
+    
+    .cpg-header {
+        padding: 15px;
+    }
+
+    .cpg-tabs-container {
+        padding: 0 15px 10px 15px;
+    }
+
+    .cpg-tab-btn {
+        /* Diminui o padding dos botões de aba para caber mais na tela. */
+        padding: 12px 15px;
+        font-size: 0.9rem;
+    }
+    .cpg-tab-text {
+        /* Esconde o texto da aba para economizar espaço, mostrando só o ícone. */
+        display: none;
+    }
+
+    /* Reduz o tamanho das fontes grandes para não dominarem a tela. */
+    .cpg-resumo-card .valor {
+        font-size: 1.8rem;
+    }
+    .cpg-alerta-card .contador {
+        font-size: 2rem;
+    }
+
+    /* Ajusta o modal para ocupar quase toda a tela, com margens pequenas. */
+    .cpg-modal-content {
+        width: 95%;
+        padding: 20px 15px;
+    }
+
+    .cpg-resumo-grid {
+        /* Muda o grid de resumo para ter colunas menores. */
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    }
+    
+    .cpg-passagem-header-actions {
+        gap: 15px;
+    }
+}
+
+
+/* --------------------------------------------------------------------------
+   Ajustes Finos para Telas Muito Pequenas
+   - Apenas um ajuste extra para o texto das abas, se necessário.
+   -------------------------------------------------------------------------- */
+@media (max-width: 399px) {
+    /* Mantém o texto escondido e ajusta padding se necessário. 
+       A regra de 480px já deve cobrir bem, mas podemos adicionar
+       ajustes específicos aqui se algo quebrar. */
 }

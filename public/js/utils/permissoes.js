@@ -92,7 +92,13 @@ export const permissoesDisponiveis = [
      // --- PAGAMENTOS A FUNCIONARIOS ---
     { id: 'acessar-central-pagamentos', label: 'Acessar Central de Pagamentos à Empregados', categoria: 'Pagamentos à Empregados' },
     { id: 'efetuar-pagamento-empregado', label: 'Acessar Pagamentos à Empregados', categoria: 'Pagamentos à Empregados' },
-    
+    { id: 'permitir-pagar-comissao', label: 'Ação: Pagar comissões', categoria: 'Pagamentos à Empregados' },
+    { id: 'permitir-conceder-bonus', label: 'Ação: Conceder bônus e premiações', categoria: 'Pagamentos à Empregados' },
+    { id: 'permitir-pagar-passagens', label: 'Ação: Pagar vales-transporte (passagens)', categoria: 'Pagamentos à Empregados' },
+    { id: 'permitir-lancar-falta-nao-justificada', label: 'Ação: Lançar faltas não justificadas', categoria: 'Pagamentos à Empregados' },
+    { id: 'permitir-estornar-passagens', label: 'Ação: Estornar pagamentos de passagens', categoria: 'Pagamentos à Empregados' },
+
+
     // --- CONFIGURAÇÕES ---
     { id: 'acesso-ponto-por-processo', label: 'Ver Tela de Pontos por Processo', categoria: 'Configurações' },
     { id: 'gerenciar-comunicacoes', label: 'Ver Tela Gerenciar Comunicações', categoria: 'Configurações' },

@@ -1443,7 +1443,41 @@ body {
     .fc-header-actions .fc-btn-icon { 
         width: 38px; 
         height: 38px; 
-        font-size: 1.1rem; }
+        font-size: 1.1rem; 
+    }
+
+    /* --- AJUSTE NOS CABEÇALHOS DAS ABAS PARA MOBILE --- */
+    /* Layout para a aba LANÇAMENTOS */
+    #tab-lancamentos .fc-table-header {
+        display: flex; /* Mantém na mesma linha */
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px; /* Adiciona espaço antes da linha de busca */
+    }
+
+    /* Layout para a aba AGENDA */
+    #tab-agenda .fc-table-header {
+        display: flex; /* Transforma em flex container */
+        justify-content: space-between; /* Alinha os itens nas extremidades */
+        align-items: center;
+        gap: 15px; /* Espaço entre as linhas */
+    }
+    #tab-agenda .fc-table-header .fc-section-title {
+        order: 1; /* Move o título para a segunda "posição" */
+        width: auto; /* Garante que o título não ocupe a linha toda */
+    }
+    #tab-agenda .fc-table-header .fc-header-actions {
+        order: 1; /* Move o grupo de botões para a primeira "posição" */
+        width: 100%; /* Faz o grupo de botões ocupar a primeira linha inteira */
+        justify-content: flex-end; /* Alinha os botões dentro dele à direita */
+    }
+    #tab-agenda .fc-header-actions #btnAtualizarAgenda {
+        order: 1; /* Botão "Atualizar" fica em segundo no grupo */
+    }
+    #tab-agenda .fc-header-actions #btnAgendarNovaConta {
+        order: 2; /* Botão "+ Agendar" fica em primeiro no grupo */
+    }
+
     .fc-desktop-only-actions { display: none; }
     .fc-mobile-only-menu { display: block; }
     .fc-tabs-container { overflow-x: auto; padding: 0 10px;}
@@ -1455,6 +1489,10 @@ body {
         max-width: 95vw; /* Garante que o modal use quase toda a tela */
         max-height: 85vh;
         padding:10px;
+    }
+
+    .fc-input, .fc-select, textarea.fc-input{
+        font-size: 0.9rem;
     }
 
     .fc-tab-btn {
@@ -1488,7 +1526,6 @@ body {
         padding: 8px 10px;
     }
 
-    
     /* --- AJUSTES NOVO CARD DE LANÇAMENTO PARA MOBILE --- */
      .fc-lancamento-card {
         gap: 10px;
@@ -1562,6 +1599,31 @@ body {
         display: flex !important; 
     }
 
+    /* --- TRANSFORMA O BOTÃO "+ AGENDAR NOVO" EM UM ÍCONE "+" NO MOBILE --- */
+    #tab-agenda #btnAgendarNovaConta {
+        font-size: 0; /* Esconde o texto "Agendar Novo" */
+        width: 42px;  /* Define uma largura fixa */
+        height: 42px; /* Define uma altura fixa */
+        border-radius: 50%; /* Deixa o botão redondo */
+        padding: 0; /* Remove o padding interno */
+        position: relative; /* Necessário para o pseudo-elemento */
+    }
+
+    #tab-agenda #btnAgendarNovaConta i {
+        display: none; /* Esconde o ícone original do Font Awesome */
+    }
+
+    #tab-agenda #btnAgendarNovaConta::before {
+        content: '+'; /* Adiciona o símbolo de "+" */
+        font-size: 1.8rem; /* Tamanho do "+" */
+        font-weight: 300; /* Deixa o "+" mais fino e elegante */
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        line-height: 1; /* Garante alinhamento vertical perfeito */
+    }
+
 }
 
 @media (max-width: 414px) {
@@ -1602,4 +1664,18 @@ body {
         max-width: 45vh;
         max-height: 85vh;
     }
+    .fc-saldo-hero-title {
+    font-size: 0.8rem;
+    }
+
+    .fc-btn-atualizar {
+    font-size: 0.7rem;
+    }
+    
+    .fc-btn {
+        padding: 4px 6px;
+        font-size: 0.8rem;
+    }
+
+
 }

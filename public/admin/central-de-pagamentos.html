@@ -132,11 +132,20 @@
         <h2 class="cpg-section-title">Pagamento de Passagens (Vale-Transporte)</h2>
         
         <!-- Filtro de Empregado -->
-        <div class="cpg-form-group" style="max-width: 400px; margin-bottom: 20px;">
+        <div class="cpg-passagem-header-actions"> <!-- Novo container flexível -->
+        <div class="cpg-form-group" style="flex-grow: 1;"> <!-- O seletor agora ocupa o espaço disponível -->
             <label for="passagem-filtro-empregado">Selecione o Empregado</label>
             <select id="passagem-filtro-empregado" class="cpg-select" disabled>
                 <option value="">Carregando...</option>
             </select>
+            </div>
+            
+            <!-- <<< NOSSO NOVO CÓDIGO >>> -->
+            <div class="cpg-form-group" style="align-self: flex-end;">
+                <button id="passagem-btn-historico-recargas" class="cpg-btn cpg-btn-secundario">
+                    <i class="fas fa-history"></i> Histórico de Recargas
+                </button>
+            </div>
         </div>
 
         <!-- Layout principal com Calendário e Ações -->
@@ -144,9 +153,16 @@
             <!-- Coluna do Calendário -->
             <div class="cpg-calendario-container">
                 <div id="calendario-passagens"></div>
+
+            <div id="passagem-acoes-rapidas" class="cpg-passagem-acoes-rapidas hidden">
+                <button id="passagem-btn-marcar-falta" class="cpg-btn cpg-btn-aviso">
+                    <i class="fas fa-user-clock"></i> Marcar Dias Selecionados como Falta
+                </button>
+            </div>
+
                 <div class="cpg-legenda-calendario">
                     <span><i class="fas fa-circle" style="color: #27ae60;"></i> Pago</span>
-                    <span><i class="fas fa-circle" style="color: #f39c12;"></i> Falta</span>
+                    <span><i class="fas fa-circle" style="color: #f39c12;"></i> FNJ (Falta)</span>
                     <span><i class="fas fa-circle" style="color: #8e44ad;"></i> A Compensar</span>
                     <span><i class="fas fa-circle" style="color: #bdc3c7;"></i> Compensado</span>
                 </div>
@@ -162,17 +178,37 @@
                     </div>
 
                     <div id="passagem-area-pagamento" class="hidden">
-                        <hr style="margin: 20px 0;">
-                        <div class="cpg-form-group">
-                            <label for="passagem-conta-debito">Debitar da Conta Financeira*</label>
-                            <select id="passagem-conta-debito" class="cpg-select" required>
-                                <!-- Opções carregadas pelo JS -->
-                            </select>
-                        </div>
-                        <button id="passagem-btn-efetuar-pagamento" class="cpg-btn cpg-btn-primario" style="width: 100%; margin-top: 10px;">
-                            <i class="fas fa-check-circle"></i> Efetuar Pagamento
-                        </button>
+                    <hr style="margin: 20px 0;">
+                    
+                    <!-- Novo campo para a concessionária (informativo) -->
+                    <div class="cpg-form-group">
+                        <label>Concessionária</label>
+                        <input type="text" id="passagem-concessionaria-nome" class="cpg-input" readonly style="background-color: #ecf0f1; cursor: not-allowed;">
                     </div>
+
+                    <!-- Novo campo para a taxa, agora editável -->
+                    <div class="cpg-form-group">
+                        <label for="passagem-taxa-valor">Taxa da Concessionária (R$)</label>
+                        <input type="number" id="passagem-taxa-valor" class="cpg-input" placeholder="0.00" step="0.01" min="0">
+                    </div>
+
+                    <!-- Novo campo para o total geral -->
+                    <div class="cpg-form-group">
+                        <label>Valor Total do Pagamento (VT + Taxa)</label>
+                        <input type="text" id="passagem-valor-total" class="cpg-input" readonly style="font-weight: bold; background-color: #ecf0f1; cursor: not-allowed;">
+                    </div>
+                    
+                    <div class="cpg-form-group">
+                        <label for="passagem-conta-debito">Debitar da Conta Financeira*</label>
+                        <select id="passagem-conta-debito" class="cpg-select" required>
+                            <!-- Opções carregadas pelo JS -->
+                        </select>
+                    </div>
+                    <button id="passagem-btn-efetuar-pagamento" class="cpg-btn cpg-btn-primario" style="width: 100%; margin-top: 10px;">
+                        <i class="fas fa-check-circle"></i> Efetuar Pagamento
+                    </button>
+                </div>
+
                 </div>
             </div>
         </div>

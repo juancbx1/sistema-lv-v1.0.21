@@ -23,9 +23,12 @@ const formatCurrency = (value) => {
 // --- Variáveis Globais ---
 let cachedUsuarios = [];
 let cachedContasFinanceiro = [];
+let cachedConcessionariasVT = [];
 let historicoComissoesPagas = [];
 let calendarioObj = null; // Armazenará a instância do FullCalendar
 let diasSelecionados = new Map(); // Armazenará os dias selecionados para pagamento
+let usuarioLogado = null;
+
 
 
 // --- Funções de UI e Lógica ---
@@ -220,9 +223,7 @@ function renderizarResultadoComissao(dados) {
             </div>
         `;
     }
-    // Se não foi pago e não há comissão, a área de ação simplesmente não é renderizada.
-
-    // <<< CORPO DA TABELA RESTAURADO AQUI >>>
+    
     const tabelaBodyHtml = detalhesComissao.semanas.map(semana => `
         <tr>
             <td>${semana.periodo}</td>
@@ -270,7 +271,14 @@ function renderizarResultadoComissao(dados) {
     // Adiciona o listener de evento ao botão de pagamento, se ele existir
     const btnPagar = document.getElementById('comissao-btn-efetuar-pagamento');
     if (btnPagar) {
-        btnPagar.addEventListener('click', () => handleEfetuarPagamentoComissao(dados));
+        btnPagar.addEventListener('click', () => handleEfetuarPagamentoComissao(dadosDoCalculo));
+        
+        // <<<< APLICA A VERIFICAÇÃO DE PERMISSÃO AQUI >>>>
+        verificarPermissaoEConfigurarBotao(
+            'comissao-btn-efetuar-pagamento', 
+            'permitir-pagar-comissao', 
+            'Você não tem permissão para pagar comissões.'
+        );
     }
 }
 
@@ -510,6 +518,9 @@ function inicializarCalendarioParaEmpregado() {
             center: 'title',
             right: ''
         },
+        buttonText: {
+            today: 'Hoje'
+        },
         selectable: true,
         
         // <<< A MUDANÇA PRINCIPAL ESTÁ AQUI >>>
@@ -534,10 +545,40 @@ function inicializarCalendarioParaEmpregado() {
             }
         },
 
-        dateClick: function(info) {
-            if (calendarioObj.getEventById(info.dateStr)) {
-                return;
+        dateClick: async function(info) {
+            const evento = calendarioObj.getEventById(info.dateStr);
+            const empregadoId = document.getElementById('passagem-filtro-empregado').value;
+
+            // CASO 1: O dia já tem um evento.
+            if (evento) {
+                // Se for FNJ, pergunta se quer remover.
+                if (evento.extendedProps.status === 'FALTA_NAO_JUSTIFICADA') {
+                    const confirmado = await mostrarPopupConfirmacao('Deseja remover o registro de falta para este dia?');
+                    if (confirmado) {
+                        try {
+                            const spinnerOverlay = document.getElementById('cpg-global-spinner');
+                            spinnerOverlay.style.display = 'flex';
+                            await fetchAPI('/api/pagamentos/remover-registro-dia', {
+                                method: 'POST',
+                                body: JSON.stringify({ usuario_id: empregadoId, data: info.dateStr })
+                            });
+                            mostrarPopupPagamentos('Falta removida com sucesso.', 'sucesso');
+                            calendarioObj.refetchEvents();
+                        } catch (error) {
+                            mostrarPopupPagamentos(`Erro ao remover falta: ${error.message}`, 'erro');
+                        } finally {
+                            const spinnerOverlay = document.getElementById('cpg-global-spinner');
+                            spinnerOverlay.style.display = 'none';
+                        }
+                    }
+                } else {
+                    // Se for PAGO ou outro status, informa que precisa usar o estorno do histórico.
+                    mostrarPopupPagamentos(`Este dia está marcado como "${evento.title}". Para estornar um pagamento, use o "Histórico de Recargas".`, 'aviso');
+                }
+                return; // Impede a seleção do dia.
             }
+
+            // CASO 2: O dia está em branco, lógica de seleção normal.
             const cell = info.dayEl;
             if (diasSelecionados.has(info.dateStr)) {
                 diasSelecionados.delete(info.dateStr);
@@ -554,30 +595,207 @@ function inicializarCalendarioParaEmpregado() {
 }
 
 /**
- * Atualiza a UI do "carrinho" de pagamento de passagens.
+ * Atualiza a UI do "carrinho" de pagamento de passagens, incluindo o cálculo da taxa.
  */
 function atualizarResumoPagamento() {
     const resumoContainer = document.getElementById('passagem-resumo-pagamento');
     const areaPagamento = document.getElementById('passagem-area-pagamento');
+    const acoesRapidasEl = document.getElementById('passagem-acoes-rapidas'); 
     const filtroEmpregadoEl = document.getElementById('passagem-filtro-empregado');
     const optionSelecionada = filtroEmpregadoEl.options[filtroEmpregadoEl.selectedIndex];
-    const valorDiario = parseFloat(optionSelecionada.dataset.valorPassagem) || 0;
+    
+    const empregadoId = parseInt(filtroEmpregadoEl.value);
+    const empregado = cachedUsuarios.find(u => u.id === empregadoId);
 
-    if (diasSelecionados.size === 0) {
+    // Campos da área de pagamento
+    const concessionariaNomeEl = document.getElementById('passagem-concessionaria-nome');
+    const taxaValorEl = document.getElementById('passagem-taxa-valor');
+    const valorTotalEl = document.getElementById('passagem-valor-total');
+    const contaDebitoEl = document.getElementById('passagem-conta-debito');
+    
+    // Preenche as contas de débito (uma única vez)
+    if (contaDebitoEl.options.length <= 1) { // Evita repreencher
+        contaDebitoEl.innerHTML = '<option value="">Selecione a conta...</option>';
+        cachedContasFinanceiro.forEach(c => {
+            contaDebitoEl.innerHTML += `<option value="${c.id}">${c.nome_conta}</option>`;
+        });
+    }
+
+    if (diasSelecionados.size === 0 || !empregado) {
         resumoContainer.innerHTML = `<p class="cpg-resumo-placeholder">Clique nos dias do calendário para selecionar as passagens a pagar.</p>`;
         areaPagamento.classList.add('hidden');
+        acoesRapidasEl.classList.add('hidden');
         return;
     }
 
+    const valorDiario = parseFloat(empregado.valor_passagem_diaria) || 0;
     const totalDias = diasSelecionados.size;
-    const totalPagar = totalDias * valorDiario;
+    const totalPassagens = totalDias * valorDiario;
 
+    // Lógica da Concessionária e Taxa
+    let taxaEstimada = 0;
+    let nomeConcessionaria = 'N/A';
+    if (empregado.concessionarias_vt && empregado.concessionarias_vt.length > 0) {
+        const idConcessionaria = empregado.concessionarias_vt[0]; // Pega a primeira vinculada
+        const concessionaria = cachedConcessionariasVT.find(c => c.id === idConcessionaria);
+        if (concessionaria) {
+            nomeConcessionaria = concessionaria.nome;
+            const taxaPercentual = parseFloat(concessionaria.taxa_recarga_percentual) || 0;
+            taxaEstimada = totalPassagens * (taxaPercentual / 100);
+        }
+    }
+    
+    // Atualiza o resumo no topo
     resumoContainer.innerHTML = `
         <div class="cpg-resumo-item"><span>Dias selecionados:</span> <strong>${totalDias}</strong></div>
-        <div class="cpg-resumo-item"><span>Valor diário da passagem:</span> <strong>${formatCurrency(valorDiario)}</strong></div>
-        <div class="cpg-resumo-item cpg-resumo-total"><span>Total a Pagar:</span> <span>${formatCurrency(totalPagar)}</span></div>
+        <div class="cpg-resumo-item"><span>Valor diário (VT):</span> <strong>${formatCurrency(valorDiario)}</strong></div>
+        <div class="cpg-resumo-item cpg-resumo-total"><span>Subtotal (Passagens):</span> <span>${formatCurrency(totalPassagens)}</span></div>
     `;
+
+    // Atualiza os campos na área de pagamento
+    concessionariaNomeEl.value = nomeConcessionaria;
+    taxaValorEl.value = taxaEstimada.toFixed(2); // Preenche a taxa estimada
+
+    // Função para recalcular o total quando a taxa for editada
+    const recalcularTotal = () => {
+        const taxaFinal = parseFloat(taxaValorEl.value) || 0;
+        const totalGeral = totalPassagens + taxaFinal;
+        valorTotalEl.value = formatCurrency(totalGeral);
+    };
+
+    // Adiciona o listener para o input da taxa
+    taxaValorEl.removeEventListener('input', recalcularTotal); // Remove listener antigo para evitar duplicidade
+    taxaValorEl.addEventListener('input', recalcularTotal);
+
+    // Calcula e exibe o total inicial
+    recalcularTotal();
+    
     areaPagamento.classList.remove('hidden');
+    acoesRapidasEl.classList.remove('hidden'); 
+}
+
+async function handleMarcarFalta() {
+    const filtroEmpregadoEl = document.getElementById('passagem-filtro-empregado');
+    const empregadoId = parseInt(filtroEmpregadoEl.value);
+    
+    if (!empregadoId || diasSelecionados.size === 0) {
+        mostrarPopupPagamentos("Selecione um empregado e os dias no calendário.", 'erro');
+        return;
+    }
+
+    const datas = Array.from(diasSelecionados.keys());
+
+    const confirmado = await mostrarPopupConfirmacao(
+        `Confirma o registro de ${datas.length} falta(s) para este empregado?`
+    );
+    if (!confirmado) return;
+
+    const btn = document.getElementById('passagem-btn-marcar-falta');
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Registrando...`;
+
+    try {
+        const resultado = await fetchAPI('/api/pagamentos/registrar-falta', {
+        method: 'POST',
+        body: JSON.stringify({
+            usuario_id: empregadoId,
+            datas: datas
+        })
+        });
+        
+        mostrarPopupPagamentos("Faltas registradas com sucesso!", 'sucesso');
+        
+        // Limpa e atualiza a UI
+        diasSelecionados.clear();
+        document.querySelectorAll('.fc-day-selected').forEach(cell => cell.classList.remove('fc-day-selected'));
+        atualizarResumoPagamento();
+        if (calendarioObj) {
+            calendarioObj.refetchEvents();
+        }
+
+    } catch (error) {
+        mostrarPopupPagamentos(`Erro ao registrar faltas: ${error.message}`, 'erro');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fas fa-user-clock"></i> Marcar Dias Selecionados como Falta`;
+    }
+}
+
+async function handleEfetuarPagamentoPassagem() {
+    // 1. Coleta e Validação dos dados
+    const filtroEmpregadoEl = document.getElementById('passagem-filtro-empregado');
+    const empregadoId = parseInt(filtroEmpregadoEl.value);
+    const empregado = cachedUsuarios.find(u => u.id === empregadoId);
+
+    const contaDebitoId = parseInt(document.getElementById('passagem-conta-debito').value);
+    const taxaValor = parseFloat(document.getElementById('passagem-taxa-valor').value);
+    
+    if (!empregadoId || !empregado) { mostrarPopupPagamentos("Selecione um empregado válido.", 'erro'); return; }
+    if (diasSelecionados.size === 0) { mostrarPopupPagamentos("Selecione pelo menos um dia no calendário para pagar.", 'erro'); return; }
+    if (isNaN(taxaValor) || taxaValor < 0) { mostrarPopupPagamentos("O valor da taxa é inválido.", 'erro'); return; }
+    if (!contaDebitoId) { mostrarPopupPagamentos("Selecione a conta financeira para o débito.", 'erro'); return; }
+    
+    // 2. Cálculo dos valores
+    const valorDiario = parseFloat(empregado.valor_passagem_diaria) || 0;
+    const totalPassagens = diasSelecionados.size * valorDiario;
+    const totalAPagar = totalPassagens + taxaValor;
+    const datasPagas = Array.from(diasSelecionados.keys()); // Pega as datas do Map
+
+    // 3. Montagem do Payload
+    const payload = {
+        calculo: {
+            detalhes: {
+                funcionario: { id: empregado.id, nome: empregado.nome },
+                // Usamos a data atual para criar uma referência
+                ciclo: { nome: `Recarga VT - ${new Date().toLocaleDateString('pt-BR')}` },
+                tipoPagamento: 'VALE_TRANSPORTE'
+            },
+            proventos: {
+                // O valor total entra aqui
+                valeTransporte: totalAPagar 
+            },
+            totais: {
+                totalLiquidoAPagar: totalAPagar
+            }
+        },
+        id_conta_debito: contaDebitoId,
+        datas_pagas: datasPagas,
+        valor_passagem_diaria: valorDiario
+    };
+
+    // Mostra um popup de confirmação antes de enviar
+    const confirmado = await mostrarPopupConfirmacao(
+        `Confirma o pagamento de ${formatCurrency(totalAPagar)} para ${empregado.nome}?<br><br>
+         Isso registrará ${datasPagas.length} dias como pagos e lançará a despesa no financeiro.`
+    );
+    if (!confirmado) return;
+
+    // 4. Envio para a API (a ser implementado)
+    const btnPagar = document.getElementById('passagem-btn-efetuar-pagamento');
+    btnPagar.disabled = true;
+    btnPagar.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Processando...`;
+
+    try {
+        const resultado = await fetchAPI('/api/pagamentos/efetuar', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+        });
+
+        mostrarPopupPagamentos("Pagamento de passagens efetuado com sucesso!", 'sucesso');
+        
+        // Limpa a seleção e atualiza a UI
+        diasSelecionados.clear();
+        atualizarResumoPagamento();
+        if (calendarioObj) {
+            calendarioObj.refetchEvents(); // Recarrega os eventos do calendário!
+        }
+
+    } catch (error) {
+        mostrarPopupPagamentos(`Erro ao processar pagamento: ${error.message}`, 'erro');
+    } finally {
+        btnPagar.disabled = false;
+        btnPagar.innerHTML = `<i class="fas fa-check-circle"></i> Efetuar Pagamento`;
+    }
 }
 
 async function abrirModalHistorico() {
@@ -640,6 +858,164 @@ async function abrirModalHistorico() {
     }
 }
 
+async function abrirModalHistoricoRecargas() {
+    const filtroEmpregadoEl = document.getElementById('passagem-filtro-empregado');
+    const empregadoId = parseInt(filtroEmpregadoEl.value);
+
+    if (!empregadoId) {
+        mostrarPopupPagamentos("Por favor, selecione um empregado para ver o histórico.", 'aviso');
+        return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'cpg-modal-overlay';
+    overlay.innerHTML = `
+        <div class="cpg-modal-content" style="max-width: 700px;">
+            <div class="cpg-modal-header">
+                <h2>Histórico de Recargas de VT</h2>
+                <button class="cpg-modal-close-btn">×</button>
+            </div>
+            <div class="cpg-modal-body">
+                <div id="historico-vt-spinner" class="cpg-spinner"><span>Carregando histórico...</span></div>
+                <div id="historico-vt-container"></div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const fecharModal = () => document.body.removeChild(overlay);
+    overlay.querySelector('.cpg-modal-close-btn').addEventListener('click', fecharModal);
+    overlay.addEventListener('click', e => { if (e.target === overlay) fecharModal(); });
+
+    try {
+        const historico = await fetchAPI(`/api/pagamentos/historico-vt?usuario_id=${empregadoId}`);
+        const container = overlay.querySelector('#historico-vt-container');
+        
+        if (historico.length === 0) {
+            container.innerHTML = '<p style="text-align: center; padding: 20px 0;">Nenhuma recarga de VT encontrada para este empregado.</p>';
+        } else {
+            // <<<< LÓGICA DE PERMISSÃO INTEGRADA NA GERAÇÃO DO HTML >>>>
+            const podeEstornar = usuarioLogado && usuarioLogado.permissoes.includes('permitir-estornar-passagens');
+
+            container.innerHTML = `
+                <table class="cpg-tabela-detalhes">
+                    <thead>
+                        <tr>
+                            <th>Data da Recarga</th>
+                            <th>Descrição</th>
+                            <th style="text-align: right;">Valor Pago</th>
+                            <th style="text-align: center;">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${historico.map(recarga => {
+                            // Gera o HTML do botão baseado na permissão
+                            const botaoEstornarHtml = `
+                                <button class="cpg-btn cpg-btn-aviso" 
+                                        data-recarga-id="${recarga.id}" 
+                                        style="padding: 5px 10px; font-size: 0.8rem; ${!podeEstornar ? 'background-color: #dce4e6; border-color: #dce4e6; cursor: not-allowed;' : ''}"
+                                        ${!podeEstornar ? 'disabled title="Você não tem permissão para estornar passagens."' : ''}>
+                                    <i class="fas fa-undo"></i> Estornar
+                                </button>`;
+
+                            return `
+                                <tr>
+                                    <td>${new Date(recarga.data_pagamento).toLocaleDateString('pt-BR')}</td>
+                                    <td>${recarga.descricao}</td>
+                                    <td style="text-align: right;">${formatCurrency(recarga.valor_liquido_pago)}</td>
+                                    <td style="text-align: center;">
+                                        ${recarga.estornado_em 
+                                            ? `<span style="color: #c0392b; font-weight: bold;">Estornado</span>`
+                                            : botaoEstornarHtml
+                                        }
+                                    </td>
+                                </tr>
+                            `
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        // Adiciona o event listener para todos os botões de estorno
+        container.querySelectorAll('button[data-recarga-id]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                // Se o botão estiver desabilitado (sem permissão), mostra o popup.
+                if (btn.disabled) {
+                    e.preventDefault();
+                    mostrarPopupPagamentos('Você não tem permissão para estornar passagens.', 'erro');
+                    return;
+                }
+                const recargaId = btn.dataset.recargaId;
+                handleEstornarRecarga(recargaId, fecharModal);
+            });
+        });
+
+    } catch (error) {
+        overlay.querySelector('#historico-vt-container').innerHTML = `<p style="color: red;">Erro ao carregar histórico: ${error.message}</p>`;
+    } finally {
+        overlay.querySelector('#historico-vt-spinner').style.display = 'none';
+    }
+}
+
+async function handleEstornarRecarga(recargaId, callbackFecharModal) {
+    const confirmado = await mostrarPopupConfirmacao(
+        "Você tem certeza que deseja estornar os dias desta recarga?<br><br>Esta ação removerá os registros de dias pagos e não poderá ser desfeita. O lançamento financeiro deverá ser tratado manualmente."
+    );
+
+    if (!confirmado) return;
+    
+    // Mostra o que enviaremos para a API
+    console.log(`Pronto para estornar a recarga com ID de histórico: ${recargaId}`);
+    
+    // Simulação de chamada de API
+    const spinnerOverlay = document.getElementById('cpg-global-spinner');
+    spinnerOverlay.style.display = 'flex';
+    
+    try {
+        const resultado = await fetchAPI('/api/pagamentos/estornar-vt', {
+            method: 'POST',
+            body: JSON.stringify({ recarga_id: recargaId })
+        });
+
+        mostrarPopupPagamentos("Recarga estornada com sucesso! O calendário será atualizado.", 'sucesso');
+        
+        // Fecha o modal e atualiza o calendário
+        if (callbackFecharModal) callbackFecharModal();
+        if (calendarioObj) calendarioObj.refetchEvents();
+
+    } catch (error) {
+        mostrarPopupPagamentos(`Erro ao estornar recarga: ${error.message}`, 'erro');
+    } finally {
+        spinnerOverlay.style.display = 'none';
+    }
+}
+
+function verificarPermissaoEConfigurarBotao(idBotao, permissaoNecessaria, mensagemSemPermissao) {
+    const botao = document.getElementById(idBotao);
+    if (!botao) return;
+
+    if (usuarioLogado && usuarioLogado.permissoes.includes(permissaoNecessaria)) {
+        // Usuário TEM a permissão, garante que o botão está normal
+        botao.disabled = false;
+        botao.style.cursor = 'pointer';
+        botao.title = ''; // Remove a dica de "sem permissão"
+    } else {
+        // Usuário NÃO TEM a permissão
+        botao.disabled = true;
+        botao.style.cursor = 'not-allowed';
+        botao.style.backgroundColor = '#dce4e6'; // Cor cinza claro
+        botao.title = 'Você não tem permissão para executar esta ação.';
+
+        // Adiciona um listener para mostrar popup se o usuário tentar clicar
+        botao.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation(); // Impede outros listeners de serem acionados
+            mostrarPopupPagamentos(mensagemSemPermissao || 'Você não tem permissão para executar esta ação.', 'erro');
+        }, true); // O 'true' captura o evento na fase de "captura", antes de outros listeners
+    }
+}
+
 // --- Inicialização da Página ---
 document.addEventListener('DOMContentLoaded', async () => {
     // Esconde o conteúdo principal e mostra o spinner global
@@ -650,15 +1026,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     try {
         await verificarAutenticacao('central-de-pagamentos.html', ['acessar-central-pagamentos']);
+        usuarioLogado = await fetchAPI('/api/usuarios/me');
 
-        const [usuarios, configFinanceiro, historico] = await Promise.all([
+        const [usuarios, configFinanceiro, historico, concessionarias] = await Promise.all([
             fetchAPI('/api/usuarios'),
             fetchAPI('/api/financeiro/configuracoes'),
-            fetchAPI('/api/pagamentos/historico')
+            fetchAPI('/api/pagamentos/historico'),
+            fetchAPI('/api/financeiro/concessionarias-vt')
         ]);
         
         cachedUsuarios = usuarios;
         cachedContasFinanceiro = configFinanceiro.contas;
+        cachedConcessionariasVT = concessionarias;
         historicoComissoesPagas = historico;
 
         preencherFiltrosComissao();
@@ -732,4 +1111,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (filtroEmpregadoPassagem) {
         filtroEmpregadoPassagem.addEventListener('change', inicializarCalendarioParaEmpregado);
     }
+
+     const btnEfetuarPagamentoPassagem = document.getElementById('passagem-btn-efetuar-pagamento');
+    if (btnEfetuarPagamentoPassagem) {
+        btnEfetuarPagamentoPassagem.addEventListener('click', handleEfetuarPagamentoPassagem);
+    }
+
+    const btnMarcarFalta = document.getElementById('passagem-btn-marcar-falta');
+    if (btnMarcarFalta) {
+        btnMarcarFalta.addEventListener('click', handleMarcarFalta);
+    }
+
+    const btnHistoricoRecargas = document.getElementById('passagem-btn-historico-recargas');
+    if (btnHistoricoRecargas) {
+        btnHistoricoRecargas.addEventListener('click', abrirModalHistoricoRecargas);
+    }
+
+    verificarPermissaoEConfigurarBotao('bonus-btn-conceder', 'permitir-conceder-bonus');
+    verificarPermissaoEConfigurarBotao('passagem-btn-efetuar-pagamento', 'permitir-pagar-passagens');
+verificarPermissaoEConfigurarBotao('passagem-btn-marcar-falta', 'permitir-lancar-falta-nao-justificada');
 });
