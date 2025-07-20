@@ -645,21 +645,18 @@
 /* Celulares Pequenos (iPhone SE) */
 @media (max-width: 399px) {
     :root { 
-        --ml-largura-menu: 100%; /* Menu ocupa a tela toda */
-        --ml-sombra-menu: none;
+        --ml-largura-menu: calc(100vw - 70px); 
     }
     .hamburger-menu.active {
-        /* Esconde o botão de fechar quando o menu está aberto para não ficar estranho */
-        display: none;
+        left: calc(var(--ml-largura-menu) + 15px); 
     }
 
     .ml-modal-container {
-        width: 95%; /* Ocupa quase toda a largura da tela */
+        width: 95%; 
         max-height: 90vh;
         overflow-y: auto;
     }
     .ml-avatar-grid {
-        /* Força 2 colunas para não ficar muito pequeno */
         grid-template-columns: repeat(2, 1fr);
         gap: 15px;
     }
