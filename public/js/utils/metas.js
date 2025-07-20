@@ -5,16 +5,19 @@ const metasConfig = {
     // Metas para o tipo 'costureira'
     costureira: {
         1: [
-            { pontos_meta: 2175, valor: 40, descricao: "Meta Bronze" },
-            { pontos_meta: 2375, valor: 50, descricao: "Meta Prata" },
-            { pontos_meta: 2575, valor: 70, descricao: "Meta Ouro" },
-            { pontos_meta: 3075, valor: 110, descricao: "Meta Diamante" }
+            { pontos_meta: 2200, valor: 50, descricao: "Meta Bronze" },
+            { pontos_meta: 2400, valor: 70, descricao: "Meta Prata" },
+            { pontos_meta: 2975, valor: 100, descricao: "Meta Ouro" },
+            { pontos_meta: 3650, valor: 110, descricao: "Meta Diamante" },
+            { pontos_meta: 4050, valor: 130, descricao: "Meta Platina" }
+
         ],
         2: [
-            { pontos_meta: 2050, valor: 50, descricao: "Meta Bronze" },
-            { pontos_meta: 2200, valor: 70, descricao: "Meta Prata" },
-            { pontos_meta: 2400, valor: 90, descricao: "Meta Ouro" },
-            { pontos_meta: 2975, valor: 130, descricao: "Meta Diamante" }
+            { pontos_meta: 2200, valor: 70, descricao: "Meta Bronze" },
+            { pontos_meta: 2400, valor: 90, descricao: "Meta Prata" },
+            { pontos_meta: 2975, valor: 130, descricao: "Meta Ouro" },
+            { pontos_meta: 3575, valor: 150, descricao: "Meta Diamante" },
+            { pontos_meta: 4300, valor: 200, descricao: "Meta Platina" }
         ],
         3: [
             { pontos_meta: 1900, valor: 45, descricao: "Meta Bronze" },
