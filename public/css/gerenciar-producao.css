@@ -403,61 +403,52 @@ body.autenticado {
 }
 
 /* Definir larguras relativas para as colunas */
-#tabelaProducoes th:nth-child(1), /* ID */
+#tabelaProducoes th:nth-child(1),
 #tabelaProducoes td:nth-child(1) {
-    width: 8%;
+    width: 12%; /* Feito por */
+    white-space: normal; word-break: break-word;
 }
-
-#tabelaProducoes th:nth-child(2), /* Funcionário */
+#tabelaProducoes th:nth-child(2),
 #tabelaProducoes td:nth-child(2) {
-    width: 15%;
-    white-space: normal;
-    word-break: break-word;
+    width: 12%; /* Produto */
+    white-space: normal; word-break: break-word;
 }
-
-#tabelaProducoes th:nth-child(3), /* Produto */
+#tabelaProducoes th:nth-child(3),
 #tabelaProducoes td:nth-child(3) {
-    width: 12%;
-    white-space: normal;
-    word-break: break-word;
+    width: 10%; /* Variação */
 }
-
-#tabelaProducoes th:nth-child(4), /* Proc./Máq. */
+#tabelaProducoes th:nth-child(4),
 #tabelaProducoes td:nth-child(4) {
-    width: 15%;
-    white-space: normal;
-    word-break: break-word;
+    width: 13%; /* Proc./Máq. */
+    white-space: normal; word-break: break-word;
 }
-
-#tabelaProducoes th:nth-child(5), /* OP */
+#tabelaProducoes th:nth-child(5),
 #tabelaProducoes td:nth-child(5) {
-    width: 8%;
+    width: 6%; /* OP */
 }
-
-#tabelaProducoes th:nth-child(6), /* Qtde */
+#tabelaProducoes th:nth-child(6),
 #tabelaProducoes td:nth-child(6) {
-    width: 6%;
+    width: 5%; /* Qtde */
 }
-
-#tabelaProducoes th:nth-child(7), /* Data/Hora */
+#tabelaProducoes th:nth-child(7), /* << Pts */
 #tabelaProducoes td:nth-child(7) {
-    width: 14%;
-    white-space: normal;
-    word-break: break-word;
+    width: 7%;
 }
-
-#tabelaProducoes th:nth-child(8), /* Assinou? */
+#tabelaProducoes th:nth-child(8), /* << Data/Hora */
 #tabelaProducoes td:nth-child(8) {
-    width: 6%;
+    width: 11%;
+    white-space: normal; word-break: break-word;
 }
-
-#tabelaProducoes th:nth-child(9), /* Por */
+#tabelaProducoes th:nth-child(9), /* << Assinou? */
 #tabelaProducoes td:nth-child(9) {
-    width: 8%;
+    width: 5%;
 }
-
-#tabelaProducoes th:nth-child(10), /* Ação */
+#tabelaProducoes th:nth-child(10), /* << Por */
 #tabelaProducoes td:nth-child(10) {
+    width: 9%;
+}
+#tabelaProducoes th:nth-child(11), /* << Ação */
+#tabelaProducoes td:nth-child(11) {
     width: 10%;
 }
 
@@ -638,6 +629,14 @@ body.autenticado {
 }
 
 
+/* Estilo para mostrar o valor antigo dos pontos após edição */
+.pontos-antigos {
+    color: #7f8c8d; /* Cinza */
+    text-decoration: line-through;
+    font-size: 0.9em;
+    margin-left: 8px; /* Espaço entre o valor novo e o antigo */
+}
+
 /* Ajustes gerais para telas menores TIPO IPAD (aplicado a todos os breakpoints mobile) */
 @media (max-width: 1024px) {
     .container {
@@ -783,7 +782,7 @@ body.autenticado {
     }
 
     /* Ajusta os botões de ação */
-    #tabelaProducoes td:nth-child(10) {
+    #tabelaProducoes td:nth-child(11) {
         display: flex;
         gap: 10px;
         justify-content: space-between;
@@ -794,7 +793,7 @@ body.autenticado {
         padding: 5px 8px;
     }
 
-    #tabelaProducoes td:nth-child(10):before {
+    #tabelaProducoes td:nth-child(11):before { /* <<< E AQUI TAMBÉM */
         display: none; /* Remove o rótulo "Ação" para os botões */
     }
 

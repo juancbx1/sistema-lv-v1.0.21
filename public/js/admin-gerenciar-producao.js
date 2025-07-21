@@ -11,6 +11,18 @@ let currentPage = 1;
 const registrosPorPagina = 10;
 
 /**
+ * Retorna a data local no formato YYYY-MM-DD, evitando problemas com fuso horário.
+ * @param {Date} date - O objeto de data a ser formatado. Padrão é a data atual.
+ * @returns {string} A data formatada como "YYYY-MM-DD".
+ */
+function getLocalDateString(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+/**
  * Exibe um popup customizado na tela.
  * @param {string} mensagem - O texto a ser exibido.
  * @param {string} tipo - 'sucesso', 'erro', ou 'aviso' para estilização.
@@ -176,8 +188,12 @@ function aplicarFiltros(page = 1) {
     const filtroAssinatura = document.getElementById('filtroAssinatura')?.value || '';
 
     const filteredProducoes = allProducoes.filter(p => {
-        const dataProducao = p.data.substring(0, 10);
-        const matchesData = !filtroData || dataProducao === filtroData;
+        // 1. Criamos um objeto Date a partir da string de data UTC do registro.
+        const dataProducaoObj = new Date(p.data);
+        // 2. Usamos nossa função auxiliar para obter a data no formato YYYY-MM-DD LOCAL.
+        const dataProducaoLocal = getLocalDateString(dataProducaoObj);
+        // 3. Comparamos a data LOCAL do registro com a data LOCAL do filtro.
+        const matchesData = !filtroData || dataProducaoLocal === filtroData;
         const matchesFuncionario = !filtroFuncionario || p.funcionario === filtroFuncionario;
         const matchesMaquina = !filtroMaquina || p.maquina === filtroMaquina;
         const matchesProcesso = !filtroProcesso || p.processo === filtroProcesso;
@@ -192,6 +208,7 @@ function aplicarFiltros(page = 1) {
     renderizarTabela(filteredProducoes);
 }
 
+
 /** Renderiza a tabela e a paginação com base nos dados filtrados. */
 function renderizarTabela(producoesFiltradas) {
     const corpoTabela = document.getElementById('corpoTabelaProducoes');
@@ -201,6 +218,7 @@ function renderizarTabela(producoesFiltradas) {
 
     if (!corpoTabela || !tabelaContainer || !noRecordsMessage) return;
 
+    // Limpa o modo de edição de qualquer linha que possa ter ficado aberta
     document.querySelectorAll('.edit-mode').forEach(row => desativarModoEdicao(row));
 
     if (producoesFiltradas.length === 0) {
@@ -225,6 +243,9 @@ function renderizarTabela(producoesFiltradas) {
         tr.dataset.id = p.id;
         tr.dataset.opNumero = p.op_numero;
 
+        // Convertendo pontos para número para usar toFixed() com segurança
+        const pontos = Number(p.pontos_gerados || 0);
+
         tr.innerHTML = `
             <td data-label="Feito Por:" data-field="funcionario">${p.funcionario}</td>
             <td data-label="Produto">${p.produto}</td>
@@ -232,9 +253,10 @@ function renderizarTabela(producoesFiltradas) {
             <td data-label="Proc./Máq.">${p.processo} / ${p.maquina}</td>
             <td data-label="OP">${p.op_numero || '-'}</td>
             <td data-label="Qtde" data-field="quantidade">${p.quantidade}</td>
+            <td data-label="Pts" data-field="pontos">${pontos.toFixed(2)}</td>
             <td data-label="Data/Hora">${p.dataHoraFormatada} ${p.edicoes > 0 ? `<span class="edicao-info">(E${p.edicoes}x)</span>`: ''}</td>
-            <td data-label="Assinou?">${p.assinada ? 'Sim' : 'Não'}</td>
-            <td data-label="Por">${p.lancado_por || 'Desconhecido'}</td>
+            <td data-label="Assinado">${p.assinada ? 'Sim' : 'Não'}</td>
+            <td data-label="Retirado Por">${p.lancado_por || 'Desconhecido'}</td>
             <td data-label="Ação">
                 <div class="botoes-acao">
                     ${permissoes.includes('editar-registro-producao') ? '<button class="btn-editar-registro">Editar</button>' : ''}
@@ -334,22 +356,25 @@ function desativarModoEdicao(tr, dadosNovos = null) {
     tr.classList.remove('edit-mode');
     const id = tr.dataset.id;
     
-    // Se recebemos dados novos (após salvar), usamos eles.
-    // Senão, buscamos os dados originais no nosso array em memória.
     const producao = dadosNovos || allProducoes.find(p => p.id === id);
     if (!producao) {
         console.error(`Produção com ID ${id} não encontrada para restaurar a linha.`);
-        tr.remove(); // Remove a linha se os dados sumiram por algum motivo
+        tr.remove();
         return;
     }
+
+    const pontos = Number(producao.pontos_gerados || 0);
 
     // Restaura as células de dados para texto simples
     tr.querySelector('[data-field="funcionario"]').textContent = producao.funcionario;
     tr.querySelector('[data-field="quantidade"]').textContent = producao.quantidade;
+    // <<< MUDANÇA: Restaura a célula de pontos, removendo qualquer flair visual >>>
+    tr.querySelector('[data-field="pontos"]').innerHTML = pontos.toFixed(2);
 
     // Restaura os botões de ação originais
     const tdAcao = tr.querySelector('[data-label="Ação"]');
     if (tdAcao) {
+        // A contagem de colunas no mobile usa a quantidade de `<td>` com `data-label`
         tdAcao.innerHTML = `
             <div class="botoes-acao">
                 ${permissoes.includes('editar-registro-producao') ? '<button class="btn-editar-registro">Editar</button>' : ''}
@@ -385,39 +410,47 @@ async function salvarEdicao(tr) {
             }),
         });
 
-        if (!response.ok) throw new Error('Falha ao salvar alterações na API.');
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Falha ao salvar na API' }));
+            throw new Error(errorData.error || 'Falha ao salvar alterações na API.');
+        }
         
         const producaoAtualizada = await response.json();
+        const pontosOriginais = Number(producaoOriginal.pontos_gerados || 0);
+        const pontosNovos = Number(producaoAtualizada.pontos_gerados || 0);
 
+        // Atualiza os dados em memória
         const index = allProducoes.findIndex(p => p.id === id);
         if (index !== -1) {
-            // ==========================================================
-            // >> CORREÇÃO AQUI <<
-            // ==========================================================
-            // Mantemos todas as propriedades que já tínhamos calculado no frontend
-            // (como 'variacao' e 'feitoPor') e sobrescrevemos apenas as que
-            // a API retornou (como 'quantidade', 'funcionario', 'edicoes').
             allProducoes[index] = {
-                ...allProducoes[index], // <-- Mantém o objeto antigo como base
-                ...producaoAtualizada,  // <-- Sobrescreve com os dados novos da API
-                // Recalculamos a data formatada pois a API não retorna isso
+                ...allProducoes[index],
+                ...producaoAtualizada,
                 dataHoraFormatada: new Date(producaoAtualizada.data).toLocaleString('pt-BR'),
             };
         }
 
-        await verificarEAtualizarStatusOP(producaoAtualizada.op_numero);
-        
-        mostrarPopup('Alterações salvas com sucesso!', 'sucesso');
-         // ==========================================================
-        // >> Passar os dados atualizados <<
-        // ==========================================================
-        desativarModoEdicao(tr, allProducoes[index]); // Passamos o objeto totalmente atualizado
+        // Restaura a linha para o modo de visualização com os novos dados
+        desativarModoEdicao(tr, allProducoes[index]);
 
+        // <<< MUDANÇA: Adiciona o feedback visual se os pontos mudaram >>>
+        if (pontosNovos !== pontosOriginais) {
+            const tdPontos = tr.querySelector('[data-field="pontos"]');
+            if (tdPontos) {
+                tdPontos.innerHTML = `
+                    ${pontosNovos.toFixed(2)}
+                    <span class="pontos-antigos">${pontosOriginais.toFixed(2)}</span>
+                `;
+            }
+        }
+        // <<< FIM DA MUDANÇA >>>
+
+        await verificarEAtualizarStatusOP(producaoAtualizada.op_numero);
+        mostrarPopup('Alterações salvas com sucesso!', 'sucesso');
 
     } catch (error) {
         console.error('Erro ao salvar edição:', error);
-        mostrarPopup('Não foi possível salvar as alterações.', 'erro');
-        desativarModoEdicao(tr);
+        mostrarPopup(`Não foi possível salvar: ${error.message}`, 'erro');
+        desativarModoEdicao(tr); // Restaura a linha para o estado original em caso de erro
     }
 }
 
@@ -520,13 +553,13 @@ function setupEventListeners() {
     document.getElementById('filtroProduto')?.addEventListener('change', () => aplicarFiltros(1));
     document.getElementById('filtroAssinatura')?.addEventListener('change', () => aplicarFiltros(1));
     document.getElementById('limparFiltros')?.addEventListener('click', () => {
-        document.getElementById('filtroCostureira').value = '';
-        document.getElementById('filtroData').value = new Date().toISOString().substring(0, 10); // Volta para data de hoje
-        document.getElementById('filtroMaquina').value = '';
-        document.getElementById('filtroProcesso').value = '';
-        document.getElementById('filtroProduto').value = '';
-        document.getElementById('filtroAssinatura').value = '';
-        aplicarFiltros(1);
+    document.getElementById('filtroCostureira').value = '';
+    document.getElementById('filtroData').value = getLocalDateString();
+    document.getElementById('filtroMaquina').value = '';
+    document.getElementById('filtroProcesso').value = '';
+    document.getElementById('filtroProduto').value = '';
+    document.getElementById('filtroAssinatura').value = '';
+    aplicarFiltros(1);
     });
 }
 
@@ -537,9 +570,9 @@ async function inicializar() {
     permissoes = auth.permissoes || [];
     usuarioLogado = auth.usuario;
 
-    document.getElementById('filtroData').value = new Date().toISOString().substring(0, 10);
+    document.getElementById('filtroData').value = getLocalDateString();
 
-     const corpoTabela = document.getElementById('corpoTabelaProducoes');
+    const corpoTabela = document.getElementById('corpoTabelaProducoes');
     if (corpoTabela) {
         corpoTabela.innerHTML = `
             <tr>

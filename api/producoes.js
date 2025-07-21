@@ -8,12 +8,76 @@ import express from 'express';
 // Importe a função de buscar permissões completas
 import { getPermissoesCompletasUsuarioDB } from './usuarios.js'; 
 
+
+
 const router = express.Router();
 const pool = new Pool({
     connectionString: process.env.POSTGRES_URL,
     timezone: 'UTC',
 });
 const SECRET_KEY = process.env.JWT_SECRET;
+
+/**
+ * Calcula os pontos de uma produção com base nos parâmetros fornecidos.
+ * @param {object} dbClient - A conexão ativa com o banco de dados.
+ * @param {number} produto_id - O ID do produto.
+ * @param {string} processo - O nome do processo (ex: "Bainha").
+ * @param {number} quantidade - A quantidade produzida.
+ * @param {number} funcionario_id - O ID do funcionário que realizou a tarefa.
+ * @returns {Promise<object>} Uma promessa que resolve para um objeto { pontosGerados, valorPontoAplicado }.
+ */
+async function calcularPontosProducao(dbClient, produto_id, processo, quantidade, funcionario_id) {
+    console.log(`[calcularPontosProducao] Iniciando cálculo para Produto ID: ${produto_id}, Processo: "${processo}", Qtd: ${quantidade}, Func. ID: ${funcionario_id}`);
+
+    // Validação de segurança
+    if (!produto_id || !processo || quantidade < 0 || !funcionario_id) {
+        console.warn('[calcularPontosProducao] Dados de entrada inválidos. Retornando 0 pontos.');
+        return { pontosGerados: 0, valorPontoAplicado: 0 };
+    }
+
+    const funcionarioInfoResult = await dbClient.query(
+        'SELECT tipos FROM usuarios WHERE id = $1 LIMIT 1',
+        [funcionario_id]
+    );
+
+    let tipoAtividadeParaConfigPontos;
+    if (funcionarioInfoResult.rows.length > 0 && funcionarioInfoResult.rows[0].tipos) {
+        const tiposFuncionario = funcionarioInfoResult.rows[0].tipos;
+        if (tiposFuncionario.includes('costureira')) {
+            tipoAtividadeParaConfigPontos = 'costura_op_costureira';
+        } else if (tiposFuncionario.includes('tiktik')) {
+            tipoAtividadeParaConfigPontos = 'processo_op_tiktik';
+        }
+    }
+
+    console.log(`[calcularPontosProducao] Tipo de Atividade inferido: "${tipoAtividadeParaConfigPontos}"`);
+
+    let valorPontoAplicado = 1.00;
+    if (quantidade > 0 && tipoAtividadeParaConfigPontos) {
+        const configPontosResult = await dbClient.query(
+            `SELECT pontos_padrao FROM configuracoes_pontos_processos
+             WHERE produto_id = $1 AND processo_nome = $2 AND tipo_atividade = $3 AND ativo = TRUE LIMIT 1;`,
+            [produto_id, processo, tipoAtividadeParaConfigPontos]
+        );
+
+        if (configPontosResult.rows.length > 0 && configPontosResult.rows[0].pontos_padrao !== null) {
+            valorPontoAplicado = parseFloat(configPontosResult.rows[0].pontos_padrao);
+            console.log(`[calcularPontosProducao] Configuração de pontos encontrada. Valor do ponto: ${valorPontoAplicado}`);
+        } else {
+            console.log(`[calcularPontosProducao] Nenhuma configuração de pontos encontrada. Usando valor de ponto padrão: ${valorPontoAplicado}`);
+        }
+    } else if (quantidade === 0) {
+        valorPontoAplicado = 0;
+    }
+
+    const pontosGerados = quantidade * valorPontoAplicado;
+
+    return {
+        pontosGerados: parseFloat(pontosGerados.toFixed(2)),
+        valorPontoAplicado: parseFloat(valorPontoAplicado.toFixed(2))
+    };
+}
+
 
 // Função verificarToken
 const verificarToken = (reqOriginal) => {
@@ -28,7 +92,7 @@ const verificarToken = (reqOriginal) => {
         const error = new Error('Token mal formatado');
         error.statusCode = 401;
         throw error;
-    }
+    } 
     try {
         const decoded = jwt.verify(token, SECRET_KEY);
         // console.log('[api/producoes - verificarToken] Token decodificado:', decoded);
@@ -80,7 +144,6 @@ router.post('/', async (req, res) => {
         } = req.body;
 
         console.log(`[2. VALIDAÇÃO] Validando dados... Produto ID: ${produto_id}, Funcionário ID: ${funcionario_id}`);
-        // <<< MUDANÇA: Adicionada validação para funcionario_id >>>
         if (!id || !opNumero || etapaIndex === undefined || !processo || !produto_id || !funcionario || !funcionario_id || quantidade === undefined || !data || !lancadoPor) {
             return res.status(400).json({ error: 'Dados incompletos. Todos os campos são obrigatórios, incluindo funcionario_id.' });
         }
@@ -96,57 +159,20 @@ router.post('/', async (req, res) => {
         }
         console.log('[2. VALIDAÇÃO] Dados básicos validados com sucesso.');
 
-        // --- LÓGICA DE PONTOS COM TIPO DE ATIVIDADE INFERIDO ---
-        console.log(`[3. PONTOS] Iniciando cálculo de pontos para Produto ID: ${parsedProdutoId}, Processo: "${processo}", Funcionário ID: "${funcionario_id}"`);
-
-        // <<< MUDANÇA: Busca o tipo do usuário pelo ID, não mais pelo NOME >>>
-        const funcionarioInfoResult = await dbClient.query(
-            'SELECT tipos FROM usuarios WHERE id = $1 LIMIT 1',
-            [funcionario_id]
+        // ---------------------------------------------------------------------
+        // <<< MUDANÇA AQUI: A LÓGICA ANTIGA FOI SUBSTITUÍDA POR ESTA CHAMADA >>>
+        // ---------------------------------------------------------------------
+        // --- LÓGICA DE PONTOS USANDO A FUNÇÃO REUTILIZÁVEL ---
+        const { pontosGerados, valorPontoAplicado } = await calcularPontosProducao(
+            dbClient,
+            parsedProdutoId,
+            processo,
+            parsedQuantidade,
+            funcionario_id
         );
-
-        let tipoAtividadeParaConfigPontos;
-        if (funcionarioInfoResult.rows.length > 0 && funcionarioInfoResult.rows[0].tipos) {
-            const tiposFuncionario = funcionarioInfoResult.rows[0].tipos; // Ex: ['costureira'] ou ['tiktik']
-            if (tiposFuncionario.includes('costureira')) {
-                tipoAtividadeParaConfigPontos = 'costura_op_costureira';
-            } else if (tiposFuncionario.includes('tiktik')) {
-                tipoAtividadeParaConfigPontos = 'processo_op_tiktik';
-            } else {
-                console.warn(`[3. PONTOS] Funcionário ID "${funcionario_id}" não tem um tipo ('costureira' ou 'tiktik') definido em seus 'tipos' para determinar a atividade.`);
-            }
-        } else {
-            console.warn(`[3. PONTOS] Informações do funcionário ID "${funcionario_id}" não encontradas ou sem tipos definidos. Não é possível determinar tipo_atividade para pontos.`);
-        }
-        console.log(`[3. PONTOS] Tipo de Atividade determinado para busca de pontos: "${tipoAtividadeParaConfigPontos}"`);
-        
-        let valorPontoAplicado = 1.00;
-        let pontosGerados = parsedQuantidade * valorPontoAplicado;
-
-        if (tipoAtividadeParaConfigPontos && parsedQuantidade > 0) {
-            const configPontosResult = await dbClient.query(
-                `SELECT pontos_padrao FROM configuracoes_pontos_processos
-                 WHERE produto_id = $1 AND processo_nome = $2 AND tipo_atividade = $3 AND ativo = TRUE LIMIT 1;`,
-                [parsedProdutoId, processo, tipoAtividadeParaConfigPontos]
-            );
-
-            if (configPontosResult.rows.length > 0 && configPontosResult.rows[0].pontos_padrao !== null) {
-                valorPontoAplicado = parseFloat(configPontosResult.rows[0].pontos_padrao);
-                pontosGerados = parsedQuantidade * valorPontoAplicado;
-                console.log(`[3. PONTOS] Configuração de pontos encontrada. Valor do ponto: ${valorPontoAplicado}. Pontos gerados recalculados: ${pontosGerados}`);
-            } else {
-                console.log(`[3. PONTOS] Nenhuma configuração de pontos encontrada. Usando valor de ponto padrão: ${valorPontoAplicado}. Pontos gerados (padrão): ${pontosGerados}`);
-            }
-        } else if (parsedQuantidade === 0) {
-            valorPontoAplicado = 0;
-            pontosGerados = 0;
-            console.log(`[3. PONTOS] Quantidade é 0. Pontos gerados definidos como 0.`);
-        } else {
-             console.log(`[3. PONTOS] Tipo de atividade não pôde ser determinado. Usando valor de ponto padrão ${valorPontoAplicado}. Pontos gerados (padrão): ${pontosGerados}`);
-        }
         // --- FIM DA LÓGICA DE PONTOS ---
+        // ---------------------------------------------------------------------
 
-        // <<< MUDANÇA: Adicionada a coluna "funcionario_id" na query INSERT >>>
         const queryText = `
             INSERT INTO producoes (
                 id, op_numero, etapa_index, processo, produto_id, variacao, maquina,
@@ -154,12 +180,11 @@ router.post('/', async (req, res) => {
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             RETURNING *;`;
         
-        // <<< MUDANÇA: Adicionado "funcionario_id" no array de valores >>>
         const values = [
             id, opNumero, etapaIndex, processo, parsedProdutoId, variacao || null, maquina,
             parsedQuantidade, funcionario, funcionario_id, data, lancadoPor, 
-            parseFloat(valorPontoAplicado.toFixed(2)),
-            parseFloat(pontosGerados.toFixed(2))
+            valorPontoAplicado, // Já é float
+            pontosGerados     // Já é float
         ];
 
         console.log('[4. BANCO DE DADOS] Executando query INSERT com valores:', values);
@@ -182,7 +207,6 @@ router.post('/', async (req, res) => {
         }
     }
 });
-
 // GET /api/producoes/
 router.get('/', async (req, res) => {
     const { usuarioLogado } = req;
@@ -259,34 +283,34 @@ router.put('/', async (req, res) => {
         dbClient = await pool.connect();
         const permissoesDoUsuario = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
         
-        const { id, quantidade, edicoes, assinada, funcionario, dadosColetados } = req.body;
+        // <<< MUDANÇA: Adicionamos o 'id' ao nome do funcionário para clareza >>>
+        const { id, quantidade, edicoes, assinada, funcionario: novoNomeFuncionario, dadosColetados } = req.body;
 
         if (!id) {
             return res.status(400).json({ error: 'ID da produção é obrigatório.' });
         }
-        if (assinada === undefined && quantidade === undefined && edicoes === undefined) {
-            return res.status(400).json({ error: 'Nenhum campo para atualizar fornecido.' });
-        }
 
-        const producaoResult = await dbClient.query('SELECT funcionario, assinada FROM producoes WHERE id = $1', [id]);
+        // <<< MUDANÇA: Buscamos mais dados do registro original >>>
+        const producaoResult = await dbClient.query(
+            'SELECT * FROM producoes WHERE id = $1', 
+            [id]
+        );
+
         if (producaoResult.rows.length === 0) {
             return res.status(404).json({ error: 'Produção não encontrada para atualização.' });
         }
 
-        const { funcionario: funcionarioDaProducao, assinada: jaAssinada } = producaoResult.rows[0];
+        const producaoOriginal = producaoResult.rows[0];
         const nomeUsuarioLogado = usuarioLogado.nome || usuarioLogado.nome_usuario;
         
-        const isOwner = funcionarioDaProducao === nomeUsuarioLogado;
-        const isAttemptingToSignOnly = (assinada === true && quantidade === undefined && edicoes === undefined);
+        const isOwner = producaoOriginal.funcionario === nomeUsuarioLogado;
+        const isAttemptingToSignOnly = (assinada === true && quantidade === undefined && novoNomeFuncionario === undefined);
         const podeEditarGeral = permissoesDoUsuario.includes('editar-registro-producao');
-        // CORREÇÃO: Usando o nome padronizado da permissão
         const podeAssinarPropria = permissoesDoUsuario.includes('assinar-producao-costureira');
 
-        // Estrutura if/else if/else para garantir que apenas um caminho seja seguido
-
-        // CASO 1: É o dono tentando assinar e tem permissão para isso
+        // CASO 1: Assinatura de Costureira
         if (isOwner && isAttemptingToSignOnly && podeAssinarPropria) {
-            if (jaAssinada) {
+            if (producaoOriginal.assinada) {
                 return res.status(400).json({ error: 'Este item já foi assinado.' });
             }
             await dbClient.query('BEGIN');
@@ -296,31 +320,79 @@ router.put('/', async (req, res) => {
             return res.status(200).json(updateResult.rows[0]);
         } 
         
-        // CASO 2: É um admin/supervisor tentando editar de forma geral
+        // CASO 2: Edição Geral (Admin/Supervisor) - AQUI ESTÁ A CORREÇÃO!
         else if (podeEditarGeral) {
-            // Este caso cobre edições de quantidade, funcionário, etc. que não são apenas uma assinatura.
-            // (A lógica interna para construir a query de update permanece a mesma)
             const updateFields = [];
             const updateValues = [];
             let paramIndex = 1;
-            if (quantidade !== undefined) { updateFields.push(`quantidade = $${paramIndex++}`); updateValues.push(quantidade); }
-            if (edicoes !== undefined) { updateFields.push(`edicoes = $${paramIndex++}`); updateValues.push(JSON.stringify(edicoes)); }
-            if (funcionario !== undefined && funcionario.trim() !== '') { updateFields.push(`funcionario = $${paramIndex++}`); updateValues.push(funcionario); }
+
+            let recalcularPontos = false;
+            let idFuncionarioParaCalculo = producaoOriginal.funcionario_id;
+            let quantidadeParaCalculo = producaoOriginal.quantidade;
+
+            if (quantidade !== undefined && quantidade !== producaoOriginal.quantidade) {
+                updateFields.push(`quantidade = $${paramIndex++}`);
+                updateValues.push(quantidade);
+                quantidadeParaCalculo = quantidade; // Usa a nova quantidade para o cálculo
+                recalcularPontos = true;
+            }
+            
+            // <<< MUDANÇA: Lógica para quando o funcionário é alterado >>>
+            if (novoNomeFuncionario !== undefined && novoNomeFuncionario !== producaoOriginal.funcionario) {
+                const novoFuncionarioResult = await dbClient.query('SELECT id FROM usuarios WHERE nome = $1', [novoNomeFuncionario]);
+                if (novoFuncionarioResult.rows.length === 0) {
+                    return res.status(404).json({ error: `Funcionário '${novoNomeFuncionario}' não encontrado.` });
+                }
+                const novoFuncionarioId = novoFuncionarioResult.rows[0].id;
+
+                updateFields.push(`funcionario = $${paramIndex++}`);
+                updateValues.push(novoNomeFuncionario);
+                updateFields.push(`funcionario_id = $${paramIndex++}`);
+                updateValues.push(novoFuncionarioId);
+                
+                idFuncionarioParaCalculo = novoFuncionarioId; // Usa o novo funcionário para o cálculo
+                recalcularPontos = true;
+            }
+
+            if (edicoes !== undefined) {
+                updateFields.push(`edicoes = $${paramIndex++}`);
+                updateValues.push(edicoes);
+            }
+            
+            // <<< MUDANÇA: Se precisa recalcular, chama a nossa nova função! >>>
+            if (recalcularPontos) {
+                const { pontosGerados, valorPontoAplicado } = await calcularPontosProducao(
+                    dbClient,
+                    producaoOriginal.produto_id,
+                    producaoOriginal.processo,
+                    quantidadeParaCalculo,
+                    idFuncionarioParaCalculo
+                );
+
+                updateFields.push(`pontos_gerados = $${paramIndex++}`);
+                updateValues.push(pontosGerados);
+                updateFields.push(`valor_ponto_aplicado = $${paramIndex++}`);
+                updateValues.push(valorPontoAplicado);
+                console.log(`[PUT /api/producoes] Pontos recalculados para Produção ID ${id}. Novos pontos: ${pontosGerados}`);
+            }
+
+            // O resto da lógica de assinatura continua igual
             if (assinada !== undefined) {
                 updateFields.push(`assinada = $${paramIndex++}`);
                 updateValues.push(assinada);
-                if (assinada === true && !jaAssinada) {
-                    await dbClient.query(`INSERT INTO log_assinaturas (id_usuario, id_producao, dados_coletados) VALUES ($1, $2, $3)`, [usuarioLogado.id, id, { origem: 'admin_edit' }]);
-                }
             }
-            if (updateFields.length === 0) return res.status(400).json({ error: "Nenhum campo válido para atualização." });
+
+            if (updateFields.length === 0) {
+                return res.status(200).json(producaoOriginal); // Nenhuma alteração, retorna o original
+            }
+
             updateValues.push(id); 
             const queryUpdate = `UPDATE producoes SET ${updateFields.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
             const result = await dbClient.query(queryUpdate, updateValues);
             return res.status(200).json(result.rows[0]);
         }
         
-        // CASO 3: Nenhuma das condições acima foi atendida, então a permissão é negada.
+        // CASO 3: Permissão negada
         else {
             return res.status(403).json({ error: 'Permissão negada para alterar este registro de produção.' });
         }
@@ -333,7 +405,6 @@ router.put('/', async (req, res) => {
         if (dbClient) dbClient.release();
     }
 });
-
 
 
 // DELETE /api/producoes/
