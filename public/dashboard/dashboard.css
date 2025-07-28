@@ -2469,4 +2469,9 @@ body.ds-body.autenticado {
         min-width: 35px;
         font-size: 0.9rem;
     }
+    .ds-avatar-slot {
+    width: 80px;
+    height: 80px;
+    }
+
 }

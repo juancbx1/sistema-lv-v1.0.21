@@ -2044,7 +2044,8 @@ function configurarEventListenersGerais() {
 
     // Listener para o botão de Ação de Assinatura
     document.getElementById('btnAcaoAssinatura')?.addEventListener('click', () => {
-        const naoAssinados = dadosDashboardCache?.desempenho?.atividades.filter(item => !item.assinada) || [];
+        const naoAssinados = todasAsAtividadesRelevantes.filter(item => !item.assinada);
+
         if (naoAssinados.length > 0) {
             mostrarModalAssinatura(naoAssinados);
         } else {
