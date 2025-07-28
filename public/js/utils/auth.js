@@ -30,103 +30,90 @@ export async function sincronizarPermissoesUsuario(usuario) {
   usuario.permissoes = Array.from(permissoesBase).filter(p => permissoesValidas.has(p));
   return usuario;
 }
-
 /**
  * Verifica a autenticação do usuário e suas permissões para acessar uma página.
- * @param {string} pagina - O nome do arquivo da página (ex: 'admin/home.html').
+ * @param {string} pagina - O caminho da página (ex: 'dashboard/desempenho.html').
  * @param {string[]} permissoesRequeridas - Um array de permissões necessárias.
  * @param {'all' | 'any'} [modo='all'] - 'all' exige todas as permissões, 'any' exige pelo menos uma.
  * @returns {Promise<object|null>} Um objeto com {usuario, permissoes} ou null se a autenticação falhar.
  */
 export async function verificarAutenticacao(pagina, permissoesRequeridas = [], modo = 'all') {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    console.log('[Auth] Token não encontrado, redirecionando para login.');
-    window.location.href = '/index.html';
-    return null;
-  }
-
-  // Bloco de Pré-verificação com Cache (Opcional, mas rápido)
-  const permissoesCache = JSON.parse(localStorage.getItem('permissoes') || '[]');
-  if (permissoesCache.length > 0 && permissoesRequeridas.length > 0) {
-    const temPermissaoCache = (modo === 'any')
-      ? permissoesRequeridas.some(p => permissoesCache.includes(p))
-      : permissoesRequeridas.every(p => permissoesCache.includes(p));
-    
-    if (!temPermissaoCache) {
-      console.log(`[Auth Cache] Sem permissão (${modo}) para [${permissoesRequeridas.join(', ')}]. Redirecionando.`);
-      window.location.href = '/admin/acesso-negado.html';
-      return null;
-    }
-  }
-
-  try {
-    const response = await fetch('/api/usuarios/me', {
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
-    
-    if (!response.ok) {
-        if (response.status === 401) throw new Error('Token expirado');
-        throw new Error('Falha ao verificar usuário no servidor.');
+    const token = localStorage.getItem('token');
+    if (!token) {
+        console.log('[Auth] Token não encontrado, redirecionando para login.');
+        window.location.href = '/index.html';
+        return null;
     }
 
-    let usuarioLogado = await response.json();
-    localStorage.setItem('permissoes', JSON.stringify(usuarioLogado.permissoes || []));
+    // --- MUDANÇA 1: Identificar o "ambiente" da página (admin vs dashboard) ---
+    const ambiente = pagina.startsWith('dashboard/') ? 'dashboard' : 'admin';
+    const paginaAcessoNegado = ambiente === 'dashboard'
+        ? '/dashboard/acesso-restrito-costureira.html' // << Página de acesso negado para o dashboard
+        : '/admin/acesso-negado.html';                  // << Página de acesso negado para o admin
 
-    // --- NOVA LÓGICA DE REDIRECIONAMENTO E ACESSO ---
-    const tipos = usuarioLogado.tipos || [];
-    const permissoes = usuarioLogado.permissoes || [];
+    try {
+        const response = await fetch('/api/usuarios/me', {
+            headers: { 'Authorization': `Bearer ${token}` },
+        });
 
-    // 1. Redirecionamento baseado em tipo/permissão
-    const isUsuarioProducao = tipos.includes('costureira') || tipos.includes('tiktik');
-    const temAcessoAdmin = permissoes.includes('acesso-admin-geral');
+        if (!response.ok) {
+            if (response.status === 401) throw new Error('Token expirado');
+            throw new Error('Falha ao verificar usuário no servidor.');
+        }
 
-    const pathAtual = window.location.pathname.toLowerCase();
-    
-    if (isUsuarioProducao && !temAcessoAdmin) {
-        // É um usuário de produção PURO. Só pode acessar o dashboard.
-        if (pathAtual !== '/dashboard/dashboard.html') {
-            console.log('[Auth] Usuário de produção puro fora da página do dashboard. Redirecionando...');
+        let usuarioLogado = await response.json();
+        localStorage.setItem('permissoes', JSON.stringify(usuarioLogado.permissoes || []));
+
+        const permissoes = usuarioLogado.permissoes || [];
+
+        // --- MUDANÇA 2: Verificação de permissões refatorada e centralizada ---
+        // Esta verificação agora acontece ANTES da lógica de redirecionamento de tipo.
+        // Isso garante que, se um usuário não tem a permissão específica, ele seja bloqueado primeiro.
+        if (permissoesRequeridas.length > 0) {
+            const temPermissao = (modo === 'any')
+                ? permissoesRequeridas.some(p => permissoes.includes(p))
+                : permissoesRequeridas.every(p => permissoes.includes(p));
+
+            if (!temPermissao) {
+                console.log(`[Auth API] Sem permissão (${modo}) para [${permissoesRequeridas.join(', ')}]. Redirecionando para ${paginaAcessoNegado}.`);
+                window.location.href = paginaAcessoNegado; // << Usa a URL de acesso negado correta
+                return null;
+            }
+        }
+
+        // --- LÓGICA DE REDIRECIONAMENTO DE TIPO (continua parecida, mas mais limpa) ---
+        const tipos = usuarioLogado.tipos || [];
+        const isUsuarioProducao = tipos.includes('costureira') || tipos.includes('tiktik');
+        const temAcessoAdmin = permissoes.includes('acesso-admin-geral');
+        
+        // Se é um usuário de produção e está tentando acessar uma página de admin
+        if (isUsuarioProducao && !temAcessoAdmin && ambiente === 'admin') {
+            console.log('[Auth] Usuário de produção tentando acessar área admin. Redirecionando...');
             window.location.href = '/dashboard/dashboard.html';
-            return null; // Interrompe a execução para a página atual carregar
-        }
-    } else {
-        // É um admin, supervisor, ou usuário híbrido. Pode acessar a área admin.
-        if (pathAtual === '/dashboard/dashboard.html') {
-             console.log('[Auth] Usuário administrativo tentando acessar dashboard diretamente. Redirecionando para home admin...');
-             window.location.href = '/admin/home.html';
-             return null;
-        }
-    }
-    
-    // 2. Verificação de permissão para a página atual
-    if (permissoesRequeridas.length > 0) {
-        const temPermissao = (modo === 'any')
-            ? permissoesRequeridas.some(p => permissoes.includes(p))
-            : permissoesRequeridas.every(p => permissoes.includes(p));
-
-        if (!temPermissao) {
-            console.log(`[Auth API] Sem permissão (${modo}) para [${permissoesRequeridas.join(', ')}]. Redirecionando.`);
-            window.location.href = '/admin/acesso-negado.html';
             return null;
         }
+
+        // Se é um usuário admin/híbrido e está tentando acessar o dashboard diretamente
+        if (!isUsuarioProducao && ambiente === 'dashboard') {
+            console.log('[Auth] Usuário administrativo tentando acessar dashboard. Redirecionando...');
+            window.location.href = '/admin/home.html';
+            return null;
+        }
+
+        console.log('[Auth] Autenticação e verificação de permissão bem-sucedidas.');
+        document.body.classList.add('autenticado');
+        return { usuario: usuarioLogado, permissoes: permissoes };
+
+    } catch (error) {
+        console.error('[Auth] Erro final na verificação:', error.message);
+        localStorage.removeItem('token');
+        localStorage.removeItem('permissoes');
+        window.location.href = error.message === 'Token expirado'
+            ? '/admin/token-expirado.html'
+            : '/index.html';
+        return null;
     }
-
-    console.log('[Auth] Autenticação bem-sucedida.');
-    document.body.classList.add('autenticado');
-    return { usuario: usuarioLogado, permissoes: permissoes };
-
-  } catch (error) {
-    console.error('[Auth] Erro final na verificação:', error.message);
-    localStorage.removeItem('token');
-    localStorage.removeItem('permissoes');
-    window.location.href = error.message === 'Token expirado' 
-      ? '/admin/token-expirado.html' 
-      : '/index.html';
-    return null;
-  }
 }
-
 
 export function logout() {
   console.log('--- LOGOUT INICIADO ---');

@@ -1,0 +1,172 @@
+/* public/dashboard/desempenho.css */
+
+ds-header-desempenho {
+    background-color: var(--ds-cor-branco);
+    padding: 15px 25px;
+    border-bottom: 1px solid var(--ds-cor-cinza-borda);
+}
+
+.ds-header-conteudo {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 1280px; /* Mantém o alinhamento com o conteúdo principal */
+    margin: 0 auto;
+}
+
+.ds-identidade-bloco-desempenho {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-top:15px;
+}
+
+.ds-identidade-avatar-desempenho {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+}
+
+.ds-identidade-avatar-desempenho img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    border: 2px solid var(--ds-cor-cinza-borda);
+}
+
+.ds-identidade-info h1 {
+    font-size: 1.5rem;
+    color: var(--ds-cor-azul-escuro);
+    margin: 0;
+    line-height: 1.1;
+}
+
+.ds-identidade-info p {
+    font-size: 1rem;
+    color: var(--ds-cor-cinza-texto-secundario);
+    font-weight: 500;
+    margin: 0;
+}
+
+.ds-link-voltar {
+    /* Estilo sutil, não precisa ser tão chamativo quanto antes */
+    color: var(--ds-cor-primaria);
+    padding: 10px 15px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.ds-link-voltar:hover {
+    background-color: rgba(var(--ds-cor-primaria-rgb), 0.1);
+    border-color: rgba(var(--ds-cor-primaria-rgb), 0.2);
+}
+
+/* Data de pagamento estimada */
+.ds-data-pagamento {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--ds-cor-texto-principal);
+    background-color: var(--ds-cor-cinza-claro-fundo);
+    padding: 6px 12px;
+    border-radius: 20px;
+}
+.ds-data-pagamento span {
+    font-weight: 700;
+    color: var(--ds-cor-primaria);
+}
+
+/* Estrutura dos Cards (já existente, mas garantindo que esteja aqui) */
+.ds-card {
+    background-color: var(--ds-cor-branco);
+    border-radius: var(--ds-raio-borda);
+    box-shadow: var(--ds-sombra-padrao);
+    margin-bottom: 25px;
+    border: 1px solid var(--ds-cor-cinza-borda);
+    overflow: hidden;
+}
+
+.ds-card-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--ds-cor-cinza-borda);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.ds-card-titulo {
+    font-size: 1.4rem;
+    color: var(--ds-cor-azul-escuro);
+    margin: 0;
+    font-weight: 600;
+}
+
+.ds-card-filtro {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.ds-card-filtro label { font-weight: 500; font-size: 0.9rem; }
+.ds-card-filtro .ds-select { min-width: 200px; }
+.ds-card-body { padding: 24px; }
+
+/* Estilos para as listas de semanas (reutilizável para ambos os cards) */
+.ds-total-card {
+    background-color: var(--ds-cor-cinza-claro-fundo);
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 15px;
+    text-align: right;
+}
+.ds-total-card span {
+    color: var(--ds-cor-primaria);
+}
+
+.ds-semana-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 0;
+    border-bottom: 1px dashed var(--ds-cor-cinza-borda);
+}
+.ds-semana-item:last-child { border-bottom: none; }
+
+.ds-semana-info .periodo { font-weight: 600; font-size: 1rem; }
+.ds-semana-info .meta { font-size: 0.9rem; color: var(--ds-cor-cinza-texto-secundario); }
+.ds-semana-info .meta.status-andamento { color: var(--ds-cor-primaria); font-style: italic; font-weight: 500; }
+.ds-semana-info .meta.status-futuro { color: var(--ds-cor-cinza-texto-secundario); font-style: italic; }
+.ds-semana-info .meta.status-sem-meta { color: var(--ds-cor-perigo); font-style: italic; }
+
+.ds-semana-valor { font-size: 1.2rem; font-weight: 700; color: var(--ds-cor-sucesso); }
+.ds-semana-valor.zerado { color: var(--ds-cor-cinza-texto-secundario); }
+
+/* Spinner */
+.ds-spinner-container { display: flex; justify-content: center; align-items: center; min-height: 150px; }
+.ds-spinner { border: 5px solid var(--ds-cor-cinza-claro-fundo); border-top: 5px solid var(--ds-cor-primaria); border-radius: 50%; width: 40px; height: 40px; animation: ds-spin 1.2s linear infinite; }
+@keyframes ds-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* Responsividade */
+@media (max-width: 480px) {
+    .ds-header-conteudo {
+        flex-direction: column;
+        gap: 15px;
+    }
+}
+
+@media (max-width: 414px) {
+    .ds-identidade-avatar {
+        width: 80px;
+        height: 80px;
+    }
+
+}

@@ -236,7 +236,7 @@ router.get('/', async (req, res) => {
             SELECT 
                 u.id, u.nome, u.nome_usuario, u.email, u.tipos, u.nivel, u.permissoes,
                 u.salario_fixo, u.valor_passagem_diaria, u.elegivel_pagamento, 
-                u.id_contato_financeiro,
+                u.id_contato_financeiro, u.data_admissao,
                 c.nome AS nome_contato_financeiro,
                 -- Agrega os IDs das concessionárias em um array, retornando um array vazio '{}' se não houver nenhum.
                 COALESCE(
@@ -352,7 +352,8 @@ router.put('/', async (req, res) => {
             id, nome, nomeUsuario, email, tipos, nivel, 
             salario_fixo, valor_passagem_diaria, 
             elegivel_pagamento, id_contato_financeiro, concessionaria_ids,
-            permissoes: permissoesIndividuais 
+            permissoes: permissoesIndividuais,
+            data_admissao   
         } = req.body;
 
         if (!id) {
@@ -379,6 +380,10 @@ router.put('/', async (req, res) => {
             const permissoesValidas = permissoesIndividuais.filter(p => backendPermissoesValidas.has(p));
             fieldsToUpdate.push(`permissoes = $${paramIndex++}`);
             values.push(permissoesValidas);
+        }
+        if (data_admissao !== undefined) { fieldsToUpdate.push(`data_admissao = $${paramIndex++}`); 
+            // Se a data vier vazia, salva como nulo
+            values.push(data_admissao || null); 
         }
 
         if (fieldsToUpdate.length > 0) {

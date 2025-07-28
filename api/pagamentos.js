@@ -6,7 +6,6 @@ import jwt from 'jsonwebtoken';
 import express from 'express';
 import { getPermissoesCompletasUsuarioDB } from './usuarios.js';
 import { ciclos } from '../public/js/utils/ciclos.js'; // Importamos a definição de ciclos
-import { calcularComissaoSemanal, obterMetas } from '../public/js/utils/metas.js';
 
 const router = express.Router();
 const pool = new Pool({
@@ -26,7 +25,6 @@ const CATEGORIA_MAP = {
 
 // Função que inicializa o mapeamento ao iniciar o servidor
 async function inicializarMapeamentoCategorias() {
-    console.log('[API Pagamentos] Inicializando mapeamento de IDs de categoria...');
     let dbClient;
     try {
         dbClient = await pool.connect();
@@ -49,8 +47,6 @@ async function inicializarMapeamentoCategorias() {
             if (cat.nome === 'Benefícios Diversos') CATEGORIA_MAP.BENEFICIOS_DIVERSOS = cat.id;
         });
         
-        console.log('[API Pagamentos] Mapeamento concluído:', CATEGORIA_MAP);
-
     } catch (error) {
         console.error('[API Pagamentos] ERRO CRÍTICO ao mapear categorias. Pagamentos podem falhar.', error);
     } finally {
@@ -63,8 +59,6 @@ inicializarMapeamentoCategorias();
 
 // --- Middleware de Autenticação para este Módulo ---
 router.use(async (req, res, next) => {
-    // --- LOG DE ENTRADA DO MIDDLEWARE ---
-    console.log(`[PAGAMENTOS MIDDLEWARE] Rota acessada: ${req.method} ${req.originalUrl}`);
 
     let dbClient;
     try {
@@ -140,66 +134,86 @@ router.get('/calcular', async (req, res) => {
                 break;
 
             case 'COMISSAO':
-                if (ciclo_index === undefined) {
-                    return res.status(400).json({ error: 'Ciclo é obrigatório para cálculo de comissão.' });
+            if (ciclo_index === undefined) {
+                return res.status(400).json({ error: 'Ciclo é obrigatório para cálculo de comissão.' });
+            }
+            cicloSelecionado = ciclos[parseInt(ciclo_index)];
+            if (!cicloSelecionado) {
+                return res.status(404).json({ error: 'Ciclo não encontrado.' });
+            }
+            
+            periodoDetalhe = cicloSelecionado.nome;
+            let detalhesSemanas = [];
+            const tipoUsuario = usuario.tipos?.includes('costureira') ? 'costureira' : 'tiktik';
+
+            // Itera sobre cada semana do ciclo para calcular individualmente
+            for (const semana of cicloSelecionado.semanas) {
+                const dataFimSemana = new Date(semana.fim + 'T23:59:59');
+
+                // 1. Encontra a versão de metas correta para esta semana específica
+                const versaoQuery = `
+                    SELECT id FROM metas_versoes
+                    WHERE data_inicio_vigencia <= $1
+                    ORDER BY data_inicio_vigencia DESC LIMIT 1;
+                `;
+                const versaoResult = await dbClient.query(versaoQuery, [dataFimSemana]);
+                if (versaoResult.rows.length === 0) {
+                    throw new Error(`Nenhuma configuração de meta encontrada para a semana que termina em ${semana.fim}`);
                 }
-                cicloSelecionado = ciclos[parseInt(ciclo_index)];
-                if (!cicloSelecionado) {
-                    return res.status(404).json({ error: 'Ciclo não encontrado.' });
+                const idVersaoCorreta = versaoResult.rows[0].id;
+
+                // 2. Busca as regras de meta para essa versão, tipo de usuário e nível
+                const regrasQuery = `
+                    SELECT pontos_meta, valor_comissao, descricao_meta 
+                    FROM metas_regras 
+                    WHERE id_versao = $1 AND tipo_usuario = $2 AND nivel = $3 
+                    ORDER BY pontos_meta ASC;
+                `;
+                const regrasResult = await dbClient.query(regrasQuery, [idVersaoCorreta, tipoUsuario, usuario.nivel]);
+                const metasDaSemana = regrasResult.rows.map(r => ({
+                    pontos_meta: parseInt(r.pontos_meta),
+                    valor: parseFloat(r.valor_comissao),
+                    descricao: r.descricao_meta
+                }));
+
+                // 3. Busca os pontos do usuário para esta semana
+                const producoesQuery = `SELECT COALESCE(SUM(pontos_gerados), 0) as total FROM producoes WHERE funcionario_id = $1 AND data BETWEEN $2 AND $3`;
+                const arrematesQuery = `SELECT COALESCE(SUM(pontos_gerados), 0) as total FROM arremates WHERE usuario_tiktik_id = $1 AND data_lancamento BETWEEN $2 AND $3`;
+                const [prodRes, arrRes] = await Promise.all([
+                    dbClient.query(producoesQuery, [usuario_id, `${semana.inicio} 00:00:00`, `${semana.fim} 23:59:59`]),
+                    dbClient.query(arrematesQuery, [usuario_id, `${semana.inicio} 00:00:00`, `${semana.fim} 23:59:59`])
+                ]);
+                const pontosDaSemana = parseFloat(prodRes.rows[0].total) + parseFloat(arrRes.rows[0].total);
+                totalPontosComissao += pontosDaSemana;
+
+                // 4. Calcula a comissão com as regras corretas (lógica replicada do antigo metas.js)
+                let valorComissaoSemana = 0;
+                let metaAtingida = "Nenhuma";
+                const metasBatidas = metasDaSemana.filter(m => pontosDaSemana >= m.pontos_meta);
+
+                if (metasBatidas.length > 0) {
+                    metasBatidas.sort((a, b) => b.pontos_meta - a.pontos_meta);
+                    const melhorMetaBatida = metasBatidas[0];
+                    valorComissaoSemana = melhorMetaBatida.valor;
+                    metaAtingida = melhorMetaBatida.descricao;
+                } else if (metasDaSemana.length > 0) {
+                    const primeiraMeta = metasDaSemana[0];
+                    const pontosFaltantes = Math.ceil(primeiraMeta.pontos_meta - pontosDaSemana);
+                    metaAtingida = `Faltam ${pontosFaltantes} pts`;
                 }
                 
-                periodoDetalhe = cicloSelecionado.nome;
-                let detalhesSemanas = [];
-                
-                // Itera sobre cada semana do ciclo para calcular individualmente
-                for (const semana of cicloSelecionado.semanas) {
-                    const dataInicioSemana = semana.inicio;
-                    const dataFimSemana = semana.fim;
+                valorComissao += valorComissaoSemana;
 
-                    const producoesQuery = `SELECT COALESCE(SUM(pontos_gerados), 0) as total FROM producoes WHERE funcionario_id = $1 AND data BETWEEN $2 AND $3`;
-                    const arrematesQuery = `SELECT COALESCE(SUM(pontos_gerados), 0) as total FROM arremates WHERE usuario_tiktik_id = $1 AND data_lancamento BETWEEN $2 AND $3`;
-
-                    const [prodRes, arrRes] = await Promise.all([
-                        dbClient.query(producoesQuery, [usuario_id, `${dataInicioSemana} 00:00:00`, `${dataFimSemana} 23:59:59`]),
-                        dbClient.query(arrematesQuery, [usuario_id, `${dataInicioSemana} 00:00:00`, `${dataFimSemana} 23:59:59`])
-                    ]);
-
-                    const pontosDaSemana = parseFloat(prodRes.rows[0].total) + parseFloat(arrRes.rows[0].total);
-                    totalPontosComissao += pontosDaSemana; // Acumula para o total do ciclo
-
-                    // Determina o tipo de usuário para buscar a meta correta
-                    const tipoUsuario = usuario.tipos?.includes('costureira') ? 'costureira' : 'tiktik';
-                    
-                    // Usa a sua função de cálculo de metas importada!
-                    const resultadoComissaoSemana = calcularComissaoSemanal(pontosDaSemana, tipoUsuario, usuario.nivel);
-                    
-                    let valorComissaoSemana = 0;
-                    let metaAtingida = "Nenhuma";
-                    
-                    if (typeof resultadoComissaoSemana === 'number') {
-                        valorComissaoSemana = resultadoComissaoSemana;
-                        // Encontra a descrição da meta atingida
-                        const metas = obterMetas(tipoUsuario, usuario.nivel);
-                        const metaObj = metas.filter(m => pontosDaSemana >= m.pontos_meta).sort((a,b) => b.pontos_meta - a.pontos_meta)[0];
-                        if (metaObj) metaAtingida = metaObj.descricao;
-
-                    } else if (resultadoComissaoSemana.faltam) {
-                        metaAtingida = `Faltam ${resultadoComissaoSemana.faltam} pts`;
-                    }
-                    
-                    valorComissao += valorComissaoSemana; // Acumula para o total do ciclo
-
-                    detalhesSemanas.push({
-                        periodo: `${new Date(dataInicioSemana+'T00:00:00').toLocaleDateString('pt-BR')} a ${new Date(dataFimSemana+'T00:00:00').toLocaleDateString('pt-BR')}`,
-                        pontos: pontosDaSemana,
-                        valor: valorComissaoSemana,
-                        metaAtingida: metaAtingida
-                    });
-                }
-                
-                // Adiciona o novo campo detalhado na resposta da API
-                res.dadosDetalhados = { semanas: detalhesSemanas };
-                break;
+                detalhesSemanas.push({
+                    periodo: `${new Date(semana.inicio+'T00:00:00').toLocaleDateString('pt-BR')} a ${new Date(semana.fim+'T00:00:00').toLocaleDateString('pt-BR')}`,
+                    pontos: pontosDaSemana,
+                    valor: valorComissaoSemana,
+                    metaAtingida: metaAtingida
+                });
+            }
+            
+            res.dadosDetalhados = { semanas: detalhesSemanas };
+            break;
 
             case 'PASSAGENS':
                 if (!data_inicio || !data_fim) return res.status(400).json({ error: 'Data de início e fim são obrigatórias para adiantamento de passagens.' });
@@ -316,14 +330,7 @@ router.post('/efetuar', async (req, res) => {
     const id_funcionario = funcionario.id;
     const nome_funcionario = funcionario.nome;
     const nomeCicloOuMotivo = ciclo.nome || '';
-    
-    // --- LOGS INICIAIS ---
-    console.log('--- [API /efetuar] INICIANDO PAGAMENTO ---');
-    console.log(`Tipo de Pagamento: ${tipoPagamento}`);
-    console.log(`Empregado: ${nome_funcionario} (ID: ${id_funcionario})`);
-    console.log(`Referência: "${nomeCicloOuMotivo}"`);
-    console.log(`Valor Líquido: ${totais.totalLiquidoAPagar}`);
-    
+
     let dbClient;
     try {
         dbClient = await pool.connect();
@@ -333,27 +340,22 @@ router.post('/efetuar', async (req, res) => {
             throw new Error(`O empregado ${nome_funcionario} não possui um contato financeiro vinculado.`);
         }
         const id_contato_financeiro = userRes.rows[0].id_contato_financeiro;
-        console.log(`[API /efetuar] Contato Financeiro do Empregado ID: ${id_contato_financeiro}`);
         
         await dbClient.query('BEGIN');
-        console.log("[API /efetuar] Transação BEGIN executada.");
 
         const fazerLancamento = async (idCategoria, valor, descricao, idContato) => {
-            if (valor <= 0) return;
-            if (!idCategoria) throw new Error(`ID de categoria para "${descricao}" não configurado ou nulo.`);
-            
-            console.log(`[API /efetuar] Preparando para inserir no financeiro: [Valor: ${valor}, CategoriaID: ${idCategoria}, Desc: "${descricao}", ContatoID: ${idContato}]`);
-            const dataTransacao = new Date().toISOString();
-            
-            await dbClient.query(
-                `INSERT INTO fc_lancamentos (id_conta_bancaria, id_categoria, tipo, valor, data_transacao, descricao, id_contato, id_usuario_lancamento) VALUES ($1, $2, 'DESPESA', $3, $4, $5, $6, $7)`,
-                [id_conta_debito, idCategoria, valor, dataTransacao, descricao, idContato, id_usuario_pagador]
-            );
-            console.log("[API /efetuar] Lançamento no financeiro bem-sucedido.");
-        };
+        if (valor <= 0) return;
+        if (!idCategoria) throw new Error(`ID de categoria para "${descricao}" não configurado ou nulo.`);
+                
+        //    Isso garante que o timestamp salvo é o do servidor do banco de dados.
+        //    Os parâmetros foram reordenados.
+        await dbClient.query(
+            `INSERT INTO fc_lancamentos (id_conta_bancaria, id_categoria, tipo, valor, data_transacao, descricao, id_contato, id_usuario_lancamento) VALUES ($1, $2, 'DESPESA', $3, NOW(), $4, $5, $6)`,
+            [id_conta_debito, idCategoria, valor, descricao, idContato, id_usuario_pagador]
+        );
+    };
 
         if (tipoPagamento === 'COMISSAO') {
-            console.log("[API /efetuar] Entrando no bloco de pagamento de COMISSÃO.");
             const { proventos } = calculo;
             
             const checkQuery = "SELECT id FROM historico_pagamentos_funcionarios WHERE usuario_id = $1 AND ciclo_nome = $2";
@@ -365,12 +367,10 @@ router.post('/efetuar', async (req, res) => {
             await fazerLancamento(CATEGORIA_MAP.COMISSAO, proventos.comissao, `Pgto Comissão (${nomeCicloOuMotivo}) para ${nome_funcionario}`, id_contato_financeiro);
 
         } else if (tipoPagamento === 'BONUS') {
-            console.log("[API /efetuar] Entrando no bloco de pagamento de BÔNUS.");
             const { proventos } = calculo;
             await fazerLancamento(CATEGORIA_MAP.BONUS_PREMIACOES, proventos.beneficios, `Bônus/Premiação: ${nomeCicloOuMotivo}`, id_contato_financeiro);
         
         } else if (tipoPagamento === 'VALE_TRANSPORTE') {
-            console.log("[API /efetuar] Entrando no bloco de pagamento de VALE_TRANSPORTE.");
             if (!datas_pagas || !Array.isArray(datas_pagas) || datas_pagas.length === 0) {
                 throw new Error("A lista de 'datas_pagas' é obrigatória para o pagamento de Vale-Transporte.");
             }
@@ -381,15 +381,12 @@ router.post('/efetuar', async (req, res) => {
             const descricaoLancamento = `Recarga VT (${datas_pagas.length} dias)`;
             await fazerLancamento(CATEGORIA_MAP.VALE_TRANSPORTE, totais.totalLiquidoAPagar, descricaoLancamento, id_contato_financeiro);
 
-            console.log(`[API /efetuar] Registrando ${datas_pagas.length} dias na tabela 'registro_dias_trabalhados'...`);
             for (const data of datas_pagas) {
                 await dbClient.query(
                     `INSERT INTO registro_dias_trabalhados (usuario_id, data, status, valor_referencia, observacao) VALUES ($1, $2, 'PAGO', $3, $4)`,
                     [id_funcionario, data, valor_passagem_diaria, `Pagamento efetuado em lote por ${req.usuarioLogado.nome}`]
                 );
-                console.log(`  - Dia ${data} registrado para o usuário ${id_funcionario}.`);
             }
-            console.log("[API /efetuar] Todos os dias foram registrados com sucesso.");
         }
         
         if (totais.totalLiquidoAPagar > 0) {
@@ -405,12 +402,9 @@ router.post('/efetuar', async (req, res) => {
                 `INSERT INTO historico_pagamentos_funcionarios (usuario_id, ciclo_nome, descricao, valor_liquido_pago, id_usuario_pagador, detalhes_pagamento, id_conta_debito) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
                 [id_funcionario, cicloParaSalvar, descricaoParaSalvar, totais.totalLiquidoAPagar, id_usuario_pagador, JSON.stringify(detalhesParaSalvar), id_conta_debito]
             );
-            console.log("[API /efetuar] Inserção no histórico bem-sucedida.");
         }
 
-        await dbClient.query('COMMIT');
-        console.log("[API /efetuar] Transação COMMIT executada. Operação finalizada com sucesso!");
-        
+        await dbClient.query('COMMIT');        
         res.status(201).json({ message: `Pagamento para ${nome_funcionario} efetuado com sucesso!` });
 
     } catch (error) {
@@ -741,7 +735,6 @@ router.post('/remover-registro-dia', async (req, res) => {
 
     const { usuario_id, data } = req.body;
 
-    console.log(`--- [API /remover-registro-dia] INICIANDO REMOÇÃO para usuário ${usuario_id} na data ${data} ---`);
     if (!usuario_id || !data) {
         return res.status(400).json({ error: 'Parâmetros usuario_id e data são obrigatórios.' });
     }
@@ -756,9 +749,7 @@ router.post('/remover-registro-dia', async (req, res) => {
 
         if (result.rowCount === 0) {
             // Isso pode acontecer se o usuário clicar rápido duas vezes. Não é um erro crítico.
-            console.log(`[API /remover-registro-dia] Nenhum registro encontrado para remover. Ação ignorada.`);
         } else {
-            console.log(`[API /remover-registro-dia] Registro removido com sucesso.`);
         }
 
         res.status(200).json({ message: 'Registro de dia removido com sucesso!' });

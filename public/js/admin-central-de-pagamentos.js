@@ -271,9 +271,8 @@ function renderizarResultadoComissao(dados) {
     // Adiciona o listener de evento ao botão de pagamento, se ele existir
     const btnPagar = document.getElementById('comissao-btn-efetuar-pagamento');
     if (btnPagar) {
-        btnPagar.addEventListener('click', () => handleEfetuarPagamentoComissao(dadosDoCalculo));
+        btnPagar.addEventListener('click', () => handleEfetuarPagamentoComissao(dados));
         
-        // <<<< APLICA A VERIFICAÇÃO DE PERMISSÃO AQUI >>>>
         verificarPermissaoEConfigurarBotao(
             'comissao-btn-efetuar-pagamento', 
             'permitir-pagar-comissao', 

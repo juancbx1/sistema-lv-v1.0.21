@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meu Desempenho</title>
+    <!-- Reutilizando os estilos base do dashboard para consistência -->
+    <link rel="stylesheet" href="/dashboard/dashboard.css">
+    <!-- Estilos específicos para esta página (vamos criar depois) -->
+    <link rel="stylesheet" href="/dashboard/desempenho.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body class="ds-body">
+
+    <!-- CABEÇALHO -->
+    <header class="ds-header-desempenho">
+        <div class="ds-header-conteudo">
+            <div class="ds-identidade-bloco-desempenho">
+                <div class="ds-identidade-avatar-desempenho">
+                    <img id="header-avatar-img" src="/img/default-avatar.png" alt="Avatar">
+                </div>
+                <div class="ds-identidade-info">
+                    <h1 id="header-nome-usuario">Carregando...</h1>
+                    <p id="header-cargo-nivel">Colaborador(a)</p>
+                </div>
+            </div>
+            <a href="/dashboard/dashboard.html" class="ds-link-voltar">
+                <i class="fas fa-arrow-left"></i> Voltar para a Dashboard
+            </a>
+        </div>
+    </header>
+
+    <!-- Container Principal do Conteúdo -->
+    <main class="ds-container-principal">
+    <!-- NOVO CARD 1: DESEMPENHO DO CICLO ATUAL -->
+        <section id="card-desempenho-atual" class="ds-card" style="display: none;"> <!-- Começa escondido -->
+            <div class="ds-card-header">
+                <h2 id="titulo-desempenho-atual" class="ds-card-titulo">Desempenho do Ciclo Atual</h2>
+            </div>
+            <div id="desempenho-atual-container" class="ds-card-body">
+                <div class="ds-spinner-container">
+                    <div class="ds-spinner"></div>
+                </div>
+            </div>
+        </section>
+                
+    <!-- NOVO CARD 2: COMISSÃO A RECEBER (CICLO FECHADO) -->
+        <section id="card-pagamento-pendente" class="ds-card" style="display: none;"> <!-- Começa escondido -->
+            <div class="ds-card-header">
+                <h2 id="titulo-pagamento-pendente" class="ds-card-titulo">Comissão a Receber (Ciclo Fechado)</h2>
+                <div id="data-pagamento-estimada" class="ds-data-pagamento">
+                    Pagamento estimado em: <span>--/--/----</span>
+                </div>
+            </div>
+            <div id="pagamento-pendente-container" class="ds-card-body">
+                <!-- Conteúdo será injetado aqui -->
+            </div>
+        </section>
+
+        <!-- SEÇÃO 2: HISTÓRICO DE COMISSÕES -->
+        <section class="ds-card">
+            <div class="ds-card-header">
+                <h2 class="ds-card-titulo">Histórico de Comissões Pagas</h2>
+                <div class="ds-card-filtro">
+                    <label for="filtro-ciclo">Filtrar por Ciclo:</label>
+                    <select id="filtro-ciclo" class="ds-select">
+                        <option value="">Carregando ciclos...</option>
+                    </select>
+                </div>
+            </div>
+            <div id="historico-container" class="ds-card-body">
+                <div class="ds-spinner-container">
+                    <div class="ds-spinner"></div>
+                </div>
+            </div>
+        </section>
+        
+    </main>
+
+    <!-- Scripts -->
+    <script src="/dashboard/desempenho.js" type="module"></script>
+
+    <!-- Input de arquivo escondido para o upload de avatar -->
+    <input type="file" id="input-avatar-upload" accept="image/*" style="display: none;">
+
+
+</body>
+</html>

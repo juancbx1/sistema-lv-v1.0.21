@@ -70,24 +70,27 @@ router.get('/', async (req, res) => {
             SELECT 
                 c.*,
                 u.nome as nome_autor,
-                -- Subquery 1: Verifica se o usuário logado já leu este post
                 EXISTS (
                     SELECT 1 FROM comunicacoes_lidos cl 
                     WHERE cl.id_comunicacao = c.id AND cl.id_usuario = $1
                 ) as lido,
-                
-                -- Subquery 2: Conta o total de likes para este post
                 (
                     SELECT COUNT(*) 
                     FROM comunicacao_reacoes cr 
                     WHERE cr.id_comunicacao = c.id AND cr.tipo_reacao = 'like'
                 )::int as total_likes,
-
-                -- Subquery 3: Verifica se o usuário logado curtiu este post
                 EXISTS (
                     SELECT 1 FROM comunicacao_reacoes cr
                     WHERE cr.id_comunicacao = c.id AND cr.id_usuario = $1 AND cr.tipo_reacao = 'like'
-                ) as usuario_curtiu
+                ) as usuario_curtiu,
+                
+                -- NOVA SUBQUERY PARA CONTAR COMENTÁRIOS --
+                (
+                    SELECT COUNT(*)
+                    FROM comunicacao_comentarios cc
+                    WHERE cc.id_comunicacao_pai = c.id
+                )::int as total_comentarios
+
             FROM 
                 comunicacoes c
             JOIN 
@@ -208,6 +211,124 @@ router.post('/:id/reagir', async (req, res) => {
         if (dbClient) await dbClient.query('ROLLBACK');
         console.error('[API POST /:id/reagir] Erro:', error);
         res.status(500).json({ error: 'Erro interno ao processar reação.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// Rota para BUSCAR comentários de um post
+router.get('/:id/comentarios', async (req, res) => {
+    const { id: comunicacaoId } = req.params;
+    let dbClient;
+
+    try {
+        dbClient = await pool.connect();
+        const queryText = `
+            SELECT 
+                cc.*,
+                u.nome as nome_autor,
+                u.avatar_url
+            FROM 
+                comunicacao_comentarios cc
+            JOIN 
+                usuarios u ON cc.id_autor = u.id
+            WHERE 
+                cc.id_comunicacao_pai = $1
+            ORDER BY 
+                cc.data_criacao ASC;
+        `;
+        const result = await dbClient.query(queryText, [comunicacaoId]);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        console.error('[API GET /:id/comentarios] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar comentários.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+
+
+// Rota para ADICIONAR um comentário a um post
+router.post('/:id/comentarios', async (req, res) => {
+    const { id: autorId } = req.usuarioLogado;
+    const { id: comunicacaoId } = req.params;
+    const { conteudo } = req.body;
+    let dbClient;
+
+    if (!conteudo || conteudo.trim() === '') {
+        return res.status(400).json({ error: 'O conteúdo do comentário não pode ser vazio.' });
+    }
+
+    try {
+        dbClient = await pool.connect();
+        const queryText = `
+            INSERT INTO comunicacao_comentarios (id_comunicacao_pai, id_autor, conteudo)
+            VALUES ($1, $2, $3)
+            RETURNING *;
+        `;
+        const result = await dbClient.query(queryText, [comunicacaoId, autorId, conteudo]);
+        
+        // Para uma resposta mais rica, buscamos os dados do autor recém-inserido
+        const comentarioCompletoQuery = `
+            SELECT cc.*, u.nome as nome_autor, u.avatar_url
+            FROM comunicacao_comentarios cc
+            JOIN usuarios u ON cc.id_autor = u.id
+            WHERE cc.id = $1;
+        `;
+        const comentarioCompletoResult = await dbClient.query(comentarioCompletoQuery, [result.rows[0].id]);
+        
+        res.status(201).json(comentarioCompletoResult.rows[0]);
+    } catch (error) {
+        console.error('[API POST /:id/comentarios] Erro:', error);
+        res.status(500).json({ error: 'Erro ao postar comentário.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// Rota para EDITAR um comentário
+router.put('/comentarios/:id_comentario', async (req, res) => {
+    const { id: usuarioId } = req.usuarioLogado;
+    const { id_comentario } = req.params;
+    const { conteudo } = req.body;
+    let dbClient;
+
+    if (!conteudo || conteudo.trim() === '') {
+        return res.status(400).json({ error: 'O conteúdo do comentário não pode ser vazio.' });
+    }
+
+    try {
+        dbClient = await pool.connect();
+        
+        // Verifica se o comentário existe e se pertence ao usuário que está tentando editar
+        const checkResult = await dbClient.query(
+            `SELECT id_autor FROM comunicacao_comentarios WHERE id = $1`, 
+            [id_comentario]
+        );
+
+        if (checkResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Comentário não encontrado.' });
+        }
+
+        if (checkResult.rows[0].id_autor !== usuarioId) {
+            // Aqui você poderia permitir que admins/supervisores editem, se quisesse.
+            // Por enquanto, apenas o próprio autor pode editar.
+            return res.status(403).json({ error: 'Você não tem permissão para editar este comentário.' });
+        }
+        
+        // Atualiza o comentário
+        const updateResult = await dbClient.query(
+            `UPDATE comunicacao_comentarios SET conteudo = $1, data_criacao = CURRENT_TIMESTAMP 
+             WHERE id = $2 RETURNING *`,
+            [conteudo, id_comentario]
+        );
+        
+        res.status(200).json(updateResult.rows[0]);
+
+    } catch (error) {
+        console.error('[API PUT /comentarios/:id_comentario] Erro:', error);
+        res.status(500).json({ error: 'Erro ao editar comentário.' });
     } finally {
         if (dbClient) dbClient.release();
     }

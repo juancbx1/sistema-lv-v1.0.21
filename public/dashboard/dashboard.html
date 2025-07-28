@@ -1,126 +1,143 @@
 <!DOCTYPE html>
-<html lang="pt-BR"> 
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Meu Dashboard</title>
-    <!-- O CSS e o JS apontarão para os novos arquivos unificados -->
-    <link rel="stylesheet" href="/dashboard/dashboard.css"> 
+    <link rel="stylesheet" href="/dashboard/dashboard.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
 </head>
 
-        <body class="ds-body"> 
-    
-    <!-- NOVO Header "Action Bar" -->
-    <header class="ds-cabecalho-pagina">
-    <!-- Lado Esquerdo: Apenas a Saudação -->
-    <div class="ds-info-usuario-principal">
-        <h1 id="saudacaoUsuario">Carregando...</h1>
-        <!-- O span do troféu foi REMOVIDO daqui -->
-    </div>
+<body class="ds-body">
 
-    <!-- Lado Direito: Barra de Ações Rápidas -->
-    <div class="ds-action-bar">
-        <!-- O troféu agora vive aqui permanentemente -->
-        <div id="nivelUsuarioContainer" class="ds-action-level" style="display: none;">
-            <i class="fas fa-trophy"></i>
-            <span id="nivelValor">N/A</span>
+    <!-- CABEÇALHO PRINCIPAL -->
+    <header class="ds-header-principal">
+        <div class="ds-identidade-bloco">
+            <div class="ds-identidade-avatar">
+                <img id="header-avatar-img" src="/img/default-avatar.png" alt="Avatar do colaborador">
+                <span id="header-level-badge" class="ds-identidade-level-badge">?</span>
+            </div>
+            <div class="ds-identidade-info">
+                <h1 id="header-nome-usuario">Carregando...</h1>
+                <p id="header-cargo-nivel">Colaborador(a)</p>
+            </div>
         </div>
 
-        <!-- Botões de Ação -->
-        <button id="btnAcaoAssinatura" class="ds-action-btn" title="Assinaturas Pendentes">
-            <i class="fas fa-file-signature"></i>
-            <span id="badgeAssinatura" class="ds-badge" style="display: none;">0</span>
+        <div class="ds-actions-bloco">
+            <button id="btnAcaoMural" class="ds-action-btn" title="Central de Comunicação">
+                <i class="fas fa-bullhorn"></i>
+                <span id="badgeMural" class="ds-badge" style="display: none;">0</span>
+            </button>
+            <button id="btnAcaoAssinatura" class="ds-action-btn" title="Assinaturas Pendentes">
+                <i class="fas fa-file-signature"></i>
+                <span id="badgeAssinatura" class="ds-badge" style="display: none;">0</span>
+            </button>
+
+            <button id="btnAcaoSuporte" class="ds-action-btn" title="Suporte & Sugestões">
+            <i class="fas fa-headset"></i>
+            <span id="badgeSuporte" class="ds-badge" style="display: none;">0</span>
         </button>
 
-        <button id="btnAcaoMural" class="ds-action-btn" title="Mural da Empresa">
-            <i class="fas fa-bullhorn"></i>
-            <span id="badgeMural" class="ds-badge" style="display: none;">0</span>
-        </button>
+            <a href="/dashboard/desempenho.html" class="ds-action-btn" title="Meu Desempenho">
+                <i class="fas fa-chart-line"></i>
+            </a>
+            <button id="btnAcaoPerfil" class="ds-action-btn" title="Meu Perfil">
+                <i class="fas fa-user-cog"></i>
+            </button>
+            <button id="logoutBtn" class="ds-action-btn ds-btn-sair" title="Sair">
+                <i class="fas fa-sign-out-alt"></i>
+            </button>
+        </div>
+    </header>
 
-        <button id="btnAcaoHistorico" class="ds-action-btn" title="Meu Histórico" disabled>
-            <i class="fas fa-chart-line"></i>
-        </button>
+    <!-- CONTEÚDO PRINCIPAL DA PÁGINA -->
+    <main class="ds-container-principal">
         
-        <!-- Botão de Sair -->
-        <button id="logoutBtn" class="ds-btn ds-btn-perigo ds-btn-sair">
-            <i class="fas fa-sign-out-alt"></i>
-            <span class="ds-btn-texto-logout">Sair</span>
-        </button>
-    </div>
-</header>
-
-    <!-- Conteúdo do Dashboard -->
-    <div class="ds-container-principal">
-        <section class="ds-cards-grid">
-            
-            <!-- Card Alcance de Meta -->
-            <div class="ds-card ds-card-meta">
-                <h2 class="ds-card-titulo">Minha Meta Semanal</h2>
-                <div class="ds-meta-controles">
-                    <select id="metaSelect" class="ds-select" disabled></select>
-                    <button id="editarMetaBtn" class="ds-btn ds-btn-outline-primario">
-                        <i class="fas fa-edit"></i> Editar Meta
-                    </button>
-                </div>
-                <div class="ds-progresso-secao">
-                    <div class="ds-progresso-container">
-                        <div class="ds-barra-progresso">
-                            <div id="progressoBarra" class="ds-barra-progresso-preenchimento"></div>
-                        </div>
-                        <p class="ds-pontos-destaque">Pontos: <span id="pontosFeitos">0</span></p>
+        <!-- PAINEL DE DESEMPENHO -->
+        <section class="ds-painel-desempenho">
+            <!-- SEÇÃO 1: FOCO DO DIA -->
+            <div class="ds-foco-diario">
+                <div class="ds-progress-ring-container">
+                    <svg class="ds-progress-ring" width="160" height="160">
+                        <circle class="ds-progress-ring-bg" stroke-width="12" r="74" cx="80" cy="80" />
+                        <circle id="progress-ring-fg" class="ds-progress-ring-fg" stroke-width="12" r="74" cx="80" cy="80" />
+                    </svg>
+                    <div id="foco-diario-texto-central" class="ds-progress-ring-texto">
+                        <span class="ds-texto-grande">--</span>
+                        <span class="ds-texto-pequeno">Pontos</span>
                     </div>
-                    <p id="pontosFaltantes" class="ds-texto-apoio">Calculando...</p>
-                    <p id="comissaoGarantida" class="ds-comissao-info" style="display: none;">Comissão já garantida: <span id="valorComissao" class="ds-valor-destaque">R$ 0,00</span></p>
-                    <p id="semMetaBatida" class="ds-sem-meta" style="display: block;">Continue produzindo para alcançar sua meta!</p>
                 </div>
-            </div>
-
-            <!-- Card Produção do Dia -->
-            <div class="ds-card ds-card-producao-dia">
-                <h2 class="ds-card-titulo">Pontos do Dia</h2>
-                <canvas id="graficoProducaoDia"></canvas>
-            </div>
-            
-            <!-- Card Andamento do Ciclo Atual -->
-            <div class="ds-card ds-card-andamento-ciclo">
-                <h2 class="ds-card-titulo" id="tituloAndamentoCiclo">Sua Jornada no Ciclo</h2>
-                <div class="ds-carrossel-ciclo-container">
-                    <button class="ds-carrossel-ciclo-nav ds-carrossel-ciclo-prev" id="cicloCarrosselPrev" aria-label="Semana Anterior">
-                        <i class="fas fa-chevron-left"></i>
-                    </button>
-                    <div class="ds-carrossel-ciclo-viewport" id="cicloCarrosselViewport">
-                        <div class="ds-carrossel-ciclo-slider" id="cicloCarrosselSlider">
-                            <!-- Slides serão injetados pelo JS -->
-                        </div>
+                <div class="ds-foco-diario-legenda-container">
+                    <div id="legenda-meta-dia" class="ds-legenda-pilula">
+                        <span>Meta do Dia</span>
+                        <strong>-- pts</strong>
                     </div>
-                    <button class="ds-carrossel-ciclo-nav ds-carrossel-ciclo-next" id="cicloCarrosselNext" aria-label="Próxima Semana">
-                        <i class="fas fa-chevron-right"></i>
-                    </button>
+                    <div id="legenda-feitos-dia" class="ds-legenda-pilula">
+                        <span>Feitos Hoje</span>
+                        <strong>-- pts</strong>
+                    </div>
                 </div>
-                <div class="ds-carrossel-ciclo-indicadores" id="cicloCarrosselIndicadores"></div>
-                <p id="cicloCarregandoMsg" class="ds-texto-apoio" style="text-align:center; margin-top:15px;">Carregando informações do ciclo...</p>
             </div>
 
-            <!-- Card Detalhamento de Atividades (ocupa a largura total) -->
-            <div class="ds-card ds-card-detalhamento ds-card-full-width">
+            <!-- SEÇÃO 2: PLANEJADOR SEMANAL (COM SLIDER) -->
+            <div class="ds-resumo-semanal">
+                <h3 class="ds-resumo-header">Planeje sua Meta Semanal</h3>
+                <div class="ds-slider-container">
+                    <input type="range" id="meta-slider" class="ds-meta-slider" min="0" max="100" value="0">
+                    <div id="slider-ticks" class="ds-slider-ticks"></div>
+                </div>
+                <div id="feedback-meta-selecionada" class="ds-feedback-meta">
+                    Meta: <span>--</span> (<span>-- pts</span>)
+                </div>
+                <div class="ds-feedback-duplo-container">
+                    <div class="ds-feedback-item">
+                        <span class="ds-feedback-label">Comissão Projetada</span>
+                        <strong id="feedback-comissao" class="ds-feedback-valor">R$ --</strong>
+                    </div>
+                    <div class="ds-feedback-item">
+                        <span class="ds-feedback-label">Faltam para o Alvo</span>
+                        <strong id="feedback-pontos-faltantes" class="ds-feedback-valor">-- pts</strong>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEÇÃO 3: MÉTRICAS RÁPIDAS -->
+            <div class="ds-metricas-rapidas">
+                <div class="ds-metrica-item">
+                    <span class="ds-metrica-label">Pontos na Semana</span>
+                    <strong id="metrica-pontos-semana" class="ds-metrica-valor">0</strong>
+                </div>
+                <div class="ds-metrica-item">
+                    <span class="ds-metrica-label">Média Diária</span>
+                    <strong id="metrica-media-diaria" class="ds-metrica-valor">0</strong>
+                </div>
+                <div class="ds-metrica-item">
+                    <span class="ds-metrica-label">Conquistas</span>
+                    <strong id="metrica-conquistas" class="ds-metrica-valor">0</strong>
+                </div>
+            </div>
+        </section>
+
+        <!-- CARD DE DETALHAMENTO DE ATIVIDADES -->
+        <section class="ds-painel-desempenho">
+            <div class="ds-card-detalhamento" style="padding: 24px;"> <!-- Adicionando padding interno -->
                 <h2 class="ds-card-titulo">Detalhamento das Atividades</h2>
-                <div class="ds-filtros-container">
-                    <div class="ds-filtro-item">
-                        <span id="filtroDia" class="ds-filtro-texto active">Filtrar por Dia</span>
-                        <input type="text" id="datepickerDia" class="ds-input ds-datepicker" placeholder="Selecione o dia">
-                    </div>
-                    <div class="ds-filtro-item">
-                        <span id="filtroSemana" class="ds-filtro-texto">Filtrar por Semana</span>
-                        <span id="datepickerSemanaDisplay" class="ds-input ds-datepicker-display">Selecione a semana</span>
-                        <input type="text" id="datepickerSemana" class="ds-datepicker-oculto">
-                    </div>
+                
+                <div class="ds-controles-detalhamento">
+                    <button id="btn-abrir-filtros" class="ds-btn ds-btn-outline-primario">
+                        <i class="fas fa-filter"></i> Buscar e Filtrar Atividades
+                    </button>
                 </div>
-                <p id="totalAtividades" class="ds-total-atividades">TOTAL DE ATIVIDADES (QTD): 0</p>
+                
+                <div id="filtros-ativos-container" class="ds-filtros-ativos-container"></div>
+                
+                <div id="totalizadores-detalhamento" class="ds-totalizadores-container"></div>
+                
                 <div class="ds-atividades-wrapper">
                     <ul id="listaAtividades" class="ds-atividades-lista"></ul>
                 </div>
+                
                 <div id="paginacaoContainer" class="ds-paginacao">
                     <button id="btnAnterior" class="ds-btn ds-btn-outline-primario">
                         <i class="fas fa-chevron-left"></i> Anterior
@@ -131,59 +148,57 @@
                     </button>
                 </div>
             </div>
-            
         </section>
-    </div>
+    </main>
 
-    <!-- Popup de Mensagem (será usado para avisos, erros, etc.) -->
+    <!-- POPUPS, MODAIS E PAINÉIS LATERAIS -->
+
     <div id="popupGenerico" class="ds-popup-overlay">
         <div class="ds-popup-mensagem">
             <i id="popupIcone" class="fas ds-popup-icone"></i>
             <p id="popupMensagemTexto"></p>
-            <button id="popupBotaoOk" class="ds-btn ds-btn-primario">OK</button>
+            <button id="popupBotaoOk" class="ds-btn ds-btn-primario ds-btn-texto-claro">OK</button>
         </div>
     </div>
     
-    <!-- Modal de Assinatura (será gerado dinamicamente pelo JS) -->
-
-    <!-- NOVO PAINEL LATERAL DE COMUNICAÇÕES -->
-    <div id="comunicacoes-overlay" class="ds-side-panel-overlay">
-        <div id="comunicacoes-panel" class="ds-side-panel">
-            <div class="ds-side-panel-header">
+    <div id="comunicacoes-overlay" class="ds-side-painel-overlay">
+        <div id="comunicacoes-painel" class="ds-side-painel">
+            <div class="ds-side-painel-header">
                 <h3>Central de Comunicação</h3>
-                <button id="fechar-panel-comunicacoes" class="ds-btn-fechar-panel">×</button>
+                <button id="fechar-painel-comunicacoes" class="ds-btn-fechar-painel-padrao">X</button>
             </div>
-            <div id="comunicacoes-panel-body" class="ds-side-panel-body">
-                <!-- Cards de comunicação serão injetados aqui -->
-                <div class="ds-spinner-container">
-                    <div class="ds-spinner"></div>
-                </div>
+            <div id="comunicacoes-painel-body" class="ds-side-painel-body">
+                <div class="ds-spinner-container"><div class="ds-spinner"></div></div>
             </div>
-            <div class="ds-side-panel-footer">
-                <button id="btn-novo-ponto-atencao" class="ds-btn ds-btn-primario">
-                    <i class="fas fa-plus-circle"></i> Enviar Ponto de Atenção
-                </button>
+           
+        </div>
+    </div>
+
+    <div id="perfil-overlay" class="ds-side-painel-overlay">
+        <div id="perfil-painel" class="ds-side-painel">
+            <div id="perfil-painel-body" class="ds-side-painel-body">
+                <div class="ds-spinner-container"><div class="ds-spinner"></div></div>
             </div>
         </div>
     </div>
 
-     <!-- NOVO Modal para criar um Ponto de Atenção -->
     <div id="modal-ponto-atencao" class="ds-popup-overlay">
         <div class="ds-popup-mensagem">
-            <h3 class="ds-modal-titulo" style="color: var(--ds-cor-texto-principal);">Enviar Ponto de Atenção</h3>
+            <button id="btn-fechar-pa" class="ds-btn-fechar-painel-padrao">X</button> 
+            <h3 class="ds-modal-titulo">Enviar Ponto de Atenção</h3>
             <p style="font-size: 0.9rem; color: var(--ds-cor-cinza-texto-secundario); text-align: left;">
-                Use este espaço para reportar problemas com máquinas, falta de material, ou dar sugestões. Sua mensagem será enviada diretamente para a supervisão.
+                Use este espaço para reportar problemas, falta de material, ou dar sugestões.
             </p>
-            <form id="form-ponto-atencao" style="width: 100%; text-align: left;">
-                <div style="margin-bottom: 15px;">
+            <form id="form-ponto-atencao" style="width: 100%; text-align: left; margin-top: 15px;">
+                <div>
                     <label for="input-pa-titulo" style="font-weight: 600;">Assunto:</label>
-                    <input type="text" id="input-pa-titulo" class="ds-input" required placeholder="Ex: Máquina de costura travando">
+                    <input type="text" id="input-pa-titulo" class="ds-input" required placeholder="Ex: Máquina travando">
                 </div>
-                <div style="margin-bottom: 15px;">
+                <div style="margin-top: 15px;">
                     <label for="textarea-pa-conteudo" style="font-weight: 600;">Descrição:</label>
-                    <textarea id="textarea-pa-conteudo" class="ds-input" rows="5" required placeholder="Descreva o problema ou sugestão em detalhes."></textarea>
+                    <textarea id="textarea-pa-conteudo" class="ds-input" rows="5" required placeholder="Descreva em detalhes."></textarea>
                 </div>
-                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px;">
                     <button type="button" id="btn-cancelar-pa" class="ds-btn ds-btn-secundario">Cancelar</button>
                     <button type="submit" id="btn-enviar-pa" class="ds-btn ds-btn-primario">Enviar</button>
                 </div>
@@ -191,12 +206,103 @@
         </div>
     </div>
 
-    <!-- Scripts -->
+    <div id="painel-filtros-overlay" class="ds-bottom-sheet-overlay">
+        <div id="painel-filtros-sheet" class="ds-bottom-sheet">
+            <div class="ds-sheet-header">
+                <h3>Buscar e Filtrar</h3>
+                <button id="btn-fechar-filtros" class="ds-btn-fechar-sheet">×</button>
+            </div>
+            <div class="ds-sheet-body">
+                <div class="ds-form-group">
+                    <label for="input-busca-op">Buscar por OP / Arremate</label>
+                    <input type="text" id="input-busca-op" class="ds-input" placeholder="Digite o número da OP...">
+                </div>
+                <div class="ds-form-group">
+                    <label for="select-periodo">Período</label>
+                    <select id="select-periodo" class="ds-select">
+                        <option value="hoje">Hoje</option>
+                        <option value="ontem">Ontem</option>
+                        <option value="esta-semana">Esta Semana (Ciclo)</option>
+                        <option value="semana-passada">Semana Passada (Ciclo)</option>
+                        <option value="dia-especifico">Dia Específico...</option>
+                        <option value="semana-especifica">Semana Específica...</option>
+                    </select>
+                    <input type="text" id="datepicker-dia-filtro" class="ds-input ds-datepicker-oculto">
+                    <input type="text" id="datepicker-semana-filtro" class="ds-input ds-datepicker-oculto">
+                </div>
+                
+            </div>
+            <div class="ds-sheet-footer">
+                <button id="btn-limpar-filtros" class="ds-btn ds-btn-secundario">Limpar</button>
+                <button id="btn-aplicar-filtros" class="ds-btn ds-btn-primario ds-btn-texto-claro">Ver Resultados</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PAINEL LATERAL DE SUPORTE E PONTOS DE ATENÇÃO -->
+        <div id="suporte-overlay" class="ds-side-painel-overlay">
+            <div id="suporte-painel" class="ds-side-painel">
+                <div class="ds-side-painel-header">
+            <h3>Suporte & Sugestões</h3>
+            <button id="fechar-painel-suporte" class="ds-btn-fechar-painel-padrao">X</button>
+        </div>
+
+        <div id="suporte-painel-body" class="ds-side-painel-body">
+            <!-- Seus pontos de atenção e respostas aparecerão aqui -->
+            <div class="ds-spinner-container">
+                <div class="ds-spinner"></div>
+            </div>
+        </div>
+        <div class="ds-side-painel-footer">
+           <button id="btn-novo-ponto-atencao-suporte" class="ds-btn ds-btn-primario ds-btn-texto-claro">
+                    <i class="fas fa-plus-circle"></i> Enviar Novo Ponto de Atenção
+            </button>
+        </div>
+    </div>
+</div>
+
+    <!-- MODAL PARA DETALHES DA CONQUISTA -->
+    <div id="modal-detalhes-conquista" class="ds-popup-overlay">
+        <div class="ds-popup-mensagem">
+            <!-- Conteúdo será injetado pelo JS -->
+        </div>
+    </div>
+
+    <!-- NOVO MODAL DE GALERIA DE AVATARES -->
+    <div id="modal-galeria-avatar" class="ds-popup-overlay">
+        <div class="ds-popup-mensagem ds-modal-galeria">
+            
+            <!-- CABEÇALHO DO MODAL -->
+            <button class="ds-btn-fechar-painel-padrao" onclick="this.closest('.ds-popup-overlay').classList.remove('ativo')">X</button>
+            <h3 class="ds-modal-titulo">Meus Avatares</h3>
+            <p class="ds-modal-subtitulo">Clique em uma imagem para defini-la como sua foto de perfil principal.</p>
+            
+            <!-- GRID ONDE OS AVATARES APARECEM -->
+            <div id="galeria-avatar-grid" class="ds-galeria-avatar-grid">
+                <!-- Os slots de avatar serão carregados aqui pelo JavaScript -->
+                <div class="ds-spinner-container">
+                    <div class="ds-spinner"></div>
+                </div>
+            </div>
+
+            <!-- RODAPÉ DO MODAL COM TEXTO DE AJUDA E BOTÃO GERENCIAR -->
+            <div class="ds-galeria-avatar-footer">
+                <p id="galeria-avatar-ajuda" class="ds-galeria-avatar-ajuda">Carregando...</p>
+                <button id="btn-gerenciar-avatares" class="ds-btn ds-btn-secundario ds-btn-sm">Gerenciar</button>
+            </div>
+
+        </div>
+    </div>
+
+
+    <!-- RECURSOS -->
+    <input type="file" id="input-avatar-upload" accept="image/*" style="display: none;">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
     <script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/i18n/datepicker-pt-BR.js"></script>
-    <script src="/dashboard/dashboard.js" type="module"></script> <!-- Aponta para o novo JS unificado -->
+    <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
+    <script src="/dashboard/dashboard.js" type="module"></script>
 
 </body>
 </html>

@@ -115,7 +115,7 @@ router.put('/definir-ativo/:id', async (req, res) => {
     }
 });
 
-// ROTA 4: DELETE /api/avatares/:id - Excluir um avatar
+// ROTA 4: DELETE /api/avatares/:id - Excluir um avatar (VERSÃO CORRIGIDA)
 router.delete('/:id', async (req, res) => {
     const token = getToken(req);
     if (!token) return res.status(401).json({ error: 'Acesso não autorizado' });
@@ -125,8 +125,9 @@ router.delete('/:id', async (req, res) => {
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const userId = decoded.id;
+        let avatarUrlCleared = false;
 
-        // Primeiro, buscar os dados do avatar para garantir que não é o ativo e pegar a URL
+        // Buscar os dados do avatar para garantir que pertence ao usuário e pegar a URL
         const { rows: [avatarParaExcluir] } = await sql`
             SELECT url_blob, ativo FROM avatares_usuarios
             WHERE id = ${avatarId} AND id_usuario = ${userId};
@@ -135,17 +136,21 @@ router.delete('/:id', async (req, res) => {
         if (!avatarParaExcluir) {
             return res.status(404).json({ error: 'Avatar não encontrado ou não pertence a este usuário.' });
         }
+
+        // --- LÓGICA CORRIGIDA ---
+        // Se o avatar a ser excluído for o ativo, limpa a referência na tabela de usuários.
         if (avatarParaExcluir.ativo) {
-            return res.status(400).json({ error: 'Não é possível excluir o avatar que está ativo.' });
+            await sql`UPDATE usuarios SET avatar_url = NULL WHERE id = ${userId};`;
+            avatarUrlCleared = true;
         }
 
         // Excluir do Vercel Blob
         await del(avatarParaExcluir.url_blob);
 
-        // Excluir do banco de dados
+        // Excluir do banco de dados (tabela de avatares)
         await sql`DELETE FROM avatares_usuarios WHERE id = ${avatarId};`;
         
-        res.status(200).json({ success: true });
+        res.status(200).json({ success: true, avatarUrlCleared: avatarUrlCleared });
 
     } catch (error) {
         console.error('Erro ao excluir avatar:', error);

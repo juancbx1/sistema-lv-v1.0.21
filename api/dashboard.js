@@ -5,8 +5,8 @@ const { Pool } = pkg;
 import jwt from 'jsonwebtoken';
 import express from 'express';
 
-// Importa a função de ciclos.
-import { getObjetoCicloCompletoAtual } from '../public/js/utils/ciclos.js';
+// Importa as funções de ciclos que agora usaremos no backend
+import { ciclos, getObjetoCicloCompletoAtual } from '../public/js/utils/ciclos.js';
 
 const router = express.Router();
 const pool = new Pool({
@@ -15,7 +15,28 @@ const pool = new Pool({
 });
 const SECRET_KEY = process.env.JWT_SECRET;
 
-// Middleware de autenticação
+// --- FUNÇÃO AUXILIAR PARA ENCONTRAR O ÚLTIMO CICLO FECHADO ---
+function findUltimoCicloFechado(dataReferencia = new Date()) {
+    const hoje = new Date(dataReferencia.getFullYear(), dataReferencia.getMonth(), dataReferencia.getDate());
+    
+    let ultimoCicloFechado = null;
+
+    for (const ciclo of ciclos) {
+        const fimCicloStr = ciclo.semanas[ciclo.semanas.length - 1].fim;
+        const dataFimCiclo = new Date(fimCicloStr + 'T23:59:59');
+
+        if (dataFimCiclo < hoje) {
+            ultimoCicloFechado = ciclo; // Continua atualizando para pegar o mais recente
+        } else {
+            // Assim que encontramos um ciclo que ainda não terminou, o anterior é o que queremos.
+            break;
+        }
+    }
+    return ultimoCicloFechado;
+}
+
+
+// Middleware de autenticação (sem alterações)
 router.use(async (req, res, next) => {
     try {
         const authHeader = req.headers.authorization;
@@ -36,116 +57,91 @@ router.get('/desempenho', async (req, res) => {
     let dbClient;
     try {
         dbClient = await pool.connect();
-        const userResult = await dbClient.query('SELECT nome, email, tipos, nivel FROM usuarios WHERE id = $1', [usuarioId]);
+        const userResult = await dbClient.query('SELECT nome, email, tipos, nivel, avatar_url FROM usuarios WHERE id = $1', [usuarioId]);
         if (userResult.rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado.' });
         
         const usuario = userResult.rows[0];
         const tipoUsuario = usuario.tipos?.[0] || null;
 
-        if (tipoUsuario !== 'costureira' && tipoUsuario !== 'tiktik') {
-            return res.status(403).json({ error: 'Dashboard destinado a costureiras e tiktiks.' });
-        }
-        
-        // *** INÍCIO DA MUDANÇA: REMOVER FILTRO DE DATA ***
-        
-        // O parâmetro da query agora é APENAS o nome do usuário.
-        const queryParams = [usuario.nome];
+        // 1. ACHAR OS CICLOS RELEVANTES
+        const cicloAtual = getObjetoCicloCompletoAtual(new Date());
+        const ultimoFechado = findUltimoCicloFechado(new Date());
 
-        console.log(`[API Desempenho] Buscando TODAS as atividades para o usuário: "${usuario.nome}"`);
-        
-        let queryText;
-        if (tipoUsuario === 'costureira') {
-            queryText = `
-                SELECT 
-                    'OP' as tipo_origem, 
-                    pr.id::text as id_original, 
-                    pr.data, 
-                    p.nome as produto, 
-                    pr.variacao, 
-                    pr.quantidade, 
-                    pr.pontos_gerados, 
-                    pr.valor_ponto_aplicado, 
-                    pr.op_numero, 
-                    pr.processo, 
-                    pr.assinada,
-                    -- Subquery para verificar se existe uma divergência pendente para esta produção
-                    EXISTS (
-                        SELECT 1 FROM log_divergencias ld 
-                        WHERE ld.id_producao_original = pr.id AND ld.status = 'Pendente'
-                    ) as divergencia_pendente
-                FROM producoes pr 
-                JOIN produtos p ON pr.produto_id = p.id 
-                WHERE pr.funcionario = $1
-            `;
-        } else { // tipoUsuario === 'tiktik'
-            queryText = `
-                -- Produções de OP do TikTik
-                SELECT 
-                    'OP' as tipo_origem, 
-                    pr.id::text as id_original, 
-                    pr.data, 
-                    p.nome as produto, 
-                    pr.variacao, 
-                    pr.quantidade, 
-                    pr.pontos_gerados, 
-                    pr.valor_ponto_aplicado, 
-                    pr.op_numero, 
-                    pr.processo, 
-                    pr.assinada_por_tiktik as assinada,
-                    EXISTS (
-                        SELECT 1 FROM log_divergencias ld 
-                        WHERE ld.id_producao_original = pr.id AND ld.status = 'Pendente'
-                    ) as divergencia_pendente
-                FROM producoes pr 
-                JOIN produtos p ON pr.produto_id = p.id 
-                WHERE pr.funcionario = $1 
-                
-                UNION ALL 
-                
-                -- Arremates do TikTik
-                SELECT 
-                    'Arremate' as tipo_origem, 
-                    ar.id::text as id_original, 
-                    ar.data_lancamento as data, 
-                    p.nome as produto, 
-                    ar.variante as variacao, 
-                    ar.quantidade_arrematada as quantidade, 
-                    ar.pontos_gerados, 
-                    ar.valor_ponto_aplicado, 
-                    ar.op_numero, 
-                    'Arremate' as processo, 
-                    ar.assinada,
-                    EXISTS (
-                        SELECT 1 FROM log_divergencias ld 
-                        WHERE ld.id_arremate_original = ar.id AND ld.status = 'Pendente'
-                    ) as divergencia_pendente
-                FROM arremates ar 
-                JOIN produtos p ON ar.produto_id = p.id 
-                WHERE ar.usuario_tiktik = $1 AND ar.tipo_lancamento = 'PRODUCAO'
-            `;
+        let dataInicioBusca = null;
+        let dataFimBusca = null;
+
+        if (cicloAtual) {
+            dataInicioBusca = cicloAtual.semanas[0].inicio; // Início do ciclo atual
+            dataFimBusca = cicloAtual.semanas[cicloAtual.semanas.length - 1].fim; // Fim do ciclo atual
+        }
+        if (ultimoFechado) {
+            // Expande o período de busca para incluir também o último ciclo fechado
+            dataInicioBusca = ultimoFechado.semanas[0].inicio;
+        }
+
+        if (!dataInicioBusca) {
+            // Se não há ciclo atual nem fechado, não busca nada
+            return res.status(200).json({
+                usuario: { ...usuario, tipo: tipoUsuario },
+                cicloFechado: null,
+                cicloAtual: null
+            });
         }
         
-        // *** FIM DA MUDANÇA ***
+        // 2. QUERY OTIMIZADA: Busca atividades apenas no período relevante
+        let queryParams = [usuario.nome, dataInicioBusca, dataFimBusca];
+        let queryText = `
+            SELECT 'OP' as tipo_origem, pr.*, p.nome as produto, 
+            (CASE WHEN '${tipoUsuario}' = 'tiktik' THEN pr.assinada_por_tiktik ELSE pr.assinada END) as assinada,
+            EXISTS (SELECT 1 FROM log_divergencias ld WHERE ld.id_producao_original = pr.id AND ld.status = 'Pendente') as divergencia_pendente
+            FROM producoes pr JOIN produtos p ON pr.produto_id = p.id 
+            WHERE pr.funcionario = $1 AND pr.data BETWEEN $2 AND $3
+        `;
+
+        if (tipoUsuario === 'tiktik') {
+            queryText += `
+                UNION ALL 
+                SELECT 'Arremate' as tipo_origem, ar.*, p.nome as produto, ar.assinada,
+                EXISTS (SELECT 1 FROM log_divergencias ld WHERE ld.id_arremate_original = ar.id AND ld.status = 'Pendente') as divergencia_pendente
+                FROM arremates ar JOIN produtos p ON ar.produto_id = p.id 
+                WHERE ar.usuario_tiktik = $1 AND ar.tipo_lancamento = 'PRODUCAO' AND ar.data_lancamento BETWEEN $2 AND $3
+            `;
+        }
         
         const desempenhoResult = await dbClient.query(queryText, queryParams);
-        const todasAsAtividades = desempenhoResult.rows;
+        const todasAtividades = desempenhoResult.rows;
 
-        console.log(`[API Desempenho] Query executada. Número TOTAL de atividades encontradas: ${todasAsAtividades.length}`);
+        // 3. SEPARAR ATIVIDADES POR CICLO
+        let atividadesCicloFechado = [];
+        if (ultimoFechado) {
+            const inicio = new Date(ultimoFechado.semanas[0].inicio + 'T00:00:00');
+            const fim = new Date(ultimoFechado.semanas[ultimoFechado.semanas.length - 1].fim + 'T23:59:59');
+            atividadesCicloFechado = todasAtividades.filter(atv => new Date(atv.data) >= inicio && new Date(atv.data) <= fim);
+        }
+
+        let atividadesCicloAtual = [];
+        if (cicloAtual) {
+            const inicio = new Date(cicloAtual.semanas[0].inicio + 'T00:00:00');
+            const fim = new Date(cicloAtual.semanas[cicloAtual.semanas.length - 1].fim + 'T23:59:59');
+            atividadesCicloAtual = todasAtividades.filter(atv => new Date(atv.data) >= inicio && new Date(atv.data) <= fim);
+        }
         
-        // Os cálculos de pontos e período agora serão feitos no frontend,
-        // pois dependem da semana selecionada pelo usuário.
-        // A API agora só entrega os dados brutos.
+        // 4. MONTAR A RESPOSTA ESTRUTURADA
         const resposta = {
-            usuario: { nome: usuario.nome, email: usuario.email, tipo: tipoUsuario, nivel: usuario.nivel },
-            // Enviamos um array vazio para 'atividades', o frontend preencherá
-            desempenho: { 
-                atividades: todasAsAtividades.sort((a,b) => new Date(b.data) - new Date(a.data))
-            }
+            usuario: { ...usuario, tipo: tipoUsuario },
+            cicloFechado: ultimoFechado ? {
+                ...ultimoFechado,
+                atividades: atividadesCicloFechado
+            } : null,
+            cicloAtual: cicloAtual ? {
+                ...cicloAtual,
+                atividades: atividadesCicloAtual
+            } : null
         };
         
         res.status(200).json(resposta);
     } catch (error) {
-        console.error('[API /api/dashboard/desempenho] Erro na rota:', error.message);
+        console.error('[API /api/dashboard/desempenho] Erro na rota:', error.message, error.stack);
         res.status(500).json({ error: 'Erro interno do servidor.' });
     } finally {
         if (dbClient) dbClient.release();

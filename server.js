@@ -34,7 +34,9 @@ import inventarioRouter from './api/inventario.js';
 import financeiroRouter from './api/financeiro.js';
 import pagamentosRouter from './api/pagamentos.js';
 import avataresRouter from './api/avatares.js';
-
+import perfisRouter from './api/perfis.js'; 
+import historicoRouter from './api/historico.js'; 
+import metasRouter from './api/metas.js'; 
 
 const app = express();
 console.log('Aplicação Express inicializada.');
@@ -77,7 +79,10 @@ const routers = {
     inventarioRouter,
     financeiroRouter,
     pagamentosRouter,
-    avataresRouter
+    avataresRouter,
+    perfisRouter,
+    historicoRouter,
+    metasRouter
 
 };
 for (const routerName in routers) {
@@ -116,6 +121,9 @@ app.use('/api/inventario', inventarioRouter)
 app.use('/api/financeiro', financeiroRouter);
 app.use('/api/pagamentos', pagamentosRouter);
 app.use('/api/avatares', avataresRouter);
+app.use('/api/perfis', perfisRouter);
+app.use('/api/historico', historicoRouter);
+app.use('/api/metas', metasRouter);
 
 
 
@@ -123,7 +131,7 @@ app.get('/api/ping', (req, res) => res.status(200).json({ message: 'pong do serv
 console.log("Rota /api/ping configurada.");
 
 // Servir arquivos HTML específicos (ajuste os caminhos e adicione mais conforme necessário)
-const serveHtmlFile = (filePath, res) => { /* ... sua função serveHtmlFile ... */
+const serveHtmlFile = (filePath, res) => {
     const fullPath = process.cwd() + `/public/${filePath}`;
     console.log(`Tentando servir HTML: ${fullPath}`);
     res.sendFile(fullPath, (err) => {

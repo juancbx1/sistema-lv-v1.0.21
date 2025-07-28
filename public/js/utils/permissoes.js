@@ -7,8 +7,17 @@
 // ==========================================================================
 
 export const permissoesDisponiveis = [
+    // --- DASHBOARD COSTUREIRAS/TIKTIK ---
+    { id: 'acesso-dashboard', label: 'Acesso ao Dashboard de Produção', categoria: 'Dashboard Costureira e Tiktik' },
+    { id: 'acesso-desempenho', label: 'Acesso ao Meu Desempenho', categoria: 'Dashboard Costureira e Tiktik' },
+    { id: 'assinar-producao-costureira', label: 'Ação: Costureira assina sua produção', categoria: 'Dashboard Costureira e Tiktik' },
+    { id: 'assinar-producao-tiktik', label: 'Ação: TikTik assina sua produção de OP', categoria: 'Dashboard Costureira e Tiktik' },
+    { id: 'assinar-arremate-tiktik', label: 'Ação: TikTik assina seus arremates', categoria: 'Dashboard Costureira e Tiktik' },
+    { id: 'ver-proprias-producoes', label: 'Permite ver as próprias produções', categoria: 'Dashboard Costureira e Tiktik' },
+    { id: 'ver-proprios-arremates', label: 'Permite ver os próprios arremates', categoria: 'Dashboard Costureira e Tiktik' },
+    { id: 'ver-lista-produtos', label: 'Ação: Permite ver a Lista de produtos (VIA API)', categoria: 'Dashboard Costureira e Tiktik' },
+
     // --- ACESSO GERAL ---
-    { id: 'acesso-dashboard', label: 'Acesso ao Dashboard de Produção', categoria: 'Acesso Geral' },
     { id: 'acesso-admin-geral', label: 'Acesso Geral à Área Administrativa', categoria: 'Acesso Geral' },
     { id: 'acesso-home', label: 'Acesso à Home Administrativa', categoria: 'Acesso Geral' },
     
@@ -103,12 +112,7 @@ export const permissoesDisponiveis = [
     { id: 'acesso-ponto-por-processo', label: 'Ver Tela de Pontos por Processo', categoria: 'Configurações' },
     { id: 'gerenciar-comunicacoes', label: 'Ver Tela Gerenciar Comunicações', categoria: 'Configurações' },
 
-    // --- AÇÕES ESPECÍFICAS DE USUÁRIOS FINAIS ---
-    { id: 'assinar-producao-costureira', label: 'Ação: Costureira assina sua produção', categoria: 'Ações Específicas do Usuário' },
-    { id: 'assinar-producao-tiktik', label: 'Ação: TikTik assina sua produção de OP', categoria: 'Ações Específicas do Usuário' },
-    { id: 'assinar-arremate-tiktik', label: 'Ação: TikTik assina seus arremates', categoria: 'Ações Específicas do Usuário' },
-    { id: 'ver-proprias-producoes', label: 'Permite ver as próprias produções', categoria: 'Ações Específicas do Usuário' },
-    { id: 'ver-proprios-arremates', label: 'Permite ver os próprios arremates', categoria: 'Ações Específicas do Usuário' },
+    
 ];
 
 

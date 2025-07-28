@@ -428,7 +428,7 @@ body {
 /* Customizações do FullCalendar */
 #calendario-passagens {
     --fc-border-color: #e9ecef;
-    --fc-today-bg-color: rgba(52, 152, 219, 0.1);
+    --fc-today-bg-color: rgba(255, 243, 205, 0.7);
     --fc-event-bg-color: #27ae60;
     --fc-event-border-color: #27ae60;
 }

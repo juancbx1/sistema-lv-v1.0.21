@@ -55,28 +55,70 @@ router.get('/desempenho', async (req, res) => {
         
         let queryText;
         if (tipoUsuario === 'costureira') {
-            // A query agora NÃO tem mais a cláusula 'BETWEEN'
             queryText = `
-                SELECT 'OP' as tipo_origem, pr.id::text as id_original, pr.data, p.nome as produto, pr.variacao, pr.quantidade, 
-                       pr.pontos_gerados, pr.valor_ponto_aplicado, pr.op_numero, pr.processo, pr.assinada 
+                SELECT 
+                    'OP' as tipo_origem, 
+                    pr.id::text as id_original, 
+                    pr.data, 
+                    p.nome as produto, 
+                    pr.variacao, 
+                    pr.quantidade, 
+                    pr.pontos_gerados, 
+                    pr.valor_ponto_aplicado, 
+                    pr.op_numero, 
+                    pr.processo, 
+                    pr.assinada,
+                    -- Subquery para verificar se existe uma divergência pendente para esta produção
+                    EXISTS (
+                        SELECT 1 FROM log_divergencias ld 
+                        WHERE ld.id_producao_original = pr.id AND ld.status = 'Pendente'
+                    ) as divergencia_pendente
                 FROM producoes pr 
                 JOIN produtos p ON pr.produto_id = p.id 
                 WHERE pr.funcionario = $1
             `;
         } else { // tipoUsuario === 'tiktik'
-            // A query agora NÃO tem mais a cláusula 'BETWEEN'
             queryText = `
-                SELECT 'OP' as tipo_origem, pr.id::text as id_original, pr.data, p.nome as produto, pr.variacao, pr.quantidade, 
-                       pr.pontos_gerados, pr.valor_ponto_aplicado, pr.op_numero, pr.processo, pr.assinada_por_tiktik as assinada 
+                -- Produções de OP do TikTik
+                SELECT 
+                    'OP' as tipo_origem, 
+                    pr.id::text as id_original, 
+                    pr.data, 
+                    p.nome as produto, 
+                    pr.variacao, 
+                    pr.quantidade, 
+                    pr.pontos_gerados, 
+                    pr.valor_ponto_aplicado, 
+                    pr.op_numero, 
+                    pr.processo, 
+                    pr.assinada_por_tiktik as assinada,
+                    EXISTS (
+                        SELECT 1 FROM log_divergencias ld 
+                        WHERE ld.id_producao_original = pr.id AND ld.status = 'Pendente'
+                    ) as divergencia_pendente
                 FROM producoes pr 
                 JOIN produtos p ON pr.produto_id = p.id 
                 WHERE pr.funcionario = $1 
                 
                 UNION ALL 
                 
-                SELECT 'Arremate' as tipo_origem, ar.id::text as id_original, ar.data_lancamento as data, p.nome as produto, 
-                       ar.variante as variacao, ar.quantidade_arrematada as quantidade, ar.pontos_gerados, 
-                       ar.valor_ponto_aplicado, ar.op_numero, 'Arremate' as processo, ar.assinada 
+                -- Arremates do TikTik
+                SELECT 
+                    'Arremate' as tipo_origem, 
+                    ar.id::text as id_original, 
+                    ar.data_lancamento as data, 
+                    p.nome as produto, 
+                    ar.variante as variacao, 
+                    ar.quantidade_arrematada as quantidade, 
+                    ar.pontos_gerados, 
+                    ar.valor_ponto_aplicado, 
+                    ar.op_numero, 
+                    'Arremate' as processo, 
+                    ar.assinada,
+                    EXISTS (
+                        SELECT 1 FROM log_divergencias ld 
+                        WHERE ld.id_arremate_original = ar.id AND ld.status = 'Pendente'
+                    ) as divergencia_pendente
                 FROM arremates ar 
                 JOIN produtos p ON ar.produto_id = p.id 
                 WHERE ar.usuario_tiktik = $1 AND ar.tipo_lancamento = 'PRODUCAO'

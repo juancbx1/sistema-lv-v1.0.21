@@ -253,3 +253,28 @@ export function getObjetoCicloCompletoAtual(dataReferencia = new Date()) {
     console.warn("Nenhum ciclo ou semana ativa encontrada para a data:", hoje);
     return null;
 }
+
+/**
+ * Calcula a data do próximo dia 15 útil a partir de uma data de referência.
+ * @param {Date} [dataReferencia=new Date()] - A data base para o cálculo (ex: data de fim de um ciclo).
+ * @returns {Date} A data do próximo pagamento.
+ */
+export function obterDataProximoPagamento(dataReferencia = new Date()) {
+    // Começa no dia 15 do mês da data de referência
+    let dataPagamento = new Date(dataReferencia.getFullYear(), dataReferencia.getMonth(), 15);
+
+    // Se a data de referência já passou do dia 15 daquele mês, calcula para o mês seguinte
+    if (dataReferencia.getDate() > 15) {
+        dataPagamento.setMonth(dataPagamento.getMonth() + 1);
+    }
+    
+    // Ajusta para o próximo dia útil se cair no fim de semana
+    let diaDaSemana = dataPagamento.getDay();
+    if (diaDaSemana === 6) { // Sábado
+        dataPagamento.setDate(dataPagamento.getDate() + 2);
+    } else if (diaDaSemana === 0) { // Domingo
+        dataPagamento.setDate(dataPagamento.getDate() + 1);
+    }
+
+    return dataPagamento;
+}

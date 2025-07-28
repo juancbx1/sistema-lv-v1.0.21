@@ -15,23 +15,20 @@ async function streamToBuffer(readableStream) {
     return Buffer.concat(chunks);
 }
 
-// A rota POST agora com verificação de autenticação
 router.post('/', async (req, res) => {
-    // --- INÍCIO DA VERIFICAÇÃO DE AUTENTICAÇÃO ---
+    let usuarioLogado;
     try {
         const authHeader = req.headers.authorization;
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        if (!authHeader || !auth-header.startsWith('Bearer ')) {
             return res.status(401).json({ error: 'Token de autenticação ausente.' });
         }
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, SECRET_KEY); // Apenas verifica se o token é válido
+        usuarioLogado = jwt.verify(token, SECRET_KEY); // Agora guardamos os dados do usuário
     } catch (error) {
         return res.status(401).json({ error: 'Token inválido ou expirado.' });
     }
-    // --- FIM DA VERIFICAÇÃO DE AUTENTICAÇÃO ---
 
     const filename = req.headers['x-filename'];
-
     if (!filename) {
         return res.status(400).json({ error: 'O header "x-filename" é obrigatório.' });
     }
@@ -39,15 +36,25 @@ router.post('/', async (req, res) => {
     try {
         const fileBuffer = await streamToBuffer(req);
 
-        const blob = await put(filename, fileBuffer, {
+        // --- INÍCIO DAS MUDANÇAS ---
+
+        // 1. Criamos um nome de arquivo único para o Blob
+        // Ex: avatares/usuario-123-minhafoto.jpg
+        const blobPathname = `avatares/usuario-${usuarioLogado.id}-${filename}`;
+
+        const blob = await put(blobPathname, fileBuffer, {
             access: 'public',
+            // 2. Adicionamos a opção para evitar conflitos de nome
+            addRandomSuffix: true, 
             token: process.env.BLOB_READ_WRITE_TOKEN,
         });
+
+        // --- FIM DAS MUDANÇAS ---
 
         return res.status(200).json(blob);
 
     } catch (error) {
-        console.error("ERRO NA API DE UPLOAD (FINAL):", error.message);
+        console.error("ERRO NA API DE UPLOAD:", error.message);
         return res.status(500).json({ error: `Falha no upload do arquivo: ${error.message}` });
     }
 });
