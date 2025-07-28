@@ -86,7 +86,6 @@ export default async function handler(request, response) {
 
                 // Verificações de conquistas de desempenho
                 if (totalPontosCiclo >= 16000) await concederConquista('pontos_ciclo_16k');
-                if (totalPontosCiclo >= 10000) await concederConquista('pontos_ciclo_10k');
                 // Adicione outras conquistas de desempenho aqui (ex: 'maratonista_platina')
             }
         }

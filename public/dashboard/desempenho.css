@@ -39,7 +39,7 @@ ds-header-desempenho {
     font-size: 1.5rem;
     color: var(--ds-cor-azul-escuro);
     margin: 0;
-    line-height: 1.1;
+    line-height: 1.1; 
 }
 
 .ds-identidade-info p {

@@ -172,12 +172,10 @@
                 <button id="btnAtualizarAgenda" class="fc-btn-atualizar">
                     <i class="fas fa-sync-alt"></i> Atualizar
                 </button>
-                <button id="btnAgendarNovaConta" class="fc-btn fc-btn-primario">
-                    <i class="fas fa-plus"></i> Agendar Novo
-                </button>
             </div>
         </header>
             <div id="agendaContainer"></div>
+            <div id="paginacaoAgendaContainer" class="fc-paginacao-container"></div>
         </div>
     </div>
     </div>
@@ -242,15 +240,23 @@
     </div>
 
 
-    <!-- Botões FAB Novo lancamento e Transferencia -->
+    <!-- Botões FAB (agora controlados por JS) -->
     <div class="fc-fab-container">
-    <button id="btnNovaTransferencia" class="fc-fab fc-fab-secundario" title="Nova Transferência">
-        <i class="fas fa-exchange-alt"></i>
-    </button>
-    <button id="btnNovoLancamento" class="fc-fab" title="Novo Lançamento">
-        <i class="fas fa-plus"></i>
-    </button>
-</div>
+        <!-- Botão de Transferência (Aba Lançamentos) -->
+        <button id="btnNovaTransferencia" class="fc-fab fc-fab-secundario hidden" title="Nova Transferência">
+            <i class="fas fa-exchange-alt"></i>
+        </button>
+        <!-- Botão de Lançamento (Aba Lançamentos) -->
+        <button id="btnNovoLancamento" class="fc-fab hidden" title="Novo Lançamento">
+            <i class="fas fa-plus"></i>
+        </button>
+        <!-- NOVO Botão de Agendamento (Aba Agenda) -->
+        <button id="btnNovoAgendamentoFab" class="fc-fab hidden" title="Novo Agendamento" style="background-color: var(--fc-cor-receita);">
+            <i class="fas fa-calendar-plus"></i>
+        </button>
+    </div>
+
+
     <script src="/js/admin-financeiro.js" type="module"></script>
     <script src="/js/carregar-menu-lateral.js" type="module"></script>
 </body>

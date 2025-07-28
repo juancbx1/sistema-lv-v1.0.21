@@ -1624,6 +1624,23 @@ body {
         line-height: 1; /* Garante alinhamento vertical perfeito */
     }
 
+    /* Permite rolagem horizontal nas abas do modal em telas pequenas  */
+    .fc-modal .fc-segmented-control {
+        display: flex;
+        overflow-x: auto; /* A mágica acontece aqui */
+        -webkit-overflow-scrolling: touch; /* Melhora a experiência em iOS */
+        scrollbar-width: none; /* Esconde a barra de rolagem no Firefox */
+    }
+    /* Esconde a barra de rolagem no Chrome/Safari/Edge */
+    .fc-modal .fc-segmented-control::-webkit-scrollbar {
+        display: none;
+    }
+
+    .fc-modal .fc-segmented-control .fc-segment-btn {
+        flex-shrink: 0; /* Impede que os botões encolham */
+        white-space: nowrap; /* Garante que o texto do botão não quebre linha */
+    }
+
 }
 
 @media (max-width: 414px) {

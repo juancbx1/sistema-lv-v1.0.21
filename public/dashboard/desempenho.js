@@ -103,7 +103,7 @@ async function renderizarPagamentoPendente(cicloFechado, usuario) {
                 </div>`,
             valorComissao: valorComissao
         };
-    });
+    }); 
 
     // Espera todos os cálculos terminarem.
     const resultadosSemanas = await Promise.all(promessasSemanas);

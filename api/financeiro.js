@@ -1107,26 +1107,27 @@ router.get('/contas-agendadas', async (req, res) => {
         return res.status(403).json({ error: 'Permissão negada.' });
     }
     
-    const { status } = req.query;
+    // Usaremos um limite maior por padrão, já que agora agrupamos por lote.
+    const { status = 'PENDENTE', limit = 15, page = 1 } = req.query; 
+    const offset = (parseInt(page) - 1) * parseInt(limit);
     let dbClient;
+
     try {
         dbClient = await pool.connect();
-        let query = `
+
+        // 1. Busca TODAS as contas pendentes, sem paginação no SQL. A ordenação é importante!
+        const queryTodosPendentes = `
             SELECT 
                 ca.*, 
                 cat.nome as nome_categoria, 
                 c.nome as nome_favorecido,
-                u.nome as nome_usuario_agendamento,
-                -- Subquery para buscar os itens-filho em formato JSON
+                u_agenda.nome as nome_usuario_agendamento,
+                u_edicao.nome as nome_usuario_edicao,
                 (
                     SELECT json_agg(json_build_object(
-                        'id', i.id,
-                        'id_categoria', i.id_categoria,
-                        'nome_categoria', cat_item.nome,
-                        'id_contato_item', i.id_contato_item,
-                        'nome_contato_item', contato_item.nome,
-                        'descricao_item', i.descricao_item,
-                        'valor_item', i.valor_item
+                        'id', i.id, 'id_categoria', i.id_categoria, 'nome_categoria', cat_item.nome,
+                        'id_contato_item', i.id_contato_item, 'nome_contato_item', contato_item.nome,
+                        'descricao_item', i.descricao_item, 'valor_item', i.valor_item
                     ))
                     FROM fc_contas_agendadas_itens i
                     LEFT JOIN fc_categorias cat_item ON i.id_categoria = cat_item.id
@@ -1136,17 +1137,40 @@ router.get('/contas-agendadas', async (req, res) => {
             FROM fc_contas_agendadas ca
             LEFT JOIN fc_categorias cat ON ca.id_categoria = cat.id
             LEFT JOIN fc_contatos c ON ca.id_contato = c.id
-            JOIN usuarios u ON ca.id_usuario_agendamento = u.id
+            LEFT JOIN usuarios u_agenda ON ca.id_usuario_agendamento = u_agenda.id
+            LEFT JOIN usuarios u_edicao ON ca.id_usuario_ultima_edicao = u_edicao.id
+            WHERE ca.status = $1
+            ORDER BY ca.data_vencimento ASC, ca.id_lote;
         `;
-        const params = [];
-        if (status) {
-            query += ' WHERE ca.status = $1';
-            params.push(status);
-        }
-        query += ' ORDER BY ca.data_vencimento ASC;';
+        const todosResult = await dbClient.query(queryTodosPendentes, [status]);
 
-        const result = await dbClient.query(query, params);
-        res.status(200).json(result.rows);
+        // 2. Agrupa os resultados em JavaScript (RESOLVE O BUG DOS LOTES)
+        const contasAgrupadas = todosResult.rows.reduce((acc, conta) => {
+            const chave = conta.id_lote || `avulso_${conta.id}`;
+            if (!acc[chave]) {
+                acc[chave] = [];
+            }
+            acc[chave].push(conta);
+            return acc;
+        }, {});
+        
+        // Converte o objeto de grupos em um array
+        // <<< AQUI ESTÁ A CORREÇÃO >>>
+        const listaDeGrupos = Object.values(contasAgrupadas);
+
+        // 3. Pagina o ARRAY de grupos em JavaScript
+        const totalGrupos = listaDeGrupos.length;
+        const gruposPaginados = listaDeGrupos.slice(offset, offset + parseInt(limit));
+        
+        // 4. Envia a resposta paginada
+        res.status(200).json({
+            // A resposta agora é um array de grupos (que são arrays de contas)
+            contasAgendadas: gruposPaginados, 
+            total: totalGrupos, // O total é de grupos, não de contas individuais
+            page: parseInt(page),
+            pages: Math.ceil(totalGrupos / limit) || 1
+        });
+
     } catch (error) {
         console.error("[API GET /contas-agendadas] Erro:", error);
         res.status(500).json({ error: 'Erro ao buscar contas agendadas.', details: error.message });
@@ -1178,6 +1202,48 @@ router.post('/contas-agendadas', async (req, res) => {
         res.status(201).json(result.rows[0]);
     } catch (error) {
         res.status(500).json({ error: 'Erro ao agendar conta.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// PUT /api/financeiro/contas-agendadas/:id - EDITAR um agendamento PENDENTE
+router.put('/contas-agendadas/:id', async (req, res) => {
+    if (!req.permissoesUsuario.includes('lancar-transacao')) {
+        return res.status(403).json({ error: 'Permissão negada para editar agendamentos.' });
+    }
+    const { id } = req.params;
+    const { id_categoria, id_contato, tipo, descricao, valor, data_vencimento } = req.body;
+    if (!id_categoria || !tipo || !descricao || !valor || !data_vencimento) {
+        return res.status(400).json({ error: 'Campos obrigatórios estão faltando.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const query = `
+            UPDATE fc_contas_agendadas 
+            SET 
+                id_categoria = $1, id_contato = $2, tipo = $3, 
+                descricao = $4, valor = $5, data_vencimento = $6,
+                id_usuario_ultima_edicao = $7, atualizado_em = NOW()
+            WHERE id = $8 AND status = 'PENDENTE'
+            RETURNING *;
+        `;
+        const result = await dbClient.query(query, [
+            id_categoria, id_contato || null, tipo, descricao, valor, data_vencimento,
+            req.usuarioLogado.id,
+            id
+        ]);
+        
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Agendamento não encontrado ou já foi baixado, por isso não pode ser editado.' });
+        }
+        
+        res.status(200).json(result.rows[0]);
+    } catch (error) {
+        console.error(`[API PUT /contas-agendadas/${id}] Erro:`, error);
+        res.status(500).json({ error: 'Erro ao atualizar agendamento.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }

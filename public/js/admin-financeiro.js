@@ -10,6 +10,7 @@ let lancamentosCache = []; // Novo cache para os lançamentos
 let contasAgendadasCache = [];
 let itemEmEdicao = null;
 let filtrosAtivos = {};
+let filtrosAgendaAtivos = {};
 let fecharModalListenerRemover = () => {};
 
 // --- FUNÇÃO UTILITÁRIA GLOBAL ---
@@ -914,6 +915,50 @@ function renderizarPaginacaoLancamentos(totalPages, currentPage) {
 
     // Opcional: Listener para 'blur' (quando o usuário clica fora do campo)
     // Se o valor for inválido, ele volta para a página atual.
+    inputPagina.addEventListener('blur', () => {
+        if (parseInt(inputPagina.value, 10) !== currentPage) {
+            inputPagina.value = currentPage;
+        }
+    });
+}
+
+// Renderiza a paginação para a aba Agenda 
+function renderizarPaginacaoAgenda(totalPages, currentPage) {
+    const container = document.getElementById('paginacaoAgendaContainer');
+    container.innerHTML = '';
+    if (totalPages <= 1) return;
+
+    container.innerHTML = `
+        <button class="fc-btn fc-btn-outline" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}>Anterior</button>
+        <span class="pagination-current">
+            Pág. 
+            <input type="number" id="inputIrParaPaginaAgenda" class="fc-input-paginacao" value="${currentPage}" min="1" max="${totalPages}" title="Pressione Enter para ir"> 
+            de ${totalPages}
+        </span>
+        <button class="fc-btn fc-btn-outline" data-page="${currentPage + 1}" ${currentPage === totalPages ? 'disabled' : ''}>Próximo</button>
+    `;
+
+    // Listener para os botões "Anterior" e "Próximo"
+    container.querySelectorAll('.fc-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const page = e.currentTarget.dataset.page;
+            carregarContasAgendadas(parseInt(page));
+        });
+    });
+
+    // Listener para o campo de input
+    const inputPagina = document.getElementById('inputIrParaPaginaAgenda');
+    inputPagina.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            let paginaDesejada = parseInt(inputPagina.value, 10);
+            if (isNaN(paginaDesejada) || paginaDesejada < 1) paginaDesejada = 1;
+            else if (paginaDesejada > totalPages) paginaDesejada = totalPages;
+            inputPagina.value = paginaDesejada;
+            carregarContasAgendadas(paginaDesejada);
+        }
+    });
+
     inputPagina.addEventListener('blur', () => {
         if (parseInt(inputPagina.value, 10) !== currentPage) {
             inputPagina.value = currentPage;
@@ -2124,20 +2169,28 @@ async function alterarStatusContato(id, statusAtual) {
 
 // --- Funções da Agenda Financeira ---
 
-async function carregarContasAgendadas() {
+async function carregarContasAgendadas(page = 1) {
     const container = document.getElementById('agendaContainer');
     if (!container) return;
 
-    // 1. Injeta o HTML do spinner no container
-    container.innerHTML = `<div class="fc-spinner"><span>Buscando contas agendadas...</span></div>`;
+    container.innerHTML = `<div class="fc-spinner-container">
+        <div class="fc-spinner-dots"><div class="dot-1"></div><div class="dot-2"></div><div class="dot-3"></div></div>
+        <span class="fc-spinner-text">Buscando contas agendadas...</span>
+    </div>`;
+
+    filtrosAgendaAtivos.page = page; // Salva a página atual
+
+    const params = new URLSearchParams({ page });
 
     try {
-        const data = await fetchFinanceiroAPI('/contas-agendadas?status=PENDENTE');
-        contasAgendadasCache = data;
-        // 2. A renderização substitui o spinner pelo conteúdo final
+        const data = await fetchFinanceiroAPI(`/contas-agendadas?${params.toString()}`);
+        
+        contasAgendadasCache = data.contasAgendadas;
+        
         renderizarTabelaAgenda(); 
+        renderizarPaginacaoAgenda(data.pages, data.page); // Chama a renderização da paginação
+
     } catch(e) {
-        // 3. Em caso de erro, a mensagem de erro também substitui o spinner
         container.innerHTML = `<p style="color: red; text-align:center; padding: 20px;">Erro ao carregar a agenda.</p>`;
     }
 }
@@ -2407,10 +2460,18 @@ async function salvarAgendamento(event) {
     
     try {
         btnSalvar.disabled = true;
-        btnSalvar.innerHTML = `<i class="fas fa-spinner fc-btn-spinner"></i> Agendando...`;
+        btnSalvar.innerHTML = `<i class="fas fa-spinner fc-btn-spinner"></i> Salvando...`;
 
-        await fetchFinanceiroAPI('/contas-agendadas', { method: 'POST', body: JSON.stringify(payload) });
-        mostrarPopupFinanceiro('Conta agendada com sucesso!', 'sucesso');
+        if (itemEmEdicao) {
+            // Se itemEmEdicao existe, estamos editando. Usamos PUT.
+            await fetchFinanceiroAPI(`/contas-agendadas/${itemEmEdicao.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+            mostrarPopupFinanceiro('Agendamento atualizado com sucesso!', 'sucesso');
+        } else {
+            // Se não, estamos criando. Usamos POST.
+            await fetchFinanceiroAPI('/contas-agendadas', { method: 'POST', body: JSON.stringify(payload) });
+            mostrarPopupFinanceiro('Conta agendada com sucesso!', 'sucesso');
+        }
+        
         fecharModal();
         carregarContasAgendadas(); // Recarrega a lista
     } catch(e) {
@@ -2418,7 +2479,7 @@ async function salvarAgendamento(event) {
     } finally {
         if(btnSalvar) {
             btnSalvar.disabled = false;
-            btnSalvar.innerHTML = textoOriginalBtn;
+            btnSalvar.innerHTML = itemEmEdicao ? 'Salvar Alterações' : 'Agendar';
         }
     }
 }
@@ -3054,6 +3115,33 @@ function mudarAba(abaAtiva) {
         }
         break;
     }
+    gerenciarVisibilidadeFABs(abaAtiva);
+
+}
+
+function gerenciarVisibilidadeFABs(abaAtiva) {
+    const fabLancamento = document.getElementById('btnNovoLancamento');
+    const fabTransferencia = document.getElementById('btnNovaTransferencia');
+    const fabAgenda = document.getElementById('btnNovoAgendamentoFab');
+
+    // Esconde todos por padrão
+    fabLancamento?.classList.add('hidden');
+    fabTransferencia?.classList.add('hidden');
+    fabAgenda?.classList.add('hidden');
+
+    // Mostra os botões corretos com base na aba
+    switch (abaAtiva) {
+        case 'lancamentos':
+            fabLancamento?.classList.remove('hidden');
+            fabTransferencia?.classList.remove('hidden');
+            break;
+        case 'agenda':
+            fabAgenda?.classList.remove('hidden');
+            break;
+        case 'dashboard':
+            // Nenhum botão aparece no dashboard
+            break;
+    }
 }
 
 async function abrirModalTransferencia() {
@@ -3352,12 +3440,12 @@ function setupEventListenersFinanceiro() {
         btnNovoLancamento?.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para criar lançamentos.', 'aviso'));
     }
 
-    const btnAgendar = document.getElementById('btnAgendarNovaConta');
+    const btnAgendarFab = document.getElementById('btnNovoAgendamentoFab');
     if(permissoesGlobaisFinanceiro.includes('lancar-transacao')) {
-        btnAgendar?.addEventListener('click', () => abrirModalAgendamento());
+        btnAgendarFab?.addEventListener('click', () => abrirModalAgendamento());
     } else {
-        btnAgendar?.classList.add('fc-btn-disabled');
-        btnAgendar?.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para agendar contas.', 'aviso'));
+        btnAgendarFab?.classList.add('fc-btn-disabled');
+        btnAgendarFab?.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para agendar contas.', 'aviso'));
     }
 
     // --- PAINEL DE NOTIFICAÇÕES (Caixa de Entrada) ---
@@ -3554,24 +3642,22 @@ function renderizarTabelaAgenda() {
     const podeBaixar = permissoesGlobaisFinanceiro.includes('aprovar-pagamento');
     const podeEditarExcluir = permissoesGlobaisFinanceiro.includes('lancar-transacao');
 
+    // O cache agora é um array de grupos. Ex: [[conta1, conta2], [conta3_avulsa]]
     if (contasAgendadasCache.length === 0) {
         container.innerHTML = `<p style="text-align:center; padding: 20px;">Nenhuma conta pendente na agenda.</p>`;
         return;
     }
 
-    const contasAgrupadas = contasAgendadasCache.reduce((acc, conta) => {
-        const chave = conta.id_lote || `avulso_${conta.id}`;
-        if (!acc[chave]) acc[chave] = [];
-        acc[chave].push(conta);
-        return acc;
-    }, {});
-
     let htmlFinal = '';
-    for (const chave in contasAgrupadas) {
-        const itensDoGrupo = contasAgrupadas[chave].sort((a, b) => new Date(a.data_vencimento) - new Date(b.data_vencimento));
+    // <<< MUDANÇA: Itera diretamente sobre os grupos recebidos da API >>>
+    for (const itensDoGrupo of contasAgendadasCache) {
+        if (!itensDoGrupo || itensDoGrupo.length === 0) continue;
+
         const primeiroItem = itensDoGrupo[0];
+        const chave = primeiroItem.id_lote || `avulso_${primeiroItem.id}`;
 
         if (primeiroItem.id_lote) {
+            // A lógica para renderizar um LOTE permanece a mesma
             const descricaoGrupo = primeiroItem.descricao.split(' - Parcela')[0] || 'Lote de Parcelas';
             const valorTotalGrupo = itensDoGrupo.reduce((soma, item) => soma + parseFloat(item.valor), 0);
             const hoje = new Date(); hoje.setHours(0,0,0,0);
@@ -3603,17 +3689,12 @@ function renderizarTabelaAgenda() {
             htmlFinal += `
                 <div class="fc-agenda-card-wrapper">
                     <div class="fc-agenda-card pagar ${isAtrasado ? 'atrasado' : ''}" data-lote="true">
-                        <div class="card-main-line">
+                         <div class="card-main-line">
                             <div class="main-info">
                                 <span class="lancamento-id">Lote #${primeiroItem.id_lote}</span>
                                 <div class="descricao-lote-editavel">
                                     <span class="descricao">${descricaoGrupo}</span>
-                                    <button class="fc-btn-icon-discreto btn-editar-descricao-lote" 
-                                            data-lote-id="${primeiroItem.id_lote}" 
-                                            data-descricao-atual="${descricaoGrupo}" 
-                                            title="Editar descrição do lote">
-                                        <i class="fas fa-pencil-alt"></i>
-                                    </button>
+                                    <button class="fc-btn-icon-discreto btn-editar-descricao-lote" data-lote-id="${primeiroItem.id_lote}" data-descricao-atual="${descricaoGrupo}" title="Editar descrição do lote"><i class="fas fa-pencil-alt"></i></button>
                                 </div>
                             </div>
                             <span class="valor">${formatCurrency(valorTotalGrupo)}</span>
@@ -3632,8 +3713,8 @@ function renderizarTabelaAgenda() {
                     </div>
                     ${detalhesParcelasHtml}
                 </div>`;
-
-        } else { // Card Avulso (Simples ou Detalhado)
+        } else { 
+            // A lógica para renderizar um item AVULSO também permanece a mesma
             const c = primeiroItem;
             const isDetalhado = c.itens && c.itens.length > 0;
             let categoriaExibida = c.nome_categoria || 'Sem Categoria';
@@ -3674,21 +3755,25 @@ function renderizarTabelaAgenda() {
                         <span class="detail-item"><b>Vencimento:</b> ${vencimento.toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</span>
                     </div>
                     <div class="card-meta-line">
-                        <div class="meta-info"><span class="detail-item"><b>Agendado por:</b> ${c.nome_usuario_agendamento || 'N/A'}</span></div>
-                        
-                        <div class="actions">
-                        <!-- Grupo para os botões de ação principais -->
-                        <div class="actions-main-group">
-                            <div class="actions-secondary">
-                                <button class="fc-btn fc-btn-outline btn-editar-agendamento" data-id="${c.id}" ${podeEditarExcluir ? '' : 'disabled'} title="Editar"><i class="fas fa-pencil-alt"></i></button>
-                                <button class="fc-btn fc-btn-outline btn-excluir-agendamento" data-id="${c.id}" ${podeEditarExcluir ? '' : 'disabled'} title="Excluir"><i class="fas fa-trash"></i></button>
-                            </div>
-                            <button class="fc-btn fc-btn-primario btn-dar-baixa" data-id="${c.id}" ${podeBaixar ? '' : 'disabled'} title="Dar Baixa"><i class="fas fa-check"></i> Baixar</button>
+                        <div class="meta-info">
+                            <span class="detail-item"><b>Agendado por:</b> ${c.nome_usuario_agendamento || 'N/A'}</span>
+                            ${c.nome_usuario_edicao ? `
+                                <span class="detail-item" title="Última edição em ${new Date(c.atualizado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}">
+                                    <i class="fas fa-history" style="color: var(--fc-cor-aviso);"></i>
+                                    <b>Editado por:</b> ${c.nome_usuario_edicao}
+                                </span>
+                            ` : ''}
                         </div>
-                        
-                        <!-- A setinha fica separada para ser posicionada independentemente -->
-                        ${isDetalhado ? `<button class="fc-btn-icon btn-toggle-agenda-details" data-id="${c.id}" title="Ver Detalhes"><i class="fas fa-chevron-down"></i></button>` : ''}
-                    </div>
+                        <div class="actions">
+                            <div class="actions-main-group">
+                                <div class="actions-secondary">
+                                    <button class="fc-btn fc-btn-outline btn-editar-agendamento" data-id="${c.id}" ${podeEditarExcluir ? '' : 'disabled'} title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                    <button class="fc-btn fc-btn-outline btn-excluir-agendamento" data-id="${c.id}" ${podeEditarExcluir ? '' : 'disabled'} title="Excluir"><i class="fas fa-trash"></i></button>
+                                </div>
+                                <button class="fc-btn fc-btn-primario btn-dar-baixa" data-id="${c.id}" ${podeBaixar ? '' : 'disabled'} title="Dar Baixa"><i class="fas fa-check"></i> Baixar</button>
+                            </div>
+                            ${isDetalhado ? `<button class="fc-btn-icon btn-toggle-agenda-details" data-id="${c.id}" title="Ver Detalhes"><i class="fas fa-chevron-down"></i></button>` : ''}
+                        </div>
                     </div>
                 </div>
                 ${detalhesHtml}
@@ -3698,11 +3783,16 @@ function renderizarTabelaAgenda() {
 
     container.innerHTML = htmlFinal;
 
-    // --- LISTENERS COMPLETOS ---
+    // A lógica para adicionar os LISTENERS permanece exatamente a mesma
     container.querySelectorAll('.btn-dar-baixa:not([disabled])').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const id = e.currentTarget.dataset.id;
-            const conta = contasAgendadasCache.find(c => c.id == id);
+            // Para encontrar a conta, agora precisamos buscar dentro dos grupos
+            let conta = null;
+            for (const grupo of contasAgendadasCache) {
+                conta = grupo.find(c => c.id == id);
+                if (conta) break;
+            }
             if (conta) abrirModalBaixa(conta);
         });
     });
@@ -3710,7 +3800,11 @@ function renderizarTabelaAgenda() {
     container.querySelectorAll('.btn-editar-agendamento:not([disabled])').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const id = e.currentTarget.dataset.id;
-            const conta = contasAgendadasCache.find(c => c.id == id);
+            let conta = null;
+            for (const grupo of contasAgendadasCache) {
+                conta = grupo.find(c => c.id == id);
+                if (conta) break;
+            }
             if (conta) abrirModalAgendamento(conta);
         });
     });
