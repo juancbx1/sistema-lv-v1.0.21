@@ -496,7 +496,7 @@ router.get('/registros-dias', async (req, res) => {
             return {
                 id: row.data.toISOString().split('T')[0],
                 title: title, // Usa a variável title
-                start: row.data,
+                start: row.data.toISOString().split('T')[0],
                 allDay: true,
                 backgroundColor: color,
                 borderColor: color,

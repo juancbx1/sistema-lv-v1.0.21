@@ -511,6 +511,7 @@ function inicializarCalendarioParaEmpregado() {
 
     calendarioObj = new FullCalendar.Calendar(calendarioContainerEl, {
         locale: 'pt-br',
+        timeZone: 'local',
         initialView: 'dayGridMonth',
         headerToolbar: {
             left: 'prev,next today',
