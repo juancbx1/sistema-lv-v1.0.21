@@ -93,13 +93,79 @@ ds-header-desempenho {
 }
 
 .ds-card-header {
-    padding: 20px 24px;
-    border-bottom: 1px solid var(--ds-cor-cinza-borda);
+    /* Garante que as abas e o filtro fiquem bem alinhados */
+    flex-wrap: nowrap;
+    padding: 0; /* Remove padding para as abas encostarem na borda */
+}
+
+/* Estilo ATUALIZADO para o container das abas */
+.ds-tabs-container {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 15px;
+    align-self: flex-end;
+    
+    /* 1. Permite a rolagem horizontal */
+    overflow-x: auto; 
+    
+    /* 2. Impede a quebra de linha dos botões */
+    white-space: nowrap; 
+    
+    /* 3. Melhora a experiência de rolagem em touch screens */
+    -webkit-overflow-scrolling: touch; 
+    
+    /* 4. Estilo opcional para a barra de rolagem (deixa mais sutil) */
+    scrollbar-width: thin; /* Para Firefox */
+    scrollbar-color: var(--ds-cor-cinza-borda) transparent; /* Para Firefox */
+}
+
+/* Estilização da barra de scroll para navegadores Webkit (Chrome, Safari) */
+.ds-tabs-container::-webkit-scrollbar {
+    height: 4px; /* Altura da barra de rolagem horizontal */
+}
+
+.ds-tabs-container::-webkit-scrollbar-track {
+    background: transparent; /* Fundo da trilha */
+}
+
+.ds-tabs-container::-webkit-scrollbar-thumb {
+    background-color: var(--ds-cor-cinza-borda); /* Cor da barra */
+    border-radius: 20px;
+}
+
+.ds-tab-btn {
+    padding: 14px 22px;
+    font-size: 1rem;
+    font-weight: 600;
+    background-color: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--ds-cor-cinza-texto-secundario);
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    margin-bottom: -1px; /* Faz a borda ativa se sobrepor à borda do card */
+    position: relative; /* Para o badge */
+}
+
+.ds-tab-btn:hover {
+    background-color: var(--ds-cor-cinza-claro-fundo);
+    color: var(--ds-cor-primaria);
+}
+
+.ds-tab-btn.ativo {
+    color: var(--ds-cor-primaria);
+    border-bottom-color: var(--ds-cor-primaria);
+}
+
+/* Badge para a aba "A Receber" */
+.ds-badge-tab {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 10px;
+    height: 10px;
+    background-color: var(--ds-cor-aviso);
+    border-radius: 50%;
+    border: 1px solid var(--ds-cor-branco);
+    box-shadow: 0 0 5px var(--ds-cor-aviso);
 }
 
 .ds-card-titulo {
@@ -110,10 +176,10 @@ ds-header-desempenho {
 }
 
 .ds-card-filtro {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    margin-left: auto; /* Empurra o filtro para a direita */
+    padding-right: 24px; /* Mantém o padding original do header */
 }
+
 .ds-card-filtro label { font-weight: 500; font-size: 0.9rem; }
 .ds-card-filtro .ds-select { min-width: 200px; }
 .ds-card-body { padding: 24px; }
@@ -123,7 +189,7 @@ ds-header-desempenho {
     background-color: var(--ds-cor-cinza-claro-fundo);
     padding: 12px 20px;
     border-radius: 8px;
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: 600;
     margin-bottom: 15px;
     text-align: right;
@@ -155,11 +221,55 @@ ds-header-desempenho {
 .ds-spinner { border: 5px solid var(--ds-cor-cinza-claro-fundo); border-top: 5px solid var(--ds-cor-primaria); border-radius: 50%; width: 40px; height: 40px; animation: ds-spin 1.2s linear infinite; }
 @keyframes ds-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
+
+/* Estilo para o novo card de identidade */
+.ds-card-identidade {
+    margin-bottom: 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom: none; /* Remove a borda para criar o efeito de união */
+    padding: 1rem 1.5rem; /* Um padding interno para o card */
+}
+
+
+/* O card principal que contém as abas */
+.ds-card-abas {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+
+/* Remove o estilo antigo do header, já que agora ele está dentro de um card */
+.ds-header-desempenho {
+    background-color: transparent; /* Fundo transparente */
+    padding: 0;
+    border-bottom: none; /* Remove a borda */
+}
+
+.ds-progress-ring-container {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 5px; /* Este é o "respiro" que impede o corte */
+}
+
+/* Ajusta o espaçamento do card de abas principal */
+main.ds-container-principal > .ds-card {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+
+
 /* Responsividade */
 @media (max-width: 480px) {
     .ds-header-conteudo {
         flex-direction: column;
         gap: 15px;
+    }
+
+    .ds-painel-desempenho {
+        padding-left: 15px;
+        padding-right: 15px;
     }
 }
 
@@ -169,4 +279,11 @@ ds-header-desempenho {
         height: 80px;
     }
 
+    .ds-tab-btn {
+        font-size: 0.8rem;
+    }
+    
+    .ds-total-card{
+       font-size: 0.9rem; 
+    }
 }

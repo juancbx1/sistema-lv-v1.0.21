@@ -201,6 +201,18 @@ body.ds-body.autenticado {
     border: 1px solid var(--ds-cor-cinza-borda);
 }
 
+.ds-painel-detalhamento {
+    position: relative;
+}
+
+/* Estilo para o texto de percentual no anel */
+.ds-texto-percentual {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--ds-cor-cinza-texto-secundario);
+    margin-top: 5px;
+}
+
 /* Seção 1: Foco Diário */
 .ds-foco-diario {
     grid-area: foco-diario;
@@ -263,10 +275,108 @@ body.ds-body.autenticado {
     border-radius: 20px;
 }
 
+/* Garante que o container das pílulas pequenas seja uma grade estável */
 .ds-foco-diario-legenda-container {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 12px;
+    margin-top: 15px;
+    width: 100%;
+    max-width: 320px;
+    transition: opacity 0.3s ease; /* Para o fade-out no estado final */
+}
+
+
+/* Container da pílula grande, à prova de "saltos" */
+.ds-feedback-diario-container {
+    width: 100%;
+    max-width: 320px;
+    min-height: 50px; /* GARANTE O ESPAÇO, SEMPRE */
     margin-top: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Estilo base da pílula grande de feedback */
+.ds-feedback-diario-pilula {
+    width: 100%;
+    padding: 12px 15px;
+    font-size: 1rem; /* Tamanho de fonte maior para destaque */
+    font-weight: 600;
+    text-align: center;
+    border-radius: var(--ds-raio-borda);
+    border: 1px solid;
+    /* Animação de entrada */
+    animation: ds-fade-in-up 0.5s ease forwards;
+}
+
+@keyframes ds-fade-in-up {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/*Estilo para o subtítulo dentro da pílula de foco */
+.ds-feedback-subtitulo {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 500;
+    opacity: 0.8;
+    margin-top: 4px;
+}
+
+/* Variações de cor para a pílula (os 3 estados) */
+/* Estado 1: "A CORRIDA" */
+.ds-feedback-diario-pilula.status-foco {
+    background-color: rgba(255, 193, 7, 0.15); /* Amarelo de aviso */
+    border-color: var(--ds-cor-aviso);
+    color: #856404;
+}
+
+/* Estado 2: "A CELEBRAÇÃO" */
+.ds-feedback-diario-pilula.status-sucesso-dia {
+    background-color: rgba(40, 167, 69, 0.15); /* Verde de sucesso */
+    border-color: var(--ds-cor-sucesso);
+    color: var(--ds-cor-sucesso-hover);
+}
+
+/* Estado 3: "O BÔNUS" */
+.ds-feedback-diario-pilula.status-bonus-semana {
+    background-color: rgba(0, 123, 255, 0.15); /* Azul primário */
+    border-color: var(--ds-cor-primaria);
+    color: var(--ds-cor-primaria-hover);
+}
+
+/* Estilo para pílula visível */
+.ds-feedback-diario-pilula.visivel {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+/* Variações de cor para a pílula grande */
+.ds-feedback-diario-pilula.status-aviso {
+    background-color: rgba(255, 193, 7, 0.1); /* --ds-cor-aviso com transparência */
+    border-color: var(--ds-cor-aviso);
+    color: #856404;
+}
+
+.ds-feedback-diario-pilula.status-sucesso {
+    background-color: rgba(40, 167, 69, 0.1); /* --ds-cor-sucesso com transparência */
+    border-color: var(--ds-cor-sucesso);
+    color: var(--ds-cor-sucesso-hover);
+}
+
+.ds-feedback-diario-pilula.status-bonus {
+    background-color: rgba(0, 123, 255, 0.1); /* --ds-cor-primaria com transparência */
+    border-color: var(--ds-cor-primaria);
+    color: var(--ds-cor-primaria-hover);
 }
 
 .ds-legenda-pilula {
@@ -568,6 +678,8 @@ body.ds-body.autenticado {
 /* Controles acima da lista */
 .ds-controles-detalhamento {
     margin-bottom: 15px;
+    display: flex; /* Essencial para alinhar os botões lado a lado */
+    gap: 10px;    /* Cria um espaço entre os botões */
 }
 
 .ds-filtros-ativos-container {
@@ -1067,10 +1179,12 @@ body.ds-body.autenticado {
 }
 
 .ds-card {
-    background-color: var(--ds-cor-cinza-fundo-card);
+    background-color: var(--ds-cor-branco);
     border-radius: var(--ds-raio-borda);
     padding: var(--ds-padding-card);
-    box-shadow: var(--ds-sombra-card);
+    box-shadow: var(--ds-sombra-padrao); /* Usei a sombra padrão que você definiu */
+    border: 1px solid var(--ds-cor-cinza-borda); /* Adicionei uma borda sutil */
+    margin-bottom: 25px; /* Adicionei um espaçamento inferior padrão */
     display: flex;
     flex-direction: column;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -1279,6 +1393,7 @@ body.ds-body.autenticado {
    ========================================================================== */
 .ds-card-detalhamento {
     /* Faz o card ocupar toda a largura do grid em telas maiores */
+    position: relative;
     grid-column: 1 / -1;
 }
 
@@ -1295,6 +1410,7 @@ body.ds-body.autenticado {
 }
 
 .ds-atividades-wrapper {
+    position: relative;
     max-height: 400px;
     overflow-y: auto;
     border: 1px solid var(--ds-cor-cinza-borda);
@@ -2312,6 +2428,67 @@ body.ds-body.autenticado {
     opacity: 1; /* Força o botão de excluir a ficar sempre visível */
 }
 
+/* ==========================================================================
+   11. Feedback Visual de Carregamento (Spinner de Bolinhas)
+   ========================================================================== */
+
+/* Container que vai ficar sobre a lista de atividades */
+.ds-lista-loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+    /* A borda agora se ajusta ao container pai (o card inteiro) */
+    border-radius: var(--ds-raio-borda); 
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0s 0.3s;
+}
+
+.ds-lista-loading-overlay.ativo {
+    opacity: 1;
+    visibility: visible;
+    transition-delay: 0s;
+}
+
+/* O spinner de 3 bolinhas */
+.ds-spinner-bolinhas {
+    display: flex;
+    gap: 10px;
+}
+
+.ds-spinner-bolinhas .bolinha {
+    width: 12px;
+    height: 12px;
+    background-color: var(--ds-cor-primaria);
+    border-radius: 50%;
+    animation: ds-pular 1.4s infinite ease-in-out both;
+}
+
+/* Animação com delay para cada bolinha */
+.ds-spinner-bolinhas .bolinha-1 {
+    animation-delay: -0.32s;
+}
+
+.ds-spinner-bolinhas .bolinha-2 {
+    animation-delay: -0.16s;
+}
+
+@keyframes ds-pular {
+    0%, 80%, 100% {
+        transform: scale(0);
+    }
+    40% {
+        transform: scale(1.0);
+    }
+}
+
 
 /* ==========================================================================
    10. Media Queries para Responsividade
@@ -2373,6 +2550,10 @@ body.ds-body.autenticado {
         font-size: 1.8rem;
     }
 
+    .ds-btn{
+        font-size: 0.85rem;
+    }
+
     .ds-container-principal { padding: 12px; }
 
     .ds-painel-desempenho {
@@ -2429,6 +2610,10 @@ body.ds-body.autenticado {
         padding: 15px;
     }
 
+    .ds-btn{
+        font-size: 0.75rem;
+    }
+
     .ds-progress-ring {
         width: 140px;
         height: 140px;
@@ -2472,6 +2657,14 @@ body.ds-body.autenticado {
     .ds-avatar-slot {
     width: 80px;
     height: 80px;
+    }
+    
+    .ds-atividades-lista .ds-atividade-item p {
+    font-size: 0.8rem;
+    }
+
+    .ds-card-titulo {
+    font-size: 1.2rem;
     }
 
 }

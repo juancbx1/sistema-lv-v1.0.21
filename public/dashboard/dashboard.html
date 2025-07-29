@@ -58,27 +58,36 @@
         <section class="ds-painel-desempenho">
             <!-- SEÇÃO 1: FOCO DO DIA -->
             <div class="ds-foco-diario">
-                <div class="ds-progress-ring-container">
-                    <svg class="ds-progress-ring" width="160" height="160">
-                        <circle class="ds-progress-ring-bg" stroke-width="12" r="74" cx="80" cy="80" />
-                        <circle id="progress-ring-fg" class="ds-progress-ring-fg" stroke-width="12" r="74" cx="80" cy="80" />
-                    </svg>
-                    <div id="foco-diario-texto-central" class="ds-progress-ring-texto">
-                        <span class="ds-texto-grande">--</span>
-                        <span class="ds-texto-pequeno">Pontos</span>
-                    </div>
-                </div>
-                <div class="ds-foco-diario-legenda-container">
-                    <div id="legenda-meta-dia" class="ds-legenda-pilula">
-                        <span>Meta do Dia</span>
-                        <strong>-- pts</strong>
-                    </div>
-                    <div id="legenda-feitos-dia" class="ds-legenda-pilula">
-                        <span>Feitos Hoje</span>
-                        <strong>-- pts</strong>
-                    </div>
+            <div class="ds-progress-ring-container">
+                <svg class="ds-progress-ring" width="160" height="160">
+                    <circle class="ds-progress-ring-bg" stroke-width="12" r="74" cx="80" cy="80" />
+                    <circle id="progress-ring-fg" class="ds-progress-ring-fg" stroke-width="12" r="74" cx="80" cy="80" />
+                </svg>
+                <div id="foco-diario-texto-central" class="ds-progress-ring-texto">
+                    <span id="foco-texto-principal" class="ds-texto-grande">--</span>
+                    <span id="foco-texto-secundario" class="ds-texto-pequeno">pontos hoje</span>
                 </div>
             </div>
+            
+            <!-- Pílulas de Apoio (ficam sempre visíveis, exceto no estado final) -->
+            <div id="container-pilulas-apoio" class="ds-foco-diario-legenda-container">
+                <div id="legenda-ritmo-dia" class="ds-legenda-pilula">
+                    <span>Ritmo Sugerido</span>
+                    <strong>-- pts</strong>
+                </div>
+                <div id="legenda-feitos-dia" class="ds-legenda-pilula">
+                    <span>Feitos Hoje</span>
+                    <strong>-- pts</strong>
+                </div>
+            </div>
+
+            <!-- O Protagonista: Bloco de Foco que se transforma -->
+            <div id="container-feedback-diario" class="ds-feedback-diario-container">
+                <!-- O conteúdo (pílula grande) será 100% controlado pelo JS -->
+            </div>
+        </div>
+
+        
 
             <!-- SEÇÃO 2: PLANEJADOR SEMANAL (COM SLIDER) -->
             <div class="ds-resumo-semanal">
@@ -119,14 +128,16 @@
             </div>
         </section>
 
-        <!-- CARD DE DETALHAMENTO DE ATIVIDADES -->
-        <section class="ds-painel-desempenho">
-            <div class="ds-card-detalhamento" style="padding: 24px;"> <!-- Adicionando padding interno -->
+        <!-- CARD DE DETALHAMENTO DE ATIVIDADES --> 
+            <section class="ds-card ds-painel-detalhamento">
                 <h2 class="ds-card-titulo">Detalhamento das Atividades</h2>
                 
                 <div class="ds-controles-detalhamento">
                     <button id="btn-abrir-filtros" class="ds-btn ds-btn-outline-primario">
-                        <i class="fas fa-filter"></i> Buscar e Filtrar Atividades
+                        <i class="fas fa-filter"></i> Busca e Filtro
+                    </button>
+                    <button id="btn-atualizar-atividades" class="ds-btn ds-btn-outline-primario">
+                        <i class="fas fa-sync-alt"></i> Atualizar
                     </button>
                 </div>
                 
@@ -147,8 +158,16 @@
                         Próximo <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
-            </div>
-        </section>
+
+                <!-- Overlay de carregamento para a lista de atividades -->
+                <div id="lista-loading-overlay" class="ds-lista-loading-overlay">
+                    <div class="ds-spinner-bolinhas">
+                        <div class="bolinha bolinha-1"></div>
+                        <div class="bolinha bolinha-2"></div>
+                        <div class="bolinha bolinha-3"></div>
+                    </div>
+                </div>
+            </section>
     </main>
 
     <!-- POPUPS, MODAIS E PAINÉIS LATERAIS -->

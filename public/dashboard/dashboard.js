@@ -346,45 +346,43 @@ async function preencherTotalConquistas() {
 }
 
 async function atualizarPainelDesempenho(usuario, cicloAtual) {
-
     // --- 1. REFERÊNCIAS AOS ELEMENTOS DO DOM ---
     const focoDiarioEl = document.querySelector('.ds-foco-diario');
     const progressRingFgEl = document.getElementById('progress-ring-fg');
-    const textoCentralGrandeEl = document.querySelector('#foco-diario-texto-central .ds-texto-grande');
-    const textoCentralPequenoEl = document.querySelector('#foco-diario-texto-central .ds-texto-pequeno');
-    const legendaMetaDiaStrong = document.querySelector('#legenda-meta-dia strong');
-    const legendaFeitosDiaStrong = document.querySelector('#legenda-feitos-dia strong');
+    const textoPrincipalEl = document.getElementById('foco-texto-principal');
+    const textoSecundarioEl = document.getElementById('foco-texto-secundario');
     
+    const pilulasApoioContainer = document.getElementById('container-pilulas-apoio');
+    const legendaRitmoDiaStrong = document.querySelector('#legenda-ritmo-dia strong');
+    const legendaFeitosDiaStrong = document.querySelector('#legenda-feitos-dia strong');
+    const feedbackDiarioContainer = document.getElementById('container-feedback-diario');
+
+    // Referências ao slider e métricas
     const sliderEl = document.getElementById('meta-slider');
     const ticksContainerEl = document.getElementById('slider-ticks');
     const feedbackMetaEl = document.getElementById('feedback-meta-selecionada');
     const feedbackComissaoEl = document.getElementById('feedback-comissao');
     const feedbackPontosFaltantesEl = document.getElementById('feedback-pontos-faltantes');
-
     const metricaPontosSemanaEl = document.getElementById('metrica-pontos-semana');
     const metricaMediaDiariaEl = document.getElementById('metrica-media-diaria');
 
-    // Se não houver ciclo atual, o painel não tem o que exibir.
     if (!cicloAtual) {
         document.querySelector('.ds-painel-desempenho').innerHTML = '<p style="text-align:center; padding: 20px;">Nenhum ciclo de trabalho ativo no momento.</p>';
         return;
     }
 
-    // --- 2. OBTENÇÃO DA META SEMANAL ESCOLHIDA ---
+    // --- 2. CÁLCULO DE METAS E PONTOS ---
     const metasDoNivel = await obterMetas(usuario.tipo, usuario.nivel, new Date());
     const pontosMetaSalva = localStorage.getItem(`metaSelecionada_${usuario.nome}`);
     let metaSelecionada = metasDoNivel.find(m => m.pontos_meta == pontosMetaSalva) || metasDoNivel[0];
-
     if (!metaSelecionada) {
-        console.warn("Nenhuma meta encontrada para o usuário.");
         metaSelecionada = { pontos_meta: 0, descricao: "Nenhuma", valor: 0 };
     }
     const pontosMetaSemanal = metaSelecionada.pontos_meta;
-    
-    // --- 3. CÁLCULOS DE PONTOS E DATAS ---
+
     const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0); // Normaliza para o início do dia
-    const diaDaSemana = hoje.getDay(); // Domingo = 0, Segunda = 1, ..., Sábado = 6
+    hoje.setHours(0, 0, 0, 0);
+    const diaDaSemana = hoje.getDay();
 
     const atividadesDaSemana = cicloAtual.atividades.filter(item => {
         const dataItem = new Date(item.data);
@@ -397,82 +395,76 @@ async function atualizarPainelDesempenho(usuario, cicloAtual) {
     const pontosFeitosHoje = atividadesDaSemana
         .filter(item => new Date(item.data).toDateString() === hoje.toDateString())
         .reduce((acc, item) => acc + (parseFloat(item.pontos_gerados) || 0), 0);
-    const pontosFaltantesSemana = Math.max(0, pontosMetaSemanal - totalPontosSemana);
-
-    // --- 4. LÓGICA DA META DIÁRIA INTELIGENTE E CONFIGURAÇÃO DA UI DO ANEL ---
-    let metaDiariaParaPill;
-    let textoAnelPrincipal;
-    let textoAnelInferior;
-    let progressoPercentualAnel;
-
-    if (pontosFaltantesSemana <= 0) {
-        // CASO 1: META SEMANAL JÁ BATIDA!
-        focoDiarioEl.classList.add('sucesso');
-        textoAnelPrincipal = 'Meta Batida!';
-        textoAnelInferior = '🎉';
-        metaDiariaParaPill = pontosFeitosHoje; // Meta do dia é o que já foi feito, pois já bateu.
-        progressoPercentualAnel = 100;
-    } else {
-        // CASO 2: META SEMANAL EM ANDAMENTO
-        focoDiarioEl.classList.remove('sucesso');
-
-        if (diaDaSemana >= 1 && diaDaSemana <= 4) { // Segunda a Quinta
-            const diasRestantes = 6 - diaDaSemana;
-            metaDiariaParaPill = pontosFaltantesSemana / diasRestantes;
-            textoAnelPrincipal = Math.ceil(pontosFaltantesSemana);
-            textoAnelInferior = 'Faltam na semana';
-            progressoPercentualAnel = metaDiariaParaPill > 0 ? (pontosFeitosHoje / metaDiariaParaPill) * 100 : 0;
-        } else if (diaDaSemana === 5) { // Sexta-feira
-            metaDiariaParaPill = pontosFaltantesSemana;
-            textoAnelPrincipal = Math.ceil(pontosFaltantesSemana);
-            textoAnelInferior = 'Falta hoje';
-            progressoPercentualAnel = metaDiariaParaPill > 0 ? (pontosFeitosHoje / metaDiariaParaPill) * 100 : 0;
-        } else if (diaDaSemana === 6) { // Sábado
-            metaDiariaParaPill = pontosFaltantesSemana;
-            textoAnelPrincipal = Math.ceil(pontosFaltantesSemana);
-            textoAnelInferior = 'Faltou na semana';
-            progressoPercentualAnel = pontosMetaSemanal > 0 ? (totalPontosSemana / pontosMetaSemanal) * 100 : 0;
-        } else { // Domingo
-            metaDiariaParaPill = pontosMetaSemanal > 0 ? pontosMetaSemanal / 5 : 0;
-            textoAnelPrincipal = Math.ceil(metaDiariaParaPill);
-            textoAnelInferior = 'Meta para Seg.';
-            progressoPercentualAnel = 0;
-        }
-    }
-
-    // --- 5. ATUALIZAÇÃO DA INTERFACE (UI) ---
-
-    // 5.1 Atualiza o Anel e as Pílulas
-    textoCentralGrandeEl.textContent = textoAnelPrincipal;
-    textoCentralPequenoEl.textContent = textoAnelInferior;
-    legendaMetaDiaStrong.textContent = `${Math.round(metaDiariaParaPill)} pts`;
+    
+    const metaDiariaFixa = pontosMetaSemanal > 0 ? pontosMetaSemanal / 5 : 0;
+    
+    // --- 3. LÓGICA DE ESTADOS DO PAINEL ---
+    
+    textoPrincipalEl.textContent = Math.round(pontosFeitosHoje);
     legendaFeitosDiaStrong.textContent = `${Math.round(pontosFeitosHoje)} pts`;
+    
+    let ritmoSugeridoParaHoje = 0;
+    if (diaDaSemana >= 1 && diaDaSemana <= 5) {
+        const diasRestantes = 6 - diaDaSemana;
+        const pontosFaltantesSemana = Math.max(0, pontosMetaSemanal - totalPontosSemana);
+        ritmoSugeridoParaHoje = pontosFaltantesSemana > 0 ? pontosFaltantesSemana / diasRestantes : 0;
+    }
+    legendaRitmoDiaStrong.textContent = `${Math.round(ritmoSugeridoParaHoje)} pts`;
 
-    // 5.2 Animação do Anel de Progresso
+    const progressoAnelPercentual = ritmoSugeridoParaHoje > 0 ? (pontosFeitosHoje / ritmoSugeridoParaHoje) * 100 : 0;
     const raio = progressRingFgEl.r.baseVal.value;
     const circunferencia = 2 * Math.PI * raio;
     progressRingFgEl.style.strokeDasharray = `${circunferencia} ${circunferencia}`;
-    const progressoFinal = Math.min(progressoPercentualAnel, 100);
-    const offsetFinal = circunferencia - (progressoFinal / 100) * circunferencia;
+    const progressoFinal = Math.min(progressoAnelPercentual, 100);
+    progressRingFgEl.style.strokeDashoffset = circunferencia - (progressoFinal / 100) * circunferencia;
 
-    let start = null;
-    const duracaoAnimacao = 1000;
-    function animarAnel(timestamp) {
-        if (!start) start = timestamp;
-        const progressoTempo = timestamp - start;
-        const progressoAnimacao = Math.min(progressoTempo / duracaoAnimacao, 1);
-        const offsetAtual = circunferencia - (progressoAnimacao * progressoFinal / 100) * circunferencia;
-        progressRingFgEl.style.strokeDashoffset = offsetAtual;
+    if (totalPontosSemana >= pontosMetaSemanal && pontosMetaSemanal > 0) {
+        // ESTADO 3: "O BÔNUS"
+        focoDiarioEl.classList.add('sucesso');
+        progressRingFgEl.style.stroke = 'var(--ds-cor-sucesso)';
+        textoPrincipalEl.textContent = '🎉';
+        textoSecundarioEl.textContent = 'Semana Completa!';
+        pilulasApoioContainer.style.opacity = '0';
+        const pontosExtras = totalPontosSemana - pontosMetaSemanal;
+        feedbackDiarioContainer.innerHTML = `<div class="ds-feedback-diario-pilula status-bonus-semana">Incrível! Pontos Extras: <strong>${Math.round(pontosExtras)}</strong></div>`;
 
-        if (progressoTempo < duracaoAnimacao) {
-            requestAnimationFrame(animarAnel);
-        } else {
-            progressRingFgEl.style.strokeDashoffset = offsetFinal;
+    } else if (pontosFeitosHoje >= metaDiariaFixa && metaDiariaFixa > 0) {
+        // ESTADO 2: "A CELEBRAÇÃO"
+        focoDiarioEl.classList.remove('sucesso');
+        progressRingFgEl.style.stroke = 'var(--ds-cor-primaria)';
+        textoSecundarioEl.textContent = 'pontos hoje';
+        pilulasApoioContainer.style.opacity = '1';
+        feedbackDiarioContainer.innerHTML = `<div class="ds-feedback-diario-pilula status-sucesso-dia">Meta do dia batida! Continue para adiantar a semana!</div>`;
+
+    } else {
+        // ESTADO 1: "A CORRIDA"
+        focoDiarioEl.classList.remove('sucesso');
+        progressRingFgEl.style.stroke = 'var(--ds-cor-primaria)';
+        textoSecundarioEl.textContent = 'pontos hoje';
+        pilulasApoioContainer.style.opacity = '1';
+
+        let debitoDeOntem = 0;
+        if (diaDaSemana > 1 && diaDaSemana <= 5) {
+            const diasUteisPassados = diaDaSemana - 1;
+            const metaEsperadaAteOntem = metaDiariaFixa * diasUteisPassados;
+            const pontosFeitosAteOntem = totalPontosSemana - pontosFeitosHoje;
+            const debitoCalculado = metaEsperadaAteOntem - pontosFeitosAteOntem;
+            if (debitoCalculado > 0) {
+                debitoDeOntem = debitoCalculado;
+            }
         }
-    }
-    requestAnimationFrame(animarAnel);
 
-    // 5.3 Lógica do Planejador Semanal (Slider)
+        const pontosFaltantesReaisHoje = (metaDiariaFixa > 0 ? metaDiariaFixa - pontosFeitosHoje : 0) + debitoDeOntem;
+        let htmlFeedback = `<div>Foco do Dia: Faltam <strong>${Math.ceil(pontosFaltantesReaisHoje)}</strong> pontos</div>`;
+
+        if (debitoDeOntem > 0) {
+            htmlFeedback += `<span class="ds-feedback-subtitulo">incluindo ${Math.ceil(debitoDeOntem)} pts de ontem</span>`;
+        }
+        
+        feedbackDiarioContainer.innerHTML = `<div class="ds-feedback-diario-pilula status-foco">${htmlFeedback}</div>`;
+    }
+
+    // --- 4. ATUALIZAÇÃO DO SLIDER E MÉTRICAS ---
     if (metasDoNivel.length > 0) {
         sliderEl.style.display = 'block';
         const valoresValidos = metasDoNivel.map(m => m.pontos_meta);
@@ -513,11 +505,10 @@ async function atualizarPainelDesempenho(usuario, cicloAtual) {
         feedbackMetaEl.textContent = 'Nenhuma meta configurada para seu nível.';
     }
 
-    // 5.4 Métricas Rápidas
+    // Métricas Rápidas
     metricaPontosSemanaEl.textContent = Math.round(totalPontosSemana);
-    
-    const diasUteisPassados = (diaDaSemana === 0 || diaDaSemana > 5) ? 5 : diaDaSemana;
-    const mediaDiaria = diasUteisPassados > 0 ? totalPontosSemana / diasUteisPassados : 0;
+    const diasUteisPassadosTotal = (diaDaSemana === 0 || diaDaSemana > 5) ? 5 : diaDaSemana;
+    const mediaDiaria = diasUteisPassadosTotal > 0 ? totalPontosSemana / diasUteisPassadosTotal : 0;
     metricaMediaDiariaEl.textContent = Math.round(mediaDiaria);
 }
 
@@ -1137,6 +1128,9 @@ async function processarUploadAvatar(event) {
 function atualizarDetalhamentoAtividades() {
     // Usa a nova variável global com a lista de atividades já unificada.
     let atividadesFiltradas = [...todasAsAtividadesRelevantes];
+
+    // ORDENAÇÃO: Garante que os itens mais recentes (maior data) apareçam primeiro.
+    atividadesFiltradas.sort((a, b) => new Date(b.data) - new Date(a.data));
     
     // Se houver uma busca por OP, ela tem prioridade MÁXIMA e ignora outros filtros de data/processo.
     if (filtrosAtivosDetalhes.busca) {
@@ -2214,6 +2208,32 @@ function configurarEventListenersGerais() {
     document.getElementById('btn-abrir-filtros')?.addEventListener('click', () => {
         abrirPainelFiltros();
     });
+
+    document.getElementById('btn-atualizar-atividades')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-atualizar-atividades');
+    const overlay = document.getElementById('lista-loading-overlay');
+
+    // Mostra o spinner de bolinhas e desativa os botões
+    overlay.classList.add('ativo');
+    btn.disabled = true;
+    document.getElementById('btn-abrir-filtros').disabled = true;
+
+    try {
+        // Força a busca de novos dados do servidor
+        await atualizarDashboardCompleto(true, false);
+        
+        mostrarPopup('Lista de atividades atualizada!', 'sucesso', 2000);
+    } catch (error) {
+        console.error('Erro ao atualizar atividades:', error);
+        mostrarPopup('Não foi possível atualizar a lista.', 'erro');
+    } finally {
+        // Esconde o spinner e reativa os botões
+        overlay.classList.remove('ativo');
+        btn.disabled = false;
+        document.getElementById('btn-abrir-filtros').disabled = false;
+    }
+    });
+
 
     document.getElementById('btn-fechar-filtros')?.addEventListener('click', fecharPainelFiltros);
     document.getElementById('painel-filtros-overlay')?.addEventListener('click', (e) => {
