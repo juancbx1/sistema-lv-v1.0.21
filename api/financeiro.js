@@ -105,6 +105,14 @@ async function registrarLog(dbClient, idUsuario, nomeUsuario, acao, dados) {
                 detalhes = `Rejeitou a solicitação para o lançamento #${dados.solicitacao.id_lancamento}. Motivo: ${dados.motivo}`;
                 dadosAlterados = { rejeicao: dados.solicitacao, motivo: dados.motivo };
                 break;
+                
+            case 'REGISTRO_ESTORNO': {
+                const valorFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(dados.lancamento_estorno.valor);
+                detalhes = `Registrou um estorno de ${valorFormatado} (lançamento #${dados.lancamento_estorno.id}) para a despesa original #${dados.lancamento_original.id}.`;
+                dadosAlterados = dados;
+                break;
+            }
+
             default:
                 detalhes = 'Ação de auditoria não especificada.';
         }
@@ -480,7 +488,7 @@ router.get('/lancamentos', async (req, res) => {
         return res.status(403).json({ error: 'Permissão negada.' });
     }
     
-    const { limit = 50, page = 1, dataInicio, dataFim, tipo, idConta, termoBusca } = req.query;
+    const { limit = 50, page = 1, dataInicio, dataFim, tipo, idConta, termoBusca, tipoRateio } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
     let dbClient;
@@ -507,14 +515,49 @@ router.get('/lancamentos', async (req, res) => {
             whereClauses.push(`l.id_conta_bancaria = $${paramIndex++}`);
             params.push(idConta);
         }
+
+        if (tipoRateio) {
+        switch (tipoRateio) {
+            case 'simples':
+                // Lançamento simples é aquele que NÃO tem um tipo_rateio e NÃO é uma transferência.
+                whereClauses.push(`l.tipo_rateio IS NULL AND l.id_transferencia_vinculada IS NULL`);
+                break;
+            case 'transferencia':
+                // Lançamento de transferência é aquele que tem o campo id_transferencia_vinculada preenchido.
+                whereClauses.push(`l.id_transferencia_vinculada IS NOT NULL`);
+                break;
+            case 'COMPRA':
+            case 'DETALHADO':
+                // Para 'COMPRA' e 'DETALHADO', o filtro é direto na coluna tipo_rateio.
+                whereClauses.push(`l.tipo_rateio = $${paramIndex++}`);
+                params.push(tipoRateio);
+                break;
+        }
+    }
+
+
         if (termoBusca) {
+            // 1. Tratamento para busca por ID (ex: #123)
             if (termoBusca.startsWith('#')) {
                 const idNumerico = parseInt(termoBusca.substring(1), 10);
                 if (!isNaN(idNumerico)) {
                     whereClauses.push(`l.id = $${paramIndex++}`);
                     params.push(idNumerico);
                 }
-            } else {
+            } 
+            // 2. Tratamento para busca por VALOR
+            else if (!isNaN(parseFloat(termoBusca.replace(',', '.')))) {
+                // Primeiro, limpamos a string: trocamos vírgula por ponto.
+                const valorNumerico = parseFloat(termoBusca.replace(',', '.'));
+                
+                // Adiciona a condição para buscar o valor exato na query.
+                // Usa a função ROUND() do PostgreSQL para evitar problemas com 
+                // pequenas diferenças de ponto flutuante. Comparamos com 2 casas decimais.
+                whereClauses.push(`ROUND(l.valor::numeric, 2) = ROUND($${paramIndex++}::numeric, 2)`);
+                params.push(valorNumerico);
+            }
+            // 3. Fallback: Se não for ID nem valor, busca por descrição ou favorecido (como antes)
+            else {
                 whereClauses.push(`(l.descricao ILIKE $${paramIndex} OR fav.nome ILIKE $${paramIndex})`);
                 params.push(`%${termoBusca}%`);
                 paramIndex++;
@@ -533,27 +576,30 @@ router.get('/lancamentos', async (req, res) => {
         
         const query = `
             SELECT 
-        l.*, 
-        l.data_lancamento,
-        cb.nome_conta,
-        cat.nome as nome_categoria,
-        u.nome as nome_usuario, 
-        fav.nome as nome_favorecido,
-        (
-            SELECT json_agg(json_build_object(
-                'id', li.id,
-                'descricao_item', li.descricao_item,
-                'valor_item', li.valor_item,
-                'id_categoria', li.id_categoria,
-                'nome_categoria', cat_item.nome,
-                'id_contato_item', li.id_contato_item,
-                'nome_contato_item', contato_item.nome
-            ))
-            FROM fc_lancamento_itens li
-            LEFT JOIN fc_categorias cat_item ON li.id_categoria = cat_item.id
-            LEFT JOIN fc_contatos contato_item ON li.id_contato_item = contato_item.id
-            WHERE li.id_lancamento_pai = l.id
-        ) as itens
+                l.*, 
+                l.data_lancamento,
+                l.valor_desconto,
+                cb.nome_conta,
+                cat.nome as nome_categoria,
+                u.nome as nome_usuario, 
+                fav.nome as nome_favorecido,
+                (
+                    SELECT json_agg(json_build_object(
+                        'id', li.id,
+                        'descricao_item', li.descricao_item,
+                        'quantidade', li.quantidade,
+                        'valor_unitario', li.valor_unitario,
+                        'valor_total_item', li.valor_total_item,
+                        'id_categoria', li.id_categoria,
+                        'nome_categoria', cat_item.nome,
+                        'id_contato_item', li.id_contato_item,
+                        'nome_contato_item', contato_item.nome
+                    ))
+                    FROM fc_lancamento_itens li
+                    LEFT JOIN fc_categorias cat_item ON li.id_categoria = cat_item.id
+                    LEFT JOIN fc_contatos contato_item ON li.id_contato_item = contato_item.id
+                    WHERE li.id_lancamento_pai = l.id
+                ) as itens
             ${baseQuery}
             ${whereString}
             ORDER BY l.data_transacao DESC, l.id DESC
@@ -809,6 +855,11 @@ router.put('/lancamentos/:id', async (req, res) => {
         }
         
         const lancamentoOriginal = lancamentoOriginalRes.rows[0];
+
+        if (lancamentoOriginal.status_edicao === 'PENDENTE_APROVACAO' || lancamentoOriginal.status_edicao === 'PENDENTE_EXCLUSAO') {
+             await dbClient.query('ROLLBACK');
+             return res.status(409).json({ error: 'Este lançamento já possui uma solicitação pendente e não pode ser editado.' });
+        }
         
         if (req.permissoesUsuario.includes('aprovar-alteracao-financeira')) {
             // FLUXO DO ADMIN: Edita diretamente
@@ -873,6 +924,11 @@ router.post('/lancamentos/:id/solicitar-exclusao', async (req, res) => {
         
         const lancamentoOriginal = lancamentoOriginalRes.rows[0];
 
+        if (lancamentoOriginal.status_edicao === 'PENDENTE_APROVACAO' || lancamentoOriginal.status_edicao === 'PENDENTE_EXCLUSAO') {
+            await dbClient.query('ROLLBACK');
+            return res.status(409).json({ error: 'Este lançamento já possui uma solicitação pendente e não pode ser excluído.' });
+        }
+
         if (req.permissoesUsuario.includes('aprovar-alteracao-financeira')) {
             console.log(`[ADMIN FLOW] Tentando excluir diretamente o lançamento #${id}...`);
             await registrarLog(dbClient, req.usuarioLogado.id, req.usuarioLogado.nome, 'EXCLUSAO_DIRETA_LANCAMENTO', { lancamento: lancamentoOriginal });
@@ -913,33 +969,176 @@ router.post('/lancamentos/:id/solicitar-exclusao', async (req, res) => {
     }
 });
 
+// ROTA PARA REGISTRAR UM ESTORNO
+router.post('/lancamentos/:id/estornar', async (req, res) => {
+    if (!req.permissoesUsuario.includes('estornar-transacao')) {
+        return res.status(403).json({ error: 'Permissão negada para solicitar estornos.' });
+    }
+
+    const { id: idLancamentoOriginal } = req.params;
+    const dadosEstorno = req.body; // { id_conta_bancaria, data_transacao, valor_estornado }
+    
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        await dbClient.query('BEGIN');
+
+        const lancamentoOriginalRes = await dbClient.query('SELECT * FROM fc_lancamentos WHERE id = $1 FOR UPDATE', [idLancamentoOriginal]);
+        if (lancamentoOriginalRes.rows.length === 0) throw new Error('Lançamento original não encontrado.');
+        const lancamentoOriginal = lancamentoOriginalRes.rows[0];
+
+        // <<< VERIFICAÇÃO AQUI >>>
+        if (lancamentoOriginal.status_edicao !== 'OK' && lancamentoOriginal.status_edicao !== 'ESTORNADO' && lancamentoOriginal.status_edicao !== 'EDITADO_APROVADO' && lancamentoOriginal.status_edicao !== 'EDICAO_REJEITADA') {
+            await dbClient.query('ROLLBACK'); // Libera o "FOR UPDATE"
+            return res.status(409).json({ error: `Este lançamento já possui uma ação pendente (${lancamentoOriginal.status_edicao}) e não pode ser alterado.` });
+        }
+
+        // FLUXO DO ADMIN: Executa diretamente (sem mudanças aqui)
+        if (req.permissoesUsuario.includes('aprovar-alteracao-financeira')) {
+            console.log(`[ADMIN FLOW] Estorno direto para lançamento #${idLancamentoOriginal} por ${req.usuarioLogado.nome}`);
+            
+            const estornoQuery = `INSERT INTO fc_lancamentos (id_conta_bancaria, id_categoria, tipo, valor, data_transacao, descricao, id_contato, id_usuario_lancamento, id_estorno_de) VALUES ($1, $2, 'RECEITA', $3, $4, $5, $6, $7, $8) RETURNING *;`;
+            const descricaoEstorno = `Estorno do lançamento #${idLancamentoOriginal}: ${lancamentoOriginal.descricao}`;
+            const estornoResult = await dbClient.query(estornoQuery, [dadosEstorno.id_conta_bancaria, lancamentoOriginal.id_categoria, dadosEstorno.valor_estornado, dadosEstorno.data_transacao, descricaoEstorno, lancamentoOriginal.id_contato, req.usuarioLogado.id, idLancamentoOriginal]);
+            
+            await dbClient.query("UPDATE fc_lancamentos SET status_edicao = 'ESTORNADO' WHERE id = $1", [idLancamentoOriginal]);
+            
+            await registrarLog(dbClient, req.usuarioLogado.id, req.usuarioLogado.nome, 'REGISTRO_ESTORNO', { lancamento_original: lancamentoOriginal, lancamento_estorno: estornoResult.rows[0] });
+            
+            await dbClient.query('COMMIT');
+            return res.status(201).json({ message: 'Estorno registrado com sucesso!' });
+        } 
+        // FLUXO DO USUÁRIO COMUM: Cria uma solicitação
+        else {
+            console.log(`[USER FLOW] Solicitação de estorno para lançamento #${idLancamentoOriginal} por ${req.usuarioLogado.nome}`);
+
+            const solRes = await dbClient.query(
+                `INSERT INTO fc_solicitacoes_alteracao (id_lancamento, tipo_solicitacao, dados_antigos, dados_novos, id_usuario_solicitante) VALUES ($1, 'ESTORNO', $2, $3, $4) RETURNING *;`,
+                [
+                    idLancamentoOriginal, 
+                    JSON.stringify(lancamentoOriginal), // << GARANTE A CONVERSÃO
+                    JSON.stringify(dadosEstorno),       // << GARANTE A CONVERSÃO
+                    req.usuarioLogado.id
+                ]
+            );
+
+            // Muda o status para indicar que há uma ação pendente
+            await dbClient.query(`UPDATE fc_lancamentos SET status_edicao = 'PENDENTE_APROVACAO' WHERE id = $1`, [idLancamentoOriginal]);
+            
+            // await registrarLog(...)
+            
+            await dbClient.query('COMMIT');
+            return res.status(202).json({ message: 'Solicitação de estorno enviada para aprovação.' });
+        }
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error(`[API /lancamentos/${idLancamentoOriginal}/estornar] Erro:`, error);
+        res.status(500).json({ error: 'Erro ao processar o estorno.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+
+// NOVA ROTA PARA REVERTER UM ESTORNO
+router.post('/lancamentos/:id/reverter-estorno', async (req, res) => {
+    if (!req.permissoesUsuario.includes('estornar-transacao')) {
+        return res.status(403).json({ error: 'Permissão negada para solicitar reversão.' });
+    }
+
+    const { id: idLancamentoEstorno } = req.params;
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        await dbClient.query('BEGIN');
+
+        const estornoRes = await dbClient.query('SELECT * FROM fc_lancamentos WHERE id = $1 FOR UPDATE', [idLancamentoEstorno]);
+        if (estornoRes.rows.length === 0) throw new Error('Lançamento de estorno não encontrado.');
+        const lancamentoEstorno = estornoRes.rows[0];
+        if (!lancamentoEstorno.id_estorno_de) throw new Error('Este lançamento não é um estorno.');
+
+
+        // <<< NOVA VERIFICAÇÃO AQUI >>>
+        if (lancamentoEstorno.status_edicao !== 'OK' && lancamentoEstorno.status_edicao !== 'EDITADO_APROVADO' && lancamentoEstorno.status_edicao !== 'EDICAO_REJEITADA') {
+            await dbClient.query('ROLLBACK');
+            return res.status(409).json({ error: `Este lançamento já possui uma ação pendente (${lancamentoEstorno.status_edicao}) e não pode ser alterado.` });
+        }
+        
+        // FLUXO DO ADMIN: Executa diretamente
+        if (req.permissoesUsuario.includes('aprovar-alteracao-financeira')) {
+            console.log(`[ADMIN FLOW] Reversão direta para estorno #${idLancamentoEstorno} por ${req.usuarioLogado.nome}`);
+            
+            await dbClient.query('DELETE FROM fc_lancamentos WHERE id = $1', [idLancamentoEstorno]);
+            await dbClient.query("UPDATE fc_lancamentos SET status_edicao = 'OK' WHERE id = $1", [lancamentoEstorno.id_estorno_de]);
+            
+            // await registrarLog(...)
+            
+            await dbClient.query('COMMIT');
+            return res.status(200).json({ message: 'Estorno revertido com sucesso.' });
+        }
+        // FLUXO DO USUÁRIO COMUM: Cria uma solicitação
+        else {
+            console.log(`[USER FLOW] Solicitação de reversão para estorno #${idLancamentoEstorno} por ${req.usuarioLogado.nome}`);
+
+            // Aqui, o 'id_lancamento' na solicitação é o ID do ESTORNO (que queremos apagar)
+            const solRes = await dbClient.query(
+                `INSERT INTO fc_solicitacoes_alteracao (id_lancamento, tipo_solicitacao, dados_antigos, id_usuario_solicitante) VALUES ($1, 'REVERSAO_ESTORNO', $2, $3) RETURNING *;`,
+                [idLancamentoEstorno, lancamentoEstorno, req.usuarioLogado.id]
+            );
+
+            await dbClient.query(`UPDATE fc_lancamentos SET status_edicao = 'PENDENTE_APROVACAO' WHERE id = $1`, [idLancamentoEstorno]);
+            
+            await dbClient.query('COMMIT');
+            return res.status(202).json({ message: 'Solicitação de reversão de estorno enviada para aprovação.' });
+        }
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error(`[API /reverter-estorno] Erro:`, error);
+        res.status(500).json({ error: 'Erro ao reverter o estorno.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+
 router.post('/lancamentos/detalhado', async (req, res) => {
     if (!req.permissoesUsuario.includes('lancar-transacao')) {
         return res.status(403).json({ error: 'Permissão negada.' });
     }
 
+    // 1. Recebemos o novo campo 'valor_desconto' dos dados do pai
     const { dados_pai, itens_filho, tipo_rateio } = req.body;
+    const { valor_desconto = 0 } = dados_pai; // Default 0 se não for enviado
 
     if (!dados_pai || !Array.isArray(itens_filho) || itens_filho.length === 0) {
         return res.status(400).json({ error: 'Estrutura de dados inválida.' });
     }
     
-    // Calcula o valor total a partir da soma dos filhos
-    const valor_total_calculado = itens_filho.reduce((acc, item) => acc + parseFloat(item.valor_item || 0), 0);
-    if (valor_total_calculado <= 0) {
-        return res.status(400).json({ error: 'O valor total do lançamento deve ser maior que zero.' });
+    // 2. O valor total agora é a soma dos itens MENOS o desconto
+    const soma_itens = itens_filho.reduce((acc, item) => {
+        // Validação: Cada item agora deve ter quantidade e valor unitário
+        if (!item.quantidade || !item.valor_unitario) {
+            throw new Error('Cada item detalhado deve ter quantidade e valor unitário.');
+        }
+        // O valor total do item é calculado aqui no backend
+        const valor_total_item = parseFloat(item.quantidade) * parseFloat(item.valor_unitario);
+        return acc + valor_total_item;
+    }, 0);
+
+    const valor_total_lancamento = soma_itens - parseFloat(valor_desconto);
+
+    if (valor_total_lancamento < 0) {
+        return res.status(400).json({ error: 'O valor total do lançamento (após desconto) não pode ser negativo.' });
     }
 
-    // Validações dos dados do "pai"
+    // Validações dos dados do "pai" (mesma lógica de antes)
     const { id_conta_bancaria, data_transacao, id_contato, id_categoria, descricao } = dados_pai;
     if (!id_conta_bancaria || !data_transacao) {
         return res.status(400).json({ error: 'Conta bancária e data são obrigatórios.' });
     }
-    // Validações específicas por tipo de rateio
-    if (tipo_rateio === 'DETALHADO' && (!id_contato || !id_categoria)) {
-         return res.status(400).json({ error: 'Para rateio detalhado, o favorecido e a categoria geral são obrigatórios.' });
-    }
-     if (tipo_rateio === 'COMPRA' && !id_contato) {
+    if (tipo_rateio === 'COMPRA' && !id_contato) {
          return res.status(400).json({ error: 'Para compra detalhada, o fornecedor é obrigatório.' });
     }
 
@@ -948,48 +1147,41 @@ router.post('/lancamentos/detalhado', async (req, res) => {
         dbClient = await pool.connect();
         await dbClient.query('BEGIN');
 
-        // 1. Insere o lançamento "pai"
+        // 3. Inserimos o lançamento "pai" com o valor_total_lancamento e o valor_desconto
         const lancamentoPaiQuery = `
             INSERT INTO fc_lancamentos 
-                (id_conta_bancaria, tipo, valor, data_transacao, descricao, id_contato, id_categoria, id_usuario_lancamento, tipo_rateio)
-            VALUES ($1, 'DESPESA', $2, $3, $4, $5, $6, $7, $8) 
+                (id_conta_bancaria, tipo, valor, valor_desconto, data_transacao, descricao, id_contato, id_categoria, id_usuario_lancamento, tipo_rateio)
+            VALUES ($1, 'DESPESA', $2, $3, $4, $5, $6, $7, $8, $9) 
             RETURNING id;
         `;
         const lancamentoPaiResult = await dbClient.query(lancamentoPaiQuery, [
-            id_conta_bancaria, valor_total_calculado, data_transacao, descricao, 
+            id_conta_bancaria, 
+            valor_total_lancamento, // <- Valor líquido
+            valor_desconto,         // <- Novo campo
+            data_transacao, 
+            descricao, 
             id_contato, 
-            // Para 'COMPRA', a categoria do pai é nula. Para 'DETALHADO', usamos a categoria geral.
             tipo_rateio === 'COMPRA' ? null : id_categoria,
             req.usuarioLogado.id, 
             tipo_rateio || null
         ]);
         const novoLancamentoId = lancamentoPaiResult.rows[0].id;
 
-        // 2. Itera sobre cada item "filho" e o insere
+        // 4. Inserimos cada item "filho" com os novos campos
         for (const item of itens_filho) {
-            if (!item.valor_item) {
-                throw new Error('Cada item detalhado deve ter um valor.');
-            }
-            
-            // Validação de campos obrigatórios por tipo de rateio
-            if (tipo_rateio === 'COMPRA' && !item.id_categoria) {
-                 throw new Error('Cada item da compra deve ter uma categoria.');
-            }
-            if (tipo_rateio === 'DETALHADO' && !item.id_contato_item) {
-                throw new Error('Cada item do rateio deve ter um favorecido.');
-            }
-            
-            // Query de inserção agora é a mesma para ambos, mas com valores diferentes
+            const valor_total_item = parseFloat(item.quantidade) * parseFloat(item.valor_unitario);
             const itemQuery = `
-                INSERT INTO fc_lancamento_itens (id_lancamento_pai, id_categoria, descricao_item, valor_item, id_contato_item)
-                VALUES ($1, $2, $3, $4, $5);
+                INSERT INTO fc_lancamento_itens (id_lancamento_pai, id_categoria, descricao_item, quantidade, valor_unitario, valor_total_item, id_contato_item)
+                VALUES ($1, $2, $3, $4, $5, $6, $7);
             `;
             await dbClient.query(itemQuery, [
                 novoLancamentoId, 
-                item.id_categoria, // CORREÇÃO: Passa a categoria do item
+                item.id_categoria,
                 item.descricao_item, 
-                item.valor_item, 
-                item.id_contato_item || null // Garante que será null se não for fornecido
+                item.quantidade,       // <- Novo campo
+                item.valor_unitario,   // <- Novo campo
+                valor_total_item,      // <- Valor calculado
+                item.id_contato_item || null
             ]);
         }
         
@@ -998,7 +1190,7 @@ router.post('/lancamentos/detalhado', async (req, res) => {
             req.usuarioLogado.id,
             req.usuarioLogado.nome,
             'CRIACAO_LANCAMENTO_DETALHADO',
-            { lancamento: { id: novoLancamentoId, descricao: descricao, valor: valor_total_calculado, itens: itens_filho.length, tipo_rateio: tipo_rateio } }
+            { lancamento: { id: novoLancamentoId, descricao: descricao, valor: valor_total_lancamento, itens: itens_filho.length, tipo_rateio: tipo_rateio } }
         );
 
         await dbClient.query('COMMIT');
@@ -1015,54 +1207,60 @@ router.post('/lancamentos/detalhado', async (req, res) => {
 
 // PUT /api/financeiro/lancamentos/detalhado/:id - ATUALIZAR UM LANÇAMENTO DETALHADO
 router.put('/lancamentos/detalhado/:id', async (req, res) => {
-    // Usamos a mesma permissão de edição de transações simples
     if (!req.permissoesUsuario.includes('editar-transacao')) {
         return res.status(403).json({ error: 'Permissão negada.' });
     }
 
     const { id: idLancamentoPai } = req.params;
+    // 1. Recebemos os novos campos
     const { dados_pai, itens_filho, tipo_rateio } = req.body;
+    const { valor_desconto = 0 } = dados_pai;
 
-    // Validações básicas
     if (!idLancamentoPai || !dados_pai || !Array.isArray(itens_filho) || itens_filho.length === 0) {
         return res.status(400).json({ error: 'Estrutura de dados inválida para atualização.' });
     }
     
-    // Validações dos dados do pai
+    // 2. Recalculamos o valor total
+    const soma_itens = itens_filho.reduce((acc, item) => {
+        if (!item.quantidade || !item.valor_unitario) {
+            throw new Error('Cada item detalhado deve ter quantidade e valor unitário.');
+        }
+        const valor_total_item = parseFloat(item.quantidade) * parseFloat(item.valor_unitario);
+        return acc + valor_total_item;
+    }, 0);
+    const valor_total_lancamento = soma_itens - parseFloat(valor_desconto);
+
+    // Validações...
     const { id_conta_bancaria, data_transacao, id_contato, id_categoria, descricao } = dados_pai;
     if (!id_conta_bancaria || !data_transacao) {
         return res.status(400).json({ error: 'Conta bancária e data são obrigatórios.' });
     }
 
-    const valor_total_calculado = itens_filho.reduce((acc, item) => acc + parseFloat(item.valor_item || 0), 0);
-    if (valor_total_calculado <= 0) {
-        return res.status(400).json({ error: 'O valor total do lançamento deve ser maior que zero.' });
-    }
-
     let dbClient;
     try {
         dbClient = await pool.connect();
-        await dbClient.query('BEGIN'); // INICIA A TRANSAÇÃO
+        await dbClient.query('BEGIN');
 
-        // 1. Apaga TODOS os itens "filho" antigos associados a este pai.
         await dbClient.query('DELETE FROM fc_lancamento_itens WHERE id_lancamento_pai = $1', [idLancamentoPai]);
 
-        // 2. Atualiza o lançamento "pai" com os novos dados.
+        // 3. Atualizamos o lançamento "pai" com os novos campos
         const updatePaiQuery = `
             UPDATE fc_lancamentos 
             SET 
                 id_conta_bancaria = $1, 
                 valor = $2, 
-                data_transacao = $3, 
-                descricao = $4, 
-                id_contato = $5, 
-                id_categoria = $6,
-                tipo_rateio = $7
-            WHERE id = $8;
+                valor_desconto = $3,
+                data_transacao = $4, 
+                descricao = $5, 
+                id_contato = $6, 
+                id_categoria = $7,
+                tipo_rateio = $8
+            WHERE id = $9;
         `;
         await dbClient.query(updatePaiQuery, [
             id_conta_bancaria,
-            valor_total_calculado,
+            valor_total_lancamento, // <- Valor líquido
+            valor_desconto,         // <- Novo campo
             data_transacao,
             descricao,
             id_contato,
@@ -1071,29 +1269,31 @@ router.put('/lancamentos/detalhado/:id', async (req, res) => {
             idLancamentoPai
         ]);
 
-        // 3. Insere novamente todos os itens "filho" com os novos dados.
+        // 4. Inserimos novamente os itens "filho" com os novos campos
         for (const item of itens_filho) {
+            const valor_total_item = parseFloat(item.quantidade) * parseFloat(item.valor_unitario);
             const itemQuery = `
-                INSERT INTO fc_lancamento_itens (id_lancamento_pai, id_categoria, descricao_item, valor_item, id_contato_item)
-                VALUES ($1, $2, $3, $4, $5);
+                INSERT INTO fc_lancamento_itens (id_lancamento_pai, id_categoria, descricao_item, quantidade, valor_unitario, valor_total_item, id_contato_item)
+                VALUES ($1, $2, $3, $4, $5, $6, $7);
             `;
             await dbClient.query(itemQuery, [
                 idLancamentoPai, 
                 item.id_categoria,
                 item.descricao_item, 
-                item.valor_item, 
+                item.quantidade,
+                item.valor_unitario,
+                valor_total_item,
                 item.id_contato_item || null
             ]);
         }
         
         // (Opcional) Registrar log de auditoria para a edição
-        // await registrarLog(...)
 
-        await dbClient.query('COMMIT'); // FINALIZA A TRANSAÇÃO
+        await dbClient.query('COMMIT');
         res.status(200).json({ message: 'Lançamento detalhado atualizado com sucesso.' });
 
     } catch (error) {
-        if (dbClient) await dbClient.query('ROLLBACK'); // DESFAZ TUDO EM CASO DE ERRO
+        if (dbClient) await dbClient.query('ROLLBACK');
         console.error(`[API PUT /lancamentos/detalhado/${idLancamentoPai}] Erro:`, error);
         res.status(500).json({ error: 'Erro ao atualizar lançamento detalhado.', details: error.message });
     } finally {
@@ -1707,6 +1907,32 @@ router.post('/aprovacoes/:id/aprovar', async (req, res) => {
             await dbClient.query('DELETE FROM fc_lancamentos WHERE id = $1', [idLancamento]);
             
             mensagemNotificacao = `Sua solicitação para excluir o lançamento <strong>#${idLancamento}</strong> foi APROVADA.`;
+        }
+
+        else if (solicitacao.tipo_solicitacao === 'ESTORNO') {
+            acaoLog = 'APROVACAO_ESTORNO';
+            const lancamentoOriginal = solicitacao.dados_antigos;
+            const dadosEstorno = solicitacao.dados_novos;
+
+            const estornoQuery = `INSERT INTO fc_lancamentos (id_conta_bancaria, id_categoria, tipo, valor, data_transacao, descricao, id_contato, id_usuario_lancamento, id_estorno_de) VALUES ($1, $2, 'RECEITA', $3, $4, $5, $6, $7, $8) RETURNING *;`;
+            const descricaoEstorno = `Estorno do lançamento #${idLancamento}: ${lancamentoOriginal.descricao}`;
+            await dbClient.query(estornoQuery, [dadosEstorno.id_conta_bancaria, lancamentoOriginal.id_categoria, dadosEstorno.valor_estornado, dadosEstorno.data_transacao, descricaoEstorno, lancamentoOriginal.id_contato, solicitacao.id_usuario_solicitante, idLancamento]);
+            
+            await dbClient.query("UPDATE fc_lancamentos SET status_edicao = 'ESTORNADO' WHERE id = $1", [idLancamento]);
+            
+            mensagemNotificacao = `Sua solicitação para estornar o lançamento <strong>#${idLancamento}</strong> foi APROVADA.`;
+        } 
+        
+        else if (solicitacao.tipo_solicitacao === 'REVERSAO_ESTORNO') {
+            acaoLog = 'APROVACAO_REVERSAO_ESTORNO';
+            const lancamentoEstorno = solicitacao.dados_antigos;
+            const idLancamentoOriginal = lancamentoEstorno.id_estorno_de;
+
+            // idLancamento aqui é o ID do estorno (que será apagado)
+            await dbClient.query('DELETE FROM fc_lancamentos WHERE id = $1', [idLancamento]);
+            await dbClient.query("UPDATE fc_lancamentos SET status_edicao = 'OK' WHERE id = $1", [idLancamentoOriginal]);
+
+            mensagemNotificacao = `Sua solicitação para reverter o estorno <strong>#${idLancamento}</strong> foi APROVADA.`;
         }
 
         // Atualiza a solicitação para APROVADO

@@ -80,6 +80,7 @@ export const permissoesDisponiveis = [
     { id: 'visualizar-financeiro', label: 'Visualizar dashboard e extratos', categoria: 'Financeiro (Controle de Caixa)' },
     { id: 'lancar-transacao', label: 'Ação: Lançar novas receitas e despesas', categoria: 'Financeiro (Controle de Caixa)' },
     { id: 'editar-transacao', label: 'Ação: Editar lançamentos financeiros', categoria: 'Financeiro (Controle de Caixa)' },
+    { id: 'estornar-transacao', label: 'Ação: Estornar lançamentos financeiros', categoria: 'Financeiro (Controle de Caixa)' },
     { id: 'aprovar-pagamento', label: 'Ação: Dar baixa em contas a pagar/receber', categoria: 'Financeiro (Controle de Caixa)' },
     { id: 'gerenciar-contas', label: 'Ação: Criar e editar contas bancárias', categoria: 'Financeiro (Controle de Caixa)' },
     { id: 'gerenciar-categorias', label: 'Ação: Criar e editar categorias financeiras', categoria: 'Financeiro (Controle de Caixa)' },

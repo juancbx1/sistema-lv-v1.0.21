@@ -463,17 +463,155 @@ body {
 .fc-lancamento-card .status-pendente { grid-area: status; display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 600; color: var(--fc-cor-texto-secundario); margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--fc-cor-borda); }
 .fc-lancamento-card .actions { grid-area: actions; display: flex; flex-direction: column; justify-content: center; gap: 10px; align-self: stretch; border-left: 1px solid var(--fc-cor-borda); padding-left: 10px; }
 .fc-lancamento-card .btn-toggle-details { grid-area: status; align-self: end; }
-.fc-aprovacao-card { background-color: #fff; border: 1px solid var(--fc-cor-borda); border-left: 5px solid var(--fc-cor-aviso); border-radius: var(--fc-raio-borda); margin-bottom: 20px; box-shadow: var(--fc-sombra-padrao); }
-.fc-aprovacao-card .meta-info { padding: 10px 15px; background-color: #f8f9fa; font-size: 0.85rem; color: var(--fc-cor-texto-secundario); display: flex; justify-content: space-between; border-bottom: 1px solid var(--fc-cor-borda); }
-.fc-aprovacao-card .dados-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px; }
-.fc-aprovacao-card .dados-bloco h4 { margin-top: 0; margin-bottom: 10px; text-transform: uppercase; font-size: 0.9rem; color: var(--fc-cor-texto-secundario); }
-.fc-aprovacao-card .dados-bloco.exclusao h4 { color: var(--fc-cor-despesa); }
-.fc-aprovacao-card .dados-bloco ul { list-style: none; padding: 0; margin: 0; font-size: 0.9rem; }
-.fc-aprovacao-card .dados-bloco li { margin-bottom: 5px; }
-.fc-aprovacao-card .dados-bloco .alterado { background-color: #fff3cd; font-weight: bold; border-radius: 4px; padding: 2px 5px; }
-.fc-aprovacao-card .dados-bloco .valor-antigo { text-decoration: line-through; color: #999; font-size: 0.9em; margin-left: 5px; }
-.fc-aprovacao-card .acoes-aprovacao { padding: 15px; border-top: 1px solid var(--fc-cor-borda); display: flex; justify-content: flex-end; gap: 10px; }
 
+
+/* ==========================================================================
+   CARD DE APROVAÇÃO (REDESIGN)
+   ========================================================================== */
+
+.fc-aprovacao-card {
+    background-color: #fff;
+    border: 1px solid var(--fc-cor-borda);
+    border-radius: var(--fc-raio-borda);
+    margin-bottom: 25px;
+    box-shadow: var(--fc-sombra-padrao);
+    overflow: hidden; /* Garante que os cantos arredondados sejam respeitados */
+}
+
+.fc-aprovacao-card .meta-info {
+    padding: 10px 20px;
+    background-color: #f8f9fa;
+    font-size: 0.85rem;
+    color: var(--fc-cor-texto-secundario);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--fc-cor-borda);
+}
+
+.fc-aprovacao-card-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--fc-cor-borda);
+}
+
+.fc-aprovacao-card-header .tipo-solicitacao {
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.fc-aprovacao-card-header .descricao-alvo {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--fc-cor-texto-principal);
+    margin: 0;
+}
+.fc-aprovacao-card-header .descricao-alvo span {
+    font-weight: 400;
+    color: var(--fc-cor-texto-secundario);
+}
+
+.fc-aprovacao-card-body {
+    padding: 20px;
+}
+
+/* Estilo para a lista de alterações (edição) */
+.fc-aprovacao-alteracoes-lista {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 0.95rem;
+}
+.fc-aprovacao-alteracoes-lista li {
+    padding: 10px 0;
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 15px;
+    align-items: center;
+}
+.fc-aprovacao-alteracoes-lista li:not(:last-child) {
+    border-bottom: 1px dotted var(--fc-cor-borda);
+}
+.fc-aprovacao-alteracoes-lista .label {
+    font-weight: 600;
+    color: var(--fc-cor-texto-secundario);
+    text-align: right;
+}
+.fc-aprovacao-alteracoes-lista .valor-antigo {
+    color: var(--fc-cor-despesa);
+    text-decoration: line-through;
+    margin-right: 8px;
+}
+.fc-aprovacao-alteracoes-lista .valor-novo {
+    color: var(--fc-cor-receita);
+    font-weight: 700;
+}
+.fc-aprovacao-alteracoes-lista .seta-indicador {
+    color: var(--fc-cor-primaria);
+    font-weight: 700;
+    margin: 0 5px;
+}
+
+/* Estilo para a caixa de ação (exclusão, estorno, etc.) */
+.fc-aprovacao-acao-box {
+    padding: 15px 20px;
+    border-radius: var(--fc-raio-borda);
+    margin: 0;
+    border: 1px solid;
+    background-color: #f8f9fa;
+}
+.fc-aprovacao-acao-box h4 {
+    margin-top: 0;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.fc-aprovacao-acao-box.tipo-exclusao {
+    border-color: var(--fc-cor-despesa);
+    color: #a94442;
+    background-color: #f2dede;
+}
+.fc-aprovacao-acao-box.tipo-estorno {
+    border-color: var(--fc-cor-receita);
+    color: #2b6a41;
+    background-color: #dff0d8;
+}
+.fc-aprovacao-acao-box.tipo-reversao {
+    border-color: var(--fc-cor-aviso);
+    color: #8a6d3b;
+    background-color: #fcf8e3;
+}
+
+.justificativa-solicitante {
+    padding: 15px 20px;
+    background-color: #e7f3fe; /* Azul claro */
+    border-top: 1px solid var(--fc-cor-borda);
+    border-bottom: 1px solid var(--fc-cor-borda);
+    font-size: 0.9rem;
+}
+.justificativa-solicitante strong {
+    color: #31708f;
+}
+.justificativa-solicitante p {
+    margin: 5px 0 0 0;
+    font-style: italic;
+    line-height: 1.5;
+}
+
+.fc-aprovacao-card .acoes-aprovacao {
+    padding: 15px 20px;
+    background-color: #f8f9fa;
+    border-top: 1px solid var(--fc-cor-borda);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
 
 /* --- ESTILOS PARA OS NOVOS CARDS DA AGENDA --- */
 .fc-agenda-card-wrapper {
@@ -905,7 +1043,10 @@ body {
 /* --- Filtros e Paginação --- */
 .fc-busca-e-filtros-linha { display: flex; gap: 15px; align-items: center; margin-bottom: 20px; }
 .fc-filtros-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin: -15px 0 20px 0; background-color: #f8f9fa; border: 1px solid var(--fc-cor-borda); border-top: none; border-radius: 0 0 var(--fc-raio-borda) var(--fc-raio-borda); max-height: 0; overflow: hidden; padding: 0 20px; transition: max-height 0.4s ease-out, padding 0.4s ease-out; }
-.fc-filtros-container:not(.hidden) { max-height: 400px; padding: 20px; }
+.fc-filtros-container:not(.hidden) { 
+    max-height: 450px; 
+    padding: 20px; 
+}
 .fc-filtros-container .fc-form-group { margin-bottom: 0; }
 .fc-filtros-container .button-container { display: flex; justify-content: flex-end; align-items: center; grid-column: 1 / -1; }
 #btnLimparFiltros { background-color: var(--fc-cor-texto-secundario); padding: 8px 15px; }
@@ -1364,6 +1505,17 @@ body {
     .fc-tabela-container .fc-tabela-estilizada td::before { content: attr(data-label); font-weight: 600; text-align: left; margin-right: 15px; color: var(--fc-cor-texto-principal); }
     .fc-form-row { flex-direction: column; gap: 0; }
     .fc-form-row > .fc-form-group { margin-bottom: 1rem; }
+
+    .fc-aprovacao-alteracoes-lista li {
+        grid-template-columns: 1fr;
+        gap: 5px;
+    }
+    .fc-aprovacao-alteracoes-lista .label {
+        text-align: left;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+    }
+
     .fc-rateio-header {
         display: none; /* Esconde o cabeçalho no mobile, pois os campos já têm label */
     }

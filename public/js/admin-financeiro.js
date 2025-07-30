@@ -750,30 +750,63 @@ function renderizarCardsLancamentos() {
         const classePendente = isPendente ? 'pendente' : '';
 
         // --- GERA O HTML DA ÁREA EXPANSÍVEL ---
+        // --- GERA O HTML DA ÁREA EXPANSÍVEL ---
         let detalhesHtml = '';
         if (isDetalhado) {
-            const isRateioDetalhado = l.tipo_rateio === 'DETALHADO';
-            
-            // Define o cabeçalho da tabela com base no tipo
-            const headerCols = isRateioDetalhado
-                ? ['Favorecido do Custo', 'Categoria', 'Descrição', 'Valor']
-                : ['Categoria do Item', 'Descrição', 'Valor'];
-            
-            // Gera as linhas da tabela
-            const itemRows = l.itens.map(item => `
-                <div class="item-detalhe-row">
-                    ${isRateioDetalhado ? `<div data-label="Favorecido">${item.nome_contato_item || '-'}</div>` : ''}
-                    <div data-label="Categoria">${item.nome_categoria || '-'}</div>
-                    <div data-label="Descrição">${item.descricao_item || '-'}</div>
-                    <div data-label="Valor">${formatCurrency(item.valor_item)}</div>
-                </div>
-            `).join('');
+            let headerColsHtml = '';
+            let itemRows = '';
+            let gridTemplateCols = '';
+
+            if (l.tipo_rateio === 'COMPRA') {
+                // Cabeçalho para Compra Detalhada
+                headerColsHtml = `
+                    <div>Info.</div>
+                    <div>Qtd</div>
+                    <div>V. Unit.</div>
+                    <div>V. Total</div>
+                    <div>Categoria</div>
+                `;
+                // Grid para Compra Detalhada
+                gridTemplateCols = 'grid-template-columns: minmax(0, 2fr) 0.5fr 1fr 1fr 1.5fr;';
+                
+                // Linhas para Compra Detalhada
+                itemRows = l.itens.map(item => `
+                    <div class="item-detalhe-row" style="${gridTemplateCols}">
+                        <div data-label="Info.">${item.descricao_item || '-'}</div>
+                        <div data-label="Qtd" style="text-align: center;">${item.quantidade}</div>
+                        <div data-label="V. Unit.">${formatCurrency(item.valor_unitario)}</div>
+                        <div data-label="V. Total"><strong>${formatCurrency(item.valor_total_item)}</strong></div>
+                        <div data-label="Categoria">${item.nome_categoria || '-'}</div>
+                    </div>
+                `).join('');
+
+            } else { // Para 'DETALHADO' ou outros tipos de rateio
+                // Cabeçalho para Rateio
+                headerColsHtml = `
+                    <div>Favorecido</div>
+                    <div>Categoria</div>
+                    <div>Descrição</div>
+                    <div>Valor</div>
+                `;
+                // Grid para Rateio
+                gridTemplateCols = 'grid-template-columns: 1.5fr 1.5fr 1.5fr 1fr;';
+
+                // Linhas para Rateio
+                itemRows = l.itens.map(item => `
+                    <div class="item-detalhe-row" style="${gridTemplateCols}">
+                        <div data-label="Favorecido">${item.nome_contato_item || '-'}</div>
+                        <div data-label="Categoria">${item.nome_categoria || '-'}</div>
+                        <div data-label="Descrição">${item.descricao_item || '-'}</div>
+                        <div data-label="Valor"><strong>${formatCurrency(item.valor_total_item)}</strong></div>
+                    </div>
+                `).join('');
+            }
 
             detalhesHtml = `
                 <div class="fc-lancamento-itens-container hidden" id="itens-${l.id}">
                     <div class="item-detalhe-grid">
-                        <div class="item-detalhe-header">
-                            ${headerCols.map(col => `<div>${col}</div>`).join('')}
+                        <div class="item-detalhe-header" style="${gridTemplateCols}">
+                           ${headerColsHtml}
                         </div>
                         ${itemRows}
                     </div>
@@ -802,6 +835,11 @@ function renderizarCardsLancamentos() {
                         <span class="detail-item"><i class="fas fa-tag"></i><b>Categoria:</b> ${categoriaExibida}</span>
                         <span class="detail-item"><i class="fas fa-university"></i><b>Conta:</b> ${l.nome_conta}</span>
                         <span class="detail-item"><i class="fas fa-calendar-day"></i><b>Data Trans.:</b> ${new Date(l.data_transacao).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>
+                        
+                        ${/* Lógica para mostrar o desconto APENAS se ele existir */ ''}
+                        ${l.valor_desconto > 0 ? `
+                            <span class="detail-item" style="color: var(--fc-cor-receita);"><i class="fas fa-percent"></i><b>Desconto:</b> - ${formatCurrency(l.valor_desconto)}</span>
+                        ` : ''}
                     </div>
 
                     <div class="card-meta-line">
@@ -809,11 +847,62 @@ function renderizarCardsLancamentos() {
                             <span class="detail-item"><i class="fas fa-user-tie"></i><b>Criado por:</b> ${l.nome_usuario || 'N/A'}</span>
                             <span class="detail-item"><i class="fas fa-clock"></i><b>Em:</b> ${dataHoraCriacao}</span>
                         </div>
-                        <div class="actions">
+
+                         <div class="actions">
                             ${isDetalhado ? `<button class="fc-btn-icon btn-toggle-details" data-id="${l.id}" title="Ver Detalhes"><i class="fas fa-chevron-down"></i></button>` : ''}
-                            <button class="fc-btn-icon btn-editar-lancamento" data-id="${l.id}" title="Editar" ${isPendente ? 'disabled' : ''}><i class="fas fa-pencil-alt"></i></button>
-                            <button class="fc-btn-icon btn-excluir-lancamento" data-id="${l.id}" title="Excluir" ${isPendente ? 'disabled' : ''}><i class="fas fa-trash"></i></button>
+                            
+                            ${
+                                // Se o lançamento FOR um estorno...
+                                l.id_estorno_de ? 
+                                // ...mostra o botão de REVERTER (se tiver permissão)
+                                (permissoesGlobaisFinanceiro.includes('estornar-transacao') ? `
+                                    <button 
+                                        class="fc-btn-icon btn-reverter-estorno" 
+                                        data-id="${l.id}" 
+                                        title="Reverter Estorno" 
+                                        style="color: var(--fc-cor-despesa);"
+                                        ${l.status_edicao === 'PENDENTE_APROVACAO' ? 'disabled' : ''} 
+                                    >
+                                        <i class="fas fa-history"></i>
+                                    </button>
+                                ` : '')
+                                
+                                // Se NÃO for um estorno...
+                                : 
+                                `
+                                ${l.tipo === 'DESPESA' && l.status_edicao !== 'ESTORNADO' && permissoesGlobaisFinanceiro.includes('estornar-transacao') ? `
+                                    <button 
+                                        class="fc-btn-icon btn-registrar-estorno" 
+                                        data-id="${l.id}" 
+                                        title="Registrar Estorno" 
+                                        style="color: var(--fc-cor-receita);"
+                                        ${l.status_edicao === 'PENDENTE_APROVACAO' ? 'disabled' : ''}
+                                    >
+                                        <i class="fas fa-undo-alt"></i>
+                                    </button>
+                                ` : ''}
+                                
+                                <button 
+                                    class="fc-btn-icon btn-editar-lancamento" 
+                                    data-id="${l.id}" 
+                                    title="Editar" 
+                                    ${l.status_edicao === 'PENDENTE_APROVACAO' || l.status_edicao === 'PENDENTE_EXCLUSAO' || l.status_edicao === 'ESTORNADO' ? 'disabled' : ''}
+                                >
+                                    <i class="fas fa-pencil-alt"></i>
+                                </button>
+
+                                <button 
+                                    class="fc-btn-icon btn-excluir-lancamento" 
+                                    data-id="${l.id}" 
+                                    title="Excluir" 
+                                    ${l.status_edicao === 'PENDENTE_APROVACAO' || l.status_edicao === 'PENDENTE_EXCLUSAO' || l.status_edicao === 'ESTORNADO' ? 'disabled' : ''}
+                                >
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                                `
+                            }
                         </div>
+
                     </div>
                 </div>
                 ${detalhesHtml}
@@ -865,6 +954,41 @@ function renderizarCardsLancamentos() {
             }
         }
     });
+
+    container.querySelectorAll('.btn-registrar-estorno').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const id = e.currentTarget.dataset.id;
+            const lancamento = lancamentosCache.find(l => l.id == id);
+            if (lancamento) {
+                abrirModalEstorno(lancamento);
+            }
+        });
+    });
+
+    container.querySelectorAll('.btn-reverter-estorno').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const id = e.currentTarget.dataset.id;
+            reverterEstorno(id);
+        });
+    });
+}
+
+async function reverterEstorno(idLancamentoEstorno) {
+    const confirmado = await mostrarPopupConfirmacao(
+        "Tem certeza que deseja reverter este estorno? A receita será excluída e o lançamento original voltará ao normal."
+    );
+    if (!confirmado) return;
+
+    try {
+        const response = await fetchFinanceiroAPI(`/lancamentos/${idLancamentoEstorno}/reverter-estorno`, {
+            method: 'POST'
+        });
+        mostrarPopupFinanceiro(response.message, 'sucesso');
+        carregarLancamentosFiltrados(filtrosAtivos.page || 1);
+        atualizarSaldosDashboard();
+    } catch (error) {
+        // fetchFinanceiroAPI já trata o erro
+    }
 }
 
 function renderizarPaginacaoLancamentos(totalPages, currentPage) {
@@ -1181,6 +1305,105 @@ function popularFormularioSimples(formContainer, lancamento = null) {
     }
 }
 
+function abrirModalEstorno(lancamento) {
+    itemEmEdicao = lancamento; // Guarda o lançamento original
+    const hoje = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+
+    const modalHTML = `
+        <div id="modal-estorno" class="fc-modal" style="display: flex;">
+            <div class="fc-modal-content">
+                <button class="fc-modal-close"><i class="fas fa-times"></i></button>
+                <h3 class="fc-section-title" style="text-align:center; border:0;">Registrar Estorno</h3>
+                <p style="text-align:center; margin-top:-15px; margin-bottom:20px;">
+                    Para o lançamento #${lancamento.id}: "<strong>${lancamento.descricao || 'sem descrição'}</strong>"
+                </p>
+                
+                <div class="fc-modal-body">
+                    <form id="formEstorno">
+                        <div class="fc-form-group">
+                            <label for="estorno_valor">Valor Estornado (R$)*</label>
+                            <input type="number" id="estorno_valor" class="fc-input" step="0.01" min="0.01" required value="${lancamento.valor}">
+                        </div>
+                        <div class="fc-form-group">
+                            <label for="estorno_data">Data do Recebimento do Estorno*</label>
+                            <input type="date" id="estorno_data" class="fc-input" required value="${hoje}">
+                        </div>
+                        <div class="fc-form-group">
+                            <label for="estorno_conta">Conta Bancária que Recebeu o Estorno*</label>
+                            <select id="estorno_conta" class="fc-select" required>
+                                <option value="">Selecione a conta...</option>
+                                ${contasCache.map(c => `<option value="${c.id}" ${lancamento.id_conta_bancaria == c.id ? 'selected' : ''}>${c.nome_conta}</option>`).join('')}
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="fc-modal-footer">
+                    <button id="btnCancelarModal" class="fc-btn fc-btn-secundario">Cancelar</button>
+                    <button id="btnSalvarEstorno" class="fc-btn fc-btn-primario">Confirmar Estorno</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    // Listeners
+    const modalElement = document.getElementById('modal-estorno');
+    modalElement.querySelector('.fc-modal-close').addEventListener('click', fecharModal);
+    modalElement.querySelector('#btnCancelarModal').addEventListener('click', fecharModal);
+    modalElement.querySelector('#btnSalvarEstorno').addEventListener('click', () => {
+        // Dispara o submit do form para manter o padrão
+        document.getElementById('formEstorno').requestSubmit();
+    });
+    document.getElementById('formEstorno').addEventListener('submit', salvarEstorno);
+}
+
+async function salvarEstorno(event) {
+    event.preventDefault();
+    const btnSalvar = document.getElementById('btnSalvarEstorno');
+    if (!btnSalvar || !itemEmEdicao) return;
+    const textoOriginalBtn = btnSalvar.innerHTML;
+
+    const payload = {
+        valor_estornado: parseFloat(document.getElementById('estorno_valor').value),
+        data_transacao: document.getElementById('estorno_data').value,
+        id_conta_bancaria: parseInt(document.getElementById('estorno_conta').value),
+    };
+
+    if (!payload.valor_estornado || !payload.data_transacao || !payload.id_conta_bancaria) {
+        mostrarPopupFinanceiro('Por favor, preencha todos os campos.', 'aviso');
+        return;
+    }
+
+     try {
+        btnSalvar.disabled = true;
+        btnSalvar.innerHTML = `<i class="fas fa-spinner fc-btn-spinner"></i> Salvando...`;
+
+        // 1. Capturamos a resposta da API em uma variável
+        const response = await fetchFinanceiroAPI(`/lancamentos/${itemEmEdicao.id}/estornar`, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+
+        // 2. Usamos a mensagem que vem da resposta da API
+        mostrarPopupFinanceiro(response.message, 'sucesso');
+        fecharModal();
+        
+        // 3. Atualizamos os badges (importante para o usuário ver a notificação)
+        atualizarBadgesHeader();
+        carregarLancamentosFiltrados(filtrosAtivos.page || 1);
+        atualizarSaldosDashboard();
+
+    } catch (error) {
+        // O fetchFinanceiroAPI já trata o popup de erro, então não precisamos fazer nada aqui.
+        console.error("Erro ao salvar estorno:", error);
+    } finally {
+        if (btnSalvar) {
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = textoOriginalBtn;
+        }
+    }
+}
+
 // Função para popular o formulário de Agendamento Simples
 function popularFormularioAgendamentoSimples(formContainer, agendamento = null) {
     if (!formContainer) return;
@@ -1250,31 +1473,43 @@ function popularFormularioAgendamentoSimples(formContainer, agendamento = null) 
 
 
 // Preenche e gerencia o formulário de compra detalhada
-function popularFormularioCompraDetalhada(formContainer, agendamento = null, isAgendamento = false) {
+function popularFormularioCompraDetalhada(formContainer, lancamento = null, isAgendamento = false) {
     if (!formContainer) return;
-    const dataLabel = isAgendamento ? 'Data de Vencimento*' : 'Data da Compra*';
+    
     const hoje = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
     const prefixo = formContainer.id;
+    
+    // 1. O HTML é atualizado com o campo de desconto e novos cabeçalhos da grade
     formContainer.innerHTML = `
         <div class="fc-form-row">
-            <div class="fc-form-group"><label for="${prefixo}_data">${dataLabel}</label><input type="date" id="${prefixo}_data" class="fc-input" value="${agendamento ? agendamento.data_transacao.split('T')[0] : hoje}" required></div>
-            <div class="fc-form-group"><label for="${prefixo}_valor_total">Valor Total (R$)*</label><input type="number" id="${prefixo}_valor_total" class="fc-input" step="0.01" min="0.01" required value="${agendamento?.valor || ''}"></div>
+            <div class="fc-form-group"><label for="${prefixo}_data">Data da Compra*</label><input type="date" id="${prefixo}_data" class="fc-input" value="${lancamento ? lancamento.data_transacao.split('T')[0] : hoje}" required></div>
+            <div class="fc-form-group"><label for="${prefixo}_conta">Conta Bancária*</label><select id="${prefixo}_conta" class="fc-select" required>${'<option value="">Selecione...</option>' + contasCache.map(c => `<option value="${c.id}" ${lancamento?.id_conta_bancaria == c.id ? 'selected' : ''}>${c.nome_conta}</option>`).join('')}</select></div>
         </div>
         <div class="fc-form-row">
-            <div class="fc-form-group"><label for="${prefixo}_conta">Conta Bancária*</label><select id="${prefixo}_conta" class="fc-select" required>${'<option value="">Selecione...</option>' + contasCache.map(c => `<option value="${c.id}" ${agendamento?.id_conta_bancaria == c.id ? 'selected' : ''}>${c.nome_conta}</option>`).join('')}</select></div>
-            <div class="fc-form-group"><label for="${prefixo}_favorecido_busca">Fornecedor*</label><div class="fc-autocomplete-container"><input type="text" id="${prefixo}_favorecido_busca" class="fc-input fc-autocomplete-input" placeholder="Buscar..." value="${agendamento?.nome_favorecido || ''}" autocomplete="off" required><span class="fc-autocomplete-status-icon"></span><div id="${prefixo}_favorecido_resultados" class="fc-autocomplete-results hidden"></div><input type="hidden" id="${prefixo}_favorecido_id" class="fc-autocomplete-id" value="${agendamento?.id_contato || ''}"></div></div>
+            <div class="fc-form-group" style="flex:2;"><label for="${prefixo}_favorecido_busca">Fornecedor*</label><div class="fc-autocomplete-container"><input type="text" id="${prefixo}_favorecido_busca" class="fc-input fc-autocomplete-input" placeholder="Buscar..." value="${lancamento?.nome_favorecido || ''}" autocomplete="off" required><span class="fc-autocomplete-status-icon"></span><div id="${prefixo}_favorecido_resultados" class="fc-autocomplete-results hidden"></div><input type="hidden" id="${prefixo}_favorecido_id" class="fc-autocomplete-id" value="${lancamento?.id_contato || ''}"></div></div>
+            <div class="fc-form-group" style="flex:1;"><label for="${prefixo}_valor_desconto">Desconto (R$)</label><input type="number" id="${prefixo}_valor_desconto" class="fc-input" step="0.01" min="0" value="${lancamento?.valor_desconto || '0.00'}"></div>
         </div>
-        <div class="fc-form-group"><label for="${prefixo}_descricao">Descrição Geral*</label><input type="text" id="${prefixo}_descricao" class="fc-input" required value="${agendamento?.descricao || ''}"></div>
+        <div class="fc-form-group"><label for="${prefixo}_descricao">Descrição Geral (Ex: Nota Fiscal 1234)*</label><input type="text" id="${prefixo}_descricao" class="fc-input" required value="${lancamento?.descricao || ''}"></div>
         <hr style="margin: 20px 0;"><h4 class="fc-section-title" style="font-size: 1.1rem; border:0; margin-bottom: 10px;">Itens da Compra</h4>
-        <div class="fc-rateio-header"><span>Categoria*</span><span>Descrição</span><span>Valor (R$)*</span><span>Ação</span></div>
+        
+        <div class="fc-rateio-header" style="grid-template-columns: minmax(0, 2fr) 90px 110px 110px minmax(0, 1fr) 40px;">
+            <span>Produto</span><span>Qtd</span><span>V. Unitário</span><span>V. Total</span><span>Categoria*</span><span>Ação</span>
+        </div>
+
         <div id="${prefixo}_grade_itens" class="grade-itens-rateio"></div>
         <button type="button" class="fc-btn fc-btn-outline btn-adicionar-item-rateio" style="margin-top: 10px;"><i class="fas fa-plus"></i> Add Item</button>
         <div id="${prefixo}_resumo_rateio" class="resumo-rateio" style="text-align: right; margin-top: 10px; font-weight: bold;"></div>
     `;
+
+    // O resto da lógica da função (listeners) permanece
     const gradeContainer = formContainer.querySelector(`#${prefixo}_grade_itens`);
-    if (!agendamento) adicionarLinhaItemCompra(gradeContainer);
+    if (!lancamento) {
+        adicionarLinhaItemCompra(gradeContainer);
+    }
+    
+    // 2. Adicionamos um listener para o novo campo de desconto
+    formContainer.querySelector(`#${prefixo}_valor_desconto`).addEventListener('input', () => atualizarResumoRateio(formContainer));
     formContainer.querySelector('.btn-adicionar-item-rateio').addEventListener('click', () => adicionarLinhaItemCompra(gradeContainer));
-    formContainer.querySelector(`#${prefixo}_valor_total`).addEventListener('input', () => atualizarResumoRateio(formContainer));
 }
 
 // Função ajustada para receber 'lancamento' e preencher os campos
@@ -1355,41 +1590,66 @@ function adicionarLinhaItemCompra(gradeContainer, item = null) {
     if (!gradeContainer) return;
     
     const div = document.createElement('div');
+    // 1. Mudamos o grid para 6 colunas, para acomodar os novos campos e o valor total calculado
     div.className = 'fc-rateio-linha'; 
-
+    div.style.gridTemplateColumns = 'minmax(0, 2fr) 90px 110px 110px minmax(0, 1fr) 40px';
+    
+    // Lógica para obter categorias (continua a mesma)
     const categoriasDespesa = categoriasCache.filter(c => gruposCache.find(g => g.id === c.id_grupo)?.tipo === 'DESPESA');
     const categoriasAgrupadas = categoriasDespesa.reduce((acc, categoria) => {
         (acc[categoria.id_grupo] = acc[categoria.id_grupo] || []).push(categoria);
         return acc;
     }, {});
-
     let optionsCategoria = '<option value="">Selecione...</option>';
     for (const idGrupo in categoriasAgrupadas) {
         const grupo = gruposCache.find(g => g.id == idGrupo);
         optionsCategoria += `<optgroup label="${grupo.nome}">`;
         categoriasAgrupadas[idGrupo].forEach(categoria => {
             const isSelected = item && item.id_categoria == categoria.id ? 'selected' : '';
-            optionsCategoria += `<option value="${categoria.id}" ${isSelected}>${categoria.nome} [ ${grupo.nome} ]</option>`;
+            optionsCategoria += `<option value="${categoria.id}" ${isSelected}>${categoria.nome}</option>`;
         });
         optionsCategoria += `</optgroup>`;
     }
 
+    // 2. O HTML agora tem os novos campos
     div.innerHTML = `
+        <input type="text" class="fc-input item-descricao" placeholder="Nome do Produto" value="${item?.descricao_item || ''}">
+        <input type="number" class="fc-input item-quantidade" step="0.001" min="0.001" placeholder="Qtd" required value="${item?.quantidade || '1'}">
+        <input type="number" class="fc-input item-valor-unitario" step="0.0001" min="0.0001" placeholder="V. Unitário" required value="${item?.valor_unitario || ''}">
+        <input type="number" class="fc-input item-valor-total" placeholder="V. Total" disabled>
         <select class="fc-select item-categoria" required>${optionsCategoria}</select>
-        <input type="text" class="fc-input item-descricao" placeholder="Descrição" value="${item?.descricao_item || ''}">
-        <input type="number" class="fc-input item-valor" step="0.01" min="0.01" placeholder="Valor" required value="${item?.valor_item || ''}">
         <button type="button" class="remover-item-btn"><i class="fas fa-trash"></i></button>
     `;
     gradeContainer.appendChild(div);
 
     const formPai = gradeContainer.closest('form');
-    div.querySelector('.item-valor').addEventListener('input', () => atualizarResumoRateio(formPai));
+    const inputQtd = div.querySelector('.item-quantidade');
+    const inputValorUnit = div.querySelector('.item-valor-unitario');
+    const inputValorTotal = div.querySelector('.item-valor-total');
+    
+    // 3. Função para calcular e atualizar o valor total do item
+    const calcularTotalItem = () => {
+        const qtd = parseFloat(inputQtd.value) || 0;
+        const valorUnit = parseFloat(inputValorUnit.value) || 0;
+        const total = qtd * valorUnit;
+        inputValorTotal.value = total.toFixed(2); // Mostra o valor total com 2 casas decimais
+        atualizarResumoRateio(formPai); // Atualiza o resumo geral da compra
+    };
+
+    // 4. Listeners para os novos campos
+    inputQtd.addEventListener('input', calcularTotalItem);
+    inputValorUnit.addEventListener('input', calcularTotalItem);
+    
     div.querySelector('.remover-item-btn').addEventListener('click', () => {
         div.remove();
         atualizarResumoRateio(formPai);
     });
-}
 
+    // Calcula o total inicial se estiver em modo de edição
+    if (item) {
+        calcularTotalItem();
+    }
+}
 
 // Atualiza o resumo dos valores dos itens dentro de um formulário específico
 function atualizarResumoRateio(formElement) {
@@ -1398,26 +1658,24 @@ function atualizarResumoRateio(formElement) {
     const resumoContainer = formElement.querySelector('.resumo-rateio');
     if (!resumoContainer) return;
 
-    const valorTotalInput = formElement.querySelector('.fc-input[id$="_valor_total"]');
-    if (!valorTotalInput) return;
+    // Pega o valor do desconto do novo campo
+    const valorDescontoInput = formElement.querySelector('.fc-input[id$="_valor_desconto"]');
+    const valorDesconto = parseFloat(valorDescontoInput?.value) || 0;
 
-    const valorTotalNota = parseFloat(valorTotalInput.value) || 0;
-    
     let totalItens = 0;
-    formElement.querySelectorAll('.item-valor').forEach(input => {
+    // O valor total de cada item agora é pego do input 'item-valor-total' que é calculado automaticamente
+    formElement.querySelectorAll('.item-valor-total').forEach(input => {
         totalItens += parseFloat(input.value) || 0;
     });
     
-    const diferenca = valorTotalNota - totalItens;
-    const corDiferenca = Math.abs(diferenca) < 0.01 ? 'var(--fc-cor-receita)' : 'var(--fc-cor-despesa)';
+    const valorFinal = totalItens - valorDesconto;
 
     resumoContainer.innerHTML = `
         <span>Soma dos Itens: <strong>${formatCurrency(totalItens)}</strong></span> | 
-        <span style="color: ${corDiferenca};">Diferença: <strong>${formatCurrency(diferenca)}</strong></span>
+        <span>Desconto: <strong>- ${formatCurrency(valorDesconto)}</strong></span> | 
+        <span style="color: var(--fc-cor-primaria);">Total Pago: <strong>${formatCurrency(valorFinal)}</strong></span>
     `;
 }
-
-
 
 async function salvarCompraDetalhada(event) {
     event.preventDefault();
@@ -1434,32 +1692,31 @@ async function salvarCompraDetalhada(event) {
             return;
         }
 
-        const valorTotalNota = parseFloat(form.querySelector(`#${prefixo}_valor_total`).value) || 0;
-        let totalItens = 0;
         const itens_filho = [];
         const linhasDeItens = form.querySelectorAll('.fc-rateio-linha');
 
         let algumItemInvalido = false;
         linhasDeItens.forEach(linha => {
-            const valorItem = parseFloat(linha.querySelector('.item-valor').value) || 0;
+            // Pegamos os valores dos novos campos
+            const quantidade = parseFloat(linha.querySelector('.item-quantidade').value);
+            const valor_unitario = parseFloat(linha.querySelector('.item-valor-unitario').value);
             const idCategoria = parseInt(linha.querySelector('.item-categoria').value);
-            if (!idCategoria || valorItem <= 0) algumItemInvalido = true;
+
+            if (!idCategoria || !quantidade || quantidade <= 0 || !valor_unitario || valor_unitario <= 0) {
+                algumItemInvalido = true;
+            }
             
-            totalItens += valorItem;
+            // Enviamos os dados brutos, o backend fará o cálculo do total do item
             itens_filho.push({
                 id_categoria: idCategoria,
                 descricao_item: linha.querySelector('.item-descricao').value,
-                valor_item: valorItem
+                quantidade: quantidade,
+                valor_unitario: valor_unitario
             });
         });
 
         if (algumItemInvalido || linhasDeItens.length === 0) {
-            mostrarPopupFinanceiro('Todos os itens devem ter uma categoria e um valor válido.', 'erro');
-            return;
-        }
-
-        if (Math.abs(valorTotalNota - totalItens) > 0.01) {
-            mostrarPopupFinanceiro('A soma dos itens não corresponde ao valor total da nota.', 'erro');
+            mostrarPopupFinanceiro('Todos os itens devem ter um produto, quantidade, valor unitário e categoria válidos.', 'erro');
             return;
         }
 
@@ -1471,7 +1728,7 @@ async function salvarCompraDetalhada(event) {
                 id_contato: parseInt(favorecidoId),
                 id_categoria: null,
                 descricao: form.querySelector(`#${prefixo}_descricao`).value,
-                valor: valorTotalNota // O valor do pai é o total da nota
+                valor_desconto: parseFloat(form.querySelector(`#${prefixo}_valor_desconto`).value) || 0 // Enviamos o desconto
             },
             itens_filho: itens_filho
         };
@@ -1479,12 +1736,9 @@ async function salvarCompraDetalhada(event) {
         btnSalvar.disabled = true;
         btnSalvar.innerHTML = `<i class="fas fa-spinner fc-btn-spinner"></i> Salvando...`;
 
-        // <<< AQUI ESTÁ A LÓGICA CORRETA >>>
         if (itemEmEdicao) {
-            // Se estamos editando, usamos o método PUT e o ID do item
             await fetchFinanceiroAPI(`/lancamentos/detalhado/${itemEmEdicao.id}`, { method: 'PUT', body: JSON.stringify(payload) });
         } else {
-            // Se não, usamos o método POST para criar
             await fetchFinanceiroAPI('/lancamentos/detalhado', { method: 'POST', body: JSON.stringify(payload) });
         }
         
@@ -2903,82 +3157,111 @@ async function carregarAprovacoesPendentes() {
 
 function renderizarCardsAprovacao(solicitacoes) {
     const container = document.getElementById('aprovacoesContainer');
-    if (!container) {
-        console.error('ERRO: Container #aprovacoesContainer não encontrado.');
-        return;
-    }
+    if (!container) return;
 
     if (!solicitacoes || solicitacoes.length === 0) {
         container.innerHTML = `<p style="text-align:center; padding: 20px;">Nenhuma aprovação pendente no momento.</p>`;
         return;
     }
 
-    // Função interna e segura para formatar os valores para exibição
     const formatarValorExibicao = (chave, valor) => {
-        if (valor === null || valor === undefined) return 'N/A';
-        
+        if (valor === null || valor === undefined) return '<i>Não informado</i>';
         switch(chave) {
-            case 'valor':
-                return formatCurrency(valor);
-            case 'data_transacao':
-                const dataStr = String(valor).split('T')[0];
-                return new Date(dataStr + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'});
-            case 'id_categoria':
-                return formatarCategoriaComGrupo(valor);
-            case 'id_conta_bancaria':
-                const conta = contasCache.find(c => c.id == valor);
-                return conta ? conta.nome_conta : `<span style="color:var(--fc-cor-despesa);">ID ${valor} (inválido)</span>`;
-            case 'id_contato':
-                const contato = contatosGerenciamentoCache.find(c => c.id == valor);
-                return contato ? contato.nome : '-';
-            default:
-                return valor || '-';
+            case 'valor': case 'valor_estornado': return formatCurrency(valor);
+            case 'data_transacao': return new Date(String(valor).split('T')[0] + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'});
+            case 'id_categoria': return formatarCategoriaComGrupo(valor);
+            case 'id_conta_bancaria': return contasCache.find(c => c.id == valor)?.nome_conta || `<span style="color:var(--fc-cor-despesa);">Conta Inválida</span>`;
+            case 'id_contato': return contatosGerenciamentoCache.find(c => c.id == valor)?.nome || '<i>Nenhum</i>';
+            default: return valor || '<i>Vazio</i>';
         }
     };
 
-    // Função interna para gerar o HTML dos detalhes
-    const gerarHtmlDetalhes = (dados, dadosComparacao = null, isBlocoNovo = false) => {
-        const dadosSeguros = dados || {};
-        const dadosComparacaoSeguros = dadosComparacao || {};
-
-        let html = '<ul>';
-        const chavesRelevantes = ['valor', 'data_transacao', 'descricao', 'id_categoria', 'id_conta_bancaria', 'id_contato'];
-
-        for (const chave of chavesRelevantes) {
-            const valor = dadosSeguros[chave] ?? null;
-            let valorFormatado = formatarValorExibicao(chave, valor);
-            let classe = '';
-            
-            if (dadosComparacaoSeguros && typeof dadosComparacaoSeguros === 'object') {
-                const valorComparacao = dadosComparacaoSeguros[chave] ?? null;
-                if (JSON.stringify(valor) !== JSON.stringify(valorComparacao)) {
-                    classe = 'alterado';
-                    if (isBlocoNovo) {
-                        const valorAntigoFormatado = formatarValorExibicao(chave, valorComparacao);
-                        valorFormatado = `${valorFormatado} <span class="valor-antigo">(${valorAntigoFormatado})</span>`;
-                    }
-                }
-            }
-            
-            const label = chave.replace('id_', '').replace(/_/g, ' ').replace('data transacao', 'data');
-            html += `<li class="${classe}"><strong>${label}:</strong> <span class="valor-item">${valorFormatado}</span></li>`;
-        }
-        
-        return html + '</ul>';
+    // NOVA FUNÇÃO AUXILIAR: Gera um mini resumo de um lançamento
+    const gerarResumoLancamento = (lancamento) => {
+        if (!lancamento) return '<p>Dados do lançamento indisponíveis.</p>';
+        return `
+            <ul class="fc-aprovacao-alteracoes-lista">
+                <li><span class="label">Valor</span> <div>${formatarValorExibicao('valor', lancamento.valor)}</div></li>
+                <li><span class="label">Data</span> <div>${formatarValorExibicao('data_transacao', lancamento.data_transacao)}</div></li>
+                <li><span class="label">Categoria</span> <div>${formatarValorExibicao('id_categoria', lancamento.id_categoria)}</div></li>
+                <li><span class="label">Conta</span> <div>${formatarValorExibicao('id_conta_bancaria', lancamento.id_conta_bancaria)}</div></li>
+                <li><span class="label">Favorecido</span> <div>${formatarValorExibicao('id_contato', lancamento.id_contato)}</div></li>
+            </ul>
+        `;
     };
 
     container.innerHTML = solicitacoes.map(s => {
         const dadosAntigos = s.dados_antigos;
         const dadosNovos = s.dados_novos;
-        const ehEdicao = s.tipo_solicitacao === 'EDICAO';
+        let cardBodyHtml = '';
+        let tipoInfo = { texto: 'Ação Desconhecida', icone: 'fa-question-circle', cor: 'var(--fc-cor-texto-secundario)' };
+        let tituloAlvo = `Lançamento Alvo #${dadosAntigos.id}:`;
 
-        // Bloco HTML para a justificativa do solicitante
+        switch (s.tipo_solicitacao) {
+            case 'EDICAO':
+                tipoInfo = { texto: 'Solicitação de Edição', icone: 'fa-pencil-alt', cor: 'var(--fc-cor-primaria)' };
+                let alteracoesHtml = '';
+                const chaves = ['valor', 'data_transacao', 'descricao', 'id_categoria', 'id_conta_bancaria', 'id_contato'];
+                for (const chave of chaves) {
+                    if (JSON.stringify(dadosAntigos[chave]) !== JSON.stringify(dadosNovos[chave])) {
+                        alteracoesHtml += `
+                            <li>
+                                <span class="label">${chave.replace('id_', '').replace(/_/g, ' ')}</span>
+                                <div class="valores">
+                                    <span class="valor-antigo">${formatarValorExibicao(chave, dadosAntigos[chave])}</span>
+                                    <span class="seta-indicador">→</span>
+                                    <span class="valor-novo">${formatarValorExibicao(chave, dadosNovos[chave])}</span>
+                                </div>
+                            </li>`;
+                    }
+                }
+                cardBodyHtml = `<ul class="fc-aprovacao-alteracoes-lista">${alteracoesHtml}</ul>`;
+                break;
+
+            case 'EXCLUSAO':
+                tipoInfo = { texto: 'Solicitação de Exclusão', icone: 'fa-trash-alt', cor: 'var(--fc-cor-despesa)' };
+                cardBodyHtml = `
+                    <div class="fc-aprovacao-acao-box tipo-exclusao">
+                        <h4><i class="fas fa-exclamation-triangle"></i>AÇÃO: Excluir permanentemente este lançamento.</h4>
+                    </div>
+                    <p style="margin-top: 15px; font-weight: 500;">Detalhes do lançamento a ser excluído:</p>
+                    ${gerarResumoLancamento(dadosAntigos)}
+                `;
+                break;
+
+            case 'ESTORNO':
+                tipoInfo = { texto: 'Solicitação de Estorno', icone: 'fa-undo-alt', cor: 'var(--fc-cor-receita)' };
+                cardBodyHtml = `
+                    <div class="fc-aprovacao-acao-box tipo-estorno">
+                        <h4><i class="fas fa-check-circle"></i>AÇÃO: Registrar Estorno</h4>
+                        <p>Valor: <strong>${formatarValorExibicao('valor', dadosNovos.valor_estornado)}</strong> | 
+                        Data: <strong>${formatarValorExibicao('data_transacao', dadosNovos.data_transacao)}</strong> | 
+                        Conta Destino: <strong>${formatarValorExibicao('id_conta_bancaria', dadosNovos.id_conta_bancaria)}</strong></p>
+                    </div>
+                    <p style="margin-top: 15px; font-weight: 500;">Para a despesa original:</p>
+                    ${gerarResumoLancamento(dadosAntigos)}
+                `;
+                break;
+
+            case 'REVERSAO_ESTORNO':
+                tipoInfo = { texto: 'Solicitação de Reversão de Estorno', icone: 'fa-history', cor: 'var(--fc-cor-aviso)' };
+                tituloAlvo = `Estorno Alvo #${dadosAntigos.id}:`; // Título mais específico
+                cardBodyHtml = `
+                    <div class="fc-aprovacao-acao-box tipo-reversao">
+                        <h4><i class="fas fa-info-circle"></i>AÇÃO: Reverter Estorno</h4>
+                        <p>Isto irá apagar o lançamento de receita (estorno) abaixo e reativar a despesa original (#${dadosAntigos.id_estorno_de}).</p>
+                    </div>
+                    <p style="margin-top: 15px; font-weight: 500;">Detalhes do estorno a ser revertido:</p>
+                    ${gerarResumoLancamento(dadosAntigos)}
+                `;
+                break;
+        }
+
         const justificativaHTML = s.justificativa_solicitante ? `
             <div class="justificativa-solicitante">
                 <strong>Justificativa do Solicitante:</strong>
                 <p>${s.justificativa_solicitante}</p>
-            </div>
-        ` : '';
+            </div>` : '';
 
         return `
         <div class="fc-aprovacao-card">
@@ -2986,28 +3269,20 @@ function renderizarCardsAprovacao(solicitacoes) {
                 <span>Solicitado por: <strong>${s.nome_solicitante}</strong></span>
                 <span>Em: ${new Date(s.data_solicitacao).toLocaleString('pt-BR')}</span>
             </div>
-            
+            <header class="fc-aprovacao-card-header">
+                <h3 class="tipo-solicitacao" style="color:${tipoInfo.cor};"><i class="fas ${tipoInfo.icone}"></i> ${tipoInfo.texto}</h3>
+                <h2 class="descricao-alvo"><span>${tituloAlvo}</span> ${dadosAntigos.descricao || 'Lançamento sem descrição'}</h2>
+            </header>
+            <div class="fc-aprovacao-card-body">${cardBodyHtml}</div>
             ${justificativaHTML}
-
-            <div class="dados-container">
-                <div class="dados-bloco">
-                    <h4>DE (Dados Originais)</h4>
-                    ${gerarHtmlDetalhes(dadosAntigos)}
-                </div>
-                <div class="dados-bloco ${ehEdicao ? '' : 'exclusao'}">
-                    <h4>${ehEdicao ? 'PARA (Dados Solicitados)' : 'AÇÃO SOLICITADA'}</h4>
-                    ${ehEdicao ? gerarHtmlDetalhes(dadosNovos, dadosAntigos, true) : '<ul style="color: var(--fc-cor-despesa);"><li><strong>EXCLUIR LANÇAMENTO</strong></li></ul>'}
-                </div>
-            </div>
             <div class="acoes-aprovacao">
                 <button class="fc-btn fc-btn-secundario btn-rejeitar" data-id="${s.id}"><i class="fas fa-times"></i> Rejeitar</button>
                 <button class="fc-btn fc-btn-primario btn-aprovar" data-id="${s.id}"><i class="fas fa-check"></i> Aprovar</button>
             </div>
         </div>
-        `
+        `;
     }).join('');
 
-    // Listeners para os botões de aprovar/rejeitar
     container.querySelectorAll('.btn-aprovar').forEach(btn => {
         btn.addEventListener('click', (e) => aprovarSolicitacao(e.currentTarget.dataset.id));
     });

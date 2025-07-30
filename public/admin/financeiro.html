@@ -147,10 +147,24 @@
                         <option value="DESPESA">Despesa</option>
                     </select>
                 </div>
+                
                 <div class="fc-form-grupo">
                     <label for="filtroConta">Conta</label>
                     <select id="filtroConta" name="idConta" class="fc-select"></select>
                 </div>
+
+                <!-- NOVO FILTRO TIPO DE LANCAMENTOS -->
+                <div class="fc-form-grupo">
+                    <label for="filtroTipoLancamento">Tipo de Lançamento</label>
+                    <select id="filtroTipoLancamento" name="tipoRateio" class="fc-select">
+                        <option value="">Todos</option>
+                        <option value="simples">Simples</option>
+                        <option value="COMPRA">Compra Detalhada</option>
+                        <option value="DETALHADO">Rateio Detalhado</option>
+                        <option value="transferencia">Transferência</option>
+                    </select>
+                </div>
+
                 <div class="fc-form-grupo full-width button-container">
                     <button type="button" id="btnLimparFiltros" class="fc-btn fc-btn-secundario">
                         <i class="fas fa-times-circle"></i> Limpar Filtros
@@ -196,7 +210,9 @@
             </nav>
             <div class="fc-config-content">
                 <div id="config-contas" class="fc-config-panel active"></div>
-                <div id="config-favorecidos" class="fc-config-panel"></div>
+                <div id="config-favorecidos" class="fc-config-panel">
+                    <div id="contatosGerenciamentoContainer"></div>
+                </div>
                 <div id="config-categorias" class="fc-config-panel"></div>
                 <div id="config-taxas-vt" class="fc-config-panel"></div>
                 <!-- NOVO PAINEL AQUI -->
