@@ -1,0 +1,124 @@
+/* public/css/popups.css */
+
+/* --- Container Geral e Overlay --- */
+.popup-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.popup-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(44, 62, 80, 0.6); /* Azul escuro semi-transparente */
+    animation: popup-fade-in 0.3s ease-out forwards;
+}
+
+/* --- Caixa do Popup (Estilo Base) --- */
+.popup-box {
+    position: relative;
+    background-color: #ffffff;
+    padding: 25px 30px;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    width: 90%;
+    max-width: 480px;
+    text-align: center;
+    border-left: 6px solid #ccc; /* Borda padrão cinza */
+    animation: popup-slide-in 0.3s ease-out forwards;
+    z-index: 10001;
+}
+
+.popup-box p {
+    font-size: 1.05rem;
+    line-height: 1.6;
+    margin: 0 0 25px 0;
+    color: #3c4858;
+}
+
+.popup-box p strong {
+    font-weight: 600;
+}
+
+/* --- Estilos por Tipo (Cores) --- */
+.popup-box.popup-sucesso { border-left-color: #27ae60; } /* Verde */
+.popup-box.popup-erro, .popup-box.popup-perigo { border-left-color: #e74c3c; } /* Vermelho */
+.popup-box.popup-aviso { border-left-color: #f39c12; } /* Laranja */
+.popup-box.popup-info { border-left-color: #3498db; } /* Azul */
+
+
+/* --- Botões dentro do Popup --- */
+.popup-botoes {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap; /* Para telas pequenas */
+}
+
+.popup-btn {
+    padding: 10px 25px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #ffffff;
+}
+.popup-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* Botão OK (Padrão para mensagens simples) */
+.popup-btn-ok {
+    background-color: #2c3e50; /* Azul escuro */
+}
+.popup-btn-ok:hover {
+    background-color: #34495e;
+}
+
+/* Botão Confirmar (SIM) - Verde */
+.popup-btn-confirmar {
+    background-color: #27ae60; /* Verde */
+}
+.popup-btn-confirmar:hover {
+    background-color: #229954;
+}
+
+/* Botão Cancelar (NÃO) - Vermelho */
+.popup-btn-cancelar {
+    background-color: #e74c3c; /* Vermelho */
+    order: -1; /* Opcional: Coloca o botão "Não" na esquerda por padrão */
+}
+.popup-btn-cancelar:hover {
+    background-color: #c0392b;
+}
+
+/* --- Animações --- */
+@keyframes popup-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+@keyframes popup-slide-in {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes popup-fade-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+@keyframes popup-slide-out {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(-20px); }
+}

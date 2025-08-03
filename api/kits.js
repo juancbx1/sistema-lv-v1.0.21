@@ -65,7 +65,7 @@ router.post('/montar', async (req, res) => {
         kit_produto_id,
         kit_variante,
         quantidade_kits_montados,
-        componentes_consumidos_de_arremates, // Vem do frontend, sem SKU ainda
+        componentes_consumidos_de_arremates,
         observacao
     } = req.body;
     
@@ -75,33 +75,41 @@ router.post('/montar', async (req, res) => {
         dbClient = await pool.connect();
         
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
-        if (!permissoesCompletas.includes('montar-kit')) {
+        if (!permissoesCompletas.includes('lancar-embalagem')) {
             return res.status(403).json({ error: 'Permissão negada para montar kits.' });
         }
 
+        // Validações
         if (!kit_produto_id || !quantidade_kits_montados || quantidade_kits_montados <= 0 || !componentes_consumidos_de_arremates || !Array.isArray(componentes_consumidos_de_arremates) || componentes_consumidos_de_arremates.length === 0) {
             return res.status(400).json({ error: 'Dados para montagem de kit estão incompletos ou inválidos.' });
         }
 
-        const final_kit_produto_id = parseInt(kit_produto_id);
         await dbClient.query('BEGIN');
 
         const componentesComSkuParaSalvar = [];
 
         for (const componente of componentes_consumidos_de_arremates) {
-            const { id_arremate, produto_id: comp_produto_id, variacao: comp_variacao, quantidade_usada } = componente;
-            if (!id_arremate || !comp_produto_id || !quantidade_usada || quantidade_usada <= 0) throw new Error(`Componente com dados inválidos: ${JSON.stringify(componente)}`);
+            // <<< CORREÇÃO AQUI: Acessando as propriedades diretamente >>>
+            const id_arremate = componente.id_arremate;
+            const comp_produto_id = componente.produto_id; // Nome claro da variável
+            const comp_variacao = componente.variacao;
+            const quantidade_usada = componente.quantidade_usada;
             
             const arremateResult = await dbClient.query('SELECT quantidade_arrematada, quantidade_ja_embalada FROM arremates WHERE id = $1 FOR UPDATE', [id_arremate]);
             if (arremateResult.rows.length === 0) throw new Error(`Arremate de origem (ID: ${id_arremate}) não encontrado.`);
+            
             const arremate = arremateResult.rows[0];
             const saldoAtual = arremate.quantidade_arrematada - arremate.quantidade_ja_embalada;
-            if (saldoAtual < quantidade_usada) throw new Error(`Saldo insuficiente no arremate ${id_arremate}. Saldo: ${saldoAtual}, Necessário: ${quantidade_usada}.`);
+            if (saldoAtual < quantidade_usada) {
+                throw new Error(`Saldo insuficiente no arremate ${id_arremate}. Saldo: ${saldoAtual}, Necessário: ${quantidade_usada}.`);
+            }
             
-            await dbClient.query('UPDATE arremates SET quantidade_ja_embalada = quantidade_ja_embalada + $1 WHERE id = $2', [quantidade_usada, id_arremate]);
+        await dbClient.query('UPDATE arremates SET quantidade_ja_embalada = quantidade_ja_embalada + $1 WHERE id = $2', [quantidade_usada, id_arremate]);
 
+            // LÓGICA PARA ENCONTRAR E ADICIONAR O SKU
             let skuComponente = null;
-            const produtoComponenteInfo = await dbClient.query('SELECT nome, sku, grade FROM produtos WHERE id = $1', [comp_produto_id]);
+            // Usa a variável correta 'comp_produto_id'
+            const produtoComponenteInfo = await dbClient.query('SELECT sku, grade FROM produtos WHERE id = $1', [comp_produto_id]);
             if (produtoComponenteInfo.rows.length > 0) {
                 const prod = produtoComponenteInfo.rows[0];
                 if (comp_variacao && comp_variacao !== '-') {
@@ -110,18 +118,16 @@ router.post('/montar', async (req, res) => {
                 } else {
                     skuComponente = prod.sku;
                 }
+                
                 componentesComSkuParaSalvar.push({ ...componente, sku: skuComponente });
-            } else { throw new Error(`Produto componente com ID ${comp_produto_id} não encontrado.`); }
+            } else { 
+                throw new Error(`Produto componente com ID ${comp_produto_id} não encontrado.`);
+            }
         }
 
-        const movEstoqueKitResult = await dbClient.query(
-            `INSERT INTO estoque_movimentos (produto_id, variante_nome, quantidade, tipo_movimento, usuario_responsavel, observacao) VALUES ($1, $2, $3, 'ENTRADA_PRODUCAO_KIT', $4, $5) RETURNING id;`,
-            [final_kit_produto_id, kit_variante || null, quantidade_kits_montados, (usuarioLogado.nome || 'Sistema'), observacao || `Montagem de ${quantidade_kits_montados} kit(s)`]
-        );
-        const novoMovimentoId = movEstoqueKitResult.rows[0].id;
-
+        // Busca o SKU do kit montado
         let skuDoKitMontado = null;
-        const infoDoKitMontado = await dbClient.query('SELECT sku, grade FROM produtos WHERE id = $1', [final_kit_produto_id]);
+        const infoDoKitMontado = await dbClient.query('SELECT sku, grade FROM produtos WHERE id = $1', [kit_produto_id]);
         if (infoDoKitMontado.rows.length > 0) {
             const kitProd = infoDoKitMontado.rows[0];
             if(kit_variante && kit_variante !== '-') {
@@ -129,16 +135,47 @@ router.post('/montar', async (req, res) => {
                 skuDoKitMontado = gradeInfoKit?.sku || kitProd.sku;
             } else { skuDoKitMontado = kitProd.sku; }
         }
+        if (!skuDoKitMontado) {
+            throw new Error(`Não foi possível encontrar o SKU para o kit montado (ID: ${kit_produto_id})`);
+        }
 
-        const embalagemRealizadaQuery = `INSERT INTO embalagens_realizadas (tipo_embalagem, produto_embalado_id, variante_embalada_nome, produto_ref_id, quantidade_embalada, usuario_responsavel_id, observacao, movimento_estoque_id, status, componentes_consumidos) VALUES ('KIT', $1, $2, $3, $4, $5, $6, $7, 'ATIVO', $8);`;
-        await dbClient.query(embalagemRealizadaQuery, [final_kit_produto_id, kit_variante || null, skuDoKitMontado, quantidade_kits_montados, usuarioLogado.id, observacao || null, novoMovimentoId, JSON.stringify(componentesComSkuParaSalvar)]);
+        // Registra a embalagem
+         const embalagemRealizadaQuery = `
+            INSERT INTO embalagens_realizadas 
+                (tipo_embalagem, produto_embalado_id, variante_embalada_nome, produto_ref_id, quantidade_embalada, 
+                usuario_responsavel_id, observacao, status, componentes_consumidos) 
+            VALUES ('KIT', $1, $2, $3, $4, $5, $6, 'ATIVO', $7) RETURNING id;
+        `;
+        const embalagemResult = await dbClient.query(embalagemRealizadaQuery, [
+            kit_produto_id, 
+            kit_variante || null, 
+            skuDoKitMontado, 
+            quantidade_kits_montados, 
+            usuarioLogado.id, 
+            observacao || null, 
+            // Salva o JSON que agora contém o SKU de cada componente
+            JSON.stringify(componentesComSkuParaSalvar) 
+        ]);
+        const novaEmbalagemId = embalagemResult.rows[0].id;
+
+        // Registra a entrada no estoque
+        await dbClient.query(
+        `INSERT INTO estoque_movimentos (produto_id, variante_nome, quantidade, tipo_movimento, usuario_responsavel, observacao) VALUES ($1, $2, $3, 'ENTRADA_KIT', $4, $5);`,
+        [
+            kit_produto_id,
+            kit_variante || null,
+            quantidade_kits_montados,
+            usuarioLogado.nome,
+            `Montagem de kit via embalagem #${novaEmbalagemId}`
+        ]
+    );
         
         await dbClient.query('COMMIT');
         res.status(200).json({ message: `${quantidade_kits_montados} kit(s) montado(s) com sucesso!` });
 
     } catch (error) {
         if (dbClient) await dbClient.query('ROLLBACK');
-        console.error('[API /kits/montar] Erro na transação:', error.message);
+        console.error('[API /kits/montar] Erro na transação:', error.message, error.stack);
         res.status(500).json({ error: 'Erro ao montar kits.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();

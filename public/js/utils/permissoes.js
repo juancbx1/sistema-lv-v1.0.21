@@ -59,6 +59,7 @@ export const permissoesDisponiveis = [
     { id: 'acesso-ordens-de-arremates', label: 'Ver Tela de Ordens de Arremate', categoria: 'Arremate e Embalagem' },
     { id: 'acesso-embalagem-de-produtos', label: 'Ver Tela de Embalagem', categoria: 'Arremate e Embalagem' },
     { id: 'lancar-arremate', label: 'Ação: Registrar novo arremate', categoria: 'Arremate e Embalagem' },
+    { id: 'estornar-arremate', label: 'Ação: Permite estornar Arremates', categoria: 'Arremate e Embalagem' },
     { id: 'registrar-perda-arremate', label: 'Ação: Registrar uma perda no arremate', categoria: 'Arremate e Embalagem' },
     { id: 'lancar-embalagem', label: 'Ação: Registrar embalagem de produtos', categoria: 'Arremate e Embalagem' },
     { id: 'lancar-embalagem-unidade', label: 'Ação: Lançar embalagem de unidade', categoria: 'Arremate e Embalagem' },

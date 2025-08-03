@@ -533,4 +533,5 @@ router.get('/buscar-contatos-empregado', async (req, res) => {
     }
 });
 
+
 export default router;

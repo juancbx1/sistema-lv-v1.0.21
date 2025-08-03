@@ -1,4 +1,6 @@
 // api/arremates.js
+ console.log('--- [DEBUG] O ARQUIVO api/arremates.js FOI CARREGADO PELO SERVIDOR ---');
+
 import 'dotenv/config';
 import pkg from 'pg';
 const { Pool } = pkg;
@@ -15,7 +17,6 @@ const pool = new Pool({
 const SECRET_KEY = process.env.JWT_SECRET;
 
 const verificarTokenInterna = (reqOriginal) => {
-    // console.log('[router/arremates - verificarTokenInterna] Verificando token...');
     const authHeader = reqOriginal.headers.authorization;
     if (!authHeader) {
         const error = new Error('Token não fornecido');
@@ -30,10 +31,8 @@ const verificarTokenInterna = (reqOriginal) => {
     }
     try {
         const decoded = jwt.verify(token, SECRET_KEY, { ignoreExpiration: false });
-        // console.log('[router/arremates - verificarTokenInterna] Token decodificado:', decoded);
         return decoded;
     } catch (error) {
-        // console.error('[router/arremates - verificarTokenInterna] Erro ao verificar token:', error.message);
         const newError = new Error(error.name === 'TokenExpiredError' ? 'Token expirado' : 'Token inválido');
         newError.statusCode = 401;
         if (error.name === 'TokenExpiredError') newError.details = 'jwt expired';
@@ -46,9 +45,7 @@ const verificarTokenInterna = (reqOriginal) => {
 // A gestão de conexão DB e verificação de permissões detalhadas fica em cada rota.
 router.use(async (req, res, next) => {
     try {
-        // console.log(`[router/arremates MID] Recebida ${req.method} em ${req.originalUrl}`);
         req.usuarioLogado = verificarTokenInterna(req); 
-        // console.log(`[router/arremates MID] Usuário autenticado (nome do token): ${req.usuarioLogado.nome || req.usuarioLogado.nome_usuario}`);
         next(); 
     } catch (error) {
         console.error('[router/arremates MID] Erro no middleware:', error.message, error.stack ? error.stack.substring(0,500) : '');
@@ -103,16 +100,16 @@ router.post('/', async (req, res) => {
         
         const nomeDoLancador = usuarioLogado.nome || 'Sistema';
 
-        // <<< MUDANÇA: Adicionada a coluna "usuario_tiktik_id" na query INSERT >>>
         const result = await dbClient.query(
-            `INSERT INTO arremates (op_numero, op_edit_id, produto_id, variante, quantidade_arrematada, usuario_tiktik, usuario_tiktik_id, lancado_por, valor_ponto_aplicado, pontos_gerados)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-            [
-                op_numero, op_edit_id || null, parseInt(produto_id), variante || null, 
-                quantidadeNum, usuario_tiktik, usuario_tiktik_id, nomeDoLancador,
-                valorPontoAplicado, pontosGerados
-            ]
-        );
+    `INSERT INTO arremates (op_numero, op_edit_id, produto_id, variante, quantidade_arrematada, usuario_tiktik, usuario_tiktik_id, lancado_por, valor_ponto_aplicado, pontos_gerados, tipo_lancamento)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+    [
+        op_numero, op_edit_id || null, parseInt(produto_id), variante || null, 
+        quantidadeNum, usuario_tiktik, usuario_tiktik_id, nomeDoLancador,
+        valorPontoAplicado, pontosGerados,
+        'PRODUCAO' // o o valor 'PRODUCAO' que corresponde ao placeholder $11.
+    ]
+    );
         
         res.status(201).json(result.rows[0]);
 
@@ -126,66 +123,94 @@ router.post('/', async (req, res) => {
 
 // GET /api/arremates/
 router.get('/', async (req, res) => {
-    const { usuarioLogado } = req;
-    // <<< MUDANÇA: Parâmetro do query agora é usuario_tiktik_id >>>
-    const { op_numero, usuario_tiktik_id: queryUsuarioTiktikIdParam } = req.query;
-    let dbClient;
+    console.log('--- [API GET /arremates com Filtros e Paginação] ---');
+    
+    const { 
+        produto_id, 
+        variante,
+        page = 1,
+        limit = 6,
+        fetchAll = 'false'
+    } = req.query;
 
+    const varianteDecodificada = variante ? variante.replace(/\+/g, ' ') : null;
+
+    let dbClient;
     try {
         dbClient = await pool.connect();
-        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
-        const podeAcessarEmbalagemGeral = permissoesCompletas.includes('acesso-embalagem-de-produtos');
-        const podeVerPropriosArremates = permissoesCompletas.includes('ver-proprios-arremates');
-        const idUsuarioLogado = usuarioLogado.id;
 
-        if (!podeAcessarEmbalagemGeral && !podeVerPropriosArremates) {
-            return res.status(403).json({ error: 'Permissão negada para visualizar arremates.' });
-        }
+        console.log(`[API GET /arremates] Parâmetros recebidos: produto_id=${produto_id}, variante="${variante}" (decodificada para: "${varianteDecodificada}")`);
 
-        // <<< MUDANÇA: Adicionada a coluna "usuario_tiktik_id" na query SELECT >>>
-        const baseSelect = `
-        SELECT 
-            a.id, a.op_numero, a.op_edit_id, a.variante, a.quantidade_arrematada,
-            a.usuario_tiktik, a.usuario_tiktik_id, -- <<< ADICIONADO
-            a.data_lancamento, a.quantidade_ja_embalada, a.assinada,
-            a.valor_ponto_aplicado, a.pontos_gerados, a.lancado_por, a.tipo_lancamento,
-            a.produto_id,
-            p.nome AS produto
-        FROM arremates a
-        LEFT JOIN produtos p ON a.produto_id = p.id
-    `;
-        
-        let queryText;
+        let whereClauses = [
+            // <<< FILTRO DE SALDO ADICIONADO DIRETAMENTE NA QUERY >>>
+            "(a.quantidade_arrematada - a.quantidade_ja_embalada) > 0",
+            "a.tipo_lancamento = 'PRODUCAO'"
+        ];
         let queryParams = [];
+        let paramIndex = 1;
 
-        if (op_numero) {
-            queryText = `${baseSelect} WHERE a.op_numero = $1 ORDER BY a.data_lancamento DESC`;
-            queryParams = [String(op_numero)];
-        // <<< MUDANÇA: Filtro agora usa o ID, não o nome >>>
-        } else if (queryUsuarioTiktikIdParam) {
-            if (podeAcessarEmbalagemGeral || (podeVerPropriosArremates && parseInt(queryUsuarioTiktikIdParam) === idUsuarioLogado)) {
-                queryText = `${baseSelect} WHERE a.usuario_tiktik_id = $1 ORDER BY a.data_lancamento DESC`;
-                queryParams = [parseInt(queryUsuarioTiktikIdParam)];
-            } else {
-                return res.status(403).json({ error: 'Você só pode visualizar os arremates especificados ou os seus próprios.' });
-            }
-        } else if (podeAcessarEmbalagemGeral) {
-            queryText = `${baseSelect} ORDER BY a.data_lancamento DESC`;
-        } else if (podeVerPropriosArremates) {
-            if (!idUsuarioLogado) return res.status(400).json({ error: "Falha ao identificar usuário para filtro." });
-            queryText = `${baseSelect} WHERE a.usuario_tiktik_id = $1 ORDER BY a.data_lancamento DESC`;
-            queryParams = [idUsuarioLogado];
-        } else {
-            return res.status(403).json({ error: 'Acesso a arremates não configurado corretamente.' });
+        if (produto_id) {
+            whereClauses.push(`a.produto_id = $${paramIndex++}`);
+            queryParams.push(parseInt(produto_id));
+        }
+
+        // <<< VARIÁVEL CORRIGIDA  >>>
+        if (varianteDecodificada && varianteDecodificada !== '-') {
+            whereClauses.push(`a.variante = $${paramIndex++}`);
+            queryParams.push(varianteDecodificada); // << Usa a variável decodificada
+        } else if (variante === '-') { // << Aqui mantemos 'variante' para o caso especial
+            whereClauses.push(`(a.variante IS NULL OR a.variante = '-' OR a.variante = '')`);
+        }
+
+        const whereString = `WHERE ${whereClauses.join(' AND ')}`;
+
+        const countQuery = `SELECT COUNT(*) FROM arremates a ${whereString}`;
+        const countResult = await dbClient.query(countQuery, queryParams);
+        const totalItems = parseInt(countResult.rows[0].count, 10);
+        
+        const limitNum = parseInt(limit);
+        const offset = (parseInt(page) - 1) * limitNum;
+        const totalPages = Math.ceil(totalItems / limitNum) || 1;
+
+
+        
+        // <<< LÓGICA DE PAGINAÇÃO CONDICIONAL >>>
+        let paginationClause = '';
+        if (fetchAll === 'false') {
+            const limitNum = parseInt(limit);
+            const offset = (parseInt(page) - 1) * limitNum;
+            paginationClause = `LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+            queryParams.push(limitNum, offset);
+        }
+
+        let dataQuery = `
+            SELECT a.*, p.nome as produto 
+            FROM arremates a 
+            JOIN produtos p ON a.produto_id = p.id
+            ${whereString}
+            ORDER BY a.data_lancamento DESC
+            ${paginationClause} -- <<< APLICA A PAGINAÇÃO AQUI (ou não) >>>
+        `;
+
+
+        const dataResult = await dbClient.query(dataQuery, queryParams);
+
+        // <<< LOG DE DEPURAÇÃO 4: RESULTADO >>>
+        console.log(`%c[API GET /arremates] A query retornou ${dataResult.rowCount} linhas.`, 'color: blue; font-weight: bold;');
+
+        // Se for fetchAll, não precisamos de dados de paginação na resposta.
+        if (fetchAll === 'true') {
+            return res.status(200).json({ rows: dataResult.rows, pagination: {} });
         }
         
-        const result = await dbClient.query(queryText, queryParams);
-        res.status(200).json(result.rows);
+        res.status(200).json({
+            rows: dataResult.rows,
+            pagination: { currentPage: parseInt(page), totalPages, totalItems }
+        });
 
     } catch (error) {
-        console.error('[router/arremates GET] Erro na rota:', error.message, error.stack ? error.stack.substring(0,500) : '');
-        const statusCode = error.statusCode || 500;
-        res.status(statusCode).json({ error: error.message || 'Erro interno ao buscar arremates.' });
+        console.error('[API Arremates GET / Paginado] Erro:', error);
+        res.status(500).json({ error: 'Erro interno ao buscar arremates.' });
     } finally {
         if (dbClient) dbClient.release();
     }
@@ -193,23 +218,89 @@ router.get('/', async (req, res) => {
 
 // ROTA: GET /api/arremates/historico
 router.get('/historico', async (req, res) => {
+    console.log('\n--- [API GET /historico] INÍCIO DA REQUISIÇÃO ---');
+    console.log('[LOG 1] Query Params Recebidos:', req.query);
+    
+    const { 
+        busca,
+        tipoEvento = 'todos',
+        periodo = '7d',
+        page = 1,
+        limit = 10
+    } = req.query;
+    
     let dbClient;
     try {
         dbClient = await pool.connect();
         
-        const query = `
-            SELECT 
-                a.id, a.op_numero, a.variante, a.quantidade_arrematada,
-                a.usuario_tiktik, a.lancado_por, a.data_lancamento,
-                a.tipo_lancamento, a.id_perda_origem,
-                p.nome as produto
+        let queryParams = [];
+        let whereClauses = [];
+
+        // Filtro de Período
+        if (periodo === 'hoje') {
+            whereClauses.push(`a.data_lancamento >= date_trunc('day', NOW() AT TIME ZONE 'America/Sao_Paulo')`);
+        } else if (periodo === '30d') {
+            whereClauses.push(`a.data_lancamento >= NOW() - INTERVAL '30 days'`);
+        } else if (periodo === 'mes_atual') {
+            whereClauses.push(`date_trunc('month', a.data_lancamento AT TIME ZONE 'America/Sao_Paulo') = date_trunc('month', NOW() AT TIME ZONE 'America/Sao_Paulo')`);
+        } else {
+            whereClauses.push(`a.data_lancamento >= NOW() - INTERVAL '7 days'`);
+        }
+        
+        // Filtro por Tipo de Evento
+        if (tipoEvento !== 'todos') {
+            if (tipoEvento === 'ESTORNO') {
+                whereClauses.push(`a.tipo_lancamento IN ('ESTORNO', 'PRODUCAO_ANULADA')`);
+            } else {
+                whereClauses.push(`a.tipo_lancamento = $${queryParams.length + 1}`);
+                queryParams.push(tipoEvento);
+            }
+        } else {
+             whereClauses.push(`a.tipo_lancamento IN ('PRODUCAO', 'PERDA', 'ESTORNO', 'PRODUCAO_ANULADA')`);
+        }
+        
+        // Filtro de Busca por Texto
+        if (busca) {
+            const searchTerm = `%${busca}%`;
+            whereClauses.push(`(p.nome ILIKE $${queryParams.length + 1} OR a.usuario_tiktik ILIKE $${queryParams.length + 1} OR a.lancado_por ILIKE $${queryParams.length + 1})`);
+            queryParams.push(searchTerm);
+        }
+        
+        const whereString = `WHERE ${whereClauses.join(' AND ')}`;
+        console.log('[LOG 2] Cláusula WHERE construída:', whereString);
+        console.log('[LOG 3] Parâmetros para WHERE:', queryParams);
+
+        // Query de Contagem
+        const countQuery = `SELECT COUNT(*) FROM arremates a LEFT JOIN produtos p ON a.produto_id = p.id ${whereString}`;
+        const countResult = await dbClient.query(countQuery, queryParams);
+        const totalItems = parseInt(countResult.rows[0].count, 10);
+        console.log(`[LOG 4] Contagem de itens (total): ${totalItems}`);
+
+        // Query de Dados com Paginação
+        const limitNum = parseInt(limit);
+        const offset = (parseInt(page) - 1) * limitNum;
+        const totalPages = Math.ceil(totalItems / limitNum) || 1;
+        
+        const finalQueryParams = [...queryParams, limitNum, offset];
+        
+        const dataQuery = `
+            SELECT a.*, p.nome as produto
             FROM arremates a
             LEFT JOIN produtos p ON a.produto_id = p.id
-            WHERE a.data_lancamento >= NOW() - INTERVAL '7 days'
-            ORDER BY a.data_lancamento DESC;
-        `;
-        const result = await dbClient.query(query);
-        res.status(200).json(result.rows);
+            ${whereString}
+            ORDER BY a.data_lancamento DESC
+            LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
+        
+        console.log('[LOG 5] Query de Dados Final:', dataQuery.replace(/\s+/g, ' ').trim());
+        console.log('[LOG 6] Parâmetros Finais (com paginação):', finalQueryParams);
+        
+        const dataResult = await dbClient.query(dataQuery, finalQueryParams);
+        console.log(`[LOG 7] Query de Dados retornou ${dataResult.rowCount} linhas.`);
+        
+        res.status(200).json({
+            rows: dataResult.rows,
+            pagination: { currentPage: parseInt(page), totalPages, totalItems }
+        });
 
     } catch (error) {
         console.error('[API /arremates/historico] Erro:', error);
@@ -229,7 +320,6 @@ router.put('/:id_arremate/registrar-embalagem', async (req, res) => {
     try {
         dbClient = await pool.connect(); // Obtém conexão para esta rota
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
-        // console.log(`[API Arremates PUT /:id/registrar-embalagem] Permissões de ${usuarioLogado.nome || usuarioLogado.nome_usuario}:`, permissoesCompletas);
 
         if (!permissoesCompletas.includes('lancar-embalagem')) { // Ou uma permissão mais específica se necessário
             return res.status(403).json({ error: 'Permissão negada para registrar embalagem de arremate.' });
@@ -280,7 +370,6 @@ router.put('/:id_arremate/registrar-embalagem', async (req, res) => {
 
         await dbClient.query('COMMIT'); 
 
-        // console.log(`[router/arremates PUT /:id/registrar-embalagem] Arremate ID ${idArremateNum} atualizado. Nova qtd_ja_embalada: ${novaQtdJaEmbalada}`);
         res.status(200).json({
             message: 'Arremate atualizado com sucesso.',
             arremateAtualizado: updateResult.rows[0]
@@ -290,7 +379,6 @@ router.put('/:id_arremate/registrar-embalagem', async (req, res) => {
         if (dbClient) { // Só tenta rollback se dbClient foi conectado
             try {
                 await dbClient.query('ROLLBACK');
-                // console.log('[router/arremates PUT /:id/registrar-embalagem] ROLLBACK executado devido a erro.');
             } catch (rollbackError) {
                 console.error('[router/arremates PUT /:id/registrar-embalagem] Erro ao tentar executar ROLLBACK:', rollbackError);
             }
@@ -303,7 +391,6 @@ router.put('/:id_arremate/registrar-embalagem', async (req, res) => {
     } finally {
         if (dbClient) {
             dbClient.release();
-            // console.log('[router/arremates PUT /:id/registrar-embalagem] Cliente DB liberado.');
         }
     }
 });
@@ -457,6 +544,324 @@ router.post('/registrar-perda', async (req, res) => {
         if (dbClient) await dbClient.query('ROLLBACK');
         console.error('[API /arremates/registrar-perda] Erro:', error);
         res.status(500).json({ error: 'Erro ao registrar a perda.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+router.get('/fila', async (req, res) => {
+    console.log('--- [API GET /arremates/fila] REQUISIÇÃO (LÓGICA JS NO BACKEND) ---');
+    
+    const { 
+        search, 
+        sortBy = 'data_op_mais_recente', 
+        page = 1, 
+        limit = 6 
+    } = req.query;
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        
+        // 1. BUSCAR TODAS AS OPS FINALIZADAS
+        const opsQuery = `
+            SELECT 
+                op.produto_id, op.variante, p.nome as produto, op.etapas, op.quantidade, op.data_final, op.numero, op.edit_id
+            FROM ordens_de_producao op
+            JOIN produtos p ON op.produto_id = p.id
+            WHERE op.status = 'finalizado';
+        `;
+        const opsResult = await dbClient.query(opsQuery);
+        const opsFinalizadas = opsResult.rows;
+
+        // 2. BUSCAR TODOS OS ARREMATES JÁ FEITOS
+        const arrematesQuery = `
+            SELECT produto_id, variante, op_numero, quantidade_arrematada
+            FROM arremates
+            WHERE tipo_lancamento = 'PRODUCAO' OR tipo_lancamento = 'PERDA';
+        `;
+        const arrematesResult = await dbClient.query(arrematesQuery);
+        const arrematesFeitos = arrematesResult.rows;
+
+        // 3. PROCESSAR OS DADOS EM JAVASCRIPT (LÓGICA SEGURA)
+        const obterQuantidadeFinalProduzida = (op) => {
+            if (!op || !op.etapas || !Array.isArray(op.etapas) || op.etapas.length === 0) {
+                return parseInt(op?.quantidade) || 0;
+            }
+            for (let i = op.etapas.length - 1; i >= 0; i--) {
+                const etapa = op.etapas[i];
+                if (etapa && etapa.lancado && typeof etapa.quantidade !== 'undefined' && etapa.quantidade !== null) {
+                    const qtdEtapa = parseInt(etapa.quantidade, 10);
+                    if (!isNaN(qtdEtapa) && qtdEtapa >= 0) {
+                        return qtdEtapa;
+                    }
+                }
+            }
+            return parseInt(op.quantidade) || 0;
+        };
+        
+        const arrematadoPorOp = new Map();
+        arrematesFeitos.forEach(arr => {
+            const chave = `${arr.op_numero}|${arr.variante || '-'}`;
+            arrematadoPorOp.set(chave, (arrematadoPorOp.get(chave) || 0) + arr.quantidade_arrematada);
+        });
+
+        const pendenciasAgregadas = new Map();
+        opsFinalizadas.forEach(op => {
+            const qtdProduzida = obterQuantidadeFinalProduzida(op);
+            const chaveOp = `${op.numero}|${op.variante || '-'}`;
+            const qtdArrematada = arrematadoPorOp.get(chaveOp) || 0;
+            const saldoOp = qtdProduzida - qtdArrematada;
+
+            if (saldoOp > 0) {
+                const chaveAgregada = `${op.produto_id}|${op.variante || '-'}`;
+                if (!pendenciasAgregadas.has(chaveAgregada)) {
+                    pendenciasAgregadas.set(chaveAgregada, {
+                        produto_id: op.produto_id,
+                        produto_nome: op.produto,
+                        variante: op.variante || '-',
+                        saldo_para_arrematar: 0,
+                        ops_detalhe: [],
+                        data_op_mais_recente: new Date(0)
+                    });
+                }
+
+                const item = pendenciasAgregadas.get(chaveAgregada);
+                item.saldo_para_arrematar += saldoOp;
+                item.ops_detalhe.push({
+                    numero: op.numero,
+                    edit_id: op.edit_id,
+                    saldo_op: saldoOp
+                });
+                const dataOp = op.data_final ? new Date(op.data_final) : new Date(0);
+                if (dataOp > item.data_op_mais_recente) {
+                    item.data_op_mais_recente = dataOp;
+                }
+            }
+        });
+        
+        let resultados = Array.from(pendenciasAgregadas.values());
+        
+        // --- INÍCIO DA MUDANÇA ---
+
+        // 4. CALCULAR TOTAIS GERAIS ANTES DE FILTRAR E PAGINAR
+        const totalGruposDeProdutos = resultados.length;
+        const totalPecasPendentes = resultados.reduce((total, item) => total + item.saldo_para_arrematar, 0);
+
+        // 5. APLICAR FILTROS DE BUSCA E ORDENAÇÃO
+        if (search) {
+            const searchTermLower = search.toLowerCase();
+            resultados = resultados.filter(item =>
+                item.produto_nome.toLowerCase().includes(searchTermLower) ||
+                (item.variante && item.variante.toLowerCase().includes(searchTermLower))
+            );
+        }
+
+        switch (sortBy) {
+            case 'maior_quantidade': resultados.sort((a, b) => b.saldo_para_arrematar - a.saldo_para_arrematar); break;
+            case 'menor_quantidade': resultados.sort((a, b) => a.saldo_para_arrematar - b.saldo_para_arrematar); break;
+            case 'alfabetica': resultados.sort((a, b) => a.produto_nome.localeCompare(b.produto_nome)); break;
+            default: resultados.sort((a, b) => new Date(b.data_op_mais_recente) - new Date(a.data_op_mais_recente)); break;
+        }
+
+        // 6. APLICAR PAGINAÇÃO SOBRE O RESULTADO JÁ FILTRADO E ORDENADO
+        const limitNum = parseInt(limit);
+        const offset = (parseInt(page) - 1) * limitNum;
+        const totalPages = Math.ceil(resultados.length / limitNum) || 1;
+        const paginatedResults = resultados.slice(offset, offset + limitNum);
+
+        // 7. ENVIAR A RESPOSTA COM OS TOTAIS GERAIS
+        res.status(200).json({
+            rows: paginatedResults, // Os dados da página atual
+            pagination: {
+                currentPage: parseInt(page),
+                totalPages: totalPages,
+                totalItems: totalGruposDeProdutos, // <<< TOTAL DE GRUPOS ANTES DA PAGINAÇÃO
+                totalPecas: totalPecasPendentes,    // <<< SOMA TOTAL DE PEÇAS ANTES DA PAGINAÇÃO
+                limit: limitNum
+            }
+        });
+
+        // --- FIM DA MUDANÇA ---
+
+    } catch (error) {
+        console.error('[API GET /arremates/fila] Erro na lógica JS do backend:', error.message, error.stack);
+        res.status(500).json({ error: 'Erro ao processar a fila de arremates.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// POST /api/arremates/estornar - ENDPOINT PARA ESTORNAR UM LANÇAMENTO
+router.post('/estornar', async (req, res) => {
+    console.log('--- [DEBUG] REQUISIÇÃO CHEGOU EM: POST /api/arremates/estornar (LÓGICA LOG + DELETE) ---');
+    const { usuarioLogado } = req;
+    const { id_arremate } = req.body;
+    let dbClient;
+
+    if (!id_arremate) {
+        return res.status(400).json({ error: "O ID do arremate a ser estornado é obrigatório." });
+    }
+
+    try {
+        dbClient = await pool.connect();
+        const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
+        if (!permissoes.includes('estornar-arremate')) {
+            return res.status(403).json({ error: 'Permissão negada para estornar arremates.' });
+        }
+
+        await dbClient.query('BEGIN');
+
+        // 1. Busca o registro original.
+        const arremateResult = await dbClient.query(`SELECT * FROM arremates WHERE id = $1`, [id_arremate]);
+        if (arremateResult.rows.length === 0) {
+            await dbClient.query('ROLLBACK');
+            return res.status(404).json({ error: 'Lançamento de arremate não encontrado.' });
+        }
+        const arremateOriginal = arremateResult.rows[0];
+        
+        // Validações ...
+
+        // 2. CRIA UM NOVO REGISTRO DE LOG DO TIPO 'ESTORNO'
+        console.log('[DEBUG] Criando registro de log de ESTORNO...');
+        const logEstornoQuery = `
+            INSERT INTO arremates 
+                (op_numero, op_edit_id, produto_id, variante, quantidade_arrematada, 
+                 usuario_tiktik, usuario_tiktik_id, lancado_por, tipo_lancamento, assinada, id_perda_origem)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ESTORNO', true, $9)
+        `;
+
+        // <<< A CORREÇÃO ESTÁ AQUI >>>
+        await dbClient.query(logEstornoQuery, [
+            arremateOriginal.op_numero,
+            arremateOriginal.op_edit_id,
+            arremateOriginal.produto_id,
+            arremateOriginal.variante,
+            arremateOriginal.quantidade_arrematada,
+            arremateOriginal.usuario_tiktik,
+            arremateOriginal.usuario_tiktik_id,
+            usuarioLogado.nome || 'Sistema',
+            null // CORRIGIDO: id_perda_origem deve ser nulo para um estorno.
+        ]);
+        
+        // 3. APAGA o registro de arremate original.
+        console.log(`[DEBUG] Apagando o arremate original com ID: ${id_arremate}`);
+        const deleteResult = await dbClient.query(`DELETE FROM arremates WHERE id = $1`, [id_arremate]);
+        if (deleteResult.rowCount === 0) {
+            throw new Error("Falha ao apagar o registro de arremate original.");
+        }
+        
+        await dbClient.query('COMMIT');
+        
+        res.status(200).json({ message: 'Arremate estornado com sucesso!' });
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error('[API /arremates/estornar - LÓGICA LOG + DELETE] Erro:', error.message, error.stack);
+        res.status(500).json({ error: 'Erro interno ao estornar o arremate.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// GET /api/arremates/contagem-hoje - ENDPOINT PARA O DASHBOARD
+router.get('/contagem-hoje', async (req, res) => {
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        
+        // A query soma a 'quantidade_arrematada' de todos os lançamentos
+        // do tipo PRODUCAO que foram criados hoje.
+        // Usamos a conversão de timezone para 'America/Sao_Paulo' para garantir
+        // que o "hoje" seja calculado corretamente, independentemente do servidor.
+        const query = `
+            SELECT COALESCE(SUM(quantidade_arrematada), 0) as total
+            FROM arremates
+            WHERE 
+                tipo_lancamento = 'PRODUCAO' AND
+                data_lancamento >= date_trunc('day', NOW() AT TIME ZONE 'America/Sao_Paulo') AND
+                data_lancamento < date_trunc('day', NOW() AT TIME ZONE 'America/Sao_Paulo') + interval '1 day';
+        `;
+        
+        const result = await dbClient.query(query);
+        const totalArrematadoHoje = parseInt(result.rows[0].total) || 0;
+
+        res.status(200).json({ total: totalArrematadoHoje });
+
+    } catch (error) {
+        console.error('[API /arremates/contagem-hoje] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar contagem de arremates de hoje.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// GET /api/arremates/historico-produto - PARA A ABA DE HISTÓRICO DA TELA DE DETALHES
+router.get('/historico-produto', async (req, res) => {
+    const { 
+        produto_id, 
+        variante,
+        page = 1,
+        limit = 8 // Um limite baixo, ideal para uma aba de modal
+    } = req.query;
+
+    if (!produto_id) {
+        return res.status(400).json({ error: "ID do produto é obrigatório." });
+    }
+
+    const varianteDecodificada = variante ? variante.replace(/\+/g, ' ') : null;
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        
+        let whereClauses = ['produto_id = $1'];
+        const params = [parseInt(produto_id)];
+        let paramIndex = 2;
+
+        if (varianteDecodificada && varianteDecodificada !== '-') {
+            whereClauses.push(`variante = $${paramIndex++}`);
+            params.push(varianteDecodificada);
+        } else {
+            whereClauses.push("(variante IS NULL OR variante = '' OR variante = '-')");
+        }
+        
+        const whereString = `WHERE ${whereClauses.join(' AND ')}`;
+
+        // Query de Contagem
+        const countQuery = `SELECT COUNT(*) FROM arremates ${whereString}`;
+        const countResult = await dbClient.query(countQuery, params);
+        const totalItems = parseInt(countResult.rows[0].count, 10);
+
+        // Query de Dados com Paginação
+        const limitNum = parseInt(limit);
+        const offset = (parseInt(page) - 1) * limitNum;
+        const totalPages = Math.ceil(totalItems / limitNum) || 1;
+        
+        const dataQuery = `
+            SELECT data_lancamento, tipo_lancamento, quantidade_arrematada, usuario_tiktik, op_numero 
+            FROM arremates 
+            ${whereString}
+            ORDER BY data_lancamento DESC 
+            LIMIT $${paramIndex++} OFFSET $${paramIndex++}
+        `;
+        params.push(limitNum, offset);
+
+        const result = await dbClient.query(dataQuery, params);
+        
+        // Retorna a resposta no formato paginado
+        res.status(200).json({
+            rows: result.rows,
+            pagination: {
+                currentPage: parseInt(page),
+                totalPages: totalPages,
+                totalItems: totalItems
+            }
+        });
+
+    } catch (error) {
+        console.error("[API /historico-produto] Erro:", error.message);
+        res.status(500).json({ error: "Erro ao buscar histórico do produto." });
     } finally {
         if (dbClient) dbClient.release();
     }

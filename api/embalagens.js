@@ -1,5 +1,7 @@
 // api/embalagens.js
 
+ console.log('--- [DEBUG] O ARQUIVO api/embalagens.js FOI CARREGADO PELO SERVIDOR ---');
+
 import 'dotenv/config';
 import pkg from 'pg';
 const { Pool } = pkg;
@@ -57,7 +59,7 @@ router.get('/historico', async (req, res) => {
     const { produto_ref_id, page = 1, limit = 5 } = req.query;
 
     if (!produto_ref_id) {
-        return res.status(400).json({ error: "O SKU (produto_ref_id) é obrigatório para buscar o histórico." });
+        return res.status(400).json({ error: "O SKU (produto_ref_id) é obrigatório." });
     }
 
     let dbClient;
@@ -69,54 +71,44 @@ router.get('/historico', async (req, res) => {
         }
 
         const offset = (parseInt(page) - 1) * parseInt(limit);
-        const params = [produto_ref_id]; 
         
-        const queryText = `
-            WITH historico_combinado AS (
-                -- 1. Embalagens de UNIDADE do item base (buscando pelo SKU direto)
-                SELECT 
-                    er.id, er.tipo_embalagem, er.quantidade_embalada, er.data_embalagem, er.observacao, er.status, 
-                    p.nome as produto_embalado_nome, er.variante_embalada_nome, u.nome as usuario_responsavel
-                FROM embalagens_realizadas er
-                JOIN produtos p ON er.produto_embalado_id = p.id
-                LEFT JOIN usuarios u ON er.usuario_responsavel_id = u.id
-                WHERE er.produto_ref_id = $1
+        // --- QUERY COM UNION PARA JUNTAR OS DOIS TIPOS DE HISTÓRICO ---
+        const queryBase = `
+            -- Parte 1: Embalagens DESTE produto (apenas se for UNIDADE)
+            SELECT id FROM embalagens_realizadas
+            WHERE produto_ref_id = $1 AND tipo_embalagem = 'UNIDADE'
 
-                UNION ALL
+            UNION
 
-                -- 2. Montagens de KIT que usaram o item base como componente (buscando pelo SKU no JSON)
-                SELECT 
-                    er.id, er.tipo_embalagem, er.quantidade_embalada, er.data_embalagem, er.observacao, er.status,
-                    p.nome as produto_embalado_nome, er.variante_embalada_nome, u.nome as usuario_responsavel
-                FROM embalagens_realizadas er
-                JOIN produtos p ON er.produto_embalado_id = p.id
-                LEFT JOIN usuarios u ON er.usuario_responsavel_id = u.id
-                WHERE 
-                    er.tipo_embalagem = 'KIT' AND
-                    jsonb_path_exists(er.componentes_consumidos, '$[*] ? (@.sku == $psku)', jsonb_build_object('psku', $1))
-            )
-            SELECT * FROM historico_combinado
-            ORDER BY data_embalagem DESC
+            -- Parte 2: Embalagens de KITS que usaram este produto como COMPONENTE
+            SELECT id FROM embalagens_realizadas
+            WHERE tipo_embalagem = 'KIT' AND
+                  jsonb_path_exists(componentes_consumidos, '$[*] ? (@.sku == $sku)', jsonb_build_object('sku', $1))
+        `;
+
+        // Query de Contagem
+        const countQuery = `SELECT COUNT(*) as total_count FROM (${queryBase}) as subquery`;
+        const countResult = await dbClient.query(countQuery, [produto_ref_id]);
+        const total = parseInt(countResult.rows[0].total_count) || 0;
+        const totalPages = Math.ceil(total / parseInt(limit)) || 1;
+
+        // Query de Dados
+        const dataQuery = `
+            SELECT 
+                er.id, er.tipo_embalagem, er.quantidade_embalada, er.data_embalagem, er.observacao, er.status, 
+                p.nome as produto_embalado_nome, er.variante_embalada_nome, u.nome as usuario_responsavel
+            FROM embalagens_realizadas er
+            JOIN produtos p ON er.produto_embalado_id = p.id
+            LEFT JOIN usuarios u ON er.usuario_responsavel_id = u.id
+            WHERE er.id IN (${queryBase}) -- Filtra pelos IDs encontrados nas duas condições
+            ORDER BY er.data_embalagem DESC
             LIMIT $2 OFFSET $3;
         `;
         
-        const countQueryText = `
-             SELECT SUM(count) as total_count FROM (
-                SELECT COUNT(*) as count FROM embalagens_realizadas WHERE produto_ref_id = $1
-                UNION ALL
-                SELECT COUNT(*) as count FROM embalagens_realizadas
-                WHERE tipo_embalagem = 'KIT' AND jsonb_path_exists(componentes_consumidos, '$[*] ? (@.sku == $psku)', jsonb_build_object('psku', $1))
-            ) as subquery_counts;
-        `;
+        const result = await dbClient.query(dataQuery, [produto_ref_id, parseInt(limit), offset]);
 
-        const [result, totalResult] = await Promise.all([
-            dbClient.query(queryText, [...params, parseInt(limit), offset]),
-            dbClient.query(countQueryText, params)
-        ]);
-
-        const total = parseInt(totalResult.rows[0].total_count) || 0;
-        const totalPages = Math.ceil(total / parseInt(limit)) || 1;
-
+        console.log(`[API /historico] Buscando para SKU: ${produto_ref_id}. Encontrados ${total} registros no total.`);
+        
         res.status(200).json({ rows: result.rows, total: total, page: parseInt(page), pages: totalPages });
 
     } catch (error) {
@@ -126,7 +118,6 @@ router.get('/historico', async (req, res) => {
         if (dbClient) dbClient.release();
     }
 });
-
 
 router.post('/estornar', async (req, res) => {
     const { usuarioLogado } = req;
@@ -277,5 +268,265 @@ router.get('/contagem-hoje', async (req, res) => {
 });
 
 
+// GET /api/embalagens/fila - NOVO ENDPOINT DEDICADO PARA A FILA DE EMBALAGEM
+router.get('/fila', async (req, res) => {
+    console.log('--- [API GET /api/embalagens/fila] REQUISIÇÃO RECEBIDA ---');
+    const { 
+        search, 
+        sortBy = 'mais_recentes', 
+        page = 1, 
+        limit = 6 
+    } = req.query;
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        
+        let queryParams = [];
+        let paramIndex = 1;
+
+        // --- QUERY DE AGREGAÇÃO DIRETO NO BANCO DE DADOS ---
+        const baseSelect = `
+            SELECT
+                a.produto_id,
+                p.nome as produto,
+                a.variante,
+                SUM(a.quantidade_arrematada - a.quantidade_ja_embalada)::integer as total_disponivel_para_embalar,
+                MIN(a.data_lancamento) as data_lancamento_mais_antiga,
+                MAX(a.data_lancamento) as data_lancamento_mais_recente
+            FROM arremates a
+            JOIN produtos p ON a.produto_id = p.id
+            WHERE a.tipo_lancamento = 'PRODUCAO'
+            GROUP BY a.produto_id, p.nome, a.variante
+            HAVING SUM(a.quantidade_arrematada - a.quantidade_ja_embalada) > 0
+        `;
+
+        let finalQuery = `SELECT * FROM (${baseSelect}) as subquery`;
+        
+        // Aplica o filtro de busca
+        if (search) {
+            finalQuery += ` WHERE produto ILIKE $${paramIndex++} OR variante ILIKE $${paramIndex++}`;
+            queryParams.push(`%${search}%`, `%${search}%`);
+        }
+        
+        // Ordenação
+        let orderByClause;
+        switch (sortBy) {
+            case 'mais_antigos': orderByClause = 'ORDER BY data_lancamento_mais_antiga ASC'; break;
+            case 'maior_quantidade': orderByClause = 'ORDER BY total_disponivel_para_embalar DESC'; break;
+            case 'menor_quantidade': orderByClause = 'ORDER BY total_disponivel_para_embalar ASC'; break;
+            default: orderByClause = 'ORDER BY data_lancamento_mais_recente DESC'; break;
+        }
+        finalQuery += ` ${orderByClause}`;
+
+        // Contagem para paginação
+        const countQuery = `SELECT COUNT(*) FROM (${finalQuery}) as count_query`;
+        const countResult = await dbClient.query(countQuery, queryParams);
+        const totalItems = parseInt(countResult.rows[0].count, 10);
+
+        // Paginação
+        const limitNum = parseInt(limit);
+        const offset = (parseInt(page) - 1) * limitNum;
+        finalQuery += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+        queryParams.push(limitNum, offset);
+
+        // Busca dos dados paginados
+        const dataResult = await dbClient.query(finalQuery, queryParams);
+        const totalPages = Math.ceil(totalItems / limitNum) || 1;
+
+        res.status(200).json({
+            rows: dataResult.rows,
+            pagination: {
+                currentPage: parseInt(page),
+                totalPages: totalPages,
+                totalItems: totalItems,
+                limit: limitNum
+            }
+        });
+
+    } catch (error) {
+        console.error('[API GET /api/embalagens/fila] Erro:', error.message);
+        res.status(500).json({ error: 'Erro ao buscar a fila de embalagem.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// GET /api/embalagens/historico-geral - ENDPOINT DE AUDITORIA COMPLETA
+router.get('/historico-geral', async (req, res) => {
+    const { 
+        tipoEvento = 'todos',
+        usuarioId = 'todos',
+        periodo = '7d',
+        page = 1,
+        limit = 10
+    } = req.query;
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        
+        // --- CONSTRUÇÃO DA QUERY COM UNION ALL ---
+        // Vamos buscar 3 tipos de eventos e uni-los.
+        
+        // 1. Embalagens de Unidade e Montagens de Kit (da tabela 'embalagens_realizadas')
+        const embalagensQuery = `
+            SELECT
+                er.id,
+                er.data_embalagem as data_evento,
+                CASE 
+                    WHEN er.tipo_embalagem = 'UNIDADE' THEN 'embalagem_unidade'
+                    WHEN er.tipo_embalagem = 'KIT' THEN 'montagem_kit'
+                    ELSE 'desconhecido'
+                END as tipo_evento,
+                p.nome as produto_nome,
+                er.variante_embalada_nome as variante_nome,
+                er.quantidade_embalada as quantidade,
+                u.nome as usuario_nome,
+                er.observacao,
+                er.status
+            FROM embalagens_realizadas er
+            JOIN produtos p ON er.produto_embalado_id = p.id
+            JOIN usuarios u ON er.usuario_responsavel_id = u.id
+        `;
+
+        // 2. Estornos de Arremate (feitos a partir da página de embalagem, da tabela 'arremates')
+        const estornosArremateQuery = `
+            SELECT
+                a.id,
+                a.data_lancamento as data_evento,
+                'estorno_arremate' as tipo_evento,
+                p.nome as produto_nome,
+                a.variante as variante_nome,
+                a.quantidade_arrematada as quantidade,
+                a.lancado_por as usuario_nome,
+                'Estorno do lote ' || a.id_perda_origem as observacao,
+                'ATIVO' as status
+            FROM arremates a
+            JOIN produtos p ON a.produto_id = p.id
+            WHERE a.tipo_lancamento = 'ESTORNO'
+        `;
+
+        // 3. Estornos de Estoque (da tabela 'estoque_movimentos')
+        const estornosEstoqueQuery = `
+            SELECT
+                em.id,
+                em.data_movimento as data_evento,
+                'estorno_estoque' as tipo_evento,
+                p.nome as produto_nome,
+                em.variante_nome,
+                em.quantidade,
+                em.usuario_responsavel as usuario_nome,
+                em.observacao,
+                'ATIVO' as status
+            FROM estoque_movimentos em
+            JOIN produtos p ON em.produto_id = p.id
+            WHERE em.tipo_movimento LIKE 'ESTORNO_%'
+        `;
+
+        // Junta tudo em uma única query
+        const fullQuery = `
+            SELECT * FROM (
+                (${embalagensQuery})
+                UNION ALL
+                (${estornosArremateQuery})
+                UNION ALL
+                (${estornosEstoqueQuery})
+            ) as historico
+        `;
+
+        // --- APLICAÇÃO DOS FILTROS ---
+        let whereClauses = [];
+        let queryParams = [];
+        let paramIndex = 1;
+
+        // Filtro de Período
+        if (periodo === 'hoje') {
+            whereClauses.push(`data_evento >= date_trunc('day', NOW() AT TIME ZONE 'America/Sao_Paulo')`);
+        } else if (periodo === '30d') {
+            whereClauses.push(`data_evento >= NOW() - INTERVAL '30 days'`);
+        } else if (periodo === 'mes_atual') {
+            whereClauses.push(`date_trunc('month', data_evento) = date_trunc('month', NOW() AT TIME ZONE 'America/Sao_Paulo')`);
+        } else { // Padrão: 7d
+            whereClauses.push(`data_evento >= NOW() - INTERVAL '7 days'`);
+        }
+        
+        // Filtro por Tipo de Evento
+        if (tipoEvento !== 'todos') {
+            whereClauses.push(`tipo_evento = $${paramIndex++}`);
+            queryParams.push(tipoEvento);
+        }
+        
+        // Filtro por Usuário
+        if (usuarioId !== 'todos') {
+            // Precisamos buscar o nome do usuário a partir do ID
+            const userResult = await dbClient.query('SELECT nome FROM usuarios WHERE id = $1', [usuarioId]);
+            if (userResult.rows.length > 0) {
+                whereClauses.push(`usuario_nome = $${paramIndex++}`);
+                queryParams.push(userResult.rows[0].nome);
+            }
+        }
+        
+        const whereString = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+        
+        // Query de Contagem
+        const countQuery = `SELECT COUNT(*) FROM (${fullQuery}) as sub ${whereString}`;
+        const countResult = await dbClient.query(countQuery, queryParams);
+        const totalItems = parseInt(countResult.rows[0].count, 10);
+        
+        // Query de Dados com Paginação
+        const limitNum = parseInt(limit);
+        const offset = (parseInt(page) - 1) * limitNum;
+        const totalPages = Math.ceil(totalItems / limitNum) || 1;
+        
+        queryParams.push(limitNum, offset);
+        const dataQuery = `${fullQuery} ${whereString} ORDER BY data_evento DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+        
+        const dataResult = await dbClient.query(dataQuery, queryParams);
+        
+        res.status(200).json({
+            rows: dataResult.rows,
+            pagination: {
+                currentPage: parseInt(page),
+                totalPages: totalPages,
+                totalItems: totalItems
+            }
+        });
+
+    } catch (error) {
+        console.error('[API /embalagens/historico-geral] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar o histórico geral.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+router.get('/fila/contagem-antigos', async (req, res) => {
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        
+        const query = `
+            SELECT COUNT(*)
+            FROM (
+                SELECT 1
+                FROM arremates a
+                WHERE a.tipo_lancamento = 'PRODUCAO'
+                  AND a.data_lancamento < NOW() - INTERVAL '2 days'
+                GROUP BY a.produto_id, a.variante
+                HAVING SUM(a.quantidade_arrematada - a.quantidade_ja_embalada) > 0
+            ) as subquery;
+        `;
+        
+        const result = await dbClient.query(query);
+        res.status(200).json({ total: parseInt(result.rows[0].count, 10) || 0 });
+
+    } catch (error) {
+        console.error('[API /fila/contagem-antigos] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar contagem de itens antigos.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
 
 export default router;

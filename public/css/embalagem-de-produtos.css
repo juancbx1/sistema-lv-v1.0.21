@@ -88,15 +88,23 @@ body.autenticado {
 }
 
 .ep-cabecalho-pagina {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 25px;
     padding-bottom: 15px;
-    border-bottom: 2px solid var(--ep-cor-azul-primario);
+    border-bottom: 1px solid var(--ep-cor-cinza-borda);
 }
 
 .ep-cabecalho-pagina h1 {
-    font-size: 2rem;
+    font-size: 1.8rem;
     color: var(--ep-cor-azul-escuro);
     font-weight: 600;
+    border-bottom: none; /* Remove a linha azul antiga, se houver */
+}
+
+.ep-botoes-cabecalho {
+    display: flex;
 }
 
 .ep-card {
@@ -108,7 +116,7 @@ body.autenticado {
 }
 
 .ep-titulo-secao {
-    font-size: 1.6rem;
+    font-size: 1.4rem;
     color: var(--ep-cor-azul-escuro);
     margin-bottom: 15px;
     padding-bottom: 10px;
@@ -136,6 +144,21 @@ body.autenticado {
     text-align: center; 
     font-style: italic; 
     color: var(--ep-cor-cinza-texto);
+}
+
+/* Estilo para o botão da aba "Voltar para Arremate" */
+.ep-tab-btn.ep-btn-perigo-outline {
+    border: none;
+    border-bottom: 2px solid transparent; /* Mantém o comportamento das abas */
+    background-color: transparent;
+    color: var(--ep-cor-vermelho-perigo);
+    font-weight: 600;
+}
+.ep-tab-btn.ep-btn-perigo-outline.active {
+    border-bottom-color: var(--ep-cor-vermelho-perigo);
+}
+.ep-tab-btn.ep-btn-perigo-outline:hover:not(.active) {
+    color: var(--ep-cor-vermelho-hover);
 }
 
 /*------------------------------------*\
@@ -1266,11 +1289,28 @@ body.autenticado {
 
 /* Ajustes para o novo container de filtros */
 .ep-card-filtros {
+    position: relative; 
     padding: 20px;
 }
 .ep-card-filtros .ep-input-busca {
     margin: 0; /* Remove a margem auto para alinhar à esquerda */
     max-width: 450px;
+}
+
+/* --- Overlay de Carregamento para a Lista de Itens --- */
+.ep-lista-loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.8); /* Fundo branco semi-transparente */
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0 0 var(--ep-raio-borda-card) var(--ep-raio-borda-card);
+    transition: opacity 0.3s ease;
 }
 
 
@@ -1595,8 +1635,96 @@ body.autenticado {
 
 }
 
+/* --- ESTILOS PARA O MODAL DE HISTÓRICO GERAL --- */
+/* O .popup-container e .popup-overlay já vêm do popups.css, mas garantir aqui */
+.popup-container { display: none; }
+.popup-container.visivel { display: flex; }
+
+.ep-modal-historico {
+    background-color: var(--ep-cor-branco);
+    border-radius: var(--ep-raio-borda-container);
+    box-shadow: var(--ep-sombra-padrao);
+    width: 90%;
+    max-width: 900px;
+    z-index: 10001;
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh;
+    animation: popup-slide-in 0.3s ease-out;
+}
+
+.ep-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--ep-cor-cinza-borda);
+    flex-shrink: 0;
+}
+.ep-modal-titulo { font-size: 1.2rem; color: var(--ep-cor-azul-escuro); }
+.ep-modal-fechar-btn { background: none; border: none; font-size: 1.8rem; cursor: pointer; color: #aaa; }
+.ep-modal-fechar-btn:hover { color: var(--ep-cor-vermelho-perigo); }
+
+.ep-modal-filtros {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    padding: 15px 20px;
+    background-color: var(--ep-cor-cinza-fundo-alternativo);
+    border-bottom: 1px solid var(--ep-cor-cinza-borda);
+    flex-shrink: 0;
+}
+.ep-modal-filtros .ep-form-grupo { margin: 0; }
+
+.ep-modal-filtros .ep-form-grupo label { 
+    font-size: 0.8rem; 
+    margin: 5px 10px 0 0;
+}
+
+.ep-modal-filtros .ep-select { padding: 8px 10px; font-size: 0.9rem; }
+
+.ep-modal-body {
+    padding: 20px;
+    overflow-y: auto; /* Permite rolar a tabela */
+}
+
+.ep-modal-footer {
+    padding: 15px 20px;
+    border-top: 1px solid var(--ep-cor-cinza-borda);
+    background-color: var(--ep-cor-cinza-fundo-alternativo);
+    flex-shrink: 0;
+}
+
+/* --- Ajuste no botão de fechar do modal de histórico --- */
+.ep-modal-historico .ep-modal-fechar-btn {
+    background-color: var(--ep-cor-vermelho-perigo);
+    color: var(--ep-cor-branco);
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
+    font-weight: bold;
+    line-height: 32px; /* Centraliza o "X" */
+    text-align: center;
+    transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.ep-modal-historico .ep-modal-fechar-btn:hover {
+    background-color: var(--ep-cor-vermelho-hover);
+    transform: scale(1.1);
+}
+
+
 @media (max-width: 768px) { /* Mobile grande */
-    .ep-cabecalho-pagina h1 { font-size: 1.6rem; text-align: center; }
+    .ep-cabecalho-pagina {
+        flex-direction: column;
+        gap: 15px;
+        align-items: center; /* Centraliza no mobile */
+    }
+    .ep-cabecalho-pagina h1 { 
+        font-size: 1.6rem; 
+        text-align: center; 
+    }
     .ep-titulo-secao { font-size: 1.3rem; text-align: center; }
     .ep-descricao-secao { font-size: 0.9rem; }
     .ep-card { padding: 15px; }
@@ -1726,6 +1854,8 @@ body.autenticado {
         display: flex; /* Alinha o label e o valor */
         justify-content: space-between;
         align-items: center;
+        font-size: 0.75rem;
+        font-weight: 500;
     }
 
     #historicoEmbalagemContainer .ep-tabela-estilizada td:last-child {
@@ -1744,11 +1874,127 @@ body.autenticado {
     #historicoEmbalagemContainer .ep-tabela-estilizada td[data-label="Ações"] {
         justify-content: flex-end; /* Alinha o botão de estorno à direita */
     }
+
+     /* Seleciona a tabela dentro da  nova aba */
+    #retornarArremateContainer .ep-tabela-estilizada thead {
+        display: none;
+    }
+
+    #retornarArremateContainer .ep-tabela-estilizada tr {
+        display: block;
+        margin-bottom: 15px;
+        border: 1px solid var(--ep-cor-cinza-borda);
+        border-radius: var(--ep-raio-borda-card);
+        padding: 15px;
+        box-shadow: var(--ep-sombra-padrao);
+    }
+
+    #retornarArremateContainer .ep-tabela-estilizada td {
+        display: flex;
+        /* Alinha o rótulo à esquerda e o valor à direita */
+        justify-content: space-between; 
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px dotted #e9ecef;
+        text-align: left;
+    }
+    #retornarArremateContainer .ep-tabela-estilizada tr td:last-child {
+        border-bottom: none;
+    }
+
+    /* O RÓTULO (ex: "Data:") */
+    #retornarArremateContainer .ep-tabela-estilizada td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: var(--ep-cor-cinza-texto-secundario);
+        /* Permite que o rótulo encolha se necessário */
+        flex-shrink: 1; 
+        margin-right: 10px; /* Garante um espaço */
+    }
+
+    /* O VALOR (o texto dentro do <span>) */
+    #retornarArremateContainer .ep-tabela-estilizada td span {
+        text-align: right;
+        font-weight: 500;
+        color: var(--ep-cor-texto-principal);
+        /* IMPORTANTE: Permite que o valor quebre a linha se for muito longo */
+        word-break: break-word; 
+        /* Ocupa o espaço disponível, mas pode encolher */
+        flex-grow: 1;
+        flex-shrink: 1;
+        font-size: 0.75rem;
+    }
+    
+    /* Estilo para a linha de Ações */
+    #retornarArremateContainer .ep-tabela-estilizada td[data-label="Ações"] {
+        /* Remove o espaço entre "falso" */
+        justify-content: flex-end; 
+    }
+    #retornarArremateContainer .ep-tabela-estilizada td[data-label="Ações"]::before {
+        display: none; /* Não precisamos do rótulo "Ações" */
+    }
+
+    /* Botão com tamanho decente, sem ocupar 100% */
+    #retornarArremateContainer .ep-tabela-estilizada .ep-btn {
+        padding: 8px 18px;
+        font-size: 0.9rem;
+        flex-shrink: 0; /* Impede que o botão seja espremido */
+    }
+
+     #retornarArremateContainer .ep-tabela-estilizada {
+        min-width: 100%; /* Reseta a largura mínima para ocupar apenas o espaço disponível */
+    }
+
+    /* Seleciona a tabela dentro do modal */
+    .ep-modal-body .ep-tabela-estilizada thead {
+        display: none; /* Esconde o cabeçalho */
+    }
+
+    .ep-modal-body .ep-tabela-estilizada tr {
+        display: block;
+        margin-bottom: 15px;
+        border: 1px solid var(--ep-cor-cinza-borda);
+        border-radius: var(--ep-raio-borda-card);
+        padding: 15px;
+        box-shadow: var(--ep-sombra-padrao);
+    }
+
+    .ep-modal-body .ep-tabela-estilizada td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px dotted #e9ecef;
+        text-align: right;
+        font-size: 0.75rem;
+    }
+    .ep-modal-body .ep-tabela-estilizada tr td:last-child {
+        border-bottom: none;
+    }
+
+    .ep-modal-body .ep-tabela-estilizada td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: var(--ep-cor-cinza-texto-secundario);
+        text-align: left;
+        margin-right: 10px;
+    }
 }
 
 @media (max-width: 480px) { /* Smartphones médios e menores */
     .ep-container-principal {
         padding: 12px; /* Um pouco menos de padding */
+    }
+
+    .ep-botoes-cabecalho .ep-btn span {
+        display: none; /* Esconde o texto "Histórico Geral" */
+    }
+    .ep-botoes-cabecalho .ep-btn {
+        border-radius: 50%;
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        font-size: 1.1rem;
     }
 
     .ep-section-description {
@@ -1921,8 +2167,8 @@ body.autenticado {
     }
     /* Botão fechar já tem estilos responsivos, mas pode precisar de ajuste fino */
     #embalarDetalheView .botao-fechar {
-        top: 12px;
-        right: 12px;
+        top: 40px;
+        right: 10px;
         width: 30px;
         height: 30px;
         line-height: 30px; /* Importante para centralizar o X */
@@ -1950,9 +2196,10 @@ body.autenticado {
         font-size: 1rem;
     }
     .ep-input-com-acoes {
-        flex-direction: column; /* Empilha o input e o botão "Tudo" */
+        /* flex-direction: column; */
         gap: 8px;
-        align-items: stretch; /* Faz o botão "Tudo" ocupar a largura */
+        /* align-items: stretch; */
+        justify-self: center;
     }
     .ep-input.ep-input-grande {
         font-size: 1.3rem;
@@ -1991,7 +2238,7 @@ body.autenticado {
         max-height: 200px; /* Reduz altura da tabela */
     }
     .ep-tabela-estilizada th, .ep-tabela-estilizada td {
-        font-size: 0.8rem; /* Fonte menor na tabela */
+        font-size: 0.7rem; /* Fonte menor na tabela */
         padding: 6px 8px;
     }
     .ep-status-componente {
@@ -2017,7 +2264,6 @@ body.autenticado {
         grid-template-rows: auto auto; /* Duas linhas */
         gap: 0 15px; /* Espaço entre as colunas, sem espaço entre as linhas */
         text-align: left; /* Alinha o texto à esquerda no mobile */
-        border-left-width: 4px; /* Borda lateral um pouco mais fina */
     }
 
     .ep-info-card-icone {
@@ -2060,6 +2306,9 @@ body.autenticado {
     }
     /* FIM DO AJUSTE PARA OS CARDS DO PAINEL DE INFORMAÇÕES */
     
+    .ep-tabela-estilizada {
+    min-width: 250px;
+}
 
 }
 /* ****** FIM BREAKPOINT 480px ****** */
@@ -2175,4 +2424,3 @@ body.autenticado {
         font-size: 0.9rem;
     }
 }
-/* ****** FIM BREAKPOINT 414px ****** */

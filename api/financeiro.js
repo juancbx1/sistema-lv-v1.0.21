@@ -6,8 +6,6 @@ import jwt from 'jsonwebtoken';
 import express from 'express';
 import { getPermissoesCompletasUsuarioDB } from './usuarios.js'; // Importe a função de permissões
 
-console.log('✅ [API Financeiro] Arquivo api/financeiro.js carregado pelo servidor.');
-
 const router = express.Router();
 const pool = new Pool({
     connectionString: process.env.POSTGRES_URL,
@@ -156,12 +154,9 @@ router.use(async (req, res, next) => {
 router.get('/concessionarias-vt', async (req, res) => {
     let dbClient;
     try {
-        console.log("[BACKEND /concessionarias-vt] Rota acionada."); // LOG
         dbClient = await pool.connect();
         const result = await dbClient.query('SELECT * FROM config_concessionarias_vt ORDER BY nome');
-        
-        console.log(`[BACKEND /concessionarias-vt] Encontradas ${result.rowCount} concessionárias.`); // LOG
-        
+                
         res.status(200).json(result.rows);
     } catch (error) {
         console.error("[BACKEND /concessionarias-vt] ERRO:", error); // LOG
@@ -863,7 +858,6 @@ router.put('/lancamentos/:id', async (req, res) => {
         
         if (req.permissoesUsuario.includes('aprovar-alteracao-financeira')) {
             // FLUXO DO ADMIN: Edita diretamente
-            console.log(`[Lançamento #${id}] Edição direta por usuário com permissão: ${req.usuarioLogado.nome}`);
             const { valor, data_transacao, id_categoria, id_conta_bancaria, descricao, id_contato } = novosDados;
             
             const queryUpdate = `
@@ -881,7 +875,6 @@ router.put('/lancamentos/:id', async (req, res) => {
             });
         } else {
             // FLUXO DO USUÁRIO COMUM: Sempre solicita aprovação
-            console.log(`[Lançamento #${id}] Solicitação de edição por usuário comum: ${req.usuarioLogado.nome}`);
             const solRes = await dbClient.query(
                 `INSERT INTO fc_solicitacoes_alteracao 
                     (id_lancamento, tipo_solicitacao, dados_antigos, dados_novos, id_usuario_solicitante) 
@@ -930,7 +923,6 @@ router.post('/lancamentos/:id/solicitar-exclusao', async (req, res) => {
         }
 
         if (req.permissoesUsuario.includes('aprovar-alteracao-financeira')) {
-            console.log(`[ADMIN FLOW] Tentando excluir diretamente o lançamento #${id}...`);
             await registrarLog(dbClient, req.usuarioLogado.id, req.usuarioLogado.nome, 'EXCLUSAO_DIRETA_LANCAMENTO', { lancamento: lancamentoOriginal });
 
             // PASSO 1: Desvincular de contas agendadas (se houver vínculo)
@@ -946,7 +938,6 @@ router.post('/lancamentos/:id/solicitar-exclusao', async (req, res) => {
             return res.status(200).json({ message: 'Lançamento excluído com sucesso. A conta agendada original, se existir, voltou a ficar pendente.' });
         } else {
             // FLUXO DO USUÁRIO COMUM (sem alteração)
-            console.log(`[USER FLOW] Solicitação de exclusão para o lançamento #${id}...`);
             if (!justificativa || justificativa.trim() === '') {
                 await dbClient.query('ROLLBACK');
                 return res.status(400).json({ error: 'A justificativa é obrigatória para solicitar a exclusão.' });
@@ -995,7 +986,6 @@ router.post('/lancamentos/:id/estornar', async (req, res) => {
 
         // FLUXO DO ADMIN: Executa diretamente (sem mudanças aqui)
         if (req.permissoesUsuario.includes('aprovar-alteracao-financeira')) {
-            console.log(`[ADMIN FLOW] Estorno direto para lançamento #${idLancamentoOriginal} por ${req.usuarioLogado.nome}`);
             
             const estornoQuery = `INSERT INTO fc_lancamentos (id_conta_bancaria, id_categoria, tipo, valor, data_transacao, descricao, id_contato, id_usuario_lancamento, id_estorno_de) VALUES ($1, $2, 'RECEITA', $3, $4, $5, $6, $7, $8) RETURNING *;`;
             const descricaoEstorno = `Estorno do lançamento #${idLancamentoOriginal}: ${lancamentoOriginal.descricao}`;
@@ -1010,7 +1000,6 @@ router.post('/lancamentos/:id/estornar', async (req, res) => {
         } 
         // FLUXO DO USUÁRIO COMUM: Cria uma solicitação
         else {
-            console.log(`[USER FLOW] Solicitação de estorno para lançamento #${idLancamentoOriginal} por ${req.usuarioLogado.nome}`);
 
             const solRes = await dbClient.query(
                 `INSERT INTO fc_solicitacoes_alteracao (id_lancamento, tipo_solicitacao, dados_antigos, dados_novos, id_usuario_solicitante) VALUES ($1, 'ESTORNO', $2, $3, $4) RETURNING *;`,
@@ -1068,7 +1057,6 @@ router.post('/lancamentos/:id/reverter-estorno', async (req, res) => {
         
         // FLUXO DO ADMIN: Executa diretamente
         if (req.permissoesUsuario.includes('aprovar-alteracao-financeira')) {
-            console.log(`[ADMIN FLOW] Reversão direta para estorno #${idLancamentoEstorno} por ${req.usuarioLogado.nome}`);
             
             await dbClient.query('DELETE FROM fc_lancamentos WHERE id = $1', [idLancamentoEstorno]);
             await dbClient.query("UPDATE fc_lancamentos SET status_edicao = 'OK' WHERE id = $1", [lancamentoEstorno.id_estorno_de]);
@@ -1080,8 +1068,6 @@ router.post('/lancamentos/:id/reverter-estorno', async (req, res) => {
         }
         // FLUXO DO USUÁRIO COMUM: Cria uma solicitação
         else {
-            console.log(`[USER FLOW] Solicitação de reversão para estorno #${idLancamentoEstorno} por ${req.usuarioLogado.nome}`);
-
             // Aqui, o 'id_lancamento' na solicitação é o ID do ESTORNO (que queremos apagar)
             const solRes = await dbClient.query(
                 `INSERT INTO fc_solicitacoes_alteracao (id_lancamento, tipo_solicitacao, dados_antigos, id_usuario_solicitante) VALUES ($1, 'REVERSAO_ESTORNO', $2, $3) RETURNING *;`,
@@ -1823,31 +1809,23 @@ router.put('/lotes/:id/descricao', async (req, res) => {
 
 // GET /api/financeiro/aprovacoes-pendentes
 router.get('/aprovacoes-pendentes', async (req, res) => {
-    console.log('[API GET /aprovacoes-pendentes] Rota acessada.');
 
     if (!req.permissoesUsuario || !req.permissoesUsuario.includes('aprovar-alteracao-financeira')) {
         console.error('[API GET /aprovacoes-pendentes] Falha de permissão. Usuário não tem "aprovar-alteracao-financeira".');
         return res.status(403).json({ error: 'Permissão negada.' });
     }
-    console.log('[API GET /aprovacoes-pendentes] Verificação de permissão OK.');
     
     let dbClient;
     try {
-        console.log('[API GET /aprovacoes-pendentes] Conectando ao banco...');
         dbClient = await pool.connect();
-        console.log('[API GET /aprovacoes-pendentes] Conexão com banco OK.');
-
         const query = `
             SELECT sa.*, u.nome as nome_solicitante
             FROM fc_solicitacoes_alteracao sa
             JOIN usuarios u ON sa.id_usuario_solicitante = u.id
             WHERE sa.status = 'PENDENTE'
             ORDER BY sa.data_solicitacao ASC;
-        `;
-        
-        console.log('[API GET /aprovacoes-pendentes] Executando query...');
+        `;     
         const result = await dbClient.query(query);
-        console.log(`[API GET /aprovacoes-pendentes] Query executada com sucesso. Encontradas ${result.rowCount} solicitações.`);
         
         res.status(200).json(result.rows);
 
@@ -1858,7 +1836,6 @@ router.get('/aprovacoes-pendentes', async (req, res) => {
     } finally {
         if (dbClient) {
             dbClient.release();
-            console.log('[API GET /aprovacoes-pendentes] Conexão com banco liberada.');
         }
     }
 });

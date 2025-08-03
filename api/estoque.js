@@ -157,6 +157,7 @@ router.post('/arquivar-item', async (req, res) => {
 
 
 // POST /api/estoque/entrada-producao
+// POST /api/estoque/entrada-producao - VERSÃO CORRIGIDA
 router.post('/entrada-producao', async (req, res) => {
     const { usuarioLogado } = req;
     let dbClient;
@@ -167,13 +168,13 @@ router.post('/entrada-producao', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada para registrar entrada de produção.' });
         }
 
-        // Recebe o novo campo produto_ref_id do body
+        // Recebe os campos do body
         const { produto_id, variante_nome, quantidade_entrada, id_arremate_origem, observacao, produto_ref_id } = req.body;
 
+        // Validações
         if (!produto_id || quantidade_entrada === undefined || !produto_ref_id) {
             return res.status(400).json({ error: 'Campos obrigatórios: produto_id, quantidade_entrada e produto_ref_id (SKU).' });
         }
-        
         const quantidade = parseInt(quantidade_entrada);
         if (isNaN(quantidade) || quantidade <= 0) {
             return res.status(400).json({ error: 'Quantidade de entrada deve ser um número positivo.' });
@@ -183,20 +184,22 @@ router.post('/entrada-producao', async (req, res) => {
         
         await dbClient.query('BEGIN');
 
-        // 1. Insere o movimento no estoque e retorna o ID
+        // <<< A CORREÇÃO ESTÁ AQUI >>>
+        // A query agora tem 7 colunas e 7 placeholders ($1 a $7)
         const movimentoQueryText = `
             INSERT INTO estoque_movimentos 
                 (produto_id, variante_nome, quantidade, tipo_movimento, origem_arremate_id, usuario_responsavel, observacao)
-            VALUES ($1, $2, $3, 'ENTRADA_PRODUCAO_ARREMATE', $4, $5, $6)
+            VALUES ($1, $2, $3, 'ENTRADA_PRODUCAO', $4, $5, $6)
             RETURNING id;
         `;
+        // O tipo de movimento pode ser simplesmente 'ENTRADA_PRODUCAO'
         const movimentoResult = await dbClient.query(movimentoQueryText, [
             parseInt(produto_id), 
             varianteParaDB, 
             quantidade,
-            id_arremate_origem || null,
+            id_arremate_origem || null, // Passando o ID do arremate
             (usuarioLogado.nome || usuarioLogado.nome_usuario),
-            observacao || null
+            observacao || `Embalagem de ${quantidade} unidade(s)`
         ]);
 
         if (movimentoResult.rows.length === 0) {
@@ -204,7 +207,7 @@ router.post('/entrada-producao', async (req, res) => {
         }
         const novoMovimentoId = movimentoResult.rows[0].id;
 
-        // 2. Insere o registro em 'embalagens_realizadas' COM o SKU (produto_ref_id)
+        // O resto da lógica para inserir em 'embalagens_realizadas' já está correta no seu código
         const embalagemQueryText = `
             INSERT INTO embalagens_realizadas
                 (tipo_embalagem, produto_embalado_id, variante_embalada_nome, produto_ref_id, quantidade_embalada, 
@@ -214,7 +217,7 @@ router.post('/entrada-producao', async (req, res) => {
         await dbClient.query(embalagemQueryText, [
             parseInt(produto_id),
             varianteParaDB,
-            produto_ref_id, // SALVANDO O SKU AQUI
+            produto_ref_id,
             quantidade,
             usuarioLogado.id,
             observacao || null,
@@ -223,17 +226,13 @@ router.post('/entrada-producao', async (req, res) => {
 
         await dbClient.query('COMMIT'); 
 
-        console.log(`[API /estoque/entrada-producao] Sucesso: Movimento ${novoMovimentoId} e registro de embalagem de UNIDADE criados.`);
         res.status(201).json({ 
             message: 'Entrada de produção registrada com sucesso.',
             movimento_estoque_id: novoMovimentoId 
         });
 
     } catch (error) {
-        if (dbClient) {
-            console.error('[API /estoque/entrada-producao] Erro detectado, executando ROLLBACK.');
-            await dbClient.query('ROLLBACK');
-        }
+        if (dbClient) await dbClient.query('ROLLBACK');
         console.error('[API /estoque/entrada-producao] Erro:', error);
         res.status(500).json({ error: 'Erro ao registrar entrada no estoque.', details: error.message });
     } finally {

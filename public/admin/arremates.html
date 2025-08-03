@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ordens de Arremate</title>
+    <link rel="stylesheet" href="/css/arremates.css"> 
+    <link rel="stylesheet" href="/css/menu-lateral.css">
+    <link rel="stylesheet" href="/css/popups.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div class="hamburger-menu">
+        <i class="fas fa-bars"></i>
+        <i class="fas fa-times"></i>
+    </div>
+
+    <main class="oa-container-principal">
+        <!-- NOVO: Overlay de carregamento da página inteira -->
+        <div id="paginaLoadingOverlay" class="oa-page-loading-overlay">
+            <div class="spinner">Carregando dados...</div>
+        </div>
+
+    <!-- O resto do seu código continua aqui... -->
+        <!-- NOVO: "Card Mestre" que engloba todo o conteúdo da página -->
+        <div class="oa-main-content-card">
+
+            <!-- View Principal: Lista de Arremates -->
+            <section id="arrematesListView">
+                <div class="oa-cabecalho-pagina">
+                    <h1>Arremates</h1>
+                    <div class="oa-botoes-cabecalho">
+                        <button id="btnAbrirHistorico" class="oa-btn oa-btn-secundario">
+                            <i class="fas fa-clipboard-list"></i> 
+                            <span>Histórico</span>
+                        </button>
+                    </div>
+                </div>
+
+            <!-- NOVO PAINEL DE INFORMAÇÕES (DASHBOARD) -->
+            <div class="oa-painel-info-container">
+                <div class="oa-info-card principal">
+                    <i class="fas fa-box-open oa-info-card-icone"></i>
+                    <h3>Produtos na Fila</h3>
+                    <span class="oa-info-card-contador" id="contadorProdutosFila">0</span>
+                    <p class="oa-info-card-descricao">Grupos de produto/variação pendentes.</p>
+                </div>
+                <div class="oa-info-card alerta">
+                    <i class="fas fa-boxes oa-info-card-icone"></i>
+                    <h3>Peças Pendentes</h3>
+                    <span class="oa-info-card-contador" id="contadorPecasPendentes">0</span>
+                    <p class="oa-info-card-descricao">Soma de todas as unidades a arrematar.</p>
+                </div>
+                <div class="oa-info-card sucesso">
+                    <i class="fas fa-check-double oa-info-card-icone"></i>
+                    <h3>Arrematado Hoje</h3>
+                    <span class="oa-info-card-contador" id="contadorArrematadoHoje">0</span>
+                    <p class="oa-info-card-descricao">Total de unidades lançadas hoje.</p>
+                </div>
+            </div>
+
+                <!-- CONTAINER PARA A LISTA DE ITENS, INCLUINDO FILTROS -->
+            <div class="oa-card oa-card-filtros">
+                
+                <!-- CABEÇALHO DA SEÇÃO DE ITENS, COM BOTÃO DE ATUALIZAR -->
+                <div class="oa-secao-header">
+                    <h2 class="oa-titulo-secao">Itens na Fila</h2>
+                    <button id="btnAtualizarArremates" class="oa-btn-atualizar">
+                        <i class="fas fa-sync-alt"></i>
+                        <span>Atualizar</span>
+                    </button>
+                </div>
+
+                <!-- LINHA PARA BUSCA E BOTÃO DE FILTROS AVANÇADOS -->
+                <div class="oa-filtros-linha">
+                    <div class="oa-form-grupo" style="flex-grow: 1;">
+                        <input type="text" id="searchProdutoArremate" class="oa-input-busca" placeholder="Buscar por produto ou variação...">
+                    </div>
+                    <button id="toggleFiltrosAvancadosBtn" class="oa-btn-filtros">
+                        <i class="fas fa-filter"></i>
+                        <span>Filtros Avançados</span>
+                    </button>
+                </div>
+
+                <!-- CONTAINER DOS FILTROS AVANÇADOS (COMEÇA ESCONDIDO) -->
+                <div id="filtrosAvancadosContainer" class="oa-filtros-avancados-container hidden">
+                    <div class="oa-form-grupo">
+                        <label for="ordenacaoSelect">Ordenar por</label>
+                        <select id="ordenacaoSelect" class="oa-select">
+                            <option value="mais_recentes" selected>Mais Recentes Primeiro</option>
+                            <option value="mais_antigos">Mais Antigos Primeiro</option>
+                            <option value="maior_quantidade">Maior Quantidade</option>
+                            <option value="menor_quantidade">Menor Quantidade</option>
+                            <option value="alfabetica">Ordem Alfabética (A-Z)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="oa-form-grupo" style="justify-content: flex-end;">
+                        <button id="limparFiltrosBtn" class="oa-btn-limpar-filtros">
+                            <i class="fas fa-times-circle"></i> Limpar Filtros
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CONTAINER ONDE OS CARDS DE ITENS SERÃO RENDERIZADOS -->
+                <div id="arremateCardsContainer" class="oa-cards-container-arremate">
+                    <div class="spinner">Carregando itens para arremate...</div>
+                </div>
+
+                <!-- CONTAINER DA PAGINAÇÃO -->
+                <div id="arrematePaginationContainer" class="oa-paginacao-container" style="display: none;">
+                    <!-- Paginação será inserida aqui pelo JS -->
+                </div>
+
+            </div> <!-- Fim do .oa-card-filtros -->
+
+            </section>
+
+           
+            
+            <!-- NOVA SEÇÃO DE DETALHES COM ABAS -->
+<section class="hidden" id="arremateDetalheView">
+    <!-- CABEÇALHO DA VIEW DE DETALHE -->
+    <div class="oa-detalhe-header">
+        <div class="oa-detalhe-thumbnail" id="arremateDetalheThumbnail">
+            <!-- Imagem será preenchida pelo JS -->
+        </div>
+        <div class="oa-detalhe-info">
+            <h2 id="arremateProdutoNomeDetalhe">[Produto]</h2>
+            <p id="arremateVarianteNomeDetalhe">[Variante]</p>
+        </div>
+        <div class="oa-detalhe-saldo">
+            <label>PENDENTE DE ARREMATE</label>
+            <span id="arremateTotalPendenteAgregado">0</span>
+        </div>
+        <button class="botao-fechar oa-btn-perigo" id="fecharArremateDetalheBtn" title="Voltar para Lista">X</button>
+    </div>
+    <hr class="oa-divisor">
+
+    <!-- ABAS DE NAVEGAÇÃO -->
+    <div class="oa-tabs">
+        <button class="oa-tab-btn active" data-tab="lancar">Lançar Arremate</button>
+        <button class="oa-tab-btn" data-tab="ajuste">Registrar Ajuste</button>
+        <button class="oa-tab-btn" data-tab="historico-produto">Histórico do Produto</button>
+    </div>
+
+    <!-- PAINÉIS DAS ABAS -->
+    <div class="oa-tab-paineis">
+        <!-- ABA 1: LANÇAR ARREMATE -->
+        <div class="oa-tab-panel active" id="lancar-tab">
+            <form id="formLancarArremate" class="oa-form-acao">
+                <div class="oa-form-grupo">
+                    <label for="selectUsuarioArremate">Feito Por (Tiktik):</label>
+                    <select id="selectUsuarioArremate" class="oa-select" required></select>
+                </div>
+                <div class="oa-form-grupo">
+                    <label for="inputQuantidadeArrematar">Quantidade a Lançar:</label>
+                    <input type="number" id="inputQuantidadeArrematar" class="oa-input oa-input-grande oa-input-qtd" min="1" required placeholder="Qtd.">                </div>
+                <div class="oa-form-botoes">
+                    <button type="button" id="btnLancarArremateAgregado" class="oa-btn oa-btn-sucesso oa-btn-grande">
+                        <i class="fas fa-check"></i> Lançar Arremate
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- ABA 2: REGISTRAR AJUSTE (PERDA / LANÇAMENTO ERRADO) -->
+        <div class="oa-tab-panel" id="ajuste-tab">
+            <form id="formRegistrarAjuste" class="oa-form-acao">
+                <p class="oa-form-instrucao">Use esta opção para corrigir o saldo, seja por uma perda física ou por um lançamento de produção que foi feito por engano.</p>
+                <div class="oa-form-grupo">
+                    <label for="selectMotivoAjuste">Motivo do Ajuste</label>
+                    <select id="selectMotivoAjuste" class="oa-select" required>
+                        <option value="" disabled selected>Selecione um motivo...</option>
+                        <option value="PRODUTO_AVARIADO">Perda - Produto Avariado</option>
+                        <option value="DIVERGENCIA_SALDO">Perda - Divergência de Saldo</option>
+                        <option value="LANCAMENTO_ERRADO">Ajuste - Lançamento Errado</option>
+                    </select>
+                </div>
+                <div class="oa-form-grupo">
+                    <label for="inputQuantidadeAjuste">Quantidade a ser Descontada</label>
+                    <input type="number" id="inputQuantidadeAjuste" class="oa-input" min="1" required placeholder="Qtd. a descontar">
+                </div>
+                <div class="oa-form-grupo">
+                    <label for="textareaObservacaoAjuste">Observação (Opcional)</label>
+                    <textarea id="textareaObservacaoAjuste" class="oa-textarea oa-input" rows="2" placeholder="Ex: Peça rasgada, contagem errada na produção..."></textarea>
+                </div>
+                <div class="oa-form-botoes">
+                    <button type="button" id="btnConfirmarRegistroAjuste" class="oa-btn oa-btn-perigo">
+                        <i class="fas fa-save"></i> Confirmar Ajuste de Saldo
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- ABA 3: HISTÓRICO DO PRODUTO -->
+            <div class="oa-tab-panel" id="historico-produto-tab">
+                
+                <!-- Container para a tabela de resultados -->
+                <div id="historicoProdutoContainer" class="oa-tabela-wrapper">
+                    <!-- O JavaScript irá inserir a tabela ou o spinner aqui -->
+                    <div class="spinner">Carregando histórico do produto...</div>
+                </div>
+
+                <!-- Container para os botões de paginação -->
+                <div id="historicoProdutoPaginacao" class="oa-paginacao-container" style="margin-top: 20px; display: none;">
+                    <!-- O JavaScript irá inserir os botões de paginação aqui -->
+                </div>
+                
+            </div>
+
+
+    </div>
+</section>
+
+
+        </div> <!-- Fim do oa-main-content-card -->
+
+        <!-- MODAL DE HISTÓRICO GERAL DE ARREMATES -->
+            <div id="historicoArrematesModalContainer" class="popup-container" style="display: none;">
+                <div class="popup-overlay"></div>
+                <div class="oa-modal-historico">
+                    <div class="oa-modal-header">
+                        <h3 class="oa-modal-titulo">Histórico Geral de Arremates</h3>
+                        <button id="btnFecharHistoricoArremates" class="oa-modal-fechar-btn">X</button>
+                    </div>
+                    
+                    <!-- Filtros do Modal -->
+                    <div class="oa-modal-filtros">
+                        <div class="oa-form-grupo" style="flex-grow: 2;">
+                            <label for="filtroBuscaHistorico">Buscar por Produto ou Usuário</label>
+                            <input type="text" id="filtroBuscaHistorico" class="oa-input" placeholder="Digite para buscar...">
+                        </div>
+                        <div class="oa-form-grupo">
+                            <label for="filtroTipoEventoHistorico">Tipo de Evento</label>
+                            <select id="filtroTipoEventoHistorico" class="oa-select">
+                                <option value="todos">Todos os Eventos</option>
+                                <option value="PRODUCAO">Lançamentos</option>
+                                <option value="PERDA">Perdas</option>
+                                <option value="ESTORNO">Estornos</option>
+                            </select>
+                        </div>
+                        <div class="oa-form-grupo">
+                            <label for="filtroPeriodoHistorico">Período</label>
+                            <select id="filtroPeriodoHistorico" class="oa-select">
+                                <option value="7d">Últimos 7 dias</option>
+                                <option value="hoje">Hoje</option>
+                                <option value="30d">Últimos 30 dias</option>
+                                <option value="mes_atual">Este Mês</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="oa-modal-body">
+                        <div id="historicoArrematesTabelaWrapper" class="oa-tabela-wrapper">
+                            <!-- Tabela de resultados será inserida aqui -->
+                        </div>
+                    </div>
+
+                    <div class="oa-modal-footer">
+                        <div id="historicoArrematesPaginacao" class="oa-paginacao-container">
+                            <!-- Paginação será inserida aqui -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal para Registrar Perda no Arremate -->
+            <div id="modalRegistrarPerda" class="hidden">
+                <div class="oa-popup-overlay"></div>
+                <div class="oa-modal">
+                    <div class="oa-modal-header">
+                        <h3 class="oa-modal-titulo">Registrar Perda no Arremate</h3>
+                        <button id="btnFecharModalPerda" class="oa-modal-fechar-btn">×</button>
+                    </div>
+                    <div class="oa-modal-body">
+                        <form id="formRegistrarPerda">
+                            <p id="infoProdutoModalPerda" style="text-align: center; font-weight: 500; margin-bottom: 20px;"></p>
+                            <div class="oa-form-grupo">
+                                <label for="selectMotivoPerda">Motivo da Perda</label>
+                                <select id="selectMotivoPerda" class="oa-select" required>
+                                    <option value="" disabled selected>Selecione um motivo...</option>
+                                    <option value="PRODUTO_AVARIADO">Produto Avariado</option>
+                                    <option value="DIVERGENCIA_SALDO">Divergência de Saldo</option>
+                                </select>
+                            </div>
+                            <div class="oa-form-grupo">
+                                <label for="inputQuantidadePerdida">Quantidade a ser Descontada</label>
+                                <input type="number" id="inputQuantidadePerdida" class="oa-input" min="1" required placeholder="Qtd. perdida">
+                            </div>
+                            <div class="oa-form-grupo">
+                                <label for="textareaObservacaoPerda">Observação (Opcional)</label>
+                                <textarea id="textareaObservacaoPerda" class="oa-textarea" rows="3" placeholder="Ex: Peça rasgada, contagem errada..."></textarea>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="oa-modal-footer">
+                        <button type="button" id="btnConfirmarRegistroPerda" class="oa-btn oa-btn-perigo">
+                            <i class="fas fa-save"></i> Confirmar Perda
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+    </main>
+
+    <script src="/js/admin-arremates.js" type="module"></script>
+    <script src="/js/carregar-menu-lateral.js" type="module"></script>
+</body>
+</html>
