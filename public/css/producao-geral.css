@@ -1,0 +1,866 @@
+/* public/css/producao-geral.css */
+
+/* ==========================================================================
+   # CABEÇALHO RESPONSIVO (MODIFICADO)
+   ========================================================================== */
+.pg-cabecalho-pagina {
+    /* Por padrão, no desktop, ele já funciona bem (flex-direction: row) */
+    flex-wrap: wrap; /* Permite quebrar se necessário */
+    gap: 15px;
+}
+
+.pg-botoes-cabecalho {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+/* Estilos para o cabeçalho do card de atividades */
+.pg-atividades-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px; /* Substitui a margem do h2 */
+}
+
+.pg-atividades-header h2 {
+    margin-bottom: 0; /* Remove a margem do título */
+}
+
+/* Sobrescreve o padding do .gs-card especificamente para o container do feed de atividades, sem afetar outros cards.*/
+.pg-coluna-principal > .gs-card {
+    padding: 20px; 
+}
+
+.pg-coluna-lateral > .gs-card {
+    padding: 15px; 
+}
+
+.pg-indicador-att {
+    font-size: 0.8rem;
+    color: var(--gs-texto-secundario);
+    font-style: italic;
+}
+
+/* ==========================================================================
+   # NOVOS FILTROS DE MOMENTOS-CHAVE
+   ========================================================================== */
+.pg-momentos-chave-filtros {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 20px; 
+    margin-bottom: 25px;
+}
+
+.pg-momento-btn {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    border: 1px solid var(--gs-borda);
+    border-radius: 50px; /* Formato pílula */
+    background-color: var(--gs-fundo-input);
+    color: var(--gs-texto-secundario);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.pg-momento-btn:hover {
+    background-color: #e9ecef;
+    border-color: #ced4da;
+}
+
+.pg-momento-btn.ativo {
+    background-color: var(--gs-primaria);
+    color: var(--gs-branco);
+    border-color: var(--gs-primaria);
+    font-weight: 600;
+}
+
+
+/* ==========================================================================
+   # LAYOUT PRINCIPAL E OVERLAY DE LOADING
+   ========================================================================== */
+.pg-container-principal {
+    padding: 15px; /* Padding para mobile */
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+/* ==========================================================================
+   # ESTILOS BASE (MOBILE FIRST)
+   ========================================================================== */
+
+/* Layout do Dashboard */
+.pg-dashboard-layout {
+    display: flex;
+    flex-direction: column; /* Em mobile, tudo é uma coluna só */
+    gap: 25px;
+}
+
+/* Spinner de carregamento */
+.pg-spinner {
+    width: 24px; height: 24px; border: 3px solid var(--gs-borda); border-top-color: var(--gs-primaria);
+    border-radius: 50%; animation: pg-spin 1s linear infinite; margin: 20px auto;
+}
+@keyframes pg-spin { to { transform: rotate(360deg); } }
+
+/* Filtro de data */
+.pg-filtro-data {
+    padding: 8px 12px; border-radius: var(--gs-raio-borda-input); border: 1px solid var(--gs-borda);
+    font-size: 1rem; background-color: var(--gs-fundo-input);
+}
+
+/* Abas */
+.pg-tabs { display: flex; border-bottom: 2px solid var(--gs-borda); margin-bottom: 20px; }
+.pg-tab-btn {
+    flex-grow: 1; padding: 12px 10px; font-size: 0.9rem; font-weight: 600; border: none;
+    background-color: transparent; cursor: pointer; color: var(--gs-texto-secundario);
+    border-bottom: 3px solid transparent; transition: all 0.2s ease;
+}
+.pg-tab-btn.ativo { color: var(--gs-primaria); border-bottom-color: var(--gs-primaria); }
+.pg-tab-content { display: none; }
+.pg-tab-content.ativo { display: block; }
+
+/* Listas de Ranking/Metas */
+.pg-lista-ranking, .pg-lista-metas { display: flex; flex-direction: column; gap: 12px; }
+
+/* ==========================================================
+   # ESTILOS PARA O NOVO CARD DE FUNCIONÁRIO (REDESIGN V2)
+   ========================================================== */
+
+.pg-funcionario-card-v2 {
+    background-color: var(--gs-branco);
+    border-radius: var(--gs-raio-borda-card);
+    padding: 15px;
+    border: 1px solid var(--gs-borda);
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 15px; /* Espaço entre o header e a área de metas */
+}
+
+.pg-funcionario-card-v2:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--gs-sombra-hover);
+    border-color: var(--gs-primaria);
+}
+
+.pg-card-v2-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.pg-card-v2-header img {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--gs-borda);
+}
+
+.pg-card-v2-info-principal {
+    flex-grow: 1;
+}
+
+.pg-card-v2-info-principal h4 {
+    font-size: 1rem;
+    color: var(--gs-secundaria);
+    margin: 0;
+    font-weight: 600;
+}
+
+.pg-card-v2-pontos {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--gs-primaria);
+}
+
+.pg-card-v2-meta-info {
+    width: 100%;
+}
+
+.pg-meta-texto {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--gs-texto-secundario);
+    margin-bottom: 6px;
+    font-weight: 500;
+}
+
+.icone-meta {
+    font-size: 1rem;
+}
+
+/* Cores do ícone da meta */
+.icone-meta.perigo { color: var(--gs-perigo); }
+.icone-meta.aviso { color: var(--gs-aviso); }
+.icone-meta.sucesso { color: var(--gs-sucesso); }
+.icone-meta.bonus { 
+    color: #f1c40f; /* Dourado para o foguete */
+}
+
+/* Remove a classe antiga para não haver conflito */
+.pg-funcionario-card {
+    display: none;
+}
+
+/* Card de Funcionário */
+.pg-funcionario-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 12px;
+    background-color: var(--gs-branco); /* Fundo branco para se destacar */
+    border-radius: var(--gs-raio-borda-input); /* Borda um pouco mais sutil */
+    border: 1px solid var(--gs-borda);
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pg-funcionario-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--gs-sombra-hover);
+    border-color: var(--gs-primaria);
+}
+
+
+.pg-funcionario-card img { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; border: 2px solid var(--gs-borda); }
+.pg-funcionario-info { flex-grow: 1; }
+.pg-funcionario-info h4 { font-size: 1rem; color: var(--gs-secundaria); margin: 0; }
+.pg-funcionario-info p { font-size: 0.85rem; color: var(--gs-texto-secundario); margin: 0; font-weight: 500; }
+.pg-pontos-extras { font-size: 0.9rem; font-weight: 700; color: var(--gs-sucesso); margin-left: 8px; }
+
+/* Barra de Progresso */
+.pg-progress-bar-container { width: 100%; height: 12px; background-color: var(--gs-borda); border-radius: 10px; overflow: hidden; margin-top: 5px; }
+.pg-progress-bar { height: 100%; width: 0%; border-radius: 10px; transition: width 0.5s ease-out, background-color 0.5s ease; }
+.pg-progress-bar.perigo { background-color: var(--gs-perigo); }
+.pg-progress-bar.aviso { background-color: var(--gs-aviso); }
+.pg-progress-bar.sucesso { background-color: var(--gs-sucesso); }
+.pg-progress-bar.bonus { background: linear-gradient(45deg, var(--gs-sucesso), #58D68D); }
+
+/* Cores da borda do avatar */
+.pg-funcionario-card.meta-abaixo img { border-color: var(--gs-perigo); }
+.pg-funcionario-card.meta-ok img { border-color: var(--gs-primaria); }
+.pg-funcionario-card.meta-superada img { border-color: var(--gs-sucesso); }
+
+/* Feed de Atividades */
+.pg-feed-lista { list-style: none; padding: 0; margin: 0; max-height: 400px; overflow-y: auto; }
+.pg-feed-lista li { padding: 12px 5px; border-bottom: 1px solid var(--gs-borda); font-size: 0.9rem; }
+.pg-feed-lista li:last-child { border-bottom: none; }
+.pg-feed-lista li strong { color: var(--gs-secundaria); }
+.pg-feed-lista .horario { font-weight: 600; color: var(--gs-primaria); }
+
+/* ==========================================================
+   # ESTILOS PARA O NOVO MODAL LUPA DE DESEMPENHO (V2)
+   ========================================================== */
+
+.pg-lupa-header-v2 {
+    display: flex;
+    align-items: center;
+    gap: 10px; /* Reduz um pouco o espaçamento geral */
+    padding-bottom: 20px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--gs-borda);
+    position: relative; 
+    padding-right: 45px; 
+}
+
+.pg-lupa-header-v2 img {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.pg-lupa-info-v2 {
+    flex-grow: 1;
+}
+
+.pg-lupa-info-v2 h2 {
+    margin: 0;
+    font-size: 1.4rem;
+    color: var(--gs-secundaria);
+}
+
+.pg-lupa-info-v2 p {
+    margin: 0;
+    color: var(--gs-texto-secundario);
+    font-size: 0.9rem;
+}
+
+.pg-lupa-kpi-v2 {
+    text-align: left;
+}
+
+.pg-lupa-kpi-v2 span {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--gs-primaria);
+    display: block;
+    line-height: 1;
+}
+
+.pg-lupa-kpi-v2 label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--gs-texto-secundario);
+}
+
+.pg-lupa-secao {
+    margin-bottom: 25px;
+}
+
+
+.pg-lupa-secao h3 {
+    font-size: 1.1rem;
+    color: var(--gs-secundaria);
+}
+
+.pg-lupa-grafico-container {
+    position: relative;
+    width: 100%;
+    background-color: var(--gs-fundo-alternativo);
+    border-radius: var(--gs-raio-borda-input);
+    padding: 10px;
+}
+
+/* Estilos do Modal (permanecem os mesmos) */
+.pg-modal-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6);
+    display: flex; align-items: center; justify-content: center; z-index: 1000;
+    opacity: 0; visibility: hidden; transition: opacity 0.3s, visibility 0.3s;
+}
+.pg-modal-overlay.ativo { opacity: 1; visibility: visible; }
+
+.pg-modal-conteudo { 
+    width: 85%; 
+    max-width: 700px; 
+    max-height: 90vh; 
+    display: flex; 
+    flex-direction: column; 
+    padding: 20px; 
+}
+
+
+.pg-lupa-secao:last-of-type {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1; 
+    min-height: 0;
+}
+
+.pg-modal-lista-container.pg-layout-cards-v2, 
+.pg-lupa-secao:last-of-type
+{
+    flex-grow: 1; 
+    min-height: 0;   
+    overflow-y: auto;    
+    padding-right: 5px;
+}
+
+
+#pg-lupa-lista-produtos {
+    height: 100%; 
+}
+
+
+.pg-modal-lista-container { overflow-y: auto; flex-grow: 1; }
+
+
+/* Estilos para o Modal de Detalhes da Costura */
+.pg-modal-titulo {
+    font-size: 1.5rem;
+    color: var(--gs-secundaria);
+    margin-bottom: 5px;
+}
+
+.pg-modal-subtitulo {
+    font-size: 0.9rem;
+    color: var(--gs-texto-secundario);
+    margin-top: 0;
+    margin-bottom: 25px;
+}
+
+/* ==========================================================
+   # ESTILOS PARA O NOVO MODAL DE DETALHES (LAYOUT DE CARDS)
+   ========================================================== */
+
+.pg-produto-card-titulo {
+    font-size: 1.1rem;
+    color: var(--gs-secundaria);
+    margin: 0 0 10px 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--gs-borda);
+}
+
+.pg-produto-card-lista {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px; /* Espaço entre cada linha de processo */
+}
+
+.pg-detalhe-item {
+    display: flex;
+    align-items: baseline;
+    font-size: 0.95rem;
+}
+
+.pg-detalhe-atividade {
+    font-weight: 600;
+    color: var(--gs-texto-principal);
+}
+
+.pg-detalhe-quantidade {
+    margin-left: auto; /* Empurra a quantidade para a direita */
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--gs-primaria);
+    background-color: #eaf2f8; /* Fundo azul claro para destacar */
+    padding: 2px 8px;
+    border-radius: 50px; /* Formato pílula */
+    min-width: 30px; /* Garante um tamanho mínimo */
+    text-align: center;
+}
+
+
+/* ==========================================================
+   # ESTILOS PARA O NOVO MODAL DE DETALHES (REFORMA VISUAL v2)
+   ========================================================== */
+
+.pg-layout-cards-v2 {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.pg-produto-card-detalhe-v2 {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 15px;
+    background-color: var(--gs-fundo-alternativo);
+    border: 1px solid var(--gs-borda);
+    border-radius: var(--gs-raio-borda-card);
+    padding: 15px;
+    margin: 0 5px;
+}
+
+.pg-card-imagem-produto {
+    width: 80px;   
+    height: 80px;    
+    flex-shrink: 0;  
+    object-fit: cover;
+    border-radius: var(--gs-raio-borda-input);
+    background-color: #eee;
+}
+
+.pg-card-info-produto {
+    flex-grow: 1;
+    min-width: 0;
+    display: flex;             
+    flex-direction: column;   
+}
+
+/* Reduzindo as fontes */
+.pg-produto-card-detalhe-v2 .pg-produto-card-titulo {
+    font-size: 1rem; 
+    margin: 0 0 10px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--gs-borda);
+    /* Garante que o texto quebre se for muito longo */
+    white-space: normal;
+    word-break: break-word;
+}
+
+.pg-card-variacao-destaque {
+    font-size: 0.9rem; 
+    color: var(--gs-primaria);
+    font-weight: 500;
+}
+
+.pg-produto-card-detalhe-v2 .pg-produto-card-lista {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px; /* NOVO: Espaçamento menor entre os itens */
+}
+
+.pg-produto-card-detalhe-v2 .pg-detalhe-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.9rem; /* NOVO: Fonte menor para os processos */
+}
+
+
+/* Estilos para o texto 'vs ontem' nos cards de KPI */
+.pg-info-card-descricao .fas { /* Estilo base para a setinha */
+    margin-right: 4px;
+}
+
+.pg-info-card-descricao.comparativo-sucesso {
+    color: var(--gs-sucesso); /* Usa a cor de sucesso do seu global-style */
+    font-weight: 600;
+}
+
+.pg-info-card-descricao.comparativo-perigo {
+    color: var(--gs-perigo); /* Usa a cor de perigo do seu global-style */
+    font-weight: 600;
+}
+
+.pg-info-card-descricao.comparativo-neutro {
+    color: var(--gs-texto-secundario); /* Cor neutra se for igual */
+}
+
+/* ==========================================================
+   # ESTILO PARA O CARD DE KPI CLICÁVEL
+   ========================================================== */
+.pg-kpi-clicavel {
+    position: relative; /* Necessário para posicionar o ícone */
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer; /* Mantém o cursor para desktop */
+}
+
+.pg-kpi-clicavel:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--gs-sombra-hover);
+}
+
+/* O indicador visual que funciona em TODAS as telas */
+.pg-kpi-clicavel::after {
+    content: '\f00e'; /* Ícone de Lupa (magnifying glass) do Font Awesome */
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    font-size: 0.9rem;
+    color: var(--gs-primaria);
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+}
+
+.pg-kpi-clicavel:hover::after {
+    opacity: 1;
+}
+
+
+/* alerta de ociosidade e os títulos dos rankings */
+.ocioso-alerta {
+    color: var(--gs-aviso);
+    margin-left: 8px;
+    animation: pg-pulse 1.5s infinite;
+}
+@keyframes pg-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+.pg-ranking-titulo {
+    font-size: 1.1rem;
+    color: var(--gs-secundaria);
+    margin: 15px 0 10px 0;
+    padding-bottom: 5px;
+    border-bottom: 1px solid var(--gs-borda);
+}
+.pg-ranking-titulo:first-of-type {
+    margin-top: 0;
+}
+
+/* ==========================================================================
+   # OVERLAY DE CARREGAMENTO INICIAL
+   ========================================================================== */
+.pg-carregamento-inicial {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: var(--gs-fundo-pagina, #f4f6f8); /* Usa variável global com fallback */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    transition: opacity 0.5s ease;
+}
+
+.pg-spinner-inicial {
+    width: 50px;
+    height: 50px;
+    border: 5px solid var(--gs-borda, #dcdfe4);
+    border-top-color: var(--gs-primaria, #3498db);
+    border-radius: 50%;
+    animation: pg-spin 1s linear infinite;
+}
+
+@keyframes pg-spin {
+    to { transform: rotate(360deg); }
+}
+
+.pg-titulo-secao {
+    font-size: 1.3rem;
+    color: var(--gs-secundaria);
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--gs-borda);
+}
+
+.pph-alerta {
+    color: var(--gs-perigo);
+    margin-left: 8px;
+    animation: pg-pulse 1.5s infinite; /* Reutilizando a animação do alerta de ociosidade */
+}
+
+/* ==========================================================
+   # OVERLAY DE CARREGAMENTO PARA O RANKING
+   ========================================================== */
+
+/* 
+  Container que vai segurar o ranking e o overlay. 
+  'position: relative' é a chave para o posicionamento do overlay. 
+*/
+.pg-ranking-container {
+    position: relative;
+    min-height: 200px; /* Evita que o card encolha totalmente enquanto carrega */
+}
+
+.pg-ranking-loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.7); /* Fundo branco semitransparente */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    border-radius: var(--gs-raio-borda-card);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease-in-out, visibility 0.2s ease-in-out;
+}
+
+.pg-ranking-loading-overlay.ativo {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Reutilizando o spinner que já temos */
+.pg-ranking-loading-overlay .pg-spinner {
+    width: 40px;
+    height: 40px;
+    border-width: 4px;
+}
+
+/* ==========================================================
+   # OTIMIZAÇÃO DOS KPIs PARA MOBILE (A MÁGICA ACONTECE AQUI)
+   ========================================================== */
+#pg-resumo-kpi.gs-painel-info-container {
+    /* No mobile, usamos um grid 2x2 */
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Duas colunas de tamanho igual */
+    gap: 15px; /* Espaçamento entre os cards */
+    margin: 10px 0 10px;
+}
+
+/* Ajustes nos cards para caberem melhor no grid mobile */
+#pg-resumo-kpi .gs-info-card {
+    padding: 15px; /* Menos padding interno */
+    border-left-width: 4px; /* Borda lateral um pouco mais fina */
+}
+
+#pg-resumo-kpi .gs-info-card-icone {
+    font-size: 1.5rem; /* Ícone menor */
+    margin-bottom: 8px;
+}
+
+#pg-resumo-kpi .gs-info-card h3 {
+    font-size: 0.85rem; /* Título menor */
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+#pg-resumo-kpi .gs-info-card-contador {
+    font-size: 1.8rem; /* Contador menor */
+}
+
+#pg-resumo-kpi .pg-info-card-descricao {
+    font-size: 0.75rem; /* Descrição (vs ontem) menor */
+}
+
+/* Estilo base para o container do input de data */
+.gs-cabecalho-pagina .gs-botoes-cabecalho {
+    /* No desktop, vamos alinhar à direita por padrão */
+    margin-left: auto;
+}
+
+/* Sobrescreve a margem do gs-card especificamente nesta página */
+.pg-dashboard-layout .gs-card {
+    margin-bottom: 0;
+}
+
+
+/* ==========================================================================
+   # BREAKPOINTS PARA TABLET E DESKTOP
+   ========================================================================== */
+@media (max-width: 399px) {
+
+    .pg-modal-titulo {
+        font-size: 1.3rem;
+    }
+    
+    .pg-lupa-secao h3 {
+        font-size: 1rem;
+        margin-bottom: 5px;
+    }
+
+    .pg-lupa-info-v2 h2 {
+        font-size: 1rem;
+    }
+
+    .pg-produto-card-detalhe-v2 .pg-produto-card-titulo {
+        font-size: 0.9rem;
+    }
+
+    .pg-lupa-kpi-v2 span {
+        font-size: 1.5rem;
+    }
+
+
+}
+
+@media (max-width: 480px) {
+
+    .pg-filtro-data {
+        width: 100%; /* Faz o input de data ocupar toda a largura disponível */
+        max-width: none;
+        margin-top:10px;
+    }
+    .pg-cabecalho-pagina {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+    .pg-cabecalho-pagina h1 {
+        margin-bottom: 15px;
+    }
+    .gs-botoes-cabecalho {
+        width: 100%;
+        margin-left: 0; /* Reseta o alinhamento do desktop */
+        display: flex;
+        justify-content: center; /* Centraliza o input dentro do container */
+    }
+    .pg-filtro-data {
+        /* Não mais 100%, mas um tamanho razoável */
+        width: 100%;
+        max-width: 250px; 
+    }
+    .pg-momentos-chave-filtros {
+        justify-content: center; /* Centraliza os botões no mobile */
+    }
+
+    .pg-produto-card-detalhe-v2 {
+        flex-direction: row;      /* Layout lado a lado */
+        align-items: flex-start;  /* Alinha os itens no topo */
+        padding: 8px;
+    }
+
+    .pg-card-imagem-produto {
+        align-self: flex-start; /* Alinha a imagem no início em vez de centralizar */
+    }
+
+    .pg-card-info-produto {
+        flex-grow: 1; /* Faz a área de info ocupar o resto do espaço */
+    }
+}
+
+
+/* Telas de tablet menores - @756px */
+@media (min-width: 768px) {
+    .pg-container-principal {
+        padding: 25px;
+    }
+
+    .pg-cabecalho-pagina {
+        flex-direction: column; /* Título e data um embaixo do outro */
+        align-items: center;    /* Centraliza os itens */
+        text-align: center;
+    }
+    .pg-cabecalho-pagina h1 {
+        margin-bottom: 10px;
+    }
+
+    .pg-momentos-chave-filtros {
+        justify-content: center; /* Centraliza os botões no mobile */
+    }
+}
+
+
+   /* Telas de tablet maiores e desktops pequenos - @1024px */
+@media (min-width: 1024px) {
+    .pg-dashboard-layout {
+        flex-direction: row; /* Volta a ser linha */
+        align-items: flex-start; /* Alinha os itens no topo */
+    }
+    .pg-coluna-principal {
+        flex: 1; /* Ocupa o espaço restante */
+        min-width: 0; /* Correção de flexbox */
+    }
+    .pg-coluna-lateral {
+        width: 380px; /* Largura fixa para a sidebar */
+        flex-shrink: 0;
+        position: sticky; /* Efeito "grudento" ao rolar a página */
+        top: 20px;
+    }
+
+    /* Em telas maiores, as abas do ranking/metas não fazem sentido.
+       Vamos transformá-las em títulos de seção. */
+    .pg-tabs { display: none; }
+    .pg-tab-content { 
+        display: block !important;
+        margin-bottom: 30px;
+    }
+    .pg-tab-content::before {
+        content: '🔥 Ranking de Pontos';
+        display: block; font-size: 1.2rem; font-weight: 600; color: var(--gs-secundaria);
+        margin-bottom: 15px; padding-bottom: 8px; border-bottom: 1px solid var(--gs-borda);
+    }
+    #tab-content-metas::before {
+        content: '🎯 Radar de Metas';
+    }
+
+    /* RESTAURA O LAYOUT ORIGINAL DOS KPIs PARA DESKTOP */
+    #pg-resumo-kpi.gs-painel-info-container {
+        /* No desktop, voltamos ao padrão de auto-fill que cria 4 colunas */
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    }
+    
+    /* Restaura o tamanho original dos elementos no desktop */
+    #pg-resumo-kpi .gs-info-card {
+        padding: 20px;
+        border-left-width: 5px;
+    }
+    #pg-resumo-kpi .gs-info-card-icone { font-size: 1.8rem; }
+    #pg-resumo-kpi .gs-info-card h3 { font-size: 1.1rem; }
+    #pg-resumo-kpi .gs-info-card-contador { font-size: 2.5rem; }
+    #pg-resumo-kpi .pg-info-card-descricao { font-size: 0.85rem; }
+
+    .pg-layout-cards-v2 {
+        flex-direction: row;  /* Em telas grandes, os itens ficam lado a lado */
+        flex-wrap: wrap;      /* E quebram para a próxima linha quando não cabem */
+        /* O 'gap' continua funcionando aqui para espaçamento horizontal e vertical */
+    }
+
+    /* Precisamos definir a largura dos cards para criar o efeito de 2 colunas */
+    .pg-layout-cards-v2 > .pg-produto-card-detalhe-v2 {
+        width: calc(50% - 7.5px); /* 50% do espaço menos metade do 'gap' */
+    }
+}

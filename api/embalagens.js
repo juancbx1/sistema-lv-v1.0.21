@@ -1,7 +1,5 @@
 // api/embalagens.js
 
- console.log('--- [DEBUG] O ARQUIVO api/embalagens.js FOI CARREGADO PELO SERVIDOR ---');
-
 import 'dotenv/config';
 import pkg from 'pg';
 const { Pool } = pkg;
@@ -524,6 +522,110 @@ router.get('/fila/contagem-antigos', async (req, res) => {
     } catch (error) {
         console.error('[API /fila/contagem-antigos] Erro:', error);
         res.status(500).json({ error: 'Erro ao buscar contagem de itens antigos.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+router.get('/sugestao-estoque', async (req, res) => {
+    const { produto_id, variante, produto_ref_id } = req.query; // Recebe os 3, mas prioriza ID e variante
+
+    // Decodifica o '+' para espaço e trata o caso de ser nulo ou '-'
+    const varianteDecodificada = (variante === '-' || !variante) 
+                                  ? null 
+                                  : variante.replace(/\+/g, ' ');
+
+    if (!produto_id || !produto_ref_id) {
+        return res.status(400).json({ error: "O ID do produto e o SKU (produto_ref_id) são obrigatórios." });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+
+        // 1. Encontrar todos os KITS que usam este SKU como componente
+        const kitsQueUsamOComponenteQuery = `
+            SELECT 
+                p.id as kit_id,
+                p.nome as kit_nome,
+                p_grade.variacao as kit_variacao,
+                p_grade.sku as kit_sku,
+                p_grade.composicao
+            FROM 
+                produtos p,
+                jsonb_to_recordset(p.grade) AS p_grade(sku TEXT, variacao TEXT, composicao JSONB)
+            WHERE 
+                p.is_kit = TRUE AND
+                jsonb_path_exists(p_grade.composicao, 
+                    '$[*] ? (@.produto_id == $prod_id && @.variacao == $prod_var)', 
+                    jsonb_build_object('prod_id', $1::int, 'prod_var', $2::text)
+                );
+        `;
+        const kitsResult = await dbClient.query(kitsQueUsamOComponenteQuery, [produto_id, varianteDecodificada]);        const kitsEncontrados = kitsResult.rows;
+
+        // 2. Coletar os SKUs de que precisamos: o item principal E os KITS relacionados.
+            const todosSkusNecessarios = new Set([produto_ref_id]); // Começa com o SKU principal
+            kitsEncontrados.forEach(kit => {
+                if (kit.kit_sku) {
+                    todosSkusNecessarios.add(kit.kit_sku);
+                }
+            });
+
+        // 3. Buscar o saldo em estoque para TODOS os SKUs coletados de uma só vez
+            let saldosMap = new Map(); // Inicia o mapa como vazio
+
+            // **NOVA PROTEÇÃO:** Só executa a query se tivermos SKUs para buscar
+            if (todosSkusNecessarios.size > 0) {
+                const saldosQuery = `
+            WITH saldos_por_item AS (
+                -- Primeiro, calcula o saldo por produto_id e variante_nome
+                SELECT 
+                    produto_id,
+                    variante_nome,
+                    SUM(quantidade) as saldo_atual
+                FROM estoque_movimentos
+                GROUP BY produto_id, variante_nome
+            )
+            -- Agora, fazemos o JOIN para encontrar o SKU correspondente
+            SELECT
+                COALESCE(g.sku, p.sku) as produto_ref_id,
+                s.saldo_atual
+            FROM saldos_por_item s
+            JOIN produtos p ON s.produto_id = p.id
+            LEFT JOIN jsonb_to_recordset(p.grade) AS g(sku TEXT, variacao TEXT) 
+                ON p.grade IS NOT NULL AND g.variacao = s.variante_nome
+            WHERE COALESCE(g.sku, p.sku) = ANY($1::text[]);
+        `;
+        const saldosResult = await dbClient.query(saldosQuery, [Array.from(todosSkusNecessarios)]);
+        // Preenche o mapa com os resultados
+        saldosMap = new Map(saldosResult.rows.map(item => [item.produto_ref_id, parseInt(item.saldo_atual, 10) || 0]));
+    }
+        // 4. Montar a resposta final
+        const saldoItemPrincipal = saldosMap.get(produto_ref_id) || 0;
+
+        // Mapeia os kits para a resposta, buscando o saldo deles no nosso 'saldosMap'
+        // Não dependemos mais da variável 'todosOsProdutosCadastrados'
+        const kitsRelacionadosInfo = kitsEncontrados.map(kit => {
+            return {
+                kit_id: kit.kit_id,
+                kit_nome: kit.kit_nome,
+                kit_variacao: kit.kit_variacao,
+                kit_sku: kit.kit_sku,
+                saldo_em_estoque: saldosMap.get(kit.kit_sku) || 0
+                // A imagem será buscada pelo frontend, que já tem o cache de produtos.
+            };
+        });
+
+        res.status(200).json({
+            sku_principal: produto_ref_id,
+            saldo_em_estoque_principal: saldoItemPrincipal,
+            kits_relacionados: kitsRelacionadosInfo
+        });
+        // --- FIM DA CORREÇÃO ---
+
+    } catch (error) {
+        console.error('[API /sugestao-estoque] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar sugestões de estoque.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }

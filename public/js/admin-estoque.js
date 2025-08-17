@@ -1,6 +1,8 @@
 // public/js/admin-estoque.js
 import { verificarAutenticacao } from '/js/utils/auth.js';
-import { obterProdutos, invalidateCache } from '/js/utils/storage.js'; 
+import { obterProdutos, invalidateCache } from '/js/utils/storage.js';
+import { mostrarMensagem, mostrarConfirmacao } from '/js/utils/popups.js';
+import { adicionarBotaoFechar } from '/js/utils/botoes-fechar.js';
 
 // --- Variáveis Globais ---
 let permissoesGlobaisEstoque = [];
@@ -15,6 +17,8 @@ let saldosEstoqueGlobaisCompletos = [];
 let filtroAlertaAtivo = null;
 let todosOsProdutosCadastrados = [];
 let todosProdutosParaConfigNiveis = [];
+let historicoGeralEstoquePage = 1;
+
 
 let modalNiveisElement; 
 let modalNiveisTituloElement;
@@ -43,114 +47,6 @@ let sessaoInventarioAtiva = null; // Guarda os dados da sessão de inventário e
 let limparListenerRodape = null; // <<< NOVA VARIÁVEL GLOBAL
 
 
-// --- FUNÇÃO DE POPUP DE MENSAGEM (Sem alterações) ---
-function mostrarPopupEstoque(mensagem, tipo = 'info', duracao = 4000, permitirHTML = false) { 
-    const popupId = `popup-estoque-${Date.now()}`;
-    const popup = document.createElement('div');
-    popup.id = popupId;
-    popup.className = `es-popup-mensagem popup-${tipo}`; 
-
-    const overlayId = `overlay-estoque-${popupId}`;
-    const overlay = document.createElement('div');
-    overlay.id = overlayId;
-    overlay.className = 'es-popup-overlay';
-
-    if (permitirHTML) {
-        popup.innerHTML = `<p>${mensagem}</p>`;
-    } else {
-        const p = document.createElement('p');
-        p.textContent = mensagem;
-        popup.appendChild(p);
-    }
-
-    const fecharBtnManual = document.createElement('button');
-    fecharBtnManual.textContent = 'OK';
-    fecharBtnManual.onclick = () => {
-        popup.style.animation = 'es-fadeOutPopup 0.3s ease-out forwards';
-        overlay.style.animation = 'es-fadeOutOverlayPopup 0.3s ease-out forwards';
-        setTimeout(() => {
-            if (document.body.contains(popup)) document.body.removeChild(popup);
-            if (document.body.contains(overlay)) document.body.removeChild(overlay);
-        }, 300);
-    };
-    popup.appendChild(fecharBtnManual);
-
-    document.body.appendChild(overlay);
-    document.body.appendChild(popup);
-
-    if (duracao > 0) {
-        setTimeout(() => {
-            const el = document.getElementById(popupId);
-            if (el && document.body.contains(el)) {
-                el.style.animation = 'es-fadeOutPopup 0.3s ease-out forwards';
-                const ov = document.getElementById(overlayId);
-                if (ov) ov.style.animation = 'es-fadeOutOverlayPopup 0.3s ease-out forwards';
-                
-                setTimeout(() => {
-                    if (document.body.contains(el)) document.body.removeChild(el);
-                    if (ov && document.body.contains(ov)) document.body.removeChild(ov);
-                }, 300);
-            }
-        }, duracao);
-    }
-}
-
-// NOVO: Função para um popup de confirmação (Sim/Não)
-function mostrarPopupConfirmacao(mensagem, tipo = 'aviso') {
-    return new Promise((resolve) => {
-        // Remove qualquer popup de confirmação existente para evitar duplicação
-        const popupExistente = document.getElementById('popup-confirmacao-estoque');
-        if (popupExistente) popupExistente.parentElement.remove();
-
-        const container = document.createElement('div');
-        container.id = 'popup-confirmacao-estoque';
-
-        const popup = document.createElement('div');
-        popup.className = `es-popup-mensagem popup-${tipo}`;
-        popup.style.animation = 'es-fadeInPopup 0.3s ease-out';
-        
-        const overlay = document.createElement('div');
-        overlay.className = 'es-popup-overlay';
-        overlay.style.animation = 'es-fadeInOverlayPopup 0.3s ease-out';
-
-        const p = document.createElement('p');
-        p.innerHTML = mensagem; // Usar innerHTML para permitir <br> etc.
-        popup.appendChild(p);
-
-        const botoesContainer = document.createElement('div');
-        botoesContainer.style.display = 'flex';
-        botoesContainer.style.gap = '10px';
-        botoesContainer.style.justifyContent = 'center';
-
-        const fecharEResolver = (valor) => {
-            popup.style.animation = 'es-fadeOutPopup 0.3s ease-out forwards';
-            overlay.style.animation = 'es-fadeOutOverlayPopup 0.3s ease-out forwards';
-            setTimeout(() => {
-                document.body.removeChild(container);
-                resolve(valor);
-            }, 300);
-        };
-
-        const btnConfirmar = document.createElement('button');
-        btnConfirmar.textContent = 'Sim, continuar';
-        btnConfirmar.className = 'es-btn-confirmar'; // Adicionaremos um estilo para ele
-        btnConfirmar.onclick = () => fecharEResolver(true);
-
-        const btnCancelar = document.createElement('button');
-        btnCancelar.textContent = 'Cancelar';
-        btnCancelar.className = 'es-btn-cancelar'; // Adicionaremos um estilo para ele
-        btnCancelar.onclick = () => fecharEResolver(false);
-        
-        botoesContainer.appendChild(btnCancelar);
-        botoesContainer.appendChild(btnConfirmar);
-        popup.appendChild(botoesContainer);
-
-        container.appendChild(overlay);
-        container.appendChild(popup);
-        document.body.appendChild(container);
-    });
-}
-
 function debounce(func, wait) { 
     let timeout;
     return function (...args) {
@@ -174,7 +70,7 @@ function getLabelFiltro(chave) {
 async function fetchEstoqueAPI(endpoint, options = {}) {
     const token = localStorage.getItem('token');
     if (!token) {
-        mostrarPopupEstoque('Erro de autenticação. Faça login novamente.', 'erro');
+        mostrarMensagem('Erro de autenticação. Faça login novamente.', 'erro');
         window.location.href = '/index.html';
         throw new Error('Token não encontrado');
     }
@@ -205,7 +101,7 @@ async function fetchEstoqueAPI(endpoint, options = {}) {
 
             if (response.status === 401 || (errorData.error || '').toLowerCase().includes('token')) {
                 localStorage.removeItem('token');
-                mostrarPopupEstoque('Sessão expirada ou inválida. Faça login novamente.', 'erro');
+                mostrarMensagem('Sessão expirada ou inválida. Faça login novamente.', 'erro');
                 window.location.href = '/index.html';
             }
             
@@ -257,11 +153,11 @@ async function forcarAtualizacaoEstoque() {
         // Chama a função principal de carregamento da tabela
         await carregarTabelaEstoque();
 
-        mostrarPopupEstoque('Lista de estoque atualizada com sucesso!', 'sucesso', 2500);
+        mostrarMensagem('Lista de estoque atualizada com sucesso!', 'sucesso', 2500);
 
     } catch (error) {
         console.error('[forcarAtualizacaoEstoque] Erro ao atualizar estoque:', error);
-        mostrarPopupEstoque('Falha ao atualizar a lista de estoque.', 'erro');
+        mostrarMensagem('Falha ao atualizar a lista de estoque.', 'erro');
     } finally {
         // Reabilita o botão e restaura o texto
         if(span) span.textContent = originalText;
@@ -275,7 +171,7 @@ async function abrirModalConfigurarNiveis() {
     console.log(`%c[ABRINDO MODAL] - 'Configurar Níveis' foi chamada.`, 'color: #27ae60; font-weight: bold;');
     
     if (!permissoesGlobaisEstoque.includes('gerenciar-niveis-alerta-estoque')) {
-        mostrarPopupEstoque('Você não tem permissão para configurar níveis de estoque.', 'aviso');
+        mostrarMensagem('Você não tem permissão para configurar níveis de estoque.', 'aviso');
         return;
     }
 
@@ -287,6 +183,8 @@ async function abrirModalConfigurarNiveis() {
     
     // Mostra o modal
     modalNiveisElement.style.display = 'flex';
+    adicionarBotaoFechar(modalNiveisElement, fecharModalNiveis);
+
 
     try {
         // A lógica de fetch e renderização permanece a mesma
@@ -311,7 +209,7 @@ async function abrirModalConfigurarNiveis() {
         todosProdutosParaConfigNiveis.sort((a,b) => a.nome_completo.localeCompare(b.nome_completo));
         renderizarTabelaConfigNiveis(todosProdutosParaConfigNiveis);
     } catch (error) {
-        mostrarPopupEstoque("Erro ao carregar dados para configuração de níveis.", "erro");
+        mostrarMensagem("Erro ao carregar dados para configuração de níveis.", "erro");
         tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:red;">Erro ao carregar.</td></tr>`;
     }
 }
@@ -422,12 +320,12 @@ async function salvarNiveisEmLote() {
             validationMsgEl.innerHTML = `Corrija os erros:<br>${errosDeValidacao.join('<br>')}`;
             validationMsgEl.style.display = 'block';
         }
-        mostrarPopupEstoque('Existem erros de validação.', 'erro');
+        mostrarMensagem('Existem erros de validação.', 'erro');
         return;
     }
 
     if (configsParaSalvar.length === 0) {
-        mostrarPopupEstoque('Nenhuma alteração para salvar.', 'info');
+        mostrarMensagem('Nenhuma alteração para salvar.', 'info');
         return;
     }
 
@@ -438,7 +336,7 @@ async function salvarNiveisEmLote() {
 
     try {
         await fetchEstoqueAPI('/niveis-estoque/batch', { method: 'POST', body: JSON.stringify({ configs: configsParaSalvar }) });
-        mostrarPopupEstoque('Configurações de nível salvas com sucesso!', 'sucesso');
+        mostrarMensagem('Configurações de nível salvas com sucesso!', 'sucesso');
         
         // Atualiza cache local
         configsParaSalvar.forEach(savedConfig => {
@@ -450,7 +348,7 @@ async function salvarNiveisEmLote() {
         fecharModalNiveis();
         await carregarTabelaEstoque(document.getElementById('searchEstoque')?.value || '');
     } catch (error) {
-        mostrarPopupEstoque(`Erro ao salvar: ${error.data?.details || error.message}`, 'erro');
+        mostrarMensagem(`Erro ao salvar: ${error.data?.details || error.message}`, 'erro');
     } finally {
         if (btnSalvarLoteEl) { btnSalvarLoteEl.disabled = false; btnSalvarLoteEl.innerHTML = originalText; }
     }
@@ -468,6 +366,84 @@ function fecharModalNiveis() {
      if(niveisValidationMessageElement) niveisValidationMessageElement.style.display = 'none';
  }
 // --- FIM DA LÓGICA DE NÍVEIS ---
+
+async function abrirModalHistoricoGeralEstoque() {
+    const modal = document.getElementById('modalHistoricoGeralEstoque');
+    if (!modal) return;
+    
+    adicionarBotaoFechar(modal, fecharModalHistoricoGeralEstoque);
+    modal.style.display = 'flex';
+    
+    await carregarHistoricoGeralEstoque(1);
+}
+
+function fecharModalHistoricoGeralEstoque() {
+    const modal = document.getElementById('modalHistoricoGeralEstoque');
+    if (modal) modal.style.display = 'none';
+}
+
+async function carregarHistoricoGeralEstoque(page = 1) {
+    historicoGeralEstoquePage = page;
+    const tbody = document.getElementById('tabelaHistoricoGeralEstoqueBody');
+    const paginacaoContainer = document.getElementById('paginacaoHistoricoGeralEstoque');
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;"><div class="es-spinner"></div></td></tr>`;
+
+    try {
+        const tipoEvento = document.getElementById('filtroEventoEstoque').value;
+        const periodo = document.getElementById('filtroPeriodoEstoque').value;
+
+        const params = new URLSearchParams({
+            tipoEvento,
+            periodo,
+            page,
+            limit: 15
+        });
+
+        const response = await fetchEstoqueAPI(`/estoque/auditoria?${params.toString()}`);
+        const { rows, pagination } = response;
+
+        tbody.innerHTML = '';
+        if (rows.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;">Nenhum evento encontrado para os filtros selecionados.</td></tr>`;
+        } else {
+            rows.forEach(evento => {
+                const tr = tbody.insertRow();
+                let detalhesHtml = '';
+                if (evento.detalhes) {
+                    detalhesHtml = Object.entries(evento.detalhes)
+                        .filter(([key, value]) => value !== null && value !== '') 
+                        .map(([key, value]) => {
+                            // Transforma a chave em um texto mais legível
+                            const chaveFormatada = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                            return `<strong>${chaveFormatada}:</strong> ${value}`;
+                        })
+                        .join('<br>');
+                }
+
+                tr.innerHTML = `
+                    <td data-label="Data">${new Date(evento.data_evento).toLocaleString('pt-BR')}</td>
+                    <td data-label="Usuário">${evento.usuario_nome || 'N/A'}</td>
+                    <td data-label="Ação">${evento.tipo_evento.replace(/_/g, ' ')}</td>
+                    <td data-label="Detalhes">${detalhesHtml}</td>
+                `;
+            });
+        }
+
+        // Lógica de paginação (usando uma função genérica seria ideal, mas por enquanto fazemos aqui)
+        paginacaoContainer.innerHTML = '';
+        if (pagination.totalPages > 1) {
+            paginacaoContainer.style.display = 'flex';
+            // Adicionar botões de paginação...
+            // (O código de renderizarPaginacao pode ser adaptado aqui)
+        } else {
+            paginacaoContainer.style.display = 'none';
+        }
+
+    } catch (error) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:red;">Erro ao carregar histórico.</td></tr>`;
+    }
+}
+
 
 
 // --- LÓGICA DE DADOS E TABELA PRINCIPAL (Sem alterações significativas) ---
@@ -587,7 +563,7 @@ async function obterSaldoEstoqueAtualAPI() {
         return saldosEstoqueGlobaisCompletos;
     } catch (error) {
         console.error('[obterSaldoEstoqueAtualAPI] Erro ao buscar saldo:', error);
-        mostrarPopupEstoque('Falha ao carregar dados do estoque.', 'erro');
+        mostrarMensagem('Falha ao carregar dados do estoque.', 'erro');
         return [];
     }
 }
@@ -837,7 +813,7 @@ async function filtrarEstoquePorAlerta(tipoAlerta) {
 
 async function mostrarViewFilaProducao() {
     if (!permissoesGlobaisEstoque.includes('acesso-estoque')) {
-        mostrarPopupEstoque('Você não tem permissão para acessar esta área.', 'aviso');
+        mostrarMensagem('Você não tem permissão para acessar esta área.', 'aviso');
         return;
     }
 
@@ -845,9 +821,13 @@ async function mostrarViewFilaProducao() {
     // Mostra o overlay e esconde as views antigas
     if (overlay) overlay.classList.remove('hidden');
     document.getElementById('mainViewEstoque').style.display = 'none';
+    
     const filaView = document.getElementById('filaProducaoView');
     filaView.classList.remove('hidden');
     filaView.style.display = 'block';
+
+    adicionarBotaoFechar(filaView, voltarDaFilaParaEstoque);
+
 
     try {
         const btnSalvar = document.getElementById('btnSalvarPrioridades');
@@ -878,7 +858,7 @@ async function mostrarViewFilaProducao() {
 
     } catch(error) {
         console.error("Erro ao carregar fila de produção:", error);
-        mostrarPopupEstoque("Erro ao carregar a fila de produção.", "erro");
+        mostrarMensagem("Erro ao carregar a fila de produção.", "erro");
     } finally {
         // Esconde o overlay DEPOIS que tudo carregou
         if (overlay) overlay.classList.add('hidden');
@@ -910,7 +890,7 @@ function moverItemFila(produtoRefId, direcao) {
     // Marca que a ordem foi alterada para habilitar o botão de salvar
     const btnSalvar = document.getElementById('btnSalvarPrioridades');
     if(btnSalvar) {
-        btnSalvar.style.backgroundColor = 'var(--es-cor-verde-sucesso)';
+        btnSalvar.style.backgroundColor = 'var(--gs-sucesso)';
         btnSalvar.disabled = false;
     }
 
@@ -1158,11 +1138,11 @@ function renderizarPromessasEmProducao() {
 async function anularPromessa(promessaId, nomeProduto) {
     // --- VERIFICAÇÃO DE PERMISSÃO NO INÍCIO ---
     if (!permissoesGlobaisEstoque.includes('anular-promessa-producao')) {
-        mostrarPopupEstoque('Você não tem permissão para anular promessas de produção.', 'aviso');
+        mostrarMensagem('Você não tem permissão para anular promessas de produção.', 'aviso');
         return;
     }
 
-    const confirmado = await mostrarPopupConfirmacao(
+    const confirmado = await mostrarConfirmacao(
         `Tem certeza que deseja anular a promessa de produção para <br><b>${nomeProduto}</b>?<br><br>O item voltará para a fila de prioridades.`,
         'perigo'
     );
@@ -1179,15 +1159,15 @@ async function anularPromessa(promessaId, nomeProduto) {
         renderizarFilaDeProducao();
         renderizarPromessasEmProducao();
 
-        mostrarPopupEstoque('Promessa anulada. O item voltou para a fila de prioridades.', 'sucesso');
+        mostrarMensagem('Promessa anulada. O item voltou para a fila de prioridades.', 'sucesso');
     } catch (error) {
-        mostrarPopupEstoque(`Erro ao anular promessa: ${error.data?.details || error.message}`, 'erro');
+        mostrarMensagem(`Erro ao anular promessa: ${error.data?.details || error.message}`, 'erro');
     }
 }
 
 async function iniciarProducao(produtoRefId) {
     const item = saldosEstoqueGlobaisCompletos.find(s => s.produto_ref_id === produtoRefId);
-    const confirmado = await mostrarPopupConfirmacao(`Confirma o início da produção para <br><b>${item.produto_nome} - ${item.variante_nome || 'Padrão'}</b>?`, 'aviso');
+    const confirmado = await mostrarConfirmacao(`Confirma o início da produção para <br><b>${item.produto_nome} - ${item.variante_nome || 'Padrão'}</b>?`, 'aviso');
 
     if (!confirmado) return;
 
@@ -1202,9 +1182,9 @@ async function iniciarProducao(produtoRefId) {
         renderizarFilaDeProducao();
         renderizarPromessasEmProducao();
         
-        mostrarPopupEstoque('Item enviado para a fila de produção ativa!', 'sucesso');
+        mostrarMensagem('Item enviado para a fila de produção ativa!', 'sucesso');
     } catch (error) {
-        mostrarPopupEstoque(`Erro ao iniciar produção: ${error.message}`, 'erro');
+        mostrarMensagem(`Erro ao iniciar produção: ${error.message}`, 'erro');
     }
 }
 
@@ -1255,10 +1235,10 @@ async function salvarPrioridades() {
             if(configCache) configCache.prioridade = p.prioridade;
         });
 
-        mostrarPopupEstoque('Ordem da fila salva com sucesso!', 'sucesso');
-        btn.style.backgroundColor = 'var(--es-cor-azul-primario)';
+        mostrarMensagem('Ordem da fila salva com sucesso!', 'sucesso');
+        btn.style.backgroundColor = 'var(--gs-primaria)';
     } catch(error) {
-        mostrarPopupEstoque('Erro ao salvar prioridades.', 'erro');
+        mostrarMensagem('Erro ao salvar prioridades.', 'erro');
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-save"></i> Salvar Ordem da Fila';
@@ -1271,7 +1251,7 @@ async function salvarPrioridades() {
 function abrirViewMovimento(item) {
     console.log('[abrirViewMovimento] Abrindo para o item:', item);
     if (!permissoesGlobaisEstoque.includes('gerenciar-estoque')) {
-        mostrarPopupEstoque('Você não tem permissão para gerenciar o estoque.', 'aviso');
+        mostrarMensagem('Você não tem permissão para gerenciar o estoque.', 'aviso');
         return;
     }
     itemEstoqueSelecionado = { ...item }; // Armazena o item na variável de estado unificada
@@ -1395,12 +1375,48 @@ function prepararViewMovimento() {
         historicoBody.innerHTML = '<tr><td colspan="6"><div class="es-spinner"></div></td></tr>';
         carregarHistoricoMovimentacoes(item.produto_id, item.variante_nome, 1);
     }
+
+    // --- NOVA LÓGICA DE CONTROLE DE PERMISSÕES ---
+    const btnEntrada = containerBotoesTipoOp.querySelector('[data-tipo="ENTRADA_MANUAL"]');
+    const btnSaida = containerBotoesTipoOp.querySelector('[data-tipo="SAIDA_MANUAL"]');
+    const btnDevolucao = containerBotoesTipoOp.querySelector('[data-tipo="DEVOLUCAO"]');
+    const btnSalvar = document.getElementById('salvarMovimentoBtn');
+
+    // Permissões necessárias
+    const podeEntrada = permissoesGlobaisEstoque.includes('registrar-entrada-manual');
+    const podeSaida = permissoesGlobaisEstoque.includes('registrar-saida-manual');
+    const podeDevolucao = permissoesGlobaisEstoque.includes('registrar-devolucao');
+
+    // Habilita ou desabilita cada botão
+    if (btnEntrada) btnEntrada.disabled = !podeEntrada;
+    if (btnSaida) btnSaida.disabled = !podeSaida;
+    if (btnDevolucao) btnDevolucao.disabled = !podeDevolucao;
+
+    // Lógica para definir a operação padrão e o estado do botão Salvar
+    if (podeEntrada) {
+        atualizarCamposPorTipoOperacao('ENTRADA_MANUAL');
+    } else if (podeSaida) {
+        atualizarCamposPorTipoOperacao('SAIDA_MANUAL');
+    } else if (podeDevolucao) {
+        atualizarCamposPorTipoOperacao('DEVOLUCAO');
+    } else {
+        // Nenhum botão é permitido, desabilita tudo e mostra mensagem
+        if (inputTipoOperacaoOculto) inputTipoOperacaoOculto.value = '';
+        containerBotoesTipoOp.querySelectorAll('.movimento-op-btn').forEach(btn => btn.classList.remove('ativo'));
+        if (qtdInput) qtdInput.disabled = true;
+        mostrarMensagem('Você não tem permissão para realizar nenhuma operação de estoque.', 'aviso');
+    }
+
+    // O botão de salvar só fica ativo se o usuário tiver permissão para PELO MENOS UMA operação.
+    if (btnSalvar) {
+        btnSalvar.disabled = !(podeEntrada || podeSaida || podeDevolucao);
+    }
 }
 
 
 async function iniciarProcessoDeEstorno(movimentoId, saldoParaEstorno, botao) {
     if (isNaN(movimentoId) || isNaN(saldoParaEstorno)) {
-        mostrarPopupEstoque('Erro: Informações do movimento para estorno estão inválidas.', 'erro');
+        mostrarMensagem('Erro: Informações do movimento para estorno estão inválidas.', 'erro');
         return;
     }
     
@@ -1429,7 +1445,7 @@ async function iniciarProcessoDeEstorno(movimentoId, saldoParaEstorno, botao) {
         const movimentoDeEstorno = response.movimentoDeEstorno;
         if (!movimentoDeEstorno) throw new Error("A API não retornou os dados do estorno.");
         
-        mostrarPopupEstoque('Estorno realizado com sucesso!', 'sucesso');
+        mostrarMensagem('Estorno realizado com sucesso!', 'sucesso');
         
         // Atualiza a UI principal
         const itemNoCache = saldosEstoqueGlobaisCompletos.find(item => item.produto_id == movimentoDeEstorno.produto_id && item.variante_nome == (movimentoDeEstorno.variante_nome || '-'));
@@ -1450,7 +1466,7 @@ async function iniciarProcessoDeEstorno(movimentoId, saldoParaEstorno, botao) {
         }
 
     } catch (error) {
-        mostrarPopupEstoque(`Falha no estorno: ${error.data?.details || error.message}`, 'erro');
+        mostrarMensagem(`Falha no estorno: ${error.data?.details || error.message}`, 'erro');
     } finally {
         // Garante que o botão seja reabilitado, mesmo que esteja em outra "página" do histórico
         const btnOriginal = document.querySelector(`.btn-iniciar-estorno[data-movimento-id="${movimentoId}"]`);
@@ -1542,7 +1558,7 @@ async function arquivarItemEstoque() {
     // 1. Validação inicial
     if (!itemEstoqueSelecionado || !itemEstoqueSelecionado.produto_ref_id) {
         console.error("[arquivarItemEstoque] Tentativa de arquivar sem um item selecionado ou sem produto_ref_id.", itemEstoqueSelecionado);
-        mostrarPopupEstoque('Nenhum item válido selecionado para arquivar.', 'erro');
+        mostrarMensagem('Nenhum item válido selecionado para arquivar.', 'erro');
         return;
     }
 
@@ -1552,7 +1568,7 @@ async function arquivarItemEstoque() {
     // 2. Confirmação do usuário
     const mensagemConfirmacao = `Tem certeza que deseja arquivar o item <br><b>"${itemEstoqueSelecionado.produto_nome} - ${itemEstoqueSelecionado.variante_nome}"</b> (SKU: ${skuParaArquivar})?<br><br>Esta ação irá removê-lo da lista de estoque se o saldo for zero.`;
 
-    const confirmado = await mostrarPopupConfirmacao(mensagemConfirmacao, 'perigo');
+    const confirmado = await mostrarConfirmacao(mensagemConfirmacao, 'perigo');
 
     if (!confirmado) {
         console.log("[arquivarItemEstoque] Arquivamento cancelado pelo usuário.");
@@ -1574,7 +1590,7 @@ async function arquivarItemEstoque() {
             body: JSON.stringify({ produto_ref_id: skuParaArquivar })
         });
         
-        mostrarPopupEstoque('Item arquivado com sucesso!', 'sucesso');
+        mostrarMensagem('Item arquivado com sucesso!', 'sucesso');
 
         // Força a recarga da lista principal ao voltar para refletir a mudança
         saldosEstoqueGlobaisCompletos = []; 
@@ -1582,7 +1598,7 @@ async function arquivarItemEstoque() {
 
     } catch (error) {
         console.error('[arquivarItemEstoque] Erro ao arquivar:', error);
-        mostrarPopupEstoque(error.data?.details || error.data?.error || error.message || 'Erro ao arquivar o item.', 'erro');
+        mostrarMensagem(error.data?.details || error.data?.error || error.message || 'Erro ao arquivar o item.', 'erro');
     } finally {
         if(btnArquivar) {
             btnArquivar.disabled = false;
@@ -1596,7 +1612,7 @@ async function arquivarItemEstoque() {
 async function salvarMovimentoManualEstoque() {
     // AJUSTADO para usar itemEstoqueSelecionado e novos IDs
     if (!itemEstoqueSelecionado) {
-        mostrarPopupEstoque('Nenhum item selecionado para edição.', 'erro');
+        mostrarMensagem('Nenhum item selecionado para edição.', 'erro');
         return;
     }
 
@@ -1605,25 +1621,25 @@ async function salvarMovimentoManualEstoque() {
     const observacao = document.getElementById('observacaoMovimento').value;
 
     if (tipoOperacao === '') {
-        mostrarPopupEstoque('Selecione um tipo de operação (+, - ou =).', 'aviso');
+        mostrarMensagem('Selecione um tipo de operação (+, - ou =).', 'aviso');
         return;
     }
     if (quantidadeStr.trim() === '') {
-        mostrarPopupEstoque('O campo de quantidade é obrigatório.', 'aviso');
+        mostrarMensagem('O campo de quantidade é obrigatório.', 'aviso');
         return;
     }
     const quantidade = parseInt(quantidadeStr);
 
     if (isNaN(quantidade)) {
-        mostrarPopupEstoque('Quantidade deve ser um número.', 'aviso');
+        mostrarMensagem('Quantidade deve ser um número.', 'aviso');
         return;
     }
     if ((tipoOperacao === 'ENTRADA_MANUAL' || tipoOperacao === 'SAIDA_MANUAL') && quantidade <= 0) {
-        mostrarPopupEstoque('Quantidade para entrada/saída manual deve ser maior que zero.', 'aviso');
+        mostrarMensagem('Quantidade para entrada/saída manual deve ser maior que zero.', 'aviso');
         return;
     }
     if (tipoOperacao === 'BALANCO' && quantidade < 0) {
-        mostrarPopupEstoque('Quantidade para balanço não pode ser negativa.', 'aviso');
+        mostrarMensagem('Quantidade para balanço não pode ser negativa.', 'aviso');
         return;
     }
 
@@ -1644,7 +1660,7 @@ async function salvarMovimentoManualEstoque() {
             method: 'POST',
             body: JSON.stringify(payload)
         });
-        mostrarPopupEstoque(resultado.message || 'Movimento de estoque salvo com sucesso!', 'sucesso');
+        mostrarMensagem(resultado.message || 'Movimento de estoque salvo com sucesso!', 'sucesso');
         
         // Invalida caches para forçar recarga dos dados
         saldosEstoqueGlobaisCompletos = [];
@@ -1660,7 +1676,7 @@ async function salvarMovimentoManualEstoque() {
 
     } catch (error) {
         console.error('[salvarMovimentoManualEstoque] Erro ao salvar:', error);
-        mostrarPopupEstoque(error.data?.details || error.message || 'Erro desconhecido ao salvar movimento.', 'erro');
+        mostrarMensagem(error.data?.details || error.message || 'Erro desconhecido ao salvar movimento.', 'erro');
     } finally {
         salvarBtn.disabled = false;
         salvarBtn.innerHTML = originalSalvarBtnText;
@@ -1694,6 +1710,8 @@ function handleHashChangeEstoque() {
 
     if (hash.startsWith('#inventario')) {
     inventarioView.style.display = 'block';
+
+    adicionarBotaoFechar(inventarioView, () => { window.location.hash = '#'; });
     
     // Rota para a tela de contagem de uma sessão específica
     if (hash.includes('/contagem/')) {
@@ -1713,6 +1731,7 @@ function handleHashChangeEstoque() {
             return;
         }
         movimentoView.style.display = 'block';
+        adicionarBotaoFechar(movimentoView, () => { window.location.hash = '#'; });
         prepararViewMovimento(); // Prepara e preenche a view
     } 
     // Rota padrão (lista de estoque)
@@ -1729,7 +1748,7 @@ function handleHashChangeEstoque() {
         
         carregarTabelaEstoque(searchTermAtual, currentPageEstoqueTabela).catch(err => {
             console.error("Erro ao recarregar tabela de estoque via handleHashChange:", err);
-            mostrarPopupEstoque("Falha ao atualizar tabela de estoque.", "erro");
+            mostrarMensagem("Falha ao atualizar tabela de estoque.", "erro");
         });
     }
 }
@@ -1744,6 +1763,7 @@ async function abrirModalArquivados() {
     if(tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;"><div class="es-spinner"></div> Carregando...</td></tr>';
     
     modal.style.display = 'flex';
+    adicionarBotaoFechar(modal, fecharModalArquivados);
     await carregarItensArquivados();
 }
 
@@ -1759,7 +1779,7 @@ async function carregarItensArquivados() {
     } catch (error) {
         const tbody = document.getElementById('tabelaItensArquivadosBody');
         if(tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:red;">Erro ao carregar itens arquivados.</td></tr>';
-        mostrarPopupEstoque('Falha ao carregar a lista de itens arquivados.', 'erro');
+        mostrarMensagem('Falha ao carregar a lista de itens arquivados.', 'erro');
     }
 }
 
@@ -1784,7 +1804,7 @@ function renderizarTabelaArquivados(itens) {
             <td><strong>${item.produto_nome}</strong><br><small>${item.variante_nome}</small></td>
             <td>${item.produto_ref_id}</td>
             <td style="text-align: center;">
-                <button class="es-btn es-btn-sucesso btn-restaurar-item" data-sku="${item.produto_ref_id}" data-nome="${item.produto_nome} - ${item.variante_nome}">
+                <button class="gs-btn gs-btn-sucesso btn-restaurar-item" data-sku="${item.produto_ref_id}" data-nome="${item.produto_nome} - ${item.variante_nome}">
                     <i class="fas fa-undo-alt"></i> Restaurar
                 </button>
             </td>
@@ -1799,7 +1819,7 @@ async function handleRestaurarItemClick(event) {
     const sku = targetButton.dataset.sku;
     const nome = targetButton.dataset.nome;
 
-    const confirmado = await mostrarPopupConfirmacao(`Tem certeza que deseja restaurar o item <br><b>${nome}</b> (SKU: ${sku})?<br><br>Ele voltará a aparecer na lista principal de estoque.`);
+    const confirmado = await mostrarConfirmacao(`Tem certeza que deseja restaurar o item <br><b>${nome}</b> (SKU: ${sku})?<br><br>Ele voltará a aparecer na lista principal de estoque.`);
     
     if (!confirmado) return;
 
@@ -1809,7 +1829,7 @@ async function handleRestaurarItemClick(event) {
     try {
         await fetchEstoqueAPI(`/estoque/arquivados/${sku}`, { method: 'DELETE' });
         
-        mostrarPopupEstoque('Item restaurado com sucesso!', 'sucesso');
+        mostrarMensagem('Item restaurado com sucesso!', 'sucesso');
         
         // Remove a linha da tabela do modal para feedback imediato
         targetButton.closest('tr').remove();
@@ -1818,7 +1838,7 @@ async function handleRestaurarItemClick(event) {
         saldosEstoqueGlobaisCompletos = [];
 
     } catch (error) {
-        mostrarPopupEstoque(error.data?.error || 'Erro ao restaurar o item.', 'erro');
+        mostrarMensagem(error.data?.error || 'Erro ao restaurar o item.', 'erro');
         targetButton.disabled = false;
         targetButton.innerHTML = '<i class="fas fa-undo-alt"></i> Restaurar';
     }
@@ -1875,7 +1895,7 @@ async function carregarHistoricoMovimentacoes(produtoId, varianteNome, page) {
         renderizarPaginacaoHistorico(data.pages || 0, produtoId, varianteNome); // Passa o ID para a paginação
     } catch (error) {
         tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:red;">Erro ao carregar histórico.</td></tr>`;
-        mostrarPopupEstoque('Erro ao carregar histórico de movimentações.', 'erro');
+        mostrarMensagem('Erro ao carregar histórico de movimentações.', 'erro');
     }
 }
 
@@ -1988,6 +2008,8 @@ function mostrarViewSeparacao() {
     separacaoView.classList.remove('hidden');
     separacaoView.style.display = 'block';
 
+    adicionarBotaoFechar(separacaoView, voltarParaEstoquePrincipal);
+
     // Limpa a busca e renderiza os produtos base
     document.getElementById('searchSeparacaoProdutoBase').value = '';
     renderizarProdutosBase();
@@ -2059,9 +2081,13 @@ function mostrarViewDetalheSeparacao(nomeProduto) {
     produtoEmDetalheSeparacao = nomeProduto;
 
     document.getElementById('separacaoView').style.display = 'none';
+
     const detalheView = document.getElementById('separacaoDetalheView');
     detalheView.classList.remove('hidden');
     detalheView.style.display = 'block';
+
+    // Adiciona o botão "X" que chama a função de voltar para a lista de produtos
+    adicionarBotaoFechar(detalheView, voltarParaListaProdutos);
 
     document.getElementById('detalheSeparacaoTitulo').textContent = `Separando: ${nomeProduto}`;
     
@@ -2080,7 +2106,7 @@ function voltarParaListaProdutos() {
 
 function voltarParaEstoquePrincipal() {
     if (itensEmSeparacao.size > 0) {
-        mostrarPopupConfirmacao('Você tem itens no carrinho de separação.<br>Deseja descartá-los e voltar?', 'aviso')
+        mostrarConfirmacao('Você tem itens no carrinho de separação.<br>Deseja descartá-los e voltar?', 'aviso')
             .then(confirmado => {
                 if (confirmado) {
                     itensEmSeparacao.clear();
@@ -2165,7 +2191,7 @@ function renderizarCardsDeVariacao() {
             </div>
             <div class="es-separacao-card-body">
                 <div class="es-separacao-card-saldo">
-                    Estoque: <strong class="saldo-display" style="color: ${quantidadeNoCarrinho > 0 ? '#e74c3c' : 'var(--es-cor-azul-primario)'};">${saldoProjetado}</strong>
+                    Estoque: <strong class="saldo-display" style="color: ${quantidadeNoCarrinho > 0 ? '#e74c3c' : 'var(--gs-primaria)'};">${saldoProjetado}</strong>
                 </div>
                 <div class="es-separacao-card-controls">
                     <button class="control-btn minus-btn">-</button>
@@ -2199,7 +2225,7 @@ function renderizarCardsDeVariacao() {
             } else {
                 itensEmSeparacao.delete(item.produto_ref_id);
                 card.classList.remove('selecionado');
-                saldoDisplay.style.color = 'var(--es-cor-azul-primario)';
+                saldoDisplay.style.color = 'var(--gs-primaria)';
             }
             atualizarCarrinhoFlutuante();
         };
@@ -2275,7 +2301,7 @@ function abrirModalFinalizacao() {
     // Validação robusta dos elementos
     if (!modal || !corpoTabela || !canalVendaContainer || !btnConfirmar) {
         console.error("Erro fatal: Elementos do modal de finalização não encontrados. Verifique os IDs no HTML.");
-        mostrarPopupEstoque("Erro ao abrir janela de finalização (E-01).", "erro");
+        mostrarMensagem("Erro ao abrir janela de finalização (E-01).", "erro");
         return;
     }
 
@@ -2353,7 +2379,7 @@ async function confirmarSaidaEstoque() {
     const observacao = document.getElementById('observacaoSaida').value;
 
     if (!tipo_operacao) {
-        mostrarPopupEstoque('Selecione um canal de venda para a saída.', 'aviso');
+        mostrarMensagem('Selecione um canal de venda para a saída.', 'aviso');
         return;
     }
 
@@ -2379,7 +2405,7 @@ async function confirmarSaidaEstoque() {
             body: JSON.stringify(payload)
         });
 
-        mostrarPopupEstoque('Saída de estoque registrada com sucesso!', 'sucesso');
+        mostrarMensagem('Saída de estoque registrada com sucesso!', 'sucesso');
         
         // CORREÇÃO 1: Limpa o carrinho e ATUALIZA a interface do carrinho flutuante
         itensEmSeparacao.clear();
@@ -2397,7 +2423,7 @@ async function confirmarSaidaEstoque() {
 
     } catch (error) {
         console.error('[confirmarSaidaEstoque] Erro:', error);
-        mostrarPopupEstoque(`Falha ao registrar saída: ${error.data?.details || error.message}`, 'erro');
+        mostrarMensagem(`Falha ao registrar saída: ${error.data?.details || error.message}`, 'erro');
     } finally {
         // Garante que o estado do botão seja resetado em qualquer cenário (sucesso ou falha)
         if (btnConfirmar) {
@@ -2444,7 +2470,7 @@ async function inicializarPaginaEstoque() {
 
     } catch (error) {
         console.error("[inicializarPaginaEstoque] Erro:", error);
-        mostrarPopupEstoque("Falha ao carregar dados do estoque.", "erro");
+        mostrarMensagem("Falha ao carregar dados do estoque.", "erro");
     } finally {
         // Esconde o overlay DEPOIS que tudo carregou
         if(overlay) overlay.classList.add('hidden');
@@ -2496,7 +2522,7 @@ async function prepararViewInventario() {
     } catch (error) {
         console.error('[prepararViewInventario] Erro ao buscar sessões:', error);
         historicoBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">Falha ao carregar histórico.</td></tr>`;
-        mostrarPopupEstoque('Não foi possível carregar os dados do inventário.', 'erro');
+        mostrarMensagem('Não foi possível carregar os dados do inventário.', 'erro');
     } finally {
         btnIniciarNovo.disabled = false; // Reabilita o botão em qualquer cenário
     }
@@ -2518,7 +2544,7 @@ async function iniciarNovoInventario() {
         });
 
         sessaoInventarioAtiva = resultado.sessao;
-        mostrarPopupEstoque(`Novo inventário #${sessaoInventarioAtiva.id} iniciado com ${resultado.totalItens} itens.`, 'sucesso');
+        mostrarMensagem(`Novo inventário #${sessaoInventarioAtiva.id} iniciado com ${resultado.totalItens} itens.`, 'sucesso');
         
         window.location.hash = `#inventario/contagem/${sessaoInventarioAtiva.id}`;
 
@@ -2526,7 +2552,7 @@ async function iniciarNovoInventario() {
         console.error('[iniciarNovoInventario] Erro:', error);
         // A API já retorna um erro 409 se houver um inventário em andamento.
         const mensagem = error.data?.error || error.message || 'Erro desconhecido ao iniciar inventário.';
-        mostrarPopupEstoque(mensagem, 'erro');
+        mostrarMensagem(mensagem, 'erro');
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-plus-circle"></i> Iniciar Novo Inventário';
@@ -2569,7 +2595,7 @@ function renderizarHistoricoInventario(sessoes) {
             <td data-label="Finalizado em">${dataFim}</td>
             <td data-label="Responsável">${sessao.usuario_responsavel || 'N/A'}</td>
             <td data-label="Ações" style="text-align:center;">
-            <button class="es-btn es-btn-secundario" onclick="abrirModalDetalhesInventario(${sessao.id})">
+            <button class="gs-btn gs-btn-secundario" onclick="abrirModalDetalhesInventario(${sessao.id})">
                 <i class="fas fa-eye"></i> Ver
             </button>
             </td>
@@ -2779,7 +2805,7 @@ function adicionarListenersContagem() {
                 // Isso acontecerá apenas na primeira vez que uma contagem for salva com sucesso.
                 if (btnRevisar.disabled) {
                     btnRevisar.disabled = false;
-                    mostrarPopupEstoque('Contagem salva. Você já pode revisar e finalizar o inventário.', 'info', 3000);
+                    mostrarMensagem('Contagem salva. Você já pode revisar e finalizar o inventário.', 'info', 3000);
                 }
                 // ********************************************
 
@@ -2798,7 +2824,7 @@ function adicionarListenersContagem() {
 
             } catch (error) {
                 console.error('Erro ao salvar contagem:', error);
-                mostrarPopupEstoque(`Falha ao salvar a contagem para ${produtoRefId}`, 'erro');
+                mostrarMensagem(`Falha ao salvar a contagem para ${produtoRefId}`, 'erro');
                 input.style.borderColor = 'red';
             } finally {
                 input.disabled = false; // Reabilita o input
@@ -2952,7 +2978,7 @@ function abrirModalRevisao() {
     );
 
     if (itensDivergentes.length === 0) {
-        mostrarPopupEstoque('Nenhuma divergência encontrada. Não há nada a ajustar.', 'info');
+        mostrarMensagem('Nenhuma divergência encontrada. Não há nada a ajustar.', 'info');
         return;
     }
 
@@ -2982,7 +3008,7 @@ function fecharModalRevisao() {
 
 async function finalizarInventario() {
     const btn = document.getElementById('btnConfirmarFinalizacaoInventario');
-    const confirmado = await mostrarPopupConfirmacao(
+    const confirmado = await mostrarConfirmacao(
         'Tem certeza que deseja finalizar este inventário?<br>Os saldos de estoque dos itens listados serão <b>permanentemente ajustados</b>.',
         'perigo'
     );
@@ -2997,7 +3023,7 @@ async function finalizarInventario() {
             method: 'POST'
         });
 
-        mostrarPopupEstoque(resultado.message, 'sucesso');
+        mostrarMensagem(resultado.message, 'sucesso');
         
         // Limpa o cache de estoque para forçar a recarga na próxima vez que a tela principal for vista
         saldosEstoqueGlobaisCompletos = [];
@@ -3009,7 +3035,7 @@ async function finalizarInventario() {
 
     } catch (error) {
         console.error('Erro ao finalizar inventário:', error);
-        mostrarPopupEstoque(`Falha ao finalizar: ${error.data?.details || error.message}`, 'erro');
+        mostrarMensagem(`Falha ao finalizar: ${error.data?.details || error.message}`, 'erro');
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-check-circle"></i> Confirmar e Ajustar Estoque';
@@ -3108,7 +3134,6 @@ function setupEventListenersEstoque() {
     }
 
     // Listeners para os botões da nova view
-    document.getElementById('btnVoltarDaFila')?.addEventListener('click', voltarDaFilaParaEstoque);
     document.getElementById('btnSalvarPrioridades')?.addEventListener('click', salvarPrioridades);
 
     document.getElementById('btnGerenciarFila')?.addEventListener('click', mostrarViewFilaProducao);
@@ -3127,9 +3152,7 @@ function setupEventListenersEstoque() {
     document.getElementById('fecharModalHistorico')?.addEventListener('click', fecharModalHistorico);
     document.getElementById('arquivarItemBtn')?.addEventListener('click', arquivarItemEstoque);
     document.getElementById('btnIniciarSeparacao')?.addEventListener('click', mostrarViewSeparacao);
-    document.getElementById('btnVoltarDaSeparacao')?.addEventListener('click', voltarParaEstoquePrincipal);
     document.getElementById('searchSeparacaoProdutoBase')?.addEventListener('input', debounce(renderizarProdutosBase, 350));
-    document.getElementById('btnVoltarParaListaProdutos')?.addEventListener('click', voltarParaListaProdutos);
     document.getElementById('carrinhoSeparacao')?.addEventListener('click', abrirModalFinalizacao);    document.getElementById('fecharModalFinalizar')?.addEventListener('click', fecharModalFinalizacao);
     document.getElementById('btnCancelarFinalizacao')?.addEventListener('click', fecharModalFinalizacao);
     document.getElementById('btnConfirmarSaidaEstoque')?.addEventListener('click', confirmarSaidaEstoque);
@@ -3165,7 +3188,7 @@ function setupEventListenersEstoque() {
             // Se NÃO tem permissão, adiciona a classe de estilo e o listener para o popup
             btnVerArquivados.classList.add('permissao-negada');
             btnVerArquivados.addEventListener('click', () => {
-                mostrarPopupEstoque('Você não tem permissão para visualizar e editar itens arquivados.', 'aviso');
+                mostrarMensagem('Você não tem permissão para visualizar e editar itens arquivados.', 'aviso');
             });
         }
     }
@@ -3206,16 +3229,15 @@ function setupEventListenersEstoque() {
             btnRealizarInventario.disabled = true; // Desabilita semanticamente
             btnRealizarInventario.addEventListener('click', (e) => {
                 e.preventDefault(); // Garante que nenhuma ação padrão ocorra
-                mostrarPopupEstoque('Você não tem permissão para realizar inventários.', 'aviso');
+                mostrarMensagem('Você não tem permissão para realizar inventários.', 'aviso');
             });
         }
     }
 
-    // Listener para o botão de voltar do inventário
-    document.getElementById('btnVoltarDoInventario')?.addEventListener('click', () => {
-        // Adicionar lógica de confirmação se houver trabalho não salvo
-        window.location.hash = '#';
-    });
+
+    document.getElementById('btnAbrirHistoricoGeralEstoque')?.addEventListener('click', abrirModalHistoricoGeralEstoque);
+    document.getElementById('filtroEventoEstoque')?.addEventListener('change', () => carregarHistoricoGeralEstoque(1));
+    document.getElementById('filtroPeriodoEstoque')?.addEventListener('change', () => carregarHistoricoGeralEstoque(1));
 
     // Listener para iniciar um novo inventário
     document.getElementById('btnIniciarNovoInventario')?.addEventListener('click', iniciarNovoInventario);
@@ -3223,9 +3245,9 @@ function setupEventListenersEstoque() {
     document.getElementById('btnContinuarInventario')?.addEventListener('click', () => {
     if (sessaoInventarioAtiva) {
         window.location.hash = `#inventario/contagem/${sessaoInventarioAtiva.id}`;
-        mostrarPopupEstoque(`Continuando inventário #${sessaoInventarioAtiva.id}. Tela de contagem a ser implementada.`, 'info');
+        mostrarMensagem(`Continuando inventário #${sessaoInventarioAtiva.id}. Tela de contagem a ser implementada.`, 'info');
     } else {
-        mostrarPopupEstoque('Nenhuma sessão de inventário ativa encontrada para continuar.', 'erro');
+        mostrarMensagem('Nenhuma sessão de inventário ativa encontrada para continuar.', 'erro');
     }
     });
 
@@ -3249,7 +3271,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await inicializarPaginaEstoque();
     } catch (error) {
         console.error('[Estoque DOMContentLoaded] Erro:', error);
-        mostrarPopupEstoque('Erro crítico ao carregar a página de estoque.', 'erro');
+        mostrarMensagem('Erro crítico ao carregar a página de estoque.', 'erro');
     }
 });
 

@@ -123,14 +123,12 @@ router.post('/', async (req, res) => {
 
 // GET /api/arremates/
 router.get('/', async (req, res) => {
-    console.log('--- [API GET /arremates com Filtros e Paginação] ---');
-    
     const { 
         produto_id, 
         variante,
+        fetchAll = 'false',
         page = 1,
-        limit = 6,
-        fetchAll = 'false'
+        limit = 6 
     } = req.query;
 
     const varianteDecodificada = variante ? variante.replace(/\+/g, ' ') : null;
@@ -138,14 +136,10 @@ router.get('/', async (req, res) => {
     let dbClient;
     try {
         dbClient = await pool.connect();
-
-        console.log(`[API GET /arremates] Parâmetros recebidos: produto_id=${produto_id}, variante="${variante}" (decodificada para: "${varianteDecodificada}")`);
-
-        let whereClauses = [
-            // <<< FILTRO DE SALDO ADICIONADO DIRETAMENTE NA QUERY >>>
-            "(a.quantidade_arrematada - a.quantidade_ja_embalada) > 0",
-            "a.tipo_lancamento = 'PRODUCAO'"
-        ];
+        
+        // A base da query agora não tem mais o filtro de saldo,
+        // pois fetchAll pode precisar de todos, e a paginação só dos com saldo.
+        let whereClauses = []; 
         let queryParams = [];
         let paramIndex = 1;
 
@@ -154,62 +148,74 @@ router.get('/', async (req, res) => {
             queryParams.push(parseInt(produto_id));
         }
 
-        // <<< VARIÁVEL CORRIGIDA  >>>
         if (varianteDecodificada && varianteDecodificada !== '-') {
             whereClauses.push(`a.variante = $${paramIndex++}`);
-            queryParams.push(varianteDecodificada); // << Usa a variável decodificada
-        } else if (variante === '-') { // << Aqui mantemos 'variante' para o caso especial
+            queryParams.push(varianteDecodificada);
+        } else if (variante === '-') {
             whereClauses.push(`(a.variante IS NULL OR a.variante = '-' OR a.variante = '')`);
         }
 
-        const whereString = `WHERE ${whereClauses.join(' AND ')}`;
-
-        const countQuery = `SELECT COUNT(*) FROM arremates a ${whereString}`;
-        const countResult = await dbClient.query(countQuery, queryParams);
-        const totalItems = parseInt(countResult.rows[0].count, 10);
-        
-        const limitNum = parseInt(limit);
-        const offset = (parseInt(page) - 1) * limitNum;
-        const totalPages = Math.ceil(totalItems / limitNum) || 1;
-
-
-        
-        // <<< LÓGICA DE PAGINAÇÃO CONDICIONAL >>>
-        let paginationClause = '';
-        if (fetchAll === 'false') {
-            const limitNum = parseInt(limit);
-            const offset = (parseInt(page) - 1) * limitNum;
-            paginationClause = `LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
-            queryParams.push(limitNum, offset);
-        }
-
-        let dataQuery = `
-            SELECT a.*, p.nome as produto 
-            FROM arremates a 
-            JOIN produtos p ON a.produto_id = p.id
-            ${whereString}
-            ORDER BY a.data_lancamento DESC
-            ${paginationClause} -- <<< APLICA A PAGINAÇÃO AQUI (ou não) >>>
-        `;
-
-
-        const dataResult = await dbClient.query(dataQuery, queryParams);
-
-        // <<< LOG DE DEPURAÇÃO 4: RESULTADO >>>
-        console.log(`%c[API GET /arremates] A query retornou ${dataResult.rowCount} linhas.`, 'color: blue; font-weight: bold;');
-
-        // Se for fetchAll, não precisamos de dados de paginação na resposta.
+        // --- LÓGICA CONDICIONAL: A CHAVE DA CORREÇÃO ---
         if (fetchAll === 'true') {
-            return res.status(200).json({ rows: dataResult.rows, pagination: {} });
-        }
-        
-        res.status(200).json({
-            rows: dataResult.rows,
-            pagination: { currentPage: parseInt(page), totalPages, totalItems }
-        });
+            // LÓGICA ANTIGA PARA COMPATIBILIDADE: Retorna todos os arremates (com e sem saldo)
+            // A sua função buscarArrematesDetalhados já faz o filtro de saldo no JS depois
+            const whereString = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+            
+            const dataQuery = `
+                SELECT a.*, p.nome as produto 
+                FROM arremates a 
+                JOIN produtos p ON a.produto_id = p.id
+                ${whereString}
+                ORDER BY a.data_lancamento DESC
+            `;
+            
+            const dataResult = await dbClient.query(dataQuery, queryParams);
 
+            // **RETORNA NO FORMATO ANTIGO E ESPERADO PELO fetchAll**
+            return res.status(200).json({ rows: dataResult.rows });
+
+        } else {
+            // LÓGICA NOVA PARA A PAGINAÇÃO NA ABA "VOLTAR PARA ARREMATE"
+            // Adiciona o filtro de saldo aqui, pois esta chamada só quer itens pendentes
+            whereClauses.push("(a.quantidade_arrematada - a.quantidade_ja_embalada) > 0");
+            whereClauses.push("a.tipo_lancamento = 'PRODUCAO'");
+            
+            const whereString = `WHERE ${whereClauses.join(' AND ')}`;
+
+            const countQuery = `SELECT COUNT(a.id) as total_count FROM arremates a ${whereString}`;
+            const countResult = await dbClient.query(countQuery, queryParams);
+            const totalItems = parseInt(countResult.rows[0].total_count, 10);
+            
+            const limitNum = parseInt(limit);
+            const totalPages = Math.ceil(totalItems / limitNum) || 1;
+            const offset = (parseInt(page) - 1) * limitNum;
+
+            const dataQuery = `
+                SELECT 
+                    a.*, 
+                    COALESCE(op.numero, a.op_numero) as op_numero 
+                FROM arremates a 
+                LEFT JOIN ordens_de_producao op ON a.op_numero = op.numero
+                ${whereString}
+                ORDER BY a.data_lancamento DESC
+                LIMIT $${paramIndex++} OFFSET $${paramIndex++}
+            `;
+            queryParams.push(limitNum, offset);
+            
+            const dataResult = await dbClient.query(dataQuery, queryParams);
+            
+            // **RETORNA NO FORMATO NOVO ESPERADO PELA PAGINAÇÃO**
+            return res.status(200).json({
+                rows: dataResult.rows,
+                pagination: {
+                    currentPage: parseInt(page),
+                    totalPages: totalPages,
+                    totalItems: totalItems
+                }
+            });
+        }
     } catch (error) {
-        console.error('[API Arremates GET / Paginado] Erro:', error);
+        console.error('[API Arremates GET / Híbrido] Erro:', error);
         res.status(500).json({ error: 'Erro interno ao buscar arremates.' });
     } finally {
         if (dbClient) dbClient.release();

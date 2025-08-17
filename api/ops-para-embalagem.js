@@ -21,7 +21,6 @@ if (!SECRET_KEY) {
 
 // Função verificarTokenInterna (mantenha a sua ou use uma centralizada)
 const verificarTokenInterna = (reqOriginal) => {
-    // console.log('[router/ops-para-embalagem - verificarTokenInterna] Verificando token...');
     const authHeader = reqOriginal.headers.authorization;
     if (!authHeader) {
         const error = new Error('Token não fornecido');
@@ -36,10 +35,8 @@ const verificarTokenInterna = (reqOriginal) => {
     }
     try {
         const decoded = jwt.verify(token, SECRET_KEY, { ignoreExpiration: false });
-        // console.log('[router/ops-para-embalagem - verificarTokenInterna] Token decodificado:', decoded);
         return decoded; // Retorna o payload do token
     } catch (error) {
-        // console.error('[router/ops-para-embalagem - verificarTokenInterna] Erro ao verificar token:', error.message);
         const newError = new Error(error.name === 'TokenExpiredError' ? 'Token expirado' : 'Token inválido');
         newError.statusCode = 401;
         if (error.name === 'TokenExpiredError') newError.details = 'jwt expired';
@@ -51,19 +48,15 @@ const verificarTokenInterna = (reqOriginal) => {
 router.use(async (req, res, next) => {
     let clienteConectado; // Cliente para o middleware
     try {
-        // console.log(`[router/ops-para-embalagem MID] Recebida ${req.method} em ${req.originalUrl}`);
         req.usuarioLogado = verificarTokenInterna(req); // req.usuarioLogado é o payload do token
-        // console.log(`[router/ops-para-embalagem MID] Usuário autenticado: ${req.usuarioLogado.nome || req.usuarioLogado.nome_usuario}`);
 
         clienteConectado = await pool.connect(); // Conecta para buscar permissões
         // Não anexamos a req.dbCliente aqui, pois getPermissoesCompletasUsuarioDB gerencia seu cliente
         // E a rota GET / também vai pegar seu próprio cliente.
 
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(clienteConectado, req.usuarioLogado.id);
-        // console.log(`[router/ops-para-embalagem MID] Permissões DB para ${req.usuarioLogado.nome || req.usuarioLogado.nome_usuario}:`, permissoesCompletas);
         
         if (!permissoesCompletas.includes('acesso-embalagem-de-produtos')) {
-            // console.warn(`[router/ops-para-embalagem MID] Permissão 'acesso-embalagem-de-produtos' negada para ${req.usuarioLogado.nome || req.usuarioLogado.nome_usuario}.`);
             const err = new Error('Permissão negada para acessar OPs para embalagem.');
             err.statusCode = 403;
             throw err; // Será pego pelo catch abaixo
@@ -81,7 +74,6 @@ router.use(async (req, res, next) => {
     } finally {
         if (clienteConectado) {
             clienteConectado.release(); // Libera o cliente usado pelo middleware
-            // console.log('[router/ops-para-embalagem MID] Cliente DB do middleware liberado.');
         }
     }
 });

@@ -4,9 +4,29 @@ import pkg from 'pg';
 const { Pool } = pkg;
 import jwt from 'jsonwebtoken';
 import express from 'express';
+import { getPermissoesCompletasUsuarioDB } from './usuarios.js';
 
-// Importar a função de buscar permissões completas
-import { getPermissoesCompletasUsuarioDB } from './usuarios.js'; // Verifique o caminho
+async function registrarEventoAuditoria(dbClient, evento) {
+    const { usuarioLogado, tipo_evento, entidade, entidade_id, detalhes } = evento;
+    
+    try {
+        await dbClient.query(
+            `INSERT INTO auditoria_eventos (usuario_id, usuario_nome, tipo_evento, entidade, entidade_id, detalhes)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+                usuarioLogado.id,
+                usuarioLogado.nome || usuarioLogado.nome_usuario,
+                tipo_evento,
+                entidade || null,
+                entidade_id ? String(entidade_id) : null,
+                detalhes || null
+            ]
+        );
+    } catch (error) {
+        // Logamos o erro de auditoria, mas não paramos a operação principal
+        console.error('[AUDITORIA] Falha ao registrar evento:', error.message);
+    }
+}
 
 const router = express.Router();
 const pool = new Pool({
@@ -17,14 +37,12 @@ const SECRET_KEY = process.env.JWT_SECRET;
 
 // --- Função verificarTokenInterna (mantenha ou centralize) ---
 const verificarTokenInterna = (reqOriginal) => {
-    // ... (código da sua função verificarTokenInterna, igual à de api/kits.js)
     const authHeader = reqOriginal.headers.authorization;
     if (!authHeader) throw new Error('Token não fornecido');
     const token = authHeader.split(' ')[1];
     if (!token) throw new Error('Token mal formatado');
     try {
         const decoded = jwt.verify(token, SECRET_KEY, { ignoreExpiration: false });
-        // console.log('[router/estoque - verificarTokenInterna] Token decodificado:', decoded);
         return decoded;
     } catch (error) {
         const newError = new Error(error.name === 'TokenExpiredError' ? 'Token expirado' : 'Token inválido');
@@ -99,6 +117,7 @@ router.get('/saldo', async (req, res) => {
         `;
 
         const result = await dbClient.query(queryText);
+        
         res.status(200).json(result.rows);
     } catch (error) {
         console.error('[router/estoque GET /saldo] Erro:', error);
@@ -140,8 +159,15 @@ router.post('/arquivar-item', async (req, res) => {
         const result = await dbClient.query(query, [produto_ref_id, usuarioLogado.id]);
 
         if (result.rowCount > 0) {
-            console.log(`[API /arquivar-item] SUCESSO: SKU ${produto_ref_id} inserido na tabela de arquivados.`);
-            res.status(200).json({ message: `Item com SKU ${produto_ref_id} foi arquivado com sucesso.` });
+        await registrarEventoAuditoria(dbClient, {
+            usuarioLogado,
+            tipo_evento: 'ITEM_ARQUIVADO',
+            entidade: 'EstoqueItem',
+            entidade_id: produto_ref_id
+        });
+
+        console.log(`[API /arquivar-item] SUCESSO: SKU ${produto_ref_id} inserido...`);
+        res.status(200).json({ message: `Item com SKU ${produto_ref_id} foi arquivado...` });
         } else {
             console.log(`[API /arquivar-item] INFO: SKU ${produto_ref_id} já estava arquivado (ON CONFLICT DO NOTHING).`);
             res.status(200).json({ message: `Item com SKU ${produto_ref_id} já se encontra arquivado.` });
@@ -333,6 +359,20 @@ router.post('/movimento-manual', async (req, res) => {
 
         const { produto_id, variante_nome, quantidade_movimentada, tipo_operacao, observacao } = req.body;
 
+        const permissoesNecessarias = {
+            'ENTRADA_MANUAL': 'registrar-entrada-manual',
+            'SAIDA_MANUAL': 'registrar-saida-manual',
+            'DEVOLUCAO': 'registrar-devolucao'
+        };
+
+        const permissaoRequerida = permissoesNecessarias[tipo_operacao];
+
+        // Verifica se a operação existe no nosso mapa e se o usuário tem a permissão
+        if (!permissaoRequerida || !permissoesCompletas.includes(permissaoRequerida)) {
+            console.warn(`[API /movimento-manual] Usuário ID ${usuarioLogado.id} tentou realizar a operação '${tipo_operacao}' sem permissão.`);
+            return res.status(403).json({ error: `Permissão negada para realizar a operação: ${tipo_operacao}` });
+        }
+
         if (!produto_id || quantidade_movimentada === undefined || !tipo_operacao) {
             return res.status(400).json({ error: 'Campos obrigatórios: produto_id, quantidade_movimentada, tipo_operacao.' });
         }
@@ -384,11 +424,34 @@ router.post('/movimento-manual', async (req, res) => {
             ]
         );
         
-        console.log(`[API /estoque/movimento-manual] Movimento (${tipoMovimentoDB}) registrado:`, result.rows[0]);
+        const movimentoRegistrado = result.rows[0];
+
+        // --- REGISTRO DE AUDITORIA ---
+        const detalhesAuditoria = {
+        quantidade: movimentoRegistrado.quantidade,
+        movimento_id: movimentoRegistrado.id
+        };
+
+        // Adiciona a observação APENAS se ela existir
+        if (movimentoRegistrado.observacao) {
+            detalhesAuditoria.observacao = movimentoRegistrado.observacao;
+        }
+
+        await registrarEventoAuditoria(dbClient, {
+            usuarioLogado,
+            tipo_evento: tipo_operacao,
+            entidade: 'Estoque',
+            entidade_id: `${movimentoRegistrado.produto_id}|${movimentoRegistrado.variante_nome || '-'}`,
+            detalhes: detalhesAuditoria // Usamos nosso objeto construído dinamicamente
+        });
+        // --- FIM DO REGISTRO ---
+
+        console.log(`[API /estoque/movimento-manual] Movimento (${tipoMovimentoDB}) registrado:`, movimentoRegistrado);
         res.status(201).json({
             message: `Movimento de '${tipo_operacao}' registrado com sucesso.`,
-            movimentoRegistrado: result.rows[0]
+            movimentoRegistrado: movimentoRegistrado
         });
+
 
     } catch (error) {
         console.error('[API /estoque/movimento-manual] Erro:', error.message);
@@ -655,6 +718,70 @@ router.delete('/arquivados/:produto_ref_id', async (req, res) => {
     } catch (error) {
         console.error('[API /estoque/arquivados DELETE] Erro:', error);
         res.status(500).json({ error: 'Erro ao restaurar o item.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// BUSCA O HISTÓRICO GERAL (AUDITORIA) DO ESTOQUE
+router.get('/auditoria', async (req, res) => {
+    const { usuarioLogado } = req;
+    const { tipoEvento = 'todos', periodo = '7d', page = 1, limit = 15 } = req.query;
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
+        if (!permissoes.includes('acesso-estoque')) { // Ou uma permissão mais específica
+            return res.status(403).json({ error: 'Permissão negada para ver o histórico.' });
+        }
+
+        let whereClauses = ["entidade LIKE 'Estoque%'"]; // Filtra apenas eventos do módulo de Estoque
+        let queryParams = [];
+        let paramIndex = 1;
+
+        // Filtro de Período
+        if (periodo === 'hoje') {
+            whereClauses.push(`data_evento >= date_trunc('day', NOW())`);
+        } else if (periodo === '30d') {
+            whereClauses.push(`data_evento >= NOW() - INTERVAL '30 days'`);
+        } else { // Padrão: 7d
+            whereClauses.push(`data_evento >= NOW() - INTERVAL '7 days'`);
+        }
+        
+        // Filtro por Tipo de Evento
+        if (tipoEvento !== 'todos') {
+            whereClauses.push(`tipo_evento = $${paramIndex++}`);
+            queryParams.push(tipoEvento);
+        }
+        
+        const whereString = `WHERE ${whereClauses.join(' AND ')}`;
+        
+        const countQuery = `SELECT COUNT(*) FROM auditoria_eventos ${whereString}`;
+        const countResult = await dbClient.query(countQuery, queryParams);
+        const totalItems = parseInt(countResult.rows[0].count, 10);
+        
+        const limitNum = parseInt(limit);
+        const offset = (parseInt(page) - 1) * limitNum;
+        const totalPages = Math.ceil(totalItems / limitNum) || 1;
+        
+        queryParams.push(limitNum, offset);
+        const dataQuery = `SELECT * FROM auditoria_eventos ${whereString} ORDER BY data_evento DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+        
+        const dataResult = await dbClient.query(dataQuery, queryParams);
+        
+        res.status(200).json({
+            rows: dataResult.rows,
+            pagination: {
+                currentPage: parseInt(page),
+                totalPages: totalPages,
+                totalItems: totalItems
+            }
+        });
+
+    } catch (error) {
+        console.error('[API /estoque/auditoria] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar o histórico de auditoria.' });
     } finally {
         if (dbClient) dbClient.release();
     }

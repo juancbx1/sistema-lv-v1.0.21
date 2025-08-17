@@ -3,6 +3,7 @@
 import { verificarAutenticacao } from '/js/utils/auth.js';
 import { mostrarMensagem, mostrarConfirmacao } from '/js/utils/popups.js';
 import { obterProdutos as obterProdutosDoStorage, invalidateCache as invalidateProdutosStorageCache } from '/js/utils/storage.js';
+import { adicionarBotaoFechar } from '/js/utils/botoes-fechar.js';
 
 // --- Variáveis Globais ---
 let todosOsUsuarios = [];
@@ -80,19 +81,20 @@ function criarInstanciaDoModalHistorico() {
     // Se o modal já foi criado em memória, não faz nada.
     if (modalHistoricoGeralElement) return;
 
-    console.log("Criando a instância do modal de histórico pela primeira vez...");
+    console.log("Criando a instância do modal de histórico (versão corrigida)...");
     
     const container = document.createElement('div');
     container.id = 'historicoGeralModalContainer';
-    container.className = 'popup-container';
-    container.style.display = 'none'; // Começa escondido
+    container.className = 'popup-container es-modal'; // Usa a classe base do modal
+    container.style.display = 'none';
 
     container.innerHTML = `
         <div class="popup-overlay"></div>
-        <div class="ep-modal-historico">
+        <div class="es-modal-conteudo" style="max-width: 900px;">
+            <!-- O botão 'X' será adicionado aqui pelo JS -->
+            
             <div class="ep-modal-header">
                 <h3 class="ep-modal-titulo">Histórico Geral de Embalagem</h3>
-                <button id="btnFecharHistoricoGeral" class="ep-modal-fechar-btn">×</button>
             </div>
             <div class="ep-modal-filtros">
                 <div class="ep-form-grupo"><label for="filtroTipoEvento">Tipo</label><select id="filtroTipoEvento" class="ep-select"><option value="todos">Todos</option><option value="embalagem_unidade">Embalagem (UN)</option><option value="montagem_kit">Montagem (KIT)</option><option value="estorno_arremate">Estorno (p/ Arremate)</option><option value="estorno_estoque">Estorno (do Estoque)</option></select></div>
@@ -100,7 +102,7 @@ function criarInstanciaDoModalHistorico() {
                 <div class="ep-form-grupo"><label for="filtroPeriodo">Período</label><select id="filtroPeriodo" class="ep-select"><option value="7d">7 dias</option><option value="hoje">Hoje</option><option value="30d">30 dias</option><option value="mes_atual">Este Mês</option></select></div>
             </div>
             <div class="ep-modal-body"><div id="historicoGeralTabelaWrapper" class="ep-tabela-wrapper"></div></div>
-            <div class="ep-modal-footer"><div id="historicoGeralPaginacao" class="ep-paginacao-container"></div></div>
+            <div class="ep-modal-footer"><div id="historicoGeralPaginacao" class="gs-paginacao-container"></div></div>
         </div>
     `;
 
@@ -109,13 +111,11 @@ function criarInstanciaDoModalHistorico() {
     container.querySelector('#filtroTipoEvento').addEventListener('change', recarregarHistorico);
     container.querySelector('#filtroUsuario').addEventListener('change', recarregarHistorico);
     container.querySelector('#filtroPeriodo').addEventListener('change', recarregarHistorico);
-    container.querySelector('#btnFecharHistoricoGeral').addEventListener('click', fecharModalHistoricoGeral);
     container.querySelector('.popup-overlay').addEventListener('click', fecharModalHistoricoGeral);
 
     // Guarda a referência na variável global
     modalHistoricoGeralElement = container;
 }
-
 
 function fecharModalHistoricoGeral() {
     if (modalHistoricoGeralElement && modalHistoricoGeralElement.parentNode) {
@@ -127,6 +127,8 @@ function fecharModalHistoricoGeral() {
 async function abrirModalHistoricoGeral() {
     // Garante que a instância do modal exista em memória
     criarInstanciaDoModalHistorico();
+
+    adicionarBotaoFechar(modalHistoricoGeralElement, fecharModalHistoricoGeral);
     
     // Se o modal não estiver no DOM, adiciona-o.
     if (!document.body.contains(modalHistoricoGeralElement)) {
@@ -196,14 +198,13 @@ async function carregarArrematesDeOrigem(page = 1) { // Agora aceita o número d
             produto_id: produto_id,
             variante: variante || '-',
             page: page,
-            limit: ARREMATES_ORIGEM_PER_PAGE
+            limit: ARREMATES_ORIGEM_PER_PAGE // Usa a constante que já existe no seu código
         });
 
         // A API agora retorna um objeto { rows, pagination }
         const response = await fetchFromAPI(`/arremates?${params.toString()}`);
         const { rows: arrematesComSaldo, pagination } = response;
     
-
         if (arrematesComSaldo.length === 0) {
             container.innerHTML = '<p style="text-align: center;">Nenhum lançamento de arremate com saldo encontrado para este item.</p>';
             return;
@@ -211,51 +212,37 @@ async function carregarArrematesDeOrigem(page = 1) { // Agora aceita o número d
 
         let tabelaHTML = `
             <table class="ep-tabela-estilizada">
-                <thead>
-                    <tr>
-                        <th>Data</th>
-                        <th>Feito por (Tiktik)</th>
-                        <th style="text-align: right;">Saldo</th>
-                        <th>OP Origem</th>
-                        <th style="text-align: center;">Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
-        arrematesComSaldo.forEach(item => {
-        const saldo = item.quantidade_arrematada - item.quantidade_ja_embalada;
+                <thead>...</thead>
+                <tbody>`;
         
-        // Envolvemos os valores em <span> para que o CSS possa selecioná-los.
-        // O botão de ação também fica dentro de um span para consistência.
-        tabelaHTML += `
-            <tr data-arremate-id="${item.id}" data-arremate-info="${saldo} pçs para ${item.usuario_tiktik}">
-                <td data-label="Data:"><span>${new Date(item.data_lancamento).toLocaleString('pt-BR')}</span></td>
-                <td data-label="Feito por:"><span>${item.usuario_tiktik}</span></td>
-                <td data-label="Saldo:" style="font-weight: bold;"><span>${saldo}</span></td>
-                <td data-label="OP Origem:"><span>${item.op_numero}</span></td>
-                <td data-label="Ações:">
-                    <span>
-                        ${permissoes.includes('estornar-arremate') ? 
-                            `<button class="ep-btn ep-btn-perigo" onclick="handleEstornoDeArremateClick(this)">Estornar</button>` : 
-                            'Sem permissão'}
-                    </span>
-                </td>
-            </tr>
-        `;
-    });
+        arrematesComSaldo.forEach(item => {
+            const saldo = item.quantidade_arrematada - item.quantidade_ja_embalada;
+            tabelaHTML += `
+                <tr data-arremate-id="${item.id}" data-arremate-info="${saldo} pçs para ${item.usuario_tiktik || 'N/A'}">
+                    <td data-label="Data:"><span>${new Date(item.data_lancamento).toLocaleString('pt-BR')}</span></td>
+                    <td data-label="Feito por:"><span>${item.usuario_tiktik || 'N/A'}</span></td>
+                    <td data-label="Saldo:" style="font-weight: bold;"><span>${saldo}</span></td>
+                    <td data-label="OP Origem:"><span>${item.op_numero || '-'}</span></td>
+                    <td data-label="Ações:">
+                        <span>
+                            ${permissoes.includes('estornar-arremate') ? 
+                                `<button class="gs-btn gs-btn-perigo" onclick="handleEstornoDeArremateClick(this)">Estornar</button>` : 
+                                'Sem permissão'}
+                        </span>
+                    </td>
+                </tr>
+            `;
+        });
 
         tabelaHTML += `</tbody></table>`;
-
         container.innerHTML = tabelaHTML;
 
-    // Chama a função renderizarPaginacao para desenhar os botões
         renderizarPaginacao(paginacaoContainer, pagination.totalPages, pagination.currentPage, carregarArrematesDeOrigem);
 
     } catch (error) {
         container.innerHTML = `<p style="text-align: center; color: red;">Erro ao carregar arremates de origem.</p>`;
     }
 }
-
 
 /**
  * Handler para o clique no botão de estorno na aba "Voltar para Arremate".
@@ -361,12 +348,12 @@ function renderizarPaginacaoHistorico(totalPages, produtoRefId) {
     paginacaoEl.style.display = 'flex';
 
     paginacaoEl.innerHTML = `
-        <button class="pagination-btn ep-btn" data-page="${Math.max(1, currentPageHistorico - 1)}" ${currentPageHistorico === 1 ? 'disabled' : ''}>Anterior</button>
-        <span class="pagination-current">Pág. ${currentPageHistorico} de ${totalPages}</span>
-        <button class="pagination-btn ep-btn" data-page="${Math.min(totalPages, currentPageHistorico + 1)}" ${currentPageHistorico === totalPages ? 'disabled' : ''}>Próximo</button>
+        <button class="gs-paginacao-btn" data-page="${Math.max(1, currentPageHistorico - 1)}" ${currentPageHistorico === 1 ? 'disabled' : ''}>Anterior</button>
+        <span class="gs-paginacao-info">Pág. ${currentPageHistorico} de ${totalPages}</span>
+        <button class="gs-paginacao-btn" data-page="${Math.min(totalPages, currentPageHistorico + 1)}" ${currentPageHistorico === totalPages ? 'disabled' : ''}>Próximo</button>
     `;
 
-    paginacaoEl.querySelectorAll('.pagination-btn').forEach(btn => {
+    paginacaoEl.querySelectorAll('.gs-paginacao-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const targetPage = parseInt(btn.dataset.page);
             // Chama a função de carregar histórico passando o SKU (produtoRefId) e a nova página
@@ -468,7 +455,7 @@ function renderizarPaginacao(container, totalPages, currentPage, callback) {
 
     const criarBtn = (texto, page, isDisabled) => {
         const btn = document.createElement('button');
-        btn.className = 'ep-btn pagination-btn'; // Usando a classe de botão da página
+        btn.className = 'gs-paginacao-btn'; // Usando a classe de botão da página
         btn.textContent = texto;
         btn.disabled = isDisabled;
         if (!isDisabled) {
@@ -480,7 +467,7 @@ function renderizarPaginacao(container, totalPages, currentPage, callback) {
     container.appendChild(criarBtn('Anterior', currentPage - 1, currentPage === 1));
     
     const pageInfo = document.createElement('span');
-    pageInfo.className = 'pagination-current';
+    pageInfo.className = 'gs-paginacao-info';
     pageInfo.textContent = `Pág. ${currentPage} de ${totalPages}`;
     container.appendChild(pageInfo);
     
@@ -836,10 +823,10 @@ async function carregarDetalhesEmbalagemView(agregado) {
 
     // Lógica para buscar e preencher o SKU
     const skuEl = document.getElementById('embalagemDetalheSKU');
-    if (skuEl) {
-        let skuProduto = 'N/A';
-        const produtoCad = todosOsProdutosCadastrados.find(p => p.id == agregado.produto_id);
-        if (produtoCad) {
+        if (skuEl) {
+            let skuProduto = 'N/A';
+            const produtoCad = todosOsProdutosCadastrados.find(p => p.id == agregado.produto_id);
+            if (produtoCad) {
             if (agregado.variante && agregado.variante !== '-') {
                 const gradeInfo = produtoCad.grade?.find(g => g.variacao === agregado.variante);
                 skuProduto = gradeInfo?.sku || produtoCad.sku || 'N/A';
@@ -848,6 +835,15 @@ async function carregarDetalhesEmbalagemView(agregado) {
             }
         }
         skuEl.textContent = `SKU: ${skuProduto}`;
+
+        if (skuProduto && skuProduto !== 'N/A') {
+            carregarSugestoesDeEstoque(agregado.produto_id, agregado.variante, skuProduto);
+        } else {
+            // Esconde o painel se não houver SKU
+            const painelSugestao = document.getElementById('painelSugestaoEstoque');
+            if(painelSugestao) painelSugestao.style.display = 'none';
+        }
+
     }
 
     // --- APENAS RESET VISUAL da Aba "Montar e Embalar Kit" ---
@@ -1508,6 +1504,7 @@ async function handleHashChangeEmbalagem() {
         const data = localStorage.getItem('embalarDetalheAtual');
         if (data) {
             embalarDetalheViewEl.style.display = 'block';
+            adicionarBotaoFechar(embalarDetalheViewEl, () => { window.location.hash = ''; });
             await carregarDetalhesEmbalagemView(JSON.parse(data));
         } else {
             // Se não encontrou dados, volta para a lista para evitar uma tela vazia
@@ -1530,62 +1527,34 @@ async function handleHashChangeEmbalagem() {
 }
 
 async function inicializarDadosEViewsEmbalagem() {
-    await Promise.all([
-        obterProdutosDoStorage(true).then(p => { todosOsProdutosCadastrados = p; }),
-        fetchFromAPI('/usuarios').then(users => { todosOsUsuarios = users || []; })
-    ]);
-    await handleHashChangeEmbalagem();
+    // Pega o container principal da lista de embalagem
+    const containerPrincipal = document.getElementById('embalagemListViewNova');
+    if (!containerPrincipal) return;
+
+    // 1. Adiciona a classe de "carregando" para bloquear cliques
+    containerPrincipal.classList.add('carregando-dados-iniciais');
+
+    try {
+        // 2. Carrega todos os dados essenciais em paralelo
+        await Promise.all([
+            obterProdutosDoStorage(true).then(p => { todosOsProdutosCadastrados = p; }),
+            fetchFromAPI('/usuarios').then(users => { todosOsUsuarios = users || []; })
+        ]);
+
+        // 3. Somente depois que TUDO estiver carregado, chama o roteador
+        await handleHashChangeEmbalagem();
+
+    } catch (error) {
+        console.error("Erro crítico na inicialização de dados:", error);
+        mostrarMensagem("Não foi possível carregar os dados essenciais da página.", "erro");
+    } finally {
+        // 4. Remove a classe de "carregando", liberando os cliques
+        containerPrincipal.classList.remove('carregando-dados-iniciais');
+    }
 }
 
-
-// Lembre-se de manter a função fecharModalHistoricoGeral e os outros códigos como estão.
-function getHtmlDoModalHistorico() {
-    return `
-        <div class="popup-overlay"></div>
-        <div class="ep-modal-historico">
-            <div class="ep-modal-header">
-                <h3 class="ep-modal-titulo">Histórico Geral de Embalagem</h3>
-                <button id="btnFecharHistoricoGeral" class="ep-modal-fechar-btn">×</button>
-            </div>
-            <div class="ep-modal-filtros">
-                <div class="ep-form-grupo">
-                    <label for="filtroTipoEvento">Tipo de Evento</label>
-                    <select id="filtroTipoEvento" class="ep-select">
-                        <option value="todos">Todos os Eventos</option>
-                        <option value="embalagem_unidade">Embalagem (Unidade)</option>
-                        <option value="montagem_kit">Montagem (Kit)</option>
-                        <option value="estorno_arremate">Estorno (p/ Arremate)</option>
-                        <option value="estorno_estoque">Estorno (do Estoque)</option>
-                    </select>
-                </div>
-                <div class="ep-form-grupo">
-                    <label for="filtroUsuario">Usuário</label>
-                    <select id="filtroUsuario" class="ep-select">
-                        <option value="todos">Todos os Usuários</option>
-                    </select>
-                </div>
-                <div class="ep-form-grupo">
-                    <label for="filtroPeriodo">Período</label>
-                    <select id="filtroPeriodo" class="ep-select">
-                        <option value="7d">Últimos 7 dias</option>
-                        <option value="hoje">Hoje</option>
-                        <option value="30d">Últimos 30 dias</option>
-                        <option value="mes_atual">Este Mês</option>
-                    </select>
-                </div>
-            </div>
-            <div class="ep-modal-body">
-                <div id="historicoGeralTabelaWrapper" class="ep-tabela-wrapper"></div>
-            </div>
-            <div class="ep-modal-footer">
-                <div id="historicoGeralPaginacao" class="ep-paginacao-container"></div>
-            </div>
-        </div>
-    `;
-}
 
 // --- LÓGICA PARA O NOVO MODAL DE HISTÓRICO GERAL ---
-
 let historicoGeralCurrentPage = 1;
 const HISTORICO_GERAL_PER_PAGE = 10;
 
@@ -1665,6 +1634,80 @@ function formatarTipoEvento(tipo, status) {
     return nomes[tipo] || tipo;
 }
 
+async function carregarSugestoesDeEstoque(produtoId, variante, sku) {
+    const painel = document.getElementById('painelSugestaoEstoque');
+    const conteudo = document.getElementById('sugestaoConteudo');
+    if (!painel || !conteudo) return;
+
+    painel.style.display = 'none';
+    conteudo.innerHTML = '<div class="spinner">Analisando estoque...</div>';
+
+    try {
+        const params = new URLSearchParams({
+            produto_id: produtoId,
+            variante: variante || '-',
+            produto_ref_id: sku
+        });
+
+        const data = await fetchFromAPI(`/embalagens/sugestao-estoque?${params.toString()}`);
+        
+        if (!data.kits_relacionados || data.kits_relacionados.length === 0) {
+            console.log(`[Sugestão Estoque] O item ${sku} não compõe nenhum kit. O painel não será exibido.`);
+            return;
+        }
+
+        const header = painel.querySelector('.ep-sugestao-header');
+        if (!header.dataset.listenerAttached) {
+            header.addEventListener('click', () => {
+                painel.classList.toggle('recolhido');
+            });
+            header.dataset.listenerAttached = 'true';
+        }
+        
+        painel.classList.remove('recolhido');
+        painel.style.display = 'block';
+
+        const produtoPrincipalDef = todosOsProdutosCadastrados.find(p => p.id === produtoId);
+        const gradePrincipalDef = produtoPrincipalDef?.grade.find(g => g.variacao === variante);
+          
+        // 1. Cria o HTML para o card do item principal
+        const htmlPrincipal = `
+            <div class="ep-radar-card principal">
+                <img src="${gradePrincipalDef?.imagem || produtoPrincipalDef?.imagem || '/img/placeholder-image.png'}" class="ep-radar-img" alt="Item principal">
+                <div class="nome">${produtoPrincipalDef?.nome || 'Item'} (${variante || 'Padrão'})</div>
+                <div class="valor">${data.saldo_em_estoque_principal}</div>
+            </div>
+        `;
+
+        // 2. Cria o HTML para os cards dos kits (se houver)
+        const htmlKits = data.kits_relacionados.map(kit => {
+            const kitDef = todosOsProdutosCadastrados.find(p => p.id === kit.kit_id);
+            const gradeKitDef = kitDef?.grade.find(g => g.sku === kit.kit_sku);
+            
+            let classeSaldoKit = '';
+            if (kit.saldo_em_estoque <= 5) classeSaldoKit = 'critico-estoque';
+            else if (kit.saldo_em_estoque <= 15) classeSaldoKit = 'baixo-estoque';
+
+            return `
+                <div class="ep-radar-card ${classeSaldoKit}">
+                    <img src="${gradeKitDef?.imagem || kitDef?.imagem || '/img/placeholder-image.png'}" class="ep-radar-img" alt="${kit.kit_nome}">
+                    <div class="nome">${kit.kit_nome} (${kit.kit_variacao})</div>
+                    <div class="valor">${kit.saldo_em_estoque}</div>
+                </div>
+            `;
+        }).join('');
+
+        // 3. Monta o wrapper final com o card principal e os cards dos kits JUNTOS
+        conteudo.innerHTML = `<div class="ep-radar-cards-wrapper">${htmlPrincipal}${htmlKits}</div>`;
+
+        // --- FIM DA CORREÇÃO ---
+
+    } catch (error) {
+        console.error("Erro ao carregar sugestões:", error);
+        painel.style.display = 'none';
+    }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         const auth = await verificarAutenticacao('embalagem-de-produtos.html', ['acesso-embalagem-de-produtos']);
@@ -1680,12 +1723,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         await inicializarDadosEViewsEmbalagem(); 
 
         window.addEventListener('hashchange', handleHashChangeEmbalagem);
-        
-        // Listeners de navegação e ação principais (permanentes na página)
-        const fecharDetalheBtnEl = document.getElementById('fecharEmbalarDetalheBtn');
-        if (fecharDetalheBtnEl) {
-            fecharDetalheBtnEl.addEventListener('click', () => { window.location.hash = ''; });
-        }
 
         const btnEmbalarUnidadeEl = document.getElementById('btnEmbalarEnviarEstoqueUnidade');
         if (btnEmbalarUnidadeEl) {
@@ -1849,8 +1886,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
 });
-
-
 
 // Função global para limpar cache (se necessário para debug)
 window.limparCacheEmbalagemProdutos = async () => {

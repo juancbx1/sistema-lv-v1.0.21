@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Produção em Tempo Real</title>
+    
+    <!-- Links CSS essenciais -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="/css/global-style.css">
+    <link rel="stylesheet" href="/css/menu-lateral.css">
+    <link rel="stylesheet" href="/css/popups.css">
+    <link rel="stylesheet" href="/css/producao-geral.css">
+</head>
+<body>
+    <!-- NOVO OVERLAY DE CARREGAMENTO INICIAL -->
+    <div id="carregamento-inicial" class="pg-carregamento-inicial">
+        <div class="pg-spinner-inicial"></div>
+    </div>
+
+
+    <!-- Menu Hambúrguer (Adicionado) -->
+    <div class="hamburger-menu">
+        <i class="fas fa-bars"></i>
+        <i class="fas fa-times"></i>
+    </div>
+
+    <!-- Container Principal (Padrão Estoque) -->
+    <main class="pg-container-principal">
+
+        <!-- View Única do Dashboard -->
+        <section class="gs-card" id="view-producao-geral">
+
+            <!-- Cabeçalho Padrão da Página -->
+            <header class="pg-cabecalho-pagina">
+                <h1>Produção em Tempo Real</h1>
+                <div class="gs-botoes-cabecalho pg-botoes-cabecalho">
+                    <!-- NOVO BOTÃO DE ATUALIZAÇÃO -->
+                    <input type="date" id="pg-filtro-data" class="pg-filtro-data">
+                    <button id="btn-atualizar-agora" class="gs-btn-atualizar">
+                        <i class="fas fa-sync-alt"></i>
+                        <span>Atualizar</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- NOVO: Filtros de Momentos-Chave -->
+            <section class="pg-momentos-chave-filtros">
+                <button class="pg-momento-btn ativo" data-periodo="dia-inteiro">Dia Inteiro</button>
+                <button class="pg-momento-btn" data-periodo="inicio-dia">Até 9h</button>
+                <button class="pg-momento-btn" data-periodo="pico-manha">9h-12h</button>
+                <button class="pg-momento-btn" data-periodo="vale-tarde">14h-16h</button>
+                <button class="pg-momento-btn" data-periodo="sprint-final">Após 16h</button>
+            </section>
+
+                <div class="pg-dashboard-layout">
+                    
+                    <!-- Coluna Lateral (Sidebar com Ranking/Metas)-->
+                    <aside class="pg-coluna-lateral">
+                        <!-- Card 2: Ranking e Metas (com abas) -->
+                        <section class="gs-card">
+                            <nav class="pg-tabs">
+                                <button id="btn-tab-ranking" class="pg-tab-btn ativo" data-tab="ranking">🔥 Ranking</button>
+                                <button id="btn-tab-metas" class="pg-tab-btn" data-tab="metas">📡 Radar de Metas</button>                            
+                            </nav>
+                            
+                            <!-- NOVO CONTAINER + OVERLAY -->
+                            <div class="pg-ranking-container" id="ranking-container">
+                                <div id="tab-content-ranking" class="pg-tab-content ativo">
+                                    <div id="pg-ranking-lista" class="pg-lista-ranking">
+                                        <!-- Gerado pelo JS -->
+                                    </div>
+                                </div>
+
+                                <div id="tab-content-metas" class="pg-tab-content">
+                                    <div id="pg-metas-lista" class="pg-lista-metas">
+                                        <!-- Gerado pelo JS -->
+                                    </div>
+                                </div>
+
+                                <!-- O overlay de loading mora aqui, escondido por padrão -->
+                                <div class="pg-ranking-loading-overlay" id="ranking-loading-overlay">
+                                    <div class="pg-spinner"></div>
+                                </div>
+                            </div>
+                        </section>
+                    </aside>
+
+                    <!-- Coluna Principal (Conteúdo) -->
+                    <div class="pg-coluna-principal">
+
+                        <!-- Seção dos KPIs / Resumo do Dia -->
+                            <section class="pg-kpi-container">
+                                <h2 class="gs-titulo-secao">Resumo do Dia</h2>
+                                <div id="pg-resumo-kpi" class="gs-painel-info-container">
+                                    <!-- Gerado pelo JS -->
+                                </div>
+                            </section>
+                        
+                        <!-- Card 3: Feed de Atividades Recentes -->
+                        <section class="gs-card">
+                            <div class="pg-atividades-header"> <!-- NOVO WRAPPER -->
+                                <h2>Atividades Recentes</h2>
+                                <!-- NOVO INDICADOR DE ATUALIZAÇÃO -->
+                                <span id="indicador-ultima-att" class="pg-indicador-att"></span>
+                            </div>
+                            <ul id="pg-feed-atividades" class="pg-feed-lista">
+                            <!-- Gerado pelo JS -->
+                            </ul>
+                            <!-- Container de Paginação (Substitui o botão "Ver Tudo") -->
+                            <div id="paginacao-feed" class="gs-paginacao-container" style="display: none;">
+                                <!-- Paginação será gerada pelo JS aqui -->
+                            </div>
+                        </section>
+                    </div>
+
+                </div> <!-- Fim .pg-dashboard-layout -->
+
+
+
+        </section> <!-- Fim #view-producao-geral -->
+    
+    </main>
+
+    <!-- Modal para exibir todas as atividades (fora do main) -->
+    <div id="pg-modal-todas-atividades" class="pg-modal-overlay">
+        <div class="pg-modal-conteudo gs-card">
+            <!-- Botão de fechar será injetado pelo JS -->
+            <h2>Todas as Atividades do Dia</h2>
+            <input type="text" id="pg-modal-busca" class="pg-modal-busca-input" placeholder="Filtrar por funcionário, produto, processo...">
+            <div id="pg-modal-lista-container" class="pg-modal-lista-container">
+                <!-- A lista completa será gerada aqui -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/js/admin-producao-geral.js" type="module"></script>
+    <script src="/js/carregar-menu-lateral.js" type="module"></script>
+</body>
+</html>

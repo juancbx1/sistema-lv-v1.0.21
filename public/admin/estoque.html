@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Controle de Estoque</title>
-    <link rel="stylesheet" href="/css/estoque.css">
+    <link rel="stylesheet" href="/css/global-style.css">
     <link rel="stylesheet" href="/css/menu-lateral.css">
+    <link rel="stylesheet" href="/css/estoque.css">
+    <link rel="stylesheet" href="/css/popups.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
@@ -23,56 +25,63 @@
         <div class="es-spinner"></div>
     </div>
 
-    <div class="es-cabecalho-pagina">
-        <h1>Estoque</h1>
-        
-        <!-- NOVOS BOTÕES DE AÇÃO -->
-        <div class="es-botoes-acao-container">
-            <button id="btnIniciarSeparacao" class="es-btn-acao es-btn-acao-sep" title="Nova Separação de Pedidos">
+
+
+    <!-- NOVO CABEÇALHO PADRONIZADO -->
+        <div class="gs-cabecalho-pagina">
+            <h1>Estoque</h1>
+            <div class="gs-botoes-cabecalho">
+                <button id="btnAbrirHistoricoGeralEstoque" class="gs-btn gs-btn-secundario">
+                    <i class="fas fa-clipboard-list"></i> 
+                    <span>Histórico Geral</span>
+                </button>
+            </div>
+        </div>
+
+    <!-- NOVO PAINEL DE AÇÕES -->
+        <div class="gs-card gs-painel-acoes">
+            <button id="btnIniciarSeparacao" class="gs-acao-card" title="Nova Separação de Pedidos">
                 <i class="fas fa-box-open"></i>
-                <span>SEP</span>
+                <span>Separação</span>
             </button>
-            <button id="btnRealizarInventario" class="es-btn-acao es-btn-acao-inv" title="Realizar Inventário de Estoque">
+            <button id="btnRealizarInventario" class="gs-acao-card" title="Realizar Inventário de Estoque">
                 <i class="fas fa-clipboard-check"></i>
-                <span>INV</span>
+                <span>Inventário</span>
             </button>
+            <button id="btnGerenciarFila" class="gs-acao-card" title="Gerenciar Fila de Produção Prioritária">
+                <i class="fas fa-stream"></i>
+                <span>Fila de Produção</span>
+            </button>
+            <button id="btnConfigurarNiveisEstoque" class="gs-acao-card" title="Configurar níveis de alerta">
+                <i class="fas fa-cog"></i>
+                <span>Configurar Níveis</span>
+            </button>
+            <button id="btnVerArquivados" class="gs-acao-card" title="Ver itens arquivados">
+                <i class="fas fa-archive"></i>
+                <span>Ver Arquivados</span>
+            </button>
+        </div>
+
+
+    <!-- NOVO PAINEL DE INFORMAÇÕES E ALERTAS -->
+    <div class="gs-painel-info-container">
+        <!-- Card de Reposição Urgente -->
+        <div class="gs-info-card alerta" id="cardReposicaoUrgente">
+            <i class="fas fa-shipping-fast gs-info-card-icone"></i>
+            <h3>Reposição Urgente</h3>
+            <span class="gs-info-card-contador" id="contadorUrgente">0</span>
+            <p class="gs-info-card-descricao">Itens em nível crítico.</p>
+        </div>
+
+        <!-- Card de Estoque Baixo -->
+        <div class="gs-info-card aviso" id="cardEstoqueBaixo">
+            <i class="fas fa-box-open gs-info-card-icone"></i>
+            <h3>Estoque Baixo</h3>
+            <span class="gs-info-card-contador" id="contadorBaixo">0</span>
+            <p class="gs-info-card-descricao">Itens que precisam de atenção.</p>
         </div>
     </div>
 
-
-    <!-- CARDS DE ALERTA E BOTÕES DE AÇÃO -->
-    <div class="es-card" style="margin-bottom: 20px;">
-        <h2 class="es-titulo-secao" style="text-align:left; border-bottom:none; margin-bottom:15px;">Alertas de Estoque</h2>
-        <div class="es-alerta-cards-container">
-            <div class="es-alerta-card urgente" id="cardReposicaoUrgente">
-                <i class="fas fa-exclamation-triangle es-alerta-icone"></i>
-                <h3>Reposição Urgente</h3>
-                <span class="es-alerta-card-contador" id="contadorUrgente">0</span>
-                <p class="es-alerta-card-descricao">Itens que atingiram o nível crítico.</p>
-            </div>
-            <div class="es-alerta-card baixo" id="cardEstoqueBaixo">
-                 <i class="fas fa-exclamation-circle es-alerta-icone"></i>
-                <h3>Estoque Baixo</h3>
-                <span class="es-alerta-card-contador" id="contadorBaixo">0</span>
-                <p class="es-alerta-card-descricao">Itens próximos do nível crítico.</p>
-            </div>
-        </div>
-
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; flex-wrap: wrap; gap: 10px;">
-            <button class="es-btn es-btn-secundario" id="btnMostrarTodosEstoque" style="display: none;">
-                <i class="fas fa-list"></i> Mostrar Todos os Itens
-            </button>
-            <button class="es-btn es-btn-primario" id="btnGerenciarFila" title="Gerenciar Fila de Produção Prioritária">
-                <i class="fas fa-stream"></i> Gerenciar Fila
-            </button>
-            <button class="es-btn es-btn-primario" id="btnConfigurarNiveisEstoque" title="Configurar níveis de alerta" style="margin-left: auto;">
-                <i class="fas fa-cog"></i> Configurar Níveis
-            </button>
-            <button class="es-btn es-btn-secundario" id="btnVerArquivados" title="Ver itens arquivados">
-                <i class="fas fa-archive"></i> Ver Arquivados
-            </button>
-        </div>
-    </div>
     
     <!-- CONTAINER PARA A LISTA DE ITENS, INCLUINDO FILTROS (ESTRUTURA ATUALIZADA) -->
     <div class="es-card">
@@ -85,7 +94,7 @@
         <!-- CABEÇALHO DA SEÇÃO DE ITENS, COM BOTÃO DE ATUALIZAR -->
         <div class="es-secao-header">
             <h2 class="es-titulo-secao">Itens em Estoque</h2>
-            <button id="btnAtualizarEstoque" class="es-btn-atualizar">
+            <button id="btnAtualizarEstoque" class="gs-btn-atualizar">
                 <i class="fas fa-sync-alt"></i>
                 <span>Atualizar</span>
             </button>
@@ -120,40 +129,11 @@
 </section>
 
         <!-- NOVA VIEW UNIFICADA: Movimentação de Estoque -->
-      <section class="hidden" id="editarEstoqueMovimentoView">
+    <section class="hidden gs-card" id="editarEstoqueMovimentoView">
 
-    <!-- BOTÃO 'X' AGORA FICA FORA DO GRID, NO TOPO DA SECTION -->
-    <button class="botao-fechar es-btn-perigo" id="voltarParaListaBtn" title="Voltar para Lista">X</button>
-
-    <div class="es-movimento-grid">
-
-        <!-- Coluna Esquerda: Histórico de Movimentações -->
-        <div class="es-movimento-coluna-info">
-            <div class="es-card">
-                <h3 class="es-titulo-secao">Histórico de Movimentações</h3>
-                <div id="historicoContainer" class="es-tabela-wrapper" style="max-height: 550px; overflow-y: auto;">
-                    <table class="es-tabela-estilizada" style="display: table;">
-                        <thead>
-                            <tr>
-                                <th>Data</th>
-                                <th>Tipo</th>
-                                <th style="text-align: right;">Qtd.</th>
-                                <th>Usuário</th>
-                                <th>Observação</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody id="historicoMovimentacoesBody"> <!-- CORRIGIDO PARA 'Body' -->
-                            <!-- Histórico será inserido aqui -->
-                        </tbody>
-                    </table>
-                </div>
-                <div id="paginacaoHistoricoMovimentacoes" class="es-paginacao-container" style="margin-top: 15px;"></div>
-            </div>
-        </div>
 
         <!-- Coluna Direita: Ações (Info do Produto + Formulário) -->
-        <div class="es-movimento-coluna-acao">
+        <div class="gs-card movimento-card-acao">
             <!-- CARD UNIFICADO DE AÇÃO -->
             <div class="es-card">
                 <div class="movimento-header">
@@ -193,22 +173,43 @@
                     
                     <div class="es-form-botoes">
                         <button id="arquivarItemBtn" class="es-btn-icon-danger" title="Arquivar Item" style="margin-right: auto; display: none;"><i class="fas fa-archive"></i></button>
-                        <button id="salvarMovimentoBtn" class="es-btn es-btn-primario"><i class="fas fa-save"></i> Salvar Movimento</button>
+                        <button id="salvarMovimentoBtn" class="gs-btn gs-btn-primario"><i class="fas fa-save"></i> Salvar Movimento</button>
                     </div>
                 </div>
             </div>
         </div>
+
+        <!-- Coluna Esquerda: Histórico de Movimentações -->
+        <div class="gs-card movimento-card-acao">
+            <div class="es-card">
+                <h3 class="es-titulo-secao">Histórico de Movimentações</h3>
+                <div id="historicoContainer" class="es-tabela-wrapper" style="max-height: 550px; overflow-y: auto;">
+                    <table class="es-tabela-estilizada" style="display: table;">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Tipo</th>
+                                <th style="text-align: right;">Qtd.</th>
+                                <th>Usuário</th>
+                                <th>Observação</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historicoMovimentacoesBody"> <!-- CORRIGIDO PARA 'Body' -->
+                            <!-- Histórico será inserido aqui -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="paginacaoHistoricoMovimentacoes" class="es-paginacao-container" style="margin-top: 15px;"></div>
+            </div>
+        </div>
         
-    </div>
 </section>
 
         <!-- VIEW 1: SEPARAÇÃO DE PEDIDOS (LISTA DE PRODUTOS BASE) -->
-        <section id="separacaoView" class="hidden">
-            <div class="es-cabecalho-pagina">
+        <section id="separacaoView" class="hidden gs-card"> <!-- Adicionamos a classe .gs-card -->
+            <div class="gs-cabecalho-pagina">
                 <h1>Separação de Pedidos</h1>
-                <button id="btnVoltarDaSeparacao" class="es-btn-voltar-centralizado">
-                     <i class="fas fa-arrow-left"></i> Voltar ao Estoque
-                </button>
             </div>
             
             <div class="es-card">
@@ -224,12 +225,9 @@
         </section>
 
         <!-- NOVA VIEW 2: DETALHE DA SEPARAÇÃO (VARIAÇÕES DE UM PRODUTO) -->
-        <section id="separacaoDetalheView" class="hidden">
-            <div class="es-cabecalho-pagina">
+        <section id="separacaoDetalheView" class="hidden gs-card"> <!-- Adicionamos a classe .gs-card -->
+            <div class="gs-cabecalho-pagina">
                 <h1 id="detalheSeparacaoTitulo">Separando: [Nome do Produto]</h1>
-                <button id="btnVoltarParaListaProdutos" class="es-btn-voltar-centralizado">
-                    <i class="fas fa-arrow-left"></i> Voltar para Produtos
-                </button>
             </div>
 
             <div class="es-card">
@@ -243,16 +241,14 @@
             </div>
         </section>
 
-        <section id="filaProducaoView" class="hidden">
+        <section id="filaProducaoView" class="hidden gs-card">
+
             <div id="filaLoadingOverlay" class="es-pagina-loading-overlay">
-            <div class="es-spinner"></div>
+                <div class="es-spinner"></div>
             </div>
-        <div class="es-cabecalho-pagina">
-            <h1>Fila de Produção</h1>
-            <button id="btnVoltarDaFila" class="es-btn es-btn-secundario" style="margin-left: auto;">
-                <i class="fas fa-arrow-left"></i> Voltar ao Estoque
-            </button>
-        </div>
+            <div class="gs-cabecalho-pagina"> <!-- Usa o cabeçalho padrão -->
+                <h1>Fila de Produção</h1>
+            </div>
 
         <!-- NOVO: Abas para alternar entre Prioridades e Em Produção -->
         <div class="es-tabs-container">
@@ -292,12 +288,12 @@
                 <div id="filtrosFilaDinamicos">
                     <!-- Filtros dinâmicos (cor, tamanho, etc.) serão inseridos aqui -->
                 </div>
-                <button id="limparFiltrosFilaBtn" class="es-btn es-btn-perigo" style="align-self: flex-end;">Limpar</button>
+                <button id="limparFiltrosFilaBtn" class="gs-btn gs-btn-perigo" style="align-self: flex-end;">Limpar</button>
             </div>
 
 
 
-            <button id="btnSalvarPrioridades" class="es-btn es-btn-primario hidden">
+            <button id="btnSalvarPrioridades" class="gs-btn gs-btn-primario hidden">
                 <i class="fas fa-save"></i> Salvar Ordem da Fila
             </button>
         </div>
@@ -321,29 +317,26 @@
         <!-- =============================================== -->
     <!-- ### INÍCIO - NOVA VIEW DE INVENTÁRIO ### -->
     <!-- =============================================== -->
-    <section id="inventarioView" class="hidden">
-        
+        <section id="inventarioView" class="hidden gs-card">     
+
         <div id="inventarioLoadingOverlay" class="es-pagina-loading-overlay hidden">
             <div class="es-spinner"></div>
         </div>
 
-        <div class="es-cabecalho-pagina">
-            <h1>Inventário de Estoque</h1>
-            <button id="btnVoltarDoInventario" class="es-btn es-btn-secundario" style="margin-left: auto;">
-                <i class="fas fa-arrow-left"></i> Voltar ao Estoque
-            </button>
+        <div class="gs-cabecalho-pagina">
+        <h1>Inventário de Estoque</h1>
         </div>
 
         <!-- TELA INICIAL: Onde o usuário decide o que fazer -->
         <div id="inventarioHome" class="es-card">
             <h2 class="es-titulo-secao">Gerenciar Inventário</h2>
             <div class="inventario-home-botoes">
-                <button id="btnIniciarNovoInventario" class="es-btn es-btn-primario">
+                <button id="btnIniciarNovoInventario" class="gs-btn gs-btn-primario">
                     <i class="fas fa-plus-circle"></i> Iniciar Novo Inventário
                 </button>
                 <div id="containerInventarioEmAndamento" class="hidden">
                     <p>Há um inventário em andamento.</p>
-                    <button id="btnContinuarInventario" class="es-btn es-btn-sucesso">
+                    <button id="btnContinuarInventario" class="gs-btn gs-btn-sucesso">
                         <i class="fas fa-play-circle"></i> Continuar Contagem
                     </button>
                 </div>
@@ -419,7 +412,7 @@
             </div>
             
             <div class="inventario-rodape-acoes">
-                 <button id="btnRevisarInventario" class="es-btn es-btn-primario" disabled>
+                 <button id="btnRevisarInventario" class="gs-btn gs-btn-primario" disabled>
                     <i class="fas fa-check-double"></i> Revisar e Finalizar
                 </button>
             </div>
@@ -433,7 +426,6 @@
 
 <div id="modalFinalizarSeparacao" class="es-modal" style="display:none;">
     <div class="es-modal-conteudo" style="max-width: 700px;">
-        <button class="botao-fechar es-btn-perigo" id="fecharModalFinalizar" title="Fechar">X</button>
         <h3 id="modalFinalizarTitulo">Finalizar Separação</h3>
         
         <div class="es-modal-body">
@@ -461,8 +453,8 @@
         </div> <!-- Fim do .es-modal-body -->
 
         <div class="es-form-botoes" style="margin-top: 25px;">
-            <button type="button" class="es-btn es-btn-secundario" id="btnCancelarFinalizacao">Cancelar</button>
-            <button type="button" class="es-btn es-btn-primario" id="btnConfirmarSaidaEstoque">
+            <button type="button" class="gs-btn gs-btn-secundario" id="btnCancelarFinalizacao">Cancelar</button>
+            <button type="button" class="gs-btn gs-btn-primario" id="btnConfirmarSaidaEstoque">
                 <i class="fas fa-check-circle"></i> Confirmar Saída
             </button>
         </div>
@@ -474,7 +466,6 @@
     <!-- Modal para Configurar Níveis de Estoque (Permanece igual) -->
         <div id="modalConfigurarNiveis" class="es-modal" style="display:none;">
              <div class="es-modal-conteudo" style="max-width: 800px;">
-                <span class="es-modal-fechar es-btn-perigo" id="fecharModalNiveis">X</span>
                 <h3 id="modalNiveisTitulo">Configurar Níveis de Alerta de Estoque</h3>
                 
                 <div class="pr-form-grupo" style="margin-bottom: 15px;">
@@ -503,8 +494,8 @@
                 <div class="pr-form-botoes" style="justify-content: space-between;">
                     <div></div>
                     <div>
-                        <button type="button" class="es-btn es-btn-secundario" id="btnCancelarModalNiveis">Cancelar</button>
-                        <button type="button" class="es-btn es-btn-primario" id="btnSalvarNiveisEmLote">Salvar Alterações</button>
+                        <button type="button" class="gs-btn gs-btn-secundario" id="btnCancelarModalNiveis">Cancelar</button>
+                        <button type="button" class="gs-btn gs-btn-primario" id="btnSalvarNiveisEmLote">Salvar Alterações</button>
                     </div>
                 </div>
             </div>
@@ -514,7 +505,6 @@
     <div id="modalHistoricoMovimentacoes" class="es-modal" style="display: none;">
     <div class="es-modal-conteudo" style="max-width: 850px;">
         <!-- BOTÃO DE FECHAR PADRONIZADO -->
-        <button class="botao-fechar es-btn-perigo" id="fecharModalHistorico" title="Fechar">X</button>
         <h3>Histórico de Movimentações</h3>
             <div class="es-tabela-wrapper" style="max-height: 50vh; overflow-y: auto;">
                 <table class="es-tabela-estilizada" id="tabelaHistoricoMovimentacoes">
@@ -552,7 +542,6 @@
      <!-- MODAL PARA ITENS ARQUIVADOS -->
     <div id="modalItensArquivados" class="es-modal" style="display: none;">
         <div class="es-modal-conteudo" style="max-width: 800px;">
-            <button class="botao-fechar es-btn-perigo" id="fecharModalArquivados" title="Fechar">X</button>
             <h3 class="es-titulo-secao">Itens Arquivados</h3>
             <p style="font-size: 0.9em; color: #6c757d; margin-top: -15px; margin-bottom: 20px;">
                 Estes itens estão ocultos da lista principal de estoque. Restaure-os para que voltem a ser exibidos.
@@ -579,7 +568,6 @@
          <!-- MODAL PARA REVISÃO DO INVENTÁRIO -->
     <div id="modalRevisaoInventario" class="es-modal" style="display: none;">
         <div class="es-modal-conteudo" style="max-width: 800px;">
-            <button class="botao-fechar es-btn-perigo" id="fecharModalRevisaoInventario" title="Fechar">X</button>
             <h3>Revisão do Inventário</h3>
             <p style="text-align:center; margin-top: -10px; margin-bottom: 20px; color: #6c757d;">
                 Confira as divergências encontradas. Somente estes itens terão o saldo de estoque ajustado.
@@ -602,8 +590,8 @@
             </div>
 
             <div class="es-form-botoes" style="margin-top: 25px;">
-                <button type="button" class="es-btn es-btn-secundario" id="cancelarRevisaoInventario">Voltar para Contagem</button>
-                <button type="button" class="es-btn es-btn-sucesso" id="btnConfirmarFinalizacaoInventario">
+                <button type="button" class="gs-btn gs-btn-secundario" id="cancelarRevisaoInventario">Voltar para Contagem</button>
+                <button type="button" class="gs-btn gs-btn-sucesso" id="btnConfirmarFinalizacaoInventario">
                     <i class="fas fa-check-circle"></i> Confirmar e Ajustar Estoque
                 </button>
             </div>
@@ -613,7 +601,6 @@
      <!-- MODAL PARA DETALHES DE INVENTÁRIO FINALIZADO -->
     <div id="modalDetalhesInventario" class="es-modal" style="display: none;">
         <div class="es-modal-conteudo" style="max-width: 800px;">
-            <button class="botao-fechar es-btn-perigo" id="fecharModalDetalhesInventario" title="Fechar">X</button>
             <h3 id="detalhesInventarioTitulo">Detalhes do Inventário #</h3>
             
             <div class="inventario-detalhes-meta">
@@ -641,6 +628,58 @@
                     </tbody>
                 </table>
             </div>
+        </div>
+    </div>
+
+    <!-- MODAL PARA HISTÓRICO GERAL DO ESTOQUE -->
+    <div id="modalHistoricoGeralEstoque" class="es-modal" style="display: none;">
+        <div class="es-modal-conteudo" style="max-width: 900px;">
+            <!-- O botão fechar será adicionado pelo JS -->
+            
+            <h3 class="gs-titulo-secao">Histórico Geral do Módulo de Estoque</h3>
+            
+            <!-- Filtros do Histórico -->
+            <div class="gs-painel-filtros" style="display: flex; gap: 15px; margin-bottom: 20px;">
+                <div class="gs-form-grupo" style="flex: 1;">
+                    <label for="filtroEventoEstoque">Tipo de Evento</label>
+                    <select id="filtroEventoEstoque" class="es-select">
+                        <option value="todos">Todos</option>
+                        <option value="ENTRADA_MANUAL">Entrada Manual</option>
+                        <option value="SAIDA_MANUAL">Saída Manual</option>
+                        <option value="DEVOLUCAO">Devolução</option>
+                        <option value="ITEM_ARQUIVADO">Item Arquivado</option>
+                        <!-- Adicionar mais opções conforme implementarmos o log delas -->
+                    </select>
+                </div>
+                <div class="gs-form-grupo" style="flex: 1;">
+                    <label for="filtroPeriodoEstoque">Período</label>
+                    <select id="filtroPeriodoEstoque" class="es-select">
+                        <option value="7d">Últimos 7 dias</option>
+                        <option value="hoje">Hoje</option>
+                        <option value="30d">Últimos 30 dias</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Tabela de Resultados -->
+            <div class="es-tabela-wrapper" style="max-height: 60vh; overflow-y: auto;">
+                <table class="es-tabela-estilizada">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Usuário</th>
+                            <th>Ação</th>
+                            <th>Detalhes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaHistoricoGeralEstoqueBody">
+                        <!-- Conteúdo preenchido pelo JS -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Paginação -->
+            <div id="paginacaoHistoricoGeralEstoque" class="es-paginacao-container" style="margin-top: 15px;"></div>
         </div>
     </div>
 

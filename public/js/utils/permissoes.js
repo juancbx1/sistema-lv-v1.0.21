@@ -54,7 +54,6 @@ export const permissoesDisponiveis = [
     { id: 'excluir-registro-producao', label: 'Permite Excluir Produção', categoria: 'Gerenciar Produção' },
 
 
-
     // --- ARREMATE E EMBALAGEM ---
     { id: 'acesso-ordens-de-arremates', label: 'Ver Tela de Ordens de Arremate', categoria: 'Arremate e Embalagem' },
     { id: 'acesso-embalagem-de-produtos', label: 'Ver Tela de Embalagem', categoria: 'Arremate e Embalagem' },
@@ -75,6 +74,9 @@ export const permissoesDisponiveis = [
     { id: 'arquivar-produto-do-estoque', label: 'Ação: Arquivar um produto', categoria: 'Estoque' },
     { id: 'editar-itens-arquivados', label: 'Ação: Editar/retirar itens arquivados', categoria: 'Estoque' },
     { id: 'fazer-inventario', label: 'Ação: Permite Realizar Inventário', categoria: 'Estoque' },
+    { id: 'registrar-entrada-manual', label: 'Ação: Permite dar Entrada Manual', categoria: 'Estoque' },
+    { id: 'registrar-saida-manual', label: 'Ação: Permite dar Saída Manual', categoria: 'Estoque' },
+    { id: 'registrar-devolucao', label: 'Ação: Permite Realizar Devolução', categoria: 'Estoque' },
 
     // --- FINANCEIRO (CONTROLE DE CAIXA) ---
     { id: 'acesso-financeiro', label: 'Acesso ao Módulo Financeiro (Caixa)', categoria: 'Financeiro (Controle de Caixa)' },
@@ -113,6 +115,10 @@ export const permissoesDisponiveis = [
     // --- CONFIGURAÇÕES ---
     { id: 'acesso-ponto-por-processo', label: 'Ver Tela de Pontos por Processo', categoria: 'Configurações' },
     { id: 'gerenciar-comunicacoes', label: 'Ver Tela Gerenciar Comunicações', categoria: 'Configurações' },
+
+    
+    // --- ACESSAR PRODUCAO GERAL ---
+    { id: 'acesso-producao-geral', label: 'Ver Tela a Tela Produção Geral dos Empregados', categoria: 'Produção Geral' },
 
     
 ];
