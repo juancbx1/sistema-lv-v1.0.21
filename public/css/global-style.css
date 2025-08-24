@@ -26,6 +26,10 @@
     --gs-fundo-card: var(--gs-branco);
     --gs-fundo-alternativo: #f9fbfd; /* Para seções com fundo leve */
 
+    /* Botoes */
+    --gs-botao-secundario: #98a0a1;
+    --gs-botao-secundario-hover: #6a7879;
+
     /* Sombras */
     --gs-sombra-padrao: 0 3px 8px rgba(0, 0, 0, 0.07);
     --gs-sombra-hover: 0 6px 16px rgba(0, 0, 0, 0.12);
@@ -140,12 +144,12 @@ body.autenticado {
 }
 
 .gs-btn-secundario {
-    background-color: var(--gs-texto-secundario);
-    border-color: var(--gs-texto-secundario);
+    background-color: var(--gs-botao-secundario);
+    border-color: var(--gs-botao-secundario);
 }
 .gs-btn-secundario:hover:not(:disabled) {
-    background-color: #6a7879; /* Um cinza um pouco mais escuro */
-    border-color: #6a7879;
+    background-color: var(--gs-botao-secundario-hover);
+    border-color: var(--gs-botao-secundario-hover);
 }
 
 /* --- Cabeçalho de Página Padrão --- */
@@ -214,7 +218,11 @@ body.autenticado {
     gap: 6px;
     cursor: pointer;
     transition: all 0.2s ease-in-out;
+    grid-row: 1 / 2;
+    grid-column: 2 / 3;
+    justify-self: end; /* Alinha o botão à direita da sua célula */
 }
+
 
 .gs-btn-atualizar:hover:not(:disabled) {
     background-color: var(--gs-primaria);
@@ -366,6 +374,15 @@ body.autenticado {
     position: relative; 
 }
 
+.gs-container-cards{
+    background-color: var(--gs-fundo-card);
+    border-radius: var(--gs-raio-borda-card);
+    padding: 5px;
+    box-shadow: var(--gs-sombra-padrao);
+    position: relative; 
+
+}
+
 /* --- Painel de Ações --- */
 .gs-painel-acoes {
     display: flex;
@@ -431,6 +448,384 @@ body.autenticado {
 }
 
 /* ==========================================================================
+   # FORMS
+   ========================================================================== */
+
+/* --- Inputs, Selects, Textareas --- */
+.gs-input,
+.gs-select,
+.gs-textarea {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 0.95rem;
+    font-family: var(--gs-fonte-principal);
+    color: var(--gs-texto-principal);
+    background-color: var(--gs-fundo-input);
+    border: 1px solid var(--gs-borda);
+    border-radius: var(--gs-raio-borda-input);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.gs-input:focus,
+.gs-select:focus,
+.gs-textarea:focus {
+    outline: none;
+    border-color: var(--gs-primaria);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.25);
+}
+
+.gs-input::placeholder {
+    color: #aab8c2;
+}
+
+
+/* ==========================================================================
+   # COMPONENTE DE FILTRO DE BUSCA - PRODUTOS NA FILA
+   ========================================================================== */
+
+.gs-container-filtros{
+    background-color: var(--gs-fundo-card);
+    border-radius: var(--gs-raio-borda-card);
+    padding: 5px 15px;
+    box-shadow: var(--gs-sombra-padrao);
+    position: relative; 
+
+}
+.gs-busca-wrapper {
+  position: relative; /* Essencial para o posicionamento dos filhos */
+  display: flex;
+  align-items: center;
+  flex-grow: 1; /* Faz com que o campo de busca ocupe o espaço disponível */
+}
+
+/* --- Estilo do Input de busca --- */
+.gs-input-busca {
+  padding-right: 35px !important;
+}
+
+/* --- Botão de Limpar ('X') dentro do Input --- */
+.gs-btn-limpar-busca {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #999;
+  font-size: 1.2rem;
+  padding: 0 5px;
+  line-height: 1; /* Garante alinhamento vertical */
+}
+
+.gs-btn-limpar-busca:hover {
+  color: #333;
+}
+
+/* --- Container das buscas recentes (pílulas) --- */
+.gs-buscas-recentes-container {
+  position: absolute;
+  top: 100%; /* Posiciona logo abaixo do input */
+  left: 0;
+  right: 0;
+  background-color: var(--gs-branco, #fff);
+  border: 1px solid var(--gs-borda, #ccc);
+  border-top: none;
+  border-radius: 0 0 var(--gs-raio-borda-input, 6px);
+  box-shadow: var(--gs-sombra-padrao, 0 4px 8px rgba(0,0,0,0.1));
+  z-index: 10;
+  padding: 12px 15px;
+}
+
+.gs-buscas-recentes-titulo {
+  font-size: 0.75rem;
+  color: var(--gs-texto-secundario, #777);
+  margin: 0 0 10px 0;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.gs-buscas-recentes-lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* --- Estilo individual da Pílula de busca recente --- */
+.gs-pilula-recente {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #e9ecef;
+  border: 1px solid #dcdfe4;
+  border-radius: 20px; /* Mais arredondado */
+  padding: 5px 12px;
+  font-size: 0.85rem;
+  color: var(--gs-texto-principal, #333);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.gs-pilula-recente:hover {
+  background-color: #dcdfe4;
+  border-color: #b0b9c2;
+  transform: translateY(-1px);
+}
+
+.gs-pilula-recente .remover {
+  font-size: 1.1rem;
+  color: #888;
+  font-weight: bold;
+  opacity: 0.7;
+  transition: all 0.2s ease;
+}
+.gs-pilula-recente:hover .remover {
+  color: var(--gs-perigo, #e74c3c);
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+/* ==========================================================================
+   # NOVO COMPONENTE DE FILTROS DINÂMICOS (GS)
+   ========================================================================== */
+
+.gs-filtros-container {
+      padding: 20px 10px 0;
+}
+
+
+.gs-filtros-header {
+  display: grid;
+  /* Define duas colunas: a primeira ocupa o espaço que sobrar, a segunda tem o tamanho do conteúdo */
+  grid-template-columns: 1fr auto; 
+  /* Define duas linhas, cada uma com o tamanho do seu conteúdo */
+  grid-template-rows: auto auto;
+  gap: 15px; /* Espaço entre os elementos */
+  align-items: center; /* Alinha os itens verticalmente */
+
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--gs-borda);
+}
+
+/* Posiciona o Título na primeira linha, primeira coluna */
+.gs-header-titulo {
+  grid-row: 1 / 2;
+  grid-column: 1 / 2;
+}
+
+/* Posiciona a Busca na segunda linha, ocupando as DUAS colunas (para ficar 100% de largura) */
+.gs-filtros-header-controles {
+  grid-row: 2 / 3;
+  grid-column: 1 / 3;
+}
+
+
+/* A linha que contém o título e o botão */
+.gs-filtros-header-linha-titulo {
+    width: 100%;
+    display: flex;
+    justify-content: space-between; /* Empurra o título para a esquerda e o botão para a direita */
+    align-items: center;
+}
+
+/* O container da busca */
+.gs-filtros-header-controles {
+    width: 100%;
+}
+
+.gs-header-titulo {
+  font-size: 1.2rem;
+  color: var(--gs-secundaria);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.gs-filtros-paineis {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 20px;
+}
+
+.gs-filtro-secao {
+  display: flex;
+  flex-direction: column;
+}
+
+.gs-filtro-titulo {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--gs-texto-principal);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--gs-primaria);
+}
+
+.gs-filtro-lista {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 150px; /* Altura máxima antes de mostrar scroll */
+  overflow-y: auto;
+  padding-right: 5px; /* Espaço para a barra de rolagem */
+}
+
+.gs-filtro-lista label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.gs-filtro-lista input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.gs-filtros-footer {
+    margin: 20px 0 0;
+    padding: 10px;
+    text-align: right;
+}
+
+.gs-btn-link {
+  background: none;
+  border: none;
+  color: var(--gs-primaria);
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gs-btn-link:hover {
+  text-decoration: underline;
+}
+
+/* ==========================================================================
+   # LÓGICA ACORDEÃO PARA FILTROS MOBILE (GS)
+   ========================================================================== */
+
+/* Em telas grandes, o botão de toggle fica escondido e o conteúdo visível */
+.gs-filtros-mobile-toggle {
+  display: none;
+}
+.gs-filtros-acordeao-conteudo {
+  display: block;
+}
+.gs-filtro-badge {
+    background-color: var(--gs-primaria-hover);
+    color: white;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    margin-left: 8px;
+}
+
+/* ==========================================================================
+   # PÍLULAS DE FILTROS ATIVOS (GS)
+   ========================================================================== */
+
+.gs-filtros-ativos-container {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 15px;
+  margin-bottom: 20px;
+  background-color: var(--gs-fundo-alternativo, #f9fbfd);
+  border-radius: var(--gs-raio-borda-input);
+  border: 1px solid var(--gs-borda);
+}
+
+.gs-filtros-ativos-titulo {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--gs-texto-secundario);
+}
+
+.gs-filtros-ativos-lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gs-pilula-ativa {
+  display: inline-flex;
+  align-items: center;
+  background-color: var(--gs-primaria);
+  color: white;
+  border-radius: 20px;
+  padding: 4px 6px 4px 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.gs-pilula-ativa button {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.2rem;
+  line-height: 1;
+  margin-left: 6px;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.gs-pilula-ativa button:hover {
+  opacity: 1;
+}
+
+.gs-btn-link-limpar-ativos {
+    background: none;
+    border: none;
+    color: var(--gs-perigo);
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-decoration: underline;
+    cursor: pointer;
+    margin-left: auto; /* Empurra para a direita */
+}
+
+/* ==========================================================================
+   # BOTÃO 'LIMPAR TUDO' PARA PÍLULAS DE FILTROS (GS)
+   ========================================================================== */
+
+.gs-btn-limpar-filtros-ativos {
+  background: none;
+  border: 1px solid transparent; /* Começa sem borda visível */
+  color: var(--gs-texto-secundario, #7f8c8d); /* Cor cinza, sutil */
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  margin-left: auto; /* Continua empurrando para a direita */
+  padding: 6px 12px;
+  border-radius: 20px; /* Borda arredondada (pílula) */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.gs-btn-limpar-filtros-ativos:hover {
+  background-color: #fbeae8; /* Fundo vermelho MUITO claro */
+  border-color: var(--gs-perigo, #e74c3c); /* Borda vermelha aparece no hover */
+  color: var(--gs-perigo, #e74c3c); /* Texto fica vermelho */
+}
+
+
+/* ==========================================================================
    # AJUSTES PARA MOBILE 
    ========================================================================== */
 
@@ -455,6 +850,69 @@ body.autenticado {
     .gs-acao-card span {
         font-size: 0.8rem; /* Fonte do texto menor */
     }
+
+    .gs-header-titulo {
+        /* Ocupa um pouco de espaço, mas deixa o resto para o botão */
+        flex-grow: 1; 
+    }
+
+    .gs-btn-atualizar {
+        /* Garante que o botão não encolha */
+        flex-shrink: 0; 
+    }
+
+    .gs-filtros-header-controles {
+        /* Força este container a ocupar 100% da largura,
+        o que o joga para a linha de baixo. */
+        width: 100%;
+        /* Define a ordem visual, garantindo que ele venha depois */
+        order: 3;
+    }
+
+    .gs-filtros-header .gs-btn-atualizar {
+        align-self: auto; /* Reseta o align-self que colocamos antes */
+        width: auto;
+    }
+
+  .gs-filtros-header .gs-btn-atualizar {
+      align-self: flex-end;
+      width: auto; 
+  }
+
+  .gs-filtros-mobile-toggle {
+    display: block;
+    margin-bottom: 20px;
+  }
+  .gs-filtros-mobile-toggle .gs-btn {
+      width: 100%;
+  }
+
+  .gs-filtros-acordeao-conteudo {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease-out;
+  }
+
+  .gs-filtros-acordeao-conteudo.aberto {
+    max-height: 1000px; /* Um valor alto para garantir que todo o conteúdo caiba */
+    transition: max-height 0.5s ease-in;
+  }
+  
+  .gs-filtros-paineis {
+      grid-template-columns: 1fr;
+  }
+
+  .gs-filtros-header {
+    /* A estrutura do grid continua a mesma, o que é ótimo! */
+    /* Apenas ajustamos o gap se necessário. */
+    gap: 10px;
+  }
+
+  .gs-filtros-header-controles {
+    grid-column: 1 / 3; /* Mantemos ocupando as duas colunas para garantir 100% de largura */
+  }
+  
+
 }
 
 @media (max-width: 480px) {

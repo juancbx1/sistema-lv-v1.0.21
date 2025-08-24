@@ -237,18 +237,12 @@ router.get('/', async (req, res) => {
                 u.id, u.nome, u.nome_usuario, u.email, u.tipos, u.nivel, u.permissoes,
                 u.salario_fixo, u.valor_passagem_diaria, u.elegivel_pagamento, 
                 u.id_contato_financeiro, u.data_admissao,
-                u.data_demissao, -- NOVO
-                u.horario_entrada_1, -- NOVO
-                u.horario_saida_1, -- NOVO
-                u.horario_entrada_2, -- NOVO
-                u.horario_saida_2, -- NOVO
-                u.horario_entrada_3, -- NOVO
-                u.horario_saida_3, -- NOVO
                 c.nome AS nome_contato_financeiro,
+                -- Agrega os IDs das concessionárias em um array, retornando um array vazio '{}' se não houver nenhum.
                 COALESCE(
                     (SELECT array_agg(ucv.concessionaria_id) 
-                    FROM usuario_concessionaria_vt ucv 
-                    WHERE ucv.usuario_id = u.id),
+                     FROM usuario_concessionaria_vt ucv 
+                     WHERE ucv.usuario_id = u.id),
                     '{}'
                 ) AS concessionarias_vt
             FROM usuarios u
@@ -359,14 +353,7 @@ router.put('/', async (req, res) => {
             salario_fixo, valor_passagem_diaria, 
             elegivel_pagamento, id_contato_financeiro, concessionaria_ids,
             permissoes: permissoesIndividuais,
-            data_admissao,
-            data_demissao,
-            horario_entrada_1,
-            horario_saida_1,
-            horario_entrada_2,
-            horario_saida_2, 
-            horario_entrada_3,
-            horario_saida_3
+            data_admissao   
         } = req.body;
 
         if (!id) {
@@ -398,13 +385,6 @@ router.put('/', async (req, res) => {
             // Se a data vier vazia, salva como nulo
             values.push(data_admissao || null); 
         }
-        if (data_demissao !== undefined) { fieldsToUpdate.push(`data_demissao = $${paramIndex++}`); values.push(data_demissao || null); }
-        if (horario_entrada_1 !== undefined) { fieldsToUpdate.push(`horario_entrada_1 = $${paramIndex++}`); values.push(horario_entrada_1 || null); }
-        if (horario_saida_1 !== undefined) { fieldsToUpdate.push(`horario_saida_1 = $${paramIndex++}`); values.push(horario_saida_1 || null); }
-        if (horario_entrada_2 !== undefined) { fieldsToUpdate.push(`horario_entrada_2 = $${paramIndex++}`); values.push(horario_entrada_2 || null); }
-        if (horario_saida_2 !== undefined) { fieldsToUpdate.push(`horario_saida_2 = $${paramIndex++}`); values.push(horario_saida_2 || null); }
-        if (horario_entrada_3 !== undefined) { fieldsToUpdate.push(`horario_entrada_3 = $${paramIndex++}`); values.push(horario_entrada_3 || null); }
-        if (horario_saida_3 !== undefined) { fieldsToUpdate.push(`horario_saida_3 = $${paramIndex++}`); values.push(horario_saida_3 || null); }
 
         if (fieldsToUpdate.length > 0) {
             values.push(id);

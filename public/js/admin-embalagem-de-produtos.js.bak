@@ -4,10 +4,6 @@ import { verificarAutenticacao } from '/js/utils/auth.js';
 import { mostrarMensagem, mostrarConfirmacao } from '/js/utils/popups.js';
 import { obterProdutos as obterProdutosDoStorage, invalidateCache as invalidateProdutosStorageCache } from '/js/utils/storage.js';
 import { adicionarBotaoFechar } from '/js/utils/botoes-fechar.js';
-import { inicializarControlador } from './utils/ControladorFiltros.js';
-import { renderizarPaginacao } from './utils/Paginacao.js';
-import { renderizarComponentesReactDaEmbalagem } from '../src/pages/embalagem.jsx';
-
 
 // --- Variáveis Globais ---
 let todosOsUsuarios = [];
@@ -15,12 +11,17 @@ let usuarioLogado = null;
 let permissoes = [];
 
 let todosOsProdutosCadastrados = []; // Para imagens, nomes de produtos, definições de kit
+let totaisDaFilaDeEmbalagem = { totalItems: 0, aguardandoMuito: 0 };
+
+
 let modalHistoricoGeralElement = null;
 
 let todosArrematesRegistradosCache = []; // Cache dos arremates já feitos (com quantidade_ja_embalada)
 let produtosAgregadosParaEmbalarGlobal = []; // Array dos itens agregados (produto|variante) prontos para embalar
 let embalagemAgregadoEmVisualizacao = null; // Objeto do item agregado atualmente na tela de embalar/montar kit
 
+let currentPageEmbalagemCards = 1;
+const itemsPerPageEmbalagemCards = 6; // Quantos cards de "Pronto para Embalar" por página
 const ARREMATES_ORIGEM_PER_PAGE = 6; // Quantos itens mostrar por página na aba voltar para arremate
 
 const operacaoEmAndamento = new Set(); // Para evitar duplo clique em botões de ação
@@ -30,112 +31,47 @@ let currentPageHistorico = 1;
 const itemsPerPageHistorico = 5;
 
 async function forcarAtualizacaoEmbalagem() {
-    const btn = document.querySelector('.gs-btn-atualizar'); // Usamos a classe que está no React
+    const btn = document.getElementById('btnAtualizarEmbalagem');
     if (!btn || btn.disabled) return;
+
+    // Pega o container que vai receber o overlay
+    const containerDaLista = document.querySelector('.ep-card-filtros');
+    if (!containerDaLista) return;
 
     btn.disabled = true;
     const span = btn.querySelector('span');
     const originalText = span ? span.textContent : 'Atualizar';
     if (span) span.textContent = 'Atualizando...';
 
+    // Cria e exibe o overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'ep-lista-loading-overlay';
+    overlay.innerHTML = '<div class="spinner">Atualizando fila...</div>';
+    containerDaLista.appendChild(overlay);
+
     console.log('[forcarAtualizacaoEmbalagem] Forçando atualização da fila de embalagem...');
 
+
     try {
-        // A função que busca todos os dados e reinicializa o controlador
-        await carregarDadosEInicializarFiltros(); 
-        
-        mostrarMensagem('Fila de embalagem atualizada com sucesso!', 'sucesso', 2500);
+        await renderizarCardsEmbalagem(1);
+
+        await atualizarContadoresPainel();
+        mostrarMensagem('Fila de embalagem atualizada!', 'sucesso', 2500);
 
     } catch (error) {
         console.error('[forcarAtualizacaoEmbalagem] Erro:', error);
-        
-        mostrarMensagem('Falha ao atualizar a fila. Tente novamente.', 'erro');
-
+        mostrarMensagem('Falha ao atualizar a fila de embalagem.', 'erro');
     } finally {
-        // Restaura o botão ao seu estado original
         if (span) span.textContent = originalText;
         if (btn) btn.disabled = false;
         
+        // Remove o overlay no final
+        overlay.style.opacity = '0';
+        setTimeout(() => overlay.remove(), 300); // Remove do DOM após a transição
+
         console.log('[forcarAtualizacaoEmbalagem] Atualização concluída.');
     }
 }
-window.forcarAtualizacaoEmbalagem = forcarAtualizacaoEmbalagem;
-
-
-async function carregarDadosEInicializarFiltros() {
-    const containerEl = document.getElementById('embalagemCardsContainer');
-    if(containerEl) containerEl.innerHTML = '<div class="spinner">Carregando produtos na fila...</div>';
-
-    try {
-        const [produtosCadastrados, respostaFila] = await Promise.all([
-            obterProdutosDoStorage(true),
-            fetchFromAPI('/embalagens/fila?todos=true')
-        ]);
-        todosOsProdutosCadastrados = produtosCadastrados || [];
-        const todosOsProdutosDaFila = respostaFila.rows || [];
-        
-        inicializarControlador({
-            dadosCompletos: todosOsProdutosDaFila,
-            renderizarResultados: renderizarCardsDaPagina,
-            camposParaBusca: ['produto', 'variante', 'sku']
-        });
-
-        await atualizarContadoresPainel(todosOsProdutosDaFila);
-    } catch (error) {
-        console.error("Falha ao carregar dados da fila e inicializar filtros:", error);
-        if(containerEl) containerEl.innerHTML = '<p style="text-align:center; color: red;">Não foi possível carregar os dados da fila.</p>';
-        throw error; // Re-lança o erro para o `catch` do forcarAtualizacaoEmbalagem funcionar
-    }
-}
-
-/**
- * Analisa uma lista de produtos da fila e extrai as opções de filtro únicas.
- * @param {Array} produtosDaFila - A lista completa de produtos vinda da API.
- * @returns {object} Um objeto com arrays de filtros únicos. Ex: { produtos: [], cores: [], tamanhos: [] }
- */
-function extrairOpcoesDeFiltro(produtosDaFila) {
-    const produtos = new Set();
-    const cores = new Set();
-    const tamanhos = new Set();
-
-    const todosOsProdutosCadastradosComGrade = todosOsProdutosCadastrados.filter(p => p.grade && p.grade.length > 0);
-
-    produtosDaFila.forEach(item => {
-        // 1. Adiciona o nome do produto
-        produtos.add(item.produto);
-
-        // 2. Extrai e adiciona cores e tamanhos da variação
-        const produtoInfo = todosOsProdutosCadastradosComGrade.find(p => p.id === item.produto_id);
-        if (produtoInfo) {
-            const gradeInfo = produtoInfo.grade.find(g => g.variacao === item.variante);
-            if (gradeInfo) {
-                // Lógica para variações compostas como "Cor | Tamanho"
-                const partes = gradeInfo.variacao.split('|').map(p => p.trim());
-                partes.forEach(parte => {
-                    // Heurística simples para identificar tamanho
-                    if (['P', 'M', 'G', 'GG', 'U'].includes(parte.toUpperCase())) {
-                        tamanhos.add(parte);
-                    } else if (parte && parte !== '-') { // Se não for tamanho e não for vazio
-                        // Lógica para cores compostas como "Preto com Branco"
-                        const subCores = parte.split(/ com | e /i).map(c => c.trim());
-                        subCores.forEach(subCor => cores.add(subCor));
-                    }
-                });
-            }
-        }
-    });
-
-    // Converte os Sets para Arrays e os ordena alfabeticamente
-    return {
-        produtos: Array.from(produtos).sort(),
-        cores: Array.from(cores).sort(),
-        tamanhos: Array.from(tamanhos).sort((a, b) => { // Ordenação especial para tamanhos
-            const ordem = { 'P': 1, 'M': 2, 'G': 3, 'GG': 4, 'U': 5 };
-            return (ordem[a.toUpperCase()] || 99) - (ordem[b.toUpperCase()] || 99);
-        }),
-    };
-}
-
 
 /**
  * Cria o elemento HTML do modal em memória, mas NÃO o adiciona à página.
@@ -143,7 +79,10 @@ function extrairOpcoesDeFiltro(produtosDaFila) {
  */
 function criarInstanciaDoModalHistorico() {
     // Se o modal já foi criado em memória, não faz nada.
-    if (modalHistoricoGeralElement) return;    
+    if (modalHistoricoGeralElement) return;
+
+    console.log("Criando a instância do modal de histórico (versão corrigida)...");
+    
     const container = document.createElement('div');
     container.id = 'historicoGeralModalContainer';
     container.className = 'popup-container es-modal'; // Usa a classe base do modal
@@ -234,6 +173,7 @@ async function carregarHistoricoEmbalagem(produtoRefId, page) {
 
         const data = await fetchFromAPI(`/embalagens/historico?${params.toString()}`);
         renderizarHistoricoEmbalagem(data.rows || []);
+        renderizarPaginacaoHistorico(data.pages || 0, produtoRefId);
     } catch (error) {
         tbodyEl.innerHTML = `<tr><td colspan="6" style="text-align:center;color:red;">Erro ao carregar histórico.</td></tr>`;
     }
@@ -391,6 +331,37 @@ function renderizarHistoricoEmbalagem(registros) {
     });
 }
 
+// 3. FUNÇÃO PARA RENDERIZAR A PAGINAÇÃO DO HISTÓRICO
+function renderizarPaginacaoHistorico(totalPages, produtoRefId) {
+    const paginacaoEl = document.getElementById('paginacaoHistoricoEmbalagem');
+    if (!paginacaoEl) {
+        console.error("Elemento #paginacaoHistoricoEmbalagem não encontrado.");
+        return;
+    }
+    
+    paginacaoEl.innerHTML = '';
+    
+    if (totalPages <= 1) {
+        paginacaoEl.style.display = 'none';
+        return;
+    }
+    paginacaoEl.style.display = 'flex';
+
+    paginacaoEl.innerHTML = `
+        <button class="gs-paginacao-btn" data-page="${Math.max(1, currentPageHistorico - 1)}" ${currentPageHistorico === 1 ? 'disabled' : ''}>Anterior</button>
+        <span class="gs-paginacao-info">Pág. ${currentPageHistorico} de ${totalPages}</span>
+        <button class="gs-paginacao-btn" data-page="${Math.min(totalPages, currentPageHistorico + 1)}" ${currentPageHistorico === totalPages ? 'disabled' : ''}>Próximo</button>
+    `;
+
+    paginacaoEl.querySelectorAll('.gs-paginacao-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetPage = parseInt(btn.dataset.page);
+            // Chama a função de carregar histórico passando o SKU (produtoRefId) e a nova página
+            carregarHistoricoEmbalagem(produtoRefId, targetPage);
+        });
+    });
+}
+
 // 4. HANDLER PARA O CLIQUE NO BOTÃO DE ESTORNO
 async function handleEstornoClick(event) {
     const button = event.currentTarget;
@@ -432,6 +403,8 @@ async function handleEstornoClick(event) {
 }
 
 // --- Funções Auxiliares Essenciais ---
+
+
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
@@ -470,8 +443,36 @@ function paginarArray(array, page, itemsPerPage) {
  * @param {HTMLElement} container - O elemento div onde a paginação será desenhada.
  * @param {number} totalPages - O número total de páginas.
  * @param {number} currentPage - A página atual.
- * @param {Function} callback
+ * @param {Function} callback - A função a ser chamada quando um botão de página é clicado (ex: renderizarCardsEmbalagem).
  */
+function renderizarPaginacao(container, totalPages, currentPage, callback) {
+    container.innerHTML = '';
+    if (totalPages <= 1) {
+        container.style.display = 'none';
+        return;
+    }
+    container.style.display = 'flex';
+
+    const criarBtn = (texto, page, isDisabled) => {
+        const btn = document.createElement('button');
+        btn.className = 'gs-paginacao-btn'; // Usando a classe de botão da página
+        btn.textContent = texto;
+        btn.disabled = isDisabled;
+        if (!isDisabled) {
+            btn.onclick = () => callback(page);
+        }
+        return btn;
+    };
+
+    container.appendChild(criarBtn('Anterior', currentPage - 1, currentPage === 1));
+    
+    const pageInfo = document.createElement('span');
+    pageInfo.className = 'gs-paginacao-info';
+    pageInfo.textContent = `Pág. ${currentPage} de ${totalPages}`;
+    container.appendChild(pageInfo);
+    
+    container.appendChild(criarBtn('Próximo', currentPage + 1, currentPage === totalPages));
+}
 
 // --- Funções de Fetch ---
 async function fetchFromAPI(endpoint, options = {}) {
@@ -518,6 +519,138 @@ async function fetchFromAPI(endpoint, options = {}) {
     }
 }
 
+async function renderizarCardsEmbalagem(page = 1) {
+    currentPageEmbalagemCards = page;
+    const containerEl = document.getElementById('embalagemCardsContainer');
+    const paginationContainerEl = document.getElementById('embalagemPaginationContainer');
+    
+    if (!containerEl || !paginationContainerEl) {
+        console.error("Elementos DOM para renderização/filtros não encontrados.");
+        return;
+    }
+
+    containerEl.innerHTML = '<div class="spinner">Buscando itens na fila...</div>';
+    paginationContainerEl.innerHTML = '';
+
+    try {
+        // Referências aos filtros. Usamos 'El' no final para indicar que são elementos HTML.
+        const searchInputEl = document.getElementById('searchProdutoEmbalagem');
+        const ordenacaoEl = document.getElementById('ordenacaoSelect');
+        const filtroAlertaEl = document.getElementById('filtroAlertaSelect');
+
+        // Coleta os valores atuais dos filtros de forma segura
+        const searchTerm = searchInputEl ? searchInputEl.value : '';
+        // O sortBy no backend espera 'mais_recentes', 'mais_antigos', etc. 'padrao' não é mais usado.
+        const ordenacao = ordenacaoEl ? ordenacaoEl.value : 'mais_recentes';
+        const filtroAlerta = filtroAlertaEl ? filtroAlertaEl.value : 'todos';
+
+        // Monta os parâmetros para a nova API de forma limpa
+        const params = new URLSearchParams({
+            search: searchTerm,
+            sortBy: ordenacao,
+            filterByAge: filtroAlerta, // Este parâmetro será usado pelo backend
+            page: currentPageEmbalagemCards,
+            limit: itemsPerPageEmbalagemCards,
+        });
+
+        // ÚNICA FONTE DE DADOS: A NOVA API INTELIGENTE
+        const response = await fetchFromAPI(`/embalagens/fila?${params.toString()}`);
+        const { rows: itensParaEmbalar, pagination } = response;
+
+        // <<< GUARDE OS TOTAIS AQUI >>>
+        totaisDaFilaDeEmbalagem.totalItems = pagination.totalItems || 0;
+
+        // Atualiza a variável global (usada pelos contadores do dashboard)
+        produtosAgregadosParaEmbalarGlobal = itensParaEmbalar;
+
+        containerEl.innerHTML = ''; // Limpa o spinner
+        if (!itensParaEmbalar || itensParaEmbalar.length === 0) {
+            containerEl.innerHTML = `<p style="text-align: center; padding: 20px; grid-column: 1 / -1;">Nenhum item encontrado com os filtros aplicados.</p>`;
+            paginationContainerEl.style.display = 'none';
+            return;
+        }
+
+        itensParaEmbalar.forEach(item => {
+            const card = document.createElement('div');
+            const produtoCadastrado = todosOsProdutosCadastrados.find(p => p.id == item.produto_id);
+            let imagemSrc = '/img/placeholder-image.png';
+            let skuProduto = 'N/A';
+
+            if (produtoCadastrado) {
+                if (item.variante && item.variante !== '-') {
+                    const gradeInfo = produtoCadastrado.grade?.find(g => g.variacao === item.variante);
+                    if (gradeInfo) {
+                        imagemSrc = gradeInfo.imagem || produtoCadastrado.imagem || '/img/placeholder-image.png';
+                        skuProduto = gradeInfo.sku || produtoCadastrado.sku || 'N/A';
+                    }
+                } else {
+                    imagemSrc = produtoCadastrado.imagem || '/img/placeholder-image.png';
+                    skuProduto = produtoCadastrado.sku || 'N/A';
+                }
+            }
+            
+            let classeStatus = 'status-pronto-para-embalar';
+            let diasEsperandoTexto = '-';
+
+            if (item.data_lancamento_mais_antiga) {
+                const dataAntiga = new Date(item.data_lancamento_mais_antiga);
+                const agora = new Date();
+                const diffDias = Math.floor((agora - dataAntiga) / (1000 * 60 * 60 * 24));
+
+                if (diffDias < 1) {
+                    diasEsperandoTexto = "Hoje";
+                } else {
+                    diasEsperandoTexto = diffDias === 1 ? '1 dia' : `${diffDias} dias`;
+                }
+
+                if (diffDias >= 2) { // Alterado para >= 2 para incluir "há 2 dias"
+                    classeStatus = 'status-aguardando-muito';
+                }
+            }
+            
+            card.className = `ep-consulta-card ${classeStatus}`;
+
+            card.innerHTML = `
+                <img src="${imagemSrc}" alt="${item.produto}" class="ep-consulta-card-img" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">
+                <div class="ep-consulta-card-info">
+                    <h3>${item.produto}</h3>
+                    <p>${item.variante && item.variante !== '-' ? item.variante : 'Padrão'}</p>
+                    <p class="ep-sku-info">SKU: ${skuProduto}</p>
+                </div>
+                <div class="ep-consulta-card-dados">
+                    <div class="ep-dado-bloco">
+                        <span class="label">Disponível</span>
+                        <span class="valor">${item.total_disponivel_para_embalar}</span>
+                    </div>
+                    <div class="ep-dado-bloco">
+                        <span class="label">Aguardando</span>
+                        <span class="valor" style="${classeStatus === 'status-aguardando-muito' ? 'color: var(--ep-cor-laranja-aviso);' : ''}">${diasEsperandoTexto}</span>
+                    </div>
+                </div>
+            `;
+
+            // Prepara o objeto para a tela de detalhes, garantindo compatibilidade com o que ela espera
+            const itemParaDetalhes = {
+                produto_id: item.produto_id,
+                produto: item.produto,
+                variante: item.variante,
+                total_quantidade_disponivel_para_embalar: item.total_disponivel_para_embalar,
+                arremates_detalhe: [] // Deixamos vazio, pois a aba "Voltar para Arremate" buscará isso sob demanda
+            };
+            
+            card.dataset.embalagemAgregado = JSON.stringify(itemParaDetalhes);
+            card.addEventListener('click', handleEmbalagemCardClick);
+            containerEl.appendChild(card);
+        });
+
+        // Chama a função para desenhar os botões de paginação, usando os dados da API
+        renderizarPaginacao(paginationContainerEl, pagination.totalPages, pagination.currentPage, renderizarCardsEmbalagem);
+
+    } catch (error) {
+        console.error('Erro ao renderizar cards de embalagem:', error);
+        containerEl.innerHTML = `<p style="text-align: center; color: red;">Falha ao carregar a fila de embalagem.</p>`;
+    }
+}
 
 /**
  * Busca os arremates individuais e com saldo para um produto/variante específico.
@@ -542,121 +675,38 @@ async function buscarArrematesDetalhados(produtoId, variante) {
     }
 }
 
-async function handleEmbalagemCardClick(itemClicado) {
+async function handleEmbalagemCardClick(event) {
+    const card = event.currentTarget;
+    const agregadoResumo = JSON.parse(card.dataset.embalagemAgregado);
+    
+    // Mostra um feedback visual de carregamento
+    card.style.opacity = '0.5';
+    card.style.pointerEvents = 'none';
+
     try {
-        
-        // A função 'buscarArrematesDetalhados' já retorna os lotes individuais
-        const arrematesDoItem = await buscarArrematesDetalhados(itemClicado.produto_id, itemClicado.variante);
-        // O total disponível PRECISA ser o que está no item clicado, que já é a soma.
-        const totalDisponivel = itemClicado.total_disponivel_para_embalar;
+        // Usa a nova função para buscar os detalhes
+        const detalhes = await buscarArrematesDetalhados(agregadoResumo.produto_id, agregadoResumo.variante);
         
         const agregadoCompleto = {
-            produto_id: itemClicado.produto_id,
-            produto: itemClicado.produto,
-            variante: itemClicado.variante,
-            total_quantidade_disponivel_para_embalar: totalDisponivel, // Usamos o valor já somado
-            arremates_detalhe: arrematesDoItem, // A lista de lotes individuais
+            ...agregadoResumo,
+            arremates_detalhe: detalhes.map(d => ({
+                ...d,
+                // Garante que a propriedade esperada exista
+                quantidade_disponivel_para_embalar: d.quantidade_arrematada - d.quantidade_ja_embalada
+            }))
         };
         
+        embalagemAgregadoEmVisualizacao = agregadoCompleto;
         localStorage.setItem('embalarDetalheAtual', JSON.stringify(agregadoCompleto));
         window.location.hash = '#embalar-produto';
+
     } catch (error) {
-        console.error("Erro em handleEmbalagemCardClick:", error);
-        mostrarMensagem("Não foi possível carregar os detalhes deste item.", "erro");
+        // O erro já é tratado dentro de buscarArrematesDetalhados
+    } finally {
+        card.style.opacity = '1';
+        card.style.pointerEvents = 'auto';
     }
 }
-
-/** * Recebe uma lista de produtos JÁ FILTRADA E ORDENADA e a página atual.
- */
-function renderizarCardsDaPagina(produtosParaRenderizar, page = 1) {
-  const containerEl = document.getElementById('embalagemCardsContainer');
-  const paginationContainerEl = document.getElementById('embalagemPaginationContainer');
-  const itemsPerPage = 6;
-
-  if (!containerEl || !paginationContainerEl) {
-    console.error("[RENDER] Containers de renderização não encontrados!");
-    return;
-  }
-
-  const totalItems = produtosParaRenderizar.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
-  const currentPage = Math.max(1, Math.min(page, totalPages));
-  const inicio = (currentPage - 1) * itemsPerPage;
-  const fim = inicio + itemsPerPage;
-  const produtosDaPagina = produtosParaRenderizar.slice(inicio, fim);
-
-  containerEl.innerHTML = '';
-
-  if (produtosDaPagina.length === 0) {
-    containerEl.innerHTML = `<p style="text-align: center; padding: 20px; grid-column: 1 / -1;">Nenhum produto encontrado com os filtros aplicados.</p>`;
-    // Mesmo sem produtos, chamamos a renderização da paginação para que ela possa se esconder.
-    renderizarPaginacao(paginationContainerEl, totalPages, currentPage, (newPage) => {
-        renderizarCardsDaPagina(produtosParaRenderizar, newPage);
-    });
-    return;
-  }
-
-  produtosDaPagina.forEach(item => {
-    // Reutiliza a mesma lógica de encontrar imagem e SKU que você já tinha
-    const produtoCadastrado = todosOsProdutosCadastrados.find(p => p.id == item.produto_id);
-    let imagemSrc = '/img/placeholder-image.png';
-    let skuProduto = 'N/A';
-    if (produtoCadastrado) {
-        if (item.variante && item.variante !== '-') {
-            const gradeInfo = produtoCadastrado.grade?.find(g => g.variacao === item.variante);
-            if (gradeInfo) {
-                imagemSrc = gradeInfo.imagem || produtoCadastrado.imagem || '/img/placeholder-image.png';
-                skuProduto = gradeInfo.sku || produtoCadastrado.sku || 'N/A';
-            }
-        } else {
-            imagemSrc = produtoCadastrado.imagem || '/img/placeholder-image.png';
-            skuProduto = produtoCadastrado.sku || 'N/A';
-        }
-    }
-    
-    let classeStatus = 'status-pronto-para-embalar';
-    let diasEsperandoTexto = '-';
-    if (item.data_lancamento_mais_antiga) {
-        const diffDias = Math.floor((new Date() - new Date(item.data_lancamento_mais_antiga)) / (1000 * 60 * 60 * 24));
-        diasEsperandoTexto = diffDias < 1 ? "Hoje" : `${diffDias} dia${diffDias > 1 ? 's' : ''}`;
-        if (diffDias >= 2) {
-            classeStatus = 'status-aguardando-muito';
-        }
-    }
-
-    const card = document.createElement('div');
-    card.className = `ep-consulta-card ${classeStatus}`;
-    card.innerHTML = `
-        <img src="${imagemSrc}" alt="${item.produto}" class="ep-consulta-card-img" onerror="this.onerror=null;this.src='/img/placeholder-image.png';">
-        <div class="ep-consulta-card-info">
-            <h3>${item.produto}</h3>
-            <p>${item.variante && item.variante !== '-' ? item.variante : 'Padrão'}</p>
-            <p class="ep-sku-info">SKU: ${skuProduto}</p>
-        </div>
-        <div class="ep-consulta-card-dados">
-            <div class="ep-dado-bloco">
-                <span class="label">Disponível</span>
-                <span class="valor">${item.total_disponivel_para_embalar}</span>
-            </div>
-            <div class="ep-dado-bloco">
-                <span class="label">Aguardando</span>
-                <span class="valor" style="${classeStatus === 'status-aguardando-muito' ? 'color: var(--ep-cor-laranja-aviso);' : ''}">${diasEsperandoTexto}</span>
-            </div>
-        </div>
-    `;
-    
-    // Adiciona o listener de clique passando o objeto 'item' diretamente
-    card.addEventListener('click', () => handleEmbalagemCardClick(item));
-        
-    containerEl.appendChild(card);
-  });
-  
-  // USA O NOVO MÓDULO DE PAGINAÇÃO!
-  renderizarPaginacao(paginationContainerEl, totalPages, currentPage, (newPage) => {
-    renderizarCardsDaPagina(produtosParaRenderizar, newPage);
-  });
-}
-
 
 async function carregarDetalhesEmbalagemView(agregado) {
     document.getElementById('embalagemListViewNova').style.display = 'none';
@@ -668,12 +718,6 @@ async function carregarDetalhesEmbalagemView(agregado) {
         mostrarMensagem("Erro ao carregar view de detalhe.", "erro");
         return;
     }
-
-    adicionarBotaoFechar(embalarDetalheViewEl, () => {
-        window.location.hash = '';
-    });
-
-    embalarDetalheViewEl.style.display = 'block';
 
     embalagemAgregadoEmVisualizacao = agregado;
 
@@ -804,6 +848,7 @@ async function carregarDetalhesEmbalagemView(agregado) {
 
     // --- APENAS RESET VISUAL da Aba "Montar e Embalar Kit" ---
     // Os listeners de interação serão configurados UMA VEZ no DOMContentLoaded.
+    console.log("[carregarDetalhesEmbalagemView] Resetando UI da Aba Kit...");
     const kitTabButtonEl = document.querySelector('#embalarDetalheView .ep-tabs button[data-tab="kit"]');
     const kitVariacaoWrapperEl = document.getElementById('kitVariacaoWrapperNova');
     const kitComposicaoWrapperEl = document.getElementById('kitComposicaoWrapperNova');
@@ -1070,39 +1115,39 @@ async function montarKits() {
     }
 }
 
-async function atualizarContadoresPainel(produtosDaFila) {
-  const contadorTotalEl = document.getElementById('contadorTotalAEmbalar');
-  const contadorAguardandoEl = document.getElementById('contadorAguardandoMuitoTempo');
-  const contadorHojeEl = document.getElementById('contadorEmbaladoHoje');
+async function atualizarContadoresPainel() {
+    const contadorTotalEl = document.getElementById('contadorTotalAEmbalar');
+    const contadorAguardandoEl = document.getElementById('contadorAguardandoMuitoTempo');
+    const contadorHojeEl = document.getElementById('contadorEmbaladoHoje');
 
-  // 1. Calcula o total de itens a embalar a partir da lista recebida
-  if (contadorTotalEl) {
-      // O total de grupos de produtos na fila
-      contadorTotalEl.textContent = produtosDaFila.length;
-  }
+    // Usa o total de itens que guardamos da última chamada da API
+    if (contadorTotalEl) {
+        contadorTotalEl.textContent = totaisDaFilaDeEmbalagem.totalItems;
+    }
 
-  // 2. Calcula quantos itens estão aguardando há muito tempo
-  if (contadorAguardandoEl) {
-      const aguardandoMuito = produtosDaFila.filter(item => {
-          if (!item.data_lancamento_mais_antiga) return false;
-          const diffDias = (new Date() - new Date(item.data_lancamento_mais_antiga)) / (1000 * 60 * 60 * 24);
-          return diffDias >= 2;
-      }).length;
-      contadorAguardandoEl.textContent = aguardandoMuito;
-  }
-  
-  // 3. O único que ainda precisa de uma chamada à API é o "Embalado Hoje",
-  //    pois essa informação não está na lista da fila.
-  if (contadorHojeEl) {
-      try {
-          contadorHojeEl.textContent = '...';
-          const response = await fetchFromAPI('/embalagens/contagem-hoje');
-          contadorHojeEl.textContent = response.total || 0;
-      } catch (error) {
-          console.error("Erro ao buscar contagem de embalagens de hoje:", error);
-          contadorHojeEl.textContent = "?";
-      }
-  }
+    // Para o contador "Aguardando", vamos pedir esse número específico para a API
+    if (contadorAguardandoEl) {
+        try {
+            const response = await fetchFromAPI('/embalagens/fila/contagem-antigos');
+            totaisDaFilaDeEmbalagem.aguardandoMuito = response.total || 0;
+            contadorAguardandoEl.textContent = totaisDaFilaDeEmbalagem.aguardandoMuito;
+        } catch (error) {
+            console.error("Erro ao buscar contagem de itens antigos:", error);
+            contadorAguardandoEl.textContent = "?";
+        }
+    }
+    
+    // O contador "Embalado Hoje" já funciona bem e pode continuar como está
+    if (contadorHojeEl) {
+        try {
+            contadorHojeEl.textContent = '...';
+            const response = await fetchFromAPI('/embalagens/contagem-hoje');
+            contadorHojeEl.textContent = response.total || 0;
+        } catch (error) {
+            console.error("Erro ao buscar contagem de embalagens de hoje:", error);
+            contadorHojeEl.textContent = "?";
+        }
+    }
 }
 
 // --- Funções Auxiliares de Kit (copiadas e adaptadas com sufixo Nova) ---
@@ -1443,30 +1488,71 @@ function atualizarEstadoBotaoMontarKitNova() {
 }
 
 // --- Controle de Views (Hash e LocalStorage) ---
-// Em public/js/admin-embalagem-de-produtos.js
-
 async function handleHashChangeEmbalagem() {
     const hash = window.location.hash;
     const embalagemListViewEl = document.getElementById('embalagemListViewNova');
     const embalarDetalheViewEl = document.getElementById('embalarDetalheView');
 
+    if (!embalagemListViewEl || !embalarDetalheViewEl) return;
+
+    // Esconde ambas as views para uma transição limpa
+    embalagemListViewEl.style.display = 'none';
+    embalarDetalheViewEl.style.display = 'none';
+
     if (hash === '#embalar-produto') {
-        // MOSTRA A TELA DE DETALHES
-        embalagemListViewEl.style.display = 'none';
+        // --- MOSTRA A TELA DE DETALHES ---
         const data = localStorage.getItem('embalarDetalheAtual');
         if (data) {
-            await carregarDetalhesEmbalagemView(JSON.parse(data));
             embalarDetalheViewEl.style.display = 'block';
+            adicionarBotaoFechar(embalarDetalheViewEl, () => { window.location.hash = ''; });
+            await carregarDetalhesEmbalagemView(JSON.parse(data));
         } else {
-            // Se não há dados no localStorage, força volta para a lista
-            window.location.hash = '';
+            // Se não encontrou dados, volta para a lista para evitar uma tela vazia
+            window.location.hash = ''; 
         }
-    } else {
-        // MOSTRA A TELA DA LISTA
-        embalarDetalheViewEl.style.display = 'none';
+    } else { 
+        // --- MOSTRA A TELA DE LISTA ---
+        localStorage.removeItem('embalarDetalheAtual');
+        embalagemAgregadoEmVisualizacao = null;
+
         embalagemListViewEl.style.display = 'block';
+        
+        // A mágica acontece aqui: chama a função que busca os dados da API e renderiza a lista.
+        // O spinner já é controlado dentro desta função.
+        await renderizarCardsEmbalagem(1); 
+        
+        // Após renderizar a lista, atualiza os contadores do dashboard.
+        await atualizarContadoresPainel(); 
     }
 }
+
+async function inicializarDadosEViewsEmbalagem() {
+    // Pega o container principal da lista de embalagem
+    const containerPrincipal = document.getElementById('embalagemListViewNova');
+    if (!containerPrincipal) return;
+
+    // 1. Adiciona a classe de "carregando" para bloquear cliques
+    containerPrincipal.classList.add('carregando-dados-iniciais');
+
+    try {
+        // 2. Carrega todos os dados essenciais em paralelo
+        await Promise.all([
+            obterProdutosDoStorage(true).then(p => { todosOsProdutosCadastrados = p; }),
+            fetchFromAPI('/usuarios').then(users => { todosOsUsuarios = users || []; })
+        ]);
+
+        // 3. Somente depois que TUDO estiver carregado, chama o roteador
+        await handleHashChangeEmbalagem();
+
+    } catch (error) {
+        console.error("Erro crítico na inicialização de dados:", error);
+        mostrarMensagem("Não foi possível carregar os dados essenciais da página.", "erro");
+    } finally {
+        // 4. Remove a classe de "carregando", liberando os cliques
+        containerPrincipal.classList.remove('carregando-dados-iniciais');
+    }
+}
+
 
 // --- LÓGICA PARA O NOVO MODAL DE HISTÓRICO GERAL ---
 let historicoGeralCurrentPage = 1;
@@ -1623,91 +1709,58 @@ async function carregarSugestoesDeEstoque(produtoId, variante, sku) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  try {
-    // 1. AUTENTICAÇÃO E PERMISSÕES (INÍCIO)
-    const auth = await verificarAutenticacao('embalagem-de-produtos.html', ['acesso-embalagem-de-produtos']);
-    if (!auth) return;
-    
-    usuarioLogado = auth.usuario;
-    permissoes = auth.permissoes || [];
-    document.body.classList.add('autenticado');
+    try {
+        const auth = await verificarAutenticacao('embalagem-de-produtos.html', ['acesso-embalagem-de-produtos']);
+        if (!auth) {
+            return;
+        }
+        usuarioLogado = auth.usuario;
+        permissoes = auth.permissoes || [];
+        document.body.classList.add('autenticado');
 
-    // 2. MOSTRA SPINNER DE CARREGAMENTO GERAL
-    const containerEl = document.getElementById('embalagemCardsContainer');
-    if(containerEl) containerEl.innerHTML = '<div class="spinner">Carregando informações da página...</div>';
+        document.getElementById('btnAbrirHistoricoGeral')?.addEventListener('click', abrirModalHistoricoGeral);
 
-    // 3. CARREGAMENTO DE DADOS ESSENCIAIS E GLOBAIS
-    // Usamos Promise.all para carregar tudo em paralelo e acelerar a inicialização.
-    const [produtosCadastrados, respostaFila] = await Promise.all([
-        obterProdutosDoStorage(true),
-        fetchFromAPI('/embalagens/fila?todos=true')
-    ]);
-    
-    // Populamos nossas variáveis globais com os dados carregados.
-    todosOsProdutosCadastrados = produtosCadastrados || [];
-    const todosOsProdutosDaFila = respostaFila.rows || [];
+        await inicializarDadosEViewsEmbalagem(); 
 
-    // 3.5: EXTRAIR FILTROS
-    const opcoesDeFiltro = extrairOpcoesDeFiltro(todosOsProdutosDaFila);
+        window.addEventListener('hashchange', handleHashChangeEmbalagem);
 
-    // 4. INICIALIZAÇÃO DO SISTEMA DE FILTROS
-    // Entregamos os dados brutos ao controlador. Ele fará a primeira renderização.
-    inicializarControlador({
-        dadosCompletos: todosOsProdutosDaFila,
-        renderizarResultados: renderizarCardsDaPagina,
-        camposParaBusca: ['produto', 'variante', 'sku']
-    });
+        const btnEmbalarUnidadeEl = document.getElementById('btnEmbalarEnviarEstoqueUnidade');
+        if (btnEmbalarUnidadeEl) {
+            btnEmbalarUnidadeEl.addEventListener('click', embalarUnidade);
+        }
 
-
-    // 5. ATUALIZAÇÃO DOS WIDGETS (CONTADORES)
-    await atualizarContadoresPainel(todosOsProdutosDaFila);
-
-    // 6. RENDERIZAÇÃO DOS COMPONENTES REACT
-    renderizarComponentesReactDaEmbalagem({ opcoesDeFiltro });
-
-    // 7. CONFIGURAÇÃO DOS LISTENERS DE EVENTOS DA PÁGINA
-    // Todos os listeners que não dependem dos dados acima podem ser configurados aqui.
-    // Listener DELEGADO para o botão de histórico geral
-    document.addEventListener('click', function(event) {
-      const botaoHistorico = event.target.closest('#btnAbrirHistoricoGeral');
-      if (botaoHistorico) {
-        abrirModalHistoricoGeral();
-      }
-    });
-    window.addEventListener('forcarAtualizacaoFila', forcarAtualizacaoEmbalagem);
-
-    // Listeners para os botões de ação na TELA DE DETALHES
-    document.getElementById('btnEmbalarEnviarEstoqueUnidade')?.addEventListener('click', embalarUnidade);
-    document.getElementById('btnMontarEnviarKitsEstoque')?.addEventListener('click', montarKits);
+        const btnMontarKitsEl = document.getElementById('btnMontarEnviarKitsEstoque');
+        if (btnMontarKitsEl) {
+            btnMontarKitsEl.addEventListener('click', montarKits);
+        }
         
-    // Listener para as ABAS da TELA DE DETALHES
-    document.querySelectorAll('#embalarDetalheView .ep-tabs .ep-tab-btn').forEach(btn => {
+        // Listener para as ABAS dentro da view de detalhe
+        document.querySelectorAll('#embalarDetalheView .ep-tabs .ep-tab-btn').forEach(btn => {
         btn.addEventListener('click', async (event) => {
             const tabBtn = event.currentTarget;
             const tabId = tabBtn.dataset.tab;
+            console.log(`[ABA CLICK] Aba clicada: ${tabId}`);
 
-            console.log(`[ABA CLICK] Aba '${tabId}' foi clicada.`); // Log para depuração
-
-            // Remove a classe 'active' de todos os botões e painéis
+            // Troca a classe 'active' dos botões
             document.querySelectorAll('#embalarDetalheView .ep-tabs .ep-tab-btn').forEach(b => b.classList.remove('active'));
+            tabBtn.classList.add('active');
+
+            // Troca a classe 'active' e a visibilidade dos painéis
             document.querySelectorAll('#embalarDetalheView .ep-tab-panel').forEach(p => {
                 p.classList.remove('active');
                 p.style.display = 'none'; 
             });
 
-            // Adiciona a classe 'active' ao botão e painel clicados
-            tabBtn.classList.add('active');
             const activePanel = document.getElementById(`${tabId}-tab-nova`);
             if (activePanel) {
                 activePanel.classList.add('active');
                 activePanel.style.display = 'block'; 
-            } else {
-                console.error(`Painel da aba com ID '${tabId}-tab-nova' não encontrado.`);
             }
             
-            // Lógica para carregar o conteúdo específico de cada aba (sem mudanças aqui)
+            // Lógica para carregar o conteúdo específico de cada aba
             if (tabId === 'kit' && embalagemAgregadoEmVisualizacao) {
                 await carregarKitsDisponiveisNova(embalagemAgregadoEmVisualizacao.produto_id, embalagemAgregadoEmVisualizacao.variante);
+            
             } else if (tabId === 'historico' && embalagemAgregadoEmVisualizacao) {
                 let skuParaBusca = null;
                 const produtoCad = todosOsProdutosCadastrados.find(p => p.id == embalagemAgregadoEmVisualizacao.produto_id);
@@ -1725,63 +1778,113 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const tbodyHistEl = document.getElementById('historicoEmbalagemTableBody');
                     if (tbodyHistEl) tbodyHistEl.innerHTML = '<tr><td colspan="6" style="text-align:center;color:red;">Erro ao identificar SKU.</td></tr>';
                 }
-             } else if (tabId === 'retornar' && embalagemAgregadoEmVisualizacao) {
-                carregarArrematesDeOrigem(1);
+            
+            } else if (tabId === 'retornar' && embalagemAgregadoEmVisualizacao) {
+                // Quando a aba "Voltar para Arremate" for clicada, chama a função para carregar os dados.
+                carregarArrematesDeOrigem(1)
             }
         });
     });
 
-    // Listener DELEGADO para os cliques na ABA KIT da TELA DE DETALHES
-    const kitTabPanelEl = document.getElementById('kit-tab-nova');
-    if (kitTabPanelEl) {
-        kitTabPanelEl.addEventListener('click', (event) => {
-            const target = event.target;
-            const btnMaximo = target.closest('#btnMontarMaximoKits');
-            const acaoRapidaButton = target.closest('.ep-acoes-rapidas-qtd .ep-btn-outline-pequeno');
+   
+        // Listener DELEGADO para os cliques nos controles DENTRO da aba Kit (Configurado UMA VEZ)
+        const kitTabPanelEl = document.getElementById('kit-tab-nova');
+        if (kitTabPanelEl) {
+            console.log("[DOMContentLoaded] Configurando listener DELEGADO PERMANENTE para #kit-tab-nova.");
+            kitTabPanelEl.addEventListener('click', (event) => {
+                const target = event.target;
+                const btnMaximo = target.closest('#btnMontarMaximoKits');
+                const acaoRapidaButton = target.closest('.ep-acoes-rapidas-qtd .ep-btn-outline-pequeno');
 
-            if (btnMaximo) {
-                const currentQtdInput = document.getElementById('qtdEnviarKitsNova');
-                const currentDisponivelSpan = document.getElementById('qtdDisponivelKitsNova');
-                if (currentDisponivelSpan && currentQtdInput && !currentQtdInput.disabled) {
-                    const maxMontaveis = parseInt(currentDisponivelSpan.textContent) || 0;
-                    currentQtdInput.value = maxMontaveis;
-                    currentQtdInput.dispatchEvent(new Event('input')); 
+                if (btnMaximo) {
+                    const currentQtdInput = document.getElementById('qtdEnviarKitsNova');
+                    const currentDisponivelSpan = document.getElementById('qtdDisponivelKitsNova');
+                    if (currentDisponivelSpan && currentQtdInput && !currentQtdInput.disabled) {
+                        const maxMontaveis = parseInt(currentDisponivelSpan.textContent) || 0;
+                        currentQtdInput.value = maxMontaveis;
+                        currentQtdInput.dispatchEvent(new Event('input')); 
+                    }
+                    return; 
                 }
-                return; 
-            }
 
-            if (acaoRapidaButton && acaoRapidaButton.dataset.qtdAdd !== undefined) {
-                const currentQtdInput = document.getElementById('qtdEnviarKitsNova');
-                const currentDisponivelSpan = document.getElementById('qtdDisponivelKitsNova');
-                if (currentQtdInput && currentDisponivelSpan && !currentQtdInput.disabled) {
-                    const qtdAtual = parseInt(currentQtdInput.value) || 0;
-                    const qtdAdd = parseInt(acaoRapidaButton.dataset.qtdAdd);
-                    let novaQtd = qtdAtual + qtdAdd;
-                    const maxQtd = parseInt(currentDisponivelSpan.textContent) || 0;
-                    novaQtd = Math.max(0, Math.min(novaQtd, maxQtd));
-                    currentQtdInput.value = novaQtd;
-                    currentQtdInput.dispatchEvent(new Event('input'));
+                if (acaoRapidaButton && acaoRapidaButton.dataset.qtdAdd !== undefined) {
+                    const currentQtdInput = document.getElementById('qtdEnviarKitsNova');
+                    const currentDisponivelSpan = document.getElementById('qtdDisponivelKitsNova');
+                    if (currentQtdInput && currentDisponivelSpan && !currentQtdInput.disabled) {
+                        const qtdAtual = parseInt(currentQtdInput.value) || 0;
+                        const qtdAdd = parseInt(acaoRapidaButton.dataset.qtdAdd);
+                        let novaQtd = qtdAtual + qtdAdd;
+                        const maxQtd = parseInt(currentDisponivelSpan.textContent) || 0;
+                        novaQtd = Math.max(0, Math.min(novaQtd, maxQtd));
+                        currentQtdInput.value = novaQtd;
+                        currentQtdInput.dispatchEvent(new Event('input'));
+                    }
+                    return; 
                 }
-                return; 
-            }
-        });
+            });
 
-        const qtdEnviarKitsInputEl = document.getElementById('qtdEnviarKitsNova');
-        if (qtdEnviarKitsInputEl) {
-            qtdEnviarKitsInputEl.oninput = () => {
-                atualizarEstadoBotaoMontarKitNova(); 
-            };
+            const qtdEnviarKitsInputEl = document.getElementById('qtdEnviarKitsNova');
+            if (qtdEnviarKitsInputEl) {
+                qtdEnviarKitsInputEl.oninput = () => {
+                    atualizarEstadoBotaoMontarKitNova(); 
+                };
+            }
         }
+
+        // Listeners para filtros, ordenação e atualização na tela principal
+        const btnAtualizarEmbalagemEl = document.getElementById('btnAtualizarEmbalagem');
+        if(btnAtualizarEmbalagemEl) {
+            btnAtualizarEmbalagemEl.addEventListener('click', forcarAtualizacaoEmbalagem);
+        }
+
+        const toggleFiltrosBtnEl = document.getElementById('toggleFiltrosAvancadosBtn');
+        const filtrosContainerEl = document.getElementById('filtrosAvancadosContainer');
+        if (toggleFiltrosBtnEl && filtrosContainerEl) {
+            toggleFiltrosBtnEl.addEventListener('click', () => {
+                filtrosContainerEl.classList.toggle('hidden');
+                const isHidden = filtrosContainerEl.classList.contains('hidden');
+                const span = toggleFiltrosBtnEl.querySelector('span');
+                if (span) {
+                    span.textContent = isHidden ? 'Filtros Avançados' : 'Fechar Filtros';
+                }
+            });
+        }
+
+        const filtroAlertaSelectEl = document.getElementById('filtroAlertaSelect');
+        const ordenacaoSelectEl = document.getElementById('ordenacaoSelect');
+        const searchInputEl = document.getElementById('searchProdutoEmbalagem');
+        const limparFiltrosBtnEl = document.getElementById('limparFiltrosBtn');
+        
+        const aplicarFiltrosEOrdenar = () => {
+            currentPageEmbalagemCards = 1; 
+            renderizarCardsEmbalagem();
+        };
+
+        if (filtroAlertaSelectEl) filtroAlertaSelectEl.addEventListener('change', aplicarFiltrosEOrdenar);
+        if (ordenacaoSelectEl) ordenacaoSelectEl.addEventListener('change', aplicarFiltrosEOrdenar);
+        if(searchInputEl) searchInputEl.addEventListener('input', debounce(aplicarFiltrosEOrdenar, 350));
+
+        if (limparFiltrosBtnEl && filtroAlertaSelectEl && ordenacaoSelectEl && searchInputEl && toggleFiltrosBtnEl && filtrosContainerEl) {
+            limparFiltrosBtnEl.addEventListener('click', () => {
+                filtroAlertaSelectEl.value = 'todos';
+                ordenacaoSelectEl.value = 'padrao';
+                searchInputEl.value = '';
+                aplicarFiltrosEOrdenar();
+                
+                filtrosContainerEl.classList.add('hidden');
+                const span = toggleFiltrosBtnEl.querySelector('span');
+                if (span) {
+                    span.textContent = 'Filtros Avançados';
+                }
+            });
+        }
+
+    } catch (error) {
+        console.error("[DOMContentLoaded Embalagem] Erro crítico na inicialização:", error);
+        mostrarMensagem("Erro crítico ao carregar a página. Tente recarregar.", "erro", 0);
     }
 
-    // 8. TRATAMENTO DA NAVEGAÇÃO VIA HASH
-    window.addEventListener('hashchange', handleHashChangeEmbalagem);
-    handleHashChangeEmbalagem();
 
-  } catch (error) {
-    console.error("[DOMContentLoaded Embalagem] Erro crítico na inicialização:", error);
-    mostrarMensagem("Erro crítico ao carregar a página. Tente recarregar.", "erro", 0);
-  }
 });
 
 // Função global para limpar cache (se necessário para debug)
@@ -1791,6 +1894,7 @@ window.limparCacheEmbalagemProdutos = async () => {
     embalagemAgregadoEmVisualizacao = null;
     await invalidateProdutosStorageCache(); // Invalida o cache de produtos no localStorage
     todosOsProdutosCadastrados = []; // Limpa o cache local de produtos
+    console.log('[limparCacheEmbalagemProdutos] Caches limpos.');
     mostrarMensagem('Cache local de embalagem de produtos limpo.', 'aviso');
     await inicializarDadosEViewsEmbalagem(); // Recarrega tudo
 };

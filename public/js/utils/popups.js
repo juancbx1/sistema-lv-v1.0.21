@@ -100,3 +100,75 @@ export function mostrarConfirmacao(mensagem, tipo = 'aviso') {
         overlay.onclick = () => fecharPopup(false); // Clicar fora cancela
     });
 }
+
+/**
+ * Exibe um popup para inserção de um valor numérico e retorna uma Promise.
+ * A Promise resolve para o número inserido ou para null se o usuário cancelar.
+ * @param {string} mensagem - A pergunta a ser exibida.
+ * @param {object} [opcoes={}] - Opções de configuração.
+ * @param {string} [opcoes.valorInicial=''] - O valor inicial do campo de input.
+ * @param {string} [opcoes.placeholder=''] - O placeholder do campo.
+ * @param {string} [opcoes.tipo='info'] - O tipo de popup para a cor da borda.
+ * @returns {Promise<number|null>} - O número inserido ou null.
+ */
+export function mostrarPromptNumerico(mensagem, opcoes = {}) {
+    removerPopupExistente();
+    const { valorInicial = '', placeholder = 'Qtd.', tipo = 'info' } = opcoes;
+
+    return new Promise((resolve) => {
+        const container = document.createElement('div');
+        container.className = 'popup-container';
+
+        container.innerHTML = `
+            <div class="popup-overlay"></div>
+            <div class="popup-box popup-${tipo}">
+                <p>${mensagem}</p>
+                <div class.popup-input-container">
+                    <input type="number" id="popupInputNumerico" class="popup-input-numerico" 
+                           value="${valorInicial}" placeholder="${placeholder}" min="0">
+                </div>
+                <div class="popup-botoes">
+                    <button class="popup-btn popup-btn-cancelar">Cancelar</button>
+                    <button id="popupBtnConfirmarNumerico" class="popup-btn popup-btn-confirmar">Confirmar</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(container);
+
+        const input = container.querySelector('#popupInputNumerico');
+        const btnConfirmar = container.querySelector('#popupBtnConfirmarNumerico');
+        const btnCancelar = container.querySelector('.popup-btn-cancelar');
+        const overlay = container.querySelector('.popup-overlay');
+
+        const fecharPopup = (valor) => {
+            removerPopupExistente();
+            resolve(valor);
+        };
+
+        // Validação em tempo real
+        input.addEventListener('input', () => {
+            const valor = parseInt(input.value);
+            btnConfirmar.disabled = isNaN(valor) || valor < 0;
+        });
+
+        btnConfirmar.onclick = () => {
+            const valor = parseInt(input.value);
+            if (!isNaN(valor) && valor >= 0) {
+                fecharPopup(valor);
+            }
+        };
+
+        // Permite confirmar com a tecla Enter
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !btnConfirmar.disabled) {
+                btnConfirmar.click();
+            }
+        });
+
+        btnCancelar.onclick = () => fecharPopup(null);
+        overlay.onclick = () => fecharPopup(null);
+
+        input.focus();
+        input.select(); // Seleciona o texto inicial para fácil substituição
+    });
+}

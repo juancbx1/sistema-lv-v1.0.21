@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arremates</title>
+    <title>Ordens de Arremate</title>
     <link rel="stylesheet" href="/css/arremates.css"> 
     <link rel="stylesheet" href="/css/menu-lateral.css">
     <link rel="stylesheet" href="/css/popups.css">
@@ -58,44 +58,6 @@
                     <p class="oa-info-card-descricao">Total de unidades lançadas hoje.</p>
                 </div>
             </div>
-
-            <!-- ========================================================================== -->
-            <!-- # NOVO PAINEL DE ATIVIDADES DOS TIKTIKS                                    -->
-            <!-- ========================================================================== -->
-            <section class="oa-painel-atividades">
-                <div class="oa-secao-header">
-                <h2 class="oa-titulo-secao">Painel de Atividades - TikTiks</h2>
-                <div class="header-acoes"> <!-- Novo container para alinhar os itens -->
-                    <span id="feedbackAtualizacao" class="feedback-atualizacao"></span>
-                    <button id="btnAtualizarPainel" class="oa-btn-atualizar" title="Atualizar painel agora">
-                        <i class="fas fa-sync-alt"></i>
-                        <span>Atualizar</span>
-                    </button>
-                </div>
-            </div>
-
-                <!-- Container para usuários ATIVOS -->
-                <div id="painelDisponiveisContainer" class="oa-painel-status-grid">
-                    <!-- JS insere os cards de 'LIVRE' e 'TRABALHANDO' aqui -->
-                </div>
-
-                <!-- Accordion para usuários INATIVOS -->
-                <div class="oa-accordion-inativos">
-                    <button id="accordionHeader" class="oa-accordion-header">
-                        <span>Em Pausa / Inativos</span>
-                        <span id="accordionBadge" class="oa-accordion-badge">0</span>
-                        <i class="fas fa-chevron-down accordion-icone"></i>
-                    </button>
-                    <div id="accordionContent" class="oa-accordion-content">
-                        <div id="painelInativosContainer" class="oa-painel-status-grid">
-                            <!-- JS insere os cards de 'ALMOÇO', 'PAUSA', 'FORA DO HORÁRIO', 'FALTOU' aqui -->
-                        </div>
-                    </div>
-                </div>
-
-            </section>
-
-            
 
                 <!-- CONTAINER PARA A LISTA DE ITENS, INCLUINDO FILTROS -->
             <div class="oa-card oa-card-filtros">
@@ -340,82 +302,7 @@
                 </div>
             </div>
 
-            <!-- ========================================================================== -->
-            <!-- # MODAL PARA ATRIBUIR TAREFA DE ARREMATE                                   -->
-            <!-- ========================================================================== -->
-            <div id="modalAtribuirTarefa" class="popup-container" style="display: none;">
-                <div class="popup-overlay"></div>
-                <div class="oa-modal-atribuir"> <!-- Nova classe para estilização específica -->
-                    <div class="oa-modal-header">
-                        <h3 id="modalAtribuirTitulo" class="oa-modal-titulo">Atribuir Tarefa para [Nome]</h3>
-                        <button class="oa-modal-fechar-btn">X</button>
-                    </div>
-                    
-                    <div class="oa-modal-body-atribuir">
-                        <!-- Coluna da Esquerda: Lista de Produtos -->
-                        <div class="coluna-lista-produtos">
-                            <div class="filtro-busca-modal">
-                                <input type="text" id="buscaProdutoModal" class="oa-input-busca" placeholder="Buscar produto ou variação...">
-                            </div>
-                            <div id="modalAtribuirFilaWrapper" class="oa-cards-container-modal">
-                                <!-- Cards de produtos serão inseridos aqui -->
-                                <div class="spinner">Carregando fila...</div>
-                            </div>
-                            <div id="modalPaginacaoContainer" class="oa-paginacao-container">
-                                <!-- Paginação interna do modal será inserida aqui -->
-                            </div>
-                        </div>
-
-                        <!-- Coluna da Direita: Detalhes e Confirmação -->
-                        <div class="coluna-confirmacao">
-                            <div id="modalAtribuirFormContainer" class="form-confirmacao-wrapper">
-                                <div class="placeholder-confirmacao">
-                                    <i class="fas fa-mouse-pointer"></i>
-                                    <p>Selecione um item da lista ao lado para começar.</p>
-                                </div>
-                                <!-- Conteúdo dinâmico será inserido aqui pelo JS -->
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
     </main>
-
-    <!-- ========================================================================== -->
-    <!-- # MODAL "MODO FOCO" - DASHBOARD DE DESEMPENHO INDIVIDUAL                   -->
-    <!-- ========================================================================== -->
-    <div id="modalModoFoco" class="popup-container" style="display: none;">
-        <div class="popup-overlay"></div>
-        <div class="oa-modal-foco">
-            <div class="oa-modal-header">
-                <div class="header-info-foco">
-                    <img id="focoAvatar" src="/img/placeholder-image.png" alt="Avatar" class="avatar-tiktik">
-                    <div>
-                        <h3 id="focoNome" class="oa-modal-titulo">Desempenho de [Nome]</h3>
-                        <span id="focoData" class="subtitulo-foco">Hoje</span>
-                    </div>
-                </div>
-                <button class="oa-modal-fechar-btn">X</button>
-            </div>
-            <div class="oa-modal-body-foco">
-                <!-- Métricas Principais -->
-                <div id="focoMetricas" class="foco-metricas-grid">
-                    <!-- Métricas serão inseridas aqui pelo JS -->
-                </div>
-                <!-- Timeline Visual -->
-                <h4>Linha do Tempo do Dia</h4>
-                <div id="focoTimeline" class="foco-timeline-container">
-                    <div class="spinner">Calculando timeline...</div>
-                </div>
-                <!-- Histórico de Tarefas -->
-                <h4>Tarefas Finalizadas Hoje</h4>
-                <div id="focoTarefas" class="oa-tabela-wrapper">
-                    <!-- Tabela de tarefas será inserida aqui -->
-                </div>
-            </div>
-        </div>
-    </div>
 
     <script src="/js/admin-arremates.js" type="module"></script>
     <script src="/js/carregar-menu-lateral.js" type="module"></script>

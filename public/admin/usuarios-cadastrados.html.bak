@@ -3,11 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerenciar Usuários</title>
+    <title>Gerenciar Usuários</title> <!-- Título mais descritivo -->
     <link rel="stylesheet" href="/css/global-style.css">
     <link rel="stylesheet" href="/css/menu-lateral.css">
-    <link rel="stylesheet" href="/css/usuarios-cadastrados.css">
-    <link rel="stylesheet" href="/css/popups.css">
+    <link rel="stylesheet" href="/css/usuarios-cadastrados.css"> <!-- Manteremos o CSS atual como base -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
@@ -29,6 +28,7 @@
                         <option value="costureira">Costureira</option>
                         <option value="tiktik">TikTik</option>
                         <option value="cortador">Cortador</option>
+                        <!-- <option value="excluidos">Excluídos</option> Removido por enquanto, pode ser um status diferente -->
                     </select>
                 </div>
             </div>
@@ -39,10 +39,10 @@
             <div id="usuariosLista" class="uc-usuarios-lista">
                 <!-- Os cards dos usuários serão inseridos aqui pelo JS -->
             </div>
-            <div class="gs-paginacao-container">
-                <button id="prevPage" class="gs-paginacao-btn">Anterior</button>
-                <span id="pageInfo" class="gs-paginacao-info"></span>
-                <button id="nextPage" class="gs-paginacao-btn">Próximo</button>
+            <div class="uc-pagination">
+                <button id="prevPage" class="uc-btn">Anterior</button>
+                <span id="pageInfo"></span>
+                <button id="nextPage" class="uc-btn">Próximo</button>
             </div>
         </section>
     </div>

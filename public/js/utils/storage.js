@@ -7,31 +7,24 @@ export async function getCachedData(key, fetchFunction, expiryMinutes = CACHE_DU
     const now = Date.now();
     const expiryMs = expiryMinutes * 60 * 1000;
 
-    console.log(`[getCachedData - ${key}] INÍCIO. forceRefresh: ${forceRefresh}, Expiry: ${expiryMinutes} min`);
 
     // 1. Se forceRefresh é true, ignora todos os caches e vai direto para a API
     if (forceRefresh) {
-        console.log(`[getCachedData - ${key}] forceRefresh é TRUE. Buscando diretamente da API.`);
         const dataFromAPI = await fetchFunction();
-        console.log(`[getCachedData - ${key}] Dados recebidos da API (devido a forceRefresh). Atualizando caches.`);
         inMemoryCache[key] = { data: dataFromAPI, timestamp: now };
         try {
             localStorage.setItem(key, JSON.stringify(dataFromAPI));
             localStorage.setItem(`${key}_timestamp`, now.toString());
-            console.log(`[getCachedData - ${key}] localStorage atualizado com dados frescos.`);
         } catch (e) { console.error(`[getCachedData - ${key}] Erro ao salvar no localStorage após forceRefresh`, e); }
         return dataFromAPI;
     }
 
     // 2. Tenta o cache em memória (se não for forceRefresh)
     if (inMemoryCache[key] && (now - inMemoryCache[key].timestamp < expiryMs)) {
-        console.log(`[getCachedData - ${key}] Usando cache de MEMÓRIA. Timestamp: ${new Date(inMemoryCache[key].timestamp).toLocaleTimeString()}`);
         return inMemoryCache[key].data;
     }
     if (inMemoryCache[key]) { // Se existe mas expirou
-        console.log(`[getCachedData - ${key}] Cache de MEMÓRIA EXPIRADO.`);
     } else {
-        console.log(`[getCachedData - ${key}] Cache de MEMÓRIA VAZIO para a chave.`);
     }
 
     // 3. Tenta o localStorage (se o de memória falhou ou está expirado, e não é forceRefresh)
@@ -40,12 +33,10 @@ export async function getCachedData(key, fetchFunction, expiryMinutes = CACHE_DU
         const cachedLSTime = localStorage.getItem(`${key}_timestamp`);
         if (cachedLS && cachedLSTime && (now - parseInt(cachedLSTime) < expiryMs)) {
             const parsedData = JSON.parse(cachedLS);
-            console.log(`[getCachedData - ${key}] Usando cache do LOCALSTORAGE. Timestamp LS: ${new Date(parseInt(cachedLSTime)).toLocaleTimeString()}`);
             inMemoryCache[key] = { data: parsedData, timestamp: parseInt(cachedLSTime) }; // Atualiza cache de memória
             return parsedData;
         }
         if (cachedLS && cachedLSTime) { // Se existe mas expirou
-             console.log(`[getCachedData - ${key}] Cache do LOCALSTORAGE EXPIRADO.`);
         }
     } catch (e) {
         console.error(`[getCachedData - ${key}] Erro ao ler/parsear cache do localStorage. Removendo cache corrompido.`, e);
@@ -54,21 +45,17 @@ export async function getCachedData(key, fetchFunction, expiryMinutes = CACHE_DU
     }
 
     // 4. Se chegou aqui, busca da API (porque não tinha cache válido ou forceRefresh foi true no início)
-    console.log(`[getCachedData - ${key}] >>> BUSCANDO DA API (nenhum cache válido ou forceRefresh inicial).`);
     const dataFromAPI = await fetchFunction();
-    console.log(`[getCachedData - ${key}] <<< DADOS RECEBIDOS DA API. Atualizando caches.`);
     inMemoryCache[key] = { data: dataFromAPI, timestamp: now };
     try {
         localStorage.setItem(key, JSON.stringify(dataFromAPI));
         localStorage.setItem(`${key}_timestamp`, now.toString());
-        console.log(`[getCachedData - ${key}] localStorage e cache de memória atualizados.`);
     } catch (e) { console.error(`[getCachedData - ${key}] Erro ao salvar no localStorage após busca na API`, e); }
     return dataFromAPI;
 }
 
 // Função para invalidar o cache (exportada para uso em outros arquivos)
 export function invalidateCache(key) {
-    console.log(`[invalidateCache - ${key}] Invalidando cache (memória e localStorage)`);
     if (inMemoryCache[key]) {
         delete inMemoryCache[key];
     }
@@ -81,7 +68,6 @@ export function invalidateCache(key) {
 export async function obterProdutos(forceRefresh = false) {
     // Define a função que realmente busca os dados da API
     const fetchProdutosDaAPI = async () => {
-        console.log('[fetchProdutosDaAPI] Iniciando busca na API /api/produtos...');
         const token = localStorage.getItem('token');
         if (!token) {
             // Se o token for estritamente necessário para esta chamada, lance um erro.
@@ -121,7 +107,6 @@ export async function obterProdutos(forceRefresh = false) {
                 console.error('[fetchProdutosDaAPI] API não retornou um array de produtos:', produtosRecebidos);
                 throw new Error('Formato de dados inesperado ao buscar produtos.');
             }
-            console.log(`[fetchProdutosDaAPI] Produtos recebidos da API: ${produtosRecebidos.length} itens. Exemplo [0].nome:`, produtosRecebidos[0]?.nome);
             return produtosRecebidos;
 
         } catch (error) {
@@ -134,14 +119,11 @@ export async function obterProdutos(forceRefresh = false) {
     const CACHE_KEY_PRODUTOS = 'produtosCadastrados'; // Use uma chave consistente
     const EXPIRY_MINUTES_PRODUTOS = 5; // Exemplo: cache de 5 minutos
 
-    console.log(`[obterProdutos] Solicitando dados com forceRefresh: ${forceRefresh}`);
     try {
         const produtos = await getCachedData(CACHE_KEY_PRODUTOS, fetchProdutosDaAPI, EXPIRY_MINUTES_PRODUTOS, forceRefresh);
         // Log para verificar o que está sendo retornado por getCachedData
         if (produtos && produtos.length > 0) {
-            console.log(`[obterProdutos] Dados de produtos retornados (total: ${produtos.length}). Exemplo [0].nome:`, produtos[0]?.nome);
         } else if (produtos) {
-            console.log('[obterProdutos] Dados de produtos retornados (lista vazia).');
         } else {
             console.warn('[obterProdutos] getCachedData retornou null/undefined.');
         }

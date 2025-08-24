@@ -1,4 +1,6 @@
 // api/arremates.js
+ console.log('--- [DEBUG] O ARQUIVO api/arremates.js FOI CARREGADO PELO SERVIDOR ---');
+
 import 'dotenv/config';
 import pkg from 'pg';
 const { Pool } = pkg;
@@ -554,12 +556,13 @@ router.post('/registrar-perda', async (req, res) => {
 });
 
 router.get('/fila', async (req, res) => {
+    console.log('--- [API GET /arremates/fila] REQUISIÇÃO (LÓGICA JS NO BACKEND) ---');
+    
     const { 
         search, 
         sortBy = 'data_op_mais_recente', 
         page = 1, 
-        limit = 6,
-        fetchAll = 'false'
+        limit = 6 
     } = req.query;
 
     let dbClient;
@@ -645,6 +648,8 @@ router.get('/fila', async (req, res) => {
         
         let resultados = Array.from(pendenciasAgregadas.values());
         
+        // --- INÍCIO DA MUDANÇA ---
+
         // 4. CALCULAR TOTAIS GERAIS ANTES DE FILTRAR E PAGINAR
         const totalGruposDeProdutos = resultados.length;
         const totalPecasPendentes = resultados.reduce((total, item) => total + item.saldo_para_arrematar, 0);
@@ -665,33 +670,25 @@ router.get('/fila', async (req, res) => {
             default: resultados.sort((a, b) => new Date(b.data_op_mais_recente) - new Date(a.data_op_mais_recente)); break;
         }
 
-        // 6. DECIDIR O FORMATO DA RESPOSTA (TUDO ou PAGINADO)
-            if (fetchAll === 'true') {
-                // Se o frontend pediu tudo, simplesmente retorne a lista de resultados completa.
-                // O frontend que pediu "tudo" (nosso modal) não precisa dos dados de paginação.
-                res.status(200).json({
-                    rows: resultados 
-                });
-            } else {
-                // Se não, execute a lógica de paginação que você já tinha.
-                // Esta é a chamada padrão da sua "Fila de Arremate" principal.
-                const limitNum = parseInt(limit);
-                const offset = (parseInt(page) - 1) * limitNum;
-                const totalPages = Math.ceil(resultados.length / limitNum) || 1;
-                const paginatedResults = resultados.slice(offset, offset + limitNum);
+        // 6. APLICAR PAGINAÇÃO SOBRE O RESULTADO JÁ FILTRADO E ORDENADO
+        const limitNum = parseInt(limit);
+        const offset = (parseInt(page) - 1) * limitNum;
+        const totalPages = Math.ceil(resultados.length / limitNum) || 1;
+        const paginatedResults = resultados.slice(offset, offset + limitNum);
 
-                // Envie a resposta no formato paginado que a sua view principal espera.
-                res.status(200).json({
-                    rows: paginatedResults,
-                    pagination: {
-                        currentPage: parseInt(page),
-                        totalPages: totalPages,
-                        totalItems: totalGruposDeProdutos,
-                        totalPecas: totalPecasPendentes,
-                        limit: limitNum
-                    }
-                });
+        // 7. ENVIAR A RESPOSTA COM OS TOTAIS GERAIS
+        res.status(200).json({
+            rows: paginatedResults, // Os dados da página atual
+            pagination: {
+                currentPage: parseInt(page),
+                totalPages: totalPages,
+                totalItems: totalGruposDeProdutos, // <<< TOTAL DE GRUPOS ANTES DA PAGINAÇÃO
+                totalPecas: totalPecasPendentes,    // <<< SOMA TOTAL DE PEÇAS ANTES DA PAGINAÇÃO
+                limit: limitNum
             }
+        });
+
+        // --- FIM DA MUDANÇA ---
 
     } catch (error) {
         console.error('[API GET /arremates/fila] Erro na lógica JS do backend:', error.message, error.stack);
@@ -700,200 +697,6 @@ router.get('/fila', async (req, res) => {
         if (dbClient) dbClient.release();
     }
 });
-
-// ROTA PRINCIPAL: GET /api/arremates/status-tiktiks
-router.get('/status-tiktiks', async (req, res) => {
-    let dbClient;
-    try {
-        dbClient = await pool.connect();
-        const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, req.usuarioLogado.id);
-        if (!permissoes.includes('acesso-ordens-de-arremates')) {
-            return res.status(403).json({ error: 'Permissão negada.' });
-        }
-
-        // 1. Resetar status "FALTOU" de dias anteriores
-        // A cláusula `WHERE status_data_modificacao < CURRENT_DATE` garante que só resetamos faltas antigas.
-        await dbClient.query(`
-    UPDATE usuarios 
-        SET status_atual = 'LIVRE', status_data_modificacao = NULL
-        WHERE 
-            status_atual = 'FALTOU' 
-            AND status_data_modificacao IS NOT NULL
-            AND status_data_modificacao < (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
-    `);
-
-        // 2. Buscar todos os usuários Tiktik com seus dados e sessões atuais
-        const query = `
-            SELECT 
-                u.id, u.nome, u.avatar_url, u.status_atual, u.status_data_modificacao,
-                u.horario_entrada_1, u.horario_saida_1, u.horario_entrada_2, u.horario_saida_2, u.horario_entrada_3, u.horario_saida_3,
-                s.id as id_sessao, s.produto_id, s.variante, s.quantidade_entregue, s.data_inicio,
-                p.nome as produto_nome
-            FROM usuarios u
-            LEFT JOIN sessoes_trabalho_arremate s ON u.id_sessao_trabalho_atual = s.id
-            LEFT JOIN produtos p ON s.produto_id = p.id
-            WHERE 'tiktik' = ANY(u.tipos)
-            ORDER BY u.nome ASC;
-        `;
-        const result = await dbClient.query(query);
-
-        // 3. Processar os dados (calcular médias, etc.)
-        const tiktiksComStatus = await Promise.all(result.rows.map(async (tiktik) => {
-            let media_tempo_por_peca = null;
-
-            if (tiktik.status_atual === 'TRABALHANDO' && tiktik.produto_id) {
-                // Busca a média para o produto (ignorando variante)
-                const mediaQuery = `
-                    SELECT AVG(EXTRACT(EPOCH FROM (data_fim - data_inicio)) / quantidade_finalizada) as media
-                    FROM sessoes_trabalho_arremate
-                    WHERE status = 'FINALIZADA' AND produto_id = $1 AND quantidade_finalizada > 0;
-                `;
-                const mediaResult = await dbClient.query(mediaQuery, [tiktik.produto_id]);
-                if (mediaResult.rows[0].media) {
-                    media_tempo_por_peca = parseFloat(mediaResult.rows[0].media);
-                }
-            }
-            
-            return { ...tiktik, media_tempo_por_peca };
-        }));
-
-        res.status(200).json(tiktiksComStatus);
-
-    } catch (error) {
-        console.error('[API /status-tiktiks] Erro:', error);
-        res.status(500).json({ error: 'Erro ao buscar status dos Tiktiks.' });
-    } finally {
-        if (dbClient) dbClient.release();
-    }
-});
-
-// ROTA: POST /api/arremates/sessoes/iniciar
-router.post('/sessoes/iniciar', async (req, res) => {
-    let dbClient;
-    try {
-        const { usuario_tiktik_id, produto_id, variante, quantidade_entregue, op_numero, op_edit_id } = req.body;
-            if (!usuario_tiktik_id || !produto_id || !quantidade_entregue || !op_numero) { // Adicionada validação para op_numero
-                return res.status(400).json({ error: 'Dados insuficientes. ID do usuário, produto, quantidade e número da OP são obrigatórios.' });
-            }
-
-        dbClient = await pool.connect();
-        await dbClient.query('BEGIN');
-
-        // 1. Criar a sessão de trabalho
-        const sessaoResult = await dbClient.query(
-            `INSERT INTO sessoes_trabalho_arremate (usuario_tiktik_id, produto_id, variante, quantidade_entregue, op_numero, op_edit_id)
-            VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-            [usuario_tiktik_id, produto_id, variante, quantidade_entregue, op_numero, op_edit_id]
-        );
-        const novaSessaoId = sessaoResult.rows[0].id;
-
-        // 2. Atualizar o status do usuário
-        await dbClient.query(
-            `UPDATE usuarios SET status_atual = 'TRABALHANDO', id_sessao_trabalho_atual = $1 WHERE id = $2`,
-            [novaSessaoId, usuario_tiktik_id]
-        );
-
-        await dbClient.query('COMMIT');
-        res.status(201).json({ message: 'Sessão iniciada com sucesso!', sessaoId: novaSessaoId });
-
-    } catch (error) {
-        if (dbClient) await dbClient.query('ROLLBACK');
-        console.error('[API /sessoes/iniciar] Erro:', error);
-        res.status(500).json({ error: 'Erro ao iniciar sessão.' });
-    } finally {
-        if (dbClient) dbClient.release();
-    }
-});
-
-// ROTA: POST /api/arremates/sessoes/finalizar
-router.post('/sessoes/finalizar', async (req, res) => {
-    let dbClient;
-    try {
-        const { id_sessao, quantidade_finalizada } = req.body;
-        if (!id_sessao || quantidade_finalizada === undefined) {
-            return res.status(400).json({ error: 'ID da sessão e quantidade finalizada são obrigatórios.' });
-        }
-
-        dbClient = await pool.connect();
-        await dbClient.query('BEGIN');
-
-        // 1. Busca dados da sessão para criar o arremate
-        const sessaoResult = await dbClient.query(`SELECT * FROM sessoes_trabalho_arremate WHERE id = $1`, [id_sessao]);
-        if (sessaoResult.rows.length === 0) throw new Error('Sessão não encontrada.');
-        const sessao = sessaoResult.rows[0];
-
-        // 2. Cria o registro de arremate oficial
-        const arrematePayload = {
-            produto_id: sessao.produto_id,
-            variante: sessao.variante,
-            quantidade_arrematada: quantidade_finalizada,
-            usuario_tiktik_id: sessao.usuario_tiktik_id,
-        };
-        // Para op_numero, etc., precisaríamos de mais lógica. Por agora, vamos focar no essencial.
-        // Vamos reutilizar a lógica de criação de arremate que você já tem.
-        const userTiktik = await dbClient.query(`SELECT nome FROM usuarios WHERE id = $1`, [arrematePayload.usuario_tiktik_id]);
-        const lancador = await dbClient.query(`SELECT nome FROM usuarios WHERE id = $1`, [req.usuarioLogado.id]);
-        
-        const arremateResult = await dbClient.query(
-            `INSERT INTO arremates (op_numero, op_edit_id, produto_id, variante, quantidade_arrematada, usuario_tiktik_id, usuario_tiktik, lancado_por, tipo_lancamento)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PRODUCAO') RETURNING id`,
-            [sessao.op_numero, sessao.op_edit_id, sessao.produto_id, sessao.variante, quantidade_finalizada, sessao.usuario_tiktik_id, userTiktik.rows[0].nome, lancador.rows[0].nome]
-        );
-        const novoArremateId = arremateResult.rows[0].id;
-        
-        // 3. Finaliza a sessão, linkando com o arremate criado
-        await dbClient.query(
-            `UPDATE sessoes_trabalho_arremate 
-             SET data_fim = NOW(), status = 'FINALIZADA', quantidade_finalizada = $1, id_arremate_gerado = $2
-             WHERE id = $3`,
-            [quantidade_finalizada, novoArremateId, id_sessao]
-        );
-        
-        // 4. Libera o usuário
-        await dbClient.query(
-            `UPDATE usuarios SET status_atual = 'LIVRE', id_sessao_trabalho_atual = NULL WHERE id = $1`,
-            [sessao.usuario_tiktik_id]
-        );
-        
-        await dbClient.query('COMMIT');
-        res.status(200).json({ message: 'Sessão finalizada e arremate registrado com sucesso!', arremateId: novoArremateId });
-
-    } catch (error) {
-        if (dbClient) await dbClient.query('ROLLBACK');
-        console.error('[API /sessoes/finalizar] Erro:', error);
-        res.status(500).json({ error: 'Erro ao finalizar sessão.' });
-    } finally {
-        if (dbClient) dbClient.release();
-    }
-});
-
-// ROTA: PUT /api/arremates/usuarios/:id/status (poderia estar em usuarios.js)
-router.put('/usuarios/:id/status', async (req, res) => {
-    let dbClient;
-    try {
-        const { id } = req.params;
-        const { status } = req.body;
-        const validStatus = ['LIVRE', 'FALTOU', 'PAUSA_MANUAL']; // Adicione outros status manuais se precisar
-        if (!status || !validStatus.includes(status)) {
-            return res.status(400).json({ error: 'Status inválido.' });
-        }
-
-        dbClient = await pool.connect();
-        
-        // Ao definir um status manual, atualizamos a data
-        const query = `UPDATE usuarios SET status_atual = $1, status_data_modificacao = CURRENT_DATE WHERE id = $2`;
-        await dbClient.query(query, [status, id]);
-        
-        res.status(200).json({ message: `Status do usuário atualizado para ${status}.` });
-
-    } catch (error) {
-        console.error('[API /usuarios/:id/status] Erro:', error);
-        res.status(500).json({ error: 'Erro ao atualizar status do usuário.' });
-    } finally {
-        if (dbClient) dbClient.release();
-    }
-});
-
 
 // POST /api/arremates/estornar - ENDPOINT PARA ESTORNAR UM LANÇAMENTO
 router.post('/estornar', async (req, res) => {
@@ -1065,100 +868,6 @@ router.get('/historico-produto', async (req, res) => {
     } catch (error) {
         console.error("[API /historico-produto] Erro:", error.message);
         res.status(500).json({ error: "Erro ao buscar histórico do produto." });
-    } finally {
-        if (dbClient) dbClient.release();
-    }
-});
-
-router.get('/desempenho-diario/:usuarioId', async (req, res) => {
-    const { usuarioId } = req.params;
-    const { data } = req.query; // Permite buscar por uma data específica, ex: '2024-08-23'
-    let dbClient;
-
-    try {
-        dbClient = await pool.connect();
-        
-        // Determina a data de referência no fuso horário do Brasil
-        // Se uma data for fornecida, usa ela. Senão, usa a data de 'hoje'.
-        const dataReferencia = data ? data : (new Date()).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
-
-        // 1. Busca todas as sessões do usuário para a data específica
-        const sessoesQuery = `
-            SELECT 
-                s.*,
-                p.nome as produto_nome
-            FROM sessoes_trabalho_arremate s
-            JOIN produtos p ON s.produto_id = p.id
-            WHERE 
-                s.usuario_tiktik_id = $1 AND
-                s.data_inicio::date = $2::date
-            ORDER BY s.data_inicio ASC;
-        `;
-        const sessoesResult = await dbClient.query(sessoesQuery, [usuarioId, dataReferencia]);
-        const sessoesDoDia = sessoesResult.rows;
-
-        // 2. Busca os horários de jornada do usuário
-        const usuarioQuery = `
-            SELECT nome, horario_entrada_1, horario_saida_1, horario_entrada_2, horario_saida_2, horario_entrada_3, horario_saida_3 
-            FROM usuarios WHERE id = $1;
-        `;
-        const usuarioResult = await dbClient.query(usuarioQuery, [usuarioId]);
-        if (usuarioResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Usuário não encontrado.' });
-        }
-        const dadosUsuario = usuarioResult.rows[0];
-
-        // 3. Processar os dados para gerar métricas e a timeline (LÓGICA NO BACKEND)
-        let totalPecas = 0;
-        let tempoTrabalhadoTotalSegundos = 0;
-        const timeline = [];
-
-        sessoesDoDia.forEach(sessao => {
-            if (sessao.status === 'FINALIZADA' && sessao.data_fim) {
-                const qtd = sessao.quantidade_finalizada || 0;
-                totalPecas += qtd;
-
-                const duracaoSegundos = (new Date(sessao.data_fim) - new Date(sessao.data_inicio)) / 1000;
-                tempoTrabalhadoTotalSegundos += duracaoSegundos;
-                
-                // Adiciona o bloco de trabalho à timeline
-                timeline.push({
-                    tipo: 'TRABALHO',
-                    inicio: sessao.data_inicio,
-                    fim: sessao.data_fim,
-                    duracao: duracaoSegundos,
-                    detalhes: `${qtd}x ${sessao.produto_nome} (${sessao.variante || 'Padrão'})`
-                });
-            }
-        });
-        
-        // Calcula a eficiência média do dia
-        const eficienciaMediaHoje = totalPecas > 0 ? tempoTrabalhadoTotalSegundos / totalPecas : 0;
-
-        const responsePayload = {
-            usuario: {
-                id: usuarioId,
-                nome: dadosUsuario.nome,
-                jornada: {
-                    entrada1: dadosUsuario.horario_entrada_1, saida1: dadosUsuario.horario_saida_1,
-                    entrada2: dadosUsuario.horario_entrada_2, saida2: dadosUsuario.horario_saida_2,
-                    entrada3: dadosUsuario.horario_entrada_3, saida3: dadosUsuario.horario_saida_3,
-                }
-            },
-            metricas: {
-                totalPecasArrematadas: totalPecas,
-                tempoTotalTrabalhadoSegundos: tempoTrabalhadoTotalSegundos,
-                eficienciaMediaPorPecaSegundos: eficienciaMediaHoje
-            },
-            sessoes: sessoesDoDia, // Envia as sessões brutas também
-            // A timeline de pausas e ociosidade será calculada no frontend para maior precisão visual
-        };
-
-        res.status(200).json(responsePayload);
-
-    } catch (error) {
-        console.error(`[API /desempenho-diario/${usuarioId}] Erro:`, error);
-        res.status(500).json({ error: 'Erro ao buscar dados de desempenho.' });
     } finally {
         if (dbClient) dbClient.release();
     }

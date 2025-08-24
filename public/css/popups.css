@@ -122,3 +122,29 @@
     from { opacity: 1; transform: translateY(0); }
     to { opacity: 0; transform: translateY(-20px); }
 }
+
+.popup-input-numerico {
+    width: 100%;
+    max-width: 130px;
+    padding: 12px;
+    margin-bottom: 15px;
+    font-size: 1.2rem;
+    font-weight: 600;
+    text-align: center;
+    border: 2px solid #e0e6ed;
+    border-radius: 8px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.popup-input-numerico:focus {
+    border-color: #3498db; /* Azul */
+    box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.15);
+}
+
+.popup-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}

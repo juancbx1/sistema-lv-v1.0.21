@@ -100,7 +100,6 @@ export async function verificarAutenticacao(pagina, permissoesRequeridas = [], m
             return null;
         }
 
-        console.log('[Auth] Autenticação e verificação de permissão bem-sucedidas.');
         document.body.classList.add('autenticado');
         return { usuario: usuarioLogado, permissoes: permissoes };
 

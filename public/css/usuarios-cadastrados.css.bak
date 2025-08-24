@@ -1,0 +1,443 @@
+/* public/css/usuarios-cadastrados.css */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Fonte mais moderna */
+    background-color: #f0f2f5; /* Fundo um pouco mais suave */
+    margin: 0;
+    padding: 20px; /* Removido padding global do body */
+    line-height: 1.6;
+    margin-left: 250px; /* Espaço do menu será tratado pelo container principal */
+    transition: margin-left 0.3s ease;
+    font-size: 14px;
+    display: flex; /* Para centralizar o conteúdo se o menu não estiver visível */
+}
+
+/* Adaptação para o menu lateral */
+body.menu-aberto {
+    margin-left: 250px; /* Ajuste conforme a largura do seu menu */
+}
+
+.uc-container { /* Nova classe para o container da página de usuários */
+    width: 100%;
+    padding: 20px;
+    margin-left: 0; /* Começa sem margem */
+    transition: margin-left 0.3s ease;
+}
+
+body.menu-aberto .uc-container {
+    margin-left: 250px; /* Desloca quando o menu está aberto */
+    width: calc(100% - 250px); /* Ajusta a largura */
+}
+
+
+.usuarios-cadastrados h1 {
+    font-size: 2rem; /* Maior */
+    color: #1a202c; /* Mais escuro */
+    text-align: left; /* Alinhar à esquerda */
+    margin-bottom: 25px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e2e8f0; /* Borda sutil */
+}
+
+.uc-controles-topo {
+    display: flex;
+    justify-content: space-between; /* Para alinhar filtro e botão de adicionar */
+    align-items: center;
+    margin-bottom: 25px;
+    flex-wrap: wrap; /* Para responsividade */
+    gap: 15px;
+}
+
+.uc-filtro-tipo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.uc-filtro-tipo label {
+    font-size: 0.95rem;
+    color: #4a5568;
+}
+
+.uc-filtro-tipo select {
+    padding: 8px 12px;
+    border: 1px solid #cbd5e0;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    background-color: white;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    min-width: 180px;
+}
+
+.uc-filtro-tipo select:focus {
+    border-color: #3182ce; /* Azul */
+    box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.5);
+    outline: none;
+}
+
+.uc-btn { /* Estilo base para botões na página */
+    padding: 8px 15px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+.uc-btn:disabled {
+    background-color: #a0aec0 !important;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+.uc-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+}
+
+.uc-btn-adicionar { /* Estilo para o botão de adicionar */
+    background-color: #38a169; /* Verde */
+    color: white;
+}
+.uc-btn-adicionar:hover:not(:disabled) {
+    background-color: #2f855a;
+}
+
+
+.uc-loading-spinner {
+    display: none;
+    font-size: 1.5rem; /* Maior */
+    text-align: center;
+    margin: 40px 0;
+    color: #4a5568;
+}
+.uc-loading-spinner i {
+    margin-right: 8px;
+}
+
+.uc-usuarios-lista {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); /* Cards um pouco maiores */
+    gap: 25px;
+}
+
+.usuario-card {
+    background-color: white;
+    border-radius: 8px; /* Bordas mais suaves */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0,0,0,0.05); /* Sombra mais sutil */
+    padding: 20px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    display: flex;
+    flex-direction: column; /* Para organizar info e botões */
+}
+
+.usuario-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.07), 0 6px 16px rgba(0,0,0,0.07);
+}
+
+.usuario-info p {
+    margin: 8px 0;
+    font-size: 0.9rem;
+    color: #4a5568;
+    display: flex; /* Para alinhar label e valor/input */
+    align-items: center;
+    flex-wrap: wrap; /* Para quebra de linha em telas pequenas */
+    gap: 5px;
+}
+
+.usuario-info p > span:first-child { /* O label "Nome:", "Email:", etc. */
+    font-weight: 600;
+    color: #2d3748;
+    min-width: 120px; /* Alinhamento dos labels */
+    display: inline-block;
+}
+
+.usuario-info input[type="text"],
+.usuario-info input[type="email"],
+.usuario-info select {
+    padding: 6px 8px;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    flex-grow: 1; /* Para ocupar espaço disponível */
+    min-width: 150px; /* Para não ficar muito pequeno */
+}
+.usuario-info input:focus, .usuario-info select:focus {
+    border-color: #3182ce;
+    box-shadow: 0 0 0 1px #3182ce;
+    outline: none;
+}
+
+.uc-card-botoes-container {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: flex-end; /* Alinha botões à direita */
+    gap: 10px;
+}
+
+.uc-btn-editar {
+    background-color: #3182ce; /* Azul */
+    color: white;
+}
+.uc-btn-editar:hover:not(:disabled) {
+    background-color: #2b6cb0;
+}
+
+.uc-btn-salvar {
+    background-color: #38a169; /* Verde */
+    color: white;
+}
+.uc-btn-salvar:hover:not(:disabled) {
+    background-color: #2f855a;
+}
+
+.uc-btn-cancelar {
+    background-color: #a0aec0; /* Cinza */
+    color: #2d3748;
+}
+.uc-btn-cancelar:hover:not(:disabled) {
+    background-color: #718096;
+    color: white;
+}
+
+
+.uc-btn-excluir-card {
+    background-color: #e53e3e; /* Vermelho */
+    color: white;
+}
+.uc-btn-excluir-card:hover:not(:disabled) {
+    background-color: #c53030;
+}
+
+/* Campo de Tipos (Checkboxes) */
+.uc-tipos-container {
+    margin-top: 5px;
+    padding: 8px;
+    border: 1px solid transparent; /* Borda invisível para manter o layout ao editar */
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column; /* Checkboxes um abaixo do outro */
+    gap: 5px;
+}
+.uc-tipos-container.editando {
+    border-color: #e2e8f0; /* Borda visível ao editar */
+    background-color: #fdfdfe;
+}
+
+.uc-tipos-container label {
+    font-size: 0.85rem;
+    color: #4a5568;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+.uc-tipos-container input[type="checkbox"] {
+    margin-right: 6px;
+    cursor: pointer;
+    transform: scale(0.9); /* Checkbox um pouco menor */
+}
+.uc-tipos-container input[type="checkbox"]:disabled + label {
+    color: #a0aec0;
+    cursor: not-allowed;
+}
+
+
+.uc-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #e2e8f0;
+}
+.uc-pagination #pageInfo {
+    font-size: 0.9rem;
+    color: #4a5568;
+}
+
+/* CSS para os novos campos de pagamento */
+.uc-pagamento-container {
+    border-top: 1px dashed #e2e8f0;
+    margin-top: 10px;
+    padding-top: 10px;
+}
+
+.uc-pagamento-container label {
+    display: block; /* Garante que o label fique em cima do input */
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #718096; /* Cor sutil */
+    margin-bottom: 4px;
+    margin-top: 8px; /* Espaçamento entre os campos */
+}
+
+/* Garante que os inputs de pagamento tenham a mesma aparência */
+.uc-pagamento-inputs .uc-input-edit {
+    width: 100%;
+    margin-bottom: 5px;
+}
+
+/* Estilos para o Modal de Vinculação */
+.uc-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.uc-modal-content {
+    background-color: white;
+    padding: 25px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from { transform: translateY(-30px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.uc-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 15px;
+    margin-bottom: 20px;
+}
+
+.uc-modal-header h2 {
+    font-size: 1.2rem;
+    color: #2d3748;
+    margin: 0;
+}
+
+.uc-modal-close-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #a0aec0;
+    transition: color 0.2s;
+}
+.uc-modal-close-btn:hover {
+    color: #2d3748;
+}
+
+.uc-modal-body .uc-form-group label {
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.uc-lista-contatos {
+    list-style: none;
+    padding: 0;
+    margin-top: 15px;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+}
+
+.uc-lista-contatos li {
+    padding: 10px 15px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    border-bottom: 1px solid #e2e8f0;
+}
+.uc-lista-contatos li:last-child {
+    border-bottom: none;
+}
+.uc-lista-contatos li:hover {
+    background-color: #f7fafc;
+}
+.uc-lista-contatos li.nenhum-resultado {
+    color: #a0aec0;
+    cursor: default;
+}
+
+/* Breakpoints */
+@media (max-width: 1024px) {
+    body.menu-aberto .uc-container {
+        margin-left: 0; /* Remove o deslocamento em telas menores quando o menu está aberto e sobrepõe */
+        width: 100%;
+    }
+    .uc-usuarios-lista {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+    .usuarios-cadastrados h1 {
+        font-size: 1.8rem;
+    }
+}
+
+@media (max-width: 768px) { /* Ajustado para 768px para melhor consistência */
+    body {
+        font-size: 13px; /* Reduz um pouco a fonte base */
+    }
+    .uc-container {
+        padding: 15px;
+    }
+    .usuarios-cadastrados h1 {
+        font-size: 1.6rem;
+        margin-bottom: 20px;
+    }
+    .uc-controles-topo {
+        flex-direction: column;
+        align-items: stretch; /* Faz o select ocupar a largura */
+    }
+    .uc-filtro-tipo select {
+        width: 100%; /* Select ocupa toda a largura */
+    }
+    .uc-usuarios-lista {
+        grid-template-columns: 1fr; /* Um card por linha */
+        gap: 15px;
+    }
+    .usuario-info p > span:first-child {
+        min-width: 100px; /* Reduz o min-width do label */
+    }
+}
+
+@media (max-width: 480px) {
+    .uc-container {
+        padding: 10px;
+    }
+    .usuarios-cadastrados h1 {
+        font-size: 1.4rem;
+    }
+    .usuario-info p {
+        font-size: 0.85rem;
+    }
+    .usuario-info input[type="text"],
+    .usuario-info input[type="email"],
+    .usuario-info select {
+        font-size: 0.85rem;
+    }
+    .uc-btn {
+        font-size: 0.85rem;
+        padding: 6px 10px;
+    }
+     .uc-card-botoes-container {
+        flex-direction: column; /* Empilha botões em telas muito pequenas */
+        align-items: stretch;
+    }
+    .uc-card-botoes-container .uc-btn {
+        width: 100%;
+        text-align: center;
+        justify-content: center;
+    }
+}

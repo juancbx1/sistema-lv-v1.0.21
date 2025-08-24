@@ -268,12 +268,12 @@ router.get('/contagem-hoje', async (req, res) => {
 
 // GET /api/embalagens/fila - NOVO ENDPOINT DEDICADO PARA A FILA DE EMBALAGEM
 router.get('/fila', async (req, res) => {
+    console.log('--- [API GET /api/embalagens/fila] REQUISIÇÃO RECEBIDA ---');
     const { 
         search, 
         sortBy = 'mais_recentes', 
         page = 1, 
-        limit = 6, // Este será ignorado se 'todos=true'
-        todos
+        limit = 6 
     } = req.query;
 
     let dbClient;
@@ -282,11 +282,13 @@ router.get('/fila', async (req, res) => {
         
         let queryParams = [];
         let paramIndex = 1;
-        
-        // --- ETAPA 1: Construir a Query Base ---
-        let baseQuery = `
+
+        // --- QUERY DE AGREGAÇÃO DIRETO NO BANCO DE DADOS ---
+        const baseSelect = `
             SELECT
-                a.produto_id, p.nome as produto, a.variante,
+                a.produto_id,
+                p.nome as produto,
+                a.variante,
                 SUM(a.quantidade_arrematada - a.quantidade_ja_embalada)::integer as total_disponivel_para_embalar,
                 MIN(a.data_lancamento) as data_lancamento_mais_antiga,
                 MAX(a.data_lancamento) as data_lancamento_mais_recente
@@ -296,16 +298,18 @@ router.get('/fila', async (req, res) => {
             GROUP BY a.produto_id, p.nome, a.variante
             HAVING SUM(a.quantidade_arrematada - a.quantidade_ja_embalada) > 0
         `;
-        let fromClause = `FROM (${baseQuery}) as subquery`;
 
-        // --- ETAPA 2: Adicionar Filtros ---
-        let whereClause = '';
+        let finalQuery = `SELECT * FROM (${baseSelect}) as subquery`;
+        
+        // Aplica o filtro de busca
         if (search) {
-            whereClause = ` WHERE unaccent(produto) ILIKE unaccent($${paramIndex++}) OR unaccent(variante) ILIKE unaccent($${paramIndex++})`;
-            queryParams.push(`%${search}%`, `%${search}%`);
+        // unaccent é uma extensão do PostgreSQL. Se não estiver habilitada, pode dar erro.
+        // A Vercel/Neon geralmente tem ela disponível.
+        finalQuery += ` WHERE unaccent(produto) ILIKE unaccent($${paramIndex++}) OR unaccent(variante) ILIKE unaccent($${paramIndex++})`;
+        queryParams.push(`%${search}%`, `%${search}%`);
         }
-
-        // --- ETAPA 3: Ordenação ---
+        
+        // Ordenação
         let orderByClause;
         switch (sortBy) {
             case 'mais_antigos': orderByClause = 'ORDER BY data_lancamento_mais_antiga ASC'; break;
@@ -313,40 +317,35 @@ router.get('/fila', async (req, res) => {
             case 'menor_quantidade': orderByClause = 'ORDER BY total_disponivel_para_embalar ASC'; break;
             default: orderByClause = 'ORDER BY data_lancamento_mais_recente DESC'; break;
         }
+        finalQuery += ` ${orderByClause}`;
 
-        // --- ETAPA 4: Execução da Query ---
-        let finalQuery;
-
-        if (todos === 'true') {
-            // Se 'todos=true', montamos a query SEM LIMIT e OFFSET
-            finalQuery = `SELECT * ${fromClause} ${whereClause} ${orderByClause}`;
-            console.log(`[API Fila] Executando query para buscar todos os itens.`);
-        } else {
-            // Se não, montamos a query COM LIMIT e OFFSET
-            const limitNum = parseInt(limit, 10);
-            const offset = (parseInt(page, 10) - 1) * limitNum;
-            queryParams.push(limitNum, offset);
-            finalQuery = `SELECT * ${fromClause} ${whereClause} ${orderByClause} LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
-            console.log(`[API Fila] Executando query paginada para a página ${page}.`);
-        }
-
-        const dataResult = await dbClient.query(finalQuery, queryParams);
-        
-        // A contagem total é feita DEPOIS, de forma separada, para garantir consistência
-        const countQuery = `SELECT COUNT(*) ${fromClause} ${whereClause}`;
-        // Usamos os parâmetros de filtro (se houver), mas não os de paginação
-        const countResult = await dbClient.query(countQuery, queryParams.slice(0, paramIndex - 1));
+        // Contagem para paginação
+        const countQuery = `SELECT COUNT(*) FROM (${finalQuery}) as count_query`;
+        const countResult = await dbClient.query(countQuery, queryParams);
         const totalItems = parseInt(countResult.rows[0].count, 10);
 
-        console.log(`[API Fila] Query executada. Retornando ${dataResult.rows.length} de ${totalItems} itens totais.`);
+        // Paginação
+        const limitNum = parseInt(limit);
+        const offset = (parseInt(page) - 1) * limitNum;
+        finalQuery += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+        queryParams.push(limitNum, offset);
+
+        // Busca dos dados paginados
+        const dataResult = await dbClient.query(finalQuery, queryParams);
+        const totalPages = Math.ceil(totalItems / limitNum) || 1;
 
         res.status(200).json({
             rows: dataResult.rows,
-            pagination: { }
+            pagination: {
+                currentPage: parseInt(page),
+                totalPages: totalPages,
+                totalItems: totalItems,
+                limit: limitNum
+            }
         });
 
     } catch (error) {
-        console.error('[API GET /api/embalagens/fila] Erro:', error);
+        console.error('[API GET /api/embalagens/fila] Erro:', error.message);
         res.status(500).json({ error: 'Erro ao buscar a fila de embalagem.' });
     } finally {
         if (dbClient) dbClient.release();

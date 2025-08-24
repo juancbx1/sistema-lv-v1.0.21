@@ -21,7 +21,15 @@
 <section class="ep-card" id="embalagemListViewNova">
 
     <!-- CABEÇALHO PRINCIPAL DA PÁGINA (PADRONIZADO) -->
-       <div id="header-root"></div>
+        <div class="gs-cabecalho-pagina">
+            <h1>Painel de Embalagem</h1>
+            <div class="gs-botoes-cabecalho">
+                <button id="btnAbrirHistoricoGeral" class="gs-btn gs-btn-secundario"> <!-- Classes de botão também padronizadas -->
+                    <i class="fas fa-clipboard-list"></i> 
+                    <span>Histórico Geral</span>
+                </button>
+            </div>
+        </div>
 
     <!-- NOVO PAINEL DE INFORMAÇÕES RÁPIDAS -->
     <div class="ep-painel-info-container">
@@ -45,19 +53,69 @@
         </div>
     </div>
 
-        <!-- Portal para o componente React de Filtros -->
-        <div id="filtros-root"></div>
+    <!-- CONTAINER PARA A LISTA DE ITENS, INCLUINDO FILTROS -->
+    <div class="ep-card ep-card-filtros">
         
-        <!-- Container para os resultados(retorno dos itens a serem exibidos) -->
-        <div class="gs-container-cards">
-            <div id="embalagemCardsContainer" class="ep-embalagem-card-container">
-                <!-- VAZIO POR PADRÃO. O JS VAI PREENCHER. -->
-            </div>
+        <!-- CABEÇALHO DA SEÇÃO DE ITENS, COM BOTÃO DE ATUALIZAR -->
+        <div class="ep-secao-header">
+            <h2 class="ep-titulo-secao">Itens na Fila</h2>
+            <button id="btnAtualizarEmbalagem" class="ep-btn-atualizar">
+                <i class="fas fa-sync-alt"></i>
+                <span>Atualizar</span>
+            </button>
+        </div>
 
-            <div id="embalagemPaginationContainer" class="gs-paginacao-container" style="display: none;">
-                <!-- Paginação será inserida aqui pelo JS -->
+        <!-- LINHA PARA BUSCA E BOTÃO DE FILTROS AVANÇADOS -->
+        <div class="ep-filtros-linha">
+            <div class="ep-form-grupo" style="flex-grow: 1;">
+                 <input type="text" id="searchProdutoEmbalagem" class="ep-input-busca" placeholder="Buscar por produto, variação ou SKU...">
             </div>
-        </div>    
+            <button id="toggleFiltrosAvancadosBtn" class="ep-btn-filtros">
+                <i class="fas fa-filter"></i>
+                <span>Filtros Avançados</span>
+            </button>
+        </div>
+
+        <!-- CONTAINER DOS FILTROS AVANÇADOS (COMEÇA ESCONDIDO) -->
+        <div id="filtrosAvancadosContainer" class="ep-filtros-avancados-container hidden">
+            <div class="ep-form-grupo">
+                <label for="filtroAlertaSelect">Filtrar por Status</label>
+                <select id="filtroAlertaSelect" class="ep-select">
+                    <option value="todos">Todos os Itens</option>
+                    <option value="antigos">Aguardando há > 2 dias</option>
+                    <option value="recentes">Itens Recentes</option>
+                </select>
+            </div>
+            
+            <div class="ep-form-grupo">
+                <label for="ordenacaoSelect">Ordenar por</label>
+                <select id="ordenacaoSelect" class="ep-select">
+                    <option value="padrao" selected>Padrão (Recomendado)</option>
+                    <option value="mais_recentes">Mais Recentes Primeiro</option>
+                    <option value="mais_antigos">Mais Antigos Primeiro</option>
+                    <option value="maior_quantidade">Maior Quantidade</option>
+                    <option value="menor_quantidade">Menor Quantidade</option>
+                </select>
+            </div>
+            
+            <div class="ep-form-grupo" style="justify-content: flex-end;">
+                <button id="limparFiltrosBtn" class="ep-btn-limpar-filtros">
+                    <i class="fas fa-times-circle"></i> Limpar Filtros
+                </button>
+            </div>
+        </div>
+
+        <!-- CONTAINER ONDE OS CARDS DE ITENS SERÃO RENDERIZADOS -->
+        <div id="embalagemCardsContainer" class="ep-embalagem-card-container">
+            <!-- VAZIO POR PADRÃO. O JS VAI PREENCHER. -->
+        </div>
+
+        <!-- CONTAINER DA PAGINAÇÃO -->
+        <div id="embalagemPaginationContainer" class="gs-paginacao-container" style="display: none;">
+            <!-- Paginação será inserida aqui pelo JS -->
+        </div>
+
+    </div> <!-- Fim do .ep-card-filtros -->
 </section>
 
 <!-- Nova Seção para Detalhes da Embalagem -->
