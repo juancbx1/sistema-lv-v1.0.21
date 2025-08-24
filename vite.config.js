@@ -2,37 +2,46 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
+import { glob } from 'glob';
+
+// Pega todos os arquivos HTML na pasta 'public' e subpastas
+const htmlFiles = glob.sync('public/**/*.html');
+
+// Transforma a lista de caminhos em um objeto para o rollup
+const input = htmlFiles.reduce((acc, file) => {
+  const name = file.replace('public/', '').replace('.html', '');
+  acc[name] = resolve(__dirname, file);
+  return acc;
+}, {});
 
 export default defineConfig({
-  root: 'public', 
+  // A raiz do projeto é onde o 'vite' é executado
+  root: '.', 
   
+  // A pasta 'public' contém assets que serão copiados para o 'dist'
+  publicDir: 'public',
+
   plugins: [react()],
   
   server: {
-    // Isso é crucial. Quando o Vite rodar no localhost, qualquer chamada
-    // para /api/alguma-coisa será redirecionada para o seu backend
-    // que está rodando via 'vercel dev' (ou diretamente no seu server.js).
+    // Abre o navegador na página de login ao iniciar
+    open: '/login.html',
     proxy: {
       '/api': {
-        target: 'http://localhost:3000', // Assumindo que seu backend roda na porta 3000
+        target: 'http://localhost:3000',
         changeOrigin: true,
       },
     },
   },
   
   build: {
-    // Diz ao Vite para gerar os arquivos de build fora da pasta 'public'
-    // para não criar um loop (ex: /public/dist). Vamos gerar na raiz do projeto.
-    outDir: '../dist', 
-    emptyOutDir: true, // Limpa o diretório 'dist' a cada build
+    // Gera os arquivos de build na pasta 'dist' na raiz do projeto
+    outDir: 'dist',
+    emptyOutDir: true,
     
     rollupOptions: {
-      input: {
-        // Mapeamos aqui cada página HTML que queremos que o Vite gerencie.
-        embalagem: resolve(__dirname, 'public/admin/embalagem-de-produtos.html'),
-        // Adicione outras páginas aqui conforme for migrando.
-        // dashboardCostureira: resolve(__dirname, 'public/dashboard/dashboard.html'),
-      },
+      // Diz ao Vite para processar todos os HTMLs encontrados
+      input,
     },
   },
 });
