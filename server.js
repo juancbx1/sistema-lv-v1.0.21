@@ -45,12 +45,20 @@ console.log('Aplicação Express inicializada.');
 // Middlewares globais
 app.use(express.json());
 console.log('Middleware express.json configurado.');
-app.use(express.static('public'));
-console.log("Middleware express.static('public') configurado.");
-app.use((req, res, next) => {
-    console.log(`[server.js] Requisição recebida: ${req.method} ${req.originalUrl}`);
-    next();
-});
+
+// <<< INÍCIO DA MODIFICAÇÃO >>>
+// Em produção (na Vercel), NODE_ENV será 'production'.
+// Nesse caso, servimos os arquivos otimizados da pasta 'dist'.
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static('dist'));
+  console.log("Servindo arquivos estáticos da pasta 'dist' (PRODUÇÃO).");
+} else {
+  // Em desenvolvimento (rodando 'node server.js' localmente),
+  // continuamos a servir a pasta 'public' para que o Vite funcione.
+  app.use(express.static('public'));
+  console.log("Servindo arquivos estáticos da pasta 'public' (DESENVOLVIMENTO).");
+}
+// <<< FIM DA MODIFICAÇÃO >>>
 
 // Checagem se os routers foram carregados
 const routers = {
