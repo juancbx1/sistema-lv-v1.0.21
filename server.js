@@ -46,24 +46,14 @@ console.log('Aplicação Express inicializada.');
 app.use(express.json());
 console.log('Middleware express.json configurado.');
 
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static('dist'));
-  console.log("Servindo arquivos estáticos da pasta 'dist' (PRODUÇÃO).");
-} else {
-  app.use(express.static('public'));
-  console.log("Servindo arquivos estáticos da pasta 'public' (DESENVOLVIMENTO).");
-}
-
-// <<< INÍCIO DA CORREÇÃO >>>
-// Adiciona uma rota específica para a raiz do site ('/')
-// para servir o login.html como página principal.
-app.get('/', (req, res) => {
-    // __dirname não existe em ES Modules, então usamos import.meta.url
-    // Mas para o Vercel, o caminho relativo funciona melhor
-    const indexPath = process.env.NODE_ENV === 'production' ? 'dist/login.html' : 'public/login.html';
-    res.sendFile(indexPath, { root: '.' });
+// Servimos 'public' para o desenvolvimento local com `node server.js` continuar funcionando
+app.use(express.static('public'));
+console.log("Middleware express.static('public') configurado.");
+app.use((req, res, next) => {
+    console.log(`[server.js] Requisição recebida: ${req.method} ${req.originalUrl}`);
+    next();
 });
-// <<< FIM DA CORREÇÃO >>>
+
 
 // Checagem se os routers foram carregados
 const routers = {
