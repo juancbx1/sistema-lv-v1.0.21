@@ -1,48 +1,37 @@
-// vite.config.js (VERSÃO FINAL CORRIGIDA)
+// vite.config.js
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
-import { glob } from 'glob';
-
-// Função para encontrar todos os arquivos HTML
-const htmlFiles = glob.sync('public/**/*.html');
-
-// Transforma a lista de caminhos em um objeto para o rollup
-const input = htmlFiles.reduce((acc, file) => {
-  // Cria um nome curto para cada entrada, ex: 'admin/embalagem-de-produtos'
-  const name = file.replace('public/', '').replace('.html', '');
-  acc[name] = resolve(__dirname, file);
-  return acc;
-}, {});
 
 export default defineConfig({
-  // A raiz do projeto é o diretório atual
-  root: '.', 
-  publicDir: 'public',
+  // A raiz do nosso site é a pasta 'public'
+  root: 'public',
+  
   plugins: [react()],
+  
   server: {
-  open: '/index.html', 
+    // A página inicial que o Vite vai tentar abrir
+    open: '/index.html',
     proxy: {
       '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
     },
-},
+  },
   
-  // ======================================================
-  //  CONFIGURAÇÃO DE BUILD UNIFICADA E CORRIGIDA
-  // ======================================================
   build: {
-    // Gera os arquivos de build na pasta 'dist' na raiz do projeto
-    outDir: 'dist',
-    // Limpa a pasta 'dist' antes de cada build
+    // O build será gerado na pasta 'dist' na raiz do projeto
+    outDir: '../dist',
     emptyOutDir: true,
     
-    // Opções avançadas para o Rollup (o "empacotador" que o Vite usa)
     rollupOptions: {
-      // Diz ao Vite para processar todos os HTMLs que encontramos
-      input,
+      // Definimos manualmente os HTMLs que são pontos de entrada
+      input: {
+        main: resolve(__dirname, 'public/index.html'),
+        embalagem: resolve(__dirname, 'public/admin/embalagem-de-produtos.html'),
+        // Adicione outros HTMLs aqui conforme precisar
+      },
     },
   },
 });

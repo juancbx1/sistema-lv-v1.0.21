@@ -6,7 +6,6 @@ import { obterProdutos as obterProdutosDoStorage, invalidateCache as invalidateP
 import { adicionarBotaoFechar } from '/js/utils/botoes-fechar.js';
 import { inicializarControlador } from './utils/ControladorFiltros.js';
 import { renderizarPaginacao } from './utils/Paginacao.js';
-import { renderizarComponentesReactDaEmbalagem } from '../src/pages/embalagem.jsx';
 
 
 // --- Variáveis Globais ---
@@ -28,6 +27,7 @@ const operacaoEmAndamento = new Set(); // Para evitar duplo clique em botões de
 // Variáveis globais para paginação do histórico
 let currentPageHistorico = 1;
 const itemsPerPageHistorico = 5;
+
 
 async function forcarAtualizacaoEmbalagem() {
     const btn = document.querySelector('.gs-btn-atualizar'); // Usamos a classe que está no React
@@ -1658,12 +1658,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         camposParaBusca: ['produto', 'variante', 'sku']
     });
 
-
     // 5. ATUALIZAÇÃO DOS WIDGETS (CONTADORES)
     await atualizarContadoresPainel(todosOsProdutosDaFila);
 
     // 6. RENDERIZAÇÃO DOS COMPONENTES REACT
-    renderizarComponentesReactDaEmbalagem({ opcoesDeFiltro });
+    if (window.renderizarComponentesReact) {
+        window.renderizarComponentesReact({ opcoesDeFiltro });
+    } else {
+        console.error("ERRO: A função de renderização do React (window.renderizarComponentesReact) não foi encontrada. Verifique se o script 'main-embalagem.jsx' está sendo carregado no HTML.");
+    }
 
     // 7. CONFIGURAÇÃO DOS LISTENERS DE EVENTOS DA PÁGINA
     // Todos os listeners que não dependem dos dados acima podem ser configurados aqui.
