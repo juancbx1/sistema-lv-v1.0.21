@@ -41,7 +41,7 @@ import realProducaoRouter from './api/real-producao.js';
 
 const app = express();
 console.log('Aplicação Express inicializada.');
-const PORTA = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 
 
 // Middlewares globais
@@ -144,8 +144,5 @@ app.use((err, req, res, next) => { /* ... seu error handler global ... */
         });
     }
 });
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor Express rodando na porta ${PORT}.`));
 
 export default app;
