@@ -31,6 +31,11 @@ export default defineConfig({
         main: resolve(__dirname, 'public/index.html'),
         home: resolve(__dirname, 'public/admin/home.html'),
         embalagem: resolve(__dirname, 'public/admin/embalagem-de-produtos.html'),
+        acessoNegado: resolve(__dirname, 'public/admin/acesso-negado.html'),
+        arremates: resolve(__dirname, 'public/admin/arremates.html'),
+        cadastrarProduto: resolve(__dirname, 'public/admin/cadastrar-produto.html'),
+        cadastrarUsuario: resolve(__dirname, 'public/admin/cadastrar-usuario.html'),
+        MenuLateral: resolve(__dirname, 'public/admin/menu-lateral.html'),
         // Adicione outros HTMLs aqui conforme precisar
       },
     },
