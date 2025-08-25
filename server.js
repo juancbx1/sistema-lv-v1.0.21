@@ -49,27 +49,10 @@ app.use(express.json());
 console.log('Middleware express.json configurado.');
 
 // Servimos 'public' para o desenvolvimento local com `node server.js` continuar funcionando
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static('dist'));
-  console.log("Servidor em modo PRODUÇÃO, servindo a pasta 'dist'.");
-} else {
+if (process.env.NODE_ENV !== 'production') {
   app.use(express.static('public'));
-  console.log("Servidor em modo DESENVOLVIMENTO, servindo a pasta 'public'.");
+  console.log("Servindo arquivos estáticos da pasta 'public' (DESENVOLVIMENTO).");
 }
-
-app.listen(PORTA, () => {
-  console.log(`Servidor rodando na porta ${PORTA}`);
-});
-
-// <<< INÍCIO DA CORREÇÃO >>>
-// Adiciona uma rota específica para a raiz do site ('/')
-// para servir o index.html como página principal.
-app.get('/', (req, res) => {
-    // A pasta de onde servir depende se estamos em produção ou desenvolvimento
-    const rootDir = process.env.NODE_ENV === 'production' ? 'dist' : 'public';
-    res.sendFile(`${rootDir}/index.html`, { root: '.' });
-});
-// <<< FIM DA CORREÇÃO >>>
 
 // Checagem se os routers foram carregados
 const routers = {
