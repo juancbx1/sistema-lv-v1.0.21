@@ -26,7 +26,7 @@ export default defineConfig({
   
   server: {
     // Abre o navegador na página de login ao iniciar o dev server
-    open: '/index.html',
+    open: '/login.html',
     proxy: {
       '/api': {
         target: 'http://localhost:3000',
