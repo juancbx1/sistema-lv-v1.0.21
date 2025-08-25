@@ -46,19 +46,14 @@ console.log('Aplicação Express inicializada.');
 app.use(express.json());
 console.log('Middleware express.json configurado.');
 
-// <<< INÍCIO DA MODIFICAÇÃO >>>
-// Em produção (na Vercel), NODE_ENV será 'production'.
-// Nesse caso, servimos os arquivos otimizados da pasta 'dist'.
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static('dist'));
   console.log("Servindo arquivos estáticos da pasta 'dist' (PRODUÇÃO).");
 } else {
   // Em desenvolvimento (rodando 'node server.js' localmente),
-  // continuamos a servir a pasta 'public' para que o Vite funcione.
   app.use(express.static('public'));
   console.log("Servindo arquivos estáticos da pasta 'public' (DESENVOLVIMENTO).");
 }
-// <<< FIM DA MODIFICAÇÃO >>>
 
 // Checagem se os routers foram carregados
 const routers = {
@@ -140,26 +135,6 @@ app.use('/api/real-producao', realProducaoRouter);
 app.get('/api/ping', (req, res) => res.status(200).json({ message: 'pong do server.js' }));
 console.log("Rota /api/ping configurada.");
 
-// Servir arquivos HTML específicos (ajuste os caminhos e adicione mais conforme necessário)
-const serveHtmlFile = (filePath, res) => {
-    const fullPath = process.cwd() + `/public/${filePath}`;
-    console.log(`Tentando servir HTML: ${fullPath}`);
-    res.sendFile(fullPath, (err) => {
-        if (err) {
-            console.error(`Erro ao servir ${fullPath}:`, err.message);
-            if (!res.headersSent) {
-                 res.status(404).send(`Arquivo não encontrado: ${filePath}`);
-            }
-        }
-    });
-};
-app.get('/', (req, res) => serveHtmlFile('index.html', res));
-app.get('/login.html', (req, res) => serveHtmlFile('login.html', res));
-app.get('/admin/home.html', (req, res) => serveHtmlFile('admin/home.html', res));
-app.get('/admin/ordens-de-producao.html', (req, res) => serveHtmlFile('admin/ordens-de-producao.html', res));
-app.get('/admin/ponto-por-processo.html', (req, res) => serveHtmlFile('admin/ponto-por-processo.html', res));
-app.get('/costureira/dashboard.html', (req, res) => serveHtmlFile('costureira/dashboard.html', res));
-app.get('/dashboard/dashboard.html', (req, res) => serveHtmlFile('dashboard/dashboard.html', res));
 
 app.use((err, req, res, next) => { /* ... seu error handler global ... */
     console.error("[server.js] Erro não tratado:", err.stack || err.message || err);
