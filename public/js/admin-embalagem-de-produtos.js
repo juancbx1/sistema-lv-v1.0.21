@@ -1623,6 +1623,10 @@ async function carregarSugestoesDeEstoque(produtoId, variante, sku) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Pegamos a referência aos elementos logo no início
+  const carregamentoEl = document.getElementById('carregamentoGlobal');
+  const conteudoEl = document.getElementById('conteudoPrincipal');
+
   try {
     // 1. AUTENTICAÇÃO E PERMISSÕES (INÍCIO)
     const auth = await verificarAutenticacao('embalagem-de-produtos.html', ['acesso-embalagem-de-produtos']);
@@ -1781,9 +1785,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.addEventListener('hashchange', handleHashChangeEmbalagem);
     handleHashChangeEmbalagem();
 
-  } catch (error) {
+   } catch (error) {
     console.error("[DOMContentLoaded Embalagem] Erro crítico na inicialização:", error);
     mostrarMensagem("Erro crítico ao carregar a página. Tente recarregar.", "erro", 0);
+  } finally {
+    // --->> A MÁGICA ACONTECE AQUI <<---
+    // Este bloco 'finally' executa SEMPRE, tenha dado certo (try) ou errado (catch).
+    // Garantimos que o usuário nunca ficará preso na tela de loading.
+    if (carregamentoEl) {
+        carregamentoEl.classList.remove('visivel');
+    }
+    if (conteudoEl) {
+        conteudoEl.classList.remove('gs-conteudo-carregando');
+    }
   }
 });
 

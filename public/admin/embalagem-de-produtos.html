@@ -11,13 +11,22 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
+
+    <!-- ======================================================= -->
+    <!--  contêiner do spinner global aqui. -->
+    <!-- ======================================================= -->
+    <div id="carregamentoGlobal" class="gs-carregamento-global-container visivel">
+        <div class="gs-spinner-global"></div>
+    </div>
+
+
     <!-- Botão Hambúrguer -->
     <div class="hamburger-menu">
         <i class="fas fa-bars"></i>
         <i class="fas fa-times"></i> 
     </div>
 
- <div class="container-ep">
+<main id="conteudoPrincipal" class="container-ep gs-conteudo-carregando">
 <section class="ep-card" id="embalagemListViewNova">
 
     <!-- CABEÇALHO PRINCIPAL DA PÁGINA (PADRONIZADO) -->
@@ -247,7 +256,7 @@
 
         </section> <!-- <<< FIM CORRETO DA SECTION DE DETALHES >>> -->
 
-    </div> <!-- <<< FIM DO .container-ep >>> -->
+     </main>
 
 
     <script src="/js/admin-embalagem-de-produtos.js" type="module"></script>
@@ -256,4 +265,4 @@
 
 
 </body>
-</html>
+</html> 
