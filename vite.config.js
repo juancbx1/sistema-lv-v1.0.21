@@ -29,6 +29,7 @@ export default defineConfig({
       // Definimos manualmente os HTMLs que são pontos de entrada
       input: {
         main: resolve(__dirname, 'public/index.html'),
+        home: resolve(__dirname, 'public/admin/home.html'),
         embalagem: resolve(__dirname, 'public/admin/embalagem-de-produtos.html'),
         // Adicione outros HTMLs aqui conforme precisar
       },
