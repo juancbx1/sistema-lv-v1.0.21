@@ -16,18 +16,6 @@ body {
 }
 
 
-/* Menu Hambúrguer (Mobile) */
-.hamburger-menu {
-    position: fixed;
-    top: 20px;
-    left: 20px;
-    font-size: 1.8rem;
-    color: #2c3e50;
-    cursor: pointer;
-    z-index: 2000;
-    transition: color 0.3s ease;
-    display: none; /* Oculto por padrão no desktop */
-}
 
 /* Container */
 .container {
@@ -258,10 +246,6 @@ body {
 
 /* Mobile (max-width: 576px) */
 @media (max-width: 576px) {
-    .hamburger-menu {
-        display: block; /* Aparece no mobile */
-    }
-
     .grafico-container { 
         height: 250px; 
         max-width: 100%; 
@@ -330,10 +314,6 @@ body {
     #graficoProducaoTempoReal { 
         height: 200px !important; 
         max-height: 200px; }
-
-    .hamburger-menu {
-        display: block; /* Aparece no mobile */
-    }
 
     .menu-lateral {
         left: -250px; /* Escondido por padrão no mobile */
