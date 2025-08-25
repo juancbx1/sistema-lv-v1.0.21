@@ -238,7 +238,7 @@ function criarHTMLCardStatus(tiktik, statusFinal, classeStatus) {
     // Montagem final do HTML do card
     return `
         <div class="card-status-header">
-            <img src="${tiktik.avatar_url || '/placeholder-image.png'}" alt="Avatar" class="avatar-tiktik" onerror="this.onerror=null; this.src='/placeholder-image.png';">
+            <img src="${tiktik.avatar_url || '/assets/img/placeholder-image.png'}" alt="Avatar" class="avatar-tiktik" onerror="this.onerror=null; this.src='/assets/img/placeholder-image.png';">
             <div class="info-empregado">
                 <span class="nome-tiktik">${tiktik.nome}</span>
                 <span class="status-selo ${classeStatus}">${statusFinal.replace('_', ' ')}</span>
@@ -325,7 +325,7 @@ async function handleAtribuirTarefa(tiktik) {
         itensDaPagina.forEach(item => {
             const produtoInfo = todosOsProdutosCadastrados.find(p => p.id == item.produto_id);
             const imagemSrc = obterImagemProduto(produtoInfo, item.variante);
-            const cardHTML = `<div class="oa-card-arremate-modal" data-produto-id="${item.produto_id}" data-variante="${item.variante}"><img src="${imagemSrc}" alt="${item.produto_nome}" class="oa-card-img" onerror="this.src='/placeholder-image.png'"><div class="oa-card-info"><h3>${item.produto_nome}</h3><p>${item.variante && item.variante !== '-' ? item.variante : 'Padrão'}</p></div><div class="oa-card-dados"><div class="dado-bloco"><span class="label">Pendente:</span><span class="valor total-pendente">${item.saldo_para_arrematar}</span></div></div></div>`;
+            const cardHTML = `<div class="oa-card-arremate-modal" data-produto-id="${item.produto_id}" data-variante="${item.variante}"><img src="${imagemSrc}" alt="${item.produto_nome}" class="oa-card-img" onerror="this.src='/assets/img/placeholder-image.png'"><div class="oa-card-info"><h3>${item.produto_nome}</h3><p>${item.variante && item.variante !== '-' ? item.variante : 'Padrão'}</p></div><div class="oa-card-dados"><div class="dado-bloco"><span class="label">Pendente:</span><span class="valor total-pendente">${item.saldo_para_arrematar}</span></div></div></div>`;
             filaWrapper.insertAdjacentHTML('beforeend', cardHTML);
         });
         
@@ -494,7 +494,7 @@ async function abrirModoFoco(tiktik) {
     if (!modal) return;
 
     // Preenche os dados básicos e mostra o modal com spinners
-    modal.querySelector('#focoAvatar').src = tiktik.avatar_url || '/placeholder-image.png';
+    modal.querySelector('#focoAvatar').src = tiktik.avatar_url || '/assets/img/placeholder-image.png';
     modal.querySelector('#focoNome').textContent = `Desempenho de ${tiktik.nome}`;
     modal.querySelector('#focoMetricas').innerHTML = '<div class="spinner"></div>';
     modal.querySelector('#focoTimeline').innerHTML = '<div class="spinner">Calculando timeline...</div>';
@@ -697,7 +697,7 @@ async function renderizarItensNaFila(page = 1) {
             const opsOrigemCount = item.ops_detalhe.length;
 
             card.innerHTML = `
-                <img src="${imagemSrc}" alt="${item.produto_nome}" class="oa-card-img" onerror="this.src='/placeholder-image.png'">
+                <img src="${imagemSrc}" alt="${item.produto_nome}" class="oa-card-img" onerror="this.src='/assets/img/placeholder-image.png'">
                 <div class="oa-card-info">
                     <h3>${item.produto_nome}</h3>
                     <p>${item.variante && item.variante !== '-' ? item.variante : 'Padrão'}</p>
@@ -758,7 +758,7 @@ async function carregarDetalhesArremateView(agregado) {
     // Preenche o cabeçalho
     const produtoInfo = todosOsProdutosCadastrados.find(p => p.id == agregado.produto_id);
     const imagemSrc = obterImagemProduto(produtoInfo, agregado.variante);
-    document.getElementById('arremateDetalheThumbnail').innerHTML = `<img src="${imagemSrc}" alt="${agregado.produto}" onerror="this.src='/placeholder-image.png'">`;
+    document.getElementById('arremateDetalheThumbnail').innerHTML = `<img src="${imagemSrc}" alt="${agregado.produto}" onerror="this.src='/assets/img/placeholder-image.png'">`;
     document.getElementById('arremateProdutoNomeDetalhe').textContent = agregado.produto;
     document.getElementById('arremateVarianteNomeDetalhe').textContent = agregado.variante && agregado.variante !== '-' ? `(${agregado.variante})` : '';
     document.getElementById('arremateTotalPendenteAgregado').textContent = agregado.total_quantidade_pendente_arremate;
@@ -988,12 +988,12 @@ function renderizarPaginacao(container, totalPages, currentPage, callback) {
 }
 
 function obterImagemProduto(produtoInfo, varianteNome) {
-    if (!produtoInfo) return '/placeholder-image.png';
+    if (!produtoInfo) return '/assets/img/placeholder-image.png';
     if (varianteNome && varianteNome !== '-') {
         const gradeItem = produtoInfo.grade?.find(g => g.variacao === varianteNome);
         if (gradeItem?.imagem) return gradeItem.imagem;
     }
-    return produtoInfo.imagem || '/placeholder-image.png';
+    return produtoInfo.imagem || '/assets/img/placeholder-image.png';
 }
 
 
