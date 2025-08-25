@@ -71,4 +71,4 @@ router.post('/', async (req, res) => {
 });
 
 // 4. Exporta o roteador para ser usado pelo api/index.js
-git
+export default router;
