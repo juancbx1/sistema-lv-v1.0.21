@@ -42,9 +42,6 @@ import realProducaoRouter from './api/real-producao.js';
 const app = express();
 console.log('Aplicação Express inicializada.');
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor Express rodando na porta ${PORT}.`));
-
-
 
 // Middlewares globais
 app.use(express.json());
@@ -53,7 +50,6 @@ console.log('Middleware express.json configurado.');
 // Servimos 'public' para o desenvolvimento local com `node server.js` continuar funcionando
 if (process.env.NODE_ENV !== 'production') {
   app.use(express.static('public'));
-  console.log("Servindo arquivos estáticos da pasta 'public' (DESENVOLVIMENTO).");
 }
 
 // Checagem se os routers foram carregados
@@ -147,5 +143,7 @@ app.use((err, req, res, next) => { /* ... seu error handler global ... */
     }
 });
 
-
+app.listen(PORT, () => {
+  console.log(`Servidor rodando na porta ${PORT}`);
+});
 export default app;
