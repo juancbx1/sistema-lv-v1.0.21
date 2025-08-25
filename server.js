@@ -50,10 +50,20 @@ if (process.env.NODE_ENV === 'production') {
   app.use(express.static('dist'));
   console.log("Servindo arquivos estáticos da pasta 'dist' (PRODUÇÃO).");
 } else {
-  // Em desenvolvimento (rodando 'node server.js' localmente),
   app.use(express.static('public'));
   console.log("Servindo arquivos estáticos da pasta 'public' (DESENVOLVIMENTO).");
 }
+
+// <<< INÍCIO DA CORREÇÃO >>>
+// Adiciona uma rota específica para a raiz do site ('/')
+// para servir o login.html como página principal.
+app.get('/', (req, res) => {
+    // __dirname não existe em ES Modules, então usamos import.meta.url
+    // Mas para o Vercel, o caminho relativo funciona melhor
+    const indexPath = process.env.NODE_ENV === 'production' ? 'dist/login.html' : 'public/login.html';
+    res.sendFile(indexPath, { root: '.' });
+});
+// <<< FIM DA CORREÇÃO >>>
 
 // Checagem se os routers foram carregados
 const routers = {
