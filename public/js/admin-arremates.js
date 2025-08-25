@@ -494,8 +494,7 @@ async function abrirModoFoco(tiktik) {
     if (!modal) return;
 
     // Preenche os dados básicos e mostra o modal com spinners
-    const avatarSrc = tiktik.avatar_url ? tiktik.avatar_url : '/img/placeholder-image.png';
-    modal.querySelector('#focoAvatar').src = avatarSrc;
+    modal.querySelector('#focoAvatar').src = tiktik.avatar_url || '/img/placeholder-image.png';
     modal.querySelector('#focoNome').textContent = `Desempenho de ${tiktik.nome}`;
     modal.querySelector('#focoMetricas').innerHTML = '<div class="spinner"></div>';
     modal.querySelector('#focoTimeline').innerHTML = '<div class="spinner">Calculando timeline...</div>';
