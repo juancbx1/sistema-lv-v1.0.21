@@ -18,22 +18,17 @@ const input = htmlFiles.reduce((acc, file) => {
 export default defineConfig({
   // A raiz do projeto é o diretório atual
   root: '.', 
-  
-  // A pasta 'public' contém assets que serão simplesmente copiados para o 'dist'
   publicDir: 'public',
-
   plugins: [react()],
-  
   server: {
-    // Abre o navegador na página de login ao iniciar o dev server
-    open: '/login.html',
+  open: '/index.html', 
     proxy: {
       '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
     },
-  },
+},
   
   // ======================================================
   //  CONFIGURAÇÃO DE BUILD UNIFICADA E CORRIGIDA
