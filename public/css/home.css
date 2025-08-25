@@ -200,10 +200,6 @@ body {
         height: 280px !important; 
         max-height: 280px; 
     }
-    
-    .hamburger-menu {
-        display: none; /* Oculto no tablet/desktop */
-    }
 
     .menu-lateral {
         left: 0; /* Sempre visível */
