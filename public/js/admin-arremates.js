@@ -140,16 +140,16 @@ function atualizarFeedbackTempo() {
  */
 function determinarStatusFinal(tiktik) {
     // 1. Verifica FALTOU (prioridade máxima)
-    const tzOffset = (new Date()).getTimezoneOffset() * 60000;
-    const hoje = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
+    const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); // Formato 'YYYY-MM-DD'
 
-    if (tiktik.status_atual === 'FALTOU' && tiktik.status_data_modificacao === hoje) {
+    // Compara apenas a parte da data (YYYY-MM-DD) de 'status_data_modificacao'
+    if (tiktik.status_atual === 'FALTOU' && tiktik.status_data_modificacao?.startsWith(hoje)) {
         return { statusFinal: 'FALTOU', classeStatus: 'status-faltou' };
     }
 
     // 2. Verifica pausas automáticas baseadas no horário
     const agora = new Date();
-    const horaAtualStr = agora.toTimeString().slice(0, 5);
+    const horaAtualStr = agora.toLocaleTimeString('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
 
     const entrada1 = tiktik.horario_entrada_1;
     const saida1 = tiktik.horario_saida_1;
@@ -157,15 +157,18 @@ function determinarStatusFinal(tiktik) {
     const saida2 = tiktik.horario_saida_2;
     const entrada3 = tiktik.horario_entrada_3;
     const saida3 = tiktik.horario_saida_3;
-    const saidaFinal = saida3 || saida2 || '23:59';
+    
+    // Define a saída final do dia, considerando os turnos existentes
+    const saidaFinal = saida3 || saida2 || saida1 || '23:59';
+    const entradaInicial = entrada1 || '00:00';
 
-    if (horaAtualStr < entrada1 || horaAtualStr > saidaFinal) {
+    if (horaAtualStr < entradaInicial || horaAtualStr > saidaFinal) {
         return { statusFinal: 'FORA DO HORÁRIO', classeStatus: 'status-fora-horario' };
     }
-    if (horaAtualStr >= saida1 && horaAtualStr < entrada2) {
+    if (saida1 && entrada2 && horaAtualStr > saida1 && horaAtualStr < entrada2) {
         return { statusFinal: 'ALMOÇO', classeStatus: 'status-almoco' };
     }
-    if (saida2 && entrada3 && horaAtualStr >= saida2 && horaAtualStr < entrada3) {
+    if (saida2 && entrada3 && horaAtualStr > saida2 && horaAtualStr < entrada3) {
         return { statusFinal: 'PAUSA', classeStatus: 'status-pausa' };
     }
 
@@ -448,8 +451,8 @@ async function handleAtribuirTarefa(tiktik) {
                     </div>
                 </div>
                 <div class="oa-form-grupo-atribuir">
-                    <label for="inputQuantidadeAtribuir">Qtd. a Entregar:</label>
-                    <input type="number" id="inputQuantidadeAtribuir" class="oa-input" min="1" max="${saldoDisponivel}" required>
+                    <label for="inputQuantidadeAtribuir">Qtd. a Arrematar:</label>
+                    <input type="number" id="inputQuantidadeAtribuir" class="oa-input-tarefas" min="1" max="${saldoDisponivel}" required>
                 </div>
                 <button id="btnConfirmarAtribuicao" class="oa-btn oa-btn-sucesso" disabled><i class="fas fa-check"></i> Confirmar</button>
             `;
@@ -573,13 +576,26 @@ async function handleFinalizarTarefa(tiktik) {
 }
 
 async function handleMarcarFalta(tiktik, statusAtual) {
+    // ✨ LOG DE DEPURAÇÃO 1 ✨
+    console.log("handleMarcarFalta foi chamada com:", { 
+        tiktikNome: tiktik.nome, 
+        tiktikId: tiktik.id,
+        statusAtual: statusAtual 
+    });
+
     const novoStatus = statusAtual === 'FALTOU' ? 'LIVRE' : 'FALTOU';
     const acao = novoStatus === 'FALTOU' ? 'registrar a falta' : 'remover a falta';
     
     const confirmado = await mostrarConfirmacao(`Deseja ${acao} para ${tiktik.nome} hoje?`);
-    if (!confirmado) return;
+    if (!confirmado) {
+        console.log("Ação cancelada pelo usuário.");
+        return;
+    }
 
     try {
+        // ✨ LOG DE DEPURAÇÃO 2 ✨
+        console.log(`Enviando requisição PUT para /api/arremates/usuarios/${tiktik.id}/status com o body:`, { status: novoStatus });
+
         await fetchFromAPI(`/arremates/usuarios/${tiktik.id}/status`, {
             method: 'PUT',
             body: JSON.stringify({ status: novoStatus })
@@ -587,15 +603,14 @@ async function handleMarcarFalta(tiktik, statusAtual) {
         
         mostrarMensagem(`Status de ${tiktik.nome} atualizado.`, 'sucesso');
         
-        // --- SIMPLESMENTE RECARREGA O PAINEL ---
         await renderizarPainelStatus();
-        // --- FIM DA LÓGICA SIMPLIFICADA ---
 
     } catch (error) {
+        // ✨ LOG DE DEPURAÇÃO 3 ✨
+        console.error("Erro em handleMarcarFalta:", error);
         mostrarMensagem(`Erro ao atualizar status: ${error.message}`, 'erro');
     }
 }
-
 
 /**
  * Inicia ou para o intervalo de atualização automática do painel.

@@ -321,6 +321,14 @@ body.autenticado { visibility: visible; }
     margin-top: 20px;
 }
 
+.oa-input-tarefas {
+    width: 100%;
+    padding: 12px;
+    font-size: 1rem;
+    border: 1px solid var(--oa-cor-cinza-borda);
+    border-radius: 6px;
+}
+
 
 /* --- ESTILOS PARA FILTROS E BUSCA --- */
 
@@ -1342,6 +1350,10 @@ body.autenticado { visibility: visible; }
     gap: 5px;
     }
 
+    .oa-input-tarefas {
+    width: 50%;
+    }
+
         /* Ajuste para o alinhamento do saldo no card principal em telas mobile */
     .oa-card-arremate .dado-bloco {
         text-align: left;
@@ -1569,11 +1581,13 @@ body.autenticado { visibility: visible; }
     }
     .oa-form-grupo-atribuir label {
         display: block;
-        text-align: left;
+        text-align: center;
         margin-bottom: 5px;
+        font-size: 1.1rem;
+        font-weight: 500;
     }
     .form-confirmacao-wrapper .oa-btn {
-        width: 100%; /* Mantém o botão com largura total */
+        width: 60%; /* Mantém o botão com largura total */
         padding: 12px; /* Reduz um pouco o padding vertical */
         font-size: 1rem; /* Tamanho de fonte razoável */
     }

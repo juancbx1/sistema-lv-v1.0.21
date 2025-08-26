@@ -1010,16 +1010,28 @@ router.put('/usuarios/:id/status', async (req, res) => {
     try {
         const { id } = req.params;
         const { status } = req.body;
-        const validStatus = ['LIVRE', 'FALTOU', 'PAUSA_MANUAL']; // Adicione outros status manuais se precisar
+
+        // ✨ LOG DE DEPURAÇÃO NO BACKEND 1 ✨
+        console.log(`[API PUT /usuarios/${id}/status] Recebido. Novo status solicitado: ${status}`);
+
+        const validStatus = ['LIVRE', 'FALTOU', 'PAUSA_MANUAL'];
         if (!status || !validStatus.includes(status)) {
+            console.error(`[API PUT /usuarios/${id}/status] Status inválido: ${status}`);
             return res.status(400).json({ error: 'Status inválido.' });
         }
 
         dbClient = await pool.connect();
         
         // Ao definir um status manual, atualizamos a data
-        const query = `UPDATE usuarios SET status_atual = $1, status_data_modificacao = CURRENT_DATE WHERE id = $2`;
-        await dbClient.query(query, [status, id]);
+        const query = `UPDATE usuarios SET status_atual = $1, status_data_modificacao = CURRENT_DATE WHERE id = $2 RETURNING id, nome, status_atual, status_data_modificacao`;
+        const result = await dbClient.query(query, [status, id]);
+
+        // ✨ LOG DE DEPURAÇÃO NO BACKEND 2 ✨
+        if (result.rowCount > 0) {
+            console.log(`[API PUT /usuarios/${id}/status] Sucesso! Usuário atualizado no banco:`, result.rows[0]);
+        } else {
+            console.warn(`[API PUT /usuarios/${id}/status] Atenção: A query foi executada mas nenhuma linha foi atualizada. O usuário com id ${id} existe?`);
+        }
         
         res.status(200).json({ message: `Status do usuário atualizado para ${status}.` });
 
