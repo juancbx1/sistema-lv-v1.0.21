@@ -15,6 +15,7 @@ let arremateAgregadoEmVisualizacao = null;
 let historicoDeArrematesCache = [];
 let totaisDaFilaDeArremate = { totalGrupos: 0, totalPecas: 0 };
 let modalAtribuirTarefaElemento = null;
+let statusTiktiksCache = [];
 
 
 // Paginação
@@ -52,6 +53,7 @@ async function renderizarPainelStatus() {
 
     try {
         const tiktiks = await fetchFromAPI('/arremates/status-tiktiks');
+        statusTiktiksCache = tiktiks;
         
         containerDisponiveis.innerHTML = '';
         containerInativos.innerHTML = '';
@@ -315,6 +317,17 @@ async function handleAtribuirTarefa(tiktik) {
         const fim = inicio + itemsPerPage;
         const itensDaPagina = itensFiltrados.slice(inicio, fim);
 
+        const produtosEmTrabalho = new Map();
+        statusTiktiksCache
+            .filter(t => t.status_atual === 'TRABALHANDO' && t.produto_id)
+            .forEach(t => {
+                const chave = `${t.produto_id}|${t.variante || '-'}`;
+                if (!produtosEmTrabalho.has(chave)) {
+                    produtosEmTrabalho.set(chave, []);
+                }
+                produtosEmTrabalho.get(chave).push({ nome: t.nome, quantidade: t.quantidade_entregue });
+            });
+
         filaWrapper.innerHTML = '';
         if (itensDaPagina.length === 0) {
             filaWrapper.innerHTML = '<p style="text-align:center; padding: 20px;">Nenhum item encontrado.</p>';
@@ -325,7 +338,34 @@ async function handleAtribuirTarefa(tiktik) {
         itensDaPagina.forEach(item => {
             const produtoInfo = todosOsProdutosCadastrados.find(p => p.id == item.produto_id);
             const imagemSrc = obterImagemProduto(produtoInfo, item.variante);
-            const cardHTML = `<div class="oa-card-arremate-modal" data-produto-id="${item.produto_id}" data-variante="${item.variante}"><img src="${imagemSrc}" alt="${item.produto_nome}" class="oa-card-img" onerror="this.src='/img/placeholder-image.png'"><div class="oa-card-info"><h3>${item.produto_nome}</h3><p>${item.variante && item.variante !== '-' ? item.variante : 'Padrão'}</p></div><div class="oa-card-dados"><div class="dado-bloco"><span class="label">Pendente:</span><span class="valor total-pendente">${item.saldo_para_arrematar}</span></div></div></div>`;
+            
+            const chaveProduto = `${item.produto_id}|${item.variante || '-'}`;
+            const tarefasAtivas = produtosEmTrabalho.get(chaveProduto);
+
+            let saldoDisplay; // Declarada aqui
+            let classesAdicionais = '';
+            
+            if (tarefasAtivas) {
+                const quantidadeReservada = tarefasAtivas.reduce((total, task) => total + task.quantidade, 0);
+                const saldoDisponivel = item.saldo_para_arrematar - quantidadeReservada;
+
+                saldoDisplay = `Disp: ${saldoDisponivel > 0 ? saldoDisponivel : 0} / ${item.saldo_para_arrematar}`;
+                classesAdicionais = 'em-trabalho-modal';
+            } else {
+                saldoDisplay = `Disp: ${item.saldo_para_arrematar}`;
+            }
+            
+            const cardHTML = `
+                <div class="oa-card-arremate-modal ${classesAdicionais}" data-produto-id="${item.produto_id}" data-variante="${item.variante}">
+                    <img src="${imagemSrc}" alt="${item.produto_nome}" class="oa-card-img" onerror="this.src='/img/placeholder-image.png'">
+                    <div class="oa-card-info">
+                        <h3>${item.produto_nome}</h3>
+                        <p>${item.variante && item.variante !== '-' ? item.variante : 'Padrão'}</p>
+                    </div>
+                    <div class="oa-card-dados-modal">
+                        <span class="valor">${saldoDisplay}</span>
+                    </div>
+                </div>`;
             filaWrapper.insertAdjacentHTML('beforeend', cardHTML);
         });
         
@@ -339,27 +379,99 @@ async function handleAtribuirTarefa(tiktik) {
         });
     };
 
-    const selecionarItem = (produtoId, variante) => {
+        const selecionarItem = (produtoId, variante) => {
         filaWrapper.querySelector('.selecionada')?.classList.remove('selecionada');
-        filaWrapper.querySelector(`[data-produto-id="${produtoId}"][data-variante="${variante}"]`)?.classList.add('selecionada');
+        const cardSelecionado = filaWrapper.querySelector(`[data-produto-id="${produtoId}"][data-variante="${variante}"]`);
+        if (cardSelecionado) {
+            cardSelecionado.classList.add('selecionada');
+        }
+
         itemSelecionado = todosItensDaFila.find(p => p.produto_id == produtoId && p.variante == variante);
+
         if (itemSelecionado) {
             const produtoInfo = todosOsProdutosCadastrados.find(p => p.id == itemSelecionado.produto_id);
             const imagemSrc = obterImagemProduto(produtoInfo, itemSelecionado.variante);
-            formContainer.innerHTML = `<button id="btnVoltarParaLista" class="oa-btn-voltar-mobile"><i class="fas fa-arrow-left"></i> Voltar</button><img src="${imagemSrc}" alt="Produto" class="img-confirmacao"><h4>${itemSelecionado.produto_nome}</h4><div class="info-saldo-atribuir"><div class="saldo-item"><label>Pendente</label><span class="saldo-valor pendente">${itemSelecionado.saldo_para_arrematar}</span></div><div class="saldo-item"><label>Restará</label><span id="saldoRestante" class="saldo-valor restante">--</span></div></div><div class="oa-form-grupo-atribuir"><label for="inputQuantidadeAtribuir">Qtd. a Entregar:</label><input type="number" id="inputQuantidadeAtribuir" class="oa-input" min="1" max="${itemSelecionado.saldo_para_arrematar}" required></div><button id="btnConfirmarAtribuicao" class="oa-btn oa-btn-sucesso" disabled><i class="fas fa-check"></i> Confirmar</button>`;
+
+            // Mapa de produtos em trabalho, para garantir a informação mais recente
+            const produtosEmTrabalho = new Map();
+            statusTiktiksCache
+                .filter(t => t.status_atual === 'TRABALHANDO' && t.produto_id)
+                .forEach(t => {
+                    const chave = `${t.produto_id}|${t.variante || '-'}`;
+                    if (!produtosEmTrabalho.has(chave)) {
+                        produtosEmTrabalho.set(chave, []);
+                    }
+                    produtosEmTrabalho.get(chave).push({ nome: t.nome, quantidade: t.quantidade_entregue });
+                });
+
+            const chaveProduto = `${itemSelecionado.produto_id}|${itemSelecionado.variante || '-'}`;
+            const tarefasAtivas = produtosEmTrabalho.get(chaveProduto);
+            
+            let saldoDisponivel = itemSelecionado.saldo_para_arrematar;
+            
+            if (tarefasAtivas) {
+                const quantidadeReservada = tarefasAtivas.reduce((total, task) => total + task.quantidade, 0);
+                saldoDisponivel = itemSelecionado.saldo_para_arrematar - quantidadeReservada;
+            }
+            saldoDisponivel = saldoDisponivel > 0 ? saldoDisponivel : 0; // Garante que não seja negativo
+
+            // Gera a lista de OPs de origem
+            let opsOrigemHTML = '';
+            if (itemSelecionado.ops_detalhe && itemSelecionado.ops_detalhe.length > 0) {
+                const listaOps = itemSelecionado.ops_detalhe
+                    .map(op => `<li>OP ${op.numero} (Saldo: ${op.saldo_op})</li>`)
+                    .join('');
+                opsOrigemHTML = `
+                    <div class="origem-lancamento-container">
+                        <strong>Origem do Lançamento:</strong>
+                        <ul>${listaOps}</ul>
+                    </div>
+                `;
+            }
+
+            formContainer.innerHTML = `
+                <button id="btnVoltarParaLista" class="oa-btn-voltar-mobile"><i class="fas fa-arrow-left"></i> Voltar</button>
+                <img src="${imagemSrc}" alt="Produto" class="img-confirmacao">
+                <h4>${itemSelecionado.produto_nome}</h4>
+                <p>${itemSelecionado.variante && itemSelecionado.variante !== '-' ? itemSelecionado.variante : 'Padrão'}</p>
+                
+                ${opsOrigemHTML} 
+
+                <div class="info-saldo-atribuir">
+                    <div class="saldo-item">
+                        <label>Disponível Agora</label>
+                        <span class="saldo-valor pendente">${saldoDisponivel}</span>
+                    </div>
+                    <div class="saldo-item">
+                        <label>Restará</label>
+                        <span id="saldoRestante" class="saldo-valor restante">--</span>
+                    </div>
+                </div>
+                <div class="oa-form-grupo-atribuir">
+                    <label for="inputQuantidadeAtribuir">Qtd. a Entregar:</label>
+                    <input type="number" id="inputQuantidadeAtribuir" class="oa-input" min="1" max="${saldoDisponivel}" required>
+                </div>
+                <button id="btnConfirmarAtribuicao" class="oa-btn oa-btn-sucesso" disabled><i class="fas fa-check"></i> Confirmar</button>
+            `;
+
             const inputQtd = formContainer.querySelector('#inputQuantidadeAtribuir');
             const btnConfirmar = formContainer.querySelector('#btnConfirmarAtribuicao');
             const saldoRestanteEl = formContainer.querySelector('#saldoRestante');
+
             formContainer.querySelector('#btnVoltarParaLista').addEventListener('click', () => mostrarTela('lista'));
+            
             inputQtd.focus();
+            
             inputQtd.oninput = () => {
-                const pendente = itemSelecionado.saldo_para_arrematar;
                 const qtd = parseInt(inputQtd.value) || 0;
-                const restante = pendente - qtd;
+                const restante = saldoDisponivel - qtd;
                 saldoRestanteEl.textContent = restante >= 0 ? restante : '--';
-                btnConfirmar.disabled = !(qtd > 0 && qtd <= pendente);
+                btnConfirmar.disabled = !(qtd > 0 && qtd <= saldoDisponivel);
             };
+
+            // Passa o 'tiktik' do escopo externo de 'handleAtribuirTarefa'
             btnConfirmar.onclick = () => confirmarAtribuicao(tiktik, itemSelecionado, parseInt(inputQtd.value));
+            
             mostrarTela('confirmacao');
         }
     };
@@ -372,19 +484,30 @@ async function handleAtribuirTarefa(tiktik) {
         }
         try {
             const opDeOrigem = item.ops_detalhe.sort((a,b) => a.numero - b.numero)[0];
+            
+            const payload = {
+                usuario_tiktik_id: tiktik.id,
+                produto_id: item.produto_id,
+                variante: item.variante === '-' ? null : item.variante,
+                quantidade_entregue: quantidade,
+                op_numero: opDeOrigem.numero,
+                op_edit_id: opDeOrigem.edit_id,
+                dados_ops: item.ops_detalhe // A chave do sucesso!
+            };
+
+            console.log("🚀 ENVIANDO PAYLOAD:", JSON.stringify(payload, null, 2));
+
             await fetchFromAPI('/arremates/sessoes/iniciar', {
                 method: 'POST',
-                body: JSON.stringify({
-                    usuario_tiktik_id: tiktik.id, produto_id: item.produto_id, variante: item.variante === '-' ? null : item.variante,
-                    quantidade_entregue: quantidade, op_numero: opDeOrigem.numero, op_edit_id: opDeOrigem.edit_id
-                })
+                body: JSON.stringify(payload)
             });
+
             mostrarMensagem('Tarefa iniciada com sucesso!', 'sucesso');
             fecharModal();
             await renderizarPainelStatus();
             await renderizarItensNaFila(1);
         } catch (error) {
-            mostrarMensagem(`Erro ao iniciar tarefa: ${error.message}`, 'erro');
+            mostrarMensagem(`Deu ruim!!: ${error.message}`, 'erro');
             if (btnConfirmar) {
                 btnConfirmar.disabled = false;
                 btnConfirmar.innerHTML = '<i class="fas fa-check"></i> Confirmar';
@@ -668,18 +791,29 @@ async function renderizarItensNaFila(page = 1) {
             limit: itemsPerPageArremateCards
         };
 
-        // <<< CHAMANDO O NOVO ENDPOINT CORRETO >>>
         const response = await fetchFromAPI(`/arremates/fila?${objectToQueryString(params)}`);
         const { rows: agregados, pagination } = response;
 
-        // <<< GUARDE OS TOTAIS AQUI >>>
         totaisDaFilaDeArremate.totalGrupos = pagination.totalItems || 0;
         totaisDaFilaDeArremate.totalPecas = pagination.totalPecas || 0;
         
-        // Atualiza a variável global para ser usada na tela de detalhes
         produtosAgregadosParaArremateGlobal = agregados;
 
-         await atualizarDashboard();
+        await atualizarDashboard();
+
+        const produtosEmTrabalho = new Map();
+        statusTiktiksCache
+            .filter(t => t.status_atual === 'TRABALHANDO' && t.produto_id)
+            .forEach(t => {
+                const chave = `${t.produto_id}|${t.variante || '-'}`;
+                if (!produtosEmTrabalho.has(chave)) {
+                    produtosEmTrabalho.set(chave, []);
+                }
+                produtosEmTrabalho.get(chave).push({ 
+                    nome: t.nome, 
+                    quantidade: t.quantidade_entregue 
+                });
+            });
 
         container.innerHTML = '';
         if (agregados.length === 0) {
@@ -692,9 +826,38 @@ async function renderizarItensNaFila(page = 1) {
             const card = document.createElement('div');
             card.className = 'oa-card-arremate';
 
+            const chaveProduto = `${item.produto_id}|${item.variante || '-'}`;
+            const tarefasAtivas = produtosEmTrabalho.get(chaveProduto);
+
+            let feedbackHTML = '';
+            let saldoPendenteHTML = `<span class="valor total-pendente">${item.saldo_para_arrematar}</span>`;
+
+            if (tarefasAtivas && tarefasAtivas.length > 0) {
+                card.classList.add('em-trabalho');
+                
+                const quantidadeReservada = tarefasAtivas.reduce((total, task) => total + task.quantidade, 0);
+                const saldoDisponivel = item.saldo_para_arrematar - quantidadeReservada;
+
+                saldoPendenteHTML = `
+                    <span class="valor saldo-dinamico disponivel">${saldoDisponivel > 0 ? saldoDisponivel : 0}</span>
+                    <span class="valor saldo-dinamico total">/ ${item.saldo_para_arrematar}</span>
+                `;
+
+                const nomes = tarefasAtivas.map(t => `<strong>${t.nome}</strong> (${t.quantidade} pçs)`).join(', ');
+                feedbackHTML = `<div class="feedback-em-trabalho"><i class="fas fa-cog fa-spin"></i> Em arremate por: ${nomes}</div>`;
+            }
+            
             const produtoInfo = todosOsProdutosCadastrados.find(p => p.id == item.produto_id);
             const imagemSrc = obterImagemProduto(produtoInfo, item.variante);
-            const opsOrigemCount = item.ops_detalhe.length;
+            const opsOrigemCount = item.ops_detalhe?.length || 0;
+            
+            const itemParaDetalhes = {
+                produto_id: item.produto_id,
+                produto: item.produto_nome,
+                variante: item.variante,
+                total_quantidade_pendente_arremate: item.saldo_para_arrematar,
+                ops_detalhe: item.ops_detalhe
+            };
 
             card.innerHTML = `
                 <img src="${imagemSrc}" alt="${item.produto_nome}" class="oa-card-img" onerror="this.src='/img/placeholder-image.png'">
@@ -705,24 +868,16 @@ async function renderizarItensNaFila(page = 1) {
                 <div class="oa-card-dados">
                     <div class="dado-bloco">
                         <span class="label">Pendente:</span>
-                        <span class="valor total-pendente">${item.saldo_para_arrematar}</span>
+                        ${saldoPendenteHTML}
                     </div>
                     <div class="dado-bloco">
                         <span class="label">OPS:</span>
                         <span class="valor">${opsOrigemCount}</span>
                     </div>
                 </div>
+                ${feedbackHTML} 
             `;
             
-            // Prepara o objeto para a tela de detalhes
-            const itemParaDetalhes = {
-                produto_id: item.produto_id,
-                produto: item.produto_nome,
-                variante: item.variante,
-                total_quantidade_pendente_arremate: item.saldo_para_arrematar,
-                ops_detalhe: item.ops_detalhe
-            };
-
             card.dataset.arremateAgregado = JSON.stringify(itemParaDetalhes);
             card.addEventListener('click', handleArremateCardClick);
             container.appendChild(card);
@@ -763,41 +918,28 @@ async function carregarDetalhesArremateView(agregado) {
     document.getElementById('arremateVarianteNomeDetalhe').textContent = agregado.variante && agregado.variante !== '-' ? `(${agregado.variante})` : '';
     document.getElementById('arremateTotalPendenteAgregado').textContent = agregado.total_quantidade_pendente_arremate;
     
-    // Reseta e preenche o formulário da primeira aba (Lançar Arremate)
-    const formLancar = document.getElementById('formLancarArremate');
-    formLancar.reset();
-    
-    const selectUser = document.getElementById('selectUsuarioArremate');
-    selectUser.innerHTML = '<option value="">Selecione o Tiktik</option>';
-    const usuariosTiktik = todosOsUsuarios.filter(u => u.tipos?.includes('tiktik'));
-    usuariosTiktik.forEach(user => selectUser.add(new Option(user.nome, user.id)));
-
-    const inputQtd = document.getElementById('inputQuantidadeArrematar');
-    inputQtd.max = agregado.total_quantidade_pendente_arremate;
-    
-    const btnLancar = document.getElementById('btnLancarArremateAgregado');
-    
-    // Lógica para habilitar/desabilitar o botão de lançar
-    const validarCampos = () => {
-        const usuarioValido = selectUser.value !== '';
-        const qtdValida = parseInt(inputQtd.value) > 0 && parseInt(inputQtd.value) <= agregado.total_quantidade_pendente_arremate;
-        btnLancar.disabled = !(usuarioValido && qtdValida && permissoes.includes('lancar-arremate'));
-    };
-    
-    selectUser.onchange = validarCampos;
-    inputQtd.oninput = validarCampos;
-    validarCampos(); // Validação inicial
-
-    // Reseta o formulário de ajuste (segunda aba)
+    // Reseta o formulário de ajuste (agora a primeira aba visível)
     const formAjuste = document.getElementById('formRegistrarAjuste');
-    formAjuste.reset();
-    document.getElementById('inputQuantidadeAjuste').max = agregado.total_quantidade_pendente_arremate;
+    if (formAjuste) {
+        formAjuste.reset();
+        document.getElementById('inputQuantidadeAjuste').max = agregado.total_quantidade_pendente_arremate;
+    }
     
-    // Define a primeira aba como ativa
+    // Garante que a aba correta esteja ativa
     document.querySelectorAll('.oa-tab-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.oa-tab-panel').forEach(panel => panel.classList.remove('active'));
-    document.querySelector('.oa-tab-btn[data-tab="lancar"]').classList.add('active');
-    document.querySelector('#lancar-tab').classList.add('active');
+    
+    const abaAjusteBtn = document.querySelector('.oa-tab-btn[data-tab="ajuste"]');
+    const abaAjustePanel = document.querySelector('#ajuste-tab');
+
+    if (abaAjusteBtn && abaAjustePanel) {
+        abaAjusteBtn.classList.add('active');
+        abaAjustePanel.classList.add('active');
+    } else {
+        // Se a aba de ajuste não existir, ativa a próxima disponível (histórico)
+        document.querySelector('.oa-tab-btn[data-tab="historico-produto"]')?.classList.add('active');
+        document.querySelector('#historico-produto-tab')?.classList.add('active');
+    }
 }
 
 async function lancarArremateAgregado() {
@@ -1366,14 +1508,6 @@ function configurarEventListeners() {
         });
     }
 
-    // Botão de lançar arremate da view de detalhes (fluxo antigo)
-    document.getElementById('btnLancarArremateAgregado')?.addEventListener('click', () => {
-        if (!permissoes.includes('lancar-arremate')) {
-            mostrarMensagem('Você não tem permissão para lançar arremates.', 'aviso');
-            return;
-        }
-        lancarArremateAgregado();
-    });
 
     // Botão de confirmar ajuste/perda da view de detalhes
     document.getElementById('btnConfirmarRegistroAjuste')?.addEventListener('click', registrarAjuste);

@@ -177,33 +177,17 @@
 
     <!-- ABAS DE NAVEGAÇÃO -->
     <div class="oa-tabs">
-        <button class="oa-tab-btn active" data-tab="lancar">Lançar Arremate</button>
-        <button class="oa-tab-btn" data-tab="ajuste">Registrar Ajuste</button>
+        <button class="oa-tab-btn active" data-tab="ajuste">Registrar Ajuste</button>
         <button class="oa-tab-btn" data-tab="historico-produto">Histórico do Produto</button>
     </div>
 
     <!-- PAINÉIS DAS ABAS -->
     <div class="oa-tab-paineis">
         <!-- ABA 1: LANÇAR ARREMATE -->
-        <div class="oa-tab-panel active" id="lancar-tab">
-            <form id="formLancarArremate" class="oa-form-acao">
-                <div class="oa-form-grupo">
-                    <label for="selectUsuarioArremate">Feito Por (Tiktik):</label>
-                    <select id="selectUsuarioArremate" class="oa-select" required></select>
-                </div>
-                <div class="oa-form-grupo">
-                    <label for="inputQuantidadeArrematar">Quantidade a Lançar:</label>
-                    <input type="number" id="inputQuantidadeArrematar" class="oa-input oa-input-grande oa-input-qtd" min="1" required placeholder="Qtd.">                </div>
-                <div class="oa-form-botoes">
-                    <button type="button" id="btnLancarArremateAgregado" class="oa-btn oa-btn-sucesso oa-btn-grande">
-                        <i class="fas fa-check"></i> Lançar Arremate
-                    </button>
-                </div>
-            </form>
-        </div>
+         <!-- foi removida daqui!!!-->
 
         <!-- ABA 2: REGISTRAR AJUSTE (PERDA / LANÇAMENTO ERRADO) -->
-        <div class="oa-tab-panel" id="ajuste-tab">
+        <div class="oa-tab-panel active" id="ajuste-tab">
             <form id="formRegistrarAjuste" class="oa-form-acao">
                 <p class="oa-form-instrucao">Use esta opção para corrigir o saldo, seja por uma perda física ou por um lançamento de produção que foi feito por engano.</p>
                 <div class="oa-form-grupo">

@@ -1211,6 +1211,101 @@ body.autenticado { visibility: visible; }
     font-weight: 500;
 }
 
+/* Estilos para a lista de OPs no modal de atribuição */
+.origem-lancamento-container {
+    text-align: left;
+    font-size: 0.85rem;
+    background-color: #f0f2f5;
+    padding: 10px 15px;
+    border-radius: 6px;
+    margin: 15px 0;
+    border: 1px solid #e0e4e8;
+}
+
+.origem-lancamento-container strong {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--oa-cor-azul-escuro);
+}
+
+.origem-lancamento-container ul {
+    list-style-type: none;
+    padding-left: 0;
+    margin: 0;
+    max-height: 80px; /* Evita listas muito longas */
+    overflow-y: auto;
+}
+
+.origem-lancamento-container li {
+    padding: 3px 0;
+    color: var(--oa-cor-cinza-texto-secundario);
+}
+
+/* Estilos para feedback de concorrência nos cards de arremate */
+.oa-card-arremate.em-trabalho {
+    border-left-color: var(--oa-cor-amarelo-atencao);
+    background-color: #fffbeb;
+    position: relative;
+}
+
+.feedback-em-trabalho {
+    /* Removido: grid-column: 1 / -1; */
+    width: 100%; /* Ocupa a largura total */
+    grid-column-start: 1;
+    grid-column-end: 4; /* Força a ocupar as 3 colunas do grid do card */
+    background-color: var(--oa-cor-amarelo-atencao);
+    color: #5d470d;
+    padding: 8px 15px;
+    font-size: 0.8rem;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    order: 4; /* Garante que ele seja o último elemento no card */
+}
+
+.feedback-em-trabalho .fa-cog {
+    font-size: 0.9rem;
+}
+
+/* Estilos para o saldo dinâmico no card de arremate */
+.dado-bloco .valor.saldo-dinamico {
+    display: inline-block; /* Permite que fiquem na mesma linha */
+    line-height: 1.2;
+}
+
+.dado-bloco .valor.saldo-dinamico.disponivel {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--oa-cor-amarelo-atencao); /* Destaca o saldo disponível */
+}
+
+.dado-bloco .valor.saldo-dinamico.total {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--oa-cor-cinza-texto-secundario);
+    margin-left: 4px;
+}
+
+/* Estilos para feedback no modal de atribuição */
+.oa-card-dados-modal {
+    margin-left: auto;
+    padding-right: 10px;
+    text-align: right;
+}
+.oa-card-dados-modal .valor {
+    font-weight: 600;
+    color: var(--oa-cor-texto-principal);
+}
+.oa-card-arremate-modal.em-trabalho-modal {
+    background-color: #fffbeb;
+    border-color: var(--oa-cor-amarelo-atencao);
+}
+.oa-card-arremate-modal.em-trabalho-modal .oa-card-dados-modal .valor {
+    color: var(--oa-cor-amarelo-atencao);
+}
+
 /*------------------------------------*\
     #RESPONSIVIDADE
 \*------------------------------------*/
@@ -1245,6 +1340,21 @@ body.autenticado { visibility: visible; }
 
     .oa-modal-filtros {
     gap: 5px;
+    }
+
+        /* Ajuste para o alinhamento do saldo no card principal em telas mobile */
+    .oa-card-arremate .dado-bloco {
+        text-align: left;
+    }
+
+    .oa-card-arremate .dado-bloco .label {
+        display: inline; /* Impede a quebra de linha */
+        margin-right: 6px; /* Adiciona um espaço depois de "PENDENTE:" */
+    }
+
+    /* Garante que o container dos dados alinhe os blocos pela base do texto */
+    .oa-card-arremate .oa-card-dados {
+        align-items: baseline;
     }
 
     /* Resetando o layout do card para voltar a usar grid interno */

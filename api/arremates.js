@@ -221,10 +221,7 @@ router.get('/', async (req, res) => {
 });
 
 // ROTA: GET /api/arremates/historico
-router.get('/historico', async (req, res) => {
-    console.log('\n--- [API GET /historico] INÍCIO DA REQUISIÇÃO ---');
-    console.log('[LOG 1] Query Params Recebidos:', req.query);
-    
+router.get('/historico', async (req, res) => {    
     const { 
         busca,
         tipoEvento = 'todos',
@@ -271,14 +268,11 @@ router.get('/historico', async (req, res) => {
         }
         
         const whereString = `WHERE ${whereClauses.join(' AND ')}`;
-        console.log('[LOG 2] Cláusula WHERE construída:', whereString);
-        console.log('[LOG 3] Parâmetros para WHERE:', queryParams);
 
         // Query de Contagem
         const countQuery = `SELECT COUNT(*) FROM arremates a LEFT JOIN produtos p ON a.produto_id = p.id ${whereString}`;
         const countResult = await dbClient.query(countQuery, queryParams);
         const totalItems = parseInt(countResult.rows[0].count, 10);
-        console.log(`[LOG 4] Contagem de itens (total): ${totalItems}`);
 
         // Query de Dados com Paginação
         const limitNum = parseInt(limit);
@@ -295,11 +289,8 @@ router.get('/historico', async (req, res) => {
             ORDER BY a.data_lancamento DESC
             LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
         
-        console.log('[LOG 5] Query de Dados Final:', dataQuery.replace(/\s+/g, ' ').trim());
-        console.log('[LOG 6] Parâmetros Finais (com paginação):', finalQueryParams);
         
         const dataResult = await dbClient.query(dataQuery, finalQueryParams);
-        console.log(`[LOG 7] Query de Dados retornou ${dataResult.rowCount} linhas.`);
         
         res.status(200).json({
             rows: dataResult.rows,
@@ -771,27 +762,127 @@ router.get('/status-tiktiks', async (req, res) => {
 router.post('/sessoes/iniciar', async (req, res) => {
     let dbClient;
     try {
-        const { usuario_tiktik_id, produto_id, variante, quantidade_entregue, op_numero, op_edit_id } = req.body;
-            if (!usuario_tiktik_id || !produto_id || !quantidade_entregue || !op_numero) { // Adicionada validação para op_numero
-                return res.status(400).json({ error: 'Dados insuficientes. ID do usuário, produto, quantidade e número da OP são obrigatórios.' });
-            }
+        const { usuario_tiktik_id, produto_id, variante, quantidade_entregue, dados_ops } = req.body;
+        
+        const qtdEntregueNum = parseInt(quantidade_entregue);
+        if (!usuario_tiktik_id || !produto_id || isNaN(qtdEntregueNum) || qtdEntregueNum <= 0 || !Array.isArray(dados_ops) || dados_ops.length === 0) {
+            return res.status(400).json({ error: 'Dados insuficientes. Verifique todos os campos.' });
+        }
 
         dbClient = await pool.connect();
         await dbClient.query('BEGIN');
 
-        // 1. Criar a sessão de trabalho
-        const sessaoResult = await dbClient.query(
-            `INSERT INTO sessoes_trabalho_arremate (usuario_tiktik_id, produto_id, variante, quantidade_entregue, op_numero, op_edit_id)
-            VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-            [usuario_tiktik_id, produto_id, variante, quantidade_entregue, op_numero, op_edit_id]
-        );
-        const novaSessaoId = sessaoResult.rows[0].id;
+        // --- TRAVA DE CONCORRÊNCIA COM ADVISORY LOCK ---
+        const varianteAsNumber = variante ? variante.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) : 0;
+        const lockKey = parseInt(produto_id) + varianteAsNumber;
 
-        // 2. Atualizar o status do usuário
-        await dbClient.query(
-            `UPDATE usuarios SET status_atual = 'TRABALHANDO', id_sessao_trabalho_atual = $1 WHERE id = $2`,
-            [novaSessaoId, usuario_tiktik_id]
+        const lockResult = await dbClient.query('SELECT pg_try_advisory_xact_lock(12345, $1)', [lockKey]);
+        const lockAcquired = lockResult.rows[0].pg_try_advisory_xact_lock;
+
+        if (!lockAcquired) {
+            await dbClient.query('ROLLBACK');
+            return res.status(409).json({ error: `Este produto está sendo atribuído por outro supervisor. Por favor, tente novamente em alguns segundos.` });
+        }
+        
+        const agoraStr = (new Date()).toLocaleTimeString('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute:'2-digit' });
+
+        const sessaoAtivaQuery = `
+            SELECT
+                s.id,
+                u.nome as tiktik_nome
+            FROM sessoes_trabalho_arremate s
+            JOIN usuarios u ON s.usuario_tiktik_id = u.id
+            WHERE s.produto_id = $1
+            AND (s.variante = $2 OR (s.variante IS NULL AND $2 IS NULL))
+            AND s.status = 'EM_ANDAMENTO'
+            AND (
+                -- Considera a sessão ativa APENAS SE o Tiktik estiver DENTRO do seu horário de trabalho
+                (u.horario_entrada_1 IS NOT NULL AND u.horario_saida_1 IS NOT NULL AND $3 BETWEEN u.horario_entrada_1 AND u.horario_saida_1) OR
+                (u.horario_entrada_2 IS NOT NULL AND u.horario_saida_2 IS NOT NULL AND $3 BETWEEN u.horario_entrada_2 AND u.horario_saida_2) OR
+                (u.horario_entrada_3 IS NOT NULL AND u.horario_saida_3 IS NOT NULL AND $3 BETWEEN u.horario_entrada_3 AND u.horario_saida_3)
+            )
+            LIMIT 1
+        `;
+        const sessaoAtivaResult = await dbClient.query(sessaoAtivaQuery, [produto_id, variante, agoraStr]);
+
+        if (sessaoAtivaResult.rows.length > 0) {
+            const sessaoExistente = sessaoAtivaResult.rows[0];
+            await dbClient.query('ROLLBACK');
+            return res.status(409).json({
+                error: `Este produto já está em uma tarefa ativa com o Tiktik '${sessaoExistente.tiktik_nome}'. Finalize a tarefa atual antes de iniciar uma nova.`
+            });
+        }
+
+        // Se passou, continua com a verificação de saldo...
+        const opNumeros = dados_ops.map(op => op.numero);
+        const opsResult = await dbClient.query( `SELECT numero, etapas, quantidade FROM ordens_de_producao WHERE numero = ANY($1::varchar[])`, [opNumeros]);
+        const opsDoBanco = opsResult.rows;
+        
+        const arrematadoResult = await dbClient.query(
+            `SELECT
+                op_numero,
+                SUM(
+                    CASE
+                        WHEN tipo_lancamento = 'PRODUCAO' THEN quantidade_arrematada
+                        WHEN tipo_lancamento = 'PERDA' THEN quantidade_arrematada
+                        WHEN tipo_lancamento = 'ESTORNO' THEN -quantidade_arrematada
+                        ELSE 0
+                    END
+                )::integer as total_arrematado_liquido
+            FROM arremates
+            WHERE op_numero = ANY($1::varchar[])
+            GROUP BY op_numero`,
+            [opNumeros]
         );
+        const arrematadoMap = new Map(arrematadoResult.rows.map(r => [r.op_numero, parseInt(r.total_arrematado_liquido, 10)]));
+        
+        let saldoRealDisponivel = 0;
+        const obterQuantidadeFinalProduzida = (op) => {
+            if (!op || !op.etapas || !Array.isArray(op.etapas) || op.etapas.length === 0) {
+                return parseInt(op?.quantidade) || 0;
+            }
+            for (let i = op.etapas.length - 1; i >= 0; i--) {
+                const etapa = op.etapas[i];
+                if (etapa && etapa.lancado && typeof etapa.quantidade !== 'undefined' && etapa.quantidade !== null) {
+                    const qtdEtapa = parseInt(etapa.quantidade, 10);
+                    if (!isNaN(qtdEtapa) && qtdEtapa >= 0) {
+                        return qtdEtapa;
+                    }
+                }
+            }
+            return parseInt(op.quantidade) || 0;
+        };
+        
+        // Agora iteramos sobre as OPs que buscamos do banco
+        for (const op of opsDoBanco) {
+            const produzido = obterQuantidadeFinalProduzida(op); // Usamos a função correta
+            const jaArrematado = arrematadoMap.get(op.numero) || 0;
+            const saldoOpReal = produzido - jaArrematado;
+
+            // Somamos apenas o saldo positivo ao total
+            if (saldoOpReal > 0) {
+                saldoRealDisponivel += saldoOpReal;
+            }
+        }
+        
+        // A trava final
+        if (qtdEntregueNum > saldoRealDisponivel) {
+            await dbClient.query('ROLLBACK');
+            return res.status(409).json({
+                error: `Conflito de saldo! A quantidade solicitada (${qtdEntregueNum}) é maior que o saldo disponível real (${saldoRealDisponivel}). Atualize a página e tente novamente.`
+            });
+        }
+
+        // Se passou, continua com a criação da sessão...
+        const op_numero_ref = dados_ops[0].numero;
+        const op_edit_id_ref = dados_ops[0].edit_id;
+        
+        const sessaoQuery = `INSERT INTO sessoes_trabalho_arremate (usuario_tiktik_id, produto_id, variante, quantidade_entregue, op_numero, op_edit_id, dados_ops) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb) RETURNING id`;
+        const sessaoParams = [usuario_tiktik_id, produto_id, variante, qtdEntregueNum, op_numero_ref, op_edit_id_ref, JSON.stringify(dados_ops)];
+        const sessaoResult = await dbClient.query(sessaoQuery, sessaoParams);
+        const novaSessaoId = sessaoResult.rows[0].id;
+        
+        await dbClient.query(`UPDATE usuarios SET status_atual = 'TRABALHANDO', id_sessao_trabalho_atual = $1 WHERE id = $2`, [novaSessaoId, usuario_tiktik_id]);
 
         await dbClient.query('COMMIT');
         res.status(201).json({ message: 'Sessão iniciada com sucesso!', sessaoId: novaSessaoId });
@@ -799,69 +890,115 @@ router.post('/sessoes/iniciar', async (req, res) => {
     } catch (error) {
         if (dbClient) await dbClient.query('ROLLBACK');
         console.error('[API /sessoes/iniciar] Erro:', error);
-        res.status(500).json({ error: 'Erro ao iniciar sessão.' });
+        res.status(500).json({ error: 'Erro ao iniciar sessão.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }
 });
 
+
 // ROTA: POST /api/arremates/sessoes/finalizar
 router.post('/sessoes/finalizar', async (req, res) => {
     let dbClient;
-    try {
-        const { id_sessao, quantidade_finalizada } = req.body;
-        if (!id_sessao || quantidade_finalizada === undefined) {
-            return res.status(400).json({ error: 'ID da sessão e quantidade finalizada são obrigatórios.' });
-        }
+    const { id_sessao, quantidade_finalizada } = req.body;
 
+    if (!id_sessao || quantidade_finalizada === undefined) {
+        return res.status(400).json({ error: 'ID da sessão e quantidade finalizada são obrigatórios.' });
+    }
+    
+    const qtdFinalizadaNum = parseInt(quantidade_finalizada);
+    if (isNaN(qtdFinalizadaNum) || qtdFinalizadaNum < 0) {
+        return res.status(400).json({ error: 'Quantidade finalizada deve ser um número não-negativo.' });
+    }
+
+    try {
         dbClient = await pool.connect();
         await dbClient.query('BEGIN');
 
-        // 1. Busca dados da sessão para criar o arremate
-        const sessaoResult = await dbClient.query(`SELECT * FROM sessoes_trabalho_arremate WHERE id = $1`, [id_sessao]);
+        const sessaoQuery = `SELECT * FROM sessoes_trabalho_arremate WHERE id = $1 FOR UPDATE`;
+        const sessaoResult = await dbClient.query(sessaoQuery, [id_sessao]);
+
         if (sessaoResult.rows.length === 0) throw new Error('Sessão não encontrada.');
         const sessao = sessaoResult.rows[0];
+    
+        if (sessao.status === 'FINALIZADA') throw new Error('Esta sessão de trabalho já foi finalizada.');
 
-        // 2. Cria o registro de arremate oficial
-        const arrematePayload = {
-            produto_id: sessao.produto_id,
-            variante: sessao.variante,
-            quantidade_arrematada: quantidade_finalizada,
-            usuario_tiktik_id: sessao.usuario_tiktik_id,
-        };
-        // Para op_numero, etc., precisaríamos de mais lógica. Por agora, vamos focar no essencial.
-        // Vamos reutilizar a lógica de criação de arremate que você já tem.
-        const userTiktik = await dbClient.query(`SELECT nome FROM usuarios WHERE id = $1`, [arrematePayload.usuario_tiktik_id]);
-        const lancador = await dbClient.query(`SELECT nome FROM usuarios WHERE id = $1`, [req.usuarioLogado.id]);
+        const userTiktikResult = await dbClient.query(`SELECT nome FROM usuarios WHERE id = $1`, [sessao.usuario_tiktik_id]);
+        const lancadorResult = await dbClient.query(`SELECT nome FROM usuarios WHERE id = $1`, [req.usuarioLogado.id]);
+        if (userTiktikResult.rows.length === 0 || lancadorResult.rows.length === 0) throw new Error('Usuário Tiktik ou Lançador não encontrado.');
+        const nomeTiktik = userTiktikResult.rows[0].nome;
+        const nomeLancador = lancadorResult.rows[0].nome;
+
+        let idsArrematesGerados = [];
+
+        if (qtdFinalizadaNum > 0) {
+            
+            let valorPontoAplicado = 1.00;
+            const configPontosQuery = `
+                SELECT pontos_padrao FROM configuracoes_pontos_processos
+                WHERE produto_id = $1 AND tipo_atividade = 'arremate_tiktik' AND ativo = TRUE LIMIT 1;
+            `;
+            const configResult = await dbClient.query(configPontosQuery, [sessao.produto_id]);
+            if (configResult.rows.length > 0 && configResult.rows[0].pontos_padrao !== null) {
+                valorPontoAplicado = parseFloat(configResult.rows[0].pontos_padrao);
+            }
+
+            let quantidadeRestanteParaLancar = qtdFinalizadaNum;
+            
+            // ✨✨✨ LÓGICA DE LEITURA 100% SEGURA ✨✨✨
+            const opsDeOrigem = (sessao && Array.isArray(sessao.dados_ops)) ? sessao.dados_ops : [];
+            const opsOrdenadas = opsDeOrigem.sort((a, b) => a.numero - b.numero);
+
+            if (opsOrdenadas.length === 0) {
+                console.error(`ERRO: A sessão ${id_sessao} foi finalizada, mas a coluna 'dados_ops' estava vazia ou inválida.`);
+                throw new Error("Não foi possível finalizar: os dados das OPs de origem não foram encontrados nesta sessão.");
+            }
+
+            for (const op of opsOrdenadas) {
+                if (quantidadeRestanteParaLancar <= 0) break;
+                const qtdParaEstaOP = Math.min(quantidadeRestanteParaLancar, op.saldo_op);
+                
+                if (qtdParaEstaOP > 0) {
+                    const pontosGeradosParaEstaOP = qtdParaEstaOP * valorPontoAplicado;
+                    const arremateResult = await dbClient.query(
+                        `INSERT INTO arremates (op_numero, op_edit_id, produto_id, variante, quantidade_arrematada, usuario_tiktik_id, usuario_tiktik, lancado_por, tipo_lancamento, valor_ponto_aplicado, pontos_gerados)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PRODUCAO', $9, $10) RETURNING id`,
+                        [
+                            op.numero, op.edit_id, sessao.produto_id, sessao.variante, 
+                            qtdParaEstaOP, sessao.usuario_tiktik_id, nomeTiktik, nomeLancador,
+                            valorPontoAplicado, pontosGeradosParaEstaOP
+                        ]
+                    );
+                    idsArrematesGerados.push(arremateResult.rows[0].id);
+                    quantidadeRestanteParaLancar -= qtdParaEstaOP;
+                }
+            }
+            
+            if (quantidadeRestanteParaLancar > 0) {
+                throw new Error(`Tentativa de lançar ${qtdFinalizadaNum} peças, mas o saldo disponível nas OPs de origem era insuficiente. Lançamento cancelado.`);
+            }
+        }
         
-        const arremateResult = await dbClient.query(
-            `INSERT INTO arremates (op_numero, op_edit_id, produto_id, variante, quantidade_arrematada, usuario_tiktik_id, usuario_tiktik, lancado_por, tipo_lancamento)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PRODUCAO') RETURNING id`,
-            [sessao.op_numero, sessao.op_edit_id, sessao.produto_id, sessao.variante, quantidade_finalizada, sessao.usuario_tiktik_id, userTiktik.rows[0].nome, lancador.rows[0].nome]
-        );
-        const novoArremateId = arremateResult.rows[0].id;
-        
-        // 3. Finaliza a sessão, linkando com o arremate criado
         await dbClient.query(
-            `UPDATE sessoes_trabalho_arremate 
-             SET data_fim = NOW(), status = 'FINALIZADA', quantidade_finalizada = $1, id_arremate_gerado = $2
-             WHERE id = $3`,
-            [quantidade_finalizada, novoArremateId, id_sessao]
+            `UPDATE sessoes_trabalho_arremate SET data_fim = NOW(), status = 'FINALIZADA', quantidade_finalizada = $1, id_arremate_gerado = $2 WHERE id = $3`,
+            [qtdFinalizadaNum, idsArrematesGerados.length > 0 ? idsArrematesGerados[0] : null, id_sessao]
         );
         
-        // 4. Libera o usuário
         await dbClient.query(
             `UPDATE usuarios SET status_atual = 'LIVRE', id_sessao_trabalho_atual = NULL WHERE id = $1`,
             [sessao.usuario_tiktik_id]
         );
         
         await dbClient.query('COMMIT');
-        res.status(200).json({ message: 'Sessão finalizada e arremate registrado com sucesso!', arremateId: novoArremateId });
+        res.status(200).json({ 
+            message: 'Sessão finalizada e arremate(s) registrado(s) com sucesso!', 
+            arremateIds: idsArrematesGerados 
+        });
 
     } catch (error) {
         if (dbClient) await dbClient.query('ROLLBACK');
         console.error('[API /sessoes/finalizar] Erro:', error);
-        res.status(500).json({ error: 'Erro ao finalizar sessão.' });
+        res.status(500).json({ error: 'Erro ao finalizar sessão.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }
@@ -897,7 +1034,6 @@ router.put('/usuarios/:id/status', async (req, res) => {
 
 // POST /api/arremates/estornar - ENDPOINT PARA ESTORNAR UM LANÇAMENTO
 router.post('/estornar', async (req, res) => {
-    console.log('--- [DEBUG] REQUISIÇÃO CHEGOU EM: POST /api/arremates/estornar (LÓGICA LOG + DELETE) ---');
     const { usuarioLogado } = req;
     const { id_arremate } = req.body;
     let dbClient;
@@ -926,7 +1062,6 @@ router.post('/estornar', async (req, res) => {
         // Validações ...
 
         // 2. CRIA UM NOVO REGISTRO DE LOG DO TIPO 'ESTORNO'
-        console.log('[DEBUG] Criando registro de log de ESTORNO...');
         const logEstornoQuery = `
             INSERT INTO arremates 
                 (op_numero, op_edit_id, produto_id, variante, quantidade_arrematada, 
@@ -948,7 +1083,6 @@ router.post('/estornar', async (req, res) => {
         ]);
         
         // 3. APAGA o registro de arremate original.
-        console.log(`[DEBUG] Apagando o arremate original com ID: ${id_arremate}`);
         const deleteResult = await dbClient.query(`DELETE FROM arremates WHERE id = $1`, [id_arremate]);
         if (deleteResult.rowCount === 0) {
             throw new Error("Falha ao apagar o registro de arremate original.");
