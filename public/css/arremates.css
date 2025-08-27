@@ -266,7 +266,12 @@ body.autenticado { visibility: visible; }
 /*------------------------------------*\
     #CARDS DE ARREMATE
 \*------------------------------------*/
-.oa-cards-container-arremate { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; margin-top: 15px; }
+.oa-cards-container-arremate { 
+    display: grid; 
+    grid-template-columns: repeat(auto-fill, 
+    minmax(320px, 1fr)); 
+    gap: 20px; 
+}
 .oa-card-arremate { display: grid; grid-template-columns: auto 1fr auto; background-color: var(--oa-cor-branco); border-radius: var(--oa-raio-borda); box-shadow: var(--oa-sombra-padrao); border-left: 6px solid var(--oa-cor-cinza-borda); /* CORREÇÃO: Borda sempre cinza */ cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; overflow: hidden; align-items: center; }
 .oa-card-arremate:hover { transform: translateY(-4px); box-shadow: var(--oa-sombra-hover); }
 
@@ -1314,6 +1319,18 @@ body.autenticado { visibility: visible; }
     color: var(--oa-cor-amarelo-atencao);
 }
 
+/* Adiciona o cursor de "ponteiro" ao avatar para indicar que é clicável */
+.oa-avatar-foco {
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Efeito de "zoom" sutil ao passar o mouse */
+.oa-avatar-foco:hover {
+    transform: scale(1.08);
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+}
+
 /*------------------------------------*\
     #RESPONSIVIDADE
 \*------------------------------------*/
@@ -1341,7 +1358,7 @@ body.autenticado { visibility: visible; }
     .oa-cabecalho-pagina .oa-botoes-cabecalho { justify-content: center; display: flex; }
     .oa-cards-container-arremate { 
         grid-template-columns: 1fr; 
-        grid-auto-rows: auto; /* IMPORTANTE: Reseta a altura automática */
+        grid-auto-rows: auto;
     }
     .oa-detalhe-grid { grid-template-columns: 1fr; }
     .oa-info-box i { font-size: 2rem; margin-right: 15px; }
@@ -1573,6 +1590,7 @@ body.autenticado { visibility: visible; }
         cursor: pointer;
         margin-bottom: 15px;
         align-self: flex-start; /* Alinha à esquerda */
+        margin: 10px 15px 0;
     }
 
     .oa-form-grupo-atribuir {

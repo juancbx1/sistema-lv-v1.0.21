@@ -1,6 +1,6 @@
 // public/js/admin-ordens-de-arremates.js
 import { verificarAutenticacao } from '/js/utils/auth.js';
-import { mostrarMensagem, mostrarConfirmacao } from '/js/utils/popups.js';
+import { mostrarMensagem, mostrarConfirmacao, mostrarPromptNumerico } from '/js/utils/popups.js';
 import { obterProdutos as obterProdutosDoStorage } from '/js/utils/storage.js';
 
 // --- Variáveis Globais --- 
@@ -14,6 +14,8 @@ let produtosAgregadosParaArremateGlobal = [];
 let arremateAgregadoEmVisualizacao = null;
 let historicoDeArrematesCache = [];
 let totaisDaFilaDeArremate = { totalGrupos: 0, totalPecas: 0 };
+let modalAtribuirTarefaElemento = null;
+let statusTiktiksCache = [];
 
 
 // Paginação
@@ -27,6 +29,690 @@ let historicoArrematesCurrentPage = 1;
 
 // Controle de UI
 const lancamentosArremateEmAndamento = new Set();
+
+// ==========================================================================
+// # LÓGICA DO NOVO PAINEL DE ATIVIDADES
+// ==========================================================================
+let painelUpdateInterval; // Variável para controlar o auto-update
+let cronometrosUpdateInterval;
+let ultimaAtualizacaoTimestamp = null;
+let feedbackUpdateInterval;  
+/**
+ * Função principal que busca os dados e renderiza o painel de status.
+ */
+async function renderizarPainelStatus() {
+    const containerDisponiveis = document.getElementById('painelDisponiveisContainer');
+    const containerInativos = document.getElementById('painelInativosContainer');
+    const badgeInativos = document.getElementById('accordionBadge');
+    const feedbackEl = document.getElementById('feedbackAtualizacao'); // <<< Pega o elemento
+
+    if (!containerDisponiveis || !containerInativos) return;
+
+    // Mostra "Atualizando..." durante a busca
+    if (feedbackEl) feedbackEl.textContent = 'Atualizando...';
+
+    try {
+        const tiktiks = await fetchFromAPI('/arremates/status-tiktiks');
+        statusTiktiksCache = tiktiks;
+        
+        containerDisponiveis.innerHTML = '';
+        containerInativos.innerHTML = '';
+        let contadorInativos = 0;
+
+        if (tiktiks.length === 0) {
+            containerDisponiveis.innerHTML = '<p>Nenhum usuário do tipo "TikTik" encontrado.</p>';
+            return;
+        }
+
+        tiktiks.forEach(tiktik => {
+        const card = document.createElement('div');
+        card.dataset.tiktikId = tiktik.id;
+        const { statusFinal, classeStatus } = determinarStatusFinal(tiktik);
+
+        // Se estiver trabalhando, armazena a data de início no próprio card
+        if (statusFinal === 'TRABALHANDO') {
+            card.dataset.inicioTarefa = tiktik.data_inicio;
+        }
+
+        card.className = `oa-card-status-tiktik ${classeStatus}`;
+        card.innerHTML = criarHTMLCardStatus(tiktik, statusFinal, classeStatus);
+            
+            // Separa em qual container o card será inserido
+            if (statusFinal === 'LIVRE' || statusFinal === 'TRABALHANDO') {
+                containerDisponiveis.appendChild(card);
+            } else {
+                containerInativos.appendChild(card);
+                contadorInativos++;
+            }
+            
+        });
+        
+        if(badgeInativos) badgeInativos.textContent = contadorInativos;
+
+        // Ao final da renderização bem-sucedida:
+        ultimaAtualizacaoTimestamp = Date.now(); // <<< ATUALIZA O TIMESTAMP
+        atualizarFeedbackTempo(); // <<< CHAMA UMA PRIMEIRA VEZ PARA O TEXTO APARECER IMEDIATAMENTE
+
+    } catch (error) {
+        console.error("Erro ao renderizar painel de status:", error);
+        containerDisponiveis.innerHTML = `<p class="erro-painel">Erro ao carregar o painel. Tente atualizar a página.</p>`;
+        if (feedbackEl) feedbackEl.textContent = 'Falha ao atualizar';
+    }
+}
+
+
+function atualizarCronometros() {
+    // Procura por todos os cards que estão no estado 'trabalhando' e têm o data-attribute
+    document.querySelectorAll('.oa-card-status-tiktik.status-trabalhando[data-inicio-tarefa]').forEach(card => {
+        const cronometroEl = card.querySelector('.cronometro-tarefa');
+        const dataInicioStr = card.dataset.inicioTarefa;
+
+        if (cronometroEl && dataInicioStr) {
+            const tempoDecorridoMs = new Date() - new Date(dataInicioStr);
+            // Garante que o tempo não seja negativo caso haja dessincronia de relógios
+            const tempoSeguroMs = Math.max(0, tempoDecorridoMs);
+            const tempoDecorridoStr = new Date(tempoSeguroMs).toISOString().substr(11, 8);
+            
+            cronometroEl.innerHTML = `<i class="fas fa-clock"></i> ${tempoDecorridoStr}`;
+        }
+    });
+}
+
+function atualizarFeedbackTempo() {
+    const feedbackEl = document.getElementById('feedbackAtualizacao');
+    if (!feedbackEl || ultimaAtualizacaoTimestamp === null) return;
+
+    const agora = Date.now();
+    const segundosAtras = Math.round((agora - ultimaAtualizacaoTimestamp) / 1000);
+
+    if (segundosAtras < 5) {
+        feedbackEl.textContent = 'Atualizado agora';
+    } else if (segundosAtras < 60) {
+        feedbackEl.textContent = `Atualizado há ${segundosAtras} segundos`;
+    } else {
+        const minutosAtras = Math.floor(segundosAtras / 60);
+        feedbackEl.textContent = `Atualizado há ${minutosAtras} min`;
+    }
+}
+
+/**
+ * Determina o status final de um empregado baseado na hierarquia de regras.
+ */
+function determinarStatusFinal(tiktik) {
+    // 1. Verifica FALTOU (prioridade máxima)
+    const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); // Formato 'YYYY-MM-DD'
+
+    // Compara apenas a parte da data (YYYY-MM-DD) de 'status_data_modificacao'
+    if (tiktik.status_atual === 'FALTOU' && tiktik.status_data_modificacao?.startsWith(hoje)) {
+        return { statusFinal: 'FALTOU', classeStatus: 'status-faltou' };
+    }
+
+    // 2. Verifica pausas automáticas baseadas no horário
+    const agora = new Date();
+    const horaAtualStr = agora.toLocaleTimeString('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+
+    const entrada1 = tiktik.horario_entrada_1;
+    const saida1 = tiktik.horario_saida_1;
+    const entrada2 = tiktik.horario_entrada_2;
+    const saida2 = tiktik.horario_saida_2;
+    const entrada3 = tiktik.horario_entrada_3;
+    const saida3 = tiktik.horario_saida_3;
+    
+    // Define a saída final do dia, considerando os turnos existentes
+    const saidaFinal = saida3 || saida2 || saida1 || '23:59';
+    const entradaInicial = entrada1 || '00:00';
+
+    if (horaAtualStr < entradaInicial || horaAtualStr > saidaFinal) {
+        return { statusFinal: 'FORA DO HORÁRIO', classeStatus: 'status-fora-horario' };
+    }
+    if (saida1 && entrada2 && horaAtualStr > saida1 && horaAtualStr < entrada2) {
+        return { statusFinal: 'ALMOÇO', classeStatus: 'status-almoco' };
+    }
+    if (saida2 && entrada3 && horaAtualStr > saida2 && horaAtualStr < entrada3) {
+        return { statusFinal: 'PAUSA', classeStatus: 'status-pausa' };
+    }
+
+    // 3. Se passou por tudo, usa o status do banco
+    switch (tiktik.status_atual) {
+        case 'TRABALHANDO':
+            return { statusFinal: 'TRABALHANDO', classeStatus: 'status-trabalhando' };
+        case 'LIVRE':
+        default:
+            return { statusFinal: 'LIVRE', classeStatus: 'status-livre' };
+    }
+}
+
+/**
+ * Cria o HTML interno de um card de status de um empregado.
+ */
+function criarHTMLCardStatus(tiktik, statusFinal, classeStatus) {
+    let infoTarefaHTML = '';
+    let botoesAcaoHTML = '';
+
+    if (statusFinal === 'TRABALHANDO') {
+        // Calcula o tempo decorrido uma vez para usar em vários lugares
+        const tempoDecorridoMs = new Date() - new Date(tiktik.data_inicio);
+        const tempoDecorridoStr = new Date(tempoDecorridoMs).toISOString().substr(11, 8);
+        
+        let progresso = 0;
+        let classeProgresso = '';
+        let mediaInfoHTML = '<p class="media-info">Sem média de tempo registrada para este produto.</p>'; // Mensagem padrão
+
+        // Lógica da barra de progresso e texto informativo
+        if (tiktik.media_tempo_por_peca && tiktik.quantidade_entregue > 0) {
+            const tempoMedioTotalSegundos = tiktik.media_tempo_por_peca * tiktik.quantidade_entregue;
+            const tempoDecorridoSegundos = tempoDecorridoMs / 1000;
+            
+            progresso = Math.min(100, (tempoDecorridoSegundos / tempoMedioTotalSegundos) * 100);
+            
+            if (progresso >= 100) {
+                classeProgresso = 'lento';
+            } else if (progresso > 75) {
+                classeProgresso = 'atencao';
+            }
+
+            // Formata o tempo médio para HH:MM:SS para exibição
+            const tempoMedioFormatado = new Date(tempoMedioTotalSegundos * 1000).toISOString().substr(11, 8);
+            mediaInfoHTML = `<p class="media-info">Tempo médio estimado: <strong>${tempoMedioFormatado}</strong></p>`;
+        }
+
+        infoTarefaHTML = `
+            <div class="info-tarefa">
+                <p class="produto-tarefa">${tiktik.produto_nome} ${tiktik.variante ? `(${tiktik.variante})` : ''}</p>
+                <p class="quantidade-tarefa">${tiktik.quantidade_entregue} pçs</p>
+                <div class="cronometro-tarefa">
+                    <i class="fas fa-clock"></i> ${tempoDecorridoStr}
+                </div>
+                <div class="barra-progresso-container">
+                    <div class="barra-progresso ${classeProgresso}" style="width: ${progresso}%;"></div>
+                </div>
+                ${mediaInfoHTML}
+            </div>
+        `;
+        botoesAcaoHTML = `<button class="btn-acao finalizar" data-action="finalizar" data-tiktik-id="${tiktik.id}"><i class="fas fa-check-double"></i> Finalizar Tarefa</button>`;
+
+    } else if (statusFinal === 'LIVRE') {
+        botoesAcaoHTML = `<button class="btn-acao iniciar" data-action="iniciar" data-tiktik-id="${tiktik.id}"><i class="fas fa-play"></i> Atribuir Tarefa</button>`;
+    }
+    
+    // Lógica para o botão de "Marcar Falta"
+    const podeMarcarFalta = ['LIVRE', 'TRABALHANDO', 'FALTOU'].includes(statusFinal);
+    const textoBotaoFalta = statusFinal === 'FALTOU' ? 'Remover Falta' : 'Marcar Falta';
+    const iconeBotaoFalta = statusFinal === 'FALTOU' ? 'fa-user-check' : 'fa-user-slash';
+
+    // Montagem final do HTML do card
+    return `
+        <div class="card-status-header">
+            <img src="${tiktik.avatar_url || '/img/placeholder-image.png'}" alt="Avatar" class="avatar-tiktik" onerror="this.onerror=null; this.src='/img/placeholder-image.png';">
+            <div class="info-empregado">
+                <span class="nome-tiktik">${tiktik.nome}</span>
+                <span class="status-selo ${classeStatus}">${statusFinal.replace('_', ' ')}</span>
+            </div>
+            ${podeMarcarFalta ? `<button class="btn-marcar-falta" data-action="marcar-falta" data-tiktik-id="${tiktik.id}" title="${textoBotaoFalta}"><i class="fas ${iconeBotaoFalta}"></i></button>` : ''}
+        </div>
+        ${infoTarefaHTML}
+        <div class="card-status-footer">
+            ${botoesAcaoHTML}
+        </div>
+    `;
+}
+
+// --- Funções de Manipulação de Ações (Handles) ---
+async function handleAtribuirTarefa(tiktik) {
+    if (!modalAtribuirTarefaElemento) {
+        console.error("FALHA CRÍTICA: O elemento do modal não foi inicializado.");
+        return mostrarMensagem("Erro ao abrir painel (código: M03).", "erro");
+    }
+
+    document.body.appendChild(modalAtribuirTarefaElemento);
+    const modal = modalAtribuirTarefaElemento;
+    
+    const fecharModal = () => {
+        modal.style.display = 'none';
+        if (modal.parentNode === document.body) {
+            document.body.removeChild(modal);
+        }
+    };
+
+    const titulo = modal.querySelector('#modalAtribuirTitulo');
+    const colunaLista = modal.querySelector('.coluna-lista-produtos');
+    const colunaConfirmacao = modal.querySelector('.coluna-confirmacao');
+    const filaWrapper = modal.querySelector('#modalAtribuirFilaWrapper');
+    const formContainer = modal.querySelector('#modalAtribuirFormContainer');
+    const buscaInput = modal.querySelector('#buscaProdutoModal');
+    const paginacaoContainer = modal.querySelector('#modalPaginacaoContainer');
+
+    let todosItensDaFila = [];
+    let itemSelecionado = null;
+    let currentPage = 1;
+    const itemsPerPage = 6;
+
+    // --- INICIALIZAÇÃO E EXIBIÇÃO DO MODAL (FLUXO CORRIGIDO) ---
+    titulo.innerHTML = `Atribuir Tarefa para <span class="nome-destaque-modal">${tiktik.nome}</span>`;
+    buscaInput.value = '';
+    formContainer.innerHTML = `<div class="placeholder-confirmacao"><i class="fas fa-mouse-pointer"></i><p>Selecione um item da lista para começar.</p></div>`;
+    filaWrapper.innerHTML = '<div class="spinner">Carregando fila...</div>';
+    paginacaoContainer.innerHTML = '';
+
+    colunaLista.style.display = 'flex';
+    colunaConfirmacao.style.display = 'flex';
+    
+    modal.querySelector('.popup-overlay').onclick = fecharModal;
+    modal.querySelector('.oa-modal-fechar-btn').onclick = fecharModal;
+    modal.style.display = 'flex';
+
+    const mostrarTela = (tela) => {
+        if (window.innerWidth > 768) return;
+        colunaLista.style.display = (tela === 'lista') ? 'flex' : 'none';
+        colunaConfirmacao.style.display = (tela === 'confirmacao') ? 'flex' : 'none';
+    };
+
+    const renderizarItensPaginados = () => {
+        const termoBusca = buscaInput.value.toLowerCase();
+        const itensFiltrados = todosItensDaFila.filter(item => 
+            item.produto_nome.toLowerCase().includes(termoBusca) ||
+            item.variante.toLowerCase().includes(termoBusca)
+        );
+
+        const totalPages = Math.ceil(itensFiltrados.length / itemsPerPage) || 1;
+        currentPage = Math.min(currentPage, totalPages);
+        const inicio = (currentPage - 1) * itemsPerPage;
+        const fim = inicio + itemsPerPage;
+        const itensDaPagina = itensFiltrados.slice(inicio, fim);
+
+        const produtosEmTrabalho = new Map();
+        statusTiktiksCache
+            .filter(t => t.status_atual === 'TRABALHANDO' && t.produto_id)
+            .forEach(t => {
+                const chave = `${t.produto_id}|${t.variante || '-'}`;
+                if (!produtosEmTrabalho.has(chave)) {
+                    produtosEmTrabalho.set(chave, []);
+                }
+                produtosEmTrabalho.get(chave).push({ nome: t.nome, quantidade: t.quantidade_entregue });
+            });
+
+        filaWrapper.innerHTML = '';
+        if (itensDaPagina.length === 0) {
+            filaWrapper.innerHTML = '<p style="text-align:center; padding: 20px;">Nenhum item encontrado.</p>';
+            paginacaoContainer.style.display = 'none';
+            return;
+        }
+
+        itensDaPagina.forEach(item => {
+            const produtoInfo = todosOsProdutosCadastrados.find(p => p.id == item.produto_id);
+            const imagemSrc = obterImagemProduto(produtoInfo, item.variante);
+            
+            const chaveProduto = `${item.produto_id}|${item.variante || '-'}`;
+            const tarefasAtivas = produtosEmTrabalho.get(chaveProduto);
+
+            let saldoDisplay; // Declarada aqui
+            let classesAdicionais = '';
+            
+            if (tarefasAtivas) {
+                const quantidadeReservada = tarefasAtivas.reduce((total, task) => total + task.quantidade, 0);
+                const saldoDisponivel = item.saldo_para_arrematar - quantidadeReservada;
+
+                saldoDisplay = `Disp: ${saldoDisponivel > 0 ? saldoDisponivel : 0} / ${item.saldo_para_arrematar}`;
+                classesAdicionais = 'em-trabalho-modal';
+            } else {
+                saldoDisplay = `Disp: ${item.saldo_para_arrematar}`;
+            }
+            
+            const cardHTML = `
+                <div class="oa-card-arremate-modal ${classesAdicionais}" data-produto-id="${item.produto_id}" data-variante="${item.variante}">
+                    <img src="${imagemSrc}" alt="${item.produto_nome}" class="oa-card-img" onerror="this.src='/img/placeholder-image.png'">
+                    <div class="oa-card-info">
+                        <h3>${item.produto_nome}</h3>
+                        <p>${item.variante && item.variante !== '-' ? item.variante : 'Padrão'}</p>
+                    </div>
+                    <div class="oa-card-dados-modal">
+                        <span class="valor">${saldoDisplay}</span>
+                    </div>
+                </div>`;
+            filaWrapper.insertAdjacentHTML('beforeend', cardHTML);
+        });
+        
+        filaWrapper.querySelectorAll('.oa-card-arremate-modal').forEach(card => {
+            card.addEventListener('click', () => selecionarItem(card.dataset.produtoId, card.dataset.variante));
+        });
+        
+        renderizarPaginacao(paginacaoContainer, totalPages, currentPage, (page) => {
+            currentPage = page;
+            renderizarItensPaginados();
+        });
+    };
+
+        const selecionarItem = (produtoId, variante) => {
+        filaWrapper.querySelector('.selecionada')?.classList.remove('selecionada');
+        const cardSelecionado = filaWrapper.querySelector(`[data-produto-id="${produtoId}"][data-variante="${variante}"]`);
+        if (cardSelecionado) {
+            cardSelecionado.classList.add('selecionada');
+        }
+
+        itemSelecionado = todosItensDaFila.find(p => p.produto_id == produtoId && p.variante == variante);
+
+        if (itemSelecionado) {
+            const produtoInfo = todosOsProdutosCadastrados.find(p => p.id == itemSelecionado.produto_id);
+            const imagemSrc = obterImagemProduto(produtoInfo, itemSelecionado.variante);
+
+            // Mapa de produtos em trabalho, para garantir a informação mais recente
+            const produtosEmTrabalho = new Map();
+            statusTiktiksCache
+                .filter(t => t.status_atual === 'TRABALHANDO' && t.produto_id)
+                .forEach(t => {
+                    const chave = `${t.produto_id}|${t.variante || '-'}`;
+                    if (!produtosEmTrabalho.has(chave)) {
+                        produtosEmTrabalho.set(chave, []);
+                    }
+                    produtosEmTrabalho.get(chave).push({ nome: t.nome, quantidade: t.quantidade_entregue });
+                });
+
+            const chaveProduto = `${itemSelecionado.produto_id}|${itemSelecionado.variante || '-'}`;
+            const tarefasAtivas = produtosEmTrabalho.get(chaveProduto);
+            
+            let saldoDisponivel = itemSelecionado.saldo_para_arrematar;
+            
+            if (tarefasAtivas) {
+                const quantidadeReservada = tarefasAtivas.reduce((total, task) => total + task.quantidade, 0);
+                saldoDisponivel = itemSelecionado.saldo_para_arrematar - quantidadeReservada;
+            }
+            saldoDisponivel = saldoDisponivel > 0 ? saldoDisponivel : 0; // Garante que não seja negativo
+
+            // Gera a lista de OPs de origem
+            let opsOrigemHTML = '';
+            if (itemSelecionado.ops_detalhe && itemSelecionado.ops_detalhe.length > 0) {
+                const listaOps = itemSelecionado.ops_detalhe
+                    .map(op => `<li>OP ${op.numero} (Saldo: ${op.saldo_op})</li>`)
+                    .join('');
+                opsOrigemHTML = `
+                    <div class="origem-lancamento-container">
+                        <strong>Origem do Lançamento:</strong>
+                        <ul>${listaOps}</ul>
+                    </div>
+                `;
+            }
+
+            formContainer.innerHTML = `
+                <button id="btnVoltarParaLista" class="oa-btn-voltar-mobile"><i class="fas fa-arrow-left"></i> Voltar</button>
+                <img src="${imagemSrc}" alt="Produto" class="img-confirmacao">
+                <h4>${itemSelecionado.produto_nome}</h4>
+                <p>${itemSelecionado.variante && itemSelecionado.variante !== '-' ? itemSelecionado.variante : 'Padrão'}</p>
+                
+                ${opsOrigemHTML} 
+
+                <div class="info-saldo-atribuir">
+                    <div class="saldo-item">
+                        <label>Disponível Agora</label>
+                        <span class="saldo-valor pendente">${saldoDisponivel}</span>
+                    </div>
+                    <div class="saldo-item">
+                        <label>Restará</label>
+                        <span id="saldoRestante" class="saldo-valor restante">--</span>
+                    </div>
+                </div>
+                <div class="oa-form-grupo-atribuir">
+                    <label for="inputQuantidadeAtribuir">Qtd. a Arrematar:</label>
+                    <input type="number" id="inputQuantidadeAtribuir" class="oa-input-tarefas" min="1" max="${saldoDisponivel}" required>
+                </div>
+                <button id="btnConfirmarAtribuicao" class="oa-btn oa-btn-sucesso" disabled><i class="fas fa-check"></i> Confirmar</button>
+            `;
+
+            const inputQtd = formContainer.querySelector('#inputQuantidadeAtribuir');
+            const btnConfirmar = formContainer.querySelector('#btnConfirmarAtribuicao');
+            const saldoRestanteEl = formContainer.querySelector('#saldoRestante');
+
+            formContainer.querySelector('#btnVoltarParaLista').addEventListener('click', () => mostrarTela('lista'));
+            
+            inputQtd.focus();
+            
+            inputQtd.oninput = () => {
+                const qtd = parseInt(inputQtd.value) || 0;
+                const restante = saldoDisponivel - qtd;
+                saldoRestanteEl.textContent = restante >= 0 ? restante : '--';
+                btnConfirmar.disabled = !(qtd > 0 && qtd <= saldoDisponivel);
+            };
+
+            // Passa o 'tiktik' do escopo externo de 'handleAtribuirTarefa'
+            btnConfirmar.onclick = () => confirmarAtribuicao(tiktik, itemSelecionado, parseInt(inputQtd.value));
+            
+            mostrarTela('confirmacao');
+        }
+    };
+
+    const confirmarAtribuicao = async (tiktik, item, quantidade) => {
+        const btnConfirmar = formContainer.querySelector('#btnConfirmarAtribuicao');
+        if (btnConfirmar) {
+            btnConfirmar.disabled = true;
+            btnConfirmar.innerHTML = '<div class="spinner-btn-interno"></div> Confirmando...';
+        }
+        try {
+            const opDeOrigem = item.ops_detalhe.sort((a,b) => a.numero - b.numero)[0];
+            
+            const payload = {
+                usuario_tiktik_id: tiktik.id,
+                produto_id: item.produto_id,
+                variante: item.variante === '-' ? null : item.variante,
+                quantidade_entregue: quantidade,
+                op_numero: opDeOrigem.numero,
+                op_edit_id: opDeOrigem.edit_id,
+                dados_ops: item.ops_detalhe // A chave do sucesso!
+            };
+
+            console.log("🚀 ENVIANDO PAYLOAD:", JSON.stringify(payload, null, 2));
+
+            await fetchFromAPI('/arremates/sessoes/iniciar', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+
+            mostrarMensagem('Tarefa iniciada com sucesso!', 'sucesso');
+            fecharModal();
+            await renderizarPainelStatus();
+            await renderizarItensNaFila(1);
+        } catch (error) {
+            mostrarMensagem(`Deu ruim!!: ${error.message}`, 'erro');
+            if (btnConfirmar) {
+                btnConfirmar.disabled = false;
+                btnConfirmar.innerHTML = '<i class="fas fa-check"></i> Confirmar';
+            }
+        }
+    };
+    
+    titulo.innerHTML = `Atribuir Tarefa para <span class="nome-destaque-modal">${tiktik.nome}</span>`;
+    buscaInput.value = '';
+    formContainer.innerHTML = `<div class="placeholder-confirmacao"><i class="fas fa-mouse-pointer"></i><p>Selecione um item da lista para começar.</p></div>`;
+    colunaLista.style.display = 'flex';
+    colunaConfirmacao.style.display = 'flex';
+    modal.querySelector('.popup-overlay').onclick = fecharModal;
+    modal.querySelector('.oa-modal-fechar-btn').onclick = fecharModal;
+    modal.style.display = 'flex';
+
+    try {
+        const response = await fetchFromAPI('/arremates/fila?fetchAll=true&sortBy=maior_quantidade');
+        todosItensDaFila = response.rows;
+        currentPage = 1;
+        renderizarItensPaginados();
+        buscaInput.oninput = debounce(() => {
+            currentPage = 1;
+            renderizarItensPaginados();
+        }, 300);
+    } catch (error) {
+        console.error("Erro em handleAtribuirTarefa:", error);
+        filaWrapper.innerHTML = `<p class="erro-painel">Erro ao carregar fila de arremates.</p>`;
+    }
+}
+
+async function handleFinalizarTarefa(tiktik) {
+    const mensagem = `Finalizando tarefa para <strong>${tiktik.nome}</strong>.<br>Produto: ${tiktik.produto_nome}<br><br>Confirme a quantidade realmente finalizada:`;
+    
+    const quantidadeFinalizada = await mostrarPromptNumerico(mensagem, {
+        valorInicial: tiktik.quantidade_entregue,
+        tipo: 'info'
+    });
+    
+    // Se o usuário cancelou, a função retorna null
+    if (quantidadeFinalizada === null) {
+        console.log("Finalização de tarefa cancelada pelo usuário.");
+        return; 
+    }
+
+    try {
+        await fetchFromAPI('/arremates/sessoes/finalizar', {
+            method: 'POST',
+            body: JSON.stringify({
+                id_sessao: tiktik.id_sessao,
+                quantidade_finalizada: quantidadeFinalizada
+            })
+        });
+        
+        mostrarMensagem('Tarefa finalizada e arremate registrado!', 'sucesso');
+
+        await renderizarPainelStatus();
+        await renderizarItensNaFila(1);
+
+    } catch (error) {
+        mostrarMensagem(`Erro ao finalizar tarefa: ${error.message}`, 'erro');
+    }
+}
+
+async function handleMarcarFalta(tiktik, statusAtual) {
+    // ✨ LOG DE DEPURAÇÃO 1 ✨
+    console.log("handleMarcarFalta foi chamada com:", { 
+        tiktikNome: tiktik.nome, 
+        tiktikId: tiktik.id,
+        statusAtual: statusAtual 
+    });
+
+    const novoStatus = statusAtual === 'FALTOU' ? 'LIVRE' : 'FALTOU';
+    const acao = novoStatus === 'FALTOU' ? 'registrar a falta' : 'remover a falta';
+    
+    const confirmado = await mostrarConfirmacao(`Deseja ${acao} para ${tiktik.nome} hoje?`);
+    if (!confirmado) {
+        console.log("Ação cancelada pelo usuário.");
+        return;
+    }
+
+    try {
+        // ✨ LOG DE DEPURAÇÃO 2 ✨
+        console.log(`Enviando requisição PUT para /api/arremates/usuarios/${tiktik.id}/status com o body:`, { status: novoStatus });
+
+        await fetchFromAPI(`/arremates/usuarios/${tiktik.id}/status`, {
+            method: 'PUT',
+            body: JSON.stringify({ status: novoStatus })
+        });
+        
+        mostrarMensagem(`Status de ${tiktik.nome} atualizado.`, 'sucesso');
+        
+        await renderizarPainelStatus();
+
+    } catch (error) {
+        // ✨ LOG DE DEPURAÇÃO 3 ✨
+        console.error("Erro em handleMarcarFalta:", error);
+        mostrarMensagem(`Erro ao atualizar status: ${error.message}`, 'erro');
+    }
+}
+
+/**
+ * Inicia ou para o intervalo de atualização automática do painel.
+ */
+function controlarAtualizacaoPainel(iniciar = true) {
+    clearInterval(painelUpdateInterval);
+    clearInterval(cronometrosUpdateInterval);
+    clearInterval(feedbackUpdateInterval);
+
+    if (iniciar) {
+        painelUpdateInterval = setInterval(renderizarPainelStatus, 20000);
+        cronometrosUpdateInterval = setInterval(atualizarCronometros, 1000);
+        feedbackUpdateInterval = setInterval(atualizarFeedbackTempo, 5000); // <<< INICIA O NOVO INTERVALO (a cada 5s)
+    }
+}
+
+async function abrirModoFoco(tiktik) {
+    const modal = document.getElementById('modalModoFoco');
+    if (!modal) return;
+
+    // Preenche os dados básicos e mostra o modal com spinners
+    modal.querySelector('#focoAvatar').src = tiktik.avatar_url || '/img/placeholder-image.png';
+    modal.querySelector('#focoNome').textContent = `Desempenho de ${tiktik.nome}`;
+    modal.querySelector('#focoMetricas').innerHTML = '<div class="spinner"></div>';
+    modal.querySelector('#focoTimeline').innerHTML = '<div class="spinner">Calculando timeline...</div>';
+    modal.querySelector('#focoTarefas').innerHTML = '<div class="spinner"></div>';
+
+    const fecharModal = () => { modal.style.display = 'none'; };
+    modal.querySelector('.popup-overlay').onclick = fecharModal;
+    modal.querySelector('.oa-modal-fechar-btn').onclick = fecharModal;
+    modal.style.display = 'flex';
+
+    try {
+        // Chama a nova API
+        const dados = await fetchFromAPI(`/arremates/desempenho-diario/${tiktik.id}`);
+        
+        // Renderiza as seções com os dados recebidos
+        renderizarMetricasFoco(dados);
+        renderizarTimelineFoco(dados);
+        renderizarTarefasFoco(dados);
+        
+    } catch (error) {
+        mostrarMensagem(`Erro ao carregar dados de desempenho: ${error.message}`, 'erro');
+        fecharModal();
+    }
+}
+
+function renderizarMetricasFoco(dados) {
+    const container = document.getElementById('focoMetricas');
+    const { metricas } = dados;
+    
+    const tempoTrabalhado = new Date(metricas.tempoTotalTrabalhadoSegundos * 1000).toISOString().substr(11, 8);
+    const eficiencia = metricas.eficienciaMediaPorPecaSegundos.toFixed(1);
+
+    container.innerHTML = `
+        <div class="metrica-item">
+            <span class="metrica-valor">${metricas.totalPecasArrematadas}</span>
+            <span class="metrica-label">Peças Arrematadas</span>
+        </div>
+        <div class="metrica-item">
+            <span class="metrica-valor">${tempoTrabalhado}</span>
+            <span class="metrica-label">Tempo Produtivo</span>
+        </div>
+        <div class="metrica-item">
+            <span class="metrica-valor">${eficiencia}s</span>
+            <span class="metrica-label">Média por Peça</span>
+        </div>
+    `;
+}
+
+function renderizarTimelineFoco(dados) {
+    // Esta é uma função complexa. Vamos começar com uma versão simplificada.
+    const container = document.getElementById('focoTimeline');
+    container.innerHTML = `<p style="text-align:center;"><i>(Timeline visual em desenvolvimento)</i></p>`;
+    // A lógica completa para a timeline pode ser um próximo passo.
+}
+
+function renderizarTarefasFoco(dados) {
+    const container = document.getElementById('focoTarefas');
+    const { sessoes } = dados;
+
+    if (sessoes.length === 0) {
+        container.innerHTML = '<p>Nenhuma tarefa finalizada hoje.</p>';
+        return;
+    }
+
+    container.innerHTML = `
+        <table class="oa-tabela-historico">
+            <thead><tr><th>Início</th><th>Produto</th><th>Qtd.</th><th>Duração</th></tr></thead>
+            <tbody>
+                ${sessoes.map(s => `
+                    <tr>
+                        <td>${new Date(s.data_inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</td>
+                        <td>${s.produto_nome} ${s.variante ? `(${s.variante})` : ''}</td>
+                        <td>${s.quantidade_finalizada || 0}</td>
+                        <td>${s.data_fim ? new Date((new Date(s.data_fim) - new Date(s.data_inicio))).toISOString().substr(14, 5) + ' min' : 'Em andamento'}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
 
 // --- Funções de Fetch API (Centralizadas) ---
 async function fetchFromAPI(endpoint, options = {}) {
@@ -120,18 +806,29 @@ async function renderizarItensNaFila(page = 1) {
             limit: itemsPerPageArremateCards
         };
 
-        // <<< CHAMANDO O NOVO ENDPOINT CORRETO >>>
         const response = await fetchFromAPI(`/arremates/fila?${objectToQueryString(params)}`);
         const { rows: agregados, pagination } = response;
 
-        // <<< GUARDE OS TOTAIS AQUI >>>
         totaisDaFilaDeArremate.totalGrupos = pagination.totalItems || 0;
         totaisDaFilaDeArremate.totalPecas = pagination.totalPecas || 0;
         
-        // Atualiza a variável global para ser usada na tela de detalhes
         produtosAgregadosParaArremateGlobal = agregados;
 
-         await atualizarDashboard();
+        await atualizarDashboard();
+
+        const produtosEmTrabalho = new Map();
+        statusTiktiksCache
+            .filter(t => t.status_atual === 'TRABALHANDO' && t.produto_id)
+            .forEach(t => {
+                const chave = `${t.produto_id}|${t.variante || '-'}`;
+                if (!produtosEmTrabalho.has(chave)) {
+                    produtosEmTrabalho.set(chave, []);
+                }
+                produtosEmTrabalho.get(chave).push({ 
+                    nome: t.nome, 
+                    quantidade: t.quantidade_entregue 
+                });
+            });
 
         container.innerHTML = '';
         if (agregados.length === 0) {
@@ -144,9 +841,38 @@ async function renderizarItensNaFila(page = 1) {
             const card = document.createElement('div');
             card.className = 'oa-card-arremate';
 
+            const chaveProduto = `${item.produto_id}|${item.variante || '-'}`;
+            const tarefasAtivas = produtosEmTrabalho.get(chaveProduto);
+
+            let feedbackHTML = '';
+            let saldoPendenteHTML = `<span class="valor total-pendente">${item.saldo_para_arrematar}</span>`;
+
+            if (tarefasAtivas && tarefasAtivas.length > 0) {
+                card.classList.add('em-trabalho');
+                
+                const quantidadeReservada = tarefasAtivas.reduce((total, task) => total + task.quantidade, 0);
+                const saldoDisponivel = item.saldo_para_arrematar - quantidadeReservada;
+
+                saldoPendenteHTML = `
+                    <span class="valor saldo-dinamico disponivel">${saldoDisponivel > 0 ? saldoDisponivel : 0}</span>
+                    <span class="valor saldo-dinamico total">/ ${item.saldo_para_arrematar}</span>
+                `;
+
+                const nomes = tarefasAtivas.map(t => `<strong>${t.nome}</strong> (${t.quantidade} pçs)`).join(', ');
+                feedbackHTML = `<div class="feedback-em-trabalho"><i class="fas fa-cog fa-spin"></i> Em arremate por: ${nomes}</div>`;
+            }
+            
             const produtoInfo = todosOsProdutosCadastrados.find(p => p.id == item.produto_id);
             const imagemSrc = obterImagemProduto(produtoInfo, item.variante);
-            const opsOrigemCount = item.ops_detalhe.length;
+            const opsOrigemCount = item.ops_detalhe?.length || 0;
+            
+            const itemParaDetalhes = {
+                produto_id: item.produto_id,
+                produto: item.produto_nome,
+                variante: item.variante,
+                total_quantidade_pendente_arremate: item.saldo_para_arrematar,
+                ops_detalhe: item.ops_detalhe
+            };
 
             card.innerHTML = `
                 <img src="${imagemSrc}" alt="${item.produto_nome}" class="oa-card-img" onerror="this.src='/img/placeholder-image.png'">
@@ -157,24 +883,16 @@ async function renderizarItensNaFila(page = 1) {
                 <div class="oa-card-dados">
                     <div class="dado-bloco">
                         <span class="label">Pendente:</span>
-                        <span class="valor total-pendente">${item.saldo_para_arrematar}</span>
+                        ${saldoPendenteHTML}
                     </div>
                     <div class="dado-bloco">
                         <span class="label">OPS:</span>
                         <span class="valor">${opsOrigemCount}</span>
                     </div>
                 </div>
+                ${feedbackHTML} 
             `;
             
-            // Prepara o objeto para a tela de detalhes
-            const itemParaDetalhes = {
-                produto_id: item.produto_id,
-                produto: item.produto_nome,
-                variante: item.variante,
-                total_quantidade_pendente_arremate: item.saldo_para_arrematar,
-                ops_detalhe: item.ops_detalhe
-            };
-
             card.dataset.arremateAgregado = JSON.stringify(itemParaDetalhes);
             card.addEventListener('click', handleArremateCardClick);
             container.appendChild(card);
@@ -215,41 +933,28 @@ async function carregarDetalhesArremateView(agregado) {
     document.getElementById('arremateVarianteNomeDetalhe').textContent = agregado.variante && agregado.variante !== '-' ? `(${agregado.variante})` : '';
     document.getElementById('arremateTotalPendenteAgregado').textContent = agregado.total_quantidade_pendente_arremate;
     
-    // Reseta e preenche o formulário da primeira aba (Lançar Arremate)
-    const formLancar = document.getElementById('formLancarArremate');
-    formLancar.reset();
-    
-    const selectUser = document.getElementById('selectUsuarioArremate');
-    selectUser.innerHTML = '<option value="">Selecione o Tiktik</option>';
-    const usuariosTiktik = todosOsUsuarios.filter(u => u.tipos?.includes('tiktik'));
-    usuariosTiktik.forEach(user => selectUser.add(new Option(user.nome, user.id)));
-
-    const inputQtd = document.getElementById('inputQuantidadeArrematar');
-    inputQtd.max = agregado.total_quantidade_pendente_arremate;
-    
-    const btnLancar = document.getElementById('btnLancarArremateAgregado');
-    
-    // Lógica para habilitar/desabilitar o botão de lançar
-    const validarCampos = () => {
-        const usuarioValido = selectUser.value !== '';
-        const qtdValida = parseInt(inputQtd.value) > 0 && parseInt(inputQtd.value) <= agregado.total_quantidade_pendente_arremate;
-        btnLancar.disabled = !(usuarioValido && qtdValida && permissoes.includes('lancar-arremate'));
-    };
-    
-    selectUser.onchange = validarCampos;
-    inputQtd.oninput = validarCampos;
-    validarCampos(); // Validação inicial
-
-    // Reseta o formulário de ajuste (segunda aba)
+    // Reseta o formulário de ajuste (agora a primeira aba visível)
     const formAjuste = document.getElementById('formRegistrarAjuste');
-    formAjuste.reset();
-    document.getElementById('inputQuantidadeAjuste').max = agregado.total_quantidade_pendente_arremate;
+    if (formAjuste) {
+        formAjuste.reset();
+        document.getElementById('inputQuantidadeAjuste').max = agregado.total_quantidade_pendente_arremate;
+    }
     
-    // Define a primeira aba como ativa
+    // Garante que a aba correta esteja ativa
     document.querySelectorAll('.oa-tab-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.oa-tab-panel').forEach(panel => panel.classList.remove('active'));
-    document.querySelector('.oa-tab-btn[data-tab="lancar"]').classList.add('active');
-    document.querySelector('#lancar-tab').classList.add('active');
+    
+    const abaAjusteBtn = document.querySelector('.oa-tab-btn[data-tab="ajuste"]');
+    const abaAjustePanel = document.querySelector('#ajuste-tab');
+
+    if (abaAjusteBtn && abaAjustePanel) {
+        abaAjusteBtn.classList.add('active');
+        abaAjustePanel.classList.add('active');
+    } else {
+        // Se a aba de ajuste não existir, ativa a próxima disponível (histórico)
+        document.querySelector('.oa-tab-btn[data-tab="historico-produto"]')?.classList.add('active');
+        document.querySelector('#historico-produto-tab')?.classList.add('active');
+    }
 }
 
 async function lancarArremateAgregado() {
@@ -754,35 +1459,63 @@ async function handleHashChange() {
 }
 
 function configurarEventListeners() {
-    document.getElementById('fecharArremateDetalheBtn')?.addEventListener('click', () => window.location.hash = '');
-    
-    // Listener do botão de Lançar com verificação de permissão no clique
-    document.getElementById('btnLancarArremateAgregado')?.addEventListener('click', () => {
-        if (!permissoes.includes('lancar-arremate')) {
-            mostrarMensagem('Você não tem permissão para lançar arremates.', 'aviso');
-            return;
-        }
-        lancarArremateAgregado();
-    });
+    // --- LISTENERS PARA ELEMENTOS ESTÁTICOS E GLOBAIS ---
 
-    // --- LÓGICA DAS ABAS DA TELA DE DETALHES ---
+    // Botão para fechar a view de detalhes (quando se usa o hash #)
+    document.getElementById('fecharArremateDetalheBtn')?.addEventListener('click', () => window.location.hash = '');
+
+    // Botão principal para abrir o modal de histórico geral
+    document.getElementById('btnAbrirHistorico')?.addEventListener('click', mostrarHistoricoArremates);
+
+    // Botão para atualizar manualmente o painel de atividades
+    document.getElementById('btnAtualizarPainel')?.addEventListener('click', renderizarPainelStatus);
+
+    // Gerenciador de navegação por hash (#)
+    window.addEventListener('hashchange', handleHashChange);
+
+    // --- LISTENERS PARA A SEÇÃO DE "ITENS NA FILA" (FILTROS) ---
+    const searchInput = document.getElementById('searchProdutoArremate');
+    const ordenacaoSelect = document.getElementById('ordenacaoSelect');
+    const toggleFiltrosBtn = document.getElementById('toggleFiltrosAvancadosBtn');
+    const filtrosContainer = document.getElementById('filtrosAvancadosContainer');
+    const limparFiltrosBtn = document.getElementById('limparFiltrosBtn');
+    const btnAtualizarFila = document.getElementById('btnAtualizarArremates');
+
+    const debouncedRender = debounce(() => renderizarItensNaFila(1), 350);
+
+    if (searchInput) searchInput.addEventListener('input', debouncedRender);
+    if (ordenacaoSelect) ordenacaoSelect.addEventListener('change', () => renderizarItensNaFila(1));
+    if (btnAtualizarFila) btnAtualizarFila.addEventListener('click', () => renderizarItensNaFila(1));
+
+    if (toggleFiltrosBtn && filtrosContainer) {
+        toggleFiltrosBtn.addEventListener('click', () => {
+            filtrosContainer.classList.toggle('hidden');
+        });
+    }
+
+    if (limparFiltrosBtn && searchInput && ordenacaoSelect) {
+        limparFiltrosBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            ordenacaoSelect.value = 'data_op_mais_recente'; // Valor padrão
+            renderizarItensNaFila(1);
+            if (filtrosContainer) filtrosContainer.classList.add('hidden');
+        });
+    }
+    
+    // --- LISTENERS PARA AS ABAS E BOTÕES DENTRO DA VIEW DE DETALHES (#lancar-arremate) ---
+    // Estes listeners são para botões que existem no HTML inicial, mesmo que escondidos.
+    
+    // Lógica das Abas
     const abasContainer = document.querySelector('.oa-tabs');
     if (abasContainer) {
         abasContainer.addEventListener('click', (e) => {
             if (e.target.matches('.oa-tab-btn')) {
                 const tabId = e.target.dataset.tab;
-                
                 document.querySelectorAll('.oa-tab-btn').forEach(btn => btn.classList.remove('active'));
                 e.target.classList.add('active');
-                
                 document.querySelectorAll('.oa-tab-panel').forEach(panel => panel.classList.remove('active'));
-                
-                // <<< CORREÇÃO AQUI, para garantir que o painel correto seja exibido >>>
                 const panelToShow = document.getElementById(`${tabId}-tab`);
-                if (panelToShow) {
-                    panelToShow.classList.add('active');
-                }
-                
+                if (panelToShow) panelToShow.classList.add('active');
                 if (tabId === 'historico-produto' && arremateAgregadoEmVisualizacao) {
                     carregarHistoricoDoProduto(arremateAgregadoEmVisualizacao.produto_id, arremateAgregadoEmVisualizacao.variante, 1);
                 }
@@ -790,16 +1523,16 @@ function configurarEventListeners() {
         });
     }
 
-    // Listeners para o novo modal de perda
-    document.getElementById('btnAbrirModalPerda')?.addEventListener('click', abrirModalPerda);
+
+    // Botão de confirmar ajuste/perda da view de detalhes
+    document.getElementById('btnConfirmarRegistroAjuste')?.addEventListener('click', registrarAjuste);
+
     document.getElementById('btnFecharModalPerda')?.addEventListener('click', fecharModalPerda);
     document.querySelector('#modalRegistrarPerda .oa-popup-overlay')?.addEventListener('click', fecharModalPerda);
-
-    window.addEventListener('hashchange', handleHashChange);
-
-
-    // Conecta o botão de confirmar ajuste à nova função
-    document.getElementById('btnConfirmarRegistroAjuste')?.addEventListener('click', registrarAjuste);
+    document.getElementById('btnConfirmarRegistroPerda')?.addEventListener('click', () => {
+        // Esta função `registrarPerda` precisaria ser definida em algum lugar.
+        // Assumindo que a lógica é similar à de `registrarAjuste`.
+    });
 }
 
 async function carregarHistoricoDoProduto(produtoId, variante, page = 1) {
@@ -878,13 +1611,14 @@ async function inicializarPagina() {
     if (overlay) overlay.classList.remove('hidden');
 
     try {
-        // Agora só carregamos os dados essenciais para a página principal
         await Promise.all([
              obterProdutosDoStorage(true).then(p => { todosOsProdutosCadastrados = p; }),
              fetchFromAPI('/usuarios').then(u => { todosOsUsuarios = u || []; })
         ]);
         
-        // A lógica do histórico só é chamada quando o modal é aberto.
+        await renderizarPainelStatus(); // Carrega o painel pela primeira vez
+        controlarAtualizacaoPainel(true); // Inicia o auto-update
+        
         await handleHashChange();
 
     } catch (error) {
@@ -897,48 +1631,129 @@ async function inicializarPagina() {
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        const auth = await verificarAutenticacao('admin/ordens-de-arremates.html', ['acesso-ordens-de-arremates']);
+        const auth = await verificarAutenticacao('admin/arremates.html', ['acesso-ordens-de-arremates']);
         if (!auth) return;
         usuarioLogado = auth.usuario;
         permissoes = auth.permissoes || [];
         document.body.classList.add('autenticado');
 
-        document.getElementById('btnAbrirHistorico')?.addEventListener('click', mostrarHistoricoArremates);
+        // Inicializa a variável do modal de atribuição para uso global
+        const modalOriginal = document.getElementById('modalAtribuirTarefa');
+            if (modalOriginal) {
+                modalAtribuirTarefaElemento = modalOriginal;
+                modalOriginal.parentNode.removeChild(modalOriginal); // "Sequestra" o elemento
+            } else {
+                console.error("CRÍTICO: Elemento do modal #modalAtribuirTarefa não encontrado no HTML inicial.");
+            }
+
+        // --- DELEGAÇÃO DE EVENTOS PARA ÁREAS DINÂMICAS ---
+
+        // 1. Gerenciador para o Painel de Atividades (Disponíveis e Inativos)
+        const painelDisponiveisContainer = document.getElementById('painelDisponiveisContainer');
+        const painelInativosContainer = document.getElementById('painelInativosContainer');
+
+        const painelClickHandler = async (event) => {
+        // 1. Identifica os elementos clicados
+        // Procura pelo elemento mais próximo com um atributo 'data-action'
+        const actionButton = event.target.closest('[data-action]');
+        // Procura pelo elemento mais próximo que seja o cabeçalho do card
+        const headerDoCard = event.target.closest('.card-status-header');
+
+        // 2. Se não clicou em nada interativo, para a execução
+        // Isso acontece se clicar no fundo do card, por exemplo.
+        if (!actionButton && !headerDoCard) {
+            return;
+        }
+
+        // 3. Encontra o card pai do elemento que foi clicado
+        const card = event.target.closest('.oa-card-status-tiktik');
+        if (!card) return;
+
+        // 4. Pega o ID do tiktik a partir do dataset do card
+        const tiktikId = parseInt(card.dataset.tiktikId);
+        if (!tiktikId) return;
 
 
+        // 5. Decide qual ação tomar com base no que foi clicado
+        try {
+
+                // --- INÍCIO DA CORREÇÃO ---
+
+                // Para QUALQUER ação (foco ou botão), buscamos os dados mais frescos da API
+                // Isso garante que sempre teremos o avatar_url e o status mais recentes.
+                const tiktiksComSessao = await fetchFromAPI('/arremates/status-tiktiks');
+                const tiktikData = tiktiksComSessao.find(t => t.id === tiktikId);
+
+                // Se por algum motivo não encontramos o usuário, paramos aqui.
+                if (!tiktikData) {
+                    throw new Error(`Dados de sessão do tiktik ID ${tiktikId} não encontrados.`);
+                }
+
+                // --- AÇÃO: Abrir o "Modo Foco" ---
+                if (headerDoCard && !actionButton) {
+                    // Agora usamos o `tiktikData` que acabamos de buscar, que contém a URL do avatar correta!
+                    abrirModoFoco(tiktikData);
+                    return; 
+                }
+
+                // --- AÇÃO: Executar um Botão (Iniciar, Finalizar, Marcar Falta) ---
+                if (actionButton) {
+                    const action = actionButton.dataset.action;
+
+                    // Não precisamos mais buscar a API aqui, pois já buscamos acima.
+                    // const tiktiksComSessao = await fetchFromAPI('/arremates/status-tiktiks');
+                    // const tiktikData = tiktiksComSessao.find(t => t.id === tiktikId);
+                    // if (!tiktikData) throw new Error(`Dados de sessão do tiktik ID ${tiktikId} não encontrados.`);
+
+                    switch(action) {
+                        case 'iniciar':
+                            handleAtribuirTarefa(tiktikData);
+                            break;
+                        case 'finalizar':
+                            handleFinalizarTarefa(tiktikData);
+                            break;
+                        case 'marcar-falta':
+                            const statusAtual = determinarStatusFinal(tiktikData).statusFinal;
+                            handleMarcarFalta(tiktikData, statusAtual);
+                            break;
+                    }
+                }
+                
+                // --- FIM DA CORREÇÃO ---
+
+            } catch (error) {
+            mostrarMensagem(`Erro ao processar ação: ${error.message}`, 'erro');
+        }
+    };
+
+        if (painelDisponiveisContainer) painelDisponiveisContainer.addEventListener('click', painelClickHandler);
+        if (painelInativosContainer) painelInativosContainer.addEventListener('click', painelClickHandler);
+
+        // 2. Gerenciador para o Accordion
+        const accordionHeader = document.getElementById('accordionHeader');
+        const accordionContent = document.getElementById('accordionContent');
+        if (accordionHeader && accordionContent) {
+            accordionHeader.addEventListener('click', () => {
+                accordionHeader.classList.toggle('active');
+                if (accordionContent.style.maxHeight) {
+                    accordionContent.style.maxHeight = null;
+                } else {
+                    accordionContent.style.maxHeight = accordionContent.scrollHeight + "px";
+                }
+            });
+        }
+        
+        // --- INICIALIZAÇÃO DA PÁGINA ---
+        
+        // Configura todos os listeners estáticos
         configurarEventListeners();
+        
+        // Carrega os dados iniciais e renderiza as seções dinâmicas
         await inicializarPagina();
+
     } catch(err) {
         console.error("Falha de autenticação ou inicialização", err);
+        const overlay = document.getElementById('paginaLoadingOverlay');
+        if (overlay) overlay.classList.add('hidden');
     }
-
-    // --- NOVOS LISTENERS PARA FILTROS ---
-    const searchInput = document.getElementById('searchProdutoArremate');
-    const ordenacaoSelect = document.getElementById('ordenacaoSelect');
-    const toggleFiltrosBtn = document.getElementById('toggleFiltrosAvancadosBtn');
-    const filtrosContainer = document.getElementById('filtrosAvancadosContainer');
-    const limparFiltrosBtn = document.getElementById('limparFiltrosBtn');
-    const btnAtualizar = document.getElementById('btnAtualizarArremates');
-
-    const debouncedRender = debounce(() => renderizarItensNaFila(1), 350);
-
-    if (searchInput) searchInput.addEventListener('input', debouncedRender);
-    if (ordenacaoSelect) ordenacaoSelect.addEventListener('change', () => renderizarItensNaFila(1));
-    if (btnAtualizar) btnAtualizar.addEventListener('click', () => renderizarItensNaFila(1));
-
-    if (toggleFiltrosBtn && filtrosContainer) {
-        toggleFiltrosBtn.addEventListener('click', () => {
-            filtrosContainer.classList.toggle('hidden');
-        });
-    }
-
-    if (limparFiltrosBtn && searchInput && ordenacaoSelect) {
-        limparFiltrosBtn.addEventListener('click', () => {
-            searchInput.value = '';
-            ordenacaoSelect.value = 'mais_recentes';
-            renderizarItensNaFila(1);
-            if (filtrosContainer) filtrosContainer.classList.add('hidden');
-        });
-    }
-
 });

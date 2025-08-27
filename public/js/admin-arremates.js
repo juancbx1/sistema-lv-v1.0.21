@@ -2,6 +2,10 @@
 import { verificarAutenticacao } from '/js/utils/auth.js';
 import { mostrarMensagem, mostrarConfirmacao, mostrarPromptNumerico } from '/js/utils/popups.js';
 import { obterProdutos as obterProdutosDoStorage } from '/js/utils/storage.js';
+import { renderizarPaginacao } from './utils/Paginacao.js';
+import { inicializarControlador, atualizarDadosControlador } from './utils/ControladorFiltros.js';
+
+
 
 // --- Variáveis Globais --- 
 let usuarioLogado = null;
@@ -243,7 +247,7 @@ function criarHTMLCardStatus(tiktik, statusFinal, classeStatus) {
     // Montagem final do HTML do card
     return `
         <div class="card-status-header">
-            <img src="${tiktik.avatar_url || '/img/placeholder-image.png'}" alt="Avatar" class="avatar-tiktik" onerror="this.onerror=null; this.src='/img/placeholder-image.png';">
+            <img src="${tiktik.avatar_url || '/img/placeholder-image.png'}" alt="Avatar" class="avatar-tiktik oa-avatar-foco" onerror="this.onerror=null; this.src='/img/placeholder-image.png';">
             <div class="info-empregado">
                 <span class="nome-tiktik">${tiktik.nome}</span>
                 <span class="status-selo ${classeStatus}">${statusFinal.replace('_', ' ')}</span>
@@ -264,16 +268,36 @@ async function handleAtribuirTarefa(tiktik) {
         return mostrarMensagem("Erro ao abrir painel (código: M03).", "erro");
     }
 
+    // Garante que o modal esteja no body para ser manipulado
     document.body.appendChild(modalAtribuirTarefaElemento);
+    
+    // A variável 'modal' continua sendo a referência ao container principal
     const modal = modalAtribuirTarefaElemento;
     
     const fecharModal = () => {
         modal.style.display = 'none';
+        // Remove do body após fechar para manter o DOM limpo
         if (modal.parentNode === document.body) {
             document.body.removeChild(modal);
         }
     };
 
+    // Seletores mais seguros com verificação de existência
+    const overlay = modal.querySelector('.popup-overlay');
+    const btnFechar = modal.querySelector('.oa-modal-fechar-btn');
+
+    if (overlay) {
+        overlay.onclick = fecharModal;
+    } else {
+        console.warn("Aviso: O elemento .popup-overlay não foi encontrado no modal de atribuir tarefa.");
+    }
+
+    if (btnFechar) {
+        btnFechar.onclick = fecharModal;
+    } else {
+        console.warn("Aviso: O botão .oa-modal-fechar-btn não foi encontrado no modal de atribuir tarefa.");
+    }
+    
     const titulo = modal.querySelector('#modalAtribuirTitulo');
     const colunaLista = modal.querySelector('.coluna-lista-produtos');
     const colunaConfirmacao = modal.querySelector('.coluna-confirmacao');
@@ -498,8 +522,6 @@ async function handleAtribuirTarefa(tiktik) {
                 dados_ops: item.ops_detalhe // A chave do sucesso!
             };
 
-            console.log("🚀 ENVIANDO PAYLOAD:", JSON.stringify(payload, null, 2));
-
             await fetchFromAPI('/arremates/sessoes/iniciar', {
                 method: 'POST',
                 body: JSON.stringify(payload)
@@ -508,7 +530,7 @@ async function handleAtribuirTarefa(tiktik) {
             mostrarMensagem('Tarefa iniciada com sucesso!', 'sucesso');
             fecharModal();
             await renderizarPainelStatus();
-            await renderizarItensNaFila(1);
+            await forcarAtualizacaoFilaDeArremates();
         } catch (error) {
             mostrarMensagem(`Deu ruim!!: ${error.message}`, 'erro');
             if (btnConfirmar) {
@@ -552,7 +574,6 @@ async function handleFinalizarTarefa(tiktik) {
     
     // Se o usuário cancelou, a função retorna null
     if (quantidadeFinalizada === null) {
-        console.log("Finalização de tarefa cancelada pelo usuário.");
         return; 
     }
 
@@ -568,7 +589,7 @@ async function handleFinalizarTarefa(tiktik) {
         mostrarMensagem('Tarefa finalizada e arremate registrado!', 'sucesso');
 
         await renderizarPainelStatus();
-        await renderizarItensNaFila(1);
+        await forcarAtualizacaoFilaDeArremates();
 
     } catch (error) {
         mostrarMensagem(`Erro ao finalizar tarefa: ${error.message}`, 'erro');
@@ -576,13 +597,6 @@ async function handleFinalizarTarefa(tiktik) {
 }
 
 async function handleMarcarFalta(tiktik, statusAtual) {
-    // ✨ LOG DE DEPURAÇÃO 1 ✨
-    console.log("handleMarcarFalta foi chamada com:", { 
-        tiktikNome: tiktik.nome, 
-        tiktikId: tiktik.id,
-        statusAtual: statusAtual 
-    });
-
     const novoStatus = statusAtual === 'FALTOU' ? 'LIVRE' : 'FALTOU';
     const acao = novoStatus === 'FALTOU' ? 'registrar a falta' : 'remover a falta';
     
@@ -593,9 +607,6 @@ async function handleMarcarFalta(tiktik, statusAtual) {
     }
 
     try {
-        // ✨ LOG DE DEPURAÇÃO 2 ✨
-        console.log(`Enviando requisição PUT para /api/arremates/usuarios/${tiktik.id}/status com o body:`, { status: novoStatus });
-
         await fetchFromAPI(`/arremates/usuarios/${tiktik.id}/status`, {
             method: 'PUT',
             body: JSON.stringify({ status: novoStatus })
@@ -745,6 +756,45 @@ async function fetchFromAPI(endpoint, options = {}) {
     return response.status === 204 ? null : response.json();
 }
 
+// Função que extrai as opções de filtro a partir dos dados brutos
+function extrairOpcoesDeFiltroArremates(itensDaFila) {
+    const produtos = new Set();
+    const cores = new Set();
+    const tamanhos = new Set();
+
+    itensDaFila.forEach(item => {
+        // Agora usamos 'item.produto' porque estamos recebendo a lista já traduzida
+        if (item.produto) {
+            produtos.add(item.produto);
+        }
+
+        // 2. Extrai cores e tamanhos da variante (ex: "Preto | G")
+        if (item.variante && item.variante !== '-') {
+            const partes = item.variante.split('|').map(p => p.trim());
+            partes.forEach(parte => {
+                // Heurística simples para identificar tamanho (pode ajustar se necessário)
+                if (['P', 'M', 'G', 'GG', 'U', 'UNICO'].includes(parte.toUpperCase())) {
+                    tamanhos.add(parte);
+                } else if (parte) { // Se não for tamanho e não for vazio
+                    // Lógica para cores compostas (ex: "Preto com Branco")
+                    const subCores = parte.split(/ com | e /i).map(c => c.trim());
+                    subCores.forEach(subCor => cores.add(subCor));
+                }
+            });
+        }
+    });
+
+    // Converte os Sets para Arrays e os ordena
+    return {
+        produtos: Array.from(produtos).sort(),
+        cores: Array.from(cores).sort(),
+        tamanhos: Array.from(tamanhos).sort((a, b) => { // Ordenação especial para tamanhos
+            const ordem = { 'P': 1, 'M': 2, 'G': 3, 'GG': 4, 'U': 5, 'UNICO': 6 };
+            return (ordem[a.toUpperCase()] || 99) - (ordem[b.toUpperCase()] || 99);
+        }),
+    };
+}
+
 
 function obterQuantidadeFinalProduzida(op) {
     if (!op || !op.etapas || !Array.isArray(op.etapas) || op.etapas.length === 0) {
@@ -766,13 +816,11 @@ function obterQuantidadeFinalProduzida(op) {
 
 function debounce(func, wait) {
     let timeout;
-
     return function executedFunction(...args) {
         const later = () => {
             clearTimeout(timeout);
             func(...args);
         };
-
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
     };
@@ -786,124 +834,70 @@ function objectToQueryString(obj) {
         .join('&');
 }
 
-async function renderizarItensNaFila(page = 1) {
-    currentPageArremateCards = page;
+function renderizarCardsDaPagina(itensParaRenderizar, page = 1) {
     const container = document.getElementById('arremateCardsContainer');
     const paginationContainer = document.getElementById('arrematePaginationContainer');
+    const itemsPerPage = 6;
+
     if (!container || !paginationContainer) return;
 
-    container.innerHTML = '<div class="spinner">Buscando...</div>';
-    paginationContainer.innerHTML = '';
+    const totalItems = itensParaRenderizar.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+    const currentPage = Math.min(page, totalPages);
+    const inicio = (currentPage - 1) * itemsPerPage;
+    const fim = inicio + itemsPerPage;
+    const itensDaPagina = itensParaRenderizar.slice(inicio, fim);
 
-    try {
-        const searchTerm = document.getElementById('searchProdutoArremate').value;
-        const sortBy = document.getElementById('ordenacaoSelect').value;
-        
-        const params = {
-            search: searchTerm,
-            sortBy: sortBy,
-            page: currentPageArremateCards,
-            limit: itemsPerPageArremateCards
-        };
-
-        const response = await fetchFromAPI(`/arremates/fila?${objectToQueryString(params)}`);
-        const { rows: agregados, pagination } = response;
-
-        totaisDaFilaDeArremate.totalGrupos = pagination.totalItems || 0;
-        totaisDaFilaDeArremate.totalPecas = pagination.totalPecas || 0;
-        
-        produtosAgregadosParaArremateGlobal = agregados;
-
-        await atualizarDashboard();
-
-        const produtosEmTrabalho = new Map();
-        statusTiktiksCache
-            .filter(t => t.status_atual === 'TRABALHANDO' && t.produto_id)
-            .forEach(t => {
-                const chave = `${t.produto_id}|${t.variante || '-'}`;
-                if (!produtosEmTrabalho.has(chave)) {
-                    produtosEmTrabalho.set(chave, []);
-                }
-                produtosEmTrabalho.get(chave).push({ 
-                    nome: t.nome, 
-                    quantidade: t.quantidade_entregue 
-                });
-            });
-
-        container.innerHTML = '';
-        if (agregados.length === 0) {
-            container.innerHTML = '<p style="text-align: center; padding: 20px;">Nenhum item aguardando arremate.</p>';
-            paginationContainer.style.display = 'none';
-            return;
-        }
-
-        agregados.forEach(item => {
+    container.innerHTML = '';
+    if (itensDaPagina.length === 0) {
+        container.innerHTML = '<p style="text-align: center; padding: 20px;">Nenhum item encontrado com os filtros aplicados.</p>';
+    } else {
+            itensDaPagina.forEach(item => {
             const card = document.createElement('div');
             card.className = 'oa-card-arremate';
-
-            const chaveProduto = `${item.produto_id}|${item.variante || '-'}`;
-            const tarefasAtivas = produtosEmTrabalho.get(chaveProduto);
-
-            let feedbackHTML = '';
-            let saldoPendenteHTML = `<span class="valor total-pendente">${item.saldo_para_arrematar}</span>`;
-
-            if (tarefasAtivas && tarefasAtivas.length > 0) {
-                card.classList.add('em-trabalho');
-                
-                const quantidadeReservada = tarefasAtivas.reduce((total, task) => total + task.quantidade, 0);
-                const saldoDisponivel = item.saldo_para_arrematar - quantidadeReservada;
-
-                saldoPendenteHTML = `
-                    <span class="valor saldo-dinamico disponivel">${saldoDisponivel > 0 ? saldoDisponivel : 0}</span>
-                    <span class="valor saldo-dinamico total">/ ${item.saldo_para_arrematar}</span>
-                `;
-
-                const nomes = tarefasAtivas.map(t => `<strong>${t.nome}</strong> (${t.quantidade} pçs)`).join(', ');
-                feedbackHTML = `<div class="feedback-em-trabalho"><i class="fas fa-cog fa-spin"></i> Em arremate por: ${nomes}</div>`;
-            }
             
+            // Antes: usava item.produto_nome, item.saldo_para_arrematar
+            // Agora: usa os nomes traduzidos e padronizados
             const produtoInfo = todosOsProdutosCadastrados.find(p => p.id == item.produto_id);
             const imagemSrc = obterImagemProduto(produtoInfo, item.variante);
             const opsOrigemCount = item.ops_detalhe?.length || 0;
             
-            const itemParaDetalhes = {
-                produto_id: item.produto_id,
-                produto: item.produto_nome,
-                variante: item.variante,
-                total_quantidade_pendente_arremate: item.saldo_para_arrematar,
-                ops_detalhe: item.ops_detalhe
-            };
-
             card.innerHTML = `
-                <img src="${imagemSrc}" alt="${item.produto_nome}" class="oa-card-img" onerror="this.src='/img/placeholder-image.png'">
+                <img src="${imagemSrc}" alt="${item.produto}" class="oa-card-img" onerror="...">
                 <div class="oa-card-info">
-                    <h3>${item.produto_nome}</h3>
+                    <h3>${item.produto}</h3>
                     <p>${item.variante && item.variante !== '-' ? item.variante : 'Padrão'}</p>
                 </div>
                 <div class="oa-card-dados">
                     <div class="dado-bloco">
                         <span class="label">Pendente:</span>
-                        ${saldoPendenteHTML}
+                        <span class="valor total-pendente">${item.total_disponivel_para_embalar}</span>
                     </div>
                     <div class="dado-bloco">
                         <span class="label">OPS:</span>
                         <span class="valor">${opsOrigemCount}</span>
                     </div>
                 </div>
-                ${feedbackHTML} 
             `;
-            
+
+            // IMPORTANTE: O dataset para a view de detalhes deve usar os dados ORIGINAIS
+            const itemParaDetalhes = {
+                produto_id: item.produto_id,
+                produto: item.produto_nome, // <--- Usa o nome original aqui
+                variante: item.variante,
+                total_quantidade_pendente_arremate: item.saldo_para_arrematar, // <--- Usa o nome original aqui
+                ops_detalhe: item.ops_detalhe
+            };
             card.dataset.arremateAgregado = JSON.stringify(itemParaDetalhes);
             card.addEventListener('click', handleArremateCardClick);
             container.appendChild(card);
         });
-        
-        renderizarPaginacao(paginationContainer, pagination.totalPages, pagination.currentPage, renderizarItensNaFila);
-
-    } catch (error) {
-        console.error("Erro ao renderizar itens da fila de arremate:", error);
-        container.innerHTML = `<p style="text-align: center; color: red;">Falha ao carregar itens. Tente novamente.</p>`;
     }
+
+    const paginacaoCallback = (newPage) => {
+        renderizarCardsDaPagina(itensParaRenderizar, newPage);
+    };
+    renderizarPaginacao(paginationContainer, totalPages, currentPage, paginacaoCallback);
 }
 
 function renderizarViewPrincipal() {
@@ -918,42 +912,33 @@ function handleArremateCardClick(event) {
     const card = event.currentTarget;
     const agregadoString = card.dataset.arremateAgregado;
     if (!agregadoString) return;
-    
     arremateAgregadoEmVisualizacao = JSON.parse(agregadoString);
     localStorage.setItem('arremateDetalheAtual', agregadoString);
     window.location.hash = '#lancar-arremate';
 }
 
 async function carregarDetalhesArremateView(agregado) {
-    // Preenche o cabeçalho
+    document.getElementById('arrematesListView').style.display = 'none';
+    document.getElementById('arremateDetalheView').classList.remove('hidden');
+
     const produtoInfo = todosOsProdutosCadastrados.find(p => p.id == agregado.produto_id);
     const imagemSrc = obterImagemProduto(produtoInfo, agregado.variante);
     document.getElementById('arremateDetalheThumbnail').innerHTML = `<img src="${imagemSrc}" alt="${agregado.produto}" onerror="this.src='/img/placeholder-image.png'">`;
     document.getElementById('arremateProdutoNomeDetalhe').textContent = agregado.produto;
     document.getElementById('arremateVarianteNomeDetalhe').textContent = agregado.variante && agregado.variante !== '-' ? `(${agregado.variante})` : '';
     document.getElementById('arremateTotalPendenteAgregado').textContent = agregado.total_quantidade_pendente_arremate;
-    
-    // Reseta o formulário de ajuste (agora a primeira aba visível)
     const formAjuste = document.getElementById('formRegistrarAjuste');
     if (formAjuste) {
         formAjuste.reset();
         document.getElementById('inputQuantidadeAjuste').max = agregado.total_quantidade_pendente_arremate;
     }
-    
-    // Garante que a aba correta esteja ativa
     document.querySelectorAll('.oa-tab-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.oa-tab-panel').forEach(panel => panel.classList.remove('active'));
-    
     const abaAjusteBtn = document.querySelector('.oa-tab-btn[data-tab="ajuste"]');
     const abaAjustePanel = document.querySelector('#ajuste-tab');
-
     if (abaAjusteBtn && abaAjustePanel) {
         abaAjusteBtn.classList.add('active');
         abaAjustePanel.classList.add('active');
-    } else {
-        // Se a aba de ajuste não existir, ativa a próxima disponível (histórico)
-        document.querySelector('.oa-tab-btn[data-tab="historico-produto"]')?.classList.add('active');
-        document.querySelector('#historico-produto-tab')?.classList.add('active');
     }
 }
 
@@ -1119,30 +1104,6 @@ function paginarArray(array, page, itemsPerPage) {
     };
 }
 
-function renderizarPaginacao(container, totalPages, currentPage, callback) {
-    container.innerHTML = '';
-    if (totalPages <= 1) {
-        container.style.display = 'none';
-        return;
-    }
-    container.style.display = 'flex';
-
-    const criarBtn = (texto, page, isDisabled) => {
-        const btn = document.createElement('button');
-        btn.className = 'pagination-btn';
-        btn.textContent = texto;
-        btn.disabled = isDisabled;
-        btn.onclick = () => callback(page);
-        return btn;
-    };
-
-    container.appendChild(criarBtn('Anterior', currentPage - 1, currentPage === 1));
-    const pageInfo = document.createElement('span');
-    pageInfo.className = 'pagination-current';
-    pageInfo.textContent = `Pág. ${currentPage} de ${totalPages}`;
-    container.appendChild(pageInfo);
-    container.appendChild(criarBtn('Próximo', currentPage + 1, currentPage === totalPages));
-}
 
 function obterImagemProduto(produtoInfo, varianteNome) {
     if (!produtoInfo) return '/img/placeholder-image.png';
@@ -1181,8 +1142,7 @@ async function handleEstornoClick(event) {
         // com os dados da página atual em que estava, usando a variável de estado correta.
         await buscarErenderizarHistoricoArremates(HISTORICO_ARREMATES_STATE.currentPage);
 
-        // E também forçamos a atualização da lista principal da página
-        await renderizarItensNaFila(1);
+        await forcarAtualizacaoFilaDeArremates();
 
     } catch (error) {
         mostrarMensagem(`Erro ao estornar: ${error.message}`, 'erro');
@@ -1428,84 +1388,40 @@ async function handleHashChange() {
     const arrematesListView = document.getElementById('arrematesListView');
     const arremateDetalheView = document.getElementById('arremateDetalheView');
 
-    arrematesListView.classList.add('hidden');
-    arremateDetalheView.classList.add('hidden');
-
-    try {
-        if (hash === '#lancar-arremate') {
-            const data = localStorage.getItem('arremateDetalheAtual');
-            if (data) {
-                arremateDetalheView.classList.remove('hidden');
-                await carregarDetalhesArremateView(JSON.parse(data));
-            } else {
-                window.location.hash = '';
-            }
+    if (hash === '#lancar-arremate') {
+        arrematesListView.style.display = 'none';
+        const data = localStorage.getItem('arremateDetalheAtual');
+        if (data) {
+            arremateDetalheView.classList.remove('hidden');
+            await carregarDetalhesArremateView(JSON.parse(data));
         } else {
+            window.location.hash = '';
+        }
+    } else {
+        arremateDetalheView.classList.add('hidden');
+        arrematesListView.style.display = 'block';
         localStorage.removeItem('arremateDetalheAtual');
-        arremateAgregadoEmVisualizacao = null; // Limpa o estado global
-
-        arrematesListView.classList.remove('hidden');
+        arremateAgregadoEmVisualizacao = null;
         
-        // Ela já busca os dados da API e renderiza tudo.
-        // O spinner já é colocado dentro da própria função `renderizarItensNaFila`.
-        await renderizarItensNaFila(1); // O '1' significa que sempre voltamos para a primeira página da lista.
-        await atualizarDashboard();
-
-    }
-    } catch (e) {
-        console.error("Erro no roteamento de hash:", e);
-        mostrarMensagem(`Erro ao navegar: ${e.message}`, 'erro');
     }
 }
 
 function configurarEventListeners() {
-    // --- LISTENERS PARA ELEMENTOS ESTÁTICOS E GLOBAIS ---
-
     // Botão para fechar a view de detalhes (quando se usa o hash #)
     document.getElementById('fecharArremateDetalheBtn')?.addEventListener('click', () => window.location.hash = '');
 
-    // Botão principal para abrir o modal de histórico geral
-    document.getElementById('btnAbrirHistorico')?.addEventListener('click', mostrarHistoricoArremates);
+    // Botão principal para abrir o modal de histórico geral (agora no header React)
+    // Usamos 'document' para o listener funcionar mesmo que o botão seja renderizado depois
+    document.addEventListener('click', (event) => {
+        if (event.target.closest('#btnAbrirHistorico')) {
+            mostrarHistoricoArremates(); // Sua função para abrir o modal
+        }
+    });
 
     // Botão para atualizar manualmente o painel de atividades
     document.getElementById('btnAtualizarPainel')?.addEventListener('click', renderizarPainelStatus);
-
-    // Gerenciador de navegação por hash (#)
-    window.addEventListener('hashchange', handleHashChange);
-
-    // --- LISTENERS PARA A SEÇÃO DE "ITENS NA FILA" (FILTROS) ---
-    const searchInput = document.getElementById('searchProdutoArremate');
-    const ordenacaoSelect = document.getElementById('ordenacaoSelect');
-    const toggleFiltrosBtn = document.getElementById('toggleFiltrosAvancadosBtn');
-    const filtrosContainer = document.getElementById('filtrosAvancadosContainer');
-    const limparFiltrosBtn = document.getElementById('limparFiltrosBtn');
-    const btnAtualizarFila = document.getElementById('btnAtualizarArremates');
-
-    const debouncedRender = debounce(() => renderizarItensNaFila(1), 350);
-
-    if (searchInput) searchInput.addEventListener('input', debouncedRender);
-    if (ordenacaoSelect) ordenacaoSelect.addEventListener('change', () => renderizarItensNaFila(1));
-    if (btnAtualizarFila) btnAtualizarFila.addEventListener('click', () => renderizarItensNaFila(1));
-
-    if (toggleFiltrosBtn && filtrosContainer) {
-        toggleFiltrosBtn.addEventListener('click', () => {
-            filtrosContainer.classList.toggle('hidden');
-        });
-    }
-
-    if (limparFiltrosBtn && searchInput && ordenacaoSelect) {
-        limparFiltrosBtn.addEventListener('click', () => {
-            searchInput.value = '';
-            ordenacaoSelect.value = 'data_op_mais_recente'; // Valor padrão
-            renderizarItensNaFila(1);
-            if (filtrosContainer) filtrosContainer.classList.add('hidden');
-        });
-    }
     
     // --- LISTENERS PARA AS ABAS E BOTÕES DENTRO DA VIEW DE DETALHES (#lancar-arremate) ---
-    // Estes listeners são para botões que existem no HTML inicial, mesmo que escondidos.
-    
-    // Lógica das Abas
     const abasContainer = document.querySelector('.oa-tabs');
     if (abasContainer) {
         abasContainer.addEventListener('click', (e) => {
@@ -1523,17 +1439,17 @@ function configurarEventListeners() {
         });
     }
 
-
     // Botão de confirmar ajuste/perda da view de detalhes
     document.getElementById('btnConfirmarRegistroAjuste')?.addEventListener('click', registrarAjuste);
 
-    document.getElementById('btnFecharModalPerda')?.addEventListener('click', fecharModalPerda);
-    document.querySelector('#modalRegistrarPerda .oa-popup-overlay')?.addEventListener('click', fecharModalPerda);
-    document.getElementById('btnConfirmarRegistroPerda')?.addEventListener('click', () => {
-        // Esta função `registrarPerda` precisaria ser definida em algum lugar.
-        // Assumindo que a lógica é similar à de `registrarAjuste`.
+    window.addEventListener('forcarAtualizacaoFila', () => {
+    // Usamos o 'then' para mostrar a mensagem apenas depois que a atualização terminar
+    forcarAtualizacaoFilaDeArremates().then(() => {
+        mostrarMensagem('Fila de arremates atualizada!', 'sucesso', 2000);
     });
+});
 }
+
 
 async function carregarHistoricoDoProduto(produtoId, variante, page = 1) {
     const container = document.getElementById('historicoProdutoContainer');
@@ -1629,7 +1545,39 @@ async function inicializarPagina() {
     }
 }
 
+async function forcarAtualizacaoFilaDeArremates() {
+    try {
+        const respostaFila = await fetchFromAPI('/arremates/fila?fetchAll=true');
+        const itensOriginaisDaFila = respostaFila.rows || [];
+
+        // >>>>> A MESMA LÓGICA DE TRADUÇÃO DA INICIALIZAÇÃO <<<<<
+        const itensTraduzidosParaControlador = itensOriginaisDaFila.map(item => ({
+            produto: item.produto_nome,
+            variante: item.variante,
+            total_disponivel_para_embalar: item.saldo_para_arrematar,
+            data_lancamento_mais_recente: item.data_op_mais_recente,
+            data_lancamento_mais_antiga: item.data_op_mais_recente,
+            ...item
+        }));
+
+        // Agora entregamos os dados JÁ TRADUZIDOS para o controlador
+        atualizarDadosControlador(itensTraduzidosParaControlador);
+        
+        // Atualiza o dashboard
+        totaisDaFilaDeArremate.totalGrupos = itensOriginaisDaFila.length;
+        totaisDaFilaDeArremate.totalPecas = itensOriginaisDaFila.reduce((acc, item) => acc + item.saldo_para_arrematar, 0);
+        await atualizarDashboard();
+
+    } catch (error) {
+        console.error("Erro ao forçar atualização da fila de arremates:", error);
+        mostrarMensagem("Não foi possível atualizar a lista de itens.", "erro");
+    }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
+    const carregamentoEl = document.getElementById('carregamentoGlobal');
+    const conteudoEl = document.getElementById('conteudoPrincipal');
+  
     try {
         const auth = await verificarAutenticacao('admin/arremates.html', ['acesso-ordens-de-arremates']);
         if (!auth) return;
@@ -1637,99 +1585,121 @@ document.addEventListener('DOMContentLoaded', async () => {
         permissoes = auth.permissoes || [];
         document.body.classList.add('autenticado');
 
-        // Inicializa a variável do modal de atribuição para uso global
+        // ADICIONADO DE VOLTA: "Sequestra" o modal de atribuição de tarefa
         const modalOriginal = document.getElementById('modalAtribuirTarefa');
-            if (modalOriginal) {
-                modalAtribuirTarefaElemento = modalOriginal;
-                modalOriginal.parentNode.removeChild(modalOriginal); // "Sequestra" o elemento
-            } else {
-                console.error("CRÍTICO: Elemento do modal #modalAtribuirTarefa não encontrado no HTML inicial.");
-            }
-
-        // --- DELEGAÇÃO DE EVENTOS PARA ÁREAS DINÂMICAS ---
-
-        // 1. Gerenciador para o Painel de Atividades (Disponíveis e Inativos)
-        const painelDisponiveisContainer = document.getElementById('painelDisponiveisContainer');
-        const painelInativosContainer = document.getElementById('painelInativosContainer');
-
-        const painelClickHandler = async (event) => {
-        // 1. Identifica os elementos clicados
-        // Procura pelo elemento mais próximo com um atributo 'data-action'
-        const actionButton = event.target.closest('[data-action]');
-        // Procura pelo elemento mais próximo que seja o cabeçalho do card
-        const headerDoCard = event.target.closest('.card-status-header');
-
-        // 2. Se não clicou em nada interativo, para a execução
-        // Isso acontece se clicar no fundo do card, por exemplo.
-        if (!actionButton && !headerDoCard) {
-            return;
+        if (modalOriginal) {
+            modalAtribuirTarefaElemento = modalOriginal;
+            modalOriginal.parentNode.removeChild(modalOriginal);
+        } else {
+            console.error("CRÍTICO: Elemento do modal #modalAtribuirTarefa não encontrado no HTML inicial.");
         }
 
-        // 3. Encontra o card pai do elemento que foi clicado
-        const card = event.target.closest('.oa-card-status-tiktik');
-        if (!card) return;
+        // 1. CARREGAMENTO DE DADOS ESSENCIAIS
+        const [produtosCadastrados, respostaFila, usuarios] = await Promise.all([
+            obterProdutosDoStorage(true),
+            fetchFromAPI('/arremates/fila?fetchAll=true'),
+            fetchFromAPI('/usuarios')
+        ]);
+        
+        todosOsProdutosCadastrados = produtosCadastrados || [];
+        todosOsUsuarios = usuarios || [];
+        const itensOriginaisDaFila = respostaFila.rows || [];
 
-        // 4. Pega o ID do tiktik a partir do dataset do card
-        const tiktikId = parseInt(card.dataset.tiktikId);
-        if (!tiktikId) return;
+        // >>>>> A MÁGICA ACONTECE AQUI: A TRADUÇÃO <<<<<
+        const itensTraduzidosParaControlador = itensOriginaisDaFila.map(item => ({
+            // Mapeia os campos de Arremate para os campos que o Controlador espera
+            produto: item.produto_nome,
+            variante: item.variante, // <--- Mantém o mesmo nome
+            total_disponivel_para_embalar: item.saldo_para_arrematar,
+            data_lancamento_mais_recente: item.data_op_mais_recente,
+            data_lancamento_mais_antiga: item.data_op_mais_recente,
 
+            // Mantém os dados originais que usamos em outras partes do código
+            ...item
+        }));
 
-        // 5. Decide qual ação tomar com base no que foi clicado
-        try {
+        // 2. EXTRAIR OPÇÕES DE FILTRO
+        // Agora usamos os dados JÁ traduzidos para extrair os filtros
+        const opcoesDeFiltro = extrairOpcoesDeFiltroArremates(itensTraduzidosParaControlador);
 
-                // --- INÍCIO DA CORREÇÃO ---
+        // 3. RENDERIZAÇÃO DOS COMPONENTES REACT
+        if (window.renderizarComponentesReactArremates) {
+            window.renderizarComponentesReactArremates({ opcoesDeFiltro });
+        } else {
+            console.error("ERRO: A função de renderização do React para Arremates não foi encontrada.");
+        }
 
-                // Para QUALQUER ação (foco ou botão), buscamos os dados mais frescos da API
-                // Isso garante que sempre teremos o avatar_url e o status mais recentes.
+        // 4. INICIALIZAÇÃO DO CONTROLADOR
+        // Agora passamos os dados traduzidos. O controlador vai entender perfeitamente.
+        inicializarControlador({
+            dadosCompletos: itensTraduzidosParaControlador,
+            renderizarResultados: renderizarCardsDaPagina,
+            camposParaBusca: ['produto', 'variante'], // Agora usamos os nomes traduzidos
+        });
+
+        // 5. ATUALIZAÇÃO DO DASHBOARD E PAINEL TIKTIK
+        await atualizarDashboard();
+        await renderizarPainelStatus();
+        controlarAtualizacaoPainel(true); // Inicia o auto-update do painel de tiktiks
+
+        // 6. CONFIGURAÇÃO DE TODOS OS EVENT LISTENERS
+        configurarEventListeners();
+
+        //  Delegação de eventos para o painel de atividades e accordion
+        const painelDisponiveisContainer = document.getElementById('painelDisponiveisContainer');
+        const painelInativosContainer = document.getElementById('painelInativosContainer');
+        const painelClickHandler = async (event) => {
+            // 1. Identifica os elementos clicados
+            const actionButton = event.target.closest('[data-action]');
+            
+            // MODIFICADO: Agora procuramos especificamente pelo avatar
+            const avatarClicado = event.target.closest('.oa-avatar-foco');
+
+            // 2. Se não clicou em nada interativo (botão ou avatar), para a execução
+            if (!actionButton && !avatarClicado) {
+                return;
+            }
+
+            // 3. Encontra o card pai do elemento que foi clicado
+            const card = event.target.closest('.oa-card-status-tiktik');
+            if (!card) return;
+
+            // 4. Pega o ID do tiktik a partir do dataset do card
+            const tiktikId = parseInt(card.dataset.tiktikId);
+            if (!tiktikId) return;
+
+            // 5. Decide qual ação tomar com base no que foi clicado
+            try {
                 const tiktiksComSessao = await fetchFromAPI('/arremates/status-tiktiks');
                 const tiktikData = tiktiksComSessao.find(t => t.id === tiktikId);
-
-                // Se por algum motivo não encontramos o usuário, paramos aqui.
-                if (!tiktikData) {
-                    throw new Error(`Dados de sessão do tiktik ID ${tiktikId} não encontrados.`);
-                }
+                if (!tiktikData) throw new Error(`Dados do tiktik ID ${tiktikId} não encontrados.`);
 
                 // --- AÇÃO: Abrir o "Modo Foco" ---
-                if (headerDoCard && !actionButton) {
-                    // Agora usamos o `tiktikData` que acabamos de buscar, que contém a URL do avatar correta!
+                // MODIFICADO: A condição agora é se o avatar foi clicado
+                if (avatarClicado) {
                     abrirModoFoco(tiktikData);
                     return; 
                 }
 
-                // --- AÇÃO: Executar um Botão (Iniciar, Finalizar, Marcar Falta) ---
+                // --- AÇÃO: Executar um Botão ---
                 if (actionButton) {
                     const action = actionButton.dataset.action;
-
-                    // Não precisamos mais buscar a API aqui, pois já buscamos acima.
-                    // const tiktiksComSessao = await fetchFromAPI('/arremates/status-tiktiks');
-                    // const tiktikData = tiktiksComSessao.find(t => t.id === tiktikId);
-                    // if (!tiktikData) throw new Error(`Dados de sessão do tiktik ID ${tiktikId} não encontrados.`);
-
                     switch(action) {
-                        case 'iniciar':
-                            handleAtribuirTarefa(tiktikData);
-                            break;
-                        case 'finalizar':
-                            handleFinalizarTarefa(tiktikData);
-                            break;
+                        case 'iniciar': handleAtribuirTarefa(tiktikData); break;
+                        case 'finalizar': handleFinalizarTarefa(tiktikData); break;
                         case 'marcar-falta':
                             const statusAtual = determinarStatusFinal(tiktikData).statusFinal;
                             handleMarcarFalta(tiktikData, statusAtual);
                             break;
                     }
                 }
-                
-                // --- FIM DA CORREÇÃO ---
-
             } catch (error) {
-            mostrarMensagem(`Erro ao processar ação: ${error.message}`, 'erro');
-        }
-    };
-
+                mostrarMensagem(`Erro ao processar ação: ${error.message}`, 'erro');
+            }
+        };
         if (painelDisponiveisContainer) painelDisponiveisContainer.addEventListener('click', painelClickHandler);
         if (painelInativosContainer) painelInativosContainer.addEventListener('click', painelClickHandler);
 
-        // 2. Gerenciador para o Accordion
         const accordionHeader = document.getElementById('accordionHeader');
         const accordionContent = document.getElementById('accordionContent');
         if (accordionHeader && accordionContent) {
@@ -1742,18 +1712,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             });
         }
-        
-        // --- INICIALIZAÇÃO DA PÁGINA ---
-        
-        // Configura todos os listeners estáticos
-        configurarEventListeners();
-        
-        // Carrega os dados iniciais e renderiza as seções dinâmicas
-        await inicializarPagina();
 
-    } catch(err) {
-        console.error("Falha de autenticação ou inicialização", err);
-        const overlay = document.getElementById('paginaLoadingOverlay');
-        if (overlay) overlay.classList.add('hidden');
-    }
+        // 7. NAVEGAÇÃO
+        window.addEventListener('hashchange', handleHashChange);
+        await handleHashChange(); // Executa na primeira carga para verificar o hash inicial
+
+   } catch (error) {
+    console.error("[DOMContentLoaded Arremates] Erro crítico na inicialização:", error);
+    mostrarMensagem("Erro crítico ao carregar a página. Tente recarregar.", "erro");
+  } finally {
+    if (carregamentoEl) carregamentoEl.classList.remove('visivel');
+    if (conteudoEl) conteudoEl.classList.remove('gs-conteudo-carregando');
+  }
 });

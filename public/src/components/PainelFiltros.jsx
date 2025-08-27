@@ -42,7 +42,7 @@ function PainelFiltros({ opcoesDeFiltro, onFiltrosChange }) {
   const [produtosSelecionados, setProdutosSelecionados] = useState([]);
   const [coresSelecionadas, setCoresSelecionadas] = useState([]);
   const [tamanhosSelecionados, setTamanhosSelecionados] = useState([]);
-  const [ordenacao, setOrdenacao] = useState('padrao');
+  const [ordenacao, setOrdenacao] = useState('mais_recentes');
   
   const [filtrosMobileAberto, setFiltrosMobileAberto] = useState(false);
   
@@ -218,8 +218,9 @@ function PainelFiltros({ opcoesDeFiltro, onFiltrosChange }) {
           <div className="gs-filtro-secao">
             <h4 className="gs-filtro-titulo">Ordenar por</h4>
             <select className="gs-select" value={ordenacao} onChange={e => setOrdenacao(e.target.value)}>
-              <option value="padrao">Padrão (Mais Antigos)</option>
-              <option value="mais_recentes">Mais Recentes</option>
+              {/* MODIFICADO: O valor padrão agora é 'mais_recentes' */}
+              <option value="mais_recentes">Padrão (Mais Recentes)</option>
+              <option value="mais_antigos">Mais Antigos</option>
               <option value="maior_quantidade">Maior Quantidade</option>
               <option value="menor_quantidade">Menor Quantidade</option>
             </select>

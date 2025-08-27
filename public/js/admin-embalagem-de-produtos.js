@@ -1654,12 +1654,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 3.5: EXTRAIR FILTROS
     const opcoesDeFiltro = extrairOpcoesDeFiltro(todosOsProdutosDaFila);
 
-    // 4. INICIALIZAÇÃO DO SISTEMA DE FILTROS
-    // Entregamos os dados brutos ao controlador. Ele fará a primeira renderização.
+    // 4. INICIALIZAÇÃO DO SISTEMA DE FILTROS PARA EMBALAGENS
     inicializarControlador({
         dadosCompletos: todosOsProdutosDaFila,
         renderizarResultados: renderizarCardsDaPagina,
-        camposParaBusca: ['produto', 'variante', 'sku']
+        // Mapeamento para os dados da Embalagem
+        mapeamentoDeCampos: {
+            busca: ['produto', 'variante', 'sku'],
+            produto: 'produto',
+            variante: 'variante',
+            quantidade: 'total_disponivel_para_embalar',
+            dataRecente: 'data_lancamento_mais_recente',
+            dataAntiga: 'data_lancamento_mais_antiga'
+        }
     });
 
     // 5. ATUALIZAÇÃO DOS WIDGETS (CONTADORES)

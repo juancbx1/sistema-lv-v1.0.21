@@ -982,17 +982,4 @@ body.autenticado {
     .gs-acao-card span {
         font-size: 0.75rem; /* Fonte bem pequena */
     }
-
-     /* Estilo para o botão de histórico (e outros botões com ícone) no mobile */
-    .gs-btn-com-icone {
-      width: 44px;
-      height: 44px;
-      padding: 0;
-      border-radius: 50%;
-    }
-
-    /* Esconde o texto dentro do botão */
-    .gs-btn-com-icone span {
-      display: none;
-    }
 }

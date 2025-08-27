@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Arremates</title>
-    <link rel="stylesheet" href="/css/arremates.css"> 
+    <link rel="stylesheet" href="/css/global-style.css">
     <link rel="stylesheet" href="/css/menu-lateral.css">
+    <link rel="stylesheet" href="/css/arremates.css"> 
     <link rel="stylesheet" href="/css/popups.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
@@ -15,360 +16,259 @@
         <i class="fas fa-times"></i>
     </div>
 
-    <main class="oa-container-principal">
-        <!-- NOVO: Overlay de carregamento da página inteira -->
-        <div id="paginaLoadingOverlay" class="oa-page-loading-overlay">
-            <div class="spinner">Carregando dados...</div>
-        </div>
+    <!-- SPINNER GLOBAL PADRONIZADO -->
+    <div id="carregamentoGlobal" class="gs-carregamento-global-container visivel">
+        <div class="gs-spinner-global"></div>
+    </div>
 
-    <!-- O resto do seu código continua aqui... -->
-        <!-- NOVO: "Card Mestre" que engloba todo o conteúdo da página -->
+    <main id="conteudoPrincipal" class="oa-container-principal gs-conteudo-carregando">
         <div class="oa-main-content-card">
 
-            <!-- View Principal: Lista de Arremates -->
+            <!-- ======================================================= -->
+            <!-- TELA 1: LISTA DE ARREMATES (FICA VISÍVEL POR PADRÃO)   -->
+            <!-- ======================================================= -->
             <section id="arrematesListView">
-                <div class="oa-cabecalho-pagina">
-                    <h1>Arremates</h1>
-                    <div class="oa-botoes-cabecalho">
-                        <button id="btnAbrirHistorico" class="oa-btn oa-btn-secundario">
-                            <i class="fas fa-clipboard-list"></i> 
-                            <span>Histórico</span>
+                <!-- Portal para o Header React -->
+                <div id="header-root"></div>
+                
+                <!-- Painel de Informações (Dashboard) -->
+                <div class="oa-painel-info-container">
+                    <div class="oa-info-card principal">
+                        <i class="fas fa-box-open oa-info-card-icone"></i>
+                        <h3>Produtos na Fila</h3>
+                        <span class="oa-info-card-contador" id="contadorProdutosFila">0</span>
+                        <p class="oa-info-card-descricao">Grupos de produto/variação pendentes.</p>
+                    </div>
+                    <div class="oa-info-card alerta">
+                        <i class="fas fa-boxes oa-info-card-icone"></i>
+                        <h3>Peças Pendentes</h3>
+                        <span class="oa-info-card-contador" id="contadorPecasPendentes">0</span>
+                        <p class="oa-info-card-descricao">Soma de todas as unidades a arrematar.</p>
+                    </div>
+                    <div class="oa-info-card sucesso">
+                        <i class="fas fa-check-double oa-info-card-icone"></i>
+                        <h3>Arrematado Hoje</h3>
+                        <span class="oa-info-card-contador" id="contadorArrematadoHoje">0</span>
+                        <p class="oa-info-card-descricao">Total de unidades lançadas hoje.</p>
+                    </div>
+                </div>
+
+                <!-- Painel de Atividades dos TikTiks -->
+                <section class="oa-painel-atividades">
+                    <div class="oa-secao-header">
+                        <h2 class="oa-titulo-secao">Painel de Atividades - TikTiks</h2>
+                        <div class="header-acoes">
+                            <span id="feedbackAtualizacao" class="feedback-atualizacao"></span>
+                            <button id="btnAtualizarPainel" class="oa-btn-atualizar" title="Atualizar painel agora">
+                                <i class="fas fa-sync-alt"></i>
+                                <span>Atualizar</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="painelDisponiveisContainer" class="oa-painel-status-grid"></div>
+                    <div class="oa-accordion-inativos">
+                        <button id="accordionHeader" class="oa-accordion-header">
+                            <span>Em Pausa / Inativos</span>
+                            <span id="accordionBadge" class="oa-accordion-badge">0</span>
+                            <i class="fas fa-chevron-down accordion-icone"></i>
                         </button>
-                    </div>
-                </div>
-
-            <!-- NOVO PAINEL DE INFORMAÇÕES (DASHBOARD) -->
-            <div class="oa-painel-info-container">
-                <div class="oa-info-card principal">
-                    <i class="fas fa-box-open oa-info-card-icone"></i>
-                    <h3>Produtos na Fila</h3>
-                    <span class="oa-info-card-contador" id="contadorProdutosFila">0</span>
-                    <p class="oa-info-card-descricao">Grupos de produto/variação pendentes.</p>
-                </div>
-                <div class="oa-info-card alerta">
-                    <i class="fas fa-boxes oa-info-card-icone"></i>
-                    <h3>Peças Pendentes</h3>
-                    <span class="oa-info-card-contador" id="contadorPecasPendentes">0</span>
-                    <p class="oa-info-card-descricao">Soma de todas as unidades a arrematar.</p>
-                </div>
-                <div class="oa-info-card sucesso">
-                    <i class="fas fa-check-double oa-info-card-icone"></i>
-                    <h3>Arrematado Hoje</h3>
-                    <span class="oa-info-card-contador" id="contadorArrematadoHoje">0</span>
-                    <p class="oa-info-card-descricao">Total de unidades lançadas hoje.</p>
-                </div>
-            </div>
-
-            <!-- ========================================================================== -->
-            <!-- # NOVO PAINEL DE ATIVIDADES DOS TIKTIKS                                    -->
-            <!-- ========================================================================== -->
-            <section class="oa-painel-atividades">
-                <div class="oa-secao-header">
-                <h2 class="oa-titulo-secao">Painel de Atividades - TikTiks</h2>
-                <div class="header-acoes"> <!-- Novo container para alinhar os itens -->
-                    <span id="feedbackAtualizacao" class="feedback-atualizacao"></span>
-                    <button id="btnAtualizarPainel" class="oa-btn-atualizar" title="Atualizar painel agora">
-                        <i class="fas fa-sync-alt"></i>
-                        <span>Atualizar</span>
-                    </button>
-                </div>
-            </div>
-
-                <!-- Container para usuários ATIVOS -->
-                <div id="painelDisponiveisContainer" class="oa-painel-status-grid">
-                    <!-- JS insere os cards de 'LIVRE' e 'TRABALHANDO' aqui -->
-                </div>
-
-                <!-- Accordion para usuários INATIVOS -->
-                <div class="oa-accordion-inativos">
-                    <button id="accordionHeader" class="oa-accordion-header">
-                        <span>Em Pausa / Inativos</span>
-                        <span id="accordionBadge" class="oa-accordion-badge">0</span>
-                        <i class="fas fa-chevron-down accordion-icone"></i>
-                    </button>
-                    <div id="accordionContent" class="oa-accordion-content">
-                        <div id="painelInativosContainer" class="oa-painel-status-grid">
-                            <!-- JS insere os cards de 'ALMOÇO', 'PAUSA', 'FORA DO HORÁRIO', 'FALTOU' aqui -->
+                        <div id="accordionContent" class="oa-accordion-content">
+                            <div id="painelInativosContainer" class="oa-painel-status-grid"></div>
                         </div>
                     </div>
+                </section>
+
+                <!-- Portal para os Filtros React -->
+                <div id="filtros-root"></div>
+
+                <!-- Container para os Cards e Paginação -->
+                <div class="gs-container-cards">
+                    <div id="arremateCardsContainer" class="oa-cards-container-arremate"></div>
+                    <div id="arrematePaginationContainer" class="gs-paginacao-container" style="display: none;"></div>
                 </div>
+            </section> <!-- FIM DA TELA 1 -->
 
-            </section>
-
-            
-
-                <!-- CONTAINER PARA A LISTA DE ITENS, INCLUINDO FILTROS -->
-            <div class="oa-card oa-card-filtros">
-                
-                <!-- CABEÇALHO DA SEÇÃO DE ITENS, COM BOTÃO DE ATUALIZAR -->
-                <div class="oa-secao-header">
-                    <h2 class="oa-titulo-secao">Itens na Fila</h2>
-                    <button id="btnAtualizarArremates" class="oa-btn-atualizar">
-                        <i class="fas fa-sync-alt"></i>
-                        <span>Atualizar</span>
-                    </button>
-                </div>
-
-                <!-- LINHA PARA BUSCA E BOTÃO DE FILTROS AVANÇADOS -->
-                <div class="oa-filtros-linha">
-                    <div class="oa-form-grupo" style="flex-grow: 1;">
-                        <input type="text" id="searchProdutoArremate" class="oa-input-busca" placeholder="Buscar por produto ou variação...">
+            <!-- ======================================================= -->
+            <!-- TELA 2: DETALHES DO ARREMATE (COMEÇA ESCONDIDA)        -->
+            <!-- ======================================================= -->
+            <section class="hidden" id="arremateDetalheView">
+                <!-- Cabeçalho da View de Detalhe -->
+                <div class="oa-detalhe-header">
+                    <div class="oa-detalhe-thumbnail" id="arremateDetalheThumbnail"></div>
+                    <div class="oa-detalhe-info">
+                        <h2 id="arremateProdutoNomeDetalhe">[Produto]</h2>
+                        <p id="arremateVarianteNomeDetalhe">[Variante]</p>
                     </div>
-                    <button id="toggleFiltrosAvancadosBtn" class="oa-btn-filtros">
-                        <i class="fas fa-filter"></i>
-                        <span>Filtros Avançados</span>
-                    </button>
-                </div>
-
-                <!-- CONTAINER DOS FILTROS AVANÇADOS (COMEÇA ESCONDIDO) -->
-                <div id="filtrosAvancadosContainer" class="oa-filtros-avancados-container hidden">
-                    <div class="oa-form-grupo">
-                        <label for="ordenacaoSelect">Ordenar por</label>
-                        <select id="ordenacaoSelect" class="oa-select">
-                            <option value="mais_recentes" selected>Mais Recentes Primeiro</option>
-                            <option value="mais_antigos">Mais Antigos Primeiro</option>
-                            <option value="maior_quantidade">Maior Quantidade</option>
-                            <option value="menor_quantidade">Menor Quantidade</option>
-                            <option value="alfabetica">Ordem Alfabética (A-Z)</option>
-                        </select>
+                    <div class="oa-detalhe-saldo">
+                        <label>PENDENTE DE ARREMATE</label>
+                        <span id="arremateTotalPendenteAgregado">0</span>
                     </div>
-                    
-                    <div class="oa-form-grupo" style="justify-content: flex-end;">
-                        <button id="limparFiltrosBtn" class="oa-btn-limpar-filtros">
-                            <i class="fas fa-times-circle"></i> Limpar Filtros
-                        </button>
-                    </div>
+                    <button class="botao-fechar oa-btn-perigo" id="fecharArremateDetalheBtn" title="Voltar para Lista">X</button>
+                </div>
+                <hr class="oa-divisor">
+
+                <!-- Abas de Navegação -->
+                <div class="oa-tabs">
+                    <button class="oa-tab-btn active" data-tab="ajuste">Registrar Ajuste</button>
+                    <button class="oa-tab-btn" data-tab="historico-produto">Histórico do Produto</button>
                 </div>
 
-                <!-- CONTAINER ONDE OS CARDS DE ITENS SERÃO RENDERIZADOS -->
-                <div id="arremateCardsContainer" class="oa-cards-container-arremate">
-                    <div class="spinner">Carregando itens para arremate...</div>
-                </div>
-
-                <!-- CONTAINER DA PAGINAÇÃO -->
-                <div id="arrematePaginationContainer" class="oa-paginacao-container" style="display: none;">
-                    <!-- Paginação será inserida aqui pelo JS -->
-                </div>
-
-            </div> <!-- Fim do .oa-card-filtros -->
-
-            </section>
-
-           
-            
-            <!-- NOVA SEÇÃO DE DETALHES COM ABAS -->
-<section class="hidden" id="arremateDetalheView">
-    <!-- CABEÇALHO DA VIEW DE DETALHE -->
-    <div class="oa-detalhe-header">
-        <div class="oa-detalhe-thumbnail" id="arremateDetalheThumbnail">
-            <!-- Imagem será preenchida pelo JS -->
-        </div>
-        <div class="oa-detalhe-info">
-            <h2 id="arremateProdutoNomeDetalhe">[Produto]</h2>
-            <p id="arremateVarianteNomeDetalhe">[Variante]</p>
-        </div>
-        <div class="oa-detalhe-saldo">
-            <label>PENDENTE DE ARREMATE</label>
-            <span id="arremateTotalPendenteAgregado">0</span>
-        </div>
-        <button class="botao-fechar oa-btn-perigo" id="fecharArremateDetalheBtn" title="Voltar para Lista">X</button>
-    </div>
-    <hr class="oa-divisor">
-
-    <!-- ABAS DE NAVEGAÇÃO -->
-    <div class="oa-tabs">
-        <button class="oa-tab-btn active" data-tab="ajuste">Registrar Ajuste</button>
-        <button class="oa-tab-btn" data-tab="historico-produto">Histórico do Produto</button>
-    </div>
-
-    <!-- PAINÉIS DAS ABAS -->
-    <div class="oa-tab-paineis">
-        <!-- ABA 1: LANÇAR ARREMATE -->
-         <!-- foi removida daqui!!!-->
-
-        <!-- ABA 2: REGISTRAR AJUSTE (PERDA / LANÇAMENTO ERRADO) -->
-        <div class="oa-tab-panel active" id="ajuste-tab">
-            <form id="formRegistrarAjuste" class="oa-form-acao">
-                <p class="oa-form-instrucao">Use esta opção para corrigir o saldo, seja por uma perda física ou por um lançamento de produção que foi feito por engano.</p>
-                <div class="oa-form-grupo">
-                    <label for="selectMotivoAjuste">Motivo do Ajuste</label>
-                    <select id="selectMotivoAjuste" class="oa-select" required>
-                        <option value="" disabled selected>Selecione um motivo...</option>
-                        <option value="PRODUTO_AVARIADO">Perda - Produto Avariado</option>
-                        <option value="DIVERGENCIA_SALDO">Perda - Divergência de Saldo</option>
-                        <option value="LANCAMENTO_ERRADO">Ajuste - Lançamento Errado</option>
-                    </select>
-                </div>
-                <div class="oa-form-grupo">
-                    <label for="inputQuantidadeAjuste">Quantidade a ser Descontada</label>
-                    <input type="number" id="inputQuantidadeAjuste" class="oa-input" min="1" required placeholder="Qtd. a descontar">
-                </div>
-                <div class="oa-form-grupo">
-                    <label for="textareaObservacaoAjuste">Observação (Opcional)</label>
-                    <textarea id="textareaObservacaoAjuste" class="oa-textarea oa-input" rows="2" placeholder="Ex: Peça rasgada, contagem errada na produção..."></textarea>
-                </div>
-                <div class="oa-form-botoes">
-                    <button type="button" id="btnConfirmarRegistroAjuste" class="oa-btn oa-btn-perigo">
-                        <i class="fas fa-save"></i> Confirmar Ajuste de Saldo
-                    </button>
-                </div>
-            </form>
-        </div>
-
-        <!-- ABA 3: HISTÓRICO DO PRODUTO -->
-            <div class="oa-tab-panel" id="historico-produto-tab">
-                
-                <!-- Container para a tabela de resultados -->
-                <div id="historicoProdutoContainer" class="oa-tabela-wrapper">
-                    <!-- O JavaScript irá inserir a tabela ou o spinner aqui -->
-                    <div class="spinner">Carregando histórico do produto...</div>
-                </div>
-
-                <!-- Container para os botões de paginação -->
-                <div id="historicoProdutoPaginacao" class="oa-paginacao-container" style="margin-top: 20px; display: none;">
-                    <!-- O JavaScript irá inserir os botões de paginação aqui -->
-                </div>
-                
-            </div>
-
-
-    </div>
-</section>
-
-
-        </div> <!-- Fim do oa-main-content-card -->
-
-        <!-- MODAL DE HISTÓRICO GERAL DE ARREMATES -->
-            <div id="historicoArrematesModalContainer" class="popup-container" style="display: none;">
-                <div class="popup-overlay"></div>
-                <div class="oa-modal-historico">
-                    <div class="oa-modal-header">
-                        <h3 class="oa-modal-titulo">Histórico Geral de Arremates</h3>
-                        <button id="btnFecharHistoricoArremates" class="oa-modal-fechar-btn">X</button>
-                    </div>
-                    
-                    <!-- Filtros do Modal -->
-                    <div class="oa-modal-filtros">
-                        <div class="oa-form-grupo" style="flex-grow: 2;">
-                            <label for="filtroBuscaHistorico">Buscar por Produto ou Usuário</label>
-                            <input type="text" id="filtroBuscaHistorico" class="oa-input" placeholder="Digite para buscar...">
-                        </div>
-                        <div class="oa-form-grupo">
-                            <label for="filtroTipoEventoHistorico">Tipo de Evento</label>
-                            <select id="filtroTipoEventoHistorico" class="oa-select">
-                                <option value="todos">Todos os Eventos</option>
-                                <option value="PRODUCAO">Lançamentos</option>
-                                <option value="PERDA">Perdas</option>
-                                <option value="ESTORNO">Estornos</option>
-                            </select>
-                        </div>
-                        <div class="oa-form-grupo">
-                            <label for="filtroPeriodoHistorico">Período</label>
-                            <select id="filtroPeriodoHistorico" class="oa-select">
-                                <option value="7d">Últimos 7 dias</option>
-                                <option value="hoje">Hoje</option>
-                                <option value="30d">Últimos 30 dias</option>
-                                <option value="mes_atual">Este Mês</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="oa-modal-body">
-                        <div id="historicoArrematesTabelaWrapper" class="oa-tabela-wrapper">
-                            <!-- Tabela de resultados será inserida aqui -->
-                        </div>
-                    </div>
-
-                    <div class="oa-modal-footer">
-                        <div id="historicoArrematesPaginacao" class="oa-paginacao-container">
-                            <!-- Paginação será inserida aqui -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Modal para Registrar Perda no Arremate -->
-            <div id="modalRegistrarPerda" class="hidden">
-                <div class="oa-popup-overlay"></div>
-                <div class="oa-modal">
-                    <div class="oa-modal-header">
-                        <h3 class="oa-modal-titulo">Registrar Perda no Arremate</h3>
-                        <button id="btnFecharModalPerda" class="oa-modal-fechar-btn">×</button>
-                    </div>
-                    <div class="oa-modal-body">
-                        <form id="formRegistrarPerda">
-                            <p id="infoProdutoModalPerda" style="text-align: center; font-weight: 500; margin-bottom: 20px;"></p>
+                <!-- Painéis das Abas -->
+                <div class="oa-tab-paineis">
+                    <!-- Aba de Registrar Ajuste -->
+                    <div class="oa-tab-panel active" id="ajuste-tab">
+                        <form id="formRegistrarAjuste" class="oa-form-acao">
+                            <p class="oa-form-instrucao">Use esta opção para corrigir o saldo, seja por uma perda física ou por um lançamento de produção que foi feito por engano.</p>
                             <div class="oa-form-grupo">
-                                <label for="selectMotivoPerda">Motivo da Perda</label>
-                                <select id="selectMotivoPerda" class="oa-select" required>
+                                <label for="selectMotivoAjuste">Motivo do Ajuste</label>
+                                <select id="selectMotivoAjuste" class="oa-select" required>
                                     <option value="" disabled selected>Selecione um motivo...</option>
-                                    <option value="PRODUTO_AVARIADO">Produto Avariado</option>
-                                    <option value="DIVERGENCIA_SALDO">Divergência de Saldo</option>
+                                    <option value="PRODUTO_AVARIADO">Perda - Produto Avariado</option>
+                                    <option value="DIVERGENCIA_SALDO">Perda - Divergência de Saldo</option>
+                                    <option value="LANCAMENTO_ERRADO">Ajuste - Lançamento Errado</option>
                                 </select>
                             </div>
                             <div class="oa-form-grupo">
-                                <label for="inputQuantidadePerdida">Quantidade a ser Descontada</label>
-                                <input type="number" id="inputQuantidadePerdida" class="oa-input" min="1" required placeholder="Qtd. perdida">
+                                <label for="inputQuantidadeAjuste">Quantidade a ser Descontada</label>
+                                <input type="number" id="inputQuantidadeAjuste" class="oa-input" min="1" required placeholder="Qtd. a descontar">
                             </div>
                             <div class="oa-form-grupo">
-                                <label for="textareaObservacaoPerda">Observação (Opcional)</label>
-                                <textarea id="textareaObservacaoPerda" class="oa-textarea" rows="3" placeholder="Ex: Peça rasgada, contagem errada..."></textarea>
+                                <label for="textareaObservacaoAjuste">Observação (Opcional)</label>
+                                <textarea id="textareaObservacaoAjuste" class="oa-textarea oa-input" rows="2" placeholder="Ex: Peça rasgada, contagem errada na produção..."></textarea>
+                            </div>
+                            <div class="oa-form-botoes">
+                                <button type="button" id="btnConfirmarRegistroAjuste" class="oa-btn oa-btn-perigo">
+                                    <i class="fas fa-save"></i> Confirmar Ajuste de Saldo
+                                </button>
                             </div>
                         </form>
                     </div>
-                    <div class="oa-modal-footer">
-                        <button type="button" id="btnConfirmarRegistroPerda" class="oa-btn oa-btn-perigo">
-                            <i class="fas fa-save"></i> Confirmar Perda
-                        </button>
+
+                    <!-- Aba de Histórico do Produto -->
+                    <div class="oa-tab-panel" id="historico-produto-tab">
+                        <div id="historicoProdutoContainer" class="oa-tabela-wrapper">
+                            <div class="spinner">Carregando histórico do produto...</div>
+                        </div>
+                        <div id="historicoProdutoPaginacao" class="oa-paginacao-container" style="margin-top: 20px; display: none;"></div>
                     </div>
                 </div>
-            </div>
-
-            <!-- ========================================================================== -->
-            <!-- # MODAL PARA ATRIBUIR TAREFA DE ARREMATE                                   -->
-            <!-- ========================================================================== -->
-            <div id="modalAtribuirTarefa" class="popup-container" style="display: none;">
-                <div class="popup-overlay"></div>
-                <div class="oa-modal-atribuir"> <!-- Nova classe para estilização específica -->
-                    <div class="oa-modal-header">
-                        <h3 id="modalAtribuirTitulo" class="oa-modal-titulo">Atribuir Tarefa para [Nome]</h3>
-                        <button class="oa-modal-fechar-btn">X</button>
-                    </div>
-                    
-                    <div class="oa-modal-body-atribuir">
-                        <!-- Coluna da Esquerda: Lista de Produtos -->
-                        <div class="coluna-lista-produtos">
-                            <div class="filtro-busca-modal">
-                                <input type="text" id="buscaProdutoModal" class="oa-input-busca" placeholder="Buscar produto ou variação...">
-                            </div>
-                            <div id="modalAtribuirFilaWrapper" class="oa-cards-container-modal">
-                                <!-- Cards de produtos serão inseridos aqui -->
-                                <div class="spinner">Carregando fila...</div>
-                            </div>
-                            <div id="modalPaginacaoContainer" class="oa-paginacao-container">
-                                <!-- Paginação interna do modal será inserida aqui -->
-                            </div>
-                        </div>
-
-                        <!-- Coluna da Direita: Detalhes e Confirmação -->
-                        <div class="coluna-confirmacao">
-                            <div id="modalAtribuirFormContainer" class="form-confirmacao-wrapper">
-                                <div class="placeholder-confirmacao">
-                                    <i class="fas fa-mouse-pointer"></i>
-                                    <p>Selecione um item da lista ao lado para começar.</p>
-                                </div>
-                                <!-- Conteúdo dinâmico será inserido aqui pelo JS -->
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
+            </section> <!-- FIM DA TELA 2 -->
+        </div> <!-- Fim do oa-main-content-card -->
     </main>
 
     <!-- ========================================================================== -->
-    <!-- # MODAL "MODO FOCO" - DASHBOARD DE DESEMPENHO INDIVIDUAL                   -->
+    <!-- # MODAIS (Fora do <main> para melhor empilhamento)                     -->
     <!-- ========================================================================== -->
+
+    <!-- MODAL DE HISTÓRICO GERAL DE ARREMATES -->
+    <div id="historicoArrematesModalContainer" class="popup-container" style="display: none;">
+        <div class="popup-overlay"></div>
+        <div class="oa-modal-historico">
+            <div class="oa-modal-header">
+                <h3 class="oa-modal-titulo">Histórico Geral de Arremates</h3>
+                <button id="btnFecharHistoricoArremates" class="oa-modal-fechar-btn">X</button>
+            </div>
+            <div class="oa-modal-filtros">
+                <div class="oa-form-grupo" style="flex-grow: 2;">
+                    <label for="filtroBuscaHistorico">Buscar por Produto ou Usuário</label>
+                    <input type="text" id="filtroBuscaHistorico" class="oa-input" placeholder="Digite para buscar...">
+                </div>
+                <div class="oa-form-grupo">
+                    <label for="filtroTipoEventoHistorico">Tipo de Evento</label>
+                    <select id="filtroTipoEventoHistorico" class="oa-select">
+                        <option value="todos">Todos os Eventos</option>
+                        <option value="PRODUCAO">Lançamentos</option>
+                        <option value="PERDA">Perdas</option>
+                        <option value="ESTORNO">Estornos</option>
+                    </select>
+                </div>
+                <div class="oa-form-grupo">
+                    <label for="filtroPeriodoHistorico">Período</label>
+                    <select id="filtroPeriodoHistorico" class="oa-select">
+                        <option value="7d">Últimos 7 dias</option>
+                        <option value="hoje">Hoje</option>
+                        <option value="30d">Últimos 30 dias</option>
+                        <option value="mes_atual">Este Mês</option>
+                    </select>
+                </div>
+            </div>
+            <div class="oa-modal-body">
+                <div id="historicoArrematesTabelaWrapper" class="oa-tabela-wrapper"></div>
+            </div>
+            <div class="oa-modal-footer">
+                <div id="historicoArrematesPaginacao" class="oa-paginacao-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL PARA REGISTRAR PERDA (Ajuste) -->
+    <div id="modalRegistrarPerda" class="hidden">
+        <div class="oa-popup-overlay"></div>
+        <div class="oa-modal">
+            <div class="oa-modal-header">
+                <h3 class="oa-modal-titulo">Registrar Perda no Arremate</h3>
+                <button id="btnFecharModalPerda" class="oa-modal-fechar-btn">×</button>
+            </div>
+            <div class="oa-modal-body">
+                <form id="formRegistrarPerda">
+                    <p id="infoProdutoModalPerda" style="text-align: center; font-weight: 500; margin-bottom: 20px;"></p>
+                    <div class="oa-form-grupo">
+                        <label for="selectMotivoPerda">Motivo da Perda</label>
+                        <select id="selectMotivoPerda" class="oa-select" required>
+                            <option value="" disabled selected>Selecione um motivo...</option>
+                            <option value="PRODUTO_AVARIADO">Produto Avariado</option>
+                            <option value="DIVERGENCIA_SALDO">Divergência de Saldo</option>
+                        </select>
+                    </div>
+                    <div class="oa-form-grupo">
+                        <label for="inputQuantidadePerdida">Quantidade a ser Descontada</label>
+                        <input type="number" id="inputQuantidadePerdida" class="oa-input" min="1" required placeholder="Qtd. perdida">
+                    </div>
+                    <div class="oa-form-grupo">
+                        <label for="textareaObservacaoPerda">Observação (Opcional)</label>
+                        <textarea id="textareaObservacaoPerda" class="oa-textarea" rows="3" placeholder="Ex: Peça rasgada, contagem errada..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="oa-modal-footer">
+                <button type="button" id="btnConfirmarRegistroPerda" class="oa-btn oa-btn-perigo">
+                    <i class="fas fa-save"></i> Confirmar Perda
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL PARA ATRIBUIR TAREFA -->
+    <div id="modalAtribuirTarefa" class="popup-container" style="display: none;">
+        <div class="popup-overlay"></div>
+        <div class="oa-modal-atribuir">
+            <div class="oa-modal-header">
+                <h3 id="modalAtribuirTitulo" class="oa-modal-titulo">Atribuir Tarefa para [Nome]</h3>
+            <button class="oa-modal-fechar-btn">X</button>
+            </div>
+            <div class="oa-modal-body-atribuir">
+                <div class="coluna-lista-produtos">
+                    <div class="filtro-busca-modal">
+                        <input type="text" id="buscaProdutoModal" class="oa-input-busca" placeholder="Buscar produto ou variação...">
+                    </div>
+                    <div id="modalAtribuirFilaWrapper" class="oa-cards-container-modal">
+                        <div class="spinner">Carregando fila...</div>
+                    </div>
+                    <div id="modalPaginacaoContainer" class="oa-paginacao-container"></div>
+                </div>
+                <div class="coluna-confirmacao">
+                    <div id="modalAtribuirFormContainer" class="form-confirmacao-wrapper">
+                        <div class="placeholder-confirmacao">
+                            <i class="fas fa-mouse-pointer"></i>
+                            <p>Selecione um item da lista ao lado para começar.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL "MODO FOCO" -->
     <div id="modalModoFoco" class="popup-container" style="display: none;">
         <div class="popup-overlay"></div>
         <div class="oa-modal-foco">
@@ -383,25 +283,19 @@
                 <button class="oa-modal-fechar-btn">X</button>
             </div>
             <div class="oa-modal-body-foco">
-                <!-- Métricas Principais -->
-                <div id="focoMetricas" class="foco-metricas-grid">
-                    <!-- Métricas serão inseridas aqui pelo JS -->
-                </div>
-                <!-- Timeline Visual -->
+                <div id="focoMetricas" class="foco-metricas-grid"></div>
                 <h4>Linha do Tempo do Dia</h4>
                 <div id="focoTimeline" class="foco-timeline-container">
                     <div class="spinner">Calculando timeline...</div>
                 </div>
-                <!-- Histórico de Tarefas -->
                 <h4>Tarefas Finalizadas Hoje</h4>
-                <div id="focoTarefas" class="oa-tabela-wrapper">
-                    <!-- Tabela de tarefas será inserida aqui -->
-                </div>
+                <div id="focoTarefas" class="oa-tabela-wrapper"></div>
             </div>
         </div>
     </div>
 
     <script src="/js/admin-arremates.js" type="module"></script>
     <script src="/js/carregar-menu-lateral.js" type="module"></script>
+    <script src="/src/main-arremates.jsx" type="module"></script>
 </body>
 </html>
