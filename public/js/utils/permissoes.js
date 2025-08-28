@@ -63,6 +63,7 @@ export const permissoesDisponiveis = [
     { id: 'lancar-embalagem', label: 'Ação: Registrar embalagem de produtos', categoria: 'Arremate e Embalagem' },
     { id: 'lancar-embalagem-unidade', label: 'Ação: Lançar embalagem de unidade', categoria: 'Arremate e Embalagem' },
     { id: 'montar-kit', label: 'Ação: Montar/desmontar kits', categoria: 'Arremate e Embalagem' },
+    { id: 'cancelar-tarefa-arremate', label: 'Ação: Permite cancelar Tarefa Atribuida', categoria: 'Arremate e Embalagem' },
 
     // --- ESTOQUE ---
     { id: 'acesso-estoque', label: 'Ver Tela de Estoque', categoria: 'Estoque' },

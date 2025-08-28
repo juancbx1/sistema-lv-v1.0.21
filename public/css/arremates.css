@@ -884,8 +884,32 @@ body.autenticado { visibility: visible; }
     border-top: 1px dashed var(--oa-cor-cinza-borda);
 }
 
-.btn-acao {
+/* Novo container para os botões de ação no rodapé do card de status */
+.oa-card-botoes-acao-container {
+    display: flex;
+    gap: 10px; /* Espaço entre os botões */
     width: 100%;
+}
+
+.aviso-pausa-inteligente {
+    font-size: 0.85rem;
+    color: var(--gs-aviso);
+    background-color: #fffbeb;
+    border: 1px solid var(--gs-aviso);
+    border-radius: 6px;
+    padding: 10px;
+    text-align: center;
+    max-width: 280px;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 5px;
+    margin-bottom: 15px;
+}
+
+.btn-acao {
+    flex-grow: 1;
+    width: auto; 
     padding: 10px;
     border: none;
     border-radius: 6px;
@@ -895,10 +919,39 @@ body.autenticado { visibility: visible; }
     cursor: pointer;
     transition: all 0.2s;
 }
-.btn-acao.iniciar { background-color: var(--oa-cor-verde-sucesso); }
+
+.btn-acao.iniciar { 
+    background-color: var(--oa-cor-verde-sucesso); 
+    width: 100%;
+}
 .btn-acao.iniciar:hover { background-color: var(--oa-cor-verde-hover); }
 .btn-acao.finalizar { background-color: var(--oa-cor-azul-primario); }
-.btn-acao.finalizar:hover { background-color: var(--oa-cor-azul-hover); }
+
+.btn-acao.finalizar:hover { 
+    background-color: var(--oa-cor-azul-hover); 
+}
+
+.btn-acao:disabled {
+    background-color: #bdc3c7; /* Um cinza claro */
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+/* Remove os efeitos de hover quando o botão está desabilitado */
+.btn-acao:disabled:hover {
+    background-color: #bdc3c7;
+    transform: none; /* Remove o efeito de "levantar" */
+    box-shadow: none;
+}
+
+/* Estilo específico para o botão de cancelar */
+.btn-acao.cancelar {
+    background-color: var(--oa-cor-cinza-texto-secundario); /* Cor neutra, menos destaque que finalizar */
+}
+.btn-acao.cancelar:hover {
+    background-color: var(--gs-perigo); /* Fica vermelho no hover, indicando uma ação destrutiva */
+    color: var(--gs-branco);
+}
 
 .erro-painel {
     text-align: center;
@@ -985,8 +1038,8 @@ body.autenticado { visibility: visible; }
     z-index: 10001;
     display: flex;
     flex-direction: column;
-    height: 85vh; /* Altura alta para dar espaço */
-    max-height: 700px;
+    max-height: 90vh;
+    height: auto;
     animation: popup-slide-in 0.3s ease-out;
 }
 
@@ -1049,18 +1102,30 @@ body.autenticado { visibility: visible; }
 }
 
 .coluna-confirmacao {
-    flex: 2; /* Ocupa menos espaço */
-    padding: 20px;
+    flex: 2;
     background-color: var(--oa-cor-cinza-fundo);
     display: flex;
-    align-items: center;
-    justify-content: center;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 20px;
 }
 
 .form-confirmacao-wrapper, .placeholder-confirmacao {
     width: 100%;
     text-align: center;
 }
+
+.form-confirmacao-wrapper {
+    width: 100%;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex-grow: 1;
+}
+
+
 .placeholder-confirmacao i { font-size: 3rem; color: #ced4da; }
 .placeholder-confirmacao p { color: var(--oa-cor-cinza-texto-secundario); margin-top: 15px; }
 
@@ -1331,6 +1396,243 @@ body.autenticado { visibility: visible; }
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
 }
 
+
+/* ==========================================================================
+   # NOVO COMPONENTE SELETOR DE QUANTIDADE (MODAL ATRIBUIR)
+   ========================================================================== */
+
+/* Wrapper principal do novo componente */
+.seletor-quantidade-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px; /* Espaço entre label, input e atalhos */
+    margin-top: 20px;
+    margin-bottom: 10px; /* Reduzido para aproximar do botão confirmar */
+    max-width: 280px; /* Largura máxima para manter compacto */
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.seletor-quantidade-wrapper label {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--oa-cor-cinza-texto-secundario);
+}
+
+/* Container do input com os botões +/- */
+.input-container {
+    display: flex;
+    align-items: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08); /* Sombra sutil para destacar */
+    border-radius: 8px;
+    overflow: hidden; /* Garante que os cantos arredondados funcionem */
+}
+
+.input-container .oa-input-tarefas {
+    text-align: center;
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: var(--oa-cor-azul-escuro);
+    width: 100px; /* Largura fixa para o input */
+    height: 60px;
+    border: 1px solid var(--oa-cor-cinza-borda);
+    border-left: none;
+    border-right: none;
+    border-radius: 0;
+    padding: 5px; /* Padding menor */
+}
+.input-container .oa-input-tarefas:focus {
+    box-shadow: none; /* Remove a sombra de foco padrão para manter o visual limpo */
+}
+.input-container .oa-input-tarefas::-webkit-outer-spin-button,
+.input-container .oa-input-tarefas::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+
+.ajuste-qtd-btn {
+    width: 45px;
+    height: 60px;
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--oa-cor-azul-primario);
+    background-color: var(--oa-cor-cinza-fundo);
+    border: 1px solid var(--oa-cor-cinza-borda);
+    cursor: pointer;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1; /* Alinhamento vertical do +/- */
+}
+.ajuste-qtd-btn:hover {
+    background-color: #e9ecef;
+}
+
+/* Container dos botões de atalho */
+.atalhos-qtd-container {
+    display: flex;
+    gap: 10px;
+}
+
+.atalho-qtd-btn {
+    padding: 10px 16px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    background-color: transparent;
+    border: 1px solid var(--oa-cor-cinza-borda);
+    color: var(--oa-cor-texto-principal);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.atalho-qtd-btn:hover {
+    background-color: var(--oa-cor-cinza-fundo);
+    border-color: var(--oa-cor-azul-primario);
+    color: var(--oa-cor-azul-primario);
+    transform: translateY(-1px);
+}
+
+/* Garante que o botão confirmar tenha um bom espaçamento e largura */
+#btnConfirmarAtribuicao {
+    width: 100%;
+    max-width: 280px;
+    padding: 12px;
+    margin: 15px auto 0 auto; 
+    display: block;
+    flex-shrink: 0;
+}
+
+.coluna-confirmacao::-webkit-scrollbar {
+    display: none; /* Esconde a barra de rolagem */
+}
+
+
+/* ==========================================================================
+   # ESTILOS REDESIGN MODO FOCO
+   ========================================================================== */
+
+.foco-resumo-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.foco-resumo-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background-color: var(--oa-cor-branco);
+    padding: 10px;
+    border-radius: var(--oa-raio-borda);
+    border: 1px solid var(--oa-cor-cinza-borda);
+}
+
+.foco-resumo-img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.foco-resumo-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.foco-resumo-nome {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--oa-cor-texto-principal);
+    line-height: 1.2;
+}
+
+.foco-resumo-qtd {
+    font-size: 0.85rem;
+    color: var(--oa-cor-cinza-texto-secundario);
+}
+
+/* Estilos para os cards de tarefa detalhada */
+#focoTarefas {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.foco-tarefa-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background-color: var(--oa-cor-branco);
+    padding: 12px 15px;
+    border-radius: var(--oa-raio-borda);
+    border: 1px solid var(--oa-cor-cinza-borda);
+    box-shadow: var(--gs-sombra-padrao);
+}
+
+.foco-tarefa-img {
+    width: 50px;
+    height: 50px;
+    border-radius: 6px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.foco-tarefa-info {
+    flex-grow: 1;
+}
+
+.foco-tarefa-produto {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--oa-cor-azul-escuro);
+    display: block;
+}
+
+.foco-tarefa-variante {
+    font-size: 0.85rem;
+    color: var(--oa-cor-cinza-texto-secundario);
+    margin-bottom: 8px;
+    display: block;
+}
+
+.foco-tarefa-metricas {
+    display: flex;
+    gap: 20px;
+    font-size: 0.9rem;
+}
+.foco-tarefa-metricas i {
+    margin-right: 6px;
+    color: var(--oa-cor-cinza-texto-secundario);
+}
+
+.btn-desfazer-tarefa {
+    background-color: var(--gs-fundo-input);
+    color: var(--gs-texto-secundario);
+    border: 1px solid var(--gs-borda);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+.btn-desfazer-tarefa:hover:not(:disabled) {
+    background-color: var(--gs-perigo);
+    color: var(--gs-branco);
+    border-color: var(--gs-perigo);
+    transform: scale(1.1);
+}
+.btn-desfazer-tarefa:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /*------------------------------------*\
     #RESPONSIVIDADE
 \*------------------------------------*/
@@ -1569,6 +1871,8 @@ body.autenticado { visibility: visible; }
     /* Esconde a coluna de confirmação por padrão no mobile */
     .coluna-confirmacao {
         display: none;
+        scrollbar-width: thin;          /* Deixa a barra de rolagem fina no Firefox */
+        scrollbar-color: #dcdfe4 #f9fbfd; /* Cor da barra e do fundo no Firefox */
     }
 
     .coluna-lista-produtos {
@@ -1630,6 +1934,34 @@ body.autenticado { visibility: visible; }
         align-items: center; /* Alinha verticalmente o texto e o botão */
     }
 
+    /* --- AJUSTES PARA ROLAGEM DO MODAL NO MOBILE --- */
+
+    /* 1. Força o modal a ter uma altura máxima definida no mobile */
+    .oa-modal-atribuir {
+        height: 90vh;
+    }
+
+    /* 2. Garante que o corpo do modal ocupe o espaço restante */
+    .oa-modal-body-atribuir {
+        flex-direction: column;
+        display: flex; /* Garante que é flex, não block */
+        flex-grow: 1;
+        min-height: 0;
+    }
+
+    /* 3. Habilita a rolagem APENAS na coluna de confirmação */
+    .coluna-confirmacao {
+        display: flex; /* Garante que está visível e usando flex */
+        flex-grow: 1; /* Faz ela ocupar o espaço disponível no modo de confirmação */
+        min-height: 0;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    .coluna-confirmacao::-webkit-scrollbar {
+        display: none;
+    }
+
 }
 
 /* --- Esconde o botão de voltar no Desktop --- */
@@ -1668,10 +2000,7 @@ body.autenticado { visibility: visible; }
     font-size: 0.8rem;
     }
 
-    .oa-modal-atribuir {
-    width: 95%;
-    height: 90vh;
-    }
+    
     .oa-cards-container-modal {
         grid-template-columns: 1fr; /* Uma coluna no mobile */
     }
@@ -1690,6 +2019,12 @@ body.autenticado { visibility: visible; }
     }
     .oa-modal-titulo{
     font-size: 1rem;
+    }
+
+    .foco-tarefa-metricas {
+        flex-direction: column;
+        gap: 5px;
+        align-items: flex-start;
     }
 
 

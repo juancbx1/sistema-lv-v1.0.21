@@ -20,6 +20,8 @@ let historicoDeArrematesCache = [];
 let totaisDaFilaDeArremate = { totalGrupos: 0, totalPecas: 0 };
 let modalAtribuirTarefaElemento = null;
 let statusTiktiksCache = [];
+let modalModoFocoElemento = null;
+
 
 
 // Paginação
@@ -104,18 +106,30 @@ async function renderizarPainelStatus() {
     }
 }
 
-
 function atualizarCronometros() {
-    // Procura por todos os cards que estão no estado 'trabalhando' e têm o data-attribute
-    document.querySelectorAll('.oa-card-status-tiktik.status-trabalhando[data-inicio-tarefa]').forEach(card => {
-        const cronometroEl = card.querySelector('.cronometro-tarefa');
-        const dataInicioStr = card.dataset.inicioTarefa;
+    // Procura por todos os cards que estão no estado 'trabalhando' ou 'livre'
+    document.querySelectorAll('.oa-card-status-tiktik.status-trabalhando, .oa-card-status-tiktik.status-livre').forEach(card => {
+        const tiktikId = parseInt(card.dataset.tiktikId);
+        const tiktikData = statusTiktiksCache.find(t => t.id === tiktikId);
 
-        if (cronometroEl && dataInicioStr) {
-            const tempoDecorridoMs = new Date() - new Date(dataInicioStr);
-            // Garante que o tempo não seja negativo caso haja dessincronia de relógios
-            const tempoSeguroMs = Math.max(0, tempoDecorridoMs);
-            const tempoDecorridoStr = new Date(tempoSeguroMs).toISOString().substr(11, 8);
+        if (!tiktikData) return;
+
+        // <<< NOVA LÓGICA DE VERIFICAÇÃO DE PAUSA >>>
+        const { statusFinal: statusCalculadoAgora } = determinarStatusFinal(tiktikData);
+        
+        // Verifica se o status que o card MOSTRA é diferente do que DEVERIA ser agora
+        if (!card.classList.contains(`status-${statusCalculadoAgora.toLowerCase().replace(' ', '-')}`)) {
+            renderizarPainelStatus(); 
+            return; // Para a execução deste loop para evitar múltiplas chamadas
+        }
+
+        // --- Lógica do cronômetro que você já tem (agora dentro do if principal) ---
+        const cronometroEl = card.querySelector('.cronometro-tarefa');
+        if (cronometroEl && tiktikData.tempo_decorrido_real_segundos !== null) {
+            const tempoAtualizadoSegundos = tiktikData.tempo_decorrido_real_segundos + 
+                ((Date.now() - (ultimaAtualizacaoTimestamp || Date.now())) / 1000);
+            
+            const tempoDecorridoStr = new Date(Math.max(0, tempoAtualizadoSegundos) * 1000).toISOString().substr(11, 8);
             
             cronometroEl.innerHTML = `<i class="fas fa-clock"></i> ${tempoDecorridoStr}`;
         }
@@ -233,11 +247,50 @@ function criarHTMLCardStatus(tiktik, statusFinal, classeStatus) {
                 ${mediaInfoHTML}
             </div>
         `;
-        botoesAcaoHTML = `<button class="btn-acao finalizar" data-action="finalizar" data-tiktik-id="${tiktik.id}"><i class="fas fa-check-double"></i> Finalizar Tarefa</button>`;
 
-    } else if (statusFinal === 'LIVRE') {
-        botoesAcaoHTML = `<button class="btn-acao iniciar" data-action="iniciar" data-tiktik-id="${tiktik.id}"><i class="fas fa-play"></i> Atribuir Tarefa</button>`;
-    }
+        const podeFinalizar = permissoes.includes('lancar-arremate');
+        const podeCancelar = permissoes.includes('cancelar-tarefa-arremate');
+
+            // Atributos para o botão Finalizar
+            const attrsFinalizar = podeFinalizar
+                ? `data-action="finalizar"`
+                : `data-action="permissao-negada" data-permissao-necessaria="Finalizar Tarefa"`;
+            
+            // Atributos para o botão Cancelar
+            const attrsCancelar = podeCancelar
+                ? `data-action="cancelar"`
+                : `data-action="permissao-negada" data-permissao-necessaria="Cancelar Tarefa"`;
+
+            botoesAcaoHTML = `
+                <div class="oa-card-botoes-acao-container">
+                    <button class="btn-acao cancelar" 
+                            ${attrsCancelar} 
+                            title="Cancelar esta tarefa"
+                            ${!podeCancelar ? 'disabled' : ''}>
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                    <button class="btn-acao finalizar"
+                            ${attrsFinalizar}
+                            ${!podeFinalizar ? 'disabled' : ''}>
+                        <i class="fas fa-check-double"></i> Finalizar
+                    </button>
+                </div>
+            `;
+
+        } else if (statusFinal === 'LIVRE') {
+            const podeAtribuir = permissoes.includes('lancar-arremate');
+            const attrsAtribuir = podeAtribuir
+                ? `data-action="iniciar"`
+                : `data-action="permissao-negada" data-permissao-necessaria="Atribuir Tarefa"`;
+
+            botoesAcaoHTML = `
+                <button class="btn-acao iniciar"
+                        ${attrsAtribuir}
+                        ${!podeAtribuir ? 'disabled' : ''}>
+                    <i class="fas fa-play"></i> Atribuir Tarefa
+                </button>
+            `;
+        }
     
     // Lógica para o botão de "Marcar Falta"
     const podeMarcarFalta = ['LIVRE', 'TRABALHANDO', 'FALTOU'].includes(statusFinal);
@@ -276,7 +329,6 @@ async function handleAtribuirTarefa(tiktik) {
     
     const fecharModal = () => {
         modal.style.display = 'none';
-        // Remove do body após fechar para manter o DOM limpo
         if (modal.parentNode === document.body) {
             document.body.removeChild(modal);
         }
@@ -419,7 +471,7 @@ async function handleAtribuirTarefa(tiktik) {
             const produtoInfo = todosOsProdutosCadastrados.find(p => p.id == itemSelecionado.produto_id);
             const imagemSrc = obterImagemProduto(produtoInfo, itemSelecionado.variante);
 
-            // Mapa de produtos em trabalho, para garantir a informação mais recente
+            // Mapa de produtos em trabalho
             const produtosEmTrabalho = new Map();
             statusTiktiksCache
                 .filter(t => t.status_atual === 'TRABALHANDO' && t.produto_id)
@@ -435,12 +487,11 @@ async function handleAtribuirTarefa(tiktik) {
             const tarefasAtivas = produtosEmTrabalho.get(chaveProduto);
             
             let saldoDisponivel = itemSelecionado.saldo_para_arrematar;
-            
             if (tarefasAtivas) {
                 const quantidadeReservada = tarefasAtivas.reduce((total, task) => total + task.quantidade, 0);
                 saldoDisponivel = itemSelecionado.saldo_para_arrematar - quantidadeReservada;
             }
-            saldoDisponivel = saldoDisponivel > 0 ? saldoDisponivel : 0; // Garante que não seja negativo
+            saldoDisponivel = saldoDisponivel > 0 ? saldoDisponivel : 0;
 
             // Gera a lista de OPs de origem
             let opsOrigemHTML = '';
@@ -456,6 +507,9 @@ async function handleAtribuirTarefa(tiktik) {
                 `;
             }
 
+            // --- INÍCIO DA PARTE MODIFICADA ---
+            
+            // 1. ATUALIZAÇÃO DO HTML DO FORMULÁRIO
             formContainer.innerHTML = `
                 <button id="btnVoltarParaLista" class="oa-btn-voltar-mobile"><i class="fas fa-arrow-left"></i> Voltar</button>
                 <img src="${imagemSrc}" alt="Produto" class="img-confirmacao">
@@ -474,34 +528,117 @@ async function handleAtribuirTarefa(tiktik) {
                         <span id="saldoRestante" class="saldo-valor restante">--</span>
                     </div>
                 </div>
-                <div class="oa-form-grupo-atribuir">
+
+                <div class="seletor-quantidade-wrapper">
                     <label for="inputQuantidadeAtribuir">Qtd. a Arrematar:</label>
-                    <input type="number" id="inputQuantidadeAtribuir" class="oa-input-tarefas" min="1" max="${saldoDisponivel}" required>
+                    <div class="input-container">
+                        <button type="button" class="ajuste-qtd-btn" data-ajuste="-1">-</button>
+                        <input type="number" id="inputQuantidadeAtribuir" class="oa-input-tarefas" min="0" max="${saldoDisponivel}" required>
+                        <button type="button" class="ajuste-qtd-btn" data-ajuste="1">+</button>
+                    </div>
+                    <div class="atalhos-qtd-container">
+                        <button type="button" class="atalho-qtd-btn" data-atalho="10">+10</button>
+                        <button type="button" class="atalho-qtd-btn" data-atalho="50">+50</button>
+                        <button type="button" class="atalho-qtd-btn" data-atalho="tudo">TUDO</button>
+                    </div>
                 </div>
                 <button id="btnConfirmarAtribuicao" class="oa-btn oa-btn-sucesso" disabled><i class="fas fa-check"></i> Confirmar</button>
             `;
 
+            // 2. ADIÇÃO DOS NOVOS LISTENERS E LÓGICA DE INTERAÇÃO
             const inputQtd = formContainer.querySelector('#inputQuantidadeAtribuir');
             const btnConfirmar = formContainer.querySelector('#btnConfirmarAtribuicao');
             const saldoRestanteEl = formContainer.querySelector('#saldoRestante');
+            const maxQtd = saldoDisponivel;
 
-            formContainer.querySelector('#btnVoltarParaLista').addEventListener('click', () => mostrarTela('lista'));
-            
-            inputQtd.focus();
-            
-            inputQtd.oninput = () => {
-                const qtd = parseInt(inputQtd.value) || 0;
-                const restante = saldoDisponivel - qtd;
-                saldoRestanteEl.textContent = restante >= 0 ? restante : '--';
-                btnConfirmar.disabled = !(qtd > 0 && qtd <= saldoDisponivel);
+            const atualizarInput = (novaQtd) => {
+                let valor = Math.max(0, Math.min(novaQtd, maxQtd));
+                inputQtd.value = valor;
+                inputQtd.dispatchEvent(new Event('input', { bubbles: true }));
             };
 
-            // Passa o 'tiktik' do escopo externo de 'handleAtribuirTarefa'
+            formContainer.querySelectorAll('.ajuste-qtd-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const ajuste = parseInt(btn.dataset.ajuste);
+                    const valorAtual = parseInt(inputQtd.value) || 0;
+                    atualizarInput(valorAtual + ajuste);
+                });
+            });
+
+            formContainer.querySelectorAll('.atalho-qtd-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const atalho = btn.dataset.atalho;
+                    const valorAtual = parseInt(inputQtd.value) || 0;
+                    
+                    if (atalho === 'tudo') {
+                        atualizarInput(maxQtd);
+                    } else {
+                        const incremento = parseInt(atalho);
+                        atualizarInput(valorAtual + incremento);
+                    }
+                });
+            });
+
+        // 3. SEU LISTENER PRINCIPAL (COM O AVISO INTELIGENTE)
+        inputQtd.addEventListener('input', debounce(() => {
+            const qtd = parseInt(inputQtd.value) || 0;
+            const restante = saldoDisponivel - qtd;
+            saldoRestanteEl.textContent = restante >= 0 ? restante : '--';
+            btnConfirmar.disabled = !(qtd > 0 && qtd <= saldoDisponivel);
+
+            // Lógica do aviso
+            const dadosDePerformanceDoProduto = statusTiktiksCache.find(t => t.produto_id === itemSelecionado.produto_id);
+            const mediaTempo = dadosDePerformanceDoProduto ? dadosDePerformanceDoProduto.media_tempo_por_peca : 0;
+            const tiktikDadosCompletos = statusTiktiksCache.find(t => t.id === tiktik.id);
+
+            formContainer.querySelector('.aviso-pausa-inteligente')?.remove();
+
+            if (qtd > 0 && mediaTempo > 0 && tiktikDadosCompletos) {
+                    const tempoEstimadoSegundos = qtd * mediaTempo;
+                    const agora = new Date();
+                    const horaAtualStr = agora.toLocaleTimeString('en-GB', { hour: '2-digit', minute:'2-digit' });
+
+                    let proximaPausaInicio = null;
+                    if (tiktikDadosCompletos.horario_saida_1 && tiktikDadosCompletos.horario_entrada_2 && horaAtualStr < tiktikDadosCompletos.horario_saida_1) {
+                        proximaPausaInicio = tiktikDadosCompletos.horario_saida_1;
+                    } else if (tiktikDadosCompletos.horario_saida_2 && tiktikDadosCompletos.horario_entrada_3 && horaAtualStr < tiktikDadosCompletos.horario_saida_2) {
+                        proximaPausaInicio = tiktikDadosCompletos.horario_saida_2;
+                    }
+                    
+                    if (proximaPausaInicio) {
+                        const agora = new Date(); // Pega a data e hora atuais
+                        
+                        // Cria uma nova data para a pausa baseada no 'agora', garantindo que é o mesmo dia
+                        const dataPausa = new Date(agora.getTime());
+                        const [h_pausa, m_pausa] = proximaPausaInicio.split(':');
+                        dataPausa.setHours(parseInt(h_pausa), parseInt(m_pausa), 0, 0); // Define a hora da pausa
+
+                        if (dataPausa > agora) { 
+                        const segundosAtePausa = (dataPausa - agora) / 1000;
+                        if (tempoEstimadoSegundos > segundosAtePausa) {
+                            const tempoEstimadoFormatado = new Date(tempoEstimadoSegundos * 1000).toISOString().substr(11, 8);
+                            const avisoEl = document.createElement('p');
+                            avisoEl.className = 'aviso-pausa-inteligente';
+                            avisoEl.innerHTML = `⚠️ <strong>Atenção:</strong> O tempo estimado (${tempoEstimadoFormatado}) é maior que o tempo restante até a próxima pausa.`;
+                            // Coloca o aviso depois do wrapper do seletor, para melhor posicionamento
+                            formContainer.querySelector('.seletor-quantidade-wrapper').insertAdjacentElement('afterend', avisoEl);
+                        }
+                    }
+                }
+            }
+        }, 300)); // Fim do addEventListener
+
+            // O resto do seu código permanece igual
+            formContainer.querySelector('#btnVoltarParaLista').addEventListener('click', () => mostrarTela('lista'));
+            inputQtd.focus();
             btnConfirmar.onclick = () => confirmarAtribuicao(tiktik, itemSelecionado, parseInt(inputQtd.value));
-            
             mostrarTela('confirmacao');
-        }
-    };
+            const colunaConfirmacao = formContainer.closest('.coluna-confirmacao');
+                if (colunaConfirmacao) {
+                    colunaConfirmacao.scrollTop = 0;
+                }
+            }
+        };
 
     const confirmarAtribuicao = async (tiktik, item, quantidade) => {
         const btnConfirmar = formContainer.querySelector('#btnConfirmarAtribuicao');
@@ -596,6 +733,37 @@ async function handleFinalizarTarefa(tiktik) {
     }
 }
 
+async function handleCancelarTarefa(tiktik) {
+    // 1. Pede confirmação ao usuário
+    const confirmado = await mostrarConfirmacao(
+        `Tem certeza que deseja cancelar a tarefa de <strong>${tiktik.produto_nome}</strong> atribuída para <strong>${tiktik.nome}</strong>? <br><br>O cronômetro será zerado e o produto voltará para a fila.`,
+        'aviso' // Usamos 'aviso' (amarelo) pois não é um erro, mas requer atenção
+    );
+
+    if (!confirmado) {
+        return; // Usuário clicou em "Não"
+    }
+
+    // 2. Chama a nova API que criamos no backend
+    try {
+        await fetchFromAPI('/arremates/sessoes/cancelar', {
+            method: 'POST',
+            body: JSON.stringify({
+                id_sessao: tiktik.id_sessao 
+            })
+        });
+        
+        mostrarMensagem('Tarefa cancelada com sucesso!', 'sucesso');
+
+        // 3. Atualiza a interface para refletir a mudança
+        await renderizarPainelStatus(); // O card do tiktik voltará ao estado "LIVRE"
+        await forcarAtualizacaoFilaDeArremates(); // O saldo do produto na fila principal será corrigido
+
+    } catch (error) {
+        mostrarMensagem(`Erro ao cancelar tarefa: ${error.message}`, 'erro');
+    }
+}
+
 async function handleMarcarFalta(tiktik, statusAtual) {
     const novoStatus = statusAtual === 'FALTOU' ? 'LIVRE' : 'FALTOU';
     const acao = novoStatus === 'FALTOU' ? 'registrar a falta' : 'remover a falta';
@@ -638,34 +806,97 @@ function controlarAtualizacaoPainel(iniciar = true) {
     }
 }
 
-async function abrirModoFoco(tiktik) {
-    const modal = document.getElementById('modalModoFoco');
-    if (!modal) return;
+async function handleDesfazerTarefa(sessaoId) {
+    const confirmado = await mostrarConfirmacao(
+        "Tem certeza que deseja desfazer esta tarefa finalizada?<br><br>O saldo do produto será devolvido à fila de arremate e esta tarefa não contará mais para as métricas de performance.",
+        'perigo'
+    );
 
-    // Preenche os dados básicos e mostra o modal com spinners
+    if (!confirmado) return;
+
+    try {
+        // Mostra o spinner global para feedback imediato
+        document.getElementById('carregamentoGlobal').classList.add('visivel');
+
+        await fetchFromAPI('/arremates/sessoes/estornar', {
+            method: 'POST',
+            body: JSON.stringify({ id_sessao: sessaoId })
+        });
+
+        mostrarMensagem("Tarefa desfeita com sucesso!", 'sucesso');
+        
+        if (modalModoFocoElemento) {
+            modalModoFocoElemento.style.display = 'none';
+        }
+        
+        await renderizarPainelStatus();
+        await forcarAtualizacaoFilaDeArremates();
+
+    } catch (error) {
+        mostrarMensagem(`Erro ao desfazer tarefa: ${error.message}`, 'erro');
+    } finally {
+        document.getElementById('carregamentoGlobal').classList.remove('visivel');
+    }
+}
+
+
+// Em: public/js/admin-arremates.js
+// SUBSTITUA a sua função abrirModoFoco inteira por esta:
+
+async function abrirModoFoco(tiktik) {
+    // 1. Verifica se temos o elemento do modal em memória
+    if (!modalModoFocoElemento) {
+        console.error("ERRO CRÍTICO: O elemento do modal não foi inicializado.");
+        mostrarMensagem("Erro ao abrir painel (código: M01).", "erro");
+        return;
+    }
+    
+    // 2. GARANTE que o modal está anexado ao body do documento
+    document.body.appendChild(modalModoFocoElemento);
+    
+    // 3. Agora podemos trabalhar com ele com segurança, usando a variável global
+    const modal = modalModoFocoElemento;
+
+    // 2. Preenche os dados básicos e mostra o modal com spinners
     modal.querySelector('#focoAvatar').src = tiktik.avatar_url || '/img/placeholder-image.png';
     modal.querySelector('#focoNome').textContent = `Desempenho de ${tiktik.nome}`;
     modal.querySelector('#focoMetricas').innerHTML = '<div class="spinner"></div>';
-    modal.querySelector('#focoTimeline').innerHTML = '<div class="spinner">Calculando timeline...</div>';
+    modal.querySelector('#focoResumoProdutos').innerHTML = '<div class="spinner">Calculando resumo...</div>';
     modal.querySelector('#focoTarefas').innerHTML = '<div class="spinner"></div>';
 
-    const fecharModal = () => { modal.style.display = 'none'; };
+    // 3. Define as funções de fechar usando as referências recém-buscadas
+    const fecharModal = () => {
+        modal.style.display = 'none';
+        if (modal.parentNode === document.body) {
+            document.body.removeChild(modal);
+        }
+    };
     modal.querySelector('.popup-overlay').onclick = fecharModal;
     modal.querySelector('.oa-modal-fechar-btn').onclick = fecharModal;
+    
+    // 4. Exibe o modal
     modal.style.display = 'flex';
 
     try {
-        // Chama a nova API
         const dados = await fetchFromAPI(`/arremates/desempenho-diario/${tiktik.id}`);
         
-        // Renderiza as seções com os dados recebidos
         renderizarMetricasFoco(dados);
-        renderizarTimelineFoco(dados);
         renderizarTarefasFoco(dados);
+        
+        const tarefasContainer = modal.querySelector('#focoTarefas');
+        // Adiciona um listener novo a cada abertura. Removê-lo ao fechar seria ideal,
+        // mas para este caso, não causará problemas significativos.
+        tarefasContainer.addEventListener('click', (event) => {
+            const undoButton = event.target.closest('.btn-desfazer-tarefa');
+            if (undoButton && !undoButton.disabled) {
+                const sessaoId = parseInt(undoButton.dataset.sessaoId);
+                handleDesfazerTarefa(sessaoId);
+            }
+        });
         
     } catch (error) {
         mostrarMensagem(`Erro ao carregar dados de desempenho: ${error.message}`, 'erro');
-        fecharModal();
+        fecharModal(); // Fecha o modal se a API der erro
     }
 }
 
@@ -692,37 +923,85 @@ function renderizarMetricasFoco(dados) {
     `;
 }
 
-function renderizarTimelineFoco(dados) {
-    // Esta é uma função complexa. Vamos começar com uma versão simplificada.
-    const container = document.getElementById('focoTimeline');
-    container.innerHTML = `<p style="text-align:center;"><i>(Timeline visual em desenvolvimento)</i></p>`;
-    // A lógica completa para a timeline pode ser um próximo passo.
-}
-
 function renderizarTarefasFoco(dados) {
-    const container = document.getElementById('focoTarefas');
+    const resumoContainer = document.getElementById('focoResumoProdutos');
+    const tarefasContainer = document.getElementById('focoTarefas');
     const { sessoes } = dados;
 
-    if (sessoes.length === 0) {
-        container.innerHTML = '<p>Nenhuma tarefa finalizada hoje.</p>';
+    if (!sessoes || sessoes.length === 0) {
+        resumoContainer.innerHTML = '<p>Nenhum produto finalizado hoje.</p>';
+        tarefasContainer.innerHTML = '<p>Nenhuma tarefa finalizada hoje.</p>';
         return;
     }
 
-    container.innerHTML = `
-        <table class="oa-tabela-historico">
-            <thead><tr><th>Início</th><th>Produto</th><th>Qtd.</th><th>Duração</th></tr></thead>
-            <tbody>
-                ${sessoes.map(s => `
-                    <tr>
-                        <td>${new Date(s.data_inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</td>
-                        <td>${s.produto_nome} ${s.variante ? `(${s.variante})` : ''}</td>
-                        <td>${s.quantidade_finalizada || 0}</td>
-                        <td>${s.data_fim ? new Date((new Date(s.data_fim) - new Date(s.data_inicio))).toISOString().substr(14, 5) + ' min' : 'Em andamento'}</td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>
-    `;
+    // --- 1. Processar dados para o Resumo ---
+    const resumoProdutos = {};
+    sessoes.forEach(sessao => {
+        if (sessao.status === 'FINALIZADA') {
+            const nomeProduto = sessao.produto_nome;
+            if (!resumoProdutos[nomeProduto]) {
+                resumoProdutos[nomeProduto] = { 
+                    totalPecas: 0, 
+                    nome: nomeProduto,
+                    imagem: obterImagemProduto(
+                        todosOsProdutosCadastrados.find(p => p.id == sessao.produto_id), 
+                        null // Para o resumo, usamos a imagem principal do produto
+                    )
+                };
+            }
+            resumoProdutos[nomeProduto].totalPecas += sessao.quantidade_finalizada || 0;
+        }
+    });
+
+    // --- 2. Renderizar o Resumo ---
+    const resumoArray = Object.values(resumoProdutos).sort((a, b) => b.totalPecas - a.totalPecas);
+    if (resumoArray.length > 0) {
+        resumoContainer.innerHTML = resumoArray.map(produto => `
+            <div class="foco-resumo-item">
+                <img src="${produto.imagem}" alt="${produto.nome}" class="foco-resumo-img">
+                <div class="foco-resumo-info">
+                    <span class="foco-resumo-nome">${produto.nome}</span>
+                    <span class="foco-resumo-qtd">${produto.totalPecas} pçs</span>
+                </div>
+            </div>
+        `).join('');
+    } else {
+        resumoContainer.innerHTML = '<p>Nenhum produto finalizado hoje.</p>';
+    }
+
+    // --- 3. Renderizar os Cards de Tarefas Detalhadas ---
+    const sessoesFinalizadas = sessoes.filter(s => s.status === 'FINALIZADA');
+    if (sessoesFinalizadas.length > 0) {
+        tarefasContainer.innerHTML = sessoesFinalizadas.map(s => {
+            const produtoInfo = todosOsProdutosCadastrados.find(p => p.id == s.produto_id);
+            const imagemSrc = obterImagemProduto(produtoInfo, s.variante);
+            const duracaoMs = s.data_fim ? new Date(s.data_fim) - new Date(s.data_inicio) : 0;
+            const duracaoFormatada = new Date(duracaoMs).toISOString().substr(11, 8);
+            const podeDesfazer = permissoes.includes('estornar-arremate');
+
+            return `
+                <div class="foco-tarefa-card">
+                    <img src="${imagemSrc}" alt="${s.produto_nome}" class="foco-tarefa-img">
+                    <div class="foco-tarefa-info">
+                        <span class="foco-tarefa-produto">${s.produto_nome}</span>
+                        <span class="foco-tarefa-variante">${s.variante || 'Padrão'}</span>
+                        <div class="foco-tarefa-metricas">
+                            <span><i class="fas fa-box"></i> ${s.quantidade_finalizada || 0} pçs</span>
+                            <span><i class="fas fa-clock"></i> ${duracaoFormatada}</span>
+                        </div>
+                    </div>
+                    <button class="btn-desfazer-tarefa" 
+                            data-sessao-id="${s.id}" 
+                            title="Desfazer este lançamento"
+                            ${podeDesfazer ? '' : 'disabled'}>
+                        <i class="fas fa-undo"></i>
+                    </button>
+                </div>
+            `;
+        }).join('');
+    } else {
+        tarefasContainer.innerHTML = '<p>Nenhuma tarefa finalizada hoje.</p>';
+    }
 }
 
 // --- Funções de Fetch API (Centralizadas) ---
@@ -1406,22 +1685,96 @@ async function handleHashChange() {
     }
 }
 
+//  Delegação de eventos para o painel de atividades e accordion
+     const painelClickHandler = async (event) => {
+
+    // 1. Identifica os possíveis alvos do clique
+    const actionButton = event.target.closest('[data-action]');
+    const avatarClicado = event.target.closest('.oa-avatar-foco');
+
+    // 3. Encontra o card pai do elemento que foi clicado
+    const card = event.target.closest('.oa-card-status-tiktik');
+    if (!card) {
+        console.error("ERRO: Alvo interativo encontrado, mas não estava dentro de um .oa-card-status-tiktik. Isso não deveria acontecer.");
+        return;
+    }
+
+    // 4. Pega o ID do tiktik a partir do dataset do card
+    const tiktikId = parseInt(card.dataset.tiktikId);
+    if (isNaN(tiktikId)) {
+        console.error("ERRO: Não foi possível obter o tiktikId do card.", card.dataset);
+        return;
+    }
+
+    // --- DECISÃO DO QUE FAZER ---
+
+    // Ação: Abrir o "Modo Foco" tem prioridade
+    if (avatarClicado) {
+        try {
+            const tiktikData = statusTiktiksCache.find(t => t.id === tiktikId);
+            if (tiktikData) {
+                abrirModoFoco(tiktikData);
+            } else {
+                console.error(`Não foram encontrados dados no cache para o tiktikId: ${tiktikId}`);
+            }
+        } catch(e) { console.error("Erro ao tentar abrir modo foco:", e); }
+        return;
+    }
+
+    // Ação: Executar um Botão
+    if (actionButton) {
+            const action = actionButton.dataset.action;
+
+            if (action === 'permissao-negada') {
+                const permissaoNecessaria = actionButton.dataset.permissaoNecessaria || "esta ação";
+                mostrarMensagem(`Você não tem permissão para ${permissaoNecessaria.toLowerCase()}.`, 'aviso');
+                return;
+            }
+
+            try {
+                const tiktikData = statusTiktiksCache.find(t => t.id === tiktikId);
+                if (!tiktikData) throw new Error(`Dados do tiktik ID ${tiktikId} não encontrados.`);
+
+                switch(action) {
+                    case 'iniciar': 
+                        handleAtribuirTarefa(tiktikData); 
+                        break;
+                    case 'finalizar': 
+                        handleFinalizarTarefa(tiktikData); 
+                        break;
+                    case 'cancelar':
+                        handleCancelarTarefa(tiktikData);
+                        break;
+                    case 'marcar-falta':
+                        const statusAtual = determinarStatusFinal(tiktikData).statusFinal;
+                        handleMarcarFalta(tiktikData, statusAtual);
+                        break;
+                }
+            } catch (error) {
+                mostrarMensagem(`Erro ao processar ação: ${error.message}`, 'erro');
+            }
+        }
+    };
+
 function configurarEventListeners() {
-    // Botão para fechar a view de detalhes (quando se usa o hash #)
+    // Mantém o listener para fechar a view de detalhes. Perfeito.
     document.getElementById('fecharArremateDetalheBtn')?.addEventListener('click', () => window.location.hash = '');
 
-    // Botão principal para abrir o modal de histórico geral (agora no header React)
-    // Usamos 'document' para o listener funcionar mesmo que o botão seja renderizado depois
-    document.addEventListener('click', (event) => {
-        if (event.target.closest('#btnAbrirHistorico')) {
-            mostrarHistoricoArremates(); // Sua função para abrir o modal
-        }
-    });
-
-    // Botão para atualizar manualmente o painel de atividades
-    document.getElementById('btnAtualizarPainel')?.addEventListener('click', renderizarPainelStatus);
+    // Mantém o listener para o Accordion de Inativos. Perfeito.
+    const accordionHeader = document.getElementById('accordionHeader');
+    const accordionContent = document.getElementById('accordionContent');
+    if (accordionHeader && accordionContent) {
+        accordionHeader.addEventListener('click', () => {
+            accordionHeader.classList.toggle('active');
+            if (accordionContent.style.maxHeight) {
+                accordionContent.style.maxHeight = null;
+            } else {
+                accordionContent.style.maxHeight = accordionContent.scrollHeight + "px";
+            }
+        });
+    }
     
-    // --- LISTENERS PARA AS ABAS E BOTÕES DENTRO DA VIEW DE DETALHES (#lancar-arremate) ---
+    // Mantém os listeners para as abas da view de detalhes. Perfeito.
     const abasContainer = document.querySelector('.oa-tabs');
     if (abasContainer) {
         abasContainer.addEventListener('click', (e) => {
@@ -1439,15 +1792,61 @@ function configurarEventListeners() {
         });
     }
 
-    // Botão de confirmar ajuste/perda da view de detalhes
+    // Mantém o listener para o botão de ajuste. Perfeito.
     document.getElementById('btnConfirmarRegistroAjuste')?.addEventListener('click', registrarAjuste);
 
+    // Mantém o listener para o evento customizado. Perfeito.
     window.addEventListener('forcarAtualizacaoFila', () => {
-    // Usamos o 'then' para mostrar a mensagem apenas depois que a atualização terminar
-    forcarAtualizacaoFilaDeArremates().then(() => {
-        mostrarMensagem('Fila de arremates atualizada!', 'sucesso', 2000);
+        forcarAtualizacaoFilaDeArremates().then(() => {
+            mostrarMensagem('Fila de arremates atualizada!', 'sucesso', 2000);
+        });
     });
-});
+
+    // =========================================================================
+    // <<< INÍCIO DA NOVA LÓGICA INTEGRADA - O LISTENER MESTRE >>>
+    // =========================================================================
+    
+    // Este único listener no documento agora gerencia as ações dinâmicas da página
+    // que antes estavam espalhadas.
+    document.addEventListener('click', async (event) => {
+        // Alvo 1: Botão de abrir o Histórico Geral (vindo do header React)
+        if (event.target.closest('#btnAbrirHistorico')) {
+            mostrarHistoricoArremates();
+            return; 
+        }
+
+        // Alvo 2: Botão de atualizar o Painel de Atividades
+        if (event.target.closest('#btnAtualizarPainel')) {
+            renderizarPainelStatus();
+            return; 
+        }
+        
+        // Alvo 3: Qualquer interação DENTRO do painel de atividades
+        // Verifica se o clique ocorreu dentro de um card de tiktik
+        const cardClicado = event.target.closest('.oa-card-status-tiktik');
+        if (cardClicado) {
+            // Se sim, delega a lógica para o painelClickHandler, que é especialista nisso.
+            await painelClickHandler(event);
+            return; 
+        }
+
+        // Alvo 4: O header do Accordion de Inativos
+            const accordionHeaderClicado = event.target.closest('#accordionHeader');
+            if (accordionHeaderClicado) {
+                const accordionContent = document.getElementById('accordionContent');
+                if (accordionContent) {
+                    accordionHeaderClicado.classList.toggle('active');
+                    if (accordionContent.style.maxHeight) {
+                        accordionContent.style.maxHeight = null;
+                    } else {
+                        accordionContent.style.maxHeight = accordionContent.scrollHeight + "px";
+                    }
+                }
+                return; // Ação concluída
+            }
+
+        
+    });
 }
 
 
@@ -1584,28 +1983,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         usuarioLogado = auth.usuario;
         permissoes = auth.permissoes || [];
         document.body.classList.add('autenticado');
-
-        // ADICIONADO DE VOLTA: "Sequestra" o modal de atribuição de tarefa
-        const modalOriginal = document.getElementById('modalAtribuirTarefa');
-        if (modalOriginal) {
-            modalAtribuirTarefaElemento = modalOriginal;
-            modalOriginal.parentNode.removeChild(modalOriginal);
-        } else {
-            console.error("CRÍTICO: Elemento do modal #modalAtribuirTarefa não encontrado no HTML inicial.");
-        }
-
+        
         // 1. CARREGAMENTO DE DADOS ESSENCIAIS
         const [produtosCadastrados, respostaFila, usuarios] = await Promise.all([
             obterProdutosDoStorage(true),
             fetchFromAPI('/arremates/fila?fetchAll=true'),
             fetchFromAPI('/usuarios')
         ]);
+
+       // "Sequestra" o modal de foco para gerenciamento via JS
+        const modalFocoOriginal = document.getElementById('modalModoFoco');
+        if (modalFocoOriginal) {
+            modalModoFocoElemento = modalFocoOriginal;
+            modalFocoOriginal.parentNode.removeChild(modalFocoOriginal);
+        } else {
+            console.error("CRÍTICO: Elemento #modalModoFoco não encontrado no HTML inicial.");
+        }
+
+        // "Sequestra" o modal de ATRIBUIR TAREFA para gerenciamento via JS
+        const modalAtribuirOriginal = document.getElementById('modalAtribuirTarefa');
+        if (modalAtribuirOriginal) {
+            modalAtribuirTarefaElemento = modalAtribuirOriginal;
+            modalAtribuirOriginal.parentNode.removeChild(modalAtribuirOriginal);
+        } else {
+            console.error("CRÍTICO: Elemento #modalAtribuirTarefa não encontrado no HTML inicial.");
+        }
         
         todosOsProdutosCadastrados = produtosCadastrados || [];
         todosOsUsuarios = usuarios || [];
         const itensOriginaisDaFila = respostaFila.rows || [];
 
-        // >>>>> A MÁGICA ACONTECE AQUI: A TRADUÇÃO <<<<<
         const itensTraduzidosParaControlador = itensOriginaisDaFila.map(item => ({
             // Mapeia os campos de Arremate para os campos que o Controlador espera
             produto: item.produto_nome,
@@ -1644,61 +2051,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // 6. CONFIGURAÇÃO DE TODOS OS EVENT LISTENERS
         configurarEventListeners();
-
-        //  Delegação de eventos para o painel de atividades e accordion
-        const painelDisponiveisContainer = document.getElementById('painelDisponiveisContainer');
-        const painelInativosContainer = document.getElementById('painelInativosContainer');
-        const painelClickHandler = async (event) => {
-            // 1. Identifica os elementos clicados
-            const actionButton = event.target.closest('[data-action]');
-            
-            // MODIFICADO: Agora procuramos especificamente pelo avatar
-            const avatarClicado = event.target.closest('.oa-avatar-foco');
-
-            // 2. Se não clicou em nada interativo (botão ou avatar), para a execução
-            if (!actionButton && !avatarClicado) {
-                return;
-            }
-
-            // 3. Encontra o card pai do elemento que foi clicado
-            const card = event.target.closest('.oa-card-status-tiktik');
-            if (!card) return;
-
-            // 4. Pega o ID do tiktik a partir do dataset do card
-            const tiktikId = parseInt(card.dataset.tiktikId);
-            if (!tiktikId) return;
-
-            // 5. Decide qual ação tomar com base no que foi clicado
-            try {
-                const tiktiksComSessao = await fetchFromAPI('/arremates/status-tiktiks');
-                const tiktikData = tiktiksComSessao.find(t => t.id === tiktikId);
-                if (!tiktikData) throw new Error(`Dados do tiktik ID ${tiktikId} não encontrados.`);
-
-                // --- AÇÃO: Abrir o "Modo Foco" ---
-                // MODIFICADO: A condição agora é se o avatar foi clicado
-                if (avatarClicado) {
-                    abrirModoFoco(tiktikData);
-                    return; 
-                }
-
-                // --- AÇÃO: Executar um Botão ---
-                if (actionButton) {
-                    const action = actionButton.dataset.action;
-                    switch(action) {
-                        case 'iniciar': handleAtribuirTarefa(tiktikData); break;
-                        case 'finalizar': handleFinalizarTarefa(tiktikData); break;
-                        case 'marcar-falta':
-                            const statusAtual = determinarStatusFinal(tiktikData).statusFinal;
-                            handleMarcarFalta(tiktikData, statusAtual);
-                            break;
-                    }
-                }
-            } catch (error) {
-                mostrarMensagem(`Erro ao processar ação: ${error.message}`, 'erro');
-            }
-        };
-        if (painelDisponiveisContainer) painelDisponiveisContainer.addEventListener('click', painelClickHandler);
-        if (painelInativosContainer) painelInativosContainer.addEventListener('click', painelClickHandler);
 
         const accordionHeader = document.getElementById('accordionHeader');
         const accordionContent = document.getElementById('accordionContent');

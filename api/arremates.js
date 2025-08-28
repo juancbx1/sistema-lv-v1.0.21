@@ -38,6 +38,42 @@ const verificarTokenInterna = (reqOriginal) => {
     }
 };
 
+/**
+ * Calcula o tempo total em segundos que um usuário esteve em pausa
+ * dentro de um intervalo de tempo de uma tarefa.
+ * @param {object} horariosUsuario - Objeto com os horários (horario_entrada_1, horario_saida_1, etc.)
+ * @param {Date} dataInicioTarefa - A data/hora de início da tarefa.
+ * @param {Date} dataFimTarefa - A data/hora de fim da tarefa (ou o momento atual se a tarefa está em andamento).
+ * @returns {number} - O total de segundos de pausa no intervalo.
+ */
+function calcularTempoDePausa(horariosUsuario, dataInicioTarefa, dataFimTarefa) {
+    let segundosPausa = 0;
+    const { horario_saida_1, horario_entrada_2, horario_saida_2, horario_entrada_3 } = horariosUsuario;
+
+    const pausas = [];
+    if (horario_saida_1 && horario_entrada_2) pausas.push({ inicio: horario_saida_1, fim: horario_entrada_2 }); // Pausa do almoço
+    if (horario_saida_2 && horario_entrada_3) pausas.push({ inicio: horario_saida_2, fim: horario_entrada_3 }); // Pausa da tarde
+
+    for (const pausa of pausas) {
+        // Constrói as datas completas para a pausa no dia da tarefa
+        const inicioPausa = new Date(dataInicioTarefa);
+        const [h_inicio, m_inicio] = pausa.inicio.split(':');
+        inicioPausa.setHours(h_inicio, m_inicio, 0, 0);
+
+        const fimPausa = new Date(dataInicioTarefa);
+        const [h_fim, m_fim] = pausa.fim.split(':');
+        fimPausa.setHours(h_fim, m_fim, 0, 0);
+
+        // Calcula a sobreposição (interseção) entre o período da tarefa e o período da pausa
+        const inicioIntersecao = new Date(Math.max(dataInicioTarefa, inicioPausa));
+        const fimIntersecao = new Date(Math.min(dataFimTarefa, fimPausa));
+
+        if (fimIntersecao > inicioIntersecao) {
+            segundosPausa += (fimIntersecao - inicioIntersecao) / 1000;
+        }
+    }
+    return Math.round(segundosPausa);
+}
 
 // Middleware para este router: Apenas autentica o token.
 // A gestão de conexão DB e verificação de permissões detalhadas fica em cada rota.
@@ -556,6 +592,19 @@ router.get('/fila', async (req, res) => {
     let dbClient;
     try {
         dbClient = await pool.connect();
+
+        // <<< NOVO: PASSO 1 - CALCULAR TODAS AS MÉDIAS DE TEMPO PRIMEIRO >>>
+        const mediasQuery = `
+            SELECT 
+                produto_id,
+                AVG((EXTRACT(EPOCH FROM (data_fim - data_inicio)) - tempo_pausado_segundos) / NULLIF(quantidade_finalizada, 0)) as media_tempo_por_peca
+            FROM sessoes_trabalho_arremate
+            WHERE status = 'FINALIZADA' AND quantidade_finalizada > 0
+            GROUP BY produto_id;
+        `;
+        const mediasResult = await dbClient.query(mediasQuery);
+        // Criamos um "mapa" para acesso rápido: { produto_id => media_tempo }
+        const mapaDeMedias = new Map(mediasResult.rows.map(row => [row.produto_id, parseFloat(row.media_tempo_por_peca)]));
         
         // 1. BUSCAR TODAS AS OPS FINALIZADAS
         const opsQuery = `
@@ -616,7 +665,8 @@ router.get('/fila', async (req, res) => {
                         variante: op.variante || '-',
                         saldo_para_arrematar: 0,
                         ops_detalhe: [],
-                        data_op_mais_recente: new Date(0)
+                        data_op_mais_recente: new Date(0),
+                        media_tempo_por_peca: mapaDeMedias.get(op.produto_id) || 0
                     });
                 }
 
@@ -731,24 +781,39 @@ router.get('/status-tiktiks', async (req, res) => {
         // 3. Processar os dados (calcular médias, etc.)
         const tiktiksComStatus = await Promise.all(result.rows.map(async (tiktik) => {
             let media_tempo_por_peca = null;
+            let tempo_decorrido_real_segundos = null;
 
-            if (tiktik.status_atual === 'TRABALHANDO' && tiktik.produto_id) {
+            if (tiktik.status_atual === 'TRABALHANDO' && tiktik.data_inicio) {
                 // Busca a média para o produto (ignorando variante)
                 const mediaQuery = `
-                    SELECT AVG(EXTRACT(EPOCH FROM (data_fim - data_inicio)) / quantidade_finalizada) as media
+                    SELECT AVG(
+                        (EXTRACT(EPOCH FROM (data_fim - data_inicio)) - tempo_pausado_segundos) / quantidade_finalizada
+                    ) as media
                     FROM sessoes_trabalho_arremate
-                    WHERE status = 'FINALIZADA' AND produto_id = $1 AND quantidade_finalizada > 0;
+                    WHERE status = 'FINALIZADA' 
+                    AND produto_id = $1 
+                    AND quantidade_finalizada > 0
+                    AND (EXTRACT(EPOCH FROM (data_fim - data_inicio)) - tempo_pausado_segundos) > 0;
                 `;
-                const mediaResult = await dbClient.query(mediaQuery, [tiktik.produto_id]);
-                if (mediaResult.rows[0].media) {
-                    media_tempo_por_peca = parseFloat(mediaResult.rows[0].media);
-                }
-            }
-            
-            return { ...tiktik, media_tempo_por_peca };
-        }));
+                 const mediaResult = await dbClient.query(mediaQuery, [tiktik.produto_id]);
+                    if (mediaResult.rows[0].media) {
+                        media_tempo_por_peca = parseFloat(mediaResult.rows[0].media);
+                    }
 
-        res.status(200).json(tiktiksComStatus);
+                    // <<< AQUI ESTÁ A NOVA LÓGICA >>>
+                    const dataInicio = new Date(tiktik.data_inicio);
+                    const agora = new Date();
+                    const tempoTotalBrutoSegundos = (agora - dataInicio) / 1000;
+                    const tempoPausaSegundos = calcularTempoDePausa(tiktik, dataInicio, agora);
+                    
+                    tempo_decorrido_real_segundos = Math.max(0, tempoTotalBrutoSegundos - tempoPausaSegundos);
+                }
+                
+                // Adicionamos a nova informação no objeto de retorno
+                return { ...tiktik, media_tempo_por_peca, tempo_decorrido_real_segundos };
+            }));
+
+            res.status(200).json(tiktiksComStatus);
 
     } catch (error) {
         console.error('[API /status-tiktiks] Erro:', error);
@@ -919,20 +984,25 @@ router.post('/sessoes/finalizar', async (req, res) => {
         const sessaoResult = await dbClient.query(sessaoQuery, [id_sessao]);
 
         if (sessaoResult.rows.length === 0) throw new Error('Sessão não encontrada.');
+
         const sessao = sessaoResult.rows[0];
-    
-        if (sessao.status === 'FINALIZADA') throw new Error('Esta sessão de trabalho já foi finalizada.');
+            if (sessao.status === 'FINALIZADA') throw new Error('Esta sessão de trabalho já foi finalizada.');
 
-        const userTiktikResult = await dbClient.query(`SELECT nome FROM usuarios WHERE id = $1`, [sessao.usuario_tiktik_id]);
-        const lancadorResult = await dbClient.query(`SELECT nome FROM usuarios WHERE id = $1`, [req.usuarioLogado.id]);
-        if (userTiktikResult.rows.length === 0 || lancadorResult.rows.length === 0) throw new Error('Usuário Tiktik ou Lançador não encontrado.');
-        const nomeTiktik = userTiktikResult.rows[0].nome;
-        const nomeLancador = lancadorResult.rows[0].nome;
+            // 1. PRIMEIRO, buscamos os dados dos usuários
+            const userTiktikResult = await dbClient.query(`SELECT * FROM usuarios WHERE id = $1`, [sessao.usuario_tiktik_id]);
+            const lancadorResult = await dbClient.query(`SELECT nome FROM usuarios WHERE id = $1`, [req.usuarioLogado.id]);
+            if (userTiktikResult.rows.length === 0 || lancadorResult.rows.length === 0) throw new Error('Usuário Tiktik ou Lançador não encontrado.');
+            const nomeTiktik = userTiktikResult.rows[0].nome;
+            const nomeLancador = lancadorResult.rows[0].nome;
 
-        let idsArrematesGerados = [];
+            // 2. AGORA SIM, com os dados do usuário em mãos, podemos calcular o tempo de pausa
+            const dataInicio = new Date(sessao.data_inicio);
+            const dataFim = new Date(); // O momento da finalização
+            const tempoPausaSegundos = calcularTempoDePausa(userTiktikResult.rows[0], dataInicio, dataFim);
 
-        if (qtdFinalizadaNum > 0) {
-            
+            let idsArrematesGerados = [];
+
+            if (qtdFinalizadaNum > 0) {
             let valorPontoAplicado = 1.00;
             const configPontosQuery = `
                 SELECT pontos_padrao FROM configuracoes_pontos_processos
@@ -945,7 +1015,6 @@ router.post('/sessoes/finalizar', async (req, res) => {
 
             let quantidadeRestanteParaLancar = qtdFinalizadaNum;
             
-            // ✨✨✨ LÓGICA DE LEITURA 100% SEGURA ✨✨✨
             const opsDeOrigem = (sessao && Array.isArray(sessao.dados_ops)) ? sessao.dados_ops : [];
             const opsOrdenadas = opsDeOrigem.sort((a, b) => a.numero - b.numero);
 
@@ -961,14 +1030,15 @@ router.post('/sessoes/finalizar', async (req, res) => {
                 if (qtdParaEstaOP > 0) {
                     const pontosGeradosParaEstaOP = qtdParaEstaOP * valorPontoAplicado;
                     const arremateResult = await dbClient.query(
-                        `INSERT INTO arremates (op_numero, op_edit_id, produto_id, variante, quantidade_arrematada, usuario_tiktik_id, usuario_tiktik, lancado_por, tipo_lancamento, valor_ponto_aplicado, pontos_gerados)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PRODUCAO', $9, $10) RETURNING id`,
-                        [
-                            op.numero, op.edit_id, sessao.produto_id, sessao.variante, 
-                            qtdParaEstaOP, sessao.usuario_tiktik_id, nomeTiktik, nomeLancador,
-                            valorPontoAplicado, pontosGeradosParaEstaOP
-                        ]
-                    );
+                        `INSERT INTO arremates (op_numero, op_edit_id, produto_id, variante, quantidade_arrematada, usuario_tiktik_id, usuario_tiktik, lancado_por, tipo_lancamento, valor_ponto_aplicado, pontos_gerados, id_sessao_origem)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PRODUCAO', $9, $10, $11) RETURNING id`,
+                            [
+                                op.numero, op.edit_id, sessao.produto_id, sessao.variante, 
+                                qtdParaEstaOP, sessao.usuario_tiktik_id, nomeTiktik, nomeLancador,
+                                valorPontoAplicado, pontosGeradosParaEstaOP,
+                                id_sessao
+                            ]
+                        );
                     idsArrematesGerados.push(arremateResult.rows[0].id);
                     quantidadeRestanteParaLancar -= qtdParaEstaOP;
                 }
@@ -980,8 +1050,10 @@ router.post('/sessoes/finalizar', async (req, res) => {
         }
         
         await dbClient.query(
-            `UPDATE sessoes_trabalho_arremate SET data_fim = NOW(), status = 'FINALIZADA', quantidade_finalizada = $1, id_arremate_gerado = $2 WHERE id = $3`,
-            [qtdFinalizadaNum, idsArrematesGerados.length > 0 ? idsArrematesGerados[0] : null, id_sessao]
+            `UPDATE sessoes_trabalho_arremate 
+            SET data_fim = $1, status = 'FINALIZADA', quantidade_finalizada = $2, id_arremate_gerado = $3, tempo_pausado_segundos = $4 
+            WHERE id = $5`,
+            [dataFim, qtdFinalizadaNum, idsArrematesGerados.length > 0 ? idsArrematesGerados[0] : null, tempoPausaSegundos, id_sessao]
         );
         
         await dbClient.query(
@@ -999,6 +1071,148 @@ router.post('/sessoes/finalizar', async (req, res) => {
         if (dbClient) await dbClient.query('ROLLBACK');
         console.error('[API /sessoes/finalizar] Erro:', error);
         res.status(500).json({ error: 'Erro ao finalizar sessão.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// ROTA: POST /api/arremates/sessoes/cancelar
+router.post('/sessoes/cancelar', async (req, res) => {
+    const { usuarioLogado } = req;
+    const { id_sessao } = req.body; // Receberemos o ID da sessão a ser cancelada
+
+    // 1. Validação básica de entrada
+    if (!id_sessao) {
+        return res.status(400).json({ error: 'O ID da sessão é obrigatório para o cancelamento.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+
+        // 2. Verificação de permissão (vamos criar uma nova permissão para isso)
+        const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
+        if (!permissoes.includes('cancelar-tarefa-arremate')) {
+            return res.status(403).json({ error: 'Permissão negada para cancelar tarefas.' });
+        }
+
+        // 3. Iniciar a transação para garantir a integridade dos dados
+        await dbClient.query('BEGIN');
+
+        // 4. Buscar a sessão para garantir que ela existe e pegar o ID do tiktik
+        const sessaoQuery = `SELECT id, usuario_tiktik_id, status FROM sessoes_trabalho_arremate WHERE id = $1 FOR UPDATE`;
+        const sessaoResult = await dbClient.query(sessaoQuery, [id_sessao]);
+
+        if (sessaoResult.rows.length === 0) {
+            // Se a sessão não existe, não é um erro grave, talvez já foi cancelada.
+            // Apenas informamos e não quebramos a transação.
+            await dbClient.query('COMMIT');
+            return res.status(404).json({ error: 'Sessão de trabalho não encontrada.' });
+        }
+
+        const sessao = sessaoResult.rows[0];
+
+        // 5. Regra de negócio: só podemos cancelar uma tarefa que está EM_ANDAMENTO
+        if (sessao.status !== 'EM_ANDAMENTO') {
+            await dbClient.query('ROLLBACK'); // Desfaz a transação
+            return res.status(409).json({ error: `Não é possível cancelar. Esta tarefa já foi '${sessao.status.toLowerCase()}'.` });
+        }
+        
+        // 6. Atualizar o status do usuário Tiktik para 'LIVRE'
+        await dbClient.query(
+            `UPDATE usuarios SET status_atual = 'LIVRE', id_sessao_trabalho_atual = NULL WHERE id = $1`,
+            [sessao.usuario_tiktik_id]
+        );
+
+        // 7. EXCLUIR o registro da sessão de trabalho.
+        // É isso que garante que ela nunca entrará nos cálculos de performance.
+        await dbClient.query(`DELETE FROM sessoes_trabalho_arremate WHERE id = $1`, [id_sessao]);
+
+        // 8. Se tudo deu certo, confirmar a transação
+        await dbClient.query('COMMIT');
+        
+        res.status(200).json({ message: 'Tarefa cancelada com sucesso!' });
+
+    } catch (error) {
+        // Se qualquer passo falhar, a transação é desfeita
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error('[API /sessoes/cancelar] Erro:', error);
+        res.status(500).json({ error: 'Erro interno ao cancelar a tarefa.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// ROTA: POST /api/arremates/sessoes/estornar
+router.post('/sessoes/estornar', async (req, res) => {
+    const { usuarioLogado } = req;
+    const { id_sessao } = req.body;
+
+    if (!id_sessao) {
+        return res.status(400).json({ error: 'O ID da sessão é obrigatório para o estorno.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+
+        const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
+        // Vamos usar a mesma permissão de estorno geral
+        if (!permissoes.includes('estornar-arremate')) {
+            return res.status(403).json({ error: 'Permissão negada para estornar lançamentos.' });
+        }
+
+        await dbClient.query('BEGIN');
+
+        // 1. Mudar o status da sessão para 'ESTORNADA'
+        // Isso a remove dos cálculos de performance imediatamente.
+        const updateSessaoResult = await dbClient.query(
+            `UPDATE sessoes_trabalho_arremate SET status = 'ESTORNADA' WHERE id = $1 AND status = 'FINALIZADA' RETURNING *`,
+            [id_sessao]
+        );
+
+        if (updateSessaoResult.rowCount === 0) {
+            await dbClient.query('ROLLBACK');
+            return res.status(404).json({ error: 'Sessão não encontrada ou já não estava com status "FINALIZADA".' });
+        }
+
+        // 2. Encontrar todos os lançamentos de arremate gerados por esta sessão
+        const arrematesOriginaisResult = await dbClient.query(
+            `SELECT * FROM arremates WHERE id_sessao_origem = $1 AND tipo_lancamento = 'PRODUCAO'`,
+            [id_sessao]
+        );
+
+        const arrematesParaEstornar = arrematesOriginaisResult.rows;
+
+        // 3. Para cada lançamento, aplicar a lógica de estorno que você já criou
+        for (const arremateOriginal of arrematesParaEstornar) {
+            // 3a. Cria um novo registro de log do tipo 'ESTORNO'
+            await dbClient.query(
+                `INSERT INTO arremates (op_numero, produto_id, variante, quantidade_arrematada, usuario_tiktik, usuario_tiktik_id, lancado_por, tipo_lancamento, assinada)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, 'ESTORNO', true)`,
+                [
+                    arremateOriginal.op_numero,
+                    arremateOriginal.produto_id,
+                    arremateOriginal.variante,
+                    arremateOriginal.quantidade_arrematada,
+                    arremateOriginal.usuario_tiktik,
+                    arremateOriginal.usuario_tiktik_id,
+                    usuarioLogado.nome || 'Sistema'
+                ]
+            );
+
+            // 3b. APAGA o registro de arremate original
+            await dbClient.query(`DELETE FROM arremates WHERE id = $1`, [arremateOriginal.id]);
+        }
+
+        await dbClient.query('COMMIT');
+
+        res.status(200).json({ message: `Lançamento estornado com sucesso. ${arrematesParaEstornar.length} registro(s) revertido(s).` });
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error('[API /sessoes/estornar] Erro:', error);
+        res.status(500).json({ error: 'Erro interno ao estornar a sessão.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }
