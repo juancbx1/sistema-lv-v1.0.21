@@ -1490,7 +1490,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    margin: 20px;
+    margin: 20px 20px 0 20px;
     border-radius: var(--fc-raio-borda);
     border: 1px solid var(--fc-cor-borda);
 }
@@ -1764,11 +1764,17 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
 @media (max-width: 1024px) { 
     body { margin-left: 0; 
     } 
-    .ultima-atividade .texto-atividade { display: none; } /* Esconde texto, mantém ícone */
-    .ultima-atividade { padding: 8px 10px; }
 }
 
 @media (max-width: 768px) {
+    .ultima-atividade {
+        display: flex;
+        justify-content: center;
+        order: 2;
+        font-size: 0.75rem;
+        text-align: center; 
+    }
+
     .fc-content-wrapper { 
         box-shadow: none; 
         border-left: none; 
@@ -1872,9 +1878,24 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
         padding: 12px 15px; 
         border-radius: var(--fc-raio-borda); 
     }
-    .header-linha-status { flex-direction: column; align-items: stretch; }
-    .ultima-atividade { display: none; } /* Esconde completamente no mobile */
-    .alerta-card-header { min-width: 0; }
+    
+    .header-linha-status {
+        flex-direction: column; /* Empilha os itens verticalmente */
+        align-items: stretch; /* Faz os itens ocuparem a largura toda */
+        gap: 12px;
+    }
+
+    .ultima-atividade {
+        display: flex; /* Garante que ela seja visível */
+        justify-content: center; /* Centraliza o texto/ícone dentro dela */
+        order: 2; /* Garante que ela fique no meio, se necessário */
+    }
+
+    .alertas-container {
+        justify-content: center;
+        order: 1; /* Garante que os alertas fiquem no topo */
+        flex-wrap: wrap;
+    }
 
     .header-linha-acoes .navegacao-titulo { flex-grow: 1; }
     .header-linha-acoes h1 { 
@@ -1907,6 +1928,15 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
 
     .header-linha-acoes.modo-busca .busca-global-wrapper .icone-input-busca {
         display: block;
+    }
+
+    .fc-filtros-container .button-container {
+        justify-content: center; /* Centraliza o botão no mobile */
+        margin-top: 10px; /* Adiciona um espaço acima do botão */
+    }
+
+    .fc-filtros-container:not(.hidden) {
+        max-height: 1000px; 
     }
 
 }
@@ -2129,10 +2159,7 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
         padding-left: 8px; 
         gap: 6px;
     }
-    .alertas-container {
-    justify-content: center;
-    margin-left: auto;
-}
+
 
 }
 
