@@ -1967,7 +1967,6 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
     .fc-fab { width: 55px; height: 55px; right: 15px; bottom: 15px; }
     .fc-notificacoes-painel { width: 95vw; right: 2.5vw; }
     .fc-modal-content {
-        width: 85vw;
         max-width: 95vw; /* Garante que o modal use quase toda a tela */
         max-height: 85vh;
         padding:10px;
@@ -2181,7 +2180,7 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
         font-size: 1.1rem;
     }
     .fc-modal-content {
-        max-width: 45vh;
+        max-width: 55vh;
         max-height: 85vh;
     }
     .fc-saldo-hero-title {
@@ -2206,8 +2205,13 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
         font-size: 0.85rem;
     }
     .header-linha-acoes h1 {
-        font-size: 0.85rem;
+        font-size: 1rem;
     }
+
+    .btn-voltar-header .fa-chevron-left{
+    font-size: 1rem;
+    }
+
 
 
 }
