@@ -4,23 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Financeiro</title>
-    <link rel="stylesheet" href="/css/global-style.css">
     <link rel="stylesheet" href="/css/menu-lateral.css">
     <link rel="stylesheet" href="/css/financeiro.css">
-    <link rel="stylesheet" href="/css/popups.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
 
 </head>
 <body>
-
-    <!-- SPINNER GLOBAL PADRONIZADO -->
-    <div id="carregamentoGlobal" class="gs-carregamento-global-container visivel">
-        <div class="gs-spinner-global"></div>
-    </div>
-
-
-    <div id="financeiro-header-root"></div>
-    <div id="financeiro-modal-root"></div>
     <div class="hamburger-menu">
         <i class="fas fa-bars"></i>
         <i class="fas fa-times"></i>
@@ -248,9 +237,6 @@
                 <div id="historicoContainer">
                     <!-- Cards de log de auditoria serão inseridos aqui -->
                 </div>
-                
-                <div id="paginacaoHistoricoContainer" class="fc-paginacao-container"></div>
-
             </div>
         </section>
 
@@ -286,8 +272,7 @@
         </button>
     </div>
 
-    <script type="module" src="/src/main-financeiro-header.jsx"></script>
-    <script type="module" src="/src/main-financeiro-modal.jsx"></script> 
+
     <script src="/js/admin-financeiro.js" type="module"></script>
     <script src="/js/carregar-menu-lateral.js" type="module"></script>
 </body>

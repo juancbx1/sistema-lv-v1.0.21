@@ -1,7 +1,6 @@
 // public/js/admin-financeiro.js
 
 import { verificarAutenticacao } from '/js/utils/auth.js';
-import { renderizarPaginacao } from '/js/utils/Paginacao.js';
 
 // --- Variáveis Globais ---
 let permissoesGlobaisFinanceiro = [];
@@ -13,23 +12,6 @@ let itemEmEdicao = null;
 let filtrosAtivos = {};
 let filtrosAgendaAtivos = {};
 let fecharModalListenerRemover = () => {};
-
-let legacyJsReady = false;
-let reactHeaderReady = false;
-const carregamentoGlobalEl = document.getElementById('carregamentoGlobal');
-
-function esconderSpinnerGlobalSePronto() {
-    if (legacyJsReady && reactHeaderReady && carregamentoGlobalEl) {
-        carregamentoGlobalEl.classList.remove('visivel');
-        console.log('[Carregamento] Todas as partes prontas. Spinner escondido.');
-    }
-}
-
-window.addEventListener('reactHeaderReady', () => {
-    console.log('[Carregamento] Sinal recebido: Header React está pronto.');
-    reactHeaderReady = true;
-    esconderSpinnerGlobalSePronto();
-});
 
 // --- FUNÇÃO UTILITÁRIA GLOBAL ---
 const formatCurrency = (value) => {
@@ -942,27 +924,16 @@ function renderizarCardsLancamentos() {
 
     const podeEditar = permissoesGlobaisFinanceiro.includes('editar-transacao');
     container.querySelectorAll('.btn-editar-lancamento').forEach(btn => {
-    if (!btn.disabled) {
-        if (podeEditar) {
-            btn.addEventListener('click', (e) => {
-                const id = e.currentTarget.dataset.id;
-                const lancamento = lancamentosCache.find(l => l.id == id);
-                if (lancamento) {
-                    // <<<<<<<<<<<<<<<<<<<<<< MUDANÇA >>>>>>>>>>>>>>>>>>>>>
-                    // Em vez de chamar o modal antigo, chamamos o React
-                    if (window.renderReactModal) {
-                        window.renderReactModal({
-                            isOpen: true,
-                            onClose: () => window.renderReactModal({ isOpen: false }),
-                            lancamentoParaEditar: lancamento, // << Passamos o lançamento aqui!
-                            contas: contasCache,
-                            categorias: categoriasCache,
-                            grupos: gruposCache
-                        });
+        if (!btn.disabled) {
+            if (podeEditar) {
+                btn.addEventListener('click', (e) => {
+                    const id = e.currentTarget.dataset.id;
+                    const lancamento = lancamentosCache.find(l => l.id == id);
+                    if (lancamento) {
+                        // Chama a função unificada, passando o lançamento para entrar em modo de edição
+                        abrirModalLancamento(lancamento); 
                     }
-                    // <<<<<<<<<<<<<<<<<<<< FIM DA MUDANÇA >>>>>>>>>>>>>>>>>>>
-                }
-            });
+                });
             } else {
                 btn.classList.add('fc-btn-disabled');
                 btn.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para editar lançamentos.', 'aviso'));
@@ -1686,38 +1657,24 @@ function atualizarResumoRateio(formElement) {
 
     const resumoContainer = formElement.querySelector('.resumo-rateio');
     if (!resumoContainer) return;
-    
-    // Identifica se é um formulário de Compra ou Rateio
-    const isCompraDetalhada = formElement.id.includes('CompraDetalhada');
+
+    // Pega o valor do desconto do novo campo
+    const valorDescontoInput = formElement.querySelector('.fc-input[id$="_valor_desconto"]');
+    const valorDesconto = parseFloat(valorDescontoInput?.value) || 0;
 
     let totalItens = 0;
+    // O valor total de cada item agora é pego do input 'item-valor-total' que é calculado automaticamente
+    formElement.querySelectorAll('.item-valor-total').forEach(input => {
+        totalItens += parseFloat(input.value) || 0;
+    });
     
-    if (isCompraDetalhada) {
-        // Lógica para Compra Detalhada (com quantidade e valor unitário)
-        const valorDescontoInput = formElement.querySelector('input[id$="_valor_desconto"]');
-        const valorDesconto = parseFloat(valorDescontoInput?.value) || 0;
+    const valorFinal = totalItens - valorDesconto;
 
-        formElement.querySelectorAll('.item-valor-total').forEach(input => {
-            totalItens += parseFloat(input.value) || 0;
-        });
-        
-        const valorFinal = totalItens - valorDesconto;
-
-        resumoContainer.innerHTML = `
-            <span>Soma dos Itens: <strong>${formatCurrency(totalItens)}</strong></span> | 
-            <span>Desconto: <strong>- ${formatCurrency(valorDesconto)}</strong></span> | 
-            <span style="color: var(--fc-cor-primaria);">Total Pago: <strong>${formatCurrency(valorFinal)}</strong></span>
-        `;
-    } else {
-        // Lógica para Rateio Detalhado (com valor direto)
-        formElement.querySelectorAll('.item-valor').forEach(input => {
-            totalItens += parseFloat(input.value) || 0;
-        });
-
-        resumoContainer.innerHTML = `
-            <span style="color: var(--fc-cor-primaria);">Total Distribuído: <strong>${formatCurrency(totalItens)}</strong></span>
-        `;
-    }
+    resumoContainer.innerHTML = `
+        <span>Soma dos Itens: <strong>${formatCurrency(totalItens)}</strong></span> | 
+        <span>Desconto: <strong>- ${formatCurrency(valorDesconto)}</strong></span> | 
+        <span style="color: var(--fc-cor-primaria);">Total Pago: <strong>${formatCurrency(valorFinal)}</strong></span>
+    `;
 }
 
 async function salvarCompraDetalhada(event) {
@@ -1731,20 +1688,16 @@ async function salvarCompraDetalhada(event) {
     try {
         const favorecidoId = form.querySelector(`#${prefixo}_favorecido_id`).value;
         if (!favorecidoId) {
-            mostrarPopupFinanceiro('Fornecedor inválido. Por favor, selecione um da lista ou crie um novo.', 'erro');
+            mostrarPopupFinanceiro('Fornecedor inválido. Por favor, selecione um da lista.', 'erro');
             return;
         }
 
         const itens_filho = [];
-        const linhasDeItens = form.querySelectorAll('.grade-itens-rateio .fc-rateio-linha');
+        const linhasDeItens = form.querySelectorAll('.fc-rateio-linha');
 
-        if (linhasDeItens.length === 0) {
-            mostrarPopupFinanceiro('É necessário adicionar pelo menos um item à compra.', 'erro');
-            return;
-        }
-        
         let algumItemInvalido = false;
         linhasDeItens.forEach(linha => {
+            // Pegamos os valores dos novos campos
             const quantidade = parseFloat(linha.querySelector('.item-quantidade').value);
             const valor_unitario = parseFloat(linha.querySelector('.item-valor-unitario').value);
             const idCategoria = parseInt(linha.querySelector('.item-categoria').value);
@@ -1753,6 +1706,7 @@ async function salvarCompraDetalhada(event) {
                 algumItemInvalido = true;
             }
             
+            // Enviamos os dados brutos, o backend fará o cálculo do total do item
             itens_filho.push({
                 id_categoria: idCategoria,
                 descricao_item: linha.querySelector('.item-descricao').value,
@@ -1761,8 +1715,8 @@ async function salvarCompraDetalhada(event) {
             });
         });
 
-        if (algumItemInvalido) {
-            mostrarPopupFinanceiro('Todos os itens devem ter quantidade, valor unitário e categoria válidos.', 'erro');
+        if (algumItemInvalido || linhasDeItens.length === 0) {
+            mostrarPopupFinanceiro('Todos os itens devem ter um produto, quantidade, valor unitário e categoria válidos.', 'erro');
             return;
         }
 
@@ -1774,7 +1728,7 @@ async function salvarCompraDetalhada(event) {
                 id_contato: parseInt(favorecidoId),
                 id_categoria: null,
                 descricao: form.querySelector(`#${prefixo}_descricao`).value,
-                valor_desconto: parseFloat(form.querySelector(`input[id$="_valor_desconto"]`).value) || 0
+                valor_desconto: parseFloat(form.querySelector(`#${prefixo}_valor_desconto`).value) || 0 // Enviamos o desconto
             },
             itens_filho: itens_filho
         };
@@ -1782,49 +1736,20 @@ async function salvarCompraDetalhada(event) {
         btnSalvar.disabled = true;
         btnSalvar.innerHTML = `<i class="fas fa-spinner fc-btn-spinner"></i> Salvando...`;
 
-        let response; // Variável para armazenar a resposta da API
-
         if (itemEmEdicao) {
-            // Se estiver editando E o usuário não for admin, pede a justificativa
-            if (!permissoesGlobaisFinanceiro.includes('aprovar-alteracao-financeira')) {
-                const justificativa = await mostrarPopupComInput(
-                    `Qual o motivo para editar a compra #${itemEmEdicao.id}?`,
-                    'Justificativa obrigatória'
-                );
-
-                if (!justificativa || justificativa.trim() === '') {
-                    mostrarPopupFinanceiro('A edição foi cancelada, pois a justificativa é obrigatória.', 'aviso');
-                    // Reabilita o botão antes de sair
-                    if (btnSalvar) {
-                        btnSalvar.disabled = false;
-                        btnSalvar.innerHTML = textoOriginalBtn;
-                    }
-                    return; // Interrompe a função
-                }
-                payload.justificativa = justificativa.trim();
-            }
-            // Envia a requisição de atualização
-            response = await fetchFinanceiroAPI(`/lancamentos/detalhado/${itemEmEdicao.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+            await fetchFinanceiroAPI(`/lancamentos/detalhado/${itemEmEdicao.id}`, { method: 'PUT', body: JSON.stringify(payload) });
         } else {
-            // Envia a requisição de criação
-            response = await fetchFinanceiroAPI('/lancamentos/detalhado', { method: 'POST', body: JSON.stringify(payload) });
+            await fetchFinanceiroAPI('/lancamentos/detalhado', { method: 'POST', body: JSON.stringify(payload) });
         }
         
-        const mensagemSucesso = response.message || (itemEmEdicao ? 'Alterações salvas com sucesso!' : 'Compra detalhada registrada com sucesso!');
+        const mensagemSucesso = itemEmEdicao ? 'Compra atualizada com sucesso!' : 'Compra detalhada registrada com sucesso!';
         mostrarPopupFinanceiro(mensagemSucesso, 'sucesso');
-        
         fecharModal();
         carregarLancamentosFiltrados(filtrosAtivos.page || 1);
         atualizarSaldosDashboard();
-        
-        // Atualiza o badge de aprovações se uma nova solicitação foi criada
-        if (response.message && response.message.includes('aprovação')) {
-            atualizarBadgesHeader();
-        }
 
     } catch(e) {
-        // O erro já é tratado e exibido pela fetchFinanceiroAPI
-        console.error("Erro em salvarCompraDetalhada:", e);
+        // erro já tratado pela fetchFinanceiroAPI
     } finally {
         if (btnSalvar) {
             btnSalvar.disabled = false;
@@ -1866,21 +1791,17 @@ function adicionarLinhaRateioDetalhado(gradeContainer, item = null) {
         optionsCategoria += `</optgroup>`;
     }
 
-    const valorDoItem = item ? (item.valor_item || item.valor_total_item) : '';
-    const nomeContatoItem = item ? (item.nome_contato_item || '') : '';
-    const idContatoItem = item ? (item.id_contato_item || '') : '';
-    const descricaoItem = item ? (item.descricao_item || '') : '';
-
+    // <<< A CORREÇÃO ESTÁ AQUI: Removido o '?' e usando os nomes corretos das propriedades >>>
     div.innerHTML = `
         <div class="fc-autocomplete-container">
-            <input type="text" id="${uniqueId}" class="fc-input fc-autocomplete-input item-contato-busca" placeholder="Buscar funcionário/sócio..." value="${nomeContatoItem}" required>
+            <input type="text" id="${uniqueId}" class="fc-input fc-autocomplete-input item-contato-busca" placeholder="Buscar funcionário/sócio..." value="${item ? item.nome_contato_item : ''}" required>
             <span class="fc-autocomplete-status-icon"></span>
             <div class="fc-autocomplete-results hidden"></div>
-            <input type="hidden" class="fc-autocomplete-id item-contato-id" value="${idContatoItem}">
+            <input type="hidden" class="fc-autocomplete-id item-contato-id" value="${item ? item.id_contato_item : ''}">
         </div>
         <select class="fc-select item-categoria" required>${optionsCategoria}</select>
-        <input type="text" class="fc-input item-descricao" placeholder="Opcional" value="${descricaoItem}">
-        <input type="number" class="fc-input item-valor" step="0.01" min="0.01" placeholder="Valor" required value="${valorDoItem}">
+        <input type="text" class="fc-input item-descricao" placeholder="Opcional" value="${item ? item.descricao_item : ''}">
+        <input type="number" class="fc-input item-valor" step="0.01" min="0.01" placeholder="Valor" required value="${item ? item.valor_item : ''}">
         <button type="button" class="remover-item-btn"><i class="fas fa-trash"></i></button>
     `;
     gradeContainer.appendChild(div);
@@ -1927,7 +1848,7 @@ async function salvarRateioDetalhado(event) {
             return;
         }
         
-         let algumItemInvalido = false;
+        let algumItemInvalido = false;
         linhasDeItens.forEach(linha => {
             const valorItem = parseFloat(linha.querySelector('.item-valor').value) || 0;
             const idContatoItem = parseInt(linha.querySelector('.item-contato-id').value) || 0;
@@ -1936,15 +1857,11 @@ async function salvarRateioDetalhado(event) {
             if (valorItem <= 0 || idContatoItem <= 0 || idCategoriaItem <= 0) {
                 algumItemInvalido = true;
             }
-
             itens_filho.push({
                 valor_item: valorItem,
                 id_contato_item: idContatoItem,
                 id_categoria: idCategoriaItem,
                 descricao_item: linha.querySelector('.item-descricao').value,
-                // Garantimos que os campos de 'compra' não sejam enviados
-                quantidade: null, 
-                valor_unitario: null
             });
         });
 
@@ -1962,40 +1879,23 @@ async function salvarRateioDetalhado(event) {
         btnSalvar.disabled = true;
         btnSalvar.innerHTML = `<i class="fas fa-spinner fc-btn-spinner"></i> Salvando...`;
 
-        let mensagemSucesso = '';
-
+        // <<< AQUI ESTÁ A LÓGICA CORRETA >>>
         if (itemEmEdicao) {
-            if (!permissoesGlobaisFinanceiro.includes('aprovar-alteracao-financeira')) {
-                 const justificativa = await mostrarPopupComInput(
-                    `Qual o motivo para editar o rateio #${itemEmEdicao.id}?`,
-                    'Justificativa obrigatória'
-                );
-
-                if (!justificativa || justificativa.trim() === '') {
-                    mostrarPopupFinanceiro('A edição foi cancelada, pois a justificativa é obrigatória.', 'aviso');
-                    throw new Error("Justificativa cancelada pelo usuário.");
-                }
-                payload.justificativa = justificativa.trim();
-            }
-            
-            const response = await fetchFinanceiroAPI(`/lancamentos/detalhado/${itemEmEdicao.id}`, { method: 'PUT', body: JSON.stringify(payload) });
-            mensagemSucesso = response.message || 'Rateio atualizado com sucesso!';
-
+            // Se estamos editando, usamos o método PUT e o ID do item
+            await fetchFinanceiroAPI(`/lancamentos/detalhado/${itemEmEdicao.id}`, { method: 'PUT', body: JSON.stringify(payload) });
         } else {
-            // ESTAMOS CRIANDO
+            // Se não, usamos o método POST para criar
             await fetchFinanceiroAPI('/lancamentos/detalhado', { method: 'POST', body: JSON.stringify(payload) });
-            mensagemSucesso = 'Rateio detalhado registrado com sucesso!';
         }
         
+        const mensagemSucesso = itemEmEdicao ? 'Rateio atualizado com sucesso!' : 'Rateio detalhado registrado com sucesso!';
         mostrarPopupFinanceiro(mensagemSucesso, 'sucesso');
         fecharModal();
         carregarLancamentosFiltrados(filtrosAtivos.page || 1);
         atualizarSaldosDashboard();
 
     } catch(e) {
-        if (e.message !== "Justificativa cancelada pelo usuário.") {
-            console.error("Erro em salvarRateioDetalhado:", e);
-        }
+        // erro já tratado pela fetchFinanceiroAPI
     } finally {
         if (btnSalvar) {
             btnSalvar.disabled = false;
@@ -2009,7 +1909,7 @@ async function salvarLancamento(event) {
     event.preventDefault();
     
     const btnSalvar = event.target.closest('.fc-modal-content').querySelector('.fc-btn-primario');
-    if (!btnSalvar) return;
+    if (!btnSalvar) return; // Segurança
     const textoOriginalBtn = btnSalvar.innerHTML;
 
     try {
@@ -2020,6 +1920,18 @@ async function salvarLancamento(event) {
             return;
         }
 
+        if (!itemEmEdicao) {
+            const dataTransacaoInput = document.getElementById('lanc_data').value;
+            const hoje = new Date();
+            const dataTransacaoDate = new Date(dataTransacaoInput + 'T00:00:00');
+            hoje.setHours(0, 0, 0, 0);
+            if (dataTransacaoDate.getTime() !== hoje.getTime()) {
+                const dataFormatada = dataTransacaoDate.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+                const confirmado = await mostrarPopupConfirmacao(`Atenção: a data da transação (${dataFormatada}) é diferente da data de hoje. Deseja continuar?`);
+                if (!confirmado) return;
+            }
+        }
+
         const payload = {
             valor: parseFloat(document.getElementById('lanc_valor').value),
             data_transacao: document.getElementById('lanc_data').value,
@@ -2028,52 +1940,24 @@ async function salvarLancamento(event) {
             descricao: document.getElementById('lanc_descricao').value,
             id_contato: parseInt(favorecidoId) || null
         };
-        
+
         if (!payload.valor || !payload.id_categoria || !payload.id_conta_bancaria) {
             mostrarPopupFinanceiro('Por favor, preencha todos os campos obrigatórios (*).', 'aviso');
             return;
         }
 
+        // Desabilita o botão e mostra o spinner ANTES da chamada à API
         btnSalvar.disabled = true;
         btnSalvar.innerHTML = `<i class="fas fa-spinner fc-btn-spinner"></i> Salvando...`;
 
         let responseMessage = '';
-
         if (itemEmEdicao) {
-            if (!permissoesGlobaisFinanceiro.includes('aprovar-alteracao-financeira')) {
-                const justificativa = await mostrarPopupComInput(
-                    `Qual o motivo para editar o lançamento #${itemEmEdicao.id}?`,
-                    'Justificativa obrigatória'
-                );
-
-                if (!justificativa || justificativa.trim() === '') {
-                    mostrarPopupFinanceiro('A edição foi cancelada, pois a justificativa é obrigatória.', 'aviso');
-                    throw new Error("Justificativa cancelada pelo usuário."); // Lança um erro para parar a execução e ir para o finally
-                }
-                // Adiciona a justificativa ao payload que será enviado para a API
-                payload.justificativa = justificativa.trim();
-            }
-
             const response = await fetchFinanceiroAPI(`/lancamentos/${itemEmEdicao.id}`, { method: 'PUT', body: JSON.stringify(payload) });
             responseMessage = response.message || 'Alterações salvas com sucesso!';
             if (response.message.includes('aguardando aprovação')) {
                 atualizarBadgesHeader();
             }
         } else {
-            
-            // Lógica de confirmação de data que você já tinha
-            const dataTransacaoInput = document.getElementById('lanc_data').value;
-            const hoje = new Date();
-            const dataTransacaoDate = new Date(dataTransacaoInput + 'T00:00:00');
-            hoje.setHours(0, 0, 0, 0);
-            if (dataTransacaoDate.getTime() !== hoje.getTime()) {
-                const dataFormatada = dataTransacaoDate.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-                const confirmado = await mostrarPopupConfirmacao(`Atenção: a data da transação (${dataFormatada}) é diferente da data de hoje. Deseja continuar?`);
-                if (!confirmado) {
-                   throw new Error("Criação cancelada pelo usuário devido à data.");
-                }
-            }
-
             payload.tipo = document.getElementById('lanc_tipo').value;
             if (!payload.tipo) {
                 mostrarPopupFinanceiro('O campo "Tipo" é obrigatório.', 'aviso');
@@ -2086,20 +1970,16 @@ async function salvarLancamento(event) {
         mostrarPopupFinanceiro(responseMessage, 'sucesso');
         fecharModal();
         
+        // <<< LINHA ALTERADA: Passa a página que estava salva nos filtros
         carregarLancamentosFiltrados(filtrosAtivos.page || 1);
         atualizarBadgesHeader();
         atualizarSaldosDashboard();
 
     } catch (error) {
-        // Se o erro foi um cancelamento do usuário, não mostramos popup de erro.
-        if (error.message !== "Justificativa cancelada pelo usuário." && 
-            error.message !== "Criação cancelada pelo usuário devido à data." &&
-            error.message !== "Tipo de lançamento não selecionado") {
+        if (error.message !== "Tipo de lançamento não selecionado") {
             console.error("Erro em salvarLancamento:", error);
-            // O fetchFinanceiroAPI já deve mostrar o popup em caso de erro de API.
         }
     } finally {
-        // Este bloco sempre será executado, garantindo que o botão seja reativado.
         if (btnSalvar) {
             btnSalvar.disabled = false;
             btnSalvar.innerHTML = textoOriginalBtn;
@@ -2543,7 +2423,7 @@ async function alterarStatusContato(id, statusAtual) {
 
 // --- Funções da Agenda Financeira ---
 
-async function carregarContasAgendadas(page = 1, filtros = {}) {
+async function carregarContasAgendadas(page = 1) {
     const container = document.getElementById('agendaContainer');
     if (!container) return;
 
@@ -2552,9 +2432,9 @@ async function carregarContasAgendadas(page = 1, filtros = {}) {
         <span class="fc-spinner-text">Buscando contas agendadas...</span>
     </div>`;
 
-    filtrosAgendaAtivos.page = page; 
+    filtrosAgendaAtivos.page = page; // Salva a página atual
 
-    const params = new URLSearchParams({ page, ...filtros }); 
+    const params = new URLSearchParams({ page });
 
     try {
         const data = await fetchFinanceiroAPI(`/contas-agendadas?${params.toString()}`);
@@ -2562,7 +2442,7 @@ async function carregarContasAgendadas(page = 1, filtros = {}) {
         contasAgendadasCache = data.contasAgendadas;
         
         renderizarTabelaAgenda(); 
-        renderizarPaginacaoAgenda(data.pages, data.page);
+        renderizarPaginacaoAgenda(data.pages, data.page); // Chama a renderização da paginação
 
     } catch(e) {
         container.innerHTML = `<p style="color: red; text-align:center; padding: 20px;">Erro ao carregar a agenda.</p>`;
@@ -3494,9 +3374,6 @@ function mudarAba(abaAtiva) {
     const nomeAba = abaAtiva.charAt(0).toUpperCase() + abaAtiva.slice(1);
     atualizarBreadcrumbs([nomeAba]);
 
-    // Dispara um evento global que o React pode ouvir
-    window.dispatchEvent(new CustomEvent('abaFinanceiroAlterada', { detail: { nomeAba: nomeAba } }));
-
     // Renderiza o conteúdo da aba que se tornou ativa
     switch (abaAtiva) {
         case 'dashboard':
@@ -3832,19 +3709,7 @@ function setupEventListenersFinanceiro() {
     // --- BOTÕES DE AÇÃO GLOBAIS (FAB E AGENDA) ---
     const btnNovoLancamento = document.getElementById('btnNovoLancamento');
     if (permissoesGlobaisFinanceiro.includes('lancar-transacao')) {
-        // Substitua a linha antiga por esta:
-        btnNovoLancamento?.addEventListener('click', () => {
-            // Agora chamamos a função global que renderiza o modal React
-            if (window.renderReactModal) {
-                window.renderReactModal({
-                    isOpen: true,
-                    onClose: () => window.renderReactModal({ isOpen: false }), // Função para fechar
-                    contas: contasCache,
-                    categorias: categoriasCache,
-                    grupos: gruposCache
-                });
-            }
-        });
+        btnNovoLancamento?.addEventListener('click', () => abrirModalLancamento());
     } else {
         btnNovoLancamento?.classList.add('fc-btn-disabled');
         btnNovoLancamento?.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para criar lançamentos.', 'aviso'));
@@ -4026,10 +3891,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // Chama a função de inicialização principal
         inicializarPaginaFinanceiro();
-
-        console.log('[Carregamento] Lógica do JS Legado está pronta.');
-        legacyJsReady = true;
-        esconderSpinnerGlobalSePronto();
 
     } catch (error) {
         console.error('[Financeiro DOMContentLoaded] Erro:', error);
@@ -4555,28 +4416,13 @@ async function atualizarBadgesHeader() {
     }
 }
 
-async function carregarLogsAuditoria(page = 1) { // Agora aceita o número da página
+async function carregarLogsAuditoria() {
     const container = document.getElementById('historicoContainer');
-    const paginacaoContainer = document.getElementById('paginacaoHistoricoContainer');
-    
-    if (!container || !paginacaoContainer) return;
-
+    if (!container) return;
     container.innerHTML = `<div class="fc-spinner">Buscando histórico...</div>`;
-    
     try {
-        // A API agora retorna um objeto com 'logs' e 'totalPages'
-        const data = await fetchFinanceiroAPI(`/logs?page=${page}`);
-        
-        renderizarLogsAuditoria(data.logs); // Passa apenas o array de logs para a função de renderização
-
-        // Chama sua função de paginação reutilizável!
-        renderizarPaginacao(
-            paginacaoContainer,
-            data.totalPages,
-            data.currentPage,
-            (novaPagina) => carregarLogsAuditoria(novaPagina) // Ação a ser executada ao clicar em um botão da paginação
-        );
-
+        const logs = await fetchFinanceiroAPI('/logs');
+        renderizarLogsAuditoria(logs);
     } catch (e) {
         container.innerHTML = `<p style="color:red">Erro ao buscar histórico.</p>`;
     }
@@ -4948,32 +4794,3 @@ async function salvarConcessionaria(id = null) {
         // fetchFinanceiroAPI já mostra o popup de erro
     }
 }
-
-
-window.addEventListener('filtrarAgendaPorAlerta', (event) => {
-    const filtro = event.detail.filtro;
-    console.log(`JS Legado ouviu o pedido para filtrar por: ${filtro}`);
-
-    // 1. Muda para a aba "Agenda"
-    mudarAba('agenda');
-
-    // 2. Chama a função de carregar a agenda, passando o filtro.
-    // O backend agora espera 'atrasadas' ou 'hoje'.
-    carregarContasAgendadas(1, { vencimento: filtro });
-});
-
-window.addEventListener('navegarParaViewFinanceiro', (event) => {
-    const view = event.detail.view;
-    console.log(`JS Legado ouviu pedido para navegar para a view: ${view}`);
-    
-    // Chama a sua função de navegação principal que já existe!
-    gerenciarNavegacaoPrincipal(view);
-});
-
-window.addEventListener('lancamentoCriadoComSucesso', () => {
-    console.log('[JS Legado] Recebido sinal de novo lançamento. Atualizando a UI...');
-    
-    // As funções que você já tem para atualizar a página!
-    carregarLancamentosFiltrados(1); // Volta para a primeira página para ver o novo lançamento
-    atualizarSaldosDashboard();
-});

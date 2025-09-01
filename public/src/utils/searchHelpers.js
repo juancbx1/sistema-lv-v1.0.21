@@ -3,6 +3,19 @@
 const BUSCAS_RECENTES_KEY = 'buscasRecentes';
 const MAX_BUSCAS = 8; // Máximo de 8 pílulas
 
+/**
+ * Normaliza o texto removendo acentos e convertendo para minúsculas.
+ * @param {string} text - O texto a ser normalizado.
+ * @returns {string} O texto normalizado.
+ */
+export const normalizeText = (text) => {
+  if (typeof text !== 'string') return '';
+  return text
+    .normalize("NFD") // Decompõe os caracteres acentuados
+    .replace(/[\u0300-\u036f]/g, "") // Remove os acentos (diacríticos)
+    .toLowerCase(); // Converte para minúsculas
+};
+
 // Função para ler as buscas salvas no localStorage
 export const getBuscasRecentes = () => {
   try {
