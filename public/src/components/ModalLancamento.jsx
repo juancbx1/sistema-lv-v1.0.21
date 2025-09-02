@@ -57,9 +57,10 @@ const ItemRateioRow = ({ item, onItemChange, onItemRemove, categoryOptions }) =>
 // =================================================================
 // Componente Principal do Modal
 // =================================================================
-export default function ModalLancamento({ isOpen, onClose, lancamentoParaEditar, contas, categorias, grupos }) {
+export default function ModalLancamento({ isOpen, onClose, lancamentoParaEditar, permissoes, contas, categorias, grupos }) {
     const isEditMode = !!lancamentoParaEditar;
-
+    const isAdmin = permissoes.includes('aprovar-alteracao-financeira');
+    
     const getInitialState = (formType) => {
         const today = getLocalDateString();
         switch (formType) {
@@ -119,6 +120,7 @@ export default function ModalLancamento({ isOpen, onClose, lancamentoParaEditar,
         }
     }, [isOpen, isEditMode, lancamentoParaEditar, categorias, grupos]);
 
+
     const formatCurrency = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(v) || 0);
 
     const getCategoryOptions = (tipo) => categorias?.filter(c => grupos?.find(g => g.id === c.id_grupo)?.tipo === tipo).map(c => ({ value: c.id, label: `${c.nome} [${grupos.find(g => g.id === c.id_grupo)?.nome}]` })) || [];
@@ -139,6 +141,7 @@ export default function ModalLancamento({ isOpen, onClose, lancamentoParaEditar,
             return { ...prevState, itens: newItems };
         });
     };
+
     const somaItensCompra = formCompra.itens?.reduce((t, i) => t + ((parseFloat(i.quantidade) || 0) * (parseFloat(i.valor_unitario) || 0)), 0) || 0;
     const totalPagoCompra = somaItensCompra - (parseFloat(formCompra.desconto) || 0);
 
@@ -159,18 +162,7 @@ export default function ModalLancamento({ isOpen, onClose, lancamentoParaEditar,
     const totalRateio = formRateio.itens?.reduce((t, i) => t + (parseFloat(i.valor_item) || 0), 0) || 0;
 
     const handleSubmit = async () => {
-    // A confirmação de data vem primeiro
-    const dataSelecionada = abaAtiva === 'simples' ? formSimples.data_transacao : (abaAtiva === 'compra' ? formCompra.data : formRateio.data);
-    const hoje = getLocalDateString()
-        
-        if (dataSelecionada !== hoje && !isEditMode) {
-            const dataFormatada = new Date(dataSelecionada + 'T12:00:00Z').toLocaleDateString('pt-BR');
-            const confirmado = await mostrarConfirmacao(
-                `A data selecionada (${dataFormatada}) é diferente de hoje. Deseja continuar com esta data?`,
-                'aviso'
-            );
-            if (!confirmado) return; // Interrompe se o usuário cancelar
-        }
+        const isAdmin = permissoes?.includes('aprovar-alteracao-financeira') || false;
 
         setIsSubmitting(true);
         let endpoint = '';
@@ -178,47 +170,61 @@ export default function ModalLancamento({ isOpen, onClose, lancamentoParaEditar,
         let method = isEditMode ? 'PUT' : 'POST';
 
         try {
+            // Passo 1: Montar o payload final com base na aba ativa.
+            // Esta parte já faz a conversão de tipos (parseFloat).
+            let finalPayload;
             if (abaAtiva === 'simples') {
-                endpoint = isEditMode ? `/api/financeiro/lancamentos/${lancamentoParaEditar.id}` : '/api/financeiro/lancamentos';
-                payload = { ...formSimples, valor: parseFloat(formSimples.valor), id_contato: formSimples.favorecido?.id || null };
-                if (!payload.valor || !payload.id_categoria || !payload.id_conta_bancaria) throw new Error("Preencha todos os campos obrigatórios (*).");
+                finalPayload = { ...formSimples, valor: parseFloat(formSimples.valor), id_contato: formSimples.favorecido?.id || null };
+                if (!finalPayload.valor || !finalPayload.id_categoria || !finalPayload.id_conta_bancaria || !finalPayload.descricao) throw new Error("Valor, Categoria, Conta Bancária e Descrição são obrigatórios.");
             } else if (abaAtiva === 'compra') {
-                endpoint = isEditMode ? `/api/financeiro/lancamentos/detalhado/${lancamentoParaEditar.id}` : '/api/financeiro/lancamentos/detalhado';
-                payload = { tipo_rateio: 'COMPRA', dados_pai: { data_transacao: formCompra.data, id_conta_bancaria: formCompra.id_conta_bancaria, id_contato: formCompra.favorecido?.id || null, descricao: formCompra.descricao, valor_desconto: parseFloat(formCompra.desconto) || 0 }, itens_filho: formCompra.itens.map(i => ({ descricao_item: i.descricao_item, quantidade: parseFloat(i.quantidade), valor_unitario: parseFloat(i.valor_unitario), id_categoria: i.id_categoria })) };
-                if (!payload.dados_pai.id_conta_bancaria || !payload.dados_pai.id_contato || payload.itens_filho.some(i => !i.id_categoria)) throw new Error("Conta, Fornecedor e Categoria de todos os itens são obrigatórios.");
+                finalPayload = { tipo_rateio: 'COMPRA', dados_pai: { data_transacao: formCompra.data, id_conta_bancaria: formCompra.id_conta_bancaria, id_contato: formCompra.favorecido?.id || null, descricao: formCompra.descricao, valor_desconto: parseFloat(formCompra.desconto) || 0 }, itens_filho: formCompra.itens.map(i => ({ descricao_item: i.descricao_item, quantidade: parseFloat(i.quantidade), valor_unitario: parseFloat(i.valor_unitario), id_categoria: i.id_categoria })) };
+                if (!finalPayload.dados_pai.id_conta_bancaria || !finalPayload.dados_pai.id_contato || !finalPayload.dados_pai.descricao || finalPayload.itens_filho.some(i => !i.id_categoria)) throw new Error("Conta, Fornecedor, Descrição Geral e Categoria de todos os itens são obrigatórios.");
             } else if (abaAtiva === 'rateio') {
-                
-                endpoint = isEditMode ? `/api/financeiro/lancamentos/detalhado/${lancamentoParaEditar.id}` : '/api/financeiro/lancamentos/detalhado';
-                payload = {
-                    tipo_rateio: 'DETALHADO',
-                    dados_pai: {
-                        data_transacao: formRateio.data,
-                        id_conta_bancaria: formRateio.id_conta_bancaria,
-                        id_contato: formRateio.favorecido?.id || null,
-                        id_categoria: formRateio.id_categoria_geral,
-                        descricao: formRateio.descricao
-                    },
-                    itens_filho: formRateio.itens.map(i => ({
-                        valor_item: parseFloat(i.valor_item),
-                        id_contato_item: i.favorecido?.id || null,
-                        id_categoria: i.id_categoria,
-                        descricao_item: i.descricao_item
-                    })),
-                };
-
-                // A validação agora checa o payload final
-                if (!payload.dados_pai.id_conta_bancaria || !payload.dados_pai.id_categoria || payload.itens_filho.some(i => !i.id_contato_item || !i.id_categoria)) {
-                     throw new Error("Conta, Categoria Geral, e Favorecido/Categoria de todos os itens são obrigatórios.");
+                finalPayload = { tipo_rateio: 'DETALHADO', dados_pai: { data_transacao: formRateio.data, id_conta_bancaria: formRateio.id_conta_bancaria, id_contato: formRateio.favorecido?.id || null, id_categoria: formRateio.id_categoria_geral, descricao: formRateio.descricao }, itens_filho: formRateio.itens.map(i => ({ valor_item: parseFloat(i.valor_item), id_contato_item: i.favorecido?.id || null, id_categoria: i.id_categoria, descricao_item: i.descricao_item })) };
+                if (!finalPayload.dados_pai.id_conta_bancaria || !finalPayload.dados_pai.id_categoria || !finalPayload.dados_pai.descricao || finalPayload.itens_filho.some(i => !i.id_contato_item || !i.id_categoria)) {
+                    throw new Error("Conta, Categoria Geral, Descrição Geral e Favorecido/Categoria de todos os itens são obrigatórios.");
                 }
+            }
+
+            // Passo 2: Lógica de decisão para definir o endpoint e o payload a ser enviado.
+            const dataSelecionada = finalPayload.data_transacao || finalPayload.dados_pai.data_transacao;
+            const hoje = getLocalDateString();
+
+            if (isEditMode) {
+                endpoint = abaAtiva === 'simples'
+                    ? `/api/financeiro/lancamentos/${lancamentoParaEditar.id}`
+                    : `/api/financeiro/lancamentos/detalhado/${lancamentoParaEditar.id}`;
+                payload = finalPayload; // Em edição, envia o payload completo.
             } 
-            
+            else if (dataSelecionada !== hoje && !isAdmin) {
+                const dataFormatada = new Date(dataSelecionada + 'T12:00:00Z').toLocaleDateString('pt-BR');
+                const justificativa = await prompt(`Justifique o motivo para lançar com data diferente de hoje (${dataFormatada}).`);
+                
+                if (!justificativa || justificativa.trim() === '') {
+                    throw new Error("Justificativa é obrigatória para lançamentos com data especial. Operação cancelada.");
+                }
+                
+                endpoint = '/api/financeiro/lancamentos/solicitar-criacao';
+                // O payload final é encapsulado para a solicitação
+                payload = {
+                    lancamento_proposto: finalPayload, // << USA O PAYLOAD JÁ TRATADO
+                    justificativa: justificativa.trim()
+                };
+            } 
+            else { // Criação normal
+                endpoint = abaAtiva === 'simples'
+                    ? '/api/financeiro/lancamentos'
+                    : '/api/financeiro/lancamentos/detalhado';
+                payload = finalPayload;
+            }
+
+            // Passo 3: Envio para a API.
             const token = localStorage.getItem('token');
             const response = await fetch(endpoint, { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload) });
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || `Erro ${response.status}`);
             
             mostrarMensagem(result.message || 'Operação realizada com sucesso!', 'sucesso', 3000);
-            
             onClose();
             window.dispatchEvent(new CustomEvent('lancamentoCriadoComSucesso'));
 

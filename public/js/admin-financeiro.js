@@ -14,6 +14,8 @@ let filtrosAtivos = {};
 let filtrosAgendaAtivos = {};
 let fecharModalListenerRemover = () => {};
 
+let modalBaseProps = {}; 
+
 let legacyJsReady = false;
 let reactHeaderReady = false;
 const carregamentoGlobalEl = document.getElementById('carregamentoGlobal');
@@ -942,27 +944,22 @@ function renderizarCardsLancamentos() {
 
     const podeEditar = permissoesGlobaisFinanceiro.includes('editar-transacao');
     container.querySelectorAll('.btn-editar-lancamento').forEach(btn => {
-    if (!btn.disabled) {
-        if (podeEditar) {
-            btn.addEventListener('click', (e) => {
-                const id = e.currentTarget.dataset.id;
-                const lancamento = lancamentosCache.find(l => l.id == id);
-                if (lancamento) {
-                    // <<<<<<<<<<<<<<<<<<<<<< MUDANÇA >>>>>>>>>>>>>>>>>>>>>
-                    // Em vez de chamar o modal antigo, chamamos o React
-                    if (window.renderReactModal) {
-                        window.renderReactModal({
-                            isOpen: true,
-                            onClose: () => window.renderReactModal({ isOpen: false }),
-                            lancamentoParaEditar: lancamento, // << Passamos o lançamento aqui!
-                            contas: contasCache,
-                            categorias: categoriasCache,
-                            grupos: gruposCache
-                        });
+        if (!btn.disabled) {
+            if (podeEditar) {
+                btn.addEventListener('click', (e) => {
+                    const id = e.currentTarget.dataset.id;
+                    const lancamento = lancamentosCache.find(l => l.id == id);
+                    if (lancamento) {
+                        if (window.renderReactModal) {
+                            window.renderReactModal({
+                                ...modalBaseProps,
+                                isOpen: true,
+                                onClose: () => window.renderReactModal({ ...modalBaseProps, isOpen: false }),
+                                lancamentoParaEditar: lancamento
+                            });
+                        }
                     }
-                    // <<<<<<<<<<<<<<<<<<<< FIM DA MUDANÇA >>>>>>>>>>>>>>>>>>>
-                }
-            });
+                });
             } else {
                 btn.classList.add('fc-btn-disabled');
                 btn.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para editar lançamentos.', 'aviso'));
@@ -3275,6 +3272,8 @@ async function carregarAprovacoesPendentes() {
     }
 }
 
+// Em public/js/admin-financeiro.js
+
 function renderizarCardsAprovacao(solicitacoes) {
     const container = document.getElementById('aprovacoesContainer');
     if (!container) return;
@@ -3288,7 +3287,7 @@ function renderizarCardsAprovacao(solicitacoes) {
         if (valor === null || valor === undefined) return '<i>Não informado</i>';
         switch(chave) {
             case 'valor': case 'valor_estornado': return formatCurrency(valor);
-            case 'data_transacao': return new Date(String(valor).split('T')[0] + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'});
+            case 'data_transacao': case 'data_vencimento': return new Date(String(valor).split('T')[0] + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'});
             case 'id_categoria': return formatarCategoriaComGrupo(valor);
             case 'id_conta_bancaria': return contasCache.find(c => c.id == valor)?.nome_conta || `<span style="color:var(--fc-cor-despesa);">Conta Inválida</span>`;
             case 'id_contato': return contatosGerenciamentoCache.find(c => c.id == valor)?.nome || '<i>Nenhum</i>';
@@ -3296,13 +3295,13 @@ function renderizarCardsAprovacao(solicitacoes) {
         }
     };
 
-    // NOVA FUNÇÃO AUXILIAR: Gera um mini resumo de um lançamento
     const gerarResumoLancamento = (lancamento) => {
         if (!lancamento) return '<p>Dados do lançamento indisponíveis.</p>';
+        const dataKey = lancamento.data_transacao ? 'data_transacao' : 'data_vencimento';
         return `
             <ul class="fc-aprovacao-alteracoes-lista">
                 <li><span class="label">Valor</span> <div>${formatarValorExibicao('valor', lancamento.valor)}</div></li>
-                <li><span class="label">Data</span> <div>${formatarValorExibicao('data_transacao', lancamento.data_transacao)}</div></li>
+                <li><span class="label">Data</span> <div>${formatarValorExibicao(dataKey, lancamento[dataKey])}</div></li>
                 <li><span class="label">Categoria</span> <div>${formatarValorExibicao('id_categoria', lancamento.id_categoria)}</div></li>
                 <li><span class="label">Conta</span> <div>${formatarValorExibicao('id_conta_bancaria', lancamento.id_conta_bancaria)}</div></li>
                 <li><span class="label">Favorecido</span> <div>${formatarValorExibicao('id_contato', lancamento.id_contato)}</div></li>
@@ -3315,7 +3314,11 @@ function renderizarCardsAprovacao(solicitacoes) {
         const dadosNovos = s.dados_novos;
         let cardBodyHtml = '';
         let tipoInfo = { texto: 'Ação Desconhecida', icone: 'fa-question-circle', cor: 'var(--fc-cor-texto-secundario)' };
-        let tituloAlvo = `Lançamento Alvo #${dadosAntigos.id}:`;
+        
+        // Lógica segura para definir o título e a descrição
+        const idAlvo = dadosAntigos?.id || 'NOVO';
+        let descricaoAlvo = dadosAntigos?.descricao || dadosNovos?.descricao || 'Lançamento Proposto';
+        let tituloAlvo = `Lançamento Alvo #${idAlvo}:`;
 
         switch (s.tipo_solicitacao) {
             case 'EDICAO':
@@ -3340,48 +3343,49 @@ function renderizarCardsAprovacao(solicitacoes) {
 
             case 'EXCLUSAO':
                 tipoInfo = { texto: 'Solicitação de Exclusão', icone: 'fa-trash-alt', cor: 'var(--fc-cor-despesa)' };
-                cardBodyHtml = `
-                    <div class="fc-aprovacao-acao-box tipo-exclusao">
-                        <h4><i class="fas fa-exclamation-triangle"></i>AÇÃO: Excluir permanentemente este lançamento.</h4>
-                    </div>
-                    <p style="margin-top: 15px; font-weight: 500;">Detalhes do lançamento a ser excluído:</p>
-                    ${gerarResumoLancamento(dadosAntigos)}
-                `;
+                cardBodyHtml = `<div class="fc-aprovacao-acao-box tipo-exclusao"><h4><i class="fas fa-exclamation-triangle"></i>AÇÃO: Excluir permanentemente este lançamento.</h4></div><p style="margin-top: 15px; font-weight: 500;">Detalhes do lançamento a ser excluído:</p>${gerarResumoLancamento(dadosAntigos)}`;
                 break;
 
             case 'ESTORNO':
                 tipoInfo = { texto: 'Solicitação de Estorno', icone: 'fa-undo-alt', cor: 'var(--fc-cor-receita)' };
-                cardBodyHtml = `
-                    <div class="fc-aprovacao-acao-box tipo-estorno">
-                        <h4><i class="fas fa-check-circle"></i>AÇÃO: Registrar Estorno</h4>
-                        <p>Valor: <strong>${formatarValorExibicao('valor', dadosNovos.valor_estornado)}</strong> | 
-                        Data: <strong>${formatarValorExibicao('data_transacao', dadosNovos.data_transacao)}</strong> | 
-                        Conta Destino: <strong>${formatarValorExibicao('id_conta_bancaria', dadosNovos.id_conta_bancaria)}</strong></p>
-                    </div>
-                    <p style="margin-top: 15px; font-weight: 500;">Para a despesa original:</p>
-                    ${gerarResumoLancamento(dadosAntigos)}
-                `;
+                cardBodyHtml = `<div class="fc-aprovacao-acao-box tipo-estorno"><h4><i class="fas fa-check-circle"></i>AÇÃO: Registrar Estorno</h4><p>Valor: <strong>${formatarValorExibicao('valor', dadosNovos.valor_estornado)}</strong> | Data: <strong>${formatarValorExibicao('data_transacao', dadosNovos.data_transacao)}</strong> | Conta Destino: <strong>${formatarValorExibicao('id_conta_bancaria', dadosNovos.id_conta_bancaria)}</strong></p></div><p style="margin-top: 15px; font-weight: 500;">Para a despesa original:</p>${gerarResumoLancamento(dadosAntigos)}`;
                 break;
 
             case 'REVERSAO_ESTORNO':
                 tipoInfo = { texto: 'Solicitação de Reversão de Estorno', icone: 'fa-history', cor: 'var(--fc-cor-aviso)' };
-                tituloAlvo = `Estorno Alvo #${dadosAntigos.id}:`; // Título mais específico
+                tituloAlvo = `Estorno Alvo #${dadosAntigos.id}:`;
+                cardBodyHtml = `<div class="fc-aprovacao-acao-box tipo-reversao"><h4><i class="fas fa-info-circle"></i>AÇÃO: Reverter Estorno</h4><p>Isto irá apagar o lançamento de receita (estorno) abaixo e reativar a despesa original (#${dadosAntigos.id_estorno_de}).</p></div><p style="margin-top: 15px; font-weight: 500;">Detalhes do estorno a ser revertido:</p>${gerarResumoLancamento(dadosAntigos)}`;
+                break;
+
+             case 'CRIACAO_DATAS_ESPECIAIS':
+                tipoInfo = { texto: 'Solicitação de Criação', icone: 'fa-plus-circle', cor: 'var(--fc-cor-receita)' };
+                tituloAlvo = `Proposta de Novo Lançamento:`;
+                
+                // Acessamos 'lancamento_proposto' a partir de 's.dados_novos'
+                const proposta = s.dados_novos.lancamento_proposto;
+                
+                const dadosParaResumo = proposta.tipo_rateio 
+                    ? { 
+                        ...proposta.dados_pai, 
+                        // Corrigindo o cálculo para ser mais seguro
+                        valor: (proposta.itens_filho || []).reduce((acc, item) => {
+                            const itemValor = item.valor_item || ((item.quantidade || 0) * (item.valor_unitario || 0));
+                            return acc + parseFloat(itemValor);
+                        }, 0) - (parseFloat(proposta.dados_pai.valor_desconto) || 0)
+                      } 
+                    : proposta;
+                
+                descricaoAlvo = dadosParaResumo.descricao || 'Lançamento Proposto';
+                
                 cardBodyHtml = `
-                    <div class="fc-aprovacao-acao-box tipo-reversao">
-                        <h4><i class="fas fa-info-circle"></i>AÇÃO: Reverter Estorno</h4>
-                        <p>Isto irá apagar o lançamento de receita (estorno) abaixo e reativar a despesa original (#${dadosAntigos.id_estorno_de}).</p>
-                    </div>
-                    <p style="margin-top: 15px; font-weight: 500;">Detalhes do estorno a ser revertido:</p>
-                    ${gerarResumoLancamento(dadosAntigos)}
+                    <div class="fc-aprovacao-acao-box tipo-reversao"><h4><i class="fas fa-info-circle"></i>AÇÃO: Criar um novo lançamento com data especial.</h4></div>
+                    <p style="margin-top: 15px; font-weight: 500;">Detalhes do lançamento proposto:</p>
+                    ${gerarResumoLancamento(dadosParaResumo)}
                 `;
                 break;
         }
 
-        const justificativaHTML = s.justificativa_solicitante ? `
-            <div class="justificativa-solicitante">
-                <strong>Justificativa do Solicitante:</strong>
-                <p>${s.justificativa_solicitante}</p>
-            </div>` : '';
+        const justificativaHTML = s.justificativa_solicitante ? `<div class="justificativa-solicitante"><strong>Justificativa do Solicitante:</strong><p>${s.justificativa_solicitante}</p></div>` : '';
 
         return `
         <div class="fc-aprovacao-card">
@@ -3391,7 +3395,7 @@ function renderizarCardsAprovacao(solicitacoes) {
             </div>
             <header class="fc-aprovacao-card-header">
                 <h3 class="tipo-solicitacao" style="color:${tipoInfo.cor};"><i class="fas ${tipoInfo.icone}"></i> ${tipoInfo.texto}</h3>
-                <h2 class="descricao-alvo"><span>${tituloAlvo}</span> ${dadosAntigos.descricao || 'Lançamento sem descrição'}</h2>
+                <h2 class="descricao-alvo"><span>${tituloAlvo}</span> ${descricaoAlvo}</h2>
             </header>
             <div class="fc-aprovacao-card-body">${cardBodyHtml}</div>
             ${justificativaHTML}
@@ -3403,12 +3407,8 @@ function renderizarCardsAprovacao(solicitacoes) {
         `;
     }).join('');
 
-    container.querySelectorAll('.btn-aprovar').forEach(btn => {
-        btn.addEventListener('click', (e) => aprovarSolicitacao(e.currentTarget.dataset.id));
-    });
-    container.querySelectorAll('.btn-rejeitar').forEach(btn => {
-        btn.addEventListener('click', (e) => rejeitarSolicitacao(e.currentTarget.dataset.id));
-    });
+    container.querySelectorAll('.btn-aprovar').forEach(btn => btn.addEventListener('click', (e) => aprovarSolicitacao(e.currentTarget.dataset.id)));
+    container.querySelectorAll('.btn-rejeitar').forEach(btn => btn.addEventListener('click', (e) => rejeitarSolicitacao(e.currentTarget.dataset.id)));
 }
 
 
@@ -3832,16 +3832,13 @@ function setupEventListenersFinanceiro() {
     // --- BOTÕES DE AÇÃO GLOBAIS (FAB E AGENDA) ---
     const btnNovoLancamento = document.getElementById('btnNovoLancamento');
     if (permissoesGlobaisFinanceiro.includes('lancar-transacao')) {
-        // Substitua a linha antiga por esta:
         btnNovoLancamento?.addEventListener('click', () => {
-            // Agora chamamos a função global que renderiza o modal React
             if (window.renderReactModal) {
                 window.renderReactModal({
+                    ...modalBaseProps,
                     isOpen: true,
-                    onClose: () => window.renderReactModal({ isOpen: false }), // Função para fechar
-                    contas: contasCache,
-                    categorias: categoriasCache,
-                    grupos: gruposCache
+                    onClose: () => window.renderReactModal({ ...modalBaseProps, isOpen: false }),
+                    lancamentoParaEditar: null
                 });
             }
         });
@@ -3987,6 +3984,13 @@ async function inicializarPaginaFinanceiro() {
         filtrosAtivos.total = lancamentosData.total;
         
         console.log('[Financeiro] Fase 2: Dados secundários carregados.');
+
+        modalBaseProps = {
+            contas: contasCache,
+            categorias: categoriasCache,
+            grupos: gruposCache,
+            permissoes: permissoesGlobaisFinanceiro
+        };
 
         // FASE 3: Renderiza os componentes que dependem dos dados secundários
         // Essas funções são rápidas pois os dados já estão em cache
@@ -4964,7 +4968,6 @@ window.addEventListener('filtrarAgendaPorAlerta', (event) => {
 
 window.addEventListener('navegarParaViewFinanceiro', (event) => {
     const view = event.detail.view;
-    console.log(`JS Legado ouviu pedido para navegar para a view: ${view}`);
     
     // Chama a sua função de navegação principal que já existe!
     gerenciarNavegacaoPrincipal(view);

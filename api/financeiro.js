@@ -2084,6 +2084,64 @@ router.post('/aprovacoes/:id/aprovar', async (req, res) => {
             await dbClient.query("UPDATE fc_lancamentos SET status_edicao = 'OK' WHERE id = $1", [idLancamentoOriginal]);
 
             mensagemNotificacao = `Sua solicitação para reverter o estorno <strong>#${idLancamento}</strong> foi APROVADA.`;
+         } else if (solicitacao.tipo_solicitacao === 'CRIACAO_DATAS_ESPECIAIS') {
+            acaoLog = 'APROVACAO_CRIACAO_ESPECIAL';
+            const lancamentoProposto = solicitacao.dados_novos.lancamento_proposto;
+
+            let novoLancamento;
+
+            // Se for um lançamento SIMPLES
+            if (!lancamentoProposto.tipo_rateio) {
+                const { tipo, valor, data_transacao, id_categoria, id_conta_bancaria, id_contato, descricao } = lancamentoProposto;
+                const lancamentoRes = await dbClient.query(
+                    `INSERT INTO fc_lancamentos (id_conta_bancaria, id_categoria, tipo, valor, data_transacao, descricao, id_contato, id_usuario_lancamento) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *;`,
+                    [id_conta_bancaria, id_categoria, tipo, valor, data_transacao, descricao, id_contato, solicitacao.id_usuario_solicitante]
+                );
+                novoLancamento = lancamentoRes.rows[0];
+            } 
+            // Se for um lançamento DETALHADO (Compra ou Rateio)
+            else {
+                const { dados_pai, itens_filho, tipo_rateio } = lancamentoProposto;
+                
+                // Primeiro, cria o lançamento "pai"
+                const lancamentoPaiRes = await dbClient.query(
+                    `INSERT INTO fc_lancamentos (tipo, tipo_rateio, data_transacao, id_conta_bancaria, id_contato, id_categoria, descricao, valor, valor_desconto, id_usuario_lancamento) VALUES ('DESPESA', $1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *;`,
+                    [ tipo_rateio, dados_pai.data_transacao, dados_pai.id_conta_bancaria, dados_pai.id_contato, dados_pai.id_categoria, dados_pai.descricao, 0, dados_pai.valor_desconto || 0, solicitacao.id_usuario_solicitante ]
+                );
+                const lancamentoPai = lancamentoPaiRes.rows[0];
+                
+                let somaTotalItens = 0;
+
+                // Depois, cria os itens "filho"
+                for (const item of itens_filho) {
+                    let valorDoItem = 0;
+                    if (tipo_rateio === 'COMPRA') {
+                        valorDoItem = (item.quantidade || 0) * (item.valor_unitario || 0);
+                        await dbClient.query(
+                            'INSERT INTO fc_lancamento_itens (id_lancamento_pai, id_categoria, descricao_item, quantidade, valor_unitario, valor_total_item, id_contato_item) VALUES ($1, $2, $3, $4, $5, $6, $7);',
+                            [lancamentoPai.id, item.id_categoria, item.descricao_item, item.quantidade, item.valor_unitario, valorDoItem, item.id_contato_item || null]
+                        );
+                    } else { // DETALHADO
+                        valorDoItem = item.valor_item || 0;
+                         await dbClient.query(
+                            'INSERT INTO fc_lancamento_itens (id_lancamento_pai, id_categoria, descricao_item, valor_total_item, id_contato_item) VALUES ($1, $2, $3, $4, $5);',
+                            [lancamentoPai.id, item.id_categoria, item.descricao_item, valorDoItem, item.id_contato_item]
+                        );
+                    }
+                    somaTotalItens += valorDoItem;
+                }
+
+                // Finalmente, atualiza o valor do lançamento "pai" com a soma correta
+                const valorFinalPai = somaTotalItens - (dados_pai.valor_desconto || 0);
+                await dbClient.query('UPDATE fc_lancamentos SET valor = $1 WHERE id = $2', [valorFinalPai, lancamentoPai.id]);
+
+                novoLancamento = { ...lancamentoPai, valor: valorFinalPai };
+            }
+            
+            // Atualiza a solicitação com o ID do lançamento recém-criado
+            await dbClient.query('UPDATE fc_solicitacoes_alteracao SET id_lancamento = $1 WHERE id = $2', [novoLancamento.id, id]);
+            
+            mensagemNotificacao = `Seu lançamento proposto para a data <strong>${new Date((novoLancamento.data_transacao || '') + 'T12:00:00Z').toLocaleDateString('pt-BR')}</strong> foi APROVADO.`;
         }
 
         // Finaliza a solicitação
@@ -2126,23 +2184,37 @@ router.post('/aprovacoes/:id/rejeitar', async (req, res) => {
         if (solRes.rows.length === 0) throw new Error('Solicitação não encontrada ou já processada.');
         const solicitacao = solRes.rows[0];
 
-        // Atualiza o lançamento para o status 'EDICAO_REJEITADA' e salva o motivo da rejeição
-        await dbClient.query(
-            "UPDATE fc_lancamentos SET status_edicao = 'EDICAO_REJEITADA', motivo_rejeicao = $1 WHERE id = $2", 
-            [motivo.trim(), solicitacao.id_lancamento]
-        );
-
-        // Atualiza a solicitação para 'REJEITADO'
+        // <<<<<<<<<<<<<<< INÍCIO DA LÓGICA CORRIGIDA >>>>>>>>>>>>>>>
+        
+        // Se for uma solicitação de criação, não há lançamento original para atualizar.
+        if (solicitacao.tipo_solicitacao !== 'CRIACAO_DATAS_ESPECIAIS') {
+            await dbClient.query(
+                "UPDATE fc_lancamentos SET status_edicao = 'EDICAO_REJEITADA', motivo_rejeicao = $1 WHERE id = $2", 
+                [motivo.trim(), solicitacao.id_lancamento]
+            );
+        }
+        
         await dbClient.query(
             "UPDATE fc_solicitacoes_alteracao SET status = 'REJEITADO', id_usuario_aprovador = $1, motivo_rejeicao = $2, data_decisao = NOW() WHERE id = $3", 
             [req.usuarioLogado.id, motivo.trim(), id]
         );
         
-        const mensagemNotificacao = `Sua solicitação para alterar o lançamento <strong>#${solicitacao.id_lancamento} ("${solicitacao.dados_antigos.descricao || 'sem descrição'}")</strong> foi REJEITADA. Motivo: ${motivo.trim()}`;
+        // Monta a mensagem de notificação de forma segura
+        let mensagemNotificacao = '';
+        if (solicitacao.tipo_solicitacao === 'CRIACAO_DATAS_ESPECIAIS') {
+            const descricaoProposta = solicitacao.dados_novos.lancamento_proposto?.dados_pai?.descricao || solicitacao.dados_novos.lancamento_proposto?.descricao || 'sem descrição';
+            mensagemNotificacao = `Sua proposta de novo lançamento ("${descricaoProposta}") foi REJEITADA. Motivo: ${motivo.trim()}`;
+        } else {
+            const descricaoAntiga = solicitacao.dados_antigos?.descricao || 'sem descrição';
+            mensagemNotificacao = `Sua solicitação para alterar o lançamento <strong>#${solicitacao.id_lancamento} ("${descricaoAntiga}")</strong> foi REJEITADA. Motivo: ${motivo.trim()}`;
+        }
+
         await dbClient.query("INSERT INTO fc_notificacoes (id_usuario_destino, tipo, mensagem) VALUES ($1, 'REJEICAO', $2);", [solicitacao.id_usuario_solicitante, mensagemNotificacao]);
         
         await registrarLog(dbClient, req.usuarioLogado.id, req.usuarioLogado.nome, 'REJEICAO_SOLICITACAO', { solicitacao, motivo: motivo.trim() });
         
+        // <<<<<<<<<<<<<<<<<<<<<<< FIM DA LÓGICA CORRIGIDA >>>>>>>>>>>>>>>>>
+
         await dbClient.query('COMMIT');
         res.status(200).json({ message: 'Solicitação rejeitada com sucesso.' });
     } catch (error) {
@@ -2311,6 +2383,48 @@ router.post('/transferencias', async (req, res) => {
         if (dbClient) await dbClient.query('ROLLBACK'); // Desfaz tudo em caso de erro
         console.error('[API POST /transferencias] Erro:', error);
         res.status(500).json({ error: 'Erro ao processar transferência.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// NOVA ROTA PARA SOLICITAR CRIAÇÃO COM DATA ESPECIAL
+router.post('/lancamentos/solicitar-criacao', async (req, res) => {
+    // Apenas pegamos o corpo da requisição inteiro
+    const { lancamento_proposto, justificativa } = req.body;
+    
+    if (!lancamento_proposto || !justificativa || justificativa.trim() === '') {
+        return res.status(400).json({ error: 'Os dados do lançamento e a justificativa são obrigatórios.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        await dbClient.query('BEGIN');
+
+        const solQuery = `
+            INSERT INTO fc_solicitacoes_alteracao 
+                (id_lancamento, tipo_solicitacao, dados_novos, id_usuario_solicitante, justificativa_solicitante) 
+            VALUES (NULL, 'CRIACAO_DATAS_ESPECIAIS', $1, $2, $3) RETURNING *;
+        `;
+
+        // <<<<<<<<<<<<<<<<<<<< ESTA É A CORREÇÃO CRÍTICA >>>>>>>>>>>>>>>>>>>>
+        // Em vez de salvar apenas lancamento_proposto, salvamos o objeto completo
+        // que a rota de aprovação espera.
+        await dbClient.query(solQuery, [
+            JSON.stringify({ lancamento_proposto: lancamento_proposto }), // Salva a estrutura { lancamento_proposto: ... }
+            req.usuarioLogado.id,
+            justificativa
+        ]);
+        // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+        await dbClient.query('COMMIT');
+        res.status(202).json({ message: 'Solicitação de lançamento com data especial enviada para aprovação.' });
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error("[API /lancamentos/solicitar-criacao] Erro:", error);
+        res.status(500).json({ error: 'Erro ao processar solicitação de criação.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }
