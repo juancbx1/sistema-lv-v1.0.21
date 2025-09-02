@@ -1758,6 +1758,58 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
 }
 
 /* ==========================================================================
+   NOVO FEED DE ATIVIDADES (HISTÓRICO)
+   ========================================================================== */
+.feed-atividades-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px; /* Espaço entre os itens do log */
+}
+
+.log-item-container {
+    display: flex;
+    align-items: flex-start;
+    gap: 15px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: var(--fc-raio-borda);
+    border: 1px solid var(--fc-cor-borda);
+}
+
+.log-item-icone {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 1.1rem;
+}
+
+.log-item-conteudo {
+    flex-grow: 1;
+}
+
+.log-item-detalhes {
+    margin: 0 0 5px 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--fc-cor-texto-principal);
+}
+/* Estiliza o texto em negrito que vem da API */
+.log-item-detalhes strong {
+    font-weight: 600;
+}
+
+.log-item-meta {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--fc-cor-texto-secundario);
+}
+
+/* ==========================================================================
    9. RESPONSIVIDADE
    ========================================================================== */
 
@@ -1767,6 +1819,9 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
 }
 
 @media (max-width: 768px) {
+    .log-item-detalhes{
+        word-break: break-word
+    }
     .ultima-atividade {
         display: flex;
         justify-content: center;
@@ -2178,6 +2233,10 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
     .fc-btn-icon {
     width: 34px;
     height: 34px;
+    }
+
+    .log-item-detalhes {
+    font-size: 0.8rem;
     }
 
 }

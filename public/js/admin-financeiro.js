@@ -3237,11 +3237,15 @@ function gerenciarNavegacaoPrincipal(view) {
         case 'historico':
             viewPrincipal.classList.add('hidden');
             historicoView.classList.remove('hidden');
-            btnConfig.querySelector('i').className = 'fas fa-times'; // Muda para 'X'
+            btnConfig.querySelector('i').className = 'fas fa-times';
             btnConfig.classList.add('fechar');
             btnConfig.title = 'Fechar Histórico';
             atualizarBreadcrumbs(['Histórico de Atividades']);
-            carregarLogsAuditoria(); // Carrega os dados desta tela
+            
+            
+            if (window.renderReactFeed) {
+                window.renderReactFeed();
+            }
             break;
 
         default: // 'main' ou qualquer outro valor
@@ -3428,7 +3432,6 @@ async function aprovarSolicitacao(id) {
         
         // Atualiza o contador do sino de notificações
         atualizarBadgesHeader();
-        carregarLogsAuditoria();
         // Recarrega os dados do dashboard e dos lançamentos em segundo plano
         // para refletir a alteração ou exclusão que foi aprovada.
         atualizarSaldosDashboard();
@@ -3457,7 +3460,6 @@ async function rejeitarSolicitacao(id) {
         carregarAprovacoesPendentes();
         // Atualiza o badge do sino
         atualizarBadgesHeader();
-        carregarLogsAuditoria();
 
     } catch(e) {
         // fetchFinanceiroAPI já lida com o popup de erro
@@ -4559,71 +4561,7 @@ async function atualizarBadgesHeader() {
     }
 }
 
-async function carregarLogsAuditoria(page = 1) { // Agora aceita o número da página
-    const container = document.getElementById('historicoContainer');
-    const paginacaoContainer = document.getElementById('paginacaoHistoricoContainer');
-    
-    if (!container || !paginacaoContainer) return;
 
-    container.innerHTML = `<div class="fc-spinner">Buscando histórico...</div>`;
-    
-    try {
-        // A API agora retorna um objeto com 'logs' e 'totalPages'
-        const data = await fetchFinanceiroAPI(`/logs?page=${page}`);
-        
-        renderizarLogsAuditoria(data.logs); // Passa apenas o array de logs para a função de renderização
-
-        // Chama sua função de paginação reutilizável!
-        renderizarPaginacao(
-            paginacaoContainer,
-            data.totalPages,
-            data.currentPage,
-            (novaPagina) => carregarLogsAuditoria(novaPagina) // Ação a ser executada ao clicar em um botão da paginação
-        );
-
-    } catch (e) {
-        container.innerHTML = `<p style="color:red">Erro ao buscar histórico.</p>`;
-    }
-}
-
-function renderizarLogsAuditoria(logs) {
-    const container = document.getElementById('historicoContainer');
-    if (!container) return;
-
-    if (logs.length === 0) {
-        container.innerHTML = `<p style="text-align:center; padding:20px;">Nenhuma atividade registrada ainda.</p>`;
-        return;
-    }
-
-    const icones = {
-        CRIACAO: 'fa-plus-circle',
-        EDICAO: 'fa-pencil-alt',
-        EXCLUSAO: 'fa-trash-alt',
-        SOLICITACAO: 'fa-hourglass-half',
-        APROVACAO: 'fa-check-circle',
-        REJEICAO: 'fa-times-circle'
-    };
-
-    container.innerHTML = logs.map(log => {
-        // Encontra a primeira palavra chave no tipo de ação para definir o ícone
-        const acaoPrincipal = Object.keys(icones).find(key => log.acao.includes(key));
-        const iconeClasse = icones[acaoPrincipal] || 'fa-info-circle';
-        
-        return `
-        <div class="fc-log-card">
-            <div class="icone">
-                <i class="fas ${iconeClasse}"></i>
-            </div>
-            <div class="conteudo">
-                <p class="detalhes">${log.detalhes}</p>
-                <p class="meta">
-                    Por <strong>${log.nome_usuario}</strong> em ${new Date(log.data_evento).toLocaleString('pt-BR')}
-                </p>
-            </div>
-        </div>
-        `
-    }).join('');
-}
 
 function gerarPreviaLoteFixo() {
     const valorTotal = parseFloat(document.getElementById('lote_valor_total').value);

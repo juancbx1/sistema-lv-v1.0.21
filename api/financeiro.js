@@ -41,7 +41,7 @@ const verificarTokenInterna = (reqOriginal) => {
     }
 };
 
-async function registrarLog(dbClient, idUsuario, nomeUsuario, acao, dados) {
+async function registrarLog(dbClient, idUsuario, nomeUsuario, acao, dados, contexto = null) {
 
     try {
         let detalhes = '';
@@ -142,7 +142,12 @@ async function registrarLog(dbClient, idUsuario, nomeUsuario, acao, dados) {
                 detalhes = `Ação de auditoria não especificada para o tipo: ${acao}`;
         }
         
-        await dbClient.query(`INSERT INTO fc_logs_auditoria (id_usuario, nome_usuario, acao, detalhes, dados_alterados) VALUES ($1, $2, $3, $4, $5);`, [idUsuario, nomeUsuario, acao, detalhes, dadosAlterados]);
+        const query = `
+            INSERT INTO fc_logs_auditoria (id_usuario, nome_usuario, acao, detalhes, dados_alterados, contexto)
+            VALUES ($1, $2, $3, $4, $5, $6);
+        `;
+        // Adiciona 'contexto' como o sexto parâmetro
+        await dbClient.query(query, [idUsuario, nomeUsuario, acao, detalhes, dadosAlterados, contexto]);
 
     } catch (logError) {
         console.error("ERRO CRÍTICO AO REGISTRAR LOG DE AUDITORIA:", logError);
@@ -756,7 +761,8 @@ router.post('/lancamentos', async (req, res) => {
             req.usuarioLogado.id,
             req.usuarioLogado.nome,
             'CRIACAO_LANCAMENTO',
-            { lancamento: novoLancamento } // Passa o objeto para a função de log
+            { lancamento: novoLancamento }, // Passa o objeto para a função de log
+            { tipo_lancamento: novoLancamento.tipo }
         );
 
         await dbClient.query('COMMIT');
@@ -1294,7 +1300,8 @@ router.post('/lancamentos/detalhado', async (req, res) => {
             req.usuarioLogado.id,
             req.usuarioLogado.nome,
             'CRIACAO_LANCAMENTO_DETALHADO',
-            { lancamento: { id: novoLancamentoId, descricao: descricao, valor: valor_total_lancamento, itens: itens_filho.length, tipo_rateio: tipo_rateio } }
+            { lancamento: { id: novoLancamentoId, descricao: descricao, valor: valor_total_lancamento, itens: itens_filho.length, tipo_rateio: tipo_rateio } },
+            { tipo_lancamento: 'DESPESA' }
         );
 
         await dbClient.query('COMMIT');
@@ -2151,7 +2158,13 @@ router.post('/aprovacoes/:id/aprovar', async (req, res) => {
         await dbClient.query("INSERT INTO fc_notificacoes (id_usuario_destino, tipo, mensagem) VALUES ($1, 'SUCESSO', $2);", [solicitacao.id_usuario_solicitante, mensagemNotificacao]);
         
         // Registra o log de auditoria
-        await registrarLog(dbClient, req.usuarioLogado.id, req.usuarioLogado.nome, acaoLog, { solicitacao });
+        await registrarLog(dbClient, 
+            req.usuarioLogado.id, 
+            req.usuarioLogado.nome, 
+            'APROVACAO_CRIACAO_ESPECIAL', // Ação específica de aprovação
+                { solicitacao }, // Dados da solicitação
+                { tipo_lancamento: novoLancamento.tipo } // Contexto com o tipo do lançamento criado
+            );
         
         await dbClient.query('COMMIT');
         res.status(200).json({ message: 'Solicitação aprovada com sucesso.' });
