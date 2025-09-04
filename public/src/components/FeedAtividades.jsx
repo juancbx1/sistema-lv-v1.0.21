@@ -1,9 +1,9 @@
-// public/src/components/FeedAtividades.jsx
-
 import React, { useState, useEffect } from 'react';
 import LogItem from './LogItem.jsx';
 
-// Vamos reusar a função de paginação do seu JS legado por enquanto
+//FEED - historico de atividades do financeiro
+
+// reusar a função de paginação do JS legado por enquanto
 // Supondo que `renderizarPaginacao` esteja disponível globalmente ou seja importada.
 import { renderizarPaginacao } from '/js/utils/Paginacao.js';
 
@@ -52,6 +52,21 @@ export default function FeedAtividades() {
             );
         }
     }, [paginacao]); // Roda sempre que as informações de paginação mudam
+
+    // Efeito para ouvir o evento de recarregamento
+    useEffect(() => {
+        const handleRecarregar = () => {
+            // Apenas busca os dados da primeira página novamente
+            fetchLogs(1); 
+        };
+
+        window.addEventListener('recarregarFeedAtividades', handleRecarregar);
+
+        // Limpa o listener quando o componente for "desmontado" para evitar vazamentos de memória
+        return () => {
+            window.removeEventListener('recarregarFeedAtividades', handleRecarregar);
+        };
+    }, []);
 
     if (isLoading) {
         return <div className="fc-spinner">Carregando histórico...</div>;

@@ -92,6 +92,7 @@ export const permissoesDisponiveis = [
     { id: 'visualizar-relatorios', label: 'Ação: Gerar relatórios financeiros', categoria: 'Financeiro (Controle de Caixa)' },
     { id: 'aprovar-alteracao-financeira', label: 'Ação: Aprovar/Rejeitar edições e exclusões', categoria: 'Financeiro (Controle de Caixa)' },
     { id: 'permite-excluir-agendamentos', label: 'Ação: Pode excluir agendamentos (pelo ID)', categoria: 'Financeiro (Controle de Caixa)' },
+    { id: 'acesso-relatorios-financeiros', label: 'Ação: Pode ver relatórios financeiros', categoria: 'Financeiro (Controle de Caixa)' },
 
 
     // --- FINANCEIRO E RELATÓRIOS ---

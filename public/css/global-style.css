@@ -1,12 +1,14 @@
 /* ==========================================================================
    # DEFINIÇÕES GLOBAIS (VARIÁVEIS)
-   ========================================================================== */
+   ========================================================================== */ 
 :root {
-    /* Cores Primárias */
+    /* Cores Padroes */
     --gs-primaria: #3498db;
     --gs-primaria-hover: #2980b9;
-    --gs-secundaria: #2c3e50; /* Azul escuro para textos e títulos */
-
+    --gs-secundaria: #2c3e50;
+    --gs-terciaria: #7f8c8d;
+    --gs-terciaria-hover: #6c7a7b;
+    
     /* Cores de Feedback */
     --gs-sucesso: #27ae60;
     --gs-sucesso-hover: #229954;
@@ -15,6 +17,10 @@
     --gs-urgente: #d32f2f; /* Vermelho mais forte, para reposição (estoque), por ex */
     --gs-aviso: #f39c12;
     --gs-info: #3498db; /* Pode ser a mesma da primária */
+    --gs-positivo-borda: #caffdd;
+    --gs-positivo-fundo: #ecfff2;
+    --gs-negativo-fundo: #fff5f5;
+    --gs-negativo-borda: #ffe2e5;
 
     /* Tons de Cinza e Neutros */
     --gs-texto-principal: #333;
@@ -22,9 +28,11 @@
     --gs-fundo-pagina: #f4f6f8;
     --gs-branco: #ffffff;
     --gs-borda: #dcdfe4;
+    --gs-borda-alternativa: #ced4da;
     --gs-fundo-input: #f8f9fa;
     --gs-fundo-card: var(--gs-branco);
     --gs-fundo-alternativo: #f9fbfd; /* Para seções com fundo leve */
+    --gs-neutro: #ccc;
 
     /* Botoes */
     --gs-botao-secundario: #98a0a1;
@@ -43,6 +51,40 @@
     --gs-fonte-principal: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
+@keyframes gs-fadeIn { 
+  from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } 
+}
+
+@keyframes gs-spin { 
+  from { transform: rotate(0deg); } to { transform: rotate(360deg); } 
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes gs-pulsar {
+    0%, 80%, 100% {
+        transform: scale(0);
+    }
+    40% {
+        transform: scale(1.0);
+    }
+}
+
+@keyframes gs-pulsar-gradual {
+    0% { background-position: 0 50%, 50% 50%, 100% 50%; }
+    25% { background-position: 0 0, 50% 50%, 100% 50%; }
+    50% { background-position: 0 50%, 50% 0, 100% 50%; }
+    75% { background-position: 0 50%, 50% 50%, 100% 0; }
+    100% { background-position: 0 50%, 50% 50%, 100% 50%; }
+}
+
+@keyframes gs-fadeInHighlight {
+  from { background-color: var(--gs-branco)be2; }
+  to { background-color: #f8f9fa; }
+}
 
 /* ==========================================================================
    # ESTILOS DE BASE E RESETS
@@ -65,7 +107,7 @@ body {
     visibility: hidden; 
     margin-left: 250px; 
     transition: margin-left 0.3s ease;
-    touch-action: manipulation; /* Ótima prática para mobile! */
+    touch-action: manipulation;
 }
 
 body.autenticado {
@@ -858,11 +900,6 @@ body.autenticado {
   width: 50px;
   height: 50px;
   animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
 }
 
 /* Classe para ESCONDER O CONTEÚDO PRINCIPAL enquanto carrega */

@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="/css/popups.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
 
-</head>
+</head> 
 <body>
 
     <!-- SPINNER GLOBAL PADRONIZADO -->
@@ -254,6 +254,15 @@
             </div>
         </section>
 
+        <!-- =============================================== -->
+        <!-- TELA 5: CENTRAL DE RELATÓRIOS (COMEÇA OCULTA)   -->
+        <!-- =============================================== -->
+        <section id="relatoriosView" class="hidden">
+            <div id="relatorios-financeiro-root">
+                <!-- O React vai renderizar a Central de Relatórios aqui -->
+            </div>
+        </section>
+
     </div> <!-- FIM do fc-content-wrapper -->
 </main>
 
@@ -281,7 +290,7 @@
             <i class="fas fa-plus"></i>
         </button>
         <!-- NOVO Botão de Agendamento (Aba Agenda) -->
-        <button id="btnNovoAgendamentoFab" class="fc-fab hidden" title="Novo Agendamento" style="background-color: var(--fc-cor-receita);">
+        <button id="btnNovoAgendamentoFab" class="fc-fab hidden" title="Novo Agendamento" style="background-color: var(--gs-sucesso);">
             <i class="fas fa-calendar-plus"></i>
         </button>
     </div>
@@ -289,6 +298,7 @@
     <script type="module" src="/src/main-financeiro-header.jsx"></script>
     <script type="module" src="/src/main-financeiro-modal.jsx"></script> 
     <script type="module" src="/src/main-feed-atividades.jsx"></script>
+    <script type="module" src="/src/main-relatorios-financeiro.jsx"></script>
     <script src="/js/admin-financeiro.js" type="module"></script>
     <script src="/js/carregar-menu-lateral.js" type="module"></script>
 </body>

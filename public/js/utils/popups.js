@@ -172,3 +172,60 @@ export function mostrarPromptNumerico(mensagem, opcoes = {}) {
         input.select(); // Seleciona o texto inicial para fácil substituição
     });
 }
+
+/**
+ * Exibe um popup com um campo de texto para justificativas ou outros inputs.
+ * @param {string} mensagem - A pergunta a ser exibida.
+ * @param {object} [opcoes={}] - Opções de configuração.
+ * @param {string} [opcoes.placeholder=''] - O placeholder do campo de texto.
+ * @param {string} [opcoes.tipo='info'] - O tipo de popup para a cor da borda.
+ * @param {string} [opcoes.textoConfirmar='Confirmar'] - Texto do botão de confirmação.
+ * @returns {Promise<string|null>} - O texto inserido ou null se o usuário cancelar.
+ */
+export function mostrarPromptTexto(mensagem, opcoes = {}) {
+    removerPopupExistente();
+    const { placeholder = '', tipo = 'info', textoConfirmar = 'Confirmar' } = opcoes;
+
+    return new Promise((resolve) => {
+        const container = document.createElement('div');
+        container.className = 'popup-container';
+
+        container.innerHTML = `
+            <div class="popup-overlay"></div>
+            <div class="popup-box popup-${tipo}">
+                <p>${mensagem}</p>
+                <div class="popup-input-container" style="margin-bottom: 20px;">
+                    <textarea id="popupInputTexto" class="popup-input-texto" 
+                              placeholder="${placeholder}" rows="3"></textarea>
+                </div>
+                <div class="popup-botoes">
+                    <button class="popup-btn popup-btn-cancelar">Cancelar</button>
+                    <button id="popupBtnConfirmarTexto" class="popup-btn popup-btn-confirmar">${textoConfirmar}</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(container);
+
+        const textarea = container.querySelector('#popupInputTexto');
+        const btnConfirmar = container.querySelector('#popupBtnConfirmarTexto');
+        const btnCancelar = container.querySelector('.popup-btn-cancelar');
+        const overlay = container.querySelector('.popup-overlay');
+
+        const fecharPopup = (valor) => {
+            removerPopupExistente();
+            resolve(valor);
+        };
+        
+        btnConfirmar.onclick = () => fecharPopup(textarea.value.trim());
+        textarea.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { // Permite Shift+Enter para nova linha
+                e.preventDefault();
+                btnConfirmar.click();
+            }
+        });
+        btnCancelar.onclick = () => fecharPopup(null);
+        overlay.onclick = () => fecharPopup(null);
+
+        textarea.focus();
+    });
+}

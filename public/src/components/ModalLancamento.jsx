@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import SearchableSelect from './SearchableSelect.jsx';
 import AutocompleteAPI from './AutocompleteAPI.jsx';
-import { mostrarMensagem, mostrarConfirmacao } from '/js/utils/popups.js';
+import { mostrarMensagem, mostrarConfirmacao, mostrarPromptTexto } from '/js/utils/popups.js';
 
 const getLocalDateString = () => {
     const date = new Date();
@@ -161,21 +161,20 @@ export default function ModalLancamento({ isOpen, onClose, lancamentoParaEditar,
     };
     const totalRateio = formRateio.itens?.reduce((t, i) => t + (parseFloat(i.valor_item) || 0), 0) || 0;
 
+    // Substitua a função handleSubmit inteira por esta nova versão
+
     const handleSubmit = async () => {
+        // 1. Pega as permissões e o modo de edição (seu código já faz isso bem)
         const isAdmin = permissoes?.includes('aprovar-alteracao-financeira') || false;
 
         setIsSubmitting(true);
-        let endpoint = '';
-        let payload = {};
-        let method = isEditMode ? 'PUT' : 'POST';
 
         try {
-            // Passo 1: Montar o payload final com base na aba ativa.
-            // Esta parte já faz a conversão de tipos (parseFloat).
+            // 2. Monta o payload final baseado na aba ativa (seu código já faz isso bem)
             let finalPayload;
             if (abaAtiva === 'simples') {
                 finalPayload = { ...formSimples, valor: parseFloat(formSimples.valor), id_contato: formSimples.favorecido?.id || null };
-                if (!finalPayload.valor || !finalPayload.id_categoria || !finalPayload.id_conta_bancaria || !finalPayload.descricao) throw new Error("Valor, Categoria, Conta Bancária e Descrição são obrigatórios.");
+                if (!finalPayload.valor || !finalPayload.id_categoria || !finalPayload.id_conta_bancaria) throw new Error("Valor, Categoria e Conta Bancária são obrigatórios.");
             } else if (abaAtiva === 'compra') {
                 finalPayload = { tipo_rateio: 'COMPRA', dados_pai: { data_transacao: formCompra.data, id_conta_bancaria: formCompra.id_conta_bancaria, id_contato: formCompra.favorecido?.id || null, descricao: formCompra.descricao, valor_desconto: parseFloat(formCompra.desconto) || 0 }, itens_filho: formCompra.itens.map(i => ({ descricao_item: i.descricao_item, quantidade: parseFloat(i.quantidade), valor_unitario: parseFloat(i.valor_unitario), id_categoria: i.id_categoria })) };
                 if (!finalPayload.dados_pai.id_conta_bancaria || !finalPayload.dados_pai.id_contato || !finalPayload.dados_pai.descricao || finalPayload.itens_filho.some(i => !i.id_categoria)) throw new Error("Conta, Fornecedor, Descrição Geral e Categoria de todos os itens são obrigatórios.");
@@ -186,41 +185,76 @@ export default function ModalLancamento({ isOpen, onClose, lancamentoParaEditar,
                 }
             }
 
-            // Passo 2: Lógica de decisão para definir o endpoint e o payload a ser enviado.
-            const dataSelecionada = finalPayload.data_transacao || finalPayload.dados_pai.data_transacao;
-            const hoje = getLocalDateString();
+            let endpoint = '';
+            let method = isEditMode ? 'PUT' : 'POST';
+            let payloadParaEnviar = finalPayload;
 
-            if (isEditMode) {
+            // --- LÓGICA DE DECISÃO CORRIGIDA E CENTRALIZADA ---
+
+            // CASO 1: É UMA EDIÇÃO E O USUÁRIO NÃO É ADMIN?
+            if (isEditMode && !isAdmin) {
+                // Pede a justificativa, não importa qual o tipo de lançamento
+                const justificativa = await mostrarPromptTexto(
+                    `Qual o motivo para editar o lançamento #${lancamentoParaEditar.id}?`,
+                    { placeholder: 'Justificativa obrigatória', tipo: 'aviso' }
+                );
+
+                if (!justificativa) {
+                    throw new Error("Edição cancelada. A justificativa é obrigatória.");
+                }
+                
+                // Adiciona a justificativa ao payload que será enviado
+                payloadParaEnviar.justificativa = justificativa;
+
+                // Define o endpoint de edição
                 endpoint = abaAtiva === 'simples'
                     ? `/api/financeiro/lancamentos/${lancamentoParaEditar.id}`
                     : `/api/financeiro/lancamentos/detalhado/${lancamentoParaEditar.id}`;
-                payload = finalPayload; // Em edição, envia o payload completo.
-            } 
-            else if (dataSelecionada !== hoje && !isAdmin) {
-                const dataFormatada = new Date(dataSelecionada + 'T12:00:00Z').toLocaleDateString('pt-BR');
-                const justificativa = await prompt(`Justifique o motivo para lançar com data diferente de hoje (${dataFormatada}).`);
+            
+            // CASO 2: É UMA CRIAÇÃO, COM DATA FUTURA/PASSADA E O USUÁRIO NÃO É ADMIN?
+            } else if (!isEditMode && !isAdmin) {
+                const dataSelecionada = finalPayload.data_transacao || finalPayload.dados_pai.data_transacao;
+                const hoje = getLocalDateString();
                 
-                if (!justificativa || justificativa.trim() === '') {
-                    throw new Error("Justificativa é obrigatória para lançamentos com data especial. Operação cancelada.");
+                if (dataSelecionada !== hoje) {
+                    const dataFormatada = new Date(dataSelecionada + 'T12:00:00Z').toLocaleDateString('pt-BR');
+                    const justificativa = await mostrarPromptTexto(
+                        `Justifique o motivo para lançar com data diferente de hoje (${dataFormatada}).`,
+                        { placeholder: 'Justificativa obrigatória', tipo: 'aviso' }
+                    );
+
+                    if (!justificativa) {
+                        throw new Error("Lançamento cancelado. Justificativa é obrigatória para datas especiais.");
+                    }
+
+                    endpoint = '/api/financeiro/lancamentos/solicitar-criacao';
+                    payloadParaEnviar = {
+                        lancamento_proposto: finalPayload,
+                        justificativa: justificativa
+                    };
+                } else {
+                    // Criação normal com data de hoje
+                    endpoint = abaAtiva === 'simples'
+                        ? '/api/financeiro/lancamentos'
+                        : '/api/financeiro/lancamentos/detalhado';
                 }
-                
-                endpoint = '/api/financeiro/lancamentos/solicitar-criacao';
-                // O payload final é encapsulado para a solicitação
-                payload = {
-                    lancamento_proposto: finalPayload, // << USA O PAYLOAD JÁ TRATADO
-                    justificativa: justificativa.trim()
-                };
-            } 
-            else { // Criação normal
-                endpoint = abaAtiva === 'simples'
-                    ? '/api/financeiro/lancamentos'
-                    : '/api/financeiro/lancamentos/detalhado';
-                payload = finalPayload;
+            
+            // CASO 3: QUALQUER OUTRA SITUAÇÃO (Criação ou Edição por um Admin)
+            } else {
+                endpoint = isEditMode 
+                    ? (abaAtiva === 'simples' ? `/api/financeiro/lancamentos/${lancamentoParaEditar.id}` : `/api/financeiro/lancamentos/detalhado/${lancamentoParaEditar.id}`)
+                    : (abaAtiva === 'simples' ? '/api/financeiro/lancamentos' : '/api/financeiro/lancamentos/detalhado');
             }
 
-            // Passo 3: Envio para a API.
+
+            // 4. Envio final para a API
             const token = localStorage.getItem('token');
-            const response = await fetch(endpoint, { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload) });
+            const response = await fetch(endpoint, { 
+                method, 
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, 
+                body: JSON.stringify(payloadParaEnviar) // << Usa a variável final
+            });
+            
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || `Erro ${response.status}`);
             
@@ -230,7 +264,7 @@ export default function ModalLancamento({ isOpen, onClose, lancamentoParaEditar,
 
         } catch (error) {
             console.error("Erro ao salvar lançamento:", error);
-            mostrarMensagem(`Erro: ${error.message}`, 'erro');
+            mostrarMensagem(error.message, 'erro'); // Mostra a mensagem de erro específica
         } finally {
             setIsSubmitting(false);
         }

@@ -12,7 +12,6 @@ export default function FinanceiroHeader() {
     const [error, setError] = useState(null);
     const [abaAtiva, setAbaAtiva] = useState('Dashboard');
     const [periodoAtivo, setPeriodoAtivo] = useState('Este Mês');
-    const [buscaAtiva, setBuscaAtiva] = useState(false);
     const [viewAtiva, setViewAtiva] = useState('main');
     
     // --- REFs PARA CONTROLE ---
@@ -162,15 +161,16 @@ export default function FinanceiroHeader() {
             </div>
 
             {/* LINHA 2: Navegação e Ferramentas */}
-            <div className={`header-linha-acoes ${buscaAtiva ? 'modo-busca' : ''}`}>
+            <div className="header-linha-acoes">
                 <div className="navegacao-titulo">
                     {viewAtiva !== 'main' ? (
                         <button className="btn-voltar-header" onClick={handleVoltar}>
                             <i className="fas fa-chevron-left"></i>
                             <h1>
-                                {viewAtiva === 'config' && 'Configurações'}
+                                {viewAtiva === 'config' && 'Configs.'}
                                 {viewAtiva === 'aprovacoes' && 'Aprovações'}
                                 {viewAtiva === 'historico' && 'Histórico'}
+                                {viewAtiva === 'relatorios' && 'Relatórios'}
                             </h1>
                         </button>
                     ) : (
@@ -179,17 +179,6 @@ export default function FinanceiroHeader() {
                 </div>
 
                 <div className="acoes-principais">
-                    <div className="busca-global-wrapper">
-                        <button className="btn-abrir-busca" onClick={() => setBuscaAtiva(true)}>
-                            <i className="fas fa-search"></i>
-                        </button>
-                        <i className="fas fa-search icone-input-busca"></i>
-                        <input type="text" placeholder={`Buscar em ${abaAtiva}...`} className="busca-global-input" />
-                        <button className="btn-fechar-busca" onClick={() => setBuscaAtiva(false)}>
-                            <i className="fas fa-times"></i>
-                        </button>
-                    </div>
-
                     <div className="seletor-periodo-wrapper">
                         <button className="seletor-periodo-btn">
                             <i className="fas fa-calendar-alt"></i>
@@ -198,7 +187,7 @@ export default function FinanceiroHeader() {
                         </button>
                     </div>
 
-                    <div className="grupo-icones-status">
+                     <div className="grupo-icones-status">
                         <IconeComBadge 
                             icone="fa-check-double" 
                             contagem={statusData.aprovacoesPendentes} 
@@ -211,6 +200,12 @@ export default function FinanceiroHeader() {
                             corBadge="var(--fc-cor-primaria)"
                             onClick={() => navegarParaView('historico')}
                         />
+                        
+                        {/* BOTÃO NOVO */}
+                        <button className="fc-btn-icon" title="Central de Relatórios" onClick={() => navegarParaView('relatorios')}>
+                            <i className="fas fa-chart-bar"></i>
+                        </button>
+                        
                         <button className="fc-btn-icon" onClick={() => navegarParaView('config')}>
                             <i className="fas fa-cog"></i>
                         </button>

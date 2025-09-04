@@ -148,3 +148,19 @@
     transform: none;
     box-shadow: none;
 }
+
+.popup-input-texto {
+    width: 100%;
+    font-size: 1rem;
+    border: 2px solid #e0e6ed;
+    border-radius: 8px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    resize: vertical; /* Permite que o usuário redimensione verticalmente */
+    box-sizing: border-box;
+}
+
+.popup-input-texto:focus {
+    border-color: #3498db; /* Azul */
+    box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.15);
+}

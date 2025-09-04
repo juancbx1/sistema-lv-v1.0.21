@@ -2,6 +2,7 @@
 
 import { verificarAutenticacao } from '/js/utils/auth.js';
 import { renderizarPaginacao } from '/js/utils/Paginacao.js';
+import { mostrarMensagem, mostrarConfirmacao, mostrarPromptTexto  } from '/js/utils/popups.js';
 
 // --- Variáveis Globais ---
 let permissoesGlobaisFinanceiro = [];
@@ -23,12 +24,10 @@ const carregamentoGlobalEl = document.getElementById('carregamentoGlobal');
 function esconderSpinnerGlobalSePronto() {
     if (legacyJsReady && reactHeaderReady && carregamentoGlobalEl) {
         carregamentoGlobalEl.classList.remove('visivel');
-        console.log('[Carregamento] Todas as partes prontas. Spinner escondido.');
     }
 }
 
 window.addEventListener('reactHeaderReady', () => {
-    console.log('[Carregamento] Sinal recebido: Header React está pronto.');
     reactHeaderReady = true;
     esconderSpinnerGlobalSePronto();
 });
@@ -48,144 +47,10 @@ function debounce(func, wait) {
     };
 }
 
-// --- Funções de Popup e API ---
-function mostrarPopupFinanceiro(mensagem, tipo = 'info', duracao = 4000) {
-    const popupId = `popup-${Date.now()}`;
-    const popup = document.createElement('div');
-    popup.id = popupId;
-    popup.className = `fc-popup-mensagem popup-${tipo}`;
-    popup.innerHTML = `<p>${mensagem}</p>`;
-
-    const overlay = document.createElement('div');
-    overlay.className = 'fc-popup-overlay';
-
-    const fecharPopup = () => {
-        popup.style.animation = 'fc-slideOut 0.3s ease-out forwards';
-        overlay.style.animation = 'fc-fadeOut 0.3s ease-out forwards';
-        setTimeout(() => {
-            if (document.body.contains(popup)) document.body.removeChild(popup);
-            if (document.body.contains(overlay)) document.body.removeChild(overlay);
-        }, 300);
-    };
-    
-    const okBtn = document.createElement('button');
-    okBtn.textContent = 'OK';
-    okBtn.className = 'fc-btn fc-btn-primario';
-    okBtn.onclick = fecharPopup;
-    popup.appendChild(okBtn);
-    
-    document.body.appendChild(overlay);
-    document.body.appendChild(popup);
-
-    if (duracao > 0) {
-        setTimeout(fecharPopup, duracao);
-    }
-}
-
-function mostrarPopupComInput(mensagem, placeholder = '') {
-    return new Promise((resolve) => {
-        // Remove qualquer popup existente para evitar sobreposição
-        const popupExistente = document.querySelector('.fc-popup-overlay');
-        if (popupExistente) popupExistente.parentElement.remove();
-
-        const container = document.createElement('div');
-        const popup = document.createElement('div');
-        popup.className = 'fc-popup-mensagem popup-aviso';
-        
-        const overlay = document.createElement('div');
-        overlay.className = 'fc-popup-overlay';
-
-        const fecharPopup = (valorResolvido) => {
-            popup.style.animation = 'fc-slideOut 0.3s ease-out forwards';
-            overlay.style.animation = 'fc-fadeOut 0.3s ease-out forwards';
-            setTimeout(() => {
-                if (document.body.contains(container)) document.body.removeChild(container);
-                resolve(valorResolvido);
-            }, 300);
-        };
-        
-        popup.innerHTML = `<p>${mensagem}</p>`;
-        
-        const formGroup = document.createElement('div');
-        formGroup.className = 'fc-form-group';
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'fc-input';
-        input.placeholder = placeholder;
-        formGroup.appendChild(input);
-        popup.appendChild(formGroup);
-
-        const botoesContainer = document.createElement('div');
-        botoesContainer.className = 'botoes-container';
-
-        const btnConfirmar = document.createElement('button');
-        btnConfirmar.textContent = 'Confirmar';
-        btnConfirmar.className = 'fc-btn fc-btn-primario';
-        btnConfirmar.onclick = () => fecharPopup(input.value);
-
-        const btnCancelar = document.createElement('button');
-        btnCancelar.textContent = 'Cancelar';
-        btnCancelar.className = 'fc-btn fc-btn-secundario';
-        btnCancelar.onclick = () => fecharPopup(null); // Resolve com null se cancelar
-        
-        botoesContainer.appendChild(btnCancelar);
-        botoesContainer.appendChild(btnConfirmar);
-        popup.appendChild(botoesContainer);
-
-        container.appendChild(overlay);
-        container.appendChild(popup);
-        document.body.appendChild(container);
-        
-        // Foco automático no input para melhor UX
-        input.focus();
-    });
-}
-
-function mostrarPopupConfirmacao(mensagem) {
-    return new Promise((resolve) => {
-        const popup = document.createElement('div');
-        popup.className = 'fc-popup-mensagem popup-aviso';
-        popup.innerHTML = `<p>${mensagem}</p>`;
-        
-        const overlay = document.createElement('div');
-        overlay.className = 'fc-popup-overlay';
-
-        const fecharPopup = (valorResolvido) => {
-            popup.style.animation = 'fc-slideOut 0.3s ease-out forwards';
-            overlay.style.animation = 'fc-fadeOut 0.3s ease-out forwards';
-            setTimeout(() => {
-                if (document.body.contains(popup)) document.body.removeChild(popup);
-                if (document.body.contains(overlay)) document.body.removeChild(overlay);
-                resolve(valorResolvido);
-            }, 300);
-        };
-
-        const botoesContainer = document.createElement('div');
-        botoesContainer.className = 'botoes-container';
-
-        const btnConfirmar = document.createElement('button');
-        btnConfirmar.textContent = 'Sim, continuar';
-        btnConfirmar.className = 'fc-btn fc-btn-primario';
-        btnConfirmar.onclick = () => fecharPopup(true);
-
-        const btnCancelar = document.createElement('button');
-        btnCancelar.textContent = 'Cancelar';
-        btnCancelar.className = 'fc-btn fc-btn-secundario';
-        btnCancelar.onclick = () => fecharPopup(false);
-        
-        botoesContainer.appendChild(btnCancelar);
-        botoesContainer.appendChild(btnConfirmar);
-        popup.appendChild(botoesContainer);
-
-        document.body.appendChild(overlay);
-        document.body.appendChild(popup);
-    });
-}
-
 async function fetchFinanceiroAPI(endpoint, options = {}) {
     const token = localStorage.getItem('token');
     if (!token) {
-        mostrarPopupFinanceiro('Erro de autenticação. Faça login novamente.', 'erro');
+        mostrarMensagem('Erro de autenticação. Faça login novamente.', 'erro');
         window.location.href = '/index.html';
         throw new Error('Token não encontrado');
     }
@@ -193,7 +58,7 @@ async function fetchFinanceiroAPI(endpoint, options = {}) {
     const headers = { 
         'Authorization': `Bearer ${token}`, 
         'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache', // <<< LINHA ADICIONADA: Impede o cache
+        'Cache-Control': 'no-cache',
         ...options.headers 
     };
     
@@ -205,10 +70,11 @@ async function fetchFinanceiroAPI(endpoint, options = {}) {
         }
         return response.status === 204 ? null : await response.json();
     } catch (error) {
-        mostrarPopupFinanceiro(error.message, 'erro');
+        mostrarMensagem(error.message, 'erro');
         throw error;
     }
 }
+
 
 function formatarCategoriaComGrupo(categoriaId) {
     const categoria = categoriasCache.find(c => c.id == categoriaId);
@@ -251,7 +117,7 @@ function renderizarTabelaContas() {
                             <td data-label="Nome">${conta.nome_conta}</td>
                             <td data-label="Banco">${conta.banco || '-'}</td>
                             <td data-label="Ag/Conta">${conta.agencia || '-'} / ${conta.numero_conta || '-'}</td>
-                            <td data-label="Status" style="color: ${conta.ativo ? 'var(--fc-cor-receita)' : 'var(--fc-cor-texto-secundario)'}; font-weight: bold;">
+                            <td data-label="Status" style="color: ${conta.ativo ? 'var(--gs-sucesso)' : 'var(--gs-texto-secundario)'}; font-weight: bold;">
                                 ${conta.ativo ? 'Ativa' : 'Inativa'}
                             </td>
                             <td data-label="Ações" class="td-acoes">
@@ -276,7 +142,7 @@ function renderizarTabelaContas() {
         });
     } else {
         container.querySelectorAll('.fc-btn-disabled').forEach(btn => {
-            btn.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para gerenciar contas bancárias.', 'aviso'));
+            btn.addEventListener('click', () => mostrarMensagem('Você não tem permissão para gerenciar contas bancárias.', 'aviso'));
         });
     }
 }
@@ -385,7 +251,7 @@ async function salvarConta(event) {
             const newConta = await fetchFinanceiroAPI('/contas', { method: 'POST', body: JSON.stringify(payload) });
             contasCache.push(newConta);
         }
-        mostrarPopupFinanceiro('Conta salva com sucesso!', 'sucesso');
+        mostrarMensagem('Conta salva com sucesso!', 'sucesso');
         fecharModal();
         renderizarTabelaContas();
     } catch (error) {
@@ -424,7 +290,7 @@ function renderizarTabelaGrupos() {
                     gruposCache.map(grupo => `
                         <tr>
                             <td data-label="Nome">${grupo.nome}</td>
-                            <td data-label="Tipo" style="color: ${grupo.tipo === 'RECEITA' ? 'var(--fc-cor-receita)' : 'var(--fc-cor-despesa)'}; font-weight: bold;">
+                            <td data-label="Tipo" style="color: ${grupo.tipo === 'RECEITA' ? 'var(--gs-sucesso)' : 'var(--gs-perigo)'}; font-weight: bold;">
                                 ${grupo.tipo}
                             </td>
                             <td data-label="Ações" class="td-acoes">
@@ -446,7 +312,7 @@ function renderizarTabelaGrupos() {
             abrirModalGrupo(grupo); 
         }));
     } else {
-        container.querySelectorAll('.fc-btn-disabled').forEach(btn => btn.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para gerenciar categorias.', 'aviso')));
+        container.querySelectorAll('.fc-btn-disabled').forEach(btn => btn.addEventListener('click', () => mostrarMensagem('Você não tem permissão para gerenciar categorias.', 'aviso')));
     }
 }
 
@@ -513,7 +379,7 @@ async function salvarGrupo(event) {
             const created = await fetchFinanceiroAPI('/grupos', { method: 'POST', body: JSON.stringify(payload) });
             gruposCache.push(created);
         }
-        mostrarPopupFinanceiro('Grupo salvo com sucesso!', 'sucesso');
+        mostrarMensagem('Grupo salvo com sucesso!', 'sucesso');
         fecharModal();
         
         renderizarTabelaGrupos();
@@ -621,8 +487,6 @@ function renderizarDashboard(saldos, alertas) {
 async function atualizarSaldosDashboard() {
     const saldosContainer = document.getElementById('saldosContainer');
     if (!saldosContainer) return;
-
-    console.log('[Dashboard] Solicitando atualização de saldos...');
     
     // 1. Mostra o spinner IMEDIATAMENTE
     saldosContainer.innerHTML = `
@@ -642,8 +506,6 @@ async function atualizarSaldosDashboard() {
         
         // 3. Renderiza o conteúdo final (substituindo o spinner)
         renderizarDashboard(dashboardData.saldos, dashboardData.alertas);
-        
-        console.log('[Dashboard] Saldos atualizados na tela com sucesso.');
     } catch (error) {
         // 4. Em caso de erro, substitui o spinner por uma mensagem de erro
         console.error('[Dashboard] Falha ao tentar atualizar os saldos:', error);
@@ -858,7 +720,7 @@ function renderizarCardsLancamentos() {
                         
                         ${/* Lógica para mostrar o desconto APENAS se ele existir */ ''}
                         ${l.valor_desconto > 0 ? `
-                            <span class="detail-item" style="color: var(--fc-cor-receita);"><i class="fas fa-percent"></i><b>Desconto:</b> - ${formatCurrency(l.valor_desconto)}</span>
+                            <span class="detail-item" style="color: var(--gs-sucesso);"><i class="fas fa-percent"></i><b>Desconto:</b> - ${formatCurrency(l.valor_desconto)}</span>
                         ` : ''}
                     </div>
 
@@ -880,7 +742,7 @@ function renderizarCardsLancamentos() {
                                         class="fc-btn-icon btn-reverter-estorno" 
                                         data-id="${l.id}" 
                                         title="Reverter Estorno" 
-                                        style="color: var(--fc-cor-despesa);"
+                                        style="color: var(--gs-perigo);"
                                         ${l.status_edicao === 'PENDENTE_APROVACAO' ? 'disabled' : ''} 
                                     >
                                         <i class="fas fa-history"></i>
@@ -895,7 +757,7 @@ function renderizarCardsLancamentos() {
                                         class="fc-btn-icon btn-registrar-estorno" 
                                         data-id="${l.id}" 
                                         title="Registrar Estorno" 
-                                        style="color: var(--fc-cor-receita);"
+                                        style="color: var(--gs-sucesso);"
                                         ${l.status_edicao === 'PENDENTE_APROVACAO' ? 'disabled' : ''}
                                     >
                                         <i class="fas fa-undo-alt"></i>
@@ -962,7 +824,7 @@ function renderizarCardsLancamentos() {
                 });
             } else {
                 btn.classList.add('fc-btn-disabled');
-                btn.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para editar lançamentos.', 'aviso'));
+                btn.addEventListener('click', () => mostrarMensagem('Você não tem permissão para editar lançamentos.', 'aviso'));
             }
         }
     });
@@ -976,7 +838,7 @@ function renderizarCardsLancamentos() {
                 });
             } else {
                 btn.classList.add('fc-btn-disabled');
-                btn.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para excluir lançamentos.', 'aviso'));
+                btn.addEventListener('click', () => mostrarMensagem('Você não tem permissão para excluir lançamentos.', 'aviso'));
             }
         }
     });
@@ -1000,7 +862,7 @@ function renderizarCardsLancamentos() {
 }
 
 async function reverterEstorno(idLancamentoEstorno) {
-    const confirmado = await mostrarPopupConfirmacao(
+    const confirmado = await mostrarConfirmacao(
         "Tem certeza que deseja reverter este estorno? A receita será excluída e o lançamento original voltará ao normal."
     );
     if (!confirmado) return;
@@ -1009,7 +871,7 @@ async function reverterEstorno(idLancamentoEstorno) {
         const response = await fetchFinanceiroAPI(`/lancamentos/${idLancamentoEstorno}/reverter-estorno`, {
             method: 'POST'
         });
-        mostrarPopupFinanceiro(response.message, 'sucesso');
+        mostrarMensagem(response.message, 'sucesso');
         carregarLancamentosFiltrados(filtrosAtivos.page || 1);
         atualizarSaldosDashboard();
     } catch (error) {
@@ -1396,7 +1258,7 @@ async function salvarEstorno(event) {
     };
 
     if (!payload.valor_estornado || !payload.data_transacao || !payload.id_conta_bancaria) {
-        mostrarPopupFinanceiro('Por favor, preencha todos os campos.', 'aviso');
+        mostrarMensagem('Por favor, preencha todos os campos.', 'aviso');
         return;
     }
 
@@ -1411,7 +1273,7 @@ async function salvarEstorno(event) {
         });
 
         // 2. Usamos a mensagem que vem da resposta da API
-        mostrarPopupFinanceiro(response.message, 'sucesso');
+        mostrarMensagem(response.message, 'sucesso');
         fecharModal();
         
         // 3. Atualizamos os badges (importante para o usuário ver a notificação)
@@ -1597,12 +1459,12 @@ function setAutocompleteStatus(inputElement, status) {
     switch (status) {
         case 'success':
             iconSpan.innerHTML = '<i class="fas fa-check-circle"></i>';
-            iconSpan.style.color = 'var(--fc-cor-receita)';
+            iconSpan.style.color = 'var(--gs-sucesso)';
             iconSpan.classList.add('visible');
             break;
         case 'error':
             iconSpan.innerHTML = '<i class="fas fa-times-circle"></i>';
-            iconSpan.style.color = 'var(--fc-cor-despesa)';
+            iconSpan.style.color = 'var(--gs-perigo)';
             iconSpan.classList.add('visible');
             break;
         case 'clear':
@@ -1684,15 +1546,14 @@ function atualizarResumoRateio(formElement) {
     const resumoContainer = formElement.querySelector('.resumo-rateio');
     if (!resumoContainer) return;
     
-    // Identifica se é um formulário de Compra ou Rateio
     const isCompraDetalhada = formElement.id.includes('CompraDetalhada');
 
     let totalItens = 0;
     
     if (isCompraDetalhada) {
-        // Lógica para Compra Detalhada (com quantidade e valor unitário)
+        // CORREÇÃO: Verifica se o input de desconto existe antes de usar
         const valorDescontoInput = formElement.querySelector('input[id$="_valor_desconto"]');
-        const valorDesconto = parseFloat(valorDescontoInput?.value) || 0;
+        const valorDesconto = valorDescontoInput ? parseFloat(valorDescontoInput.value) || 0 : 0;
 
         formElement.querySelectorAll('.item-valor-total').forEach(input => {
             totalItens += parseFloat(input.value) || 0;
@@ -1703,7 +1564,7 @@ function atualizarResumoRateio(formElement) {
         resumoContainer.innerHTML = `
             <span>Soma dos Itens: <strong>${formatCurrency(totalItens)}</strong></span> | 
             <span>Desconto: <strong>- ${formatCurrency(valorDesconto)}</strong></span> | 
-            <span style="color: var(--fc-cor-primaria);">Total Pago: <strong>${formatCurrency(valorFinal)}</strong></span>
+            <span style="color: var(--gs-primaria);">Total Pago: <strong>${formatCurrency(valorFinal)}</strong></span>
         `;
     } else {
         // Lógica para Rateio Detalhado (com valor direto)
@@ -1712,7 +1573,7 @@ function atualizarResumoRateio(formElement) {
         });
 
         resumoContainer.innerHTML = `
-            <span style="color: var(--fc-cor-primaria);">Total Distribuído: <strong>${formatCurrency(totalItens)}</strong></span>
+            <span style="color: var(--gs-primaria);">Total Distribuído: <strong>${formatCurrency(totalItens)}</strong></span>
         `;
     }
 }
@@ -1728,7 +1589,7 @@ async function salvarCompraDetalhada(event) {
     try {
         const favorecidoId = form.querySelector(`#${prefixo}_favorecido_id`).value;
         if (!favorecidoId) {
-            mostrarPopupFinanceiro('Fornecedor inválido. Por favor, selecione um da lista ou crie um novo.', 'erro');
+            mostrarMensagem('Fornecedor inválido. Por favor, selecione um da lista ou crie um novo.', 'erro');
             return;
         }
 
@@ -1736,7 +1597,7 @@ async function salvarCompraDetalhada(event) {
         const linhasDeItens = form.querySelectorAll('.grade-itens-rateio .fc-rateio-linha');
 
         if (linhasDeItens.length === 0) {
-            mostrarPopupFinanceiro('É necessário adicionar pelo menos um item à compra.', 'erro');
+            mostrarMensagem('É necessário adicionar pelo menos um item à compra.', 'erro');
             return;
         }
         
@@ -1759,7 +1620,7 @@ async function salvarCompraDetalhada(event) {
         });
 
         if (algumItemInvalido) {
-            mostrarPopupFinanceiro('Todos os itens devem ter quantidade, valor unitário e categoria válidos.', 'erro');
+            mostrarMensagem('Todos os itens devem ter quantidade, valor unitário e categoria válidos.', 'erro');
             return;
         }
 
@@ -1784,13 +1645,13 @@ async function salvarCompraDetalhada(event) {
         if (itemEmEdicao) {
             // Se estiver editando E o usuário não for admin, pede a justificativa
             if (!permissoesGlobaisFinanceiro.includes('aprovar-alteracao-financeira')) {
-                const justificativa = await mostrarPopupComInput(
+                const justificativa = await mostrarPromptTexto(
                     `Qual o motivo para editar a compra #${itemEmEdicao.id}?`,
                     'Justificativa obrigatória'
                 );
 
                 if (!justificativa || justificativa.trim() === '') {
-                    mostrarPopupFinanceiro('A edição foi cancelada, pois a justificativa é obrigatória.', 'aviso');
+                    mostrarMensagem('A edição foi cancelada, pois a justificativa é obrigatória.', 'aviso');
                     // Reabilita o botão antes de sair
                     if (btnSalvar) {
                         btnSalvar.disabled = false;
@@ -1808,7 +1669,7 @@ async function salvarCompraDetalhada(event) {
         }
         
         const mensagemSucesso = response.message || (itemEmEdicao ? 'Alterações salvas com sucesso!' : 'Compra detalhada registrada com sucesso!');
-        mostrarPopupFinanceiro(mensagemSucesso, 'sucesso');
+        mostrarMensagem(mensagemSucesso, 'sucesso');
         
         fecharModal();
         carregarLancamentosFiltrados(filtrosAtivos.page || 1);
@@ -1913,14 +1774,14 @@ async function salvarRateioDetalhado(event) {
         };
 
         if (!dadosPai.id_conta_bancaria || !dadosPai.data_transacao || !dadosPai.id_contato || !dadosPai.id_categoria) {
-            mostrarPopupFinanceiro('Por favor, preencha todos os campos da seção "Dados do Pagamento".', 'erro');
+            mostrarMensagem('Por favor, preencha todos os campos da seção "Dados do Pagamento".', 'erro');
             return;
         }
 
         const itens_filho = [];
         const linhasDeItens = form.querySelectorAll('.fc-rateio-linha');
         if (linhasDeItens.length === 0) {
-            mostrarPopupFinanceiro('Adicione pelo menos um favorecido no detalhamento dos custos.', 'erro');
+            mostrarMensagem('Adicione pelo menos um favorecido no detalhamento dos custos.', 'erro');
             return;
         }
         
@@ -1946,7 +1807,7 @@ async function salvarRateioDetalhado(event) {
         });
 
         if (algumItemInvalido) {
-            mostrarPopupFinanceiro('Todos os itens do detalhamento devem ter um favorecido, uma categoria e um valor válido.', 'erro');
+            mostrarMensagem('Todos os itens do detalhamento devem ter um favorecido, uma categoria e um valor válido.', 'erro');
             return;
         }
 
@@ -1963,13 +1824,13 @@ async function salvarRateioDetalhado(event) {
 
         if (itemEmEdicao) {
             if (!permissoesGlobaisFinanceiro.includes('aprovar-alteracao-financeira')) {
-                 const justificativa = await mostrarPopupComInput(
+                 const justificativa = await mostrarPromptTexto(
                     `Qual o motivo para editar o rateio #${itemEmEdicao.id}?`,
                     'Justificativa obrigatória'
                 );
 
                 if (!justificativa || justificativa.trim() === '') {
-                    mostrarPopupFinanceiro('A edição foi cancelada, pois a justificativa é obrigatória.', 'aviso');
+                    mostrarMensagem('A edição foi cancelada, pois a justificativa é obrigatória.', 'aviso');
                     throw new Error("Justificativa cancelada pelo usuário.");
                 }
                 payload.justificativa = justificativa.trim();
@@ -1984,7 +1845,7 @@ async function salvarRateioDetalhado(event) {
             mensagemSucesso = 'Rateio detalhado registrado com sucesso!';
         }
         
-        mostrarPopupFinanceiro(mensagemSucesso, 'sucesso');
+        mostrarMensagem(mensagemSucesso, 'sucesso');
         fecharModal();
         carregarLancamentosFiltrados(filtrosAtivos.page || 1);
         atualizarSaldosDashboard();
@@ -2013,7 +1874,7 @@ async function salvarLancamento(event) {
         const favorecidoId = document.getElementById('lanc_contato_id').value;
         const favorecidoNome = document.getElementById('lanc_contato_busca').value;
         if (!favorecidoId && favorecidoNome.trim() !== '') {
-            mostrarPopupFinanceiro('Favorecido/Pagador inválido. Por favor, selecione um item da lista ou clique em "+ Criar novo".', 'erro');
+            mostrarMensagem('Favorecido/Pagador inválido. Por favor, selecione um item da lista ou clique em "+ Criar novo".', 'erro');
             return;
         }
 
@@ -2027,7 +1888,7 @@ async function salvarLancamento(event) {
         };
         
         if (!payload.valor || !payload.id_categoria || !payload.id_conta_bancaria) {
-            mostrarPopupFinanceiro('Por favor, preencha todos os campos obrigatórios (*).', 'aviso');
+            mostrarMensagem('Por favor, preencha todos os campos obrigatórios (*).', 'aviso');
             return;
         }
 
@@ -2038,13 +1899,13 @@ async function salvarLancamento(event) {
 
         if (itemEmEdicao) {
             if (!permissoesGlobaisFinanceiro.includes('aprovar-alteracao-financeira')) {
-                const justificativa = await mostrarPopupComInput(
+                const justificativa = await mostrarPromptTexto(
                     `Qual o motivo para editar o lançamento #${itemEmEdicao.id}?`,
                     'Justificativa obrigatória'
                 );
 
                 if (!justificativa || justificativa.trim() === '') {
-                    mostrarPopupFinanceiro('A edição foi cancelada, pois a justificativa é obrigatória.', 'aviso');
+                    mostrarMensagem('A edição foi cancelada, pois a justificativa é obrigatória.', 'aviso');
                     throw new Error("Justificativa cancelada pelo usuário."); // Lança um erro para parar a execução e ir para o finally
                 }
                 // Adiciona a justificativa ao payload que será enviado para a API
@@ -2065,7 +1926,7 @@ async function salvarLancamento(event) {
             hoje.setHours(0, 0, 0, 0);
             if (dataTransacaoDate.getTime() !== hoje.getTime()) {
                 const dataFormatada = dataTransacaoDate.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-                const confirmado = await mostrarPopupConfirmacao(`Atenção: a data da transação (${dataFormatada}) é diferente da data de hoje. Deseja continuar?`);
+                const confirmado = await mostrarConfirmacao(`Atenção: a data da transação (${dataFormatada}) é diferente da data de hoje. Deseja continuar?`);
                 if (!confirmado) {
                    throw new Error("Criação cancelada pelo usuário devido à data.");
                 }
@@ -2073,14 +1934,14 @@ async function salvarLancamento(event) {
 
             payload.tipo = document.getElementById('lanc_tipo').value;
             if (!payload.tipo) {
-                mostrarPopupFinanceiro('O campo "Tipo" é obrigatório.', 'aviso');
+                mostrarMensagem('O campo "Tipo" é obrigatório.', 'aviso');
                 throw new Error("Tipo de lançamento não selecionado");
             }
             await fetchFinanceiroAPI('/lancamentos', { method: 'POST', body: JSON.stringify(payload) });
             responseMessage = 'Lançamento salvo com sucesso!';
         }
         
-        mostrarPopupFinanceiro(responseMessage, 'sucesso');
+        mostrarMensagem(responseMessage, 'sucesso');
         fecharModal();
         
         carregarLancamentosFiltrados(filtrosAtivos.page || 1);
@@ -2108,13 +1969,13 @@ async function solicitarExclusaoLancamento(id) {
     const lancamento = lancamentosCache.find(l => l.id == id);
     if (!lancamento) return;
 
-    const justificativa = await mostrarPopupComInput(
+    const justificativa = await mostrarPromptTexto(
         `Por que você deseja solicitar a exclusão do lançamento "${lancamento.descricao || 'sem descrição'}"?`,
         'Motivo da solicitação (obrigatório)'
     );
 
     if (!justificativa || justificativa.trim() === '') {
-        mostrarPopupFinanceiro('A solicitação foi cancelada, pois é necessário fornecer um motivo.', 'aviso');
+        mostrarMensagem('A solicitação foi cancelada, pois é necessário fornecer um motivo.', 'aviso');
         return;
     }
 
@@ -2124,7 +1985,7 @@ async function solicitarExclusaoLancamento(id) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ justificativa: justificativa.trim() })
         });
-        mostrarPopupFinanceiro(response.message, 'sucesso');
+        mostrarMensagem(response.message, 'sucesso');
         
         atualizarBadgesHeader();
         // <<< LINHA ALTERADA: Passa a página que estava salva nos filtros
@@ -2135,56 +1996,6 @@ async function solicitarExclusaoLancamento(id) {
 }
 
 // --- Funções de Renderização (Categorias) ---
-
-function renderizarTabelaCategorias() {
-    const container = document.getElementById('categoriasContainer');
-    if (!container) return;
-    let podeGerenciar = permissoesGlobaisFinanceiro.includes('gerenciar-categorias');
-
-    container.innerHTML = `
-        <header class="fc-table-header">
-            <h3 class="fc-table-title">Categorias</h3>
-            <button id="btnAdicionarCategoria" class="fc-btn fc-btn-primario ${podeGerenciar ? '' : 'fc-btn-disabled'}"><i class="fas fa-plus"></i> Nova</button>
-        </header>
-         <div class="fc-tabela-container">
-            <table class="fc-tabela-estilizada">
-                <thead>
-                    <tr>
-                        <th>Nome da Categoria</th>
-                        <th>Grupo Pertencente</th>
-                        <th>Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                     ${categoriasCache.length === 0 ? '<tr><td colspan="3" style="text-align:center;">Nenhuma categoria cadastrada.</td></tr>' :
-                     categoriasCache.map(cat => {
-                        const grupoPai = gruposCache.find(g => g.id === cat.id_grupo);
-                        return `
-                        <tr>
-                            <td data-label="Nome">${cat.nome}</td>
-                            <td data-label="Grupo">${grupoPai?.nome || 'Grupo não encontrado'}</td>
-                            <td data-label="Ações" class="td-acoes">
-                                <button class="fc-btn fc-btn-outline btn-editar-categoria ${podeGerenciar ? '' : 'fc-btn-disabled'}" data-id="${cat.id}" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-                            </td>
-                        </tr>
-                    `}).join('')}
-                </tbody>
-            </table>
-        </div>
-    `;
-    
-    // Adiciona listeners
-    if (podeGerenciar) {
-        document.getElementById('btnAdicionarCategoria')?.addEventListener('click', () => abrirModalCategoria());
-        container.querySelectorAll('.btn-editar-categoria').forEach(btn => btn.addEventListener('click', (e) => { 
-            const id = e.currentTarget.dataset.id; 
-            const categoria = categoriasCache.find(c => c.id == id); 
-            abrirModalCategoria(categoria); 
-        }));
-    } else {
-         container.querySelectorAll('.fc-btn-disabled').forEach(btn => btn.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para gerenciar categorias.', 'aviso')));
-    }
-}
 
 function renderizarContatosGerenciamento() {
     const container = document.getElementById('config-favorecidos');
@@ -2212,8 +2023,8 @@ function renderizarContatosGerenciamento() {
                     ${contatosGerenciamentoCache.length === 0 ? '<tr><td colspan="5" style="text-align:center;">Nenhum favorecido cadastrado.</td></tr>' :
                     contatosGerenciamentoCache.sort((a,b) => a.nome.localeCompare(b.nome)).map(contato => {
                         const isAtivo = contato.ativo;
-                        const statusCor = isAtivo ? 'var(--fc-cor-receita)' : 'var(--fc-cor-texto-secundario)';
-                        const btnStatusCor = isAtivo ? 'var(--fc-cor-despesa)' : 'var(--fc-cor-receita)';
+                        const statusCor = isAtivo ? 'var(--gs-sucesso)' : 'var(--gs-texto-secundario)';
+                        const btnStatusCor = isAtivo ? 'var(--gs-perigo)' : 'var(--gs-sucesso)';
                         const btnStatusIcon = isAtivo ? 'fa-toggle-on' : 'fa-toggle-off';
                         const btnStatusTitle = isAtivo ? 'Inativar' : 'Reativar';
                         return `
@@ -2254,7 +2065,7 @@ function renderizarContatosGerenciamento() {
         });
     } else {
         container.querySelectorAll('.fc-btn-disabled').forEach(btn => {
-            btn.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para gerenciar favorecidos.', 'aviso'));
+            btn.addEventListener('click', () => mostrarMensagem('Você não tem permissão para gerenciar favorecidos.', 'aviso'));
         });
     }
 }
@@ -2264,7 +2075,7 @@ function abrirModalCategoria(categoria = null) {
     const titulo = categoria ? 'Editar Categoria' : 'Adicionar Nova Categoria';
     
     if (gruposCache.length === 0) {
-        mostrarPopupFinanceiro('É necessário cadastrar um Grupo Financeiro antes de criar uma categoria.', 'aviso');
+        mostrarMensagem('É necessário cadastrar um Grupo Financeiro antes de criar uma categoria.', 'aviso');
         return;
     }
 
@@ -2326,7 +2137,7 @@ async function salvarCategoria(event) {
             const created = await fetchFinanceiroAPI('/categorias', { method: 'POST', body: JSON.stringify(payload) });
             categoriasCache.push(created);
         }
-        mostrarPopupFinanceiro('Categoria salva com sucesso!', 'sucesso');
+        mostrarMensagem('Categoria salva com sucesso!', 'sucesso');
         fecharModal();
         
         renderizarTabelaCategoriasAgrupadas();
@@ -2367,8 +2178,8 @@ function renderizarTabelaContatosGerenciamento() {
                     ${contatosGerenciamentoCache.length === 0 ? '<tr><td colspan="5" style="text-align:center;">Nenhum favorecido cadastrado.</td></tr>' :
                     contatosGerenciamentoCache.sort((a,b) => a.nome.localeCompare(b.nome)).map(contato => {
                         const isAtivo = contato.ativo;
-                        const statusCor = isAtivo ? 'var(--fc-cor-receita)' : 'var(--fc-cor-texto-secundario)';
-                        const btnStatusCor = isAtivo ? 'var(--fc-cor-despesa)' : 'var(--fc-cor-receita)';
+                        const statusCor = isAtivo ? 'var(--gs-sucesso)' : 'var(--gs-texto-secundario)';
+                        const btnStatusCor = isAtivo ? 'var(--gs-perigo)' : 'var(--gs-sucesso)';
                         const btnStatusIcon = isAtivo ? 'fa-toggle-on' : 'fa-toggle-off';
                         const btnStatusTitle = isAtivo ? 'Inativar' : 'Reativar';
 
@@ -2416,7 +2227,7 @@ function renderizarTabelaContatosGerenciamento() {
         });
     } else {
         container.querySelectorAll('.fc-btn-disabled').forEach(btn => {
-            btn.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para gerenciar favorecidos.', 'aviso'));
+            btn.addEventListener('click', () => mostrarMensagem('Você não tem permissão para gerenciar favorecidos.', 'aviso'));
         });
     }
 }
@@ -2498,7 +2309,7 @@ async function salvarContatoGerenciamento(event) {
             const created = await fetchFinanceiroAPI('/contatos', { method: 'POST', body: JSON.stringify(payload) });
             contatosGerenciamentoCache.push(created);
         }
-        mostrarPopupFinanceiro('Contato salvo com sucesso!', 'sucesso');
+        mostrarMensagem('Contato salvo com sucesso!', 'sucesso');
         fecharModal();
         renderizarTabelaContatosGerenciamento();
     } catch (error) {
@@ -2514,7 +2325,7 @@ async function salvarContatoGerenciamento(event) {
 async function alterarStatusContato(id, statusAtual) {
     const novoStatus = !statusAtual;
     const acao = novoStatus ? 'reativar' : 'inativar';
-    const confirmado = await mostrarPopupConfirmacao(`Tem certeza que deseja ${acao} este favorecido?`);
+    const confirmado = await mostrarConfirmacao(`Tem certeza que deseja ${acao} este favorecido?`);
     if (!confirmado) return;
 
     try {
@@ -2530,7 +2341,7 @@ async function alterarStatusContato(id, statusAtual) {
             contatosGerenciamentoCache[index] = favorecidoAtualizado;
         }
 
-        mostrarPopupFinanceiro(`Favorecido ${acao === 'reativar' ? 'reativado' : 'inativado'} com sucesso!`, 'sucesso');
+        mostrarMensagem(`Favorecido ${acao === 'reativar' ? 'reativado' : 'inativado'} com sucesso!`, 'sucesso');
         renderizarTabelaContatosGerenciamento();
 
     } catch(error) {
@@ -2825,7 +2636,7 @@ async function salvarAgendamento(event) {
     };
 
     if (!payload.tipo || !payload.descricao || !payload.valor || !payload.data_vencimento || !payload.id_categoria) {
-        mostrarPopupFinanceiro('Por favor, preencha todos os campos obrigatórios (*).', 'aviso');
+        mostrarMensagem('Por favor, preencha todos os campos obrigatórios (*).', 'aviso');
         return;
     }
     
@@ -2836,11 +2647,11 @@ async function salvarAgendamento(event) {
         if (itemEmEdicao) {
             // Se itemEmEdicao existe, estamos editando. Usamos PUT.
             await fetchFinanceiroAPI(`/contas-agendadas/${itemEmEdicao.id}`, { method: 'PUT', body: JSON.stringify(payload) });
-            mostrarPopupFinanceiro('Agendamento atualizado com sucesso!', 'sucesso');
+            mostrarMensagem('Agendamento atualizado com sucesso!', 'sucesso');
         } else {
             // Se não, estamos criando. Usamos POST.
             await fetchFinanceiroAPI('/contas-agendadas', { method: 'POST', body: JSON.stringify(payload) });
-            mostrarPopupFinanceiro('Conta agendada com sucesso!', 'sucesso');
+            mostrarMensagem('Conta agendada com sucesso!', 'sucesso');
         }
         
         fecharModal();
@@ -2877,7 +2688,7 @@ async function salvarAgendamentoDetalhado(event, tipo_rateio) {
         const linhasDeItens = form.querySelectorAll('.grade-itens-rateio .fc-rateio-linha');
 
         if (linhasDeItens.length === 0) {
-            mostrarPopupFinanceiro('É necessário adicionar pelo menos um item.', 'erro');
+            mostrarMensagem('É necessário adicionar pelo menos um item.', 'erro');
             return;
         }
 
@@ -2941,12 +2752,12 @@ async function salvarAgendamentoDetalhado(event, tipo_rateio) {
         }
 
         const msg = itemEmEdicao ? 'Agendamento atualizado com sucesso!' : 'Agendamento criado com sucesso!';
-        mostrarPopupFinanceiro(msg, 'sucesso');
+        mostrarMensagem(msg, 'sucesso');
         fecharModal();
         carregarContasAgendadas();
 
     } catch (e) {
-        mostrarPopupFinanceiro(e.message, 'erro');
+        mostrarMensagem(e.message, 'erro');
     } finally {
         if (btnSalvar) {
             btnSalvar.disabled = false;
@@ -3010,7 +2821,7 @@ async function salvarBaixa(event) {
     };
 
     if (!payload.data_transacao || !payload.id_conta_bancaria) {
-        mostrarPopupFinanceiro('Por favor, preencha todos os campos obrigatórios.', 'aviso');
+        mostrarMensagem('Por favor, preencha todos os campos obrigatórios.', 'aviso');
         return;
     }
 
@@ -3019,7 +2830,7 @@ async function salvarBaixa(event) {
         btnSalvar.innerHTML = `<i class="fas fa-spinner fc-btn-spinner"></i> Confirmando...`;
 
         await fetchFinanceiroAPI(`/contas-agendadas/${itemEmEdicao.id}/baixar`, { method: 'POST', body: JSON.stringify(payload) });
-        mostrarPopupFinanceiro('Baixa realizada com sucesso!', 'sucesso');
+        mostrarMensagem('Baixa realizada com sucesso!', 'sucesso');
         fecharModal();
         carregarContasAgendadas();
         atualizarSaldosDashboard();
@@ -3077,7 +2888,7 @@ function renderizarResultadosAutocomplete(resultados, termoBusca, resultadosDiv,
             resultadosDiv.classList.add('hidden');
 
             if (permissoesGlobaisFinanceiro.includes('criar-favorecido')) {
-                const tipo = await mostrarPopupComInput(
+                const tipo = await mostrarPromptTexto(
                     `Qual o tipo do novo contato "${termoBusca}"?`,
                     'Ex: CLIENTE, FORNECEDOR, EMPREGADO, etc.'
                 );
@@ -3093,7 +2904,7 @@ function renderizarResultadosAutocomplete(resultados, termoBusca, resultadosDiv,
                         if (!contatosGerenciamentoCache.find(c => c.id === novoContato.id)) {
                             contatosGerenciamentoCache.push(novoContato);
                         }
-                        mostrarPopupFinanceiro(`Contato "${novoContato.nome}" criado com sucesso!`, 'sucesso');
+                        mostrarMensagem(`Contato "${novoContato.nome}" criado com sucesso!`, 'sucesso');
                         
                         // --- FEEDBACK POSITIVO AO CRIAR ---
                         setAutocompleteStatus(buscaInput, 'success');
@@ -3103,14 +2914,14 @@ function renderizarResultadosAutocomplete(resultados, termoBusca, resultadosDiv,
                         setAutocompleteStatus(buscaInput, 'error');
                     }
                 } else if (tipo !== null) {
-                    mostrarPopupFinanceiro('Tipo inválido. A operação foi cancelada.', 'aviso');
+                    mostrarMensagem('Tipo inválido. A operação foi cancelada.', 'aviso');
                     setAutocompleteStatus(buscaInput, 'error');
                 } else {
                     // Usuário cancelou o popup, então limpamos o status
                      setAutocompleteStatus(buscaInput, 'clear');
                 }
             } else {
-                mostrarPopupFinanceiro(
+                mostrarMensagem(
                     'Você não tem permissão para criar novos favorecidos. Por favor, contate um administrador.',
                     'aviso'
                 );
@@ -3196,12 +3007,14 @@ function gerenciarNavegacaoPrincipal(view) {
     const configView = document.getElementById('configuracoesView');
     const aprovacoesView = document.getElementById('aprovacoesView');
     const historicoView = document.getElementById('historicoView');
+    const relatoriosView = document.getElementById('relatoriosView');
     const btnConfig = document.getElementById('btnToggleConfiguracoes');
 
     // 1. Esconde todas as telas secundárias por padrão
     configView.classList.add('hidden');
     aprovacoesView.classList.add('hidden');
     historicoView.classList.add('hidden');
+    relatoriosView.classList.add('hidden');
     
     // Mostra a tela principal
     viewPrincipal.classList.remove('hidden');
@@ -3241,10 +3054,29 @@ function gerenciarNavegacaoPrincipal(view) {
             btnConfig.classList.add('fechar');
             btnConfig.title = 'Fechar Histórico';
             atualizarBreadcrumbs(['Histórico de Atividades']);
-            
-            
             if (window.renderReactFeed) {
                 window.renderReactFeed();
+            }
+            break;
+
+        case 'relatorios':
+            // Verifica se o usuário tem a permissão necessária
+            if (permissoesGlobaisFinanceiro.includes('acesso-relatorios-financeiros')) {
+                viewPrincipal.classList.add('hidden');
+                relatoriosView.classList.remove('hidden');
+                btnConfig.querySelector('i').className = 'fas fa-times'; // Muda para 'X'
+                btnConfig.classList.add('fechar');
+                btnConfig.title = 'Fechar Relatórios';
+                atualizarBreadcrumbs(['Relatórios']);
+                
+                // Dispara a renderização do componente React (faremos isso no próximo passo)
+                if (window.renderReactRelatorios) {
+                    window.renderReactRelatorios();
+                }
+            } else {
+                mostrarMensagem('Você não tem permissão para acessar a Central de Relatórios.', 'aviso');
+                // Mantém o usuário na tela principal se ele não tiver permissão
+                gerenciarNavegacaoPrincipal('main'); 
             }
             break;
 
@@ -3293,7 +3125,7 @@ function renderizarCardsAprovacao(solicitacoes) {
             case 'valor': case 'valor_estornado': return formatCurrency(valor);
             case 'data_transacao': case 'data_vencimento': return new Date(String(valor).split('T')[0] + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'});
             case 'id_categoria': return formatarCategoriaComGrupo(valor);
-            case 'id_conta_bancaria': return contasCache.find(c => c.id == valor)?.nome_conta || `<span style="color:var(--fc-cor-despesa);">Conta Inválida</span>`;
+            case 'id_conta_bancaria': return contasCache.find(c => c.id == valor)?.nome_conta || `<span style="color:var(--gs-perigo);">Conta Inválida</span>`;
             case 'id_contato': return contatosGerenciamentoCache.find(c => c.id == valor)?.nome || '<i>Nenhum</i>';
             default: return valor || '<i>Vazio</i>';
         }
@@ -3317,7 +3149,7 @@ function renderizarCardsAprovacao(solicitacoes) {
         const dadosAntigos = s.dados_antigos;
         const dadosNovos = s.dados_novos;
         let cardBodyHtml = '';
-        let tipoInfo = { texto: 'Ação Desconhecida', icone: 'fa-question-circle', cor: 'var(--fc-cor-texto-secundario)' };
+        let tipoInfo = { texto: 'Ação Desconhecida', icone: 'fa-question-circle', cor: 'var(--gs-texto-secundario)' };
         
         // Lógica segura para definir o título e a descrição
         const idAlvo = dadosAntigos?.id || 'NOVO';
@@ -3326,7 +3158,7 @@ function renderizarCardsAprovacao(solicitacoes) {
 
         switch (s.tipo_solicitacao) {
             case 'EDICAO':
-                tipoInfo = { texto: 'Solicitação de Edição', icone: 'fa-pencil-alt', cor: 'var(--fc-cor-primaria)' };
+                tipoInfo = { texto: 'Solicitação de Edição', icone: 'fa-pencil-alt', cor: 'var(--gs-primaria)' };
                 let alteracoesHtml = '';
                 const chaves = ['valor', 'data_transacao', 'descricao', 'id_categoria', 'id_conta_bancaria', 'id_contato'];
                 for (const chave of chaves) {
@@ -3346,23 +3178,23 @@ function renderizarCardsAprovacao(solicitacoes) {
                 break;
 
             case 'EXCLUSAO':
-                tipoInfo = { texto: 'Solicitação de Exclusão', icone: 'fa-trash-alt', cor: 'var(--fc-cor-despesa)' };
+                tipoInfo = { texto: 'Solicitação de Exclusão', icone: 'fa-trash-alt', cor: 'var(--gs-perigo)' };
                 cardBodyHtml = `<div class="fc-aprovacao-acao-box tipo-exclusao"><h4><i class="fas fa-exclamation-triangle"></i>AÇÃO: Excluir permanentemente este lançamento.</h4></div><p style="margin-top: 15px; font-weight: 500;">Detalhes do lançamento a ser excluído:</p>${gerarResumoLancamento(dadosAntigos)}`;
                 break;
 
             case 'ESTORNO':
-                tipoInfo = { texto: 'Solicitação de Estorno', icone: 'fa-undo-alt', cor: 'var(--fc-cor-receita)' };
+                tipoInfo = { texto: 'Solicitação de Estorno', icone: 'fa-undo-alt', cor: 'var(--gs-sucesso)' };
                 cardBodyHtml = `<div class="fc-aprovacao-acao-box tipo-estorno"><h4><i class="fas fa-check-circle"></i>AÇÃO: Registrar Estorno</h4><p>Valor: <strong>${formatarValorExibicao('valor', dadosNovos.valor_estornado)}</strong> | Data: <strong>${formatarValorExibicao('data_transacao', dadosNovos.data_transacao)}</strong> | Conta Destino: <strong>${formatarValorExibicao('id_conta_bancaria', dadosNovos.id_conta_bancaria)}</strong></p></div><p style="margin-top: 15px; font-weight: 500;">Para a despesa original:</p>${gerarResumoLancamento(dadosAntigos)}`;
                 break;
 
             case 'REVERSAO_ESTORNO':
-                tipoInfo = { texto: 'Solicitação de Reversão de Estorno', icone: 'fa-history', cor: 'var(--fc-cor-aviso)' };
+                tipoInfo = { texto: 'Solicitação de Reversão de Estorno', icone: 'fa-history', cor: 'var(--gs-perigo)' };
                 tituloAlvo = `Estorno Alvo #${dadosAntigos.id}:`;
                 cardBodyHtml = `<div class="fc-aprovacao-acao-box tipo-reversao"><h4><i class="fas fa-info-circle"></i>AÇÃO: Reverter Estorno</h4><p>Isto irá apagar o lançamento de receita (estorno) abaixo e reativar a despesa original (#${dadosAntigos.id_estorno_de}).</p></div><p style="margin-top: 15px; font-weight: 500;">Detalhes do estorno a ser revertido:</p>${gerarResumoLancamento(dadosAntigos)}`;
                 break;
 
              case 'CRIACAO_DATAS_ESPECIAIS':
-                tipoInfo = { texto: 'Solicitação de Criação', icone: 'fa-plus-circle', cor: 'var(--fc-cor-receita)' };
+                tipoInfo = { texto: 'Solicitação de Criação', icone: 'fa-plus-circle', cor: 'var(--gs-sucesso)' };
                 tituloAlvo = `Proposta de Novo Lançamento:`;
                 
                 // Acessamos 'lancamento_proposto' a partir de 's.dados_novos'
@@ -3417,7 +3249,7 @@ function renderizarCardsAprovacao(solicitacoes) {
 
 
 async function aprovarSolicitacao(id) {
-    const confirmado = await mostrarPopupConfirmacao('Tem certeza que deseja APROVAR esta alteração? A ação é irreversível.');
+    const confirmado = await mostrarConfirmacao('Tem certeza que deseja APROVAR esta alteração? A ação é irreversível.');
     if (!confirmado) return;
 
     try {
@@ -3425,7 +3257,7 @@ async function aprovarSolicitacao(id) {
         await fetchFinanceiroAPI(`/aprovacoes/${id}/aprovar`, { method: 'POST' });
         
         // Mostra feedback de sucesso
-        mostrarPopupFinanceiro('Solicitação aprovada com sucesso!', 'sucesso');
+        mostrarMensagem('Solicitação aprovada com sucesso!', 'sucesso');
         
         // Recarrega a lista de aprovações pendentes (o item aprovado vai sumir)
         carregarAprovacoesPendentes();
@@ -3443,10 +3275,10 @@ async function aprovarSolicitacao(id) {
 }
 
 async function rejeitarSolicitacao(id) {
-    const motivo = await mostrarPopupComInput('Por favor, digite o motivo da rejeição:', 'Motivo obrigatório');
+    const motivo = await mostrarPromptTexto('Por favor, digite o motivo da rejeição:', 'Motivo obrigatório');
     
     if (!motivo || motivo.trim() === '') {
-        mostrarPopupFinanceiro('A rejeição foi cancelada, pois é necessário fornecer um motivo.', 'aviso');
+        mostrarMensagem('A rejeição foi cancelada, pois é necessário fornecer um motivo.', 'aviso');
         return;
     }
     try {
@@ -3454,7 +3286,7 @@ async function rejeitarSolicitacao(id) {
             method: 'POST',
             body: JSON.stringify({ motivo: motivo.trim() }) 
         });
-        mostrarPopupFinanceiro('Solicitação rejeitada com sucesso.', 'info');
+        mostrarMensagem('Solicitação rejeitada com sucesso.', 'info');
         
         // Recarrega a tela de aprovações para remover o item processado
         carregarAprovacoesPendentes();
@@ -3551,7 +3383,7 @@ async function abrirModalTransferencia() {
 
     // Verifica se há contas suficientes para a operação
     if (contasCache.length < 2) {
-        mostrarPopupFinanceiro('Você precisa ter pelo menos duas contas bancárias cadastradas para realizar uma transferência.', 'aviso');
+        mostrarMensagem('Você precisa ter pelo menos duas contas bancárias cadastradas para realizar uma transferência.', 'aviso');
         return;
     }
 
@@ -3571,7 +3403,7 @@ async function abrirModalTransferencia() {
         const spinnerDiv = document.querySelector('.fc-popup-overlay');
         if (spinnerDiv) document.body.removeChild(spinnerDiv);
         
-        mostrarPopupFinanceiro('Não foi possível obter os saldos das contas. Tente novamente.', 'erro');
+        mostrarMensagem('Não foi possível obter os saldos das contas. Tente novamente.', 'erro');
         return;
     }
 
@@ -3654,7 +3486,7 @@ async function salvarTransferencia() {
     try {
         const categoriaTransferencia = categoriasCache.find(c => c.nome === 'Transferência entre Contas');
         if (!categoriaTransferencia) {
-            mostrarPopupFinanceiro('Erro: Categoria "Transferência entre Contas" não encontrada. Por favor, cadastre-a nas configurações.', 'erro');
+            mostrarMensagem('Erro: Categoria "Transferência entre Contas" não encontrada. Por favor, cadastre-a nas configurações.', 'erro');
             return;
         }
 
@@ -3668,7 +3500,7 @@ async function salvarTransferencia() {
         };
 
         if (!payload.id_conta_origem || !payload.id_conta_destino || !payload.valor) {
-            mostrarPopupFinanceiro('Por favor, preencha todos os campos obrigatórios (*).', 'aviso');
+            mostrarMensagem('Por favor, preencha todos os campos obrigatórios (*).', 'aviso');
             return;
         }
 
@@ -3677,7 +3509,7 @@ async function salvarTransferencia() {
         
         await fetchFinanceiroAPI('/transferencias', { method: 'POST', body: JSON.stringify(payload) });
         
-        mostrarPopupFinanceiro('Transferência realizada com sucesso!', 'sucesso');
+        mostrarMensagem('Transferência realizada com sucesso!', 'sucesso');
         fecharModal();
         
         atualizarSaldosDashboard();
@@ -3713,7 +3545,7 @@ function setupEventListenersFinanceiro() {
         btnAprovacoes?.addEventListener('click', () => gerenciarNavegacaoPrincipal('aprovacoes'));
     } else {
         btnAprovacoes?.classList.add('fc-btn-disabled');
-        btnAprovacoes?.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para acessar esta área.', 'aviso'));
+        btnAprovacoes?.addEventListener('click', () => mostrarMensagem('Você não tem permissão para acessar esta área.', 'aviso'));
     }
 
     const btnHistorico = document.getElementById('btnIrParaHistorico');
@@ -3721,7 +3553,7 @@ function setupEventListenersFinanceiro() {
         btnHistorico?.addEventListener('click', () => gerenciarNavegacaoPrincipal('historico'));
     } else {
         btnHistorico?.classList.add('fc-btn-disabled');
-        btnHistorico?.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para ver o histórico.', 'aviso'));
+        btnHistorico?.addEventListener('click', () => mostrarMensagem('Você não tem permissão para ver o histórico.', 'aviso'));
     }
 
     document.querySelector('.fc-config-menu')?.addEventListener('click', (e) => {
@@ -3749,7 +3581,7 @@ function setupEventListenersFinanceiro() {
 
         // Listener para o botão de pagamentos desativado
         document.getElementById('btnPagamentosFuncionarios')?.addEventListener('click', () => {
-            mostrarPopupFinanceiro('Esta funcionalidade está em desenvolvimento.', 'info');
+            mostrarMensagem('Esta funcionalidade está em desenvolvimento.', 'info');
         });
 
     // --- LÓGICA DE AUTOCOMPLETE CORRIGIDA E REFINADA ---
@@ -3846,7 +3678,7 @@ function setupEventListenersFinanceiro() {
         });
     } else {
         btnNovoLancamento?.classList.add('fc-btn-disabled');
-        btnNovoLancamento?.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para criar lançamentos.', 'aviso'));
+        btnNovoLancamento?.addEventListener('click', () => mostrarMensagem('Você não tem permissão para criar lançamentos.', 'aviso'));
     }
 
     const btnAgendarFab = document.getElementById('btnNovoAgendamentoFab');
@@ -3854,7 +3686,7 @@ function setupEventListenersFinanceiro() {
         btnAgendarFab?.addEventListener('click', () => abrirModalAgendamento());
     } else {
         btnAgendarFab?.classList.add('fc-btn-disabled');
-        btnAgendarFab?.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para agendar contas.', 'aviso'));
+        btnAgendarFab?.addEventListener('click', () => mostrarMensagem('Você não tem permissão para agendar contas.', 'aviso'));
     }
 
     // --- PAINEL DE NOTIFICAÇÕES (Caixa de Entrada) ---
@@ -3928,9 +3760,7 @@ function setupEventListenersFinanceiro() {
 }
 
 
-async function inicializarPaginaFinanceiro() {
-    console.log('[Financeiro] Inicializando página...');
-    
+async function inicializarPaginaFinanceiro() {    
     // Configura listeners e estado inicial da UI que não dependem de dados
     setupEventListenersFinanceiro();
     gerenciarNavegacaoPrincipal('main');
@@ -3939,7 +3769,6 @@ async function inicializarPaginaFinanceiro() {
 
     // FASE 1: Carregamento Rápido do Dashboard
     try {
-        console.log('[Financeiro] Fase 1: Carregando dados do dashboard...');
         // Mostra um "esqueleto" de carregamento enquanto busca os dados
         const saldosContainer = document.getElementById('saldosContainer');
         if (saldosContainer) {
@@ -3954,16 +3783,13 @@ async function inicializarPaginaFinanceiro() {
         
         const dashboardData = await fetchFinanceiroAPI('/dashboard');
         renderizarDashboard(dashboardData.saldos, dashboardData.alertas);
-        console.log('[Financeiro] Fase 1: Dashboard renderizado.');
     } catch (error) {
         console.error('Erro ao carregar dados do dashboard:', error);
         const saldosContainer = document.getElementById('saldosContainer');
         if(saldosContainer) saldosContainer.innerHTML = `<p style="color:red; text-align:center;">Falha ao carregar saldos.</p>`;
     }
 
-    // FASE 2: Carregamento em Segundo Plano do Restante dos Dados
     // Esta parte executa sem bloquear a interação do usuário com o dashboard
-    console.log('[Financeiro] Fase 2: Carregando dados secundários em segundo plano...');
     try {
         const promessasDeDados = [
             fetchFinanceiroAPI('/configuracoes'),
@@ -3985,8 +3811,6 @@ async function inicializarPaginaFinanceiro() {
         contatosGerenciamentoCache = contatosData;
         filtrosAtivos.total = lancamentosData.total;
         
-        console.log('[Financeiro] Fase 2: Dados secundários carregados.');
-
         modalBaseProps = {
             contas: contasCache,
             categorias: categoriasCache,
@@ -3994,7 +3818,6 @@ async function inicializarPaginaFinanceiro() {
             permissoes: permissoesGlobaisFinanceiro
         };
 
-        // FASE 3: Renderiza os componentes que dependem dos dados secundários
         // Essas funções são rápidas pois os dados já estão em cache
         prepararAbaLancamentos(); // Popula os filtros da aba e faz a primeira renderização dos cards
         renderizarTabelaContas(); // Popula a tabela na tela de configurações
@@ -4003,15 +3826,12 @@ async function inicializarPaginaFinanceiro() {
 
     } catch (error) {
         console.error('Erro ao carregar dados secundários:', error);
-        mostrarPopupFinanceiro('Erro ao carregar alguns dados da página. Tente recarregar.', 'erro');
+        mostrarMensagem('Erro ao carregar alguns dados da página. Tente recarregar.', 'erro');
     }
 
-    // FASE 4: Carregamentos assíncronos finais (não críticos)
     // Eles rodam por último e atualizam a interface quando terminam
     atualizarBadgesHeader(); // Busca notificações e aprovações
     carregarContasAgendadas(); // Busca os dados da agenda
-
-    console.log('[Financeiro] Página inicializada com sucesso.');
 
     // FASE 5: Ajustes Finais da Interface com base nas permissões
     if (permissoesGlobaisFinanceiro.includes('permite-excluir-agendamentos')) {
@@ -4033,7 +3853,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Chama a função de inicialização principal
         inicializarPaginaFinanceiro();
 
-        console.log('[Carregamento] Lógica do JS Legado está pronta.');
         legacyJsReady = true;
         esconderSpinnerGlobalSePronto();
 
@@ -4050,7 +3869,6 @@ document.addEventListener('visibilitychange', () => {
         // E se o dashboard é a aba ativa no momento
         const dashboardTab = document.getElementById('tab-dashboard');
         if (dashboardTab && dashboardTab.classList.contains('active')) {
-            console.log('[Dashboard] Aba reativada, atualizando saldos...');
             atualizarSaldosDashboard();
         }
     }
@@ -4179,7 +3997,7 @@ function renderizarTabelaAgenda() {
                             <span class="detail-item"><b>Agendado por:</b> ${c.nome_usuario_agendamento || 'N/A'}</span>
                             ${c.nome_usuario_edicao ? `
                                 <span class="detail-item" title="Última edição em ${new Date(c.atualizado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}">
-                                    <i class="fas fa-history" style="color: var(--fc-cor-aviso);"></i>
+                                    <i class="fas fa-history" style="color: var(--gs-perigo);"></i>
                                     <b>Editado por:</b> ${c.nome_usuario_edicao}
                                 </span>
                             ` : ''}
@@ -4256,14 +4074,14 @@ function renderizarTabelaAgenda() {
 }
 
 async function editarDescricaoLote(idLote, descricaoAtual) {
-    const novaDescricao = await mostrarPopupComInput('Digite a nova descrição base para o lote:', descricaoAtual);
+    const novaDescricao = await mostrarPromptTexto('Digite a nova descrição base para o lote:', descricaoAtual);
     if (novaDescricao && novaDescricao.trim() !== '' && novaDescricao !== descricaoAtual) {
         try {
             await fetchFinanceiroAPI(`/lotes/${idLote}/descricao`, {
                 method: 'PUT',
                 body: JSON.stringify({ nova_descricao_base: novaDescricao })
             });
-            mostrarPopupFinanceiro('Descrição do lote atualizada com sucesso!', 'sucesso');
+            mostrarMensagem('Descrição do lote atualizada com sucesso!', 'sucesso');
             carregarContasAgendadas();
         } catch (error) {
             // erro já tratado
@@ -4272,12 +4090,12 @@ async function editarDescricaoLote(idLote, descricaoAtual) {
 }
 
 async function excluirAgendamento(id) {
-    const confirmado = await mostrarPopupConfirmacao('Tem certeza que deseja excluir este agendamento? Esta ação não pode ser desfeita.');
+    const confirmado = await mostrarConfirmacao('Tem certeza que deseja excluir este agendamento? Esta ação não pode ser desfeita.');
     if (!confirmado) return;
 
     try {
         await fetchFinanceiroAPI(`/contas-agendadas/${id}`, { method: 'DELETE' });
-        mostrarPopupFinanceiro('Agendamento excluído com sucesso!', 'sucesso');
+        mostrarMensagem('Agendamento excluído com sucesso!', 'sucesso');
         carregarContasAgendadas(); // Recarrega a lista
     } catch (error) {
         // fetchFinanceiroAPI já lida com o popup de erro
@@ -4338,7 +4156,7 @@ function renderizarTabelaCategoriasAgrupadas() {
         });
     } else {
         container.querySelectorAll('.fc-btn-disabled').forEach(btn => {
-            btn.addEventListener('click', () => mostrarPopupFinanceiro('Você não tem permissão para gerenciar categorias.', 'aviso'));
+            btn.addEventListener('click', () => mostrarMensagem('Você não tem permissão para gerenciar categorias.', 'aviso'));
         });
     }
 }
@@ -4376,7 +4194,7 @@ function renderizarFerramentasAdmin() {
     if (!container) return;
 
     container.innerHTML = `
-        <div class="fc-card" style="border-color: var(--fc-cor-despesa);">
+        <div class="fc-card" style="border-color: var(--gs-perigo);">
             <h3 class="fc-section-title">Excluir Agendamento Permanentemente</h3>
             <p class="fc-texto-aviso" style="margin-bottom: 20px;">
                 <i class="fas fa-exclamation-triangle"></i> 
@@ -4403,7 +4221,7 @@ async function buscarAgendamentoParaExcluir() {
     const id = input.value.trim().replace('#', '');
 
     if (!id || isNaN(id)) {
-        mostrarPopupFinanceiro('Por favor, insira um ID numérico válido.', 'aviso');
+        mostrarMensagem('Por favor, insira um ID numérico válido.', 'aviso');
         return;
     }
 
@@ -4419,29 +4237,29 @@ async function buscarAgendamentoParaExcluir() {
                 <p><strong>Descrição:</strong> ${agendamento.descricao}</p>
                 <p><strong>Valor:</strong> ${formatCurrency(agendamento.valor)}</p>
                 <p><strong>Status:</strong> ${agendamento.status} ${agendamento.id_lancamento_efetivado ? `(Lançamento #${agendamento.id_lancamento_efetivado})` : ''}</p>
-                <button id="btn-confirmar-exclusao-force" class="fc-btn" style="background-color: var(--fc-cor-despesa); width: 100%; margin-top: 15px;">
+                <button id="btn-confirmar-exclusao-force" class="fc-btn" style="background-color: var(--gs-perigo); width: 100%; margin-top: 15px;">
                     <i class="fas fa-trash-alt"></i> Excluir Permanentemente o Agendamento #${agendamento.id}
                 </button>
             </div>
         `;
 
         document.getElementById('btn-confirmar-exclusao-force').addEventListener('click', async () => {
-            const confirmado = await mostrarPopupConfirmacao(`Esta ação é IRREVERSÍVEL e removerá o agendamento #${id} para sempre. Deseja continuar?`);
+            const confirmado = await mostrarConfirmacao(`Esta ação é IRREVERSÍVEL e removerá o agendamento #${id} para sempre. Deseja continuar?`);
             if (confirmado) {
                 try {
                     await fetchFinanceiroAPI(`/contas-agendadas/${id}/force`, { method: 'DELETE' });
-                    mostrarPopupFinanceiro('Agendamento excluído permanentemente!', 'sucesso');
-                    confirmacaoArea.innerHTML = '<p style="color: var(--fc-cor-receita);">Agendamento excluído com sucesso. Você pode buscar outro ID.</p>';
+                    mostrarMensagem('Agendamento excluído permanentemente!', 'sucesso');
+                    confirmacaoArea.innerHTML = '<p style="color: var(--gs-sucesso);">Agendamento excluído com sucesso. Você pode buscar outro ID.</p>';
                 } catch (error) {
                     // fetchFinanceiroAPI já mostra o erro
-                    confirmacaoArea.innerHTML = `<p style="color: var(--fc-cor-despesa);">Falha ao excluir. Tente novamente.</p>`;
+                    confirmacaoArea.innerHTML = `<p style="color: var(--gs-perigo);">Falha ao excluir. Tente novamente.</p>`;
                 }
             }
         });
 
     } catch (error) {
         // fetchFinanceiroAPI já mostra o popup de erro (ex: 404 - Não encontrado)
-        confirmacaoArea.innerHTML = `<p style="color: var(--fc-cor-despesa);">${error.message || 'Erro ao buscar agendamento.'}</p>`;
+        confirmacaoArea.innerHTML = `<p style="color: var(--gs-perigo);">${error.message || 'Erro ao buscar agendamento.'}</p>`;
     }
 }
 
@@ -4511,7 +4329,7 @@ async function marcarComoLida(id) {
             }
         }
     } catch(e) {
-        mostrarPopupFinanceiro('Erro ao marcar notificação.', 'erro');
+        mostrarMensagem('Erro ao marcar notificação.', 'erro');
     }
 }
 
@@ -4526,7 +4344,7 @@ async function marcarTodasComoLidas() {
         const badge = document.getElementById('badgeNotificacoes');
         if (badge) badge.classList.add('hidden');
     } catch(e) {
-        mostrarPopupFinanceiro('Erro ao marcar todas as notificações.', 'erro');
+        mostrarMensagem('Erro ao marcar todas as notificações.', 'erro');
     }
 }
 
@@ -4561,8 +4379,6 @@ async function atualizarBadgesHeader() {
     }
 }
 
-
-
 function gerarPreviaLoteFixo() {
     const valorTotal = parseFloat(document.getElementById('lote_valor_total').value);
     const numParcelas = parseInt(document.getElementById('lote_num_parcelas').value);
@@ -4572,7 +4388,7 @@ function gerarPreviaLoteFixo() {
     const previaContainer = document.getElementById('lote_previa_container');
 
     if (isNaN(valorTotal) || isNaN(numParcelas) || !primeiraDataStr || isNaN(intervaloValor)) {
-        mostrarPopupFinanceiro('Preencha todos os campos do parcelamento para gerar a pré-visualização.', 'aviso');
+        mostrarMensagem('Preencha todos os campos do parcelamento para gerar a pré-visualização.', 'aviso');
         previaContainer.innerHTML = '';
         return null;
     }
@@ -4622,7 +4438,7 @@ function gerarPreviaLoteManual() {
     const linhas = document.querySelectorAll('#grade_parcelas_manuais .fc-parcela-manual-linha');
 
     if (linhas.length === 0) {
-        mostrarPopupFinanceiro('Adicione pelo menos uma parcela para gerar a pré-visualização.', 'aviso');
+        mostrarMensagem('Adicione pelo menos uma parcela para gerar a pré-visualização.', 'aviso');
         return null;
     }
 
@@ -4642,7 +4458,7 @@ function gerarPreviaLoteManual() {
     });
 
     if (hasError) {
-        mostrarPopupFinanceiro('Todas as parcelas manuais devem ter uma data e um valor válido.', 'erro');
+        mostrarMensagem('Todas as parcelas manuais devem ter uma data e um valor válido.', 'erro');
         previaContainer.innerHTML = '';
         return null;
     }
@@ -4671,7 +4487,7 @@ async function gerarEconfirmarLote(event) {
         const parcelasCalculadas = coletarDadosDoLote();
         
         if (!parcelasCalculadas || parcelasCalculadas.length === 0) {
-            mostrarPopupFinanceiro('Por favor, defina as parcelas corretamente.', 'aviso');
+            mostrarMensagem('Por favor, defina as parcelas corretamente.', 'aviso');
             return;
         }
         
@@ -4691,18 +4507,18 @@ async function gerarEconfirmarLote(event) {
         };
 
         if (!payload.descricao_lote || !payload.parcelas[0].id_categoria) {
-            mostrarPopupFinanceiro('Descrição e Categoria são obrigatórios para o lote.', 'aviso');
+            mostrarMensagem('Descrição e Categoria são obrigatórios para o lote.', 'aviso');
             return;
         }
 
-        const confirmado = await mostrarPopupConfirmacao(`Você confirma o agendamento de ${payload.parcelas.length} parcelas para "${payload.descricao_lote}"?`);
+        const confirmado = await mostrarConfirmacao(`Você confirma o agendamento de ${payload.parcelas.length} parcelas para "${payload.descricao_lote}"?`);
         if (!confirmado) return;
 
         btnSalvar.disabled = true;
         btnSalvar.innerHTML = `<i class="fas fa-spinner fc-btn-spinner"></i> Agendando...`;
 
         await fetchFinanceiroAPI('/contas-agendadas/lote', { method: 'POST', body: JSON.stringify(payload) });
-        mostrarPopupFinanceiro('Parcelas agendadas com sucesso!', 'sucesso');
+        mostrarMensagem('Parcelas agendadas com sucesso!', 'sucesso');
         fecharModal();
         carregarContasAgendadas();
         atualizarBadgesHeader();
@@ -4796,7 +4612,7 @@ function renderizarTabelaConcessionarias() {
                         <tr>
                             <td data-label="Nome">${c.nome}</td>
                             <td data-label="Taxa">${c.taxa_recarga_percentual}%</td>
-                            <td data-label="Status" style="color: ${c.ativo ? 'var(--fc-cor-receita)' : 'var(--fc-cor-texto-secundario)'}; font-weight: bold;">
+                            <td data-label="Status" style="color: ${c.ativo ? 'var(--gs-sucesso)' : 'var(--gs-texto-secundario)'}; font-weight: bold;">
                                 ${c.ativo ? 'Ativa' : 'Inativa'}
                             </td>
                             <td data-label="Ações" class="td-acoes">
@@ -4883,7 +4699,7 @@ async function salvarConcessionaria(id = null) {
 
     try {
         await fetchFinanceiroAPI(url, { method, body: JSON.stringify(payload) });
-        mostrarPopupFinanceiro('Concessionária salva com sucesso!', 'sucesso');
+        mostrarMensagem('Concessionária salva com sucesso!', 'sucesso');
         document.getElementById('modal-concessionaria').remove();
         carregarErenderizarConcessionarias();
     } catch (error) {
@@ -4894,13 +4710,14 @@ async function salvarConcessionaria(id = null) {
 
 window.addEventListener('filtrarAgendaPorAlerta', (event) => {
     const filtro = event.detail.filtro;
-    console.log(`JS Legado ouviu o pedido para filtrar por: ${filtro}`);
 
-    // 1. Muda para a aba "Agenda"
+    // 1. PRIMEIRO, GARANTE que estamos na tela principal antes de qualquer coisa.
+    gerenciarNavegacaoPrincipal('main');
+
+    // 2. AGORA sim, com a tela principal visível, muda para a aba "Agenda".
     mudarAba('agenda');
 
-    // 2. Chama a função de carregar a agenda, passando o filtro.
-    // O backend agora espera 'atrasadas' ou 'hoje'.
+    // 3. Finalmente, carrega os dados da agenda com o filtro do alerta.
     carregarContasAgendadas(1, { vencimento: filtro });
 });
 
@@ -4911,9 +4728,7 @@ window.addEventListener('navegarParaViewFinanceiro', (event) => {
     gerenciarNavegacaoPrincipal(view);
 });
 
-window.addEventListener('lancamentoCriadoComSucesso', () => {
-    console.log('[JS Legado] Recebido sinal de novo lançamento. Atualizando a UI...');
-    
+window.addEventListener('lancamentoCriadoComSucesso', () => {    
     // As funções que você já tem para atualizar a página!
     carregarLancamentosFiltrados(1); // Volta para a primeira página para ver o novo lançamento
     atualizarSaldosDashboard();
