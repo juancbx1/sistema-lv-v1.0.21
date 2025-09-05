@@ -57,7 +57,7 @@ const ItemRateioRow = ({ item, onItemChange, onItemRemove, categoryOptions }) =>
 // =================================================================
 // Componente Principal do Modal
 // =================================================================
-export default function ModalLancamento({ isOpen, onClose, lancamentoParaEditar, permissoes, contas, categorias, grupos }) {
+export default function ModalLancamento({ isOpen, onClose, onSuccess, lancamentoParaEditar, permissoes, contas, categorias, grupos }) {
     const isEditMode = !!lancamentoParaEditar;
     const isAdmin = permissoes.includes('aprovar-alteracao-financeira');
     
@@ -259,6 +259,11 @@ export default function ModalLancamento({ isOpen, onClose, lancamentoParaEditar,
             if (!response.ok) throw new Error(result.error || `Erro ${response.status}`);
             
             mostrarMensagem(result.message || 'Operação realizada com sucesso!', 'sucesso', 3000);
+            
+            // Chama o callback de sucesso ANTES de fechar o modal
+            if (onSuccess) {
+                onSuccess();
+            }
             onClose();
             window.dispatchEvent(new CustomEvent('lancamentoCriadoComSucesso'));
 

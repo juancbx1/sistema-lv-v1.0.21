@@ -126,65 +126,12 @@
 
         <!-- PAINEL DA ABA 2: LANÇAMENTOS -->
         <div id="tab-lancamentos" class="fc-tab-panel">
-            <div class="fc-section-container">
-                <header class="fc-table-header">
-                    <h2 class="fc-section-title" style="border:0; margin:0;">Histórico de Lançamentos</h2>
-                    <button id="btnAtualizarLancamentos" class="fc-btn-atualizar">
-                        <i class="fas fa-sync-alt"></i> Atualizar
-                    </button>
-                </header>
-                <div class="fc-busca-e-filtros-linha">
-                    <div class="fc-form-grupo" style="flex-grow: 1;">
-                        <input type="text" id="filtroBuscaRapida" class="fc-input" placeholder="Buscar por #ID (ex #15), descrição, ou favorecido...">
-                    </div>
-                    <button id="btnToggleFiltrosAvancados" class="fc-btn fc-btn-outline">
-                        <i class="fas fa-filter"></i> Filtros Avançados
-                    </button>
-                </div>
-                <form id="filtrosLancamentos" class="fc-filtros-container hidden">
-                <div class="fc-form-grupo">
-                    <label for="filtroDataInicio">Data Início</label>
-                    <input type="date" id="filtroDataInicio" name="dataInicio" class="fc-input">
-                </div>
-                <div class="fc-form-grupo">
-                    <label for="filtroDataFim">Data Fim</label>
-                    <input type="date" id="filtroDataFim" name="dataFim" class="fc-input">
-                </div>
-                <div class="fc-form-grupo">
-                    <label for="filtroTipo">Tipo</label>
-                    <select id="filtroTipo" name="tipo" class="fc-select">
-                        <option value="">Todos</option>
-                        <option value="RECEITA">Receita</option>
-                        <option value="DESPESA">Despesa</option>
-                    </select>
-                </div>
-                
-                <div class="fc-form-grupo">
-                    <label for="filtroConta">Conta</label>
-                    <select id="filtroConta" name="idConta" class="fc-select"></select>
-                </div>
-
-                <!-- NOVO FILTRO TIPO DE LANCAMENTOS -->
-                <div class="fc-form-grupo">
-                    <label for="filtroTipoLancamento">Tipo de Lançamento</label>
-                    <select id="filtroTipoLancamento" name="tipoRateio" class="fc-select">
-                        <option value="">Todos</option>
-                        <option value="simples">Simples</option>
-                        <option value="COMPRA">Compra Detalhada</option>
-                        <option value="DETALHADO">Rateio Detalhado</option>
-                        <option value="transferencia">Transferência</option>
-                    </select>
-                </div>
-
-                <div class="fc-form-grupo full-width button-container">
-                    <button type="button" id="btnLimparFiltros" class="fc-btn fc-btn-secundario">
-                        <i class="fas fa-times-circle"></i> Limpar Filtros
-                    </button>
-                </div>
-            </form>
-                <div id="cardsLancamentosContainer" class="fc-lancamentos-cards-container"></div>
-                <div id="paginacaoLancamentosContainer" class="fc-paginacao-container"></div>
-            </div>
+            
+            <!-- O REACT VAI RENDERIZAR TUDO AQUI DENTRO, INCLUINDO OS FILTROS -->
+            <div id="lancamentos-react-root"></div>
+            
+            <!-- A paginacao continua aqui, pois o React a controla -->
+            <div id="paginacaoLancamentosContainer" class="fc-paginacao-container"></div>
         </div>
 
         <!-- PAINEL DA ABA 3: AGENDA -->
@@ -299,6 +246,7 @@
     <script type="module" src="/src/main-financeiro-modal.jsx"></script> 
     <script type="module" src="/src/main-feed-atividades.jsx"></script>
     <script type="module" src="/src/main-relatorios-financeiro.jsx"></script>
+    <script type="module" src="/src/main-financeiro-lancamentos.jsx"></script>
     <script src="/js/admin-financeiro.js" type="module"></script>
     <script src="/js/carregar-menu-lateral.js" type="module"></script>
 </body>

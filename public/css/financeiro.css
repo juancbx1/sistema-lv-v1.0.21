@@ -10,7 +10,7 @@
 .fc-content-wrapper {
     background-color: var(--gs-fundo-card);
     border-radius: var(--gs-raio-borda-card);
-    padding: 0; /* Removido o padding para o header ocupar tudo */
+    padding: 0;
     box-shadow: var(--gs-sombra-padrao);
     border: 1px solid var(--gs-borda);
 }
@@ -146,7 +146,7 @@
 
 /* Menu "Mais Ações" (Mobile) */
 .fc-mobile-only-menu {
-    display: none; /* Escondido no desktop */
+    display: none;
     position: relative;
 }
 .fc-dropdown-menu {
@@ -205,7 +205,7 @@
     align-items: center;
     gap: 8px;
     transition: all 0.2s ease-in-out;
-    margin-bottom: -1px; /* Efeito de fusão da borda */
+    margin-bottom: -1px;
 }
 
 .fc-tab-btn:hover {
@@ -221,7 +221,7 @@
 }
 
 .fc-tabs-content {
-    padding: 0 25px 25px 25px; /* Padding para o conteúdo abaixo das abas */
+    padding: 0 25px 25px 25px;
 }
 
 .fc-tab-panel {
@@ -254,7 +254,7 @@
 
 /* --- HERO SECTION DO SALDO TOTAL --- */
 .fc-saldo-hero {
-    position: relative; /* << ADICIONADO para posicionar o botão filho */
+    position: relative;
     background-color: var(--gs-fundo-alternativo);
     border: 1px solid var(--gs-borda);
     border-radius: var(--gs-raio-borda-card);
@@ -337,7 +337,7 @@
 }
 .fc-resumo-contas-item .conta-saldo {
     font-weight: 600;
-    font-family: 'Consolas', 'Menlo', monospace; /* Fonte monoespaçada para alinhar números */
+    font-family: 'Consolas', 'Menlo', monospace;
 }
 /* Estilo para contas zeradas (quando visíveis) */
 .fc-resumo-contas-item.conta-zerada {
@@ -398,7 +398,7 @@
     gap: 8px;
 }
 .fc-agenda-card .btn-toggle-agenda-details {
-    margin-left: 5px; /* Adiciona um espaço à esquerda */
+    margin-left: 5px;
 }
 
 .fc-agenda-card .actions-main-group {
@@ -406,28 +406,8 @@
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
-    flex-grow: 1; /* Faz este grupo ocupar o espaço disponível */
+    flex-grow: 1;
 }
-
-.fc-lancamentos-cards-container { display: grid; grid-template-columns: 1fr; gap: 15px; }
-.fc-lancamento-card { display: grid; grid-template-areas: "header actions" "details actions" "status actions"; grid-template-columns: 1fr auto; gap: 5px 15px; background-color: var(--gs-fundo-card); border-radius: var(--gs-raio-borda-card); border-left: 5px solid; box-shadow: var(--gs-sombra-padrao); padding: 15px; }
-.fc-lancamento-card.receita { border-left-color: var(--gs-sucesso); }
-.fc-lancamento-card.despesa { border-left-color: var(--gs-perigo); }
-.fc-lancamento-card.pendente { border-left-color: var(--gs-texto-secundario); background-color: var(--gs-fundo-alternativo); }
-.fc-lancamento-card .header { grid-area: header; display: flex; justify-content: space-between; align-items: flex-start; gap: 15px; }
-.fc-lancamento-card .descricao-wrapper { display: flex; flex-direction: column; }
-.fc-lancamento-card .lancamento-id { font-size: 0.75rem; color: var(--gs-texto-secundario); font-weight: 500; }
-.fc-lancamento-card .descricao { font-size: 1.1rem; font-weight: 600; }
-.fc-lancamento-card .valor { font-size: 1.2rem; font-weight: 700; white-space: nowrap; }
-.fc-lancamento-card.receita .valor { color: var(--gs-sucesso); }
-.fc-lancamento-card.despesa .valor { color: var(--gs-perigo); }
-.fc-lancamento-card .details { grid-area: details; display: flex; flex-wrap: wrap; gap: 5px 15px; font-size: 0.85rem; color: var(--gs-texto-secundario); margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--gs-borda); }
-.fc-lancamento-card .detail-item { display: flex; align-items: center; gap: 5px; }
-.fc-lancamento-card .status-placeholder { min-height: 20px; grid-area: status; }
-.fc-lancamento-card .status-pendente { grid-area: status; display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 600; color: var(--gs-texto-secundario); margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--gs-borda); }
-.fc-lancamento-card .actions { grid-area: actions; display: flex; flex-direction: column; justify-content: center; gap: 10px; align-self: stretch; border-left: 1px solid var(--gs-borda); padding-left: 10px; }
-.fc-lancamento-card .btn-toggle-details { grid-area: status; align-self: end; }
-
 
 /* ==========================================================================
    CARD DE APROVAÇÃO (REDESIGN)
@@ -439,7 +419,7 @@
     border-radius: var(--gs-raio-borda-card);
     margin-bottom: 25px;
     box-shadow: var(--gs-sombra-padrao);
-    overflow: hidden; /* Garante que os cantos arredondados sejam respeitados */
+    overflow: hidden;
 }
 
 .fc-aprovacao-card .meta-info {
@@ -594,7 +574,7 @@
 .fc-agenda-card.pagar { border-left-color: var(--gs-perigo); }
 .fc-agenda-card.receber { border-left-color: var(--gs-sucesso); }
 .fc-agenda-card.atrasado { border-left-width: 7px; }
-.fc-agenda-card.atrasado .card-details .detail-item[data-label="Vencimento"] {
+.fc-agenda-card.atrasado .detail-item[data-label="Vencimento"] {
     color: var(--gs-perigo);
     font-weight: 700;
 }
@@ -602,12 +582,11 @@
     flex-wrap: nowrap; /* Impede que os botões quebrem linha */
 }
 
-
 /* --- ESTILOS PARA A ÁREA EXPANSÍVEL DO RATEIO --- */
 .fc-lancamento-itens-container {
-    background-color: var(--gs-fundo-alternativo); /* Fundo suave para diferenciar */
+    background-color: var(--gs-fundo-alternativo);
     padding: 15px 20px;
-    margin-top: -10px; /* Sobrepõe levemente a borda inferior do card */
+    margin-top: -10px;
     border-radius: 0 0 var(--gs-raio-borda-card) var(--gs-raio-borda-card);
     border: 1px solid var(--gs-borda);
     border-top: none;
@@ -615,24 +594,17 @@
 }
 
 .item-detalhe-grid {
-    font-size: 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 8px; /* Espaço entre as linhas */
 }
 
 .item-detalhe-header, .item-detalhe-row {
     display: grid;
     gap: 15px;
+    align-items: center;
+    font-size: 0.85rem;
     padding: 8px 5px;
-    align-items: center; /* Alinha o conteúdo verticalmente */
-}
-
-/* Define as colunas para cada tipo de rateio, agora usando o wrapper como referência */
-/* Padrão para COMPRA e genéricos */
-[data-rateio-tipo="COMPRA"] ~ .fc-lancamento-itens-container .item-detalhe-grid > * {
-    grid-template-columns: 2fr 1.5fr 1fr; /* Categoria | Descrição | Valor */
-}
-/* Específico para DETALHADO (Impostos) */
-[data-rateio-tipo="DETALHADO"] ~ .fc-lancamento-itens-container .item-detalhe-grid > * {
-    grid-template-columns: 2fr 2fr 1.5fr 1fr; /* Favorecido | Categoria | Descrição | Valor */
 }
 
 .item-detalhe-header {
@@ -711,7 +683,7 @@
     padding: 15px;
     cursor: pointer;
     transition: background-color 0.2s;
-    gap: 15px; /* Adiciona um espaço entre os itens */
+    gap: 15px;
 }
 .fc-agenda-grupo-header:hover {
     background-color: var(--gs-fundo-alternativo);
@@ -739,7 +711,7 @@
     gap: 20px;
     font-size: 0.9rem;
     color: var(--gs-texto-secundario);
-    flex-shrink: 0; /* Impede que este elemento seja esmagado */
+    flex-shrink: 0;
 }
 
 .fc-agenda-grupo-header .total-grupo {
@@ -768,7 +740,7 @@
     transition: max-height 0.4s ease-in-out;
 }
 .fc-agenda-parcelas-lista.expandido {
-    max-height: 600px; /* Altura máxima da lista, pode ajustar */
+    max-height: 600px;
     overflow-y: auto;
 }
 
@@ -818,15 +790,37 @@
 /* ==========================================================================
    8. COMPONENTES GERAIS (BOTÕES, MODAIS, TABELAS, ETC.)
    ========================================================================== */
-.fc-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 18px; font-size: 0.9rem; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; transition: all 0.2s; color: var(--gs-branco); }
+.fc-btn { 
+    display: inline-flex; 
+    align-items: center; 
+    justify-content: center; 
+    gap: 8px; 
+    padding: 10px 18px; 
+    font-size: 0.9rem; 
+    font-weight: 600; 
+    border-radius: 6px; 
+    border: none; 
+    cursor: pointer; transition: all 0.2s; 
+    color: var(--gs-branco); 
+}
+
+.fc-btn--modal-estorno{
+    padding: 10px 8px; 
+}
 .fc-btn-primario { background-color: var(--gs-primaria); }
 .fc-btn-primario:hover { background-color: var(--gs-primaria-hover); }
 .fc-btn-secundario { background-color: var(--gs-terciaria); }
 .fc-btn-secundario:hover { background-color: var(--gs-terciaria-hover); }
-.fc-btn-outline { background-color: transparent; color: var(--gs-primaria); border: 1px solid var(--gs-primaria); }
-.fc-btn-outline:hover { background-color: var(--gs-primaria); color: var(--gs-branco); }
+.fc-btn-outline { 
+    background-color: transparent; color: 
+    var(--gs-primaria); 
+    border: 1px solid var(--gs-primaria); 
+}
+.fc-btn-outline:hover { 
+    background-color: var(--gs-primaria); 
+    color: var(--gs-branco); 
+}
 .fc-btn-disabled { background-color: var(--gs-fundo-alternativo) !important; color: var(--gs-neutro) !important; border-color: var(--gs-borda-alternativa) !important; cursor: not-allowed !important; opacity: 0.8; }
-/* Novo: Estilo para o spinner dentro do botão */
 .fc-btn .fc-btn-spinner {
     animation: gs-spin 1s linear infinite;
 }
@@ -870,7 +864,7 @@
 /* Botão Secundário: Nova Transferência */
 #btnNovaTransferencia {
     background-color: var(--gs-terciaria);
-    font-size: 1.3rem; /* Ícone um pouco menor */
+    font-size: 1.3rem;
 }
 #btnNovaTransferencia:hover {
     background-color: var(--gs-terciaria-hover);
@@ -892,9 +886,9 @@
     padding:10px;
 }
 .fc-modal-content .fc-section-title {
-    padding: 20px 25px 0 25px; /* Espaçamento do título */
-    margin-bottom: 15px;      /* Espaço abaixo do título */
-    flex-shrink: 0;           /* Impede que o header encolha */
+    padding: 20px 25px 0 25px;
+    margin-bottom: 15px;
+    flex-shrink: 0;
 }
 .fc-modal-close { 
     position: absolute; 
@@ -921,30 +915,30 @@
 
 
 .fc-modal-body {
-    flex-grow: 1;              /* Faz o corpo ocupar todo o espaço vertical disponível */
-    overflow-y: auto;          /* Adiciona a barra de rolagem APENAS AQUI quando necessário */
-    padding: 0 25px 20px 25px; /* Espaçamento interno para o conteúdo */
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 0 25px 20px 25px;
 }
 
 .fc-modal-footer { 
     display: flex; 
-    justify-content: center;   /* Centraliza os botões */
-    padding: 15px 25px;       /* Espaçamento do rodapé */
+    justify-content: center;
+    padding: 15px 25px;
     gap: 10px; 
     border-top: 1px solid var(--gs-borda); 
-    flex-shrink: 0;           /* Impede que o rodapé encolha */
-    background-color: var(--gs-fundo-alternativo); /* Um leve fundo para destacar a área de ações */
+    flex-shrink: 0;
+    background-color: var(--gs-fundo-alternativo);
 }
 
 /* --- Estilo para o Input de Paginação --- */
 .fc-input-paginacao {
-    width: 60px; /* Largura fixa para o campo */
+    width: 60px;
     padding: 6px 8px;
     font-size: 0.9rem;
     text-align: center;
     border: 1px solid var(--gs-borda-alternativa);
     border-radius: 6px;
-    margin: 0 5px; /* Pequeno espaçamento lateral */
+    margin: 0 5px;
 }
 
 /* Remove as setinhas de número no Chrome, Safari, Edge */
@@ -1017,7 +1011,7 @@
     bottom: 25px;
     right: 25px;
     display: flex;
-    flex-direction: column-reverse; /* IMPORTANTE: Inverte a ordem para o '+' ficar embaixo */
+    flex-direction: column-reverse;
     align-items: center;
     gap: 15px;
     z-index: 1000;
@@ -1030,32 +1024,11 @@
     background-color: var(--gs-terciaria-hover);
 }
 
-/* Estilo para o card de Transferência */
-.fc-lancamento-card.transferencia {
-    border-left-color: var(--gs-primaria);
-    /* Modifica o grid para acomodar o novo layout */
-    grid-template-areas: "header header" "details details" "status status";
-    grid-template-columns: 1fr auto;
-}
-.fc-lancamento-card.transferencia .valor {
-    color: var(--gs-texto-principal);
-}
-.fc-lancamento-card.transferencia .details.transferencia-details {
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
-    gap: 10px;
-    font-size: 0.9rem;
-    width: 100%;
-    grid-column: 1 / -1; /* Faz os detalhes ocuparem toda a largura */
-}
 .details.transferencia-details .arrow {
     font-size: 1.5rem;
     color: var(--gs-texto-secundario);
 }
-.fc-lancamento-card.transferencia .actions {
-    display: none; /* Esconde os botões de ação para transferências */
-}
+
 
 /* ==========================================================================
    SPINNER - OPÇÃO 1: PULSAR ELEGANTE
@@ -1064,12 +1037,12 @@
     display: flex; 
     justify-content: center; 
     align-items: center;
-    padding: 40px 25px; /* Mais padding para dar espaço */
+    padding: 40px 25px;
     font-size: 0.9rem; 
     color: var(--gs-texto-secundario);
     gap: 10px;
     text-align: center;
-    flex-direction: column; /* Coloca o texto abaixo dos pontos */
+    flex-direction: column;
 }
 
 /* Remove o spinner antigo */
@@ -1081,15 +1054,15 @@
 .fc-spinner::after {
     content: '';
     display: block;
-    width: 60px; /* Largura do container dos pontos */
-    height: 20px; /* Altura para alinhar */
-    margin-bottom: 15px; /* Espaço entre os pontos e o texto */
+    width: 60px;
+    height: 20px;
+    margin-bottom: 15px;
     background-image: 
         radial-gradient(circle 8px, var(--gs-primaria) 100%, transparent 0),
         radial-gradient(circle 8px, var(--gs-primaria) 100%, transparent 0),
         radial-gradient(circle 8px, var(--gs-primaria) 100%, transparent 0);
     background-repeat: no-repeat;
-    background-size: 16px 16px; /* Tamanho dos pontos */
+    background-size: 16px 16px;
     background-position: 0 50%, 50% 50%, 100% 50%;
     animation: gs-pulsar 1.2s infinite ease-in-out;
 }
@@ -1172,115 +1145,6 @@
     padding-right: 35px;
 }
 
-/* ==========================================================================
-   ESTILOS PARA OS BOTÕES DE AÇÃO DOS CARDS
-   ========================================================================== */
-
-/* Regra específica para os botões de ícone DENTRO da área de ações dos cards */
-.fc-lancamento-card .actions .fc-btn-icon {
-    width: 38px;
-    height: 38px;
-    font-size: 1rem; /* Tamanho do ícone (lápis, lixeira) */
-    color: var(--gs-texto-secundario);
-    background-color: transparent;
-    border: 1px solid transparent; /* Borda invisível para manter o tamanho */
-    border-radius: 50%;
-    transition: all 0.2s ease;
-}
-
-/* Efeito de hover para os botões nos cards */
-.fc-lancamento-card .actions .fc-btn-icon:hover:not(:disabled) {
-    background-color: var(--gs-fundo-alternativo);
-    color: var(--gs-primaria);
-    border-color: var(--gs-borda);
-}
-
-/* Cor específica para o botão de excluir no estado normal */
-.fc-lancamento-card .actions .btn-excluir-lancamento {
-    color: var(--gs-perigo);
-}
-
-/* Efeito de hover para o botão de excluir */
-.fc-lancamento-card .actions .btn-excluir-lancamento:hover:not(:disabled) {
-    background-color: #fceae8; /* Fundo avermelhado claro */
-    color: #c0392b; /* Vermelho mais escuro */
-    border-color: #f5c6cb;
-}
-
-/* Garante que botões desabilitados fiquem com a aparência correta */
-.fc-lancamento-card .actions .fc-btn-icon:disabled {
-    color: var(--gs-neutro) !important;
-    background-color: transparent !important;
-    cursor: not-allowed;
-}
-
-/* ==========================================================================
-   NOVO LAYOUT DOS CARDS DE LANÇAMENTO
-   ========================================================================== */
-.fc-lancamento-card {
-    display: flex; /* MUDANÇA PRINCIPAL: Usaremos flexbox para o layout vertical */
-    flex-direction: column;
-    gap: 12px; /* Espaço entre as seções do card */
-    padding: 15px 20px;
-    /* Removemos o grid-template-areas, pois não é mais necessário */
-}
-
-/* --- LINHA PRINCIPAL (ID, DESCRIÇÃO, VALOR) --- */
-.card-main-line {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 15px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--gs-borda);
-}
-.card-main-line .main-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-.card-main-line .lancamento-id {
-    font-size: 0.8rem;
-    color: var(--gs-texto-secundario);
-    font-weight: 500;
-}
-.card-main-line .descricao {
-    font-size: 1.1rem;
-    font-weight: 600;
-    line-height: 1.3;
-}
-.card-main-line .valor {
-    font-size: 1.5rem;
-    font-weight: 700;
-    white-space: nowrap;
-    margin-left: auto; /* Garante que ele fique colado à direita */
-}
-.fc-lancamento-card.receita .valor { color: var(--gs-sucesso); }
-.fc-lancamento-card.despesa .valor { color: var(--gs-perigo); }
-
-/* --- BLOCO DE DETALHES (FAVORECIDO, CATEGORIA, CONTA) --- */
-.card-details {
-    display: grid;
-    grid-template-columns: 1fr 1fr; /* Duas colunas por padrão */
-    gap: 8px 20px;
-    font-size: 0.9rem;
-}
-.card-details .detail-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--gs-texto-secundario);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.card-details .detail-item i {
-    color: var(--gs-primaria);
-}
-.card-details .detail-item b {
-    font-weight: 600;
-    color: var(--gs-texto-principal);
-}
 
 /* --- LINHA DE METADADOS (CRIADO POR, DATA, AÇÕES) --- */
 .card-meta-line {
@@ -1296,7 +1160,7 @@
 .card-meta-line .meta-info {
     display: flex;
     gap: 15px;
-    flex-wrap: wrap; /* Permite quebrar linha em telas menores */
+    flex-wrap: wrap;
 }
 .card-meta-line .actions {
     display: flex;
@@ -1855,6 +1719,309 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
     border-bottom: 1px solid var(--gs-borda);
 }
 
+/* ==========================================================================
+   08. REDESIGN: SMART CARDS DE LANÇAMENTO (FC-SMART-CARD)
+   ========================================================================== */
+
+/* --- Estrutura Principal do Card --- */
+.fc-smart-card {
+    background-color: var(--gs-fundo-card);
+    border-radius: var(--gs-raio-borda-card);
+    border: 1px solid var(--gs-borda);
+    padding: 15px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px; /* Espaçamento entre as seções do card */
+    border-left-width: 5px;
+    margin-bottom: 15px;
+    box-shadow: var(--gs-sombra-suave);
+    transition: box-shadow 0.2s ease-in-out;
+}
+
+.fc-smart-card:hover {
+    box-shadow: var(--gs-sombra-padrao);
+}
+
+.fc-smart-card.despesa { border-left-color: var(--gs-perigo); }
+.fc-smart-card.receita { border-left-color: var(--gs-sucesso); }
+.fc-smart-card.transferencia { border-left-color: var(--gs-primaria); }
+
+/* --- Seção Header: ID, Pílulas e Valor --- */
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start; /* Alinha no topo para valores grandes */
+    gap: 15px;
+}
+
+.header-info {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap; /* Permite que as pílulas quebrem a linha em telas pequenas */
+    gap: 10px;
+    font-size: 0.85rem;
+    color: var(--gs-texto-secundario);
+}
+
+.lancamento-id {
+    font-weight: 700;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 1rem;
+    background-color: var(--gs-fundo-alternativo);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.lancamento-valor {
+    font-size: 1.8rem;
+    font-weight: 700;
+    white-space: nowrap;
+    line-height: 1.1;
+}
+.valor-receita { color: var(--gs-sucesso); }
+.valor-despesa { color: var(--gs-perigo); }
+
+/* --- Seção Título: Descrição --- */
+.card-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 0;
+    line-height: 1.4;
+    color: var(--gs-texto-principal);
+}
+
+/* --- Seção Detalhes: Grid de Informações --- */
+.card-details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 8px 20px;
+    padding: 12px 0;
+    border-top: 1px dashed var(--gs-borda);
+    border-bottom: 1px dashed var(--gs-borda);
+    font-size: 0.9rem;
+}
+
+.detail-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--gs-texto-secundario);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.detail-item i {
+    color: var(--gs-primaria);
+    width: 18px; /* Alinhamento dos ícones */
+    text-align: center;
+    font-size: 0.9em;
+}
+.detail-item span {
+    color: var(--gs-texto-principal);
+    font-weight: 500;
+}
+
+/* --- Seção Footer: Meta Info e Ações --- */
+.card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap; /* Permite quebrar linha em telas pequenas */
+}
+
+.meta-info {
+    font-size: 0.8rem;
+    color: var(--gs-texto-secundario);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    line-height: 1.5;
+}
+.meta-info span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.meta-info span + span::before {
+    content: "";
+    margin-right: 0;
+}
+
+
+.card-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.action-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid transparent;
+    background-color: transparent;
+    color: var(--gs-texto-secundario);
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.action-btn:hover:not(:disabled) {
+    background-color: var(--gs-fundo-alternativo);
+    color: var(--gs-primaria);
+}
+.action-btn:disabled {
+    color: var(--gs-neutro);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+.action-btn-delete:hover:not(:disabled) {
+    background-color: #fceae8;
+    color: var(--gs-perigo);
+}
+
+/* Cor Verde para Estorno */
+.action-btn--estorno {
+    color: var(--gs-sucesso);
+}
+.action-btn--estorno:hover:not(:disabled) {
+    background-color: #e6f4ea; /* Fundo verde claro */
+    color: #1a7f37; /* Verde mais escuro */
+}
+
+/* Cor Vermelha para Deletar */
+.action-btn--delete {
+    color: var(--gs-perigo);
+}
+.action-btn--delete:hover:not(:disabled) {
+    background-color: #fceae8; /* Fundo vermelho claro */
+    color: #b9251a; /* Vermelho mais escuro */
+}
+
+
+.card-body-compact {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-bottom: 12px;
+    border-bottom: 1px dashed var(--gs-borda);
+}
+
+.card-info-compact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px; /* 8px vertical, 20px horizontal */
+    font-size: 0.9rem;
+}
+
+.fa-spin {
+    animation: gs-spin 1s linear infinite;
+}
+
+
+/* --- Componente Badge (Pílulas) --- */
+.fc-badge-pill {
+    padding: 4px 10px;
+    border-radius: 50px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1.2;
+}
+.badge-blue { background-color: #eaf3ff; color: #357ae8; }
+.badge-purple { background-color: #f3e8fd; color: #8e44ad; }
+.badge-gray { background-color: #f1f3f4; color: #5f6368; }
+.badge-orange { background-color: #feefc3; color: #f39c12; }
+.badge-green { background-color: #e6f4ea; color: #1e8e3e; }
+
+/* --- Detalhes Expandidos para Rateio/Compra --- */
+.card-expanded-details {
+    background-color: var(--gs-fundo-alternativo);
+    margin: 10px -20px -15px -20px; /* Faz ocupar a largura toda do card */
+    padding: 15px 20px;
+    border-top: 1px solid var(--gs-borda);
+    border-radius: 0 0 var(--gs-raio-borda-card) var(--gs-raio-borda-card);
+}
+
+.item-detalhe-header, .item-detalhe-row {
+    display: grid;
+    gap: 15px;
+    padding: 8px 5px;
+    align-items: center;
+    font-size: 0.85rem;
+}
+
+/* Define as colunas para cada tipo */
+.item-detalhe-header.compra, .item-detalhe-row.compra {
+    grid-template-columns: 2fr 0.5fr 1fr 1fr;
+}
+.item-detalhe-header.rateio, .item-detalhe-row.rateio {
+    grid-template-columns: 1.5fr 1.5fr 2fr 1fr; /* Favorecido | Categoria | Descrição | Valor */
+}
+
+.item-detalhe-header {
+    font-weight: 600;
+    color: var(--gs-texto-secundario);
+    border-bottom: 2px solid var(--gs-borda);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+}
+
+.item-detalhe-row:not(:last-child) {
+    border-bottom: 1px dotted var(--gs-borda);
+}
+
+.details-summary {
+    text-align: right;
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px solid var(--gs-borda);
+    font-size: 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+/* ==========================================================================
+   11. COMPONENTES DE UI (Não Encontrado)
+   ========================================================================== */
+.fc-nao-encontrado-container {
+    text-align: center;
+    padding: 40px 20px;
+    margin: 20px auto;
+    max-width: 450px;
+    background-color: var(--gs-fundo-alternativo);
+    border-radius: var(--gs-raio-borda-card);
+    border: 1px dashed var(--gs-borda);
+    opacity: 0.8;
+}
+
+.nao-encontrado-icone {
+    font-size: 3rem;
+    color: var(--gs-primaria);
+    opacity: 0.5;
+    margin-bottom: 20px;
+}
+
+.nao-encontrado-titulo {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--gs-texto-principal);
+    margin: 0 0 10px 0;
+}
+
+.nao-encontrado-mensagem {
+    font-size: 0.95rem;
+    color: var(--gs-texto-secundario);
+    line-height: 1.6;
+    margin: 0;
+}
 
 /* ==========================================================================
    9. RESPONSIVIDADE
@@ -1956,22 +2123,27 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
         display: none; /* Esconde o cabeçalho no mobile */
     }
     .item-detalhe-row {
-        display: block; /* Desfaz o grid, empilhando os itens */
-        padding: 10px 0;
+        display: block; /* Vira um bloco */
+        padding: 12px;
+        border: 1px solid var(--gs-borda);
+        border-radius: var(--gs-raio-borda-card);
     }
     .item-detalhe-row div {
         display: flex;
-        justify-content: space-between; /* Alinha label e valor */
-        padding: 5px 0;
-        text-align: right; /* Alinha o valor à direita */
+        justify-content: space-between;
+        padding: 6px 0;
+        text-align: right;
     }
     .item-detalhe-row div::before {
-        content: attr(data-label) ":"; /* Usa o data-label como título da linha */
+        content: attr(data-label); /* Usa o data-label como título */
         font-weight: 600;
         text-align: left;
+        color: var(--gs-texto-secundario);
         margin-right: 10px;
-        color: var(--gs-texto-principal);
     }
+
+
+
     .item-detalhe-row div[data-label="Valor"] {
         font-size: 1.1em;
         font-weight: 600;
@@ -2005,8 +2177,8 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
     }
 
     .fc-filtros-container .button-container {
-        justify-content: center; /* Centraliza o botão no mobile */
-        margin-top: 10px; /* Adiciona um espaço acima do botão */
+        justify-content: center;
+        margin-top: 10px;
     }
 
     .fc-filtros-container:not(.hidden) {
@@ -2015,27 +2187,54 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
 
     /* --- AJUSTES DE RESPONSIVIDADE PARA A CENTRAL DE RELATÓRIOS --- */
     #relatoriosView .fc-table-header {
-        flex-direction: column; /* Empilha os itens verticalmente */
+        flex-direction: column;
         gap: 20px;
     }
 
     #relatoriosView .fc-table-header > div {
-        flex-direction: column; /* Empilha os filtros e o botão */
-        align-items: stretch; /* Faz os itens ocuparem a largura total */
-        width: 100%; /* Garante que o container ocupe o espaço */
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
     }
 
     #relatoriosView .fc-table-header label {
-        margin-bottom: 5px; /* Adiciona um pequeno espaço acima do input */
+        margin-bottom: 5px;
     }
 
     .relatorio-widget {
-    min-height: 450px; /* Garante espaço para o gráfico e a legenda vertical */
+    min-height: 450px;
 }
 
 }
 
 @media (max-width: 480px) {
+/* --- Responsividade para os Smart Cards --- */
+    .card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    .lancamento-valor {
+        align-self: flex-end;
+        font-size: 1.8rem;
+    }
+    .card-footer {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+    .meta-info {
+        justify-content: center;
+        text-align: center;
+        order: 2; /* Joga para baixo */
+        font-size: 0.75rem;
+    }
+    .card-actions {
+        justify-content: space-around;
+        order: 1; /* Joga para cima */
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--gs-borda);
+    }
 
     .seletor-periodo-btn {
         display: none;
@@ -2047,10 +2246,6 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
 
     .fc-header-actions {
     margin-top: 30px;
-    }
-    .fc-btn {
-        padding: 12px 14px;
-        font-size: 0.8rem;
     }
 
     .fc-header-actions .fc-btn-icon { 
@@ -2070,25 +2265,25 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
 
     /* Layout para a aba AGENDA */
     #tab-agenda .fc-table-header {
-        display: flex; /* Transforma em flex container */
-        justify-content: space-between; /* Alinha os itens nas extremidades */
+        display: flex;
+        justify-content: space-between;
         align-items: center;
-        gap: 15px; /* Espaço entre as linhas */
+        gap: 15px;
     }
     #tab-agenda .fc-table-header .fc-section-title {
-        order: 1; /* Move o título para a segunda "posição" */
-        width: auto; /* Garante que o título não ocupe a linha toda */
+        order: 1;
+        width: auto;
     }
     #tab-agenda .fc-table-header .fc-header-actions {
-        order: 1; /* Move o grupo de botões para a primeira "posição" */
-        width: 100%; /* Faz o grupo de botões ocupar a primeira linha inteira */
-        justify-content: flex-end; /* Alinha os botões dentro dele à direita */
+        order: 1;
+        width: 100%;
+        justify-content: flex-end;
     }
     #tab-agenda .fc-header-actions #btnAtualizarAgenda {
-        order: 1; /* Botão "Atualizar" fica em segundo no grupo */
+        order: 1;
     }
     #tab-agenda .fc-header-actions #btnAgendarNovaConta {
-        order: 2; /* Botão "+ Agendar" fica em primeiro no grupo */
+        order: 2;
     }
 
     .fc-desktop-only-actions { display: none; }
@@ -2098,7 +2293,7 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
     .fc-fab { width: 55px; height: 55px; right: 15px; bottom: 15px; }
     .fc-notificacoes-painel { width: 95vw; right: 2.5vw; }
     .fc-modal-content {
-        max-width: 95vw; /* Garante que o modal use quase toda a tela */
+        max-width: 95vw;
         max-height: 85vh;
         padding:10px;
     }
@@ -2135,49 +2330,24 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
         padding: 8px 10px;
     }
 
-    /* --- AJUSTES NOVO CARD DE LANÇAMENTO PARA MOBILE --- */
-     .fc-lancamento-card {
-        gap: 10px;
-        padding: 12px 15px;
-    }
-
-    .card-main-line {
-        flex-direction: column; /* Empilha descrição e valor */
-        align-items: stretch; /* Ocupa toda a largura */
-        gap: 5px;
-        border-bottom: 1px dashed var(--gs-borda);
-        padding-bottom: 10px;
-    }
-    .card-main-line .valor {
-        text-align: right; /* Alinha o valor à direita no mobile */
-        font-size: 1.5rem;
-    }
-
-    /* Detalhes viram uma única coluna */
-    .card-details {
-        grid-template-columns: 1fr;
-        gap: 6px;
-    }
-
-    /* --- AQUI ESTÃO AS MUDANÇAS --- */
     /* Meta linha agora alinha os itens lado a lado */
     .card-meta-line {
-        flex-direction: row; /* Alinha na horizontal */
-        justify-content: space-between; /* Espaça os itens */
-        align-items: center; /* Centraliza verticalmente */
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
         gap: 10px;
     }
     .card-meta-line .actions {
         display: flex;
-        flex-direction: column; /* Empilha os botões na vertical */
+        flex-direction: column;
         gap: 5px;
     }
 
     
      /* --- AJUSTES NOS BOTÕES DOS CARDS DA AGENDA PARA MOBILE --- */
     .fc-agenda-card .card-meta-line .actions {
-        flex-direction: row; /* Alinha o grupo de botões e a setinha lado a lado */
-        align-items: flex-end; /* Alinha na base */
+        flex-direction: row;
+        align-items: flex-end;
     }
 
     /* Garante que o grupo principal de botões ocupe todo o espaço à esquerda */
@@ -2210,35 +2380,35 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
 
     /* --- TRANSFORMA O BOTÃO "+ AGENDAR NOVO" EM UM ÍCONE "+" NO MOBILE --- */
     #tab-agenda #btnAgendarNovaConta {
-        font-size: 0; /* Esconde o texto "Agendar Novo" */
-        width: 42px;  /* Define uma largura fixa */
-        height: 42px; /* Define uma altura fixa */
-        border-radius: 50%; /* Deixa o botão redondo */
-        padding: 0; /* Remove o padding interno */
-        position: relative; /* Necessário para o pseudo-elemento */
+        font-size: 0;
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        padding: 0;
+        position: relative;
     }
 
     #tab-agenda #btnAgendarNovaConta i {
-        display: none; /* Esconde o ícone original do Font Awesome */
+        display: none;
     }
 
     #tab-agenda #btnAgendarNovaConta::before {
-        content: '+'; /* Adiciona o símbolo de "+" */
-        font-size: 1.8rem; /* Tamanho do "+" */
-        font-weight: 300; /* Deixa o "+" mais fino e elegante */
+        content: '+'; 
+        font-size: 1.8rem;
+        font-weight: 300;
         position: absolute;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        line-height: 1; /* Garante alinhamento vertical perfeito */
+        line-height: 1;
     }
 
     /* Permite rolagem horizontal nas abas do modal em telas pequenas  */
     .fc-modal .fc-segmented-control {
         display: flex;
-        overflow-x: auto; /* A mágica acontece aqui */
-        -webkit-overflow-scrolling: touch; /* Melhora a experiência em iOS */
-        scrollbar-width: none; /* Esconde a barra de rolagem no Firefox */
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
     }
     /* Esconde a barra de rolagem no Chrome/Safari/Edge */
     .fc-modal .fc-segmented-control::-webkit-scrollbar {
@@ -2246,11 +2416,11 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
     }
 
     .fc-modal .fc-segmented-control .fc-segment-btn {
-        flex-shrink: 0; /* Impede que os botões encolham */
-        white-space: nowrap; /* Garante que o texto do botão não quebre linha */
+        flex-shrink: 0;
+        white-space: nowrap;
     }
 
-    .alerta-texto .alerta-total { display: none; } /* Esconde o valor total, mostra só a contagem */
+    .alerta-texto .alerta-total { display: none; }
     .alerta-card-header { gap: 8px; padding: 8px 10px; }
     .acoes-principais { gap: 8px; }
     .grupo-icones-status { 
@@ -2262,8 +2432,12 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
         font-size: 0.9rem;
     }
     .log-item-meta {
-        flex-direction: column; /* Empilha usuário e data */
+        flex-direction: column;
         gap: 2px;
+    }
+    .fc-btn-filtro{
+        padding: 8px 6px;
+        font-size: 0.8rem;
     }
 
 
@@ -2294,28 +2468,10 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
 
 @media (max-width: 399px) {
     .fc-lancamentos-cards-container {
-        display: block; /* Desativa o Grid e volta para o fluxo de bloco padrão */
-        gap: 0; /* O gap não funciona com display: block */
+        display: block;
+        gap: 0;
     }
 
-    /* Substituímos o 'gap' por uma 'margin' em cada card, exceto o último */
-    .fc-lancamentos-cards-container .fc-lancamento-card-wrapper:not(:last-child) {
-        margin-bottom: 15px;
-    }
-
-    /* Outros ajustes finos para ganhar espaço */
-    .fc-lancamento-card {
-        padding: 12px;
-        gap: 5px 10px;
-    }
-
-    .fc-lancamento-card .descricao {
-        font-size: 1rem;
-    }
-    
-    .fc-lancamento-card .valor {
-        font-size: 1.1rem;
-    }
     .fc-modal-content {
         max-width: 55vh;
         max-height: 85vh;
@@ -2328,10 +2484,6 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
     font-size: 0.7rem;
     }
     
-    .fc-btn {
-        padding: 8px 12px;
-        font-size: 0.8rem;
-    }
     .alerta-card-header {
         font-size: 0.7rem;
     }
@@ -2348,5 +2500,4 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
     .btn-voltar-header .fa-chevron-left{
     font-size: 1rem;
     }
-
 }

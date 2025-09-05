@@ -448,13 +448,6 @@ router.get('/relatorios/despesas-por-categoria', async (req, res) => {
     let dbClient;
     try {
         dbClient = await pool.connect();
-
-        // Query SQL para agrupar despesas:
-        // - Junta (JOIN) com a tabela de categorias para pegar o nome.
-        // - Filtra apenas por DESPESA e pelo período desejado.
-        // - Agrupa por nome de categoria e soma os valores.
-        // - Ordena do maior gasto para o menor, mostrando o mais importante primeiro.
-        // - Limita aos 10 maiores gastos para manter o relatório limpo.
         const categoriasQuery = `
             SELECT
                 cat.nome AS "nome",
@@ -489,12 +482,10 @@ router.get('/relatorios/despesas-por-categoria', async (req, res) => {
 
 // GET /api/financeiro/configuracoes - Rota para buscar todas as configurações iniciais
 router.get('/configuracoes', async (req, res) => {
-    // A permissão 'acesso-financeiro' já foi checada no middleware, então aqui é seguro prosseguir.
     let dbClient;
     try {
         dbClient = await pool.connect();
         
-        // Usamos Promise.all para fazer as 3 buscas no banco de dados em paralelo, é mais rápido!
         const [contasResult, gruposResult, categoriasResult] = await Promise.all([
             dbClient.query('SELECT * FROM fc_contas_bancarias WHERE ativo = true ORDER BY nome_conta'),
             dbClient.query('SELECT * FROM fc_grupos_financeiros ORDER BY tipo, nome'),
@@ -793,12 +784,7 @@ router.get('/lancamentos', async (req, res) => {
             } 
             // 2. Tratamento para busca por VALOR
             else if (!isNaN(parseFloat(termoBusca.replace(',', '.')))) {
-                // Primeiro, limpamos a string: trocamos vírgula por ponto.
                 const valorNumerico = parseFloat(termoBusca.replace(',', '.'));
-                
-                // Adiciona a condição para buscar o valor exato na query.
-                // Usa a função ROUND() do PostgreSQL para evitar problemas com 
-                // pequenas diferenças de ponto flutuante. Comparamos com 2 casas decimais.
                 whereClauses.push(`ROUND(l.valor::numeric, 2) = ROUND($${paramIndex++}::numeric, 2)`);
                 params.push(valorNumerico);
             }
@@ -817,17 +803,17 @@ router.get('/lancamentos', async (req, res) => {
             JOIN fc_contas_bancarias cb ON l.id_conta_bancaria = cb.id
             LEFT JOIN fc_categorias cat ON l.id_categoria = cat.id
             LEFT JOIN fc_contatos fav ON l.id_contato = fav.id
-            JOIN usuarios u ON l.id_usuario_lancamento = u.id
+            JOIN usuarios u_criador ON l.id_usuario_lancamento = u_criador.id
+            LEFT JOIN usuarios u_editor ON l.id_usuario_edicao = u_editor.id 
         `;
         
         const query = `
             SELECT 
                 l.*, 
-                l.data_lancamento,
-                l.valor_desconto,
                 cb.nome_conta,
                 cat.nome as nome_categoria,
-                u.nome as nome_usuario, 
+                u_criador.nome as nome_usuario,
+                u_editor.nome as nome_usuario_edicao,
                 fav.nome as nome_favorecido,
                 (
                     SELECT json_agg(json_build_object(
@@ -1143,9 +1129,18 @@ router.put('/lancamentos/:id', async (req, res) => {
             
             const queryUpdate = `
                 UPDATE fc_lancamentos 
-                SET valor=$1, data_transacao=$2, id_categoria=$3, id_conta_bancaria=$4, descricao=$5, id_contato=$6, status_edicao='OK', motivo_rejeicao=NULL 
-                WHERE id = $7 RETURNING *;`;
-            const updatedResult = await dbClient.query(queryUpdate, [valor, data_transacao, id_categoria, id_conta_bancaria, descricao, id_contato, id]);
+                SET valor=$1, data_transacao=$2, id_categoria=$3, id_conta_bancaria=$4, descricao=$5, id_contato=$6, 
+                    status_edicao='OK', motivo_rejeicao=NULL, 
+                    id_usuario_edicao = $7, -- Adiciona o ID do editor
+                    atualizado_em = NOW()    -- Adiciona a data/hora atual
+                WHERE id = $8 RETURNING *;`;
+            
+            // <<< MUDANÇA NOS PARÂMETROS >>>
+            const updatedResult = await dbClient.query(queryUpdate, [
+                valor, data_transacao, id_categoria, id_conta_bancaria, descricao, id_contato, 
+                req.usuarioLogado.id, // Parâmetro $7
+                id                      // Parâmetro $8
+            ]);
             
             await registrarLog(dbClient, req.usuarioLogado.id, req.usuarioLogado.nome, 'EDICAO_LANCAMENTO', { antes: lancamentoOriginal, depois: updatedResult.rows[0] });
             
@@ -1155,8 +1150,6 @@ router.put('/lancamentos/:id', async (req, res) => {
                 lancamento: updatedResult.rows[0]
             });
         } else {
-            // FLUXO DO USUÁRIO COMUM: Sempre solicita aprovação
-            // A justificativa vem no corpo da requisição (novosDados)
             const { justificativa } = novosDados; 
 
             const solRes = await dbClient.query(
@@ -1213,13 +1206,9 @@ router.post('/lancamentos/:id/solicitar-exclusao', async (req, res) => {
         }
 
         if (req.permissoesUsuario.includes('aprovar-alteracao-financeira')) {
-            // FLUXO DO ADMIN: Exclui diretamente
             
             // Cria uma cópia do objeto para enriquecer com dados para o log
             const lancamentoParaLog = { ...lancamentoOriginal };
-
-            // Se for um lançamento detalhado (compra, rateio), a categoria principal pode ser nula.
-            // Buscamos a categoria do primeiro item para garantir um log informativo.
             if (lancamentoParaLog.tipo_rateio) {
                 const primeiroItemRes = await dbClient.query(
                     'SELECT id_categoria FROM fc_lancamento_itens WHERE id_lancamento_pai = $1 LIMIT 1',
@@ -1560,8 +1549,11 @@ router.put('/lancamentos/detalhado/:id', async (req, res) => {
                 const valor_total_lancamento = soma_itens - parseFloat(dados_pai.valor_desconto || 0);
 
                 await dbClient.query(
-                    `UPDATE fc_lancamentos SET id_conta_bancaria=$1, valor=$2, valor_desconto=$3, data_transacao=$4, descricao=$5, id_contato=$6, id_categoria=$7, tipo_rateio=$8, status_edicao='OK' WHERE id=$9;`,
-                    [dados_pai.id_conta_bancaria, valor_total_lancamento, dados_pai.valor_desconto || 0, dados_pai.data_transacao, dados_pai.descricao, dados_pai.id_contato, null, tipo_rateio, idLancamentoPai]
+                    `UPDATE fc_lancamentos 
+                     SET id_conta_bancaria=$1, valor=$2, valor_desconto=$3, data_transacao=$4, descricao=$5, id_contato=$6, id_categoria=$7, tipo_rateio=$8, 
+                         status_edicao='OK', id_usuario_edicao = $9, atualizado_em = NOW() 
+                     WHERE id=$10;`,
+                    [dados_pai.id_conta_bancaria, valor_total_lancamento, dados_pai.valor_desconto || 0, dados_pai.data_transacao, dados_pai.descricao, dados_pai.id_contato, null, tipo_rateio, req.usuarioLogado.id, idLancamentoPai]
                 );
                 for (const item of itens_filho) {
                     const valor_total_item = parseFloat(item.quantidade) * parseFloat(item.valor_unitario);
@@ -1574,8 +1566,11 @@ router.put('/lancamentos/detalhado/:id', async (req, res) => {
                 const valor_total_lancamento = itens_filho.reduce((acc, item) => acc + parseFloat(item.valor_item || 0), 0);
 
                 await dbClient.query(
-                    `UPDATE fc_lancamentos SET id_conta_bancaria=$1, valor=$2, valor_desconto=$3, data_transacao=$4, descricao=$5, id_contato=$6, id_categoria=$7, tipo_rateio=$8, status_edicao='OK' WHERE id=$9;`,
-                    [dados_pai.id_conta_bancaria, valor_total_lancamento, 0, dados_pai.data_transacao, dados_pai.descricao, dados_pai.id_contato, dados_pai.id_categoria, tipo_rateio, idLancamentoPai]
+                    `UPDATE fc_lancamentos 
+                     SET id_conta_bancaria=$1, valor=$2, valor_desconto=$3, data_transacao=$4, descricao=$5, id_contato=$6, id_categoria=$7, tipo_rateio=$8, 
+                         status_edicao='OK', id_usuario_edicao = $9, atualizado_em = NOW() 
+                     WHERE id=$10;`,
+                    [dados_pai.id_conta_bancaria, valor_total_lancamento, 0, dados_pai.data_transacao, dados_pai.descricao, dados_pai.id_contato, dados_pai.id_categoria, tipo_rateio, req.usuarioLogado.id, idLancamentoPai]
                 );
                 for (const item of itens_filho) {
                     await dbClient.query(
@@ -2245,21 +2240,21 @@ router.post('/aprovacoes/:id/aprovar', async (req, res) => {
                     if (tipo_rateio === 'COMPRA') {
                         const soma_itens = itens_filho.reduce((acc, item) => (acc + (parseFloat(item.quantidade) * parseFloat(item.valor_unitario))), 0);
                         const valor_total = soma_itens - parseFloat(dados_pai.valor_desconto || 0);
-                        await dbClient.query(`UPDATE fc_lancamentos SET id_conta_bancaria=$1, valor=$2, valor_desconto=$3, data_transacao=$4, descricao=$5, id_contato=$6, id_categoria=$7, tipo_rateio=$8, status_edicao='EDITADO_APROVADO' WHERE id=$9;`, [dados_pai.id_conta_bancaria, valor_total, dados_pai.valor_desconto || 0, dados_pai.data_transacao, dados_pai.descricao, dados_pai.id_contato, null, tipo_rateio, idLancamento]);
+                        await dbClient.query(`UPDATE fc_lancamentos SET id_conta_bancaria=$1, valor=$2, valor_desconto=$3, data_transacao=$4, descricao=$5, id_contato=$6, id_categoria=$7, tipo_rateio=$8, status_edicao='EDITADO_APROVADO', id_usuario_edicao=$9, atualizado_em=NOW() WHERE id=$10;`, [dados_pai.id_conta_bancaria, valor_total, dados_pai.valor_desconto || 0, dados_pai.data_transacao, dados_pai.descricao, dados_pai.id_contato, null, tipo_rateio, req.usuarioLogado.id, idLancamento]);
                         for (const item of itens_filho) {
                             const valor_total_item = parseFloat(item.quantidade) * parseFloat(item.valor_unitario);
                             await dbClient.query(`INSERT INTO fc_lancamento_itens (id_lancamento_pai, id_categoria, descricao_item, quantidade, valor_unitario, valor_total_item, id_contato_item) VALUES ($1,$2,$3,$4,$5,$6,$7);`, [idLancamento, item.id_categoria, item.descricao_item, item.quantidade, item.valor_unitario, valor_total_item, item.id_contato_item || null]);
                         }
                     } else if (tipo_rateio === 'DETALHADO') {
                         const valor_total = itens_filho.reduce((acc, item) => acc + parseFloat(item.valor_item || 0), 0);
-                        await dbClient.query(`UPDATE fc_lancamentos SET id_conta_bancaria=$1, valor=$2, data_transacao=$3, descricao=$4, id_contato=$5, id_categoria=$6, tipo_rateio=$7, status_edicao='EDITADO_APROVADO' WHERE id=$8;`, [dados_pai.id_conta_bancaria, valor_total, dados_pai.data_transacao, dados_pai.descricao, dados_pai.id_contato, dados_pai.id_categoria, tipo_rateio, idLancamento]);
+                        await dbClient.query(`UPDATE fc_lancamentos SET id_conta_bancaria=$1, valor=$2, data_transacao=$3, descricao=$4, id_contato=$5, id_categoria=$6, tipo_rateio=$7, status_edicao='EDITADO_APROVADO', id_usuario_edicao=$8, atualizado_em=NOW() WHERE id=$9;`, [dados_pai.id_conta_bancaria, valor_total, dados_pai.data_transacao, dados_pai.descricao, dados_pai.id_contato, dados_pai.id_categoria, tipo_rateio, req.usuarioLogado.id, idLancamento]);
                         for (const item of itens_filho) {
                             await dbClient.query(`INSERT INTO fc_lancamento_itens (id_lancamento_pai, id_categoria, descricao_item, valor_total_item, id_contato_item) VALUES ($1,$2,$3,$4,$5);`, [idLancamento, item.id_categoria, item.descricao_item, item.valor_item, item.id_contato_item || null]);
                         }
                     }
                 } else { // Lançamento Simples
                     const { valor, data_transacao, id_categoria, id_conta_bancaria, descricao, id_contato } = dadosNovos;
-                    await dbClient.query(`UPDATE fc_lancamentos SET valor=$1, data_transacao=$2, id_categoria=$3, id_conta_bancaria=$4, descricao=$5, id_contato=$6, status_edicao='EDITADO_APROVADO', motivo_rejeicao=NULL WHERE id = $7;`, [valor, data_transacao, id_categoria, id_conta_bancaria, descricao, id_contato, idLancamento]);
+                    await dbClient.query(`UPDATE fc_lancamentos SET valor=$1, data_transacao=$2, id_categoria=$3, id_conta_bancaria=$4, descricao=$5, id_contato=$6, status_edicao='EDITADO_APROVADO', motivo_rejeicao=NULL, id_usuario_edicao=$7, atualizado_em=NOW() WHERE id = $8;`, [valor, data_transacao, id_categoria, id_conta_bancaria, descricao, id_contato, req.usuarioLogado.id, idLancamento]);
                 }
                 mensagemNotificacao = `Sua edição para o lançamento <strong>#${idLancamento}</strong> foi APROVADA.`;
                 break;
