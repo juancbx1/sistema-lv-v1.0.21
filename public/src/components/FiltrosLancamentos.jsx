@@ -1,65 +1,18 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+// public/src/components/FiltrosLancamentos.jsx
+import React, { useState } from 'react';
 
-const getLocalDateString = () => {
-    const date = new Date();
-    // Pega o offset do fuso em minutos (ex: -180 para GMT-3)
-    const timezoneOffset = date.getTimezoneOffset() * 60000;
-    // Subtrai o offset para "enganar" o toISOString e obter a data local correta
-    const localDate = new Date(date.getTime() - timezoneOffset);
-    // Retorna a data no formato YYYY-MM-DD
-    return localDate.toISOString().split('T')[0];
-};
-
-const FiltrosLancamentos = ({ onFiltrosChange, contas }) => {
-    
-    const getInitialState = (resetCompleto = false) => {
-        const hoje = getLocalDateString();
-        return {
-            termoBusca: '',
-            dataInicio: resetCompleto ? '' : hoje,
-            dataFim: resetCompleto ? '' : hoje,
-            tipo: '', idConta: '', tipoRateio: ''
-        };
-    };
-
-    // O estado inicial padrão ainda usa a data de hoje
-    const [filtros, setFiltros] = useState(getInitialState());
+const FiltrosLancamentos = ({ filtros, onFiltrosChange, onLimparFiltros }) => {
     const [filtrosAvancadosVisiveis, setFiltrosAvancadosVisiveis] = useState(false);
 
-    // Usamos useRef para o debounce, que é a forma mais segura em React
-    const debounceTimeout = useRef(null);
-
-    // O useEffect agora observa as mudanças em `filtros` e aplica o debounce
-    useEffect(() => {
-        // Limpa o timeout anterior sempre que os filtros mudam
-        clearTimeout(debounceTimeout.current);
-
-        // Cria um novo timeout
-        debounceTimeout.current = setTimeout(() => {
-            onFiltrosChange(filtros);
-        }, 500); // Espera 500ms após a última mudança para notificar o pai
-
-        // Função de limpeza para desmontagem do componente
-        return () => clearTimeout(debounceTimeout.current);
-    }, [filtros, onFiltrosChange]);
-
-
     const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        setFiltros(prevFiltros => ({ ...prevFiltros, [name]: value }));
-        // A notificação ao pai agora é feita exclusivamente pelo useEffect
+        onFiltrosChange(e.target.name, e.target.value);
     };
-
+    
     const limparTermoBusca = () => {
-        setFiltros(prevFiltros => ({ ...prevFiltros, termoBusca: '' }));
+        onFiltrosChange('termoBusca', '');
     };
 
-
-    const limparFiltros = () => {
-        setFiltros(getInitialState(true));
-    };
-
-     return (
+    return (
         <>
             <div className="fc-busca-e-filtros-linha">
                 <div className="fc-form-grupo" style={{ flexGrow: 1, position: 'relative' }}>
@@ -76,16 +29,9 @@ const FiltrosLancamentos = ({ onFiltrosChange, contas }) => {
                             type="button" 
                             onClick={limparTermoBusca}
                             style={{
-                                position: 'absolute',
-                                right: '10px',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                color: '#888',
-                                fontSize: '1.2rem',
-                                padding: '0 5px'
+                                position: 'absolute', right: '10px', top: '50%',
+                                transform: 'translateY(-50%)', background: 'none', border: 'none',
+                                cursor: 'pointer', color: '#888', fontSize: '1.2rem', padding: '0 5px'
                             }}
                             title="Limpar busca"
                         >
@@ -93,10 +39,10 @@ const FiltrosLancamentos = ({ onFiltrosChange, contas }) => {
                         </button>
                     )}
                 </div>
-                <button  
+                <button 
                     type="button"
                     className="fc-btn fc-btn-filtro fc-btn-outline" 
-                    onClick={() => setFiltrosAvancadosVisiveis(!filtrosAvancadosVisiveis)}
+                    onClick={() => setFiltrosAvancadosVisiveis(prev => !prev)}
                 >
                     <i className="fas fa-filter"></i> Filtros Avançados
                 </button>
@@ -124,7 +70,7 @@ const FiltrosLancamentos = ({ onFiltrosChange, contas }) => {
                     <label>Conta</label>
                     <select name="idConta" className="fc-select" value={filtros.idConta} onChange={handleInputChange}>
                         <option value="">Todas as Contas</option>
-                        {contas.map(conta => (
+                        {(window.contasCache || []).map(conta => (
                             <option key={conta.id} value={conta.id}>{conta.nome_conta}</option>
                         ))}
                     </select>
@@ -142,7 +88,7 @@ const FiltrosLancamentos = ({ onFiltrosChange, contas }) => {
                 </div>
 
                 <div className="fc-form-grupo full-width button-container">
-                    <button type="button" className="fc-btn fc-btn-secundario" onClick={limparFiltros}>
+                    <button type="button" className="fc-btn fc-btn-secundario" onClick={onLimparFiltros}>
                         <i className="fas fa-times-circle"></i> Limpar Filtros
                     </button>
                 </div>
@@ -150,5 +96,4 @@ const FiltrosLancamentos = ({ onFiltrosChange, contas }) => {
         </>
     );
 };
-
 export default FiltrosLancamentos;

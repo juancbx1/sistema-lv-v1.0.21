@@ -2973,13 +2973,14 @@ function mudarAba(abaAtiva) {
             // O dashboard já foi renderizado na inicialização, não precisa fazer nada.
             break;
         case 'lancamentos':
+            // Se for a primeira vez, renderiza.
             if (window.renderizarLancamentosReact && !lancamentosReactRenderizado) {
                 window.renderizarLancamentosReact();
                 lancamentosReactRenderizado = true;
-            } else {
-                // Esta linha está perfeita e vai funcionar com a nova lógica do React
-                window.dispatchEvent(new CustomEvent('resetarLancamentosView'));
-            }
+            } 
+            // <<< MUDANÇA: NÃO FAZ NADA se não for a primeira vez >>>
+            // Apenas mostra o componente que estava escondido.
+            // O evento de reset só será disparado por ações externas (aprovação, etc).
             break;
         case 'agenda':
         // Só carrega se o container estiver vazio (primeira vez que abre a aba)

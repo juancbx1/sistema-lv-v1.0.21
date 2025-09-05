@@ -2216,7 +2216,7 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
     }
     .lancamento-valor {
         align-self: flex-end;
-        font-size: 1.8rem;
+        font-size: 1.6rem;
     }
     .card-footer {
         flex-direction: column;
@@ -2456,13 +2456,20 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
     }
 
     .fc-btn-icon {
-    width: 34px;
-    height: 34px;
+        width: 34px;
+        height: 34px;
     }
 
     .log-item-detalhes {
-    font-size: 0.8rem;
+        font-size: 0.8rem;
     }
+    .meta-info {
+        font-size: 0.75rem;
+    }
+    .fc-section-title{
+        font-size: 1.02rem;
+    }
+
 
 }
 
@@ -2498,6 +2505,10 @@ main.fc-main-container > .fc-content-wrapper > .fc-header {
     }
 
     .btn-voltar-header .fa-chevron-left{
-    font-size: 1rem;
+        font-size: 1rem;
+    }
+
+    .meta-info {
+        font-size: 0.65rem;
     }
 }

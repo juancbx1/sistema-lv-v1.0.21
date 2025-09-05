@@ -5,6 +5,7 @@ import FiltrosLancamentos from './FiltrosLancamentos.jsx';
 import { renderizarPaginacao } from '/js/utils/Paginacao.js';
 import NaoEncontradoBusca from './NaoEncontradoBusca.jsx';
 
+// Funções auxiliares
 const getLocalDateString = () => {
     const date = new Date();
     const timezoneOffset = date.getTimezoneOffset() * 60000;
@@ -12,6 +13,17 @@ const getLocalDateString = () => {
     return localDate.toISOString().split('T')[0];
 };
 
+const getInitialFilters = (resetCompleto = false) => {
+    const hoje = getLocalDateString();
+    return {
+        termoBusca: '',
+        dataInicio: resetCompleto ? '' : hoje,
+        dataFim: resetCompleto ? '' : hoje,
+        tipo: '', idConta: '', tipoRateio: ''
+    };
+};
+
+// Componentes de UI
 const LoadingSpinner = () => (
     <div className="fc-spinner-container">
         <div className="fc-spinner-dots"><div className="dot-1"></div><div className="dot-2"></div><div className="dot-3"></div></div>
@@ -23,25 +35,17 @@ const ErrorMessage = ({ message }) => (
     <p style={{ color: 'red', textAlign: 'center', padding: '20px' }}>{message}</p>
 );
 
+// Componente principal
 const LancamentosView = () => {
-    // ESTADO PRINCIPAL: Tudo o que a view precisa para renderizar
     const [lancamentos, setLancamentos] = useState([]);
     const [paginacao, setPaginacao] = useState({ currentPage: 1, totalPages: 1 });
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [filtros, setFiltros] = useState(() => {
-        // Inicializa o estado dos filtros diretamente com a data de hoje
-        const hoje = getLocalDateString();
-        return {
-            termoBusca: '', dataInicio: hoje, dataFim: hoje,
-            tipo: '', idConta: '', tipoRateio: ''
-        };
-    });
-    const [viewKey, setViewKey] = useState(Date.now()); // Chave para forçar o reset
-
+    const [filtros, setFiltros] = useState(getInitialFilters());
+    const [viewKey, setViewKey] = useState(Date.now());
     const timeoutRef = useRef(null);
 
-    // FUNÇÃO DE BUSCA DE DADOS: Única fonte da verdade para buscar na API
+    // Função de busca de dados
     const fetchData = useCallback(async (page, currentFilters) => {
         setIsLoading(true);
         setError(null);
@@ -69,59 +73,61 @@ const LancamentosView = () => {
         }
     }, []);
 
-    // EFEITO PRINCIPAL: Reage a mudanças nos filtros ou na página para buscar dados
+    // Efeito principal que reage a mudanças para buscar dados
     useEffect(() => {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = setTimeout(() => {
             fetchData(paginacao.currentPage, filtros);
-        }, 300); // Debounce de 300ms
-
+        }, 300);
         return () => clearTimeout(timeoutRef.current);
     }, [filtros, paginacao.currentPage, fetchData]);
 
-    // HANDLER para o reset vindo de fora (troca de aba, aprovação, etc.)
+    // Handler para o reset vindo de fora (troca de aba, aprovação, etc.)
     const handleReset = useCallback(() => {
-        setViewKey(Date.now()); // Apenas muda a key para forçar a remontagem
+        setViewKey(Date.now());
     }, []);
     
-    // EFEITO que "ouve" o mundo exterior
     useEffect(() => {
         window.addEventListener('resetarLancamentosView', handleReset);
         return () => window.removeEventListener('resetarLancamentosView', handleReset);
     }, [handleReset]);
     
-    // HANDLERS para interações da UI
-    const handleFiltrosChange = (novosFiltros) => {
-        // Ao mudar o filtro, sempre volta para a página 1
-        setPaginacao(p => ({ ...p, currentPage: 1 }));
-        setFiltros(novosFiltros);
+    const handleFiltrosChange = (nomeFiltro, valor) => {
+        setFiltros(prevFiltros => {
+            const novosFiltros = { ...prevFiltros, [nomeFiltro]: valor };
+            if (paginacao.currentPage !== 1) {
+                setPaginacao(p => ({ ...p, currentPage: 1 }));
+            }
+            return novosFiltros;
+        });
     };
 
+    const handleLimparFiltros = () => {
+        setFiltros(getInitialFilters(true));
+        setPaginacao(p => ({ ...p, currentPage: 1 }));
+    };
+    
     const handleRefresh = () => {
-        // Ação do botão "Atualizar": busca com os filtros e página atuais
         fetchData(paginacao.currentPage, filtros);
     };
     
+    // Handlers para os modais
+    const handleModalSuccess = handleReset;
     const [expandedCards, setExpandedCards] = useState([]);
     const handleToggleDetails = (cardId) => {
         setExpandedCards(prev => prev.includes(cardId) ? prev.filter(id => id !== cardId) : [...prev, cardId]);
     };
     
-    // HANDLERS para os MODAIS (usando a função de reset)
-    const handleModalSuccess = handleReset; // Após qualquer sucesso no modal, reseta a view
-
     const handleNew = useCallback(() => {
         if (window.renderReactModal) {
             const modalProps = {
                 isOpen: true,
-                lancamentoParaEditar: null, // Nulo para modo de criação
+                lancamentoParaEditar: null,
+                onSuccess: handleModalSuccess,
                 contas: window.contasCache || [],
                 categorias: window.categoriasCache || [],
                 grupos: window.gruposCache || [],
-                permissoes: window.permissoesGlobaisFinanceiro || [],
-                onSuccess: () => {
-                    handleRefresh();
-                }
+                permissoes: window.permissoesGlobaisFinanceiro || []
             };
             modalProps.onClose = () => window.renderReactModal({ ...modalProps, isOpen: false });
             window.renderReactModal(modalProps);
@@ -133,31 +139,26 @@ const LancamentosView = () => {
             const modalProps = {
                 isOpen: true,
                 lancamentoParaEditar: lancamento,
+                onSuccess: handleModalSuccess,
                 contas: window.contasCache || [],
                 categorias: window.categoriasCache || [],
                 grupos: window.gruposCache || [],
-                permissoes: window.permissoesGlobaisFinanceiro || [],
-                onSuccess: () => {
-                    handleRefresh();
-                }
+                permissoes: window.permissoesGlobaisFinanceiro || []
             };
             modalProps.onClose = () => window.renderReactModal({ ...modalProps, isOpen: false });
             window.renderReactModal(modalProps);
         }
     }, [handleModalSuccess]);
 
-    // Expondo a função de abrir modal para o JS legado
     useEffect(() => {
         window.abrirModalNovoLancamentoReact = handleNew;
         return () => { delete window.abrirModalNovoLancamentoReact; };
     }, [handleNew]);
 
-    // Handlers que chamam o JS legado
+    // Handlers que chamam o JS Legado
     const handleDelete = (lancamento) => {
-    if (window.solicitarExclusaoLancamento) {
-        window.solicitarExclusaoLancamento(lancamento);
-    }
-};
+        if (window.solicitarExclusaoLancamento) window.solicitarExclusaoLancamento(lancamento);
+    };
     const handleEstorno = (lancamento) => {
         if (window.abrirModalEstorno) window.abrirModalEstorno(lancamento);
     };
@@ -165,18 +166,20 @@ const LancamentosView = () => {
         if (window.reverterEstorno) window.reverterEstorno(lancamentoId);
     };
 
-    // Efeito para renderizar a paginação legada
+    // Efeito para renderizar a Paginação Legada
     useEffect(() => {
         const paginacaoContainer = document.getElementById('paginacaoLancamentosContainer');
-        if (paginacaoContainer) {
+        if (paginacaoContainer && !isLoading) {
             renderizarPaginacao(
                 paginacaoContainer,
                 paginacao.totalPages,
                 paginacao.currentPage,
                 (novaPagina) => setPaginacao(p => ({ ...p, currentPage: novaPagina }))
             );
+        } else if (paginacaoContainer) {
+            paginacaoContainer.innerHTML = '';
         }
-    }, [paginacao]);
+    }, [paginacao, isLoading]);
 
     return (
         <div key={viewKey} className="fc-section-container">
@@ -192,9 +195,11 @@ const LancamentosView = () => {
                 </button>
             </header>
             
-            <FiltrosLancamentos 
+             <FiltrosLancamentos 
+                filtros={filtros}
                 onFiltrosChange={handleFiltrosChange}
-                contas={window.contasCache || []}
+                onLimparFiltros={handleLimparFiltros}
+                // <<< MUDANÇA: Remova a prop `contas` daqui >>>
             />
             
             <div id="cards-container-react">
