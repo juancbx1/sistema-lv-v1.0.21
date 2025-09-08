@@ -260,6 +260,147 @@ main.ds-container-principal > .ds-card {
 }
 
 
+/* --- NOVOS ESTILOS PARA A CENTRAL DE CICLOS --- */
+
+/* Container principal dos cards de ciclo */
+#ciclos-container {
+    display: flex;
+    flex-direction: column;
+    gap: 25px; /* Espaço entre o card do ciclo atual e o próximo */
+}
+
+/* Estilo para cada card de ciclo */
+.ds-ciclo-card {
+    background-color: var(--ds-cor-branco);
+    border: 1px solid var(--ds-cor-cinza-borda);
+    border-radius: var(--ds-raio-borda);
+    box-shadow: var(--ds-sombra-padrao);
+    overflow: hidden; /* Garante que as bordas arredondadas sejam respeitadas */
+}
+
+.ds-ciclo-header {
+    background-color: #f8f9fa;
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--ds-cor-cinza-borda);
+}
+
+.ds-ciclo-header h3 {
+    margin: 0;
+    font-size: 1.3rem;
+    color: var(--ds-cor-azul-escuro);
+}
+.ds-ciclo-header h3 .status-atual {
+    color: var(--ds-cor-primaria);
+    font-style: italic;
+    font-size: 0.9em;
+}
+.ds-ciclo-header h3 .status-proximo {
+    color: var(--ds-cor-cinza-texto-secundario);
+    font-style: italic;
+    font-size: 0.9em;
+}
+
+.ds-ciclo-body {
+    padding: 20px;
+}
+
+/* Totalizador que fica dentro do corpo do card */
+.ds-ciclo-total {
+    text-align: right;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--ds-cor-texto-principal);
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+.ds-ciclo-total span {
+    color: var(--ds-cor-sucesso);
+    font-size: 1.3em;
+}
+
+/* Lista de semanas dentro do card */
+.ds-semanas-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.ds-semana-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background-color: var(--ds-cor-cinza-claro-fundo);
+    border-radius: 8px;
+    border-left: 4px solid var(--ds-cor-cinza-borda);
+}
+
+.ds-semana-item.semana-atual {
+    border-left-color: var(--ds-cor-primaria);
+}
+.ds-semana-item.semana-passada {
+    border-left-color: var(--ds-cor-sucesso);
+}
+
+.ds-semana-info .periodo { font-weight: 600; }
+.ds-semana-info .status { font-size: 0.9rem; color: var(--ds-cor-cinza-texto-secundario); }
+
+.ds-semana-pontos { 
+    font-size: 1.2rem; 
+    font-weight: 700; 
+    color: var(--ds-cor-azul-escuro); 
+}
+.ds-semana-pontos.zerado { color: var(--ds-cor-cinza-texto-secundario); }
+
+
+/* --- ESTILOS PARA O ACORDEÃO DO PRÓXIMO CICLO --- */
+
+.ds-ciclo-acordeao .ds-ciclo-header {
+    cursor: pointer; /* Indica que o cabeçalho é clicável */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background-color 0.2s ease;
+}
+
+.ds-ciclo-acordeao .ds-ciclo-header:hover {
+    background-color: #e9ecef; /* Um leve destaque no hover */
+}
+
+.ds-ciclo-acordeao .ds-acordeao-icone {
+    font-size: 1.2rem;
+    color: var(--ds-cor-cinza-texto-secundario);
+    transition: transform 0.3s ease-in-out;
+}
+
+/* Gira o ícone quando o acordeão está ativo */
+.ds-ciclo-acordeao .ds-ciclo-header.ativo .ds-acordeao-icone {
+    transform: rotate(180deg);
+}
+
+.ds-ciclo-body {
+    /* A transição será no max-height para o efeito de "deslizar" */
+    max-height: 0;
+    overflow: hidden;
+    padding: 0 20px; /* Remove padding vertical, mantém horizontal */
+    transition: max-height 0.4s ease-in-out, padding 0.4s ease-in-out;
+}
+
+/* O corpo do card de ciclo atual (não acordeão) precisa ser sempre visível */
+.ds-ciclo-card:not(.ds-ciclo-acordeao) .ds-ciclo-body {
+    max-height: 2000px; /* Um valor alto para garantir que sempre caiba */
+    padding: 20px;
+}
+
+/* Quando o acordeão está ativo, expande o corpo */
+.ds-ciclo-acordeao .ds-ciclo-header.ativo + .ds-ciclo-body {
+    max-height: 2000px;
+    padding: 20px;
+    border-top: 1px solid var(--ds-cor-cinza-borda);
+}
+
+
 /* Responsividade */
 @media (max-width: 480px) {
     .ds-header-conteudo {

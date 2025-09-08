@@ -191,43 +191,6 @@ router.put('/me/avatar', async (req, res) => {
     }
 });
 
-// NOVA ROTA PUT para definir o badge em destaque do usuário
-router.put('/me/badge', async (req, res) => {
-    const { id: usuarioId } = req.usuarioLogado;
-    const { badgeId } = req.body; // Recebe o ID da conquista escolhida
-    let dbClient;
-
-    try {
-        dbClient = await pool.connect();
-
-        // Segurança (Opcional, mas recomendado): Verificar se o usuário realmente possui essa conquista
-        if (badgeId) { // Se for null, significa que o usuário quer remover o badge
-            const checkQuery = 'SELECT 1 FROM usuario_conquistas WHERE id_usuario = $1 AND id_conquista = $2';
-            const checkResult = await dbClient.query(checkQuery, [usuarioId, badgeId]);
-            if (checkResult.rowCount === 0) {
-                return res.status(403).json({ error: 'Permissão negada. Você não possui esta conquista.' });
-            }
-        }
-        
-        // Atualiza a coluna na tabela de usuários
-        const queryText = `
-            UPDATE usuarios
-            SET badge_destaque_id = $1
-            WHERE id = $2
-            RETURNING id, badge_destaque_id;
-        `;
-        const result = await dbClient.query(queryText, [badgeId, usuarioId]);
-
-        res.status(200).json({ message: 'Badge em destaque atualizado!', usuario: result.rows[0] });
-
-    } catch (error) {
-        console.error('[API PUT /me/badge] Erro na rota:', error);
-        res.status(500).json({ error: 'Erro interno ao atualizar o badge.' });
-    } finally {
-        if (dbClient) dbClient.release();
-    }
-});
-
 // GET /api/usuarios
 router.get('/', async (req, res) => {
     const { dbCliente } = req;

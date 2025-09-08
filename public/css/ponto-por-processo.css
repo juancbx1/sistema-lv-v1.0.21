@@ -108,7 +108,7 @@ body.menu-aberto .ppp-container-principal { /* Adapte para a classe do seu menu 
     border-radius: var(--ppp-raio-borda-input);
     background-color: var(--ppp-cor-fundo-pagina);
     font-size: 0.95rem;
-    min-width: 200px;
+    min-width: 120px;
 }
 .ppp-select:focus,
 .ppp-input:focus {
@@ -251,99 +251,393 @@ body.menu-aberto .ppp-container-principal { /* Adapte para a classe do seu menu 
 @keyframes ppp-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 .ppp-carregando, .ppp-erro-carregar { text-align: center; color: var(--ppp-cor-cinza-medio-texto); font-style: italic; }
 
+/* ==========================================================================
+   Estilos para os Modais Dinâmicos
+   ========================================================================== */
+
+.ppp-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.ppp-modal-content {
+    background-color: var(--ppp-cor-branco);
+    padding: 25px 30px;
+    border-radius: var(--ppp-raio-borda-padrao);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    width: 90%;
+    max-width: 500px;
+}
+
+.ppp-modal-content h2 {
+    color: var(--ppp-cor-azul-escuro);
+    margin-top: 0;
+    margin-bottom: 15px;
+}
+
+.ppp-modal-content p {
+    margin-bottom: 20px;
+    color: var(--ppp-cor-cinza-medio-texto);
+    font-size: 0.95rem;
+}
+
+.ppp-form-group {
+    margin-bottom: 20px;
+}
+
+.ppp-form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.ppp-form-group .ppp-input {
+    width: 100%;
+}
+
+.ppp-modal-actions {
+    margin-top: 30px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+/* ==========================================================================
+   Estilos Específicos para o Modal de Condições
+   ========================================================================== */
+
+.ppp-card-nova-condicao {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: var(--ppp-raio-borda-padrao);
+    padding: 20px;
+    margin-top: 25px;
+}
+
+.ppp-card-nova-condicao h4 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: var(--ppp-cor-azul-escuro);
+}
+
+.ppp-form-row {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.ppp-form-row .ppp-form-group {
+    flex: 1; /* Faz os grupos de formulário dividirem o espaço */
+    margin-bottom: 0;
+}
+
+.ppp-sem-condicoes {
+    text-align: center;
+    color: var(--ppp-cor-cinza-medio-texto);
+    font-style: italic;
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-radius: var(--ppp-raio-borda-input);
+}
+
+.ppp-condicao-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    border-bottom: 1px solid #ecf0f1;
+}
+
+.ppp-condicao-item:last-child {
+    border-bottom: none;
+}
+
+.ppp-botao-remover-cond {
+    background-color: transparent;
+    border: none;
+    color: var(--ppp-cor-vermelho-erro);
+    font-size: 1.5rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 5px;
+    border-radius: 50%;
+}
+.ppp-botao-remover-cond:hover {
+    background-color: #f8d7da;
+}
+
+/* Bloco de CSS para as Abas */
+
+.ppp-tabs-container {
+    display: flex;
+    border-bottom: 2px solid var(--ppp-cor-cinza-borda);
+    margin-bottom: 25px;
+}
+
+.ppp-tab-btn {
+    padding: 12px 20px;
+    cursor: pointer;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--ppp-cor-cinza-medio-texto);
+    transition: all 0.2s ease;
+    margin-bottom: -2px; /* Alinha com a borda principal */
+    display: inline-flex; /* Para alinhar ícone e texto */
+    align-items: center;
+    gap: 8px; /* Espaço entre ícone e texto */
+}
+
+.ppp-tab-btn:hover {
+    color: var(--ppp-cor-azul-claro);
+    background-color: #f8f9fa; /* Um leve destaque no hover */
+}
+
+.ppp-tab-btn.active {
+    color: var(--ppp-cor-azul-escuro);
+    border-bottom-color: var(--ppp-cor-azul-claro);
+    font-weight: 600;
+}
+
+.ppp-tab-panel {
+    display: none; /* ESSA LINHA ESCONDE OS PAINÉIS INATIVOS */
+}
+
+.ppp-tab-panel.active {
+    display: block; /* ESSA LINHA MOSTRA O PAINEL ATIVO */
+}
+
+/* ==========================================================================
+   Estilos para o Layout Acordeão de Metas
+   ========================================================================== */
+
+.ppp-grupo-acordeao {
+    border: 1px solid var(--ppp-cor-cinza-borda);
+    border-radius: var(--ppp-raio-borda-padrao);
+    margin-bottom: 15px;
+    overflow: hidden; /* Garante que as bordas arredondadas funcionem */
+}
+
+.ppp-acordeao-cabecalho {
+    background-color: #f8f9fa;
+    padding: 15px 20px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background-color 0.2s ease;
+}
+
+.ppp-acordeao-cabecalho:hover {
+    background-color: #e9ecef;
+}
+
+.ppp-acordeao-cabecalho h4 {
+    margin: 0;
+    color: var(--ppp-cor-azul-escuro);
+    font-size: 1.2rem;
+}
+
+.ppp-acordeao-cabecalho .ppp-acordeao-icone {
+    font-size: 1rem;
+    color: var(--ppp-cor-cinza-medio-texto);
+    transition: transform 0.3s ease;
+}
+
+.ppp-acordeao-cabecalho.ativo .ppp-acordeao-icone {
+    transform: rotate(180deg);
+}
+
+.ppp-acordeao-conteudo {
+    padding: 0; /* O padding será controlado pela tabela/container interno */
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease-in-out, padding 0.4s ease-in-out;
+}
+
+.ppp-acordeao-conteudo.ativo {
+    /* Um valor alto para garantir que caberá qualquer conteúdo */
+    max-height: 2000px; 
+    padding: 20px;
+    border-top: 1px solid var(--ppp-cor-cinza-borda);
+}
+
+.ppp-cards-container-mobile {
+    display: none;
+}
+
 /* --- BREAKPOINTS --- */
 
-/* Telas de Tablet e Desktops Pequenos (ex: iPads em paisagem) */
-@media (min-width: 769px) and (max-width: 1024px) {
+/* ==========================================================================
+   Responsividade Mobile
+   ========================================================================== */
+
+/* --- 1. Tablets (1024px) --- */
+@media (max-width: 1024px) {
     .ppp-container-principal {
         padding: 20px;
     }
+
     .ppp-cabecalho-pagina h1 {
         font-size: 1.8rem;
     }
+
     .ppp-titulo-secao {
         font-size: 1.4rem;
     }
-    /* Mantém filtros em linha se couber, ou ajusta o gap */
+
     .ppp-filtros {
-        gap: 20px;
-    }
-    .ppp-filtros-esquerda {
-        gap: 20px;
+        flex-wrap: wrap; /* Permite que os itens quebrem a linha */
+        gap: 15px;
     }
 }
 
-/* Telas Menores (Smartphones Médios - ex: iPhone 14 Pro Max tem ~430px) */
+/* --- 2. Mobiles Gerais (768px) - A grande transformação --- */
+@media (max-width: 768px) {
+    .ppp-filtros {
+        flex-direction: column;
+        align-items: stretch; /* Itens ocupam 100% da largura */
+    }
+
+    /* Esconde a tabela original no mobile */
+    .ppp-tabela-container {
+        display: none;
+    }
+
+    /* Cria o container para os novos cards mobile */
+    .ppp-cards-container-mobile {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .ppp-card-regra-mobile {
+        background-color: var(--ppp-cor-branco);
+        border: 1px solid var(--ppp-cor-cinza-borda);
+        border-radius: var(--ppp-raio-borda-padrao);
+        box-shadow: var(--ppp-sombra-padrao);
+    }
+
+    .ppp-card-header {
+        background-color: #f8f9fa;
+        padding: 12px 15px;
+        border-bottom: 1px solid var(--ppp-cor-cinza-borda);
+    }
+
+    .ppp-card-header input {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--ppp-cor-azul-escuro);
+        border: none;
+        background: none;
+        width: 100%;
+        padding: 5px;
+        border-radius: 4px;
+    }
+    .ppp-card-header input:focus {
+        outline: none;
+        box-shadow: 0 0 0 2px var(--ppp-cor-azul-claro);
+    }
+
+    .ppp-card-body {
+        padding: 15px;
+        display: grid;
+        grid-template-columns: 1fr 1fr; /* Duas colunas para os dados */
+        gap: 15px;
+    }
+
+    .ppp-card-data-point {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .ppp-card-data-point label {
+        font-size: 0.8rem;
+        color: var(--ppp-cor-cinza-medio-texto);
+        margin-bottom: 5px;
+    }
+    
+    .ppp-card-data-point input {
+        font-size: 1rem;
+        font-weight: 500;
+        border: 1px solid var(--ppp-cor-cinza-borda);
+        border-radius: var(--ppp-raio-borda-input);
+        padding: 8px;
+        width: 100%;
+    }
+
+    .ppp-card-footer {
+        padding: 15px;
+        border-top: 1px solid #f0f0f0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    
+    .ppp-card-footer .ppp-botao-acoes {
+        display: flex;
+        gap: 10px;
+    }
+}
+
+/* --- 3. Telas Menores (480px) --- */
 @media (max-width: 480px) {
     .ppp-container-principal {
         padding: 15px;
     }
+
     .ppp-cabecalho-pagina h1 {
         font-size: 1.5rem;
-        margin-bottom: 20px;
     }
-    .ppp-titulo-secao {
-        font-size: 1.25rem;
+    
+    .ppp-tab-btn {
+        font-size: 1rem;
+        padding: 10px 15px;
     }
-    .ppp-filtros {
-        flex-direction: column; /* Empilha tudo */
-        align-items: stretch; /* Faz os elementos ocuparem a largura */
+
+    .ppp-acordeao-cabecalho h4 {
+        font-size: 1.1rem;
     }
-    .ppp-filtros-esquerda {
-        flex-direction: column;
-        align-items: stretch;
-        width: 100%;
+
+    /* No card mobile, faz os dados ficarem em uma coluna só */
+    .ppp-card-body {
+        grid-template-columns: 1fr;
     }
-    .ppp-grupo-filtro {
-        width: 100%;
+
+    .ppp-grupo-filtro{
+        flex-wrap: wrap;
     }
-    .ppp-select, .ppp-input {
-        min-width: unset; /* Remove largura mínima */
-        width: 100%;
+
+    .ppp-select, .ppp-input{
+        max-width: 250px;
     }
-    .ppp-botao-adicionar {
-        width: 100%; /* Botão de adicionar ocupa largura total */
-        margin-top: 10px;
-    }
-    .ppp-tabela {
-        font-size: 0.8rem; /* Reduz fonte da tabela */
-    }
-    .ppp-tabela th, .ppp-tabela td {
-        padding: 8px 10px;
-    }
-    .ppp-tabela input[type="number"] {
-        width: 60px; /* Input de pontos menor */
-        padding: 5px;
-    }
-    .ppp-tabela .ppp-botao {
-        padding: 6px 10px;
-        font-size: 0.8rem;
-    }
-    .ppp-tabela .ppp-botao i {
-        margin-right: 4px; /* Menos espaço para ícone */
+
+    .ppp-botao{
+        max-width: 250px;
     }
 }
 
-/* Telas Ainda Menores (ex: iPhone SE tem 375px) */
+/* --- 4. Telas Ainda Menores (414px) --- */
 @media (max-width: 414px) {
     .ppp-container-principal {
         padding: 10px;
     }
-    .ppp-cabecalho-pagina h1 {
-        font-size: 1.3rem;
-    }
-    .ppp-titulo-secao {
-        font-size: 1.15rem;
-    }
-    /* Outros ajustes finos se necessário, herdando do 480px */
-    .ppp-tabela th, .ppp-tabela td {
-        padding: 6px 8px;
-    }
-     .ppp-tabela .ppp-botao {
-        font-size: 0.75rem; /* Botões ainda menores */
-        gap: 4px;
-    }
-    .ppp-tabela .ppp-botao i {
-        display: none; /* Esconder ícones se o espaço for muito pequeno */
+
+    .ppp-tab-btn {
+        font-size: 0.9rem;
+        padding: 10px;
+        gap: 5px;
     }
 }

@@ -4,7 +4,7 @@
 // 1. IMPORTS DE MÓDULOS E UTILITÁRIOS
 // ==========================================================================
 import { verificarAutenticacao, logout } from '/js/utils/auth.js';
-import { obterMetas, calcularComissaoSemanal } from '/js/utils/metas.js'; // Usando o novo utilitário de metas unificado
+import { obterMetas, calcularComissaoSemanal, verificarCondicoes  } from '/js/utils/metas.js'; // Usando o novo utilitário de metas unificado
 import { getObjetoCicloCompletoAtual } from '/js/utils/ciclos.js';
 import { formatarData } from '/js/utils/date-utils.js';
 
@@ -16,10 +16,12 @@ import { formatarData } from '/js/utils/date-utils.js';
 let usuarioLogado = null;
 let dadosDashboardCache = null; // Armazenará a resposta completa da API /api/dashboard/desempenho
 let todasAsAtividadesRelevantes = [];
+let listaDeProdutosCache = null;
 
 // Controle de UI e Filtros
 let paginaAtualDetalhes = 1;
 const ITENS_POR_PAGINA_DETALHES = 8;
+
 
 // --- Estado dos Filtros de Detalhamento ---
 let filtrosAtivosDetalhes = {
@@ -41,7 +43,6 @@ let filtrosAtivosDetalhes = {
  */
 async function carregarDadosDashboard(forceRefresh = false) {
     if (dadosDashboardCache && !forceRefresh) {
-        console.log('[carregarDadosDashboard] Usando dados em cache.');
         return dadosDashboardCache;
     }
 
@@ -64,6 +65,21 @@ async function carregarDadosDashboard(forceRefresh = false) {
         console.error('[carregarDadosDashboard] Erro:', error.message);
         mostrarPopup('Erro ao carregar seus dados. Por favor, tente recarregar a página.', 'erro');
         return null; // Retorna nulo para que as funções chamadoras saibam do erro.
+    }
+}
+
+// Crie uma nova função para buscar os produtos
+async function carregarProdutos() {
+    if (listaDeProdutosCache) return listaDeProdutosCache;
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('/api/produtos', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (!response.ok) throw new Error('Falha ao buscar produtos');
+        listaDeProdutosCache = await response.json();
+        return listaDeProdutosCache;
+    } catch (error) {
+        console.error("Erro ao carregar produtos:", error);
+        return []; // Retorna array vazio em caso de erro
     }
 }
 
@@ -225,6 +241,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         usuarioLogado = auth.usuario; // Define o usuário logado globalmente
         document.body.classList.add('autenticado');
 
+        await carregarProdutos(); // Carrega os produtos na inicialização
         // Chama a função principal que carrega e renderiza todos os dados
         await atualizarDashboardCompleto(true);
 
@@ -311,8 +328,6 @@ async function atualizarDashboardCompleto(forceRefresh = false, mostrarSpinner =
         // O detalhamento também usa a lista unificada.
         atualizarDetalhamentoAtividades(); // Agora não precisa de parâmetro, usará a variável global
 
-        // As conquistas são independentes.
-        preencherTotalConquistas();
 
         } catch (error) {
         console.error('[atualizarDashboardCompleto] Erro inesperado ao atualizar a UI:', error);
@@ -324,26 +339,6 @@ async function atualizarDashboardCompleto(forceRefresh = false, mostrarSpinner =
     }
 }
 
-/**
- * Busca o perfil do usuário para preencher o total de conquistas na métrica.
- */
-async function preencherTotalConquistas() {
-    const metricaConquistasEl = document.getElementById('metrica-conquistas');
-    try {
-        const response = await fetch('/api/perfis/meu-perfil', {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
-        if (response.ok) {
-            const perfil = await response.json();
-            metricaConquistasEl.textContent = perfil.conquistas.filter(c => c.desbloqueada).length;
-        } else {
-            metricaConquistasEl.textContent = '0';
-        }
-    } catch (error) {
-        console.error("Erro ao buscar total de conquistas para a métrica:", error);
-        metricaConquistasEl.textContent = '0';
-    }
-}
 
 async function atualizarPainelDesempenho(usuario, cicloAtual) {
     // --- 1. REFERÊNCIAS AOS ELEMENTOS DO DOM ---
@@ -363,8 +358,6 @@ async function atualizarPainelDesempenho(usuario, cicloAtual) {
     const feedbackMetaEl = document.getElementById('feedback-meta-selecionada');
     const feedbackComissaoEl = document.getElementById('feedback-comissao');
     const feedbackPontosFaltantesEl = document.getElementById('feedback-pontos-faltantes');
-    const metricaPontosSemanaEl = document.getElementById('metrica-pontos-semana');
-    const metricaMediaDiariaEl = document.getElementById('metrica-media-diaria');
 
     if (!cicloAtual) {
         document.querySelector('.ds-painel-desempenho').innerHTML = '<p style="text-align:center; padding: 20px;">Nenhum ciclo de trabalho ativo no momento.</p>';
@@ -376,8 +369,9 @@ async function atualizarPainelDesempenho(usuario, cicloAtual) {
     const pontosMetaSalva = localStorage.getItem(`metaSelecionada_${usuario.nome}`);
     let metaSelecionada = metasDoNivel.find(m => m.pontos_meta == pontosMetaSalva) || metasDoNivel[0];
     if (!metaSelecionada) {
-        metaSelecionada = { pontos_meta: 0, descricao: "Nenhuma", valor: 0 };
+        metaSelecionada = { pontos_meta: 0, descricao: "Nenhuma", valor: 0, condicoes: [] };
     }
+
     const pontosMetaSemanal = metaSelecionada.pontos_meta;
 
     const hoje = new Date();
@@ -395,6 +389,12 @@ async function atualizarPainelDesempenho(usuario, cicloAtual) {
     const pontosFeitosHoje = atividadesDaSemana
         .filter(item => new Date(item.data).toDateString() === hoje.toDateString())
         .reduce((acc, item) => acc + (parseFloat(item.pontos_gerados) || 0), 0);
+
+    const resultadoComissao = await calcularComissaoSemanal(totalPontosSemana, usuario.tipo, usuario.nivel, atividadesDaSemana, listaDeProdutosCache, new Date());
+    
+    const progressoParaExibir = resultadoComissao.condicoesCumpridas ? [] : resultadoComissao.progressoCondicoes;
+    renderizarObjetivosMeta(progressoParaExibir, metaSelecionada);
+
     
     const metaDiariaFixa = pontosMetaSemanal > 0 ? pontosMetaSemanal / 5 : 0;
     
@@ -404,63 +404,56 @@ async function atualizarPainelDesempenho(usuario, cicloAtual) {
     legendaFeitosDiaStrong.textContent = `${Math.round(pontosFeitosHoje)} pts`;
     
     let ritmoSugeridoParaHoje = 0;
-    if (diaDaSemana >= 1 && diaDaSemana <= 5) {
+     if (diaDaSemana >= 1 && diaDaSemana <= 5) {
         const diasRestantes = 6 - diaDaSemana;
         const pontosFaltantesSemana = Math.max(0, pontosMetaSemanal - totalPontosSemana);
         ritmoSugeridoParaHoje = pontosFaltantesSemana > 0 ? pontosFaltantesSemana / diasRestantes : 0;
     }
     legendaRitmoDiaStrong.textContent = `${Math.round(ritmoSugeridoParaHoje)} pts`;
 
-    const progressoAnelPercentual = ritmoSugeridoParaHoje > 0 ? (pontosFeitosHoje / ritmoSugeridoParaHoje) * 100 : 0;
+    const progressoAnelPercentual = ritmoSugeridoParaHoje > 0 ? (pontosFeitosHoje / ritmoSugeridoParaHoje) * 100 : (pontosFeitosHoje > 0 ? 100 : 0);
     const raio = progressRingFgEl.r.baseVal.value;
     const circunferencia = 2 * Math.PI * raio;
     progressRingFgEl.style.strokeDasharray = `${circunferencia} ${circunferencia}`;
     const progressoFinal = Math.min(progressoAnelPercentual, 100);
     progressRingFgEl.style.strokeDashoffset = circunferencia - (progressoFinal / 100) * circunferencia;
 
-    if (totalPontosSemana >= pontosMetaSemanal && pontosMetaSemanal > 0) {
+    if (resultadoComissao.valor > 0) { // A meta FOI 100% batida (pontos + condições)
         // ESTADO 3: "O BÔNUS"
         focoDiarioEl.classList.add('sucesso');
         progressRingFgEl.style.stroke = 'var(--ds-cor-sucesso)';
         textoPrincipalEl.textContent = '🎉';
         textoSecundarioEl.textContent = 'Semana Completa!';
         pilulasApoioContainer.style.opacity = '0';
-        const pontosExtras = totalPontosSemana - pontosMetaSemanal;
-        feedbackDiarioContainer.innerHTML = `<div class="ds-feedback-diario-pilula status-bonus-semana">Incrível! Pontos Extras: <strong>${Math.round(pontosExtras)}</strong></div>`;
+        feedbackDiarioContainer.innerHTML = `<div class="ds-feedback-diario-pilula status-bonus-semana">Parabéns! Meta semanal completa!</div>`;
 
-    } else if (pontosFeitosHoje >= metaDiariaFixa && metaDiariaFixa > 0) {
-        // ESTADO 2: "A CELEBRAÇÃO"
+    } else if (totalPontosSemana >= pontosMetaSemanal && pontosMetaSemanal > 0) { // Pontos batidos, mas condições pendentes
         focoDiarioEl.classList.remove('sucesso');
         progressRingFgEl.style.stroke = 'var(--ds-cor-primaria)';
         textoSecundarioEl.textContent = 'pontos hoje';
         pilulasApoioContainer.style.opacity = '1';
-        feedbackDiarioContainer.innerHTML = `<div class="ds-feedback-diario-pilula status-sucesso-dia">Meta do dia batida! Continue para adiantar a semana!</div>`;
+        feedbackDiarioContainer.innerHTML = `<div class="ds-feedback-diario-pilula status-sucesso-dia">Pontos atingidos! Conclua os objetivos para liberar a comissão!</div>`;
 
-    } else {
-        // ESTADO 1: "A CORRIDA"
+    } else { // Nem os pontos foram batidos ainda
         focoDiarioEl.classList.remove('sucesso');
         progressRingFgEl.style.stroke = 'var(--ds-cor-primaria)';
         textoSecundarioEl.textContent = 'pontos hoje';
         pilulasApoioContainer.style.opacity = '1';
-
+        
+        const metaDiariaFixa = pontosMetaSemanal > 0 ? pontosMetaSemanal / 5 : 0;
         let debitoDeOntem = 0;
         if (diaDaSemana > 1 && diaDaSemana <= 5) {
             const diasUteisPassados = diaDaSemana - 1;
             const metaEsperadaAteOntem = metaDiariaFixa * diasUteisPassados;
             const pontosFeitosAteOntem = totalPontosSemana - pontosFeitosHoje;
-            const debitoCalculado = metaEsperadaAteOntem - pontosFeitosAteOntem;
-            if (debitoCalculado > 0) {
-                debitoDeOntem = debitoCalculado;
-            }
+            debitoDeOntem = Math.max(0, metaEsperadaAteOntem - pontosFeitosAteOntem);
         }
-
+        
         const pontosFaltantesReaisHoje = (metaDiariaFixa > 0 ? metaDiariaFixa - pontosFeitosHoje : 0) + debitoDeOntem;
         let htmlFeedback = `<div>Foco do Dia: Faltam <strong>${Math.ceil(pontosFaltantesReaisHoje)}</strong> pontos</div>`;
-
         if (debitoDeOntem > 0) {
             htmlFeedback += `<span class="ds-feedback-subtitulo">incluindo ${Math.ceil(debitoDeOntem)} pts de ontem</span>`;
         }
-        
         feedbackDiarioContainer.innerHTML = `<div class="ds-feedback-diario-pilula status-foco">${htmlFeedback}</div>`;
     }
 
@@ -476,40 +469,159 @@ async function atualizarPainelDesempenho(usuario, cicloAtual) {
         sliderEl.value = indiceAtual;
         ticksContainerEl.innerHTML = valoresValidos.map(() => '<div class="tick"></div>').join('');
 
-        const atualizarFeedbackSlider = (indice) => {
+        const onSliderInput = () => {
+            const indice = parseInt(sliderEl.value);
             const metaAlvo = metasDoNivel[indice];
             if (!metaAlvo) return;
+            
             feedbackMetaEl.querySelector('span:first-child').textContent = metaAlvo.descricao;
             feedbackMetaEl.querySelector('span:last-child').textContent = `${metaAlvo.pontos_meta} pts`;
             feedbackComissaoEl.textContent = `R$ ${metaAlvo.valor.toFixed(2)}`;
             const faltamParaAlvo = metaAlvo.pontos_meta - totalPontosSemana;
             feedbackPontosFaltantesEl.textContent = `${Math.ceil(Math.max(0, faltamParaAlvo))} pts`;
+            
+            // ATUALIZA OS OBJETIVOS AO MUDAR O SLIDER
+            const verificacaoSlider = verificarCondicoes(atividadesDaSemana, metaAlvo.condicoes, listaDeProdutosCache);
+            renderizarObjetivosMeta(verificacaoSlider.progresso, metaAlvo);
         };
-
-        atualizarFeedbackSlider(indiceAtual);
         
-        sliderEl.oninput = () => {
-            atualizarFeedbackSlider(parseInt(sliderEl.value));
-        };
-
-        sliderEl.onchange = async () => {
+        const onSliderChange = async () => {
             const novaMeta = metasDoNivel[parseInt(sliderEl.value)];
             if (novaMeta) {
                 localStorage.setItem(`metaSelecionada_${usuario.nome}`, novaMeta.pontos_meta);
                 mostrarPopup('Meta semanal atualizada!', 'sucesso', 2000);
-                await atualizarPainelDesempenho(usuario, cicloAtual);
+                await atualizarPainelDesempenho(usuario, cicloAtual); 
             }
         };
+
+        sliderEl.removeEventListener('input', sliderEl.oninput);
+        sliderEl.removeEventListener('change', sliderEl.onchange);
+        
+        sliderEl.oninput = onSliderInput;
+        sliderEl.onchange = onSliderChange;
+
+        // Executa uma vez para inicializar
+        onSliderInput();
     } else {
         sliderEl.style.display = 'none';
         feedbackMetaEl.textContent = 'Nenhuma meta configurada para seu nível.';
     }
+} 
 
-    // Métricas Rápidas
-    metricaPontosSemanaEl.textContent = Math.round(totalPontosSemana);
-    const diasUteisPassadosTotal = (diaDaSemana === 0 || diaDaSemana > 5) ? 5 : diaDaSemana;
-    const mediaDiaria = diasUteisPassadosTotal > 0 ? totalPontosSemana / diasUteisPassadosTotal : 0;
-    metricaMediaDiariaEl.textContent = Math.round(mediaDiaria);
+/**
+ * Cria e gerencia um tooltip informativo centralizado na tela.
+ * @param {string} text - O texto a ser exibido dentro do tooltip.
+ */
+function mostrarTooltip(text) {
+    // Remove qualquer tooltip antigo
+    document.querySelector('.ppp-tooltip-container')?.remove();
+
+    // Cria os elementos
+    const container = document.createElement('div');
+    container.className = 'ppp-tooltip-container';
+    
+    const box = document.createElement('div');
+    box.className = 'ppp-tooltip-box';
+    box.innerHTML = text;
+
+    container.appendChild(box);
+    document.body.appendChild(container);
+    
+    // Mostra com animação (o CSS cuida do resto)
+    requestAnimationFrame(() => {
+        container.classList.add('ativo');
+    });
+
+    // Fecha ao clicar no fundo escurecido (overlay)
+    container.addEventListener('click', (e) => {
+        if (e.target === container) {
+            container.remove();
+        }
+    });
+}
+
+/**
+ * Renderiza o progresso dos objetivos (condições) de uma meta no dashboard.
+ * @param {Array} progressoCondicoes - O array de progresso vindo da verificação de condições.
+ */
+function renderizarObjetivosMeta(progressoCondicoes, metaSelecionada) {
+    const secaoCard = document.getElementById('secao-objetivos-meta');
+    const tituloCard = document.getElementById('objetivos-card-titulo');
+    const container = document.getElementById('objetivos-meta-container');
+
+    if (!secaoCard || !tituloCard || !container) return;
+
+    // Se a meta selecionada não tem condições, esconde o card
+    if (!metaSelecionada || !metaSelecionada.condicoes || metaSelecionada.condicoes.length === 0) {
+        secaoCard.style.display = 'none';
+        return;
+    }
+    
+    // Se há condições, mostra o card
+    secaoCard.style.display = 'block';
+    tituloCard.innerHTML = `
+        Condições da Meta
+        <i id="tooltip-condicoes-icon" class="fas fa-info-circle ppp-tooltip-icon"></i>
+    `;
+
+    // A lógica de renderização usa o 'progressoCondicoes' que já calculamos
+    let html = '';
+    const hoje = new Date();
+    const diaDaSemana = hoje.getDay(); // 0 (Dom) a 6 (Sáb)
+    
+    // <<< A NOVA LÓGICA DE DIAS ÚTEIS ESTÁ AQUI >>>
+    // Mapeia o dia da semana para o número de dias úteis passados
+    // Domingo (0) -> 0 dias úteis; Segunda (1) -> 1 dia útil; ...; Sexta (5) e Sábado (6) -> 5 dias úteis.
+    const diasUteisPassados = Math.max(0, Math.min(5, diaDaSemana === 0 ? 0 : diaDaSemana));
+
+    progressoCondicoes.forEach(progresso => {
+        const percentual = progresso.meta > 0 ? (progresso.feitos / progresso.meta) * 100 : 0;
+        
+        let feedbackHtml = '';
+        if (progresso.cumprida) {
+            feedbackHtml = `
+                <div class="ds-objetivo-feedback-diario status-ok">
+                    <i class="fas fa-check-circle"></i> <strong>Concluído!</strong>
+                </div>`;
+        } else if (diasUteisPassados > 0) {
+            // <<< A NOVA LÓGICA DE CÁLCULO CUMULATIVO >>>
+            const metaPorDiaUtil = progresso.meta / 5;
+            const metaEsperadaHoje = metaPorDiaUtil * diasUteisPassados;
+            
+            if (progresso.feitos >= metaEsperadaHoje) {
+                feedbackHtml = `
+                    <div class="ds-objetivo-feedback-diario status-ok">
+                        <i class="fas fa-thumbs-up"></i> Em dia (Ritmo esperado até hoje: ${Math.ceil(metaEsperadaHoje)})
+                    </div>`;
+            } else {
+                feedbackHtml = `
+                    <div class="ds-objetivo-feedback-diario status-atencao">
+                        <i class="fas fa-exclamation-triangle"></i> Atenção! (Ritmo esperado até hoje: ${Math.ceil(metaEsperadaHoje)})
+                    </div>`;
+            }
+        } else {
+             // Se for domingo (diasUteisPassados = 0), não mostra feedback de ritmo ainda
+             feedbackHtml = `<div class="ds-objetivo-feedback-diario">A semana começa amanhã!</div>`;
+        }
+        
+        const classeCompletoItem = progresso.cumprida ? 'objetivo-completo' : '';
+        const classeCompletoBarra = progresso.cumprida ? 'completo' : '';
+
+        html += `
+            <div class="ds-objetivo-item ${classeCompletoItem}">
+                <div class="ds-objetivo-header">
+                    <span class="ds-objetivo-titulo">${progresso.descricao}</span>
+                    <span class="ds-objetivo-progresso-semanal">${progresso.feitos} / ${progresso.meta}</span>
+                </div>
+                <div class="ds-objetivo-barra-progresso">
+                    <div class="ds-objetivo-preenchimento ${classeCompletoBarra}" style="width: ${Math.min(100, percentual)}%;"></div>
+                </div>
+                ${feedbackHtml}
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
 }
 
 /**
@@ -984,12 +1096,6 @@ function abrirPainelPerfil() {
  * @param {HTMLElement} painelBody - O elemento onde o conteúdo será renderizado.
  */
 function renderizarPerfil(perfil, painelBody) {
-    verificarEnotificarNovasConquistas(perfil.conquistas);
-
-    const todasAsConquistasHtml = perfil.conquistas
-        .map(conquista => criarHtmlDoBadge(conquista, perfil.badge_destaque_id))
-        .join('');
-
     painelBody.innerHTML = `
         <!-- Header do Painel Lateral com Título e Botão de Fechar -->
         <div class="ds-side-painel-header">
@@ -1009,11 +1115,6 @@ function renderizarPerfil(perfil, painelBody) {
                 <p>Nível ${perfil.nivel || 'N/A'}</p>
             </div>
             
-            <!-- Galeria Única de Conquistas -->
-            <h4 class="ds-perfil-secao-titulo">Minhas Conquistas</h4>
-            <div class="ds-galeria-conquistas">
-                ${todasAsConquistasHtml}
-            </div>
         </div>
     `;
 
@@ -1026,58 +1127,7 @@ function renderizarPerfil(perfil, painelBody) {
     if (btnTrocarFoto) {
         btnTrocarFoto.addEventListener('click', abrirModalGaleriaAvatar);
     }
-    
-    // Listener de clique na galeria (VERSÃO CORRIGIDA E SEGURA)
-    const galeria = painelBody.querySelector('.ds-galeria-conquistas');
-    if (galeria) { // << Adiciona esta verificação
-        galeria.addEventListener('click', (e) => {
-            const itemClicado = e.target.closest('.ds-badge-item');
-            if (!itemClicado) return;
 
-            const idConquista = itemClicado.dataset.idConquista;
-            const conquistaSelecionada = perfil.conquistas.find(c => c.id === idConquista);
-            if (conquistaSelecionada) {
-                abrirModalDetalhesConquista(conquistaSelecionada);
-            }
-        });
-    } else {
-        console.error("Elemento .ds-galeria-conquistas não encontrado dentro do painel do perfil.");
-    }
-
-}
-
-/**
- * Função auxiliar para gerar o HTML de um único badge de conquista.
- * @param {object} conquista - O objeto da conquista.
- * @param {string} badgeDestaqueId - O ID do badge atualmente em destaque (se houver).
- * @returns {string} O HTML do badge.
- */
-function criarHtmlDoBadge(conquista, badgeDestaqueId) {
-    const isDesbloqueada = conquista.desbloqueada;
-    const isDestaque = badgeDestaqueId === conquista.id;
-    const classeBloqueado = isDesbloqueada ? '' : 'bloqueado';
-    const classeDestaque = isDestaque ? 'em-destaque' : '';
-    
-    // --- LÓGICA DO TÍTULO CORRIGIDA ---
-    // Se a conquista estiver desbloqueada, o título mostra a descrição.
-    // Se estiver bloqueada, o título é um mistério para incentivar o clique.
-    const titulo = isDesbloqueada 
-        ? `${conquista.nome}: ${conquista.descricao}` 
-        : 'Conquista Secreta (clique para ver a dica)';
-
-    return `
-        <div 
-            class="ds-badge-item ${classeBloqueado} ${classeDestaque}" 
-            title="${titulo}"
-            data-id-conquista="${conquista.id}"
-            data-desbloqueada="${isDesbloqueada}"
-        >
-            <div class="ds-badge-img-wrapper">
-                <img src="${conquista.badge_url}" alt="${conquista.nome}">
-            </div>
-            <p>${isDesbloqueada ? conquista.nome : '???'}</p>
-        </div>
-    `;
 }
 
 /**
@@ -1768,128 +1818,6 @@ async function executarAssinatura(itensParaAssinar) {
 
 
 // ==========================================================================
-// LÓGICA DE CONQUISTAS E PERFIL
-// ==========================================================================
-/**
- * Compara conquistas da API com as salvas localmente e mostra notificações para as novas.
- * @param {Array} conquistasDaApi - Array de conquistas vindo do perfil.
- */
-function verificarEnotificarNovasConquistas(conquistasDaApi) {
-    if (!usuarioLogado) return; // Garante que o usuário já foi definido
-
-    const conquistasDesbloqueadas = conquistasDaApi.filter(c => c.desbloqueada);
-    const idsConquistasSalvas = new Set(JSON.parse(localStorage.getItem(`conquistasVistas_${usuarioLogado.nome}`) || '[]'));
-
-    const novasConquistas = conquistasDesbloqueadas.filter(c => !idsConquistasSalvas.has(c.id));
-
-    if (novasConquistas.length > 0) {
-        setTimeout(() => { // Adiciona um pequeno delay para a notificação não ser tão abrupta
-            const conquista = novasConquistas[0];
-            mostrarPopupNotificacaoConquista(conquista);
-            
-            const todosOsIdsDesbloqueados = conquistasDesbloqueadas.map(c => c.id);
-            localStorage.setItem(`conquistasVistas_${usuarioLogado.nome}`, JSON.stringify(todosOsIdsDesbloqueados));
-        }, 1000); // Delay de 1 segundo
-    } else {
-        // Se não há novas conquistas, apenas garante que o localStorage está sincronizado
-        const todosOsIdsDesbloqueados = conquistasDesbloqueadas.map(c => c.id);
-        localStorage.setItem(`conquistasVistas_${usuarioLogado.nome}`, JSON.stringify(todosOsIdsDesbloqueados));
-    }
-}
-
-/**
- * Mostra um popup customizado para uma nova conquista.
- * @param {object} conquista - O objeto da conquista.
- */
-function mostrarPopupNotificacaoConquista(conquista) {
-    const overlay = document.getElementById('popupGenerico');
-    overlay.innerHTML = `
-        <div class="ds-popup-mensagem popup-conquista">
-            <img src="/img/confetti.gif" class="popup-conquista-confete" alt="">
-            <img src="${conquista.badge_url}" class="popup-conquista-badge" alt="${conquista.nome}">
-            <h3>Conquista Desbloqueada!</h3>
-            <p>${conquista.nome}</p>
-            <div class="popup-conquista-footer">
-                <button id="popupBotaoCompartilhar" class="ds-btn ds-btn-primario ds-btn-texto-claro ">Compartilhar no Mural</button>
-                <button id="popupBotaoFecharConquista" class="ds-btn ds-btn-secundario">Fechar</button>
-            </div>
-        </div>
-    `;
-
-    const fecharPopup = () => {
-        overlay.classList.remove('ativo');
-        // Restaura o HTML original do popup genérico para uso futuro
-        overlay.innerHTML = `
-            <div class="ds-popup-mensagem">
-                <i id="popupIcone" class="fas ds-popup-icone"></i>
-                <p id="popupMensagemTexto"></p>
-                <button id="popupBotaoOk" class="ds-btn ds-btn-primario ds-btn-texto-claro">OK</button>
-            </div>
-        `;
-    };
-    
-    document.getElementById('popupBotaoFecharConquista').onclick = fecharPopup;
-    document.getElementById('popupBotaoCompartilhar').onclick = () => {
-        compartilharConquistaNoMural(conquista);
-        fecharPopup();
-    };
-
-    overlay.classList.add('ativo');
-}
-
-/**
- * Posta uma mensagem no mural sobre a nova conquista.
- * @param {object} conquista - O objeto da conquista.
- */
-async function compartilharConquistaNoMural(conquista) {
-    const titulo = `🎉 Nova Conquista Desbloqueada!`;
-    const conteudo = `${usuarioLogado.nome} acaba de desbloquear a conquista: "${conquista.nome}"!`;
-
-    try {
-        const token = localStorage.getItem('token');
-        const response = await fetch('/api/comunicacoes', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ titulo, conteudo, tipo_post: 'Mural Geral' })
-        });
-        if (!response.ok) throw new Error('Falha ao compartilhar.');
-        
-        mostrarPopup('Compartilhado no mural com sucesso!', 'sucesso');
-    } catch (error) {
-        mostrarPopup(`Erro ao compartilhar: ${error.message}`, 'erro');
-    }
-}
-
-/**
- * Abre o modal com detalhes de uma conquista clicada.
- * @param {object} conquista - O objeto da conquista.
- */
-function abrirModalDetalhesConquista(conquista) {
-    const overlay = document.getElementById('modal-detalhes-conquista');
-    const container = overlay.querySelector('.ds-popup-mensagem');
-
-    let detalhesHtml = '';
-    if (conquista.desbloqueada) {
-        const data = conquista.data_desbloqueio ? new Date(conquista.data_desbloqueio).toLocaleDateString('pt-BR') : 'Data não registrada';
-        detalhesHtml = `<p class="detalhe-desbloqueio">🏆 Desbloqueada em: ${data}</p>`;
-    } else {
-        detalhesHtml = `<p class="detalhe-bloqueio">🔒 Dica: ${conquista.descricao}</p>`;
-    }
-
-    container.innerHTML = `
-        <button class="ds-btn-fechar-painel-padrao" onclick="this.closest('.ds-popup-overlay').classList.remove('ativo')">X</button>
-        <div class="detalhes-conquista-conteudo">
-            <img src="${conquista.badge_url}" alt="${conquista.nome}">
-            <h3>${conquista.nome}</h3>
-            <p class="descricao">${conquista.desbloqueada ? conquista.descricao : 'Conquista Secreta'}</p>
-            ${detalhesHtml}
-        </div>
-    `;
-
-    overlay.classList.add('ativo');
-}
-
-// ==========================================================================
 // LÓGICA DO MODAL DE GALERIA DE AVATARES
 // ==========================================================================
 
@@ -2232,6 +2160,18 @@ function configurarEventListenersGerais() {
         btn.disabled = false;
         document.getElementById('btn-abrir-filtros').disabled = false;
     }
+    });
+
+     // Listener delegado para o ícone de tooltip que é criado dinamicamente
+    document.body.addEventListener('click', (e) => {
+        if (e.target.id === 'tooltip-condicoes-icon') {
+            const textoTooltip = `
+                <p>As <strong>Condições da Meta</strong> são objetivos que você precisa cumprir durante a semana.</p>
+                <p>A quantidade necessária <strong>não é um extra</strong>, ela já faz parte da sua meta total de pontos, mas precisa ser feita com produtos específicos.</p>
+                <p>É necessário cumprir 100% de todas as condições e atingir os pontos para liberar sua comissão.</p>
+            `;
+            mostrarTooltip(textoTooltip);
+        }
     });
 
 

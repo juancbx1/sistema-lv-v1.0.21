@@ -35,37 +35,16 @@
         </section>
     </div>
 
-            <main class="ds-container-principal">
-            <!-- O NOVO E ÚNICO CARD COM ABAS -->
-            <section class="ds-card">
-                
-                <!-- O cabeçalho do card agora contém as abas e o filtro -->
-                <div class="ds-card-header">
-                    <div id="tabs-container" class="ds-tabs-container">
-                        <button class="ds-tab-btn ativo" data-tab="atual">Desempenho Atual</button>
-                        <!-- A aba "A Receber" começa escondida. O JS vai decidir se a mostra. -->
-                        <button id="tab-a-receber" class="ds-tab-btn" data-tab="receber" style="display: none;">
-                            A Receber
-                            <span id="badge-a-receber" class="ds-badge-tab"></span>
-                        </button>
-                        <button class="ds-tab-btn" data-tab="historico">Histórico</button>
-                    </div>
-                    <!-- O filtro de ciclos será movido ou controlado aqui pelo JS -->
-                    <div id="tabs-filtro-container" class="ds-card-filtro">
-                        <!-- Conteúdo do filtro será injetado aqui -->
-                    </div>
-                </div>
-
-                <!-- O corpo do card, onde todo o conteúdo dinâmico será renderizado -->
-                <div id="tabs-content-body" class="ds-card-body">
-                    <!-- Conteúdo inicial será um spinner -->
-                    <div class="ds-spinner-container">
-                        <div class="ds-spinner"></div>
-                    </div>
-                </div>
-
-            </section>
-        </main>
+            <!-- Substitua o conteúdo da sua tag <main> por este -->
+<main class="ds-container-principal">
+    <!-- O novo container que receberá os cards de ciclo -->
+    <div id="ciclos-container">
+        <!-- O conteúdo será totalmente gerado pelo JavaScript -->
+        <div class="ds-spinner-container">
+            <div class="ds-spinner"></div>
+        </div>
+    </div>
+</main>
 
     <!-- Scripts -->
     <script src="/dashboard/desempenho.js" type="module"></script>

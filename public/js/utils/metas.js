@@ -36,6 +36,9 @@ async function fetchMetasConfig(dataReferencia) {
         }
 
         const metasConfig = await response.json();
+
+        // <<< LOG 2: VERIFICAR DADOS RECEBIDOS PELA API NO FRONTEND >>>
+        //console.log('[fetchMetasConfig] Dados de metas recebidos da API:', JSON.stringify(metasConfig, null, 2));
         
         // 3. Armazena o resultado no cache antes de retornar
         // A chave de cache será a mesma data de referência para simplificar.
@@ -75,37 +78,107 @@ export async function obterMetas(tipoUsuario, nivel, dataReferencia = new Date()
     // A lógica para usar nível 1 como padrão continua a mesma
     const metasDoNivel = metasDoTipo[nivel] || metasDoTipo[1] || [];
     
-    // O backend já retorna ordenado, mas uma nova ordenação não faz mal e garante.
+    // O backend já retorna ordenado, mas uma nova ordenação não faz mal e garante. 
     return [...metasDoNivel].sort((a, b) => a.pontos_meta - b.pontos_meta);
 }
 
 /**
- * Calcula a comissão semanal com base nos pontos e no tipo/nível do usuário, para uma data específica.
- * Esta função agora é assíncrona.
+ * Calcula a comissão semanal com base nos pontos, atividades e no tipo/nível do usuário.
  * @param {number} totalPontosSemana - O total de pontos que o usuário fez na semana.
  * @param {string} tipoUsuario - O tipo de usuário.
  * @param {number} nivel - O nível do usuário.
- * @param {Date} [dataReferencia=new Date()] - A data para a qual as regras de comissão devem ser válidas.
- * @returns {Promise<number|object>} O valor da comissão ou um objeto com os pontos faltantes.
+ * @param {Array} atividadesDaSemana - A lista de atividades para verificar as condições.
+ * @param {Date} [dataReferencia=new Date()] - A data para as regras de comissão.
+ * @returns {Promise<object>} O valor da comissão ou um objeto com os pontos faltantes e status das condições.
  */
-export async function calcularComissaoSemanal(totalPontosSemana, tipoUsuario, nivel, dataReferencia = new Date()) {
-    // A data de referência é crucial aqui para pegar as regras corretas do passado!
+export async function calcularComissaoSemanal(totalPontosSemana, tipoUsuario, nivel, atividadesDaSemana = [], todosOsProdutos = [], dataReferencia = new Date()) {
     const metasDoNivel = await obterMetas(tipoUsuario, nivel, dataReferencia);
 
     if (!metasDoNivel || metasDoNivel.length === 0) {
-        console.warn(`[calcularComissaoSemanal] Nenhuma meta definida para o tipo "${tipoUsuario}" no nível ${nivel}.`);
-        return { faltam: "N/A" };
+        return { valor: 0, faltam: "N/A", condicoesCumpridas: true, progressoCondicoes: [] };
     }
 
-    // A lógica de cálculo permanece idêntica à anterior.
-    const metasBatidas = metasDoNivel.filter(m => totalPontosSemana >= m.pontos_meta);
+    // A lógica de cálculo agora considera as condições
+    let melhorMetaAtingida = null;
 
-    if (metasBatidas.length > 0) {
-        metasBatidas.sort((a, b) => b.pontos_meta - a.pontos_meta);
-        return metasBatidas[0].valor;
+    for (const meta of metasDoNivel) {
+        // Verifica se os pontos são suficientes para ESTA meta
+        if (totalPontosSemana >= meta.pontos_meta) {
+            const verificacao = verificarCondicoes(atividadesDaSemana, meta.condicoes, todosOsProdutos);
+            
+            // Se os pontos e TODAS as condições foram cumpridas
+            if (verificacao.todasCumpridas) {
+                // Armazena esta meta como uma candidata válida
+                melhorMetaAtingida = meta;
+                // Não paramos aqui, continuamos o loop para encontrar a meta de MAIOR valor que foi batida
+            }
+        }
+    }
+
+    if (melhorMetaAtingida) {
+        // Se encontramos pelo menos uma meta 100% batida, retornamos o valor da de maior pontuação
+        // (Como o array já está ordenado, a última encontrada será a melhor)
+        return { valor: melhorMetaAtingida.valor, condicoesCumpridas: true };
     } else {
+        // Se nenhuma meta foi 100% batida, retornamos o status da primeira meta
         const primeiraMeta = metasDoNivel[0];
         const pontosFaltantes = primeiraMeta.pontos_meta - totalPontosSemana;
-        return { faltam: Math.ceil(pontosFaltantes) };
+        
+        // Verifica o progresso das condições da primeira meta para dar feedback
+        const verificacao = verificarCondicoes(atividadesDaSemana, primeiraMeta.condicoes, todosOsProdutos);
+
+        return { 
+            valor: 0,
+            faltam: Math.ceil(pontosFaltantes),
+            condicoesCumpridas: verificacao.todasCumpridas,
+            progressoCondicoes: verificacao.progresso
+        };
     }
+}
+
+/**
+ * Verifica se todas as condições de uma meta foram cumpridas.
+ * @param {Array} atividadesDaSemana - Lista de atividades.
+ * @param {Array|null} condicoes - O array de condições da meta.
+ * @param {Array} todosOsProdutos - A lista completa de produtos do sistema.
+ * @returns {object} - Um objeto com { todasCumpridas: boolean, progresso: Array }.
+ */
+export function verificarCondicoes(atividadesDaSemana, condicoes, todosOsProdutos = []) {
+    if (!condicoes || condicoes.length === 0) {
+        return { todasCumpridas: true, progresso: [] };
+    }
+
+    let todasAsCondicoesForamCumpridas = true;
+    
+    const progressoCondicoes = condicoes.map(condicao => {
+        let quantidadeFeita = 0;
+        
+        if (condicao.tipo === 'arremate_produto') {
+            quantidadeFeita = atividadesDaSemana
+                .filter(atv => atv.tipo_origem === 'Arremate' && atv.produto_id === condicao.produto_id)
+                .reduce((total, atv) => total + atv.quantidade, 0);
+        }
+
+        const cumprida = quantidadeFeita >= condicao.quantidade_minima;
+        if (!cumprida) {
+            todasAsCondicoesForamCumpridas = false;
+        }
+
+        // <<< A CORREÇÃO ESTÁ AQUI >>>
+        // Procura o nome do produto na lista completa usando o ID da condição
+        const produto = todosOsProdutos.find(p => p.id === condicao.produto_id);
+        const nomeProduto = produto ? produto.nome : 'Produto Desconhecido';
+
+        return {
+            descricao: `Arremates de ${nomeProduto}`, // Usa o nome encontrado
+            feitos: quantidadeFeita,
+            meta: condicao.quantidade_minima,
+            cumprida: cumprida
+        };
+    });
+
+    return {
+        todasCumpridas: todasAsCondicoesForamCumpridas,
+        progresso: progressoCondicoes
+    };
 }

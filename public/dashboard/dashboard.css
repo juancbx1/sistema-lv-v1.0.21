@@ -479,35 +479,6 @@ body.ds-body.autenticado {
     margin-top: 5px;
 }
 
-/* Seção 3: Métricas Rápidas */
-.ds-metricas-rapidas {
-    grid-area: metricas-rapidas;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 15px;
-    padding-top: 25px;
-    border-top: 1px solid var(--ds-cor-cinza-borda);
-}
-.ds-metrica-item {
-    background-color: var(--ds-cor-cinza-claro-fundo);
-    padding: 15px;
-    border-radius: var(--ds-raio-borda);
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-}
-.ds-metrica-label {
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: var(--ds-cor-cinza-texto-secundario);
-    margin-bottom: 5px;
-}
-.ds-metrica-valor {
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: var(--ds-cor-azul-escuro);
-}
-
 /* ==========================================================================
    ESTILOS DO NOVO PLANEJADOR SEMANAL (SLIDER)
    ========================================================================== */
@@ -956,30 +927,6 @@ body.ds-body.autenticado {
 }
 .ds-btn-trocar-foto:hover { transform: scale(1.1); }
 
-.ds-galeria-conquistas {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-    gap: 15px;
-    padding: 0 20px 20px 20px; /* Padding para a galeria */
-}
-
-/* ==========================================================================
-    Adicional para CONQUISTAS
-   ========================================================================== */
-
-   .popup-conquista { text-align: center; }
-.popup-conquista-confete { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.7; }
-.popup-conquista-badge { width: 120px; height: 120px; margin-bottom: 15px; position: relative; }
-.popup-conquista h3 { font-size: 1.5rem; color: var(--ds-cor-primaria); }
-.popup-conquista p { font-size: 1.2rem; font-weight: 500; margin-bottom: 20px; }
-.popup-conquista-footer { display: flex; gap: 10px; justify-content: center; }
-
-.detalhes-conquista-conteudo { text-align: center; }
-.detalhes-conquista-conteudo img { width: 150px; height: 150px; margin-bottom: 15px; }
-.detalhes-conquista-conteudo h3 { font-size: 1.6rem; margin-bottom: 10px; }
-.detalhes-conquista-conteudo p.descricao { color: var(--ds-cor-cinza-texto-secundario); font-size: 1.1rem; }
-.detalhes-conquista-conteudo p.detalhe-desbloqueio { font-weight: bold; color: var(--ds-cor-sucesso); margin-top: 20px; }
-.detalhes-conquista-conteudo p.detalhe-bloqueio { font-weight: bold; color: var(--ds-cor-perigo); margin-top: 20px; }
 
 /* REGRAS COMPLETAS PARA O BADGE */
 .ds-badge {
@@ -1013,13 +960,6 @@ body.ds-body.autenticado {
     background-color: var(--ds-cor-aviso);
 }
 
-.ds-badge-item {
-    text-align: center;
-}
-.ds-badge-item:not(.bloqueado) {
-    cursor: pointer;
-}
-
 .ds-badge-img-wrapper {
     width: 80px;
     height: 80px;
@@ -1033,26 +973,6 @@ body.ds-body.autenticado {
     object-fit: contain;
     transition: transform 0.2s ease;
 }
-.ds-badge-item:not(.bloqueado):hover img {
-    transform: scale(1.1);
-}
-
-.ds-badge-item.bloqueado img {
-    filter: grayscale(100%) opacity(0.5);
-}
-
-.ds-badge-item p {
-    font-size: 0.8rem;
-    font-weight: 500;
-    color: var(--ds-cor-cinza-texto);
-}
-
-.ds-badge-item.em-destaque .ds-badge-img-wrapper {
-    box-shadow: 0 0 0 4px var(--ds-cor-primaria);
-    border-radius: 50%;
-    background-color: rgba(var(--ds-cor-primaria-rgb), 0.1);
-}
-
 
 /* ==========================================================================
    4. Botões e Elementos de Formulário (Inputs, Selects)
@@ -2207,89 +2127,10 @@ body.ds-body.autenticado {
     justify-content: flex-end;
 }
 
-/* ==========================================================================
-   ESTILOS DE CONQUISTAS (POPUP E MODAL)
-   ========================================================================== */
-
-/* Popup de Notificação de Nova Conquista */
-.ds-popup-mensagem.popup-conquista {
-    text-align: center;
-    border-top: 5px solid var(--ds-cor-aviso);
-    overflow: hidden; /* Garante que o confete não vaze */
-    position: relative;
-}
-
-.popup-conquista-confete {
-    position: absolute;
-    top: -20%; /* Começa um pouco acima */
-    left: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    opacity: 0.5;
-    pointer-events: none; /* Permite clicar através do GIF */
-}
-
-.popup-conquista-badge {
-    width: 120px;
-    height: 120px;
-    margin-bottom: 15px;
-    position: relative; /* Garante que fique acima do confete */
-    animation: conquista-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
 
 @keyframes conquista-pop {
     0% { transform: scale(0.5); opacity: 0; }
     100% { transform: scale(1); opacity: 1; }
-}
-
-.popup-conquista h3 {
-    font-size: 1.5rem;
-    color: var(--ds-cor-primaria);
-    position: relative;
-}
-
-.popup-conquista p {
-    font-size: 1.2rem;
-    font-weight: 500;
-    margin-bottom: 25px;
-    position: relative;
-}
-
-.popup-conquista-footer {
-    display: flex;
-    gap: 10px;
-    justify-content: center;
-    position: relative;
-}
-
-.detalhes-conquista-conteudo {
-    text-align: center;
-}
-.detalhes-conquista-conteudo img {
-    width: 150px;
-    height: 150px;
-    margin-bottom: 15px;
-}
-.detalhes-conquista-conteudo h3 {
-    font-size: 1.6rem;
-    margin-bottom: 10px;
-}
-.detalhes-conquista-conteudo p.descricao {
-    color: var(--ds-cor-cinza-texto-secundario);
-    font-size: 1.1rem;
-    line-height: 1.5;
-}
-.detalhes-conquista-conteudo p.detalhe-desbloqueio {
-    font-weight: bold;
-    color: var(--ds-cor-sucesso);
-    margin-top: 20px;
-}
-.detalhes-conquista-conteudo p.detalhe-bloqueio {
-    font-weight: bold;
-    color: var(--ds-cor-cinza-texto-secundario);
-    margin-top: 20px;
-    font-style: italic;
 }
 
 /* ==========================================================================
@@ -2489,6 +2330,155 @@ body.ds-body.autenticado {
     }
 }
 
+/* ==========================================================================
+   Estilos para o Container de Objetivos da Meta
+   ========================================================================== */
+
+.ds-objetivos-container {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none; 
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.ds-objetivo-item {
+    background-color: var(--ds-cor-cinza-claro-fundo);
+    padding: 12px 15px;
+    border-radius: var(--ds-raio-borda);
+}
+
+.ds-objetivo-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.ds-objetivo-titulo {
+    font-weight: 600;
+    color: var(--ds-cor-azul-escuro);
+    font-size: 0.9rem;
+}
+
+.ds-objetivo-progresso-semanal {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--ds-cor-cinza-texto-secundario);
+}
+
+.ds-objetivo-barra-progresso {
+    width: 100%;
+    height: 8px;
+    background-color: var(--ds-cor-cinza-borda);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.ds-objetivo-preenchimento {
+    height: 100%;
+    width: 0%; /* O JS vai alterar isso */
+    background-color: var(--ds-cor-primaria);
+    border-radius: 4px;
+    transition: width 0.5s ease-out;
+}
+.ds-objetivo-preenchimento.completo {
+    background-color: var(--ds-cor-sucesso);
+}
+
+
+.ds-objetivo-feedback-diario {
+    margin-top: 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ds-objetivo-feedback-diario.status-ok {
+    color: var(--ds-cor-sucesso-hover);
+}
+
+.ds-objetivo-feedback-diario.status-atencao {
+    color: var(--ds-cor-aviso-hover);
+}
+
+.ds-objetivo-item-sem-condicao {
+    padding: 15px;
+    text-align: center;
+    font-style: italic;
+    color: var(--ds-cor-cinza-texto-secundario);
+    background-color: var(--ds-cor-cinza-claro-fundo);
+    border-radius: var(--ds-raio-borda);
+}
+
+.ds-objetivos-titulo {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--ds-cor-azul-escuro);
+    margin-bottom: 10px;
+}
+
+.ds-objetivo-item.objetivo-completo {
+    border-left: 4px solid var(--ds-cor-sucesso);
+    background-color: #f0fdf4; /* Fundo verde bem claro */
+}
+
+.ds-objetivo-feedback-diario strong {
+    margin-left: 4px;
+}
+
+
+/* ==========================================================================
+   Estilos para o Tooltip Informativo (VERSÃO CENTRALIZADA)
+   ========================================================================== */
+
+/* Container principal do tooltip (agora com flexbox) */
+.ppp-tooltip-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10001;
+    background-color: rgba(0, 0, 0, 0.5); /* Fundo escurecido */
+    display: flex; /* <<< USA FLEXBOX PARA CENTRALIZAR */
+    justify-content: center; /* Centraliza horizontalmente */
+    align-items: center; /* Centraliza verticalmente */
+    padding: 20px; /* Garante um espaçamento das bordas */
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+}
+
+.ppp-tooltip-container.ativo {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Caixa de texto do tooltip (agora não precisa de posicionamento absoluto) */
+.ppp-tooltip-box {
+    background-color: var(--ds-cor-azul-escuro);
+    color: var(--ds-cor-branco);
+    padding: 20px;
+    border-radius: var(--ds-raio-borda);
+    box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+    width: 100%;
+    max-width: 350px; /* Um pouco maior para conforto na leitura */
+    font-size: 0.95rem;
+    line-height: 1.6;
+    text-align: center;
+    transform: scale(0.9);
+    opacity: 0;
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
+}
+
+.ppp-tooltip-container.ativo .ppp-tooltip-box {
+    transform: scale(1);
+    opacity: 1;
+}
 
 /* ==========================================================================
    10. Media Queries para Responsividade
@@ -2572,13 +2562,6 @@ body.ds-body.autenticado {
         border-right: none; /* Remove a borda lateral */
         padding-right: 0;
     }
-
-    .ds-metricas-rapidas {
-        padding-top: 20px;
-        border-top: 1px solid var(--ds-cor-cinza-borda);
-        /* 3 colunas ainda cabem bem aqui */
-        grid-template-columns: repeat(3, 1fr);
-    }
     
     .ds-metrica-label { font-size: 0.75rem; }
     .ds-metrica-valor { font-size: 1.3rem; }
@@ -2635,13 +2618,6 @@ body.ds-body.autenticado {
         font-size: 1.6rem;
     }
 
-    .ds-metricas-rapidas {
-        gap: 10px;
-    }
-
-    .ds-metrica-item {
-        padding: 12px;
-    }
     .ds-metrica-label {
         font-size: 0.7rem;
     }
@@ -2667,4 +2643,19 @@ body.ds-body.autenticado {
     font-size: 1.2rem;
     }
 
+}
+
+/* Layout para Celulares muito menores  */
+@media (max-width: 399px) {
+
+    .ds-objetivo-titulo {
+        font-size: 0.8rem;
+}
+    .ds-objetivo-item {
+        padding: 10px 10px;
+}
+
+    .ds-card {
+        padding: 10px;
+}
 }

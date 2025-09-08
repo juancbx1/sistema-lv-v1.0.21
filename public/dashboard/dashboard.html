@@ -104,6 +104,7 @@
                         <span class="ds-feedback-label">Comissão Projetada</span>
                         <strong id="feedback-comissao" class="ds-feedback-valor">R$ --</strong>
                     </div>
+
                     <div class="ds-feedback-item">
                         <span class="ds-feedback-label">Faltam para o Alvo</span>
                         <strong id="feedback-pontos-faltantes" class="ds-feedback-valor">-- pts</strong>
@@ -111,22 +112,16 @@
                 </div>
             </div>
 
-            <!-- SEÇÃO 3: MÉTRICAS RÁPIDAS -->
-            <div class="ds-metricas-rapidas">
-                <div class="ds-metrica-item">
-                    <span class="ds-metrica-label">Pontos na Semana</span>
-                    <strong id="metrica-pontos-semana" class="ds-metrica-valor">0</strong>
-                </div>
-                <div class="ds-metrica-item">
-                    <span class="ds-metrica-label">Média Diária</span>
-                    <strong id="metrica-media-diaria" class="ds-metrica-valor">0</strong>
-                </div>
-                <div class="ds-metrica-item">
-                    <span class="ds-metrica-label">Conquistas</span>
-                    <strong id="metrica-conquistas" class="ds-metrica-valor">0</strong>
-                </div>
-            </div>
         </section>
+
+        <!-- <<< ADICIONE A NOVA SEÇÃO/CARD DE OBJETIVOS AQUI >>> -->
+            <section id="secao-objetivos-meta" class="ds-card" style="display: none;">
+                <!-- O JS controlará o título e o conteúdo aqui dentro -->
+                <h2 id="objetivos-card-titulo" class="ds-card-titulo">Condições da Meta</h2>
+                <div id="objetivos-meta-container" class="ds-objetivos-container">
+                    <!-- O JS irá preencher esta área -->
+                </div>
+            </section>
 
         <!-- CARD DE DETALHAMENTO DE ATIVIDADES --> 
             <section class="ds-card ds-painel-detalhamento">
@@ -279,13 +274,6 @@
         </div>
     </div>
 </div>
-
-    <!-- MODAL PARA DETALHES DA CONQUISTA -->
-    <div id="modal-detalhes-conquista" class="ds-popup-overlay">
-        <div class="ds-popup-mensagem">
-            <!-- Conteúdo será injetado pelo JS -->
-        </div>
-    </div>
 
     <!-- NOVO MODAL DE GALERIA DE AVATARES -->
     <div id="modal-galeria-avatar" class="ds-popup-overlay">

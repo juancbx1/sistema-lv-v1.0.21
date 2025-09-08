@@ -56,7 +56,6 @@ router.get('/desempenho', async (req, res) => {
     const { id: usuarioId } = req.usuarioLogado;
     let dbClient;
     try {
-        console.log(`[API Desempenho] Iniciando para Usuário ID: ${usuarioId}`);
         dbClient = await pool.connect();
 
         // >>> A CORREÇÃO ESTÁ AQUI: dbClient em vez de db.client <<<
@@ -68,15 +67,12 @@ router.get('/desempenho', async (req, res) => {
         
         const usuario = userResult.rows[0];
         const tipoUsuario = usuario.tipos?.[0] || null;
-        console.log(`[API Desempenho] Usuário encontrado: ${usuario.nome}, Tipo: ${tipoUsuario}`);
 
         // 1. ACHAR OS CICLOS RELEVANTES
         const hoje = new Date();
         const cicloAtual = getObjetoCicloCompletoAtual(hoje);
         const ultimoFechado = findUltimoCicloFechado(hoje);
 
-        console.log(`[API Desempenho] Ciclo Atual: ${cicloAtual?.nome || 'Nenhum'}`);
-        console.log(`[API Desempenho] Último Ciclo Fechado: ${ultimoFechado?.nome || 'Nenhum'}`);
         
         // Com base na sua observação, o cicloAtual nunca deve ser nulo.
         // Adicionamos uma proteção caso isso aconteça por algum motivo inesperado.
@@ -92,7 +88,6 @@ router.get('/desempenho', async (req, res) => {
         if (ultimoFechado) {
             dataInicioBusca = ultimoFechado.semanas[0].inicio;
         }
-        console.log(`[API Desempenho] Período de busca no DB: ${dataInicioBusca} a ${dataFimBusca}`);
 
         // 2. QUERY OTIMIZADA
         let queryParams = [usuario.nome, dataInicioBusca, dataFimBusca];
@@ -100,7 +95,7 @@ router.get('/desempenho', async (req, res) => {
 
         let queryText = `
             SELECT 'OP' as tipo_origem, pr.id::text as id_original, pr.data, pr.variacao, pr.quantidade, pr.pontos_gerados, pr.op_numero, pr.processo,
-            p.nome as produto, ${campoAssinada} as assinada,
+            p.nome as produto, p.id as produto_id, ${campoAssinada} as assinada,
             EXISTS (SELECT 1 FROM log_divergencias ld WHERE ld.id_producao_original = pr.id AND ld.status = 'Pendente') as divergencia_pendente
             FROM producoes pr JOIN produtos p ON pr.produto_id = p.id 
             WHERE pr.funcionario = $1 AND pr.data BETWEEN $2 AND $3
@@ -110,7 +105,7 @@ router.get('/desempenho', async (req, res) => {
             queryText += `
                 UNION ALL 
                 SELECT 'Arremate' as tipo_origem, ar.id::text as id_original, ar.data_lancamento as data, ar.variante as variacao, ar.quantidade_arrematada as quantidade, ar.pontos_gerados, ar.op_numero, 'Arremate' as processo,
-                p.nome as produto, ar.assinada as assinada,
+                p.nome as produto, p.id as produto_id, ar.assinada as assinada,
                 EXISTS (SELECT 1 FROM log_divergencias ld WHERE ld.id_arremate_original = ar.id AND ld.status = 'Pendente') as divergencia_pendente
                 FROM arremates ar JOIN produtos p ON ar.produto_id = p.id 
                 WHERE ar.usuario_tiktik = $1 AND ar.tipo_lancamento = 'PRODUCAO' AND ar.data_lancamento BETWEEN $2 AND $3
@@ -119,7 +114,6 @@ router.get('/desempenho', async (req, res) => {
         
         const desempenhoResult = await dbClient.query(queryText, queryParams);
         const todasAtividades = desempenhoResult.rows;
-        console.log(`[API Desempenho] Query executada. Total de atividades encontradas: ${todasAtividades.length}`);
 
         // 3. SEPARAR ATIVIDADES POR CICLO
         let atividadesCicloFechado = [];
@@ -146,7 +140,6 @@ router.get('/desempenho', async (req, res) => {
             cicloAtual: { ...cicloAtual, atividades: atividadesCicloAtual }
         };
         
-        console.log(`[API Desempenho] Resposta enviada com sucesso para ${usuario.nome}.`);
         res.status(200).json(resposta);
 
     } catch (error) {

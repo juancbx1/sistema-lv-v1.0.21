@@ -34,9 +34,9 @@ router.get('/meu-perfil', async (req, res) => {
     try {
         dbClient = await pool.connect();
 
-        // Query 1: Busca os dados básicos e o badge em destaque
+        // Busca apenas os dados básicos do usuário.
         const usuarioQuery = `
-            SELECT id, nome, email, nivel, avatar_url, badge_destaque_id 
+            SELECT id, nome, email, nivel, avatar_url 
             FROM usuarios WHERE id = $1;
         `;
         const usuarioResult = await dbClient.query(usuarioQuery, [usuarioId]);
@@ -44,28 +44,6 @@ router.get('/meu-perfil', async (req, res) => {
             return res.status(404).json({ error: 'Usuário não encontrado.' });
         }
         const perfil = usuarioResult.rows[0];
-
-        // Query 2: Busca TODAS as conquistas disponíveis no sistema
-        const todasConquistasResult = await dbClient.query('SELECT * FROM conquistas ORDER BY categoria, nome;');
-        const todasConquistas = todasConquistasResult.rows;
-
-        // Query 3: Busca apenas as conquistas que o usuário DESBLOQUEOU
-        const conquistasUsuarioResult = await dbClient.query(
-        'SELECT id_conquista, data_desbloqueio FROM usuario_conquistas WHERE id_usuario = $1;', 
-        [usuarioId]
-        );
-
-        // Crie um Map para fácil acesso à data
-        const conquistasDesbloqueadasMap = new Map(
-            conquistasUsuarioResult.rows.map(r => [r.id_conquista, r.data_desbloqueio])
-        );
-        
-        // Combina as informações: adiciona um campo 'desbloqueada: true/false' a cada conquista
-        perfil.conquistas = todasConquistas.map(conquista => ({
-            ...conquista,
-            desbloqueada: conquistasDesbloqueadasMap.has(conquista.id),
-            data_desbloqueio: conquistasDesbloqueadasMap.get(conquista.id) || null
-        }));
 
         res.status(200).json(perfil);
 
