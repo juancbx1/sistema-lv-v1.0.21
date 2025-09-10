@@ -255,7 +255,7 @@ body.ds-body.autenticado {
     color: var(--ds-cor-azul-escuro);
 }
 .ds-progress-ring-texto .ds-texto-pequeno {
-    font-size: 1rem;
+    font-size: 0.9rem;
     font-weight: 500;
     color: var(--ds-cor-cinza-texto-secundario);
 }
