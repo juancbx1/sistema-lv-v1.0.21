@@ -25,11 +25,19 @@
     --ds-cor-info: #17a2b8;
     --ds-cor-info-hover: #138496;
 
+     /* Novas Cores para Níveis de Meta */
+    --ds-cor-meta-bronze: #cd7f32;    /* Cor de bronze */
+    --ds-cor-meta-prata: #c0c0c0;     /* Cor de prata */
+    --ds-cor-meta-ouro: #ddbc0c;      /* Cor de ouro */
+    --ds-cor-meta-diamante: #74cadd; /* Um azul claro/diamante */
+    --ds-cor-meta-platina: #b5b5b5;   /* Cor de platina */
+
     /* Cores Neutras */
     --ds-cor-cinza-borda: #dee2e6;
     --ds-cor-cinza-texto-secundario: #6c757d;
     --ds-cor-cinza-claro-fundo: #f8f9fa;
     --ds-cor-cinza-hover-item: #e9ecef;
+     --ds-cor-cinza-borda: #dee2e6;
 
     /* Elementos da UI */
     --ds-sombra-padrao: 0 4px 12px rgba(0, 0, 0, 0.08);
@@ -40,6 +48,8 @@
     --ds-padding-card: 24px;
     --ds-padding-input: 12px 16px;
     --ds-padding-botao: 12px 22px;
+
+
 }
 
 /* ==========================================================================
@@ -251,7 +261,7 @@ body.ds-body.autenticado {
 }
 .ds-progress-ring-texto .ds-texto-grande {
     font-size: 2.5rem;
-    font-weight: 700;
+    font-weight: 700;  
     color: var(--ds-cor-azul-escuro);
 }
 .ds-progress-ring-texto .ds-texto-pequeno {
@@ -348,7 +358,7 @@ body.ds-body.autenticado {
 
 /* Estado 3: "O BÔNUS" */
 .ds-feedback-diario-pilula.status-bonus-semana {
-    background-color: rgba(0, 123, 255, 0.15); /* Azul primário */
+    background-color: rgb(0 123 255 / 6%); /* Azul primário */
     border-color: var(--ds-cor-primaria);
     color: var(--ds-cor-primaria-hover);
 }
@@ -560,16 +570,21 @@ body.ds-body.autenticado {
     position: relative;
 }
 
+.ds-feedback-item.sucesso {
+    background-color: rgba(40, 167, 69, 0.1); /* Verde claro */
+    border: 1px solid var(--ds-cor-sucesso);
+}
+
+.ds-feedback-item.sucesso .ds-feedback-valor {
+    color: var(--ds-cor-sucesso);
+}
+
 /* Feedback da meta selecionada */
 .ds-feedback-meta {
     text-align: center;
     font-size: 1.1rem;
     font-weight: 500;
     color: var(--ds-cor-texto-principal);
-}
-.ds-feedback-meta span {
-    font-weight: 600;
-    color: var(--ds-cor-primaria);
 }
 
 /* Container para o feedback duplo */
@@ -597,9 +612,37 @@ body.ds-body.autenticado {
 
 .ds-feedback-valor {
     display: block;
-    font-size: 1.5rem;
+    font-size: 1.2rem;
     font-weight: 700;
     color: var(--ds-cor-azul-escuro);
+}
+
+
+/* Classes de estilo para colorir os nomes das metas */
+.ds-texto-meta {
+    font-weight: 700; /* Deixa o texto da meta sempre em negrito */
+    transition: color 0.3s ease;
+}
+
+.meta-bronze { color: var(--ds-cor-meta-bronze); }
+
+.meta-prata {
+    color: var(--ds-cor-meta-prata);
+    text-shadow: 0 6px 4px rgba(0, 0, 0, 0.1);
+}
+
+.meta-ouro {
+    color: var(--ds-cor-meta-ouro);
+    text-shadow: 0 1px 2px #e5e17e;
+}
+
+.meta-diamante { 
+    color: var(--ds-cor-meta-diamante); 
+    text-shadow: 0 4px 6px rgb(217 217 217 / 68%);
+}
+.meta-platina { 
+    color: var(--ds-cor-meta-platina); 
+        text-shadow: 0 1px 2px rgb(109 107 107 / 50%);
 }
 
 
@@ -2479,6 +2522,18 @@ body.ds-body.autenticado {
     transform: scale(1);
     opacity: 1;
 }
+
+/* Animação de pulso para quando o usuário está ATRASADO */
+@keyframes ds-pulso-atencao {
+    0% { filter: drop-shadow(0 0 2px rgba(255, 193, 7, 0.4)); }
+    50% { filter: drop-shadow(0 0 10px rgba(255, 193, 7, 0.8)); }
+    100% { filter: drop-shadow(0 0 2px rgba(255, 193, 7, 0.4)); }
+}
+
+.anel-atencao {
+    animation: ds-pulso-atencao 2.5s infinite ease-in-out;
+}
+
 
 /* ==========================================================================
    10. Media Queries para Responsividade

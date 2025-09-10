@@ -217,6 +217,36 @@ function mostrarPopup(mensagem, tipo = 'info', duracao = 4000) {
 }
 
 
+/**
+ * Retorna uma classe CSS com base no nome de uma meta.
+ * @param {string} nomeMeta - A descrição da meta (ex: "Meta Bronze").
+ * @returns {string} A classe CSS correspondente (ex: "meta-bronze").
+ */
+function obterClasseDeMeta(nomeMeta) {
+    const nomeLower = nomeMeta.toLowerCase();
+    if (nomeLower.includes('bronze')) return 'meta-bronze';
+    if (nomeLower.includes('prata')) return 'meta-prata';
+    if (nomeLower.includes('ouro')) return 'meta-ouro';
+    if (nomeLower.includes('diamante')) return 'meta-diamante';
+    if (nomeLower.includes('platina')) return 'meta-platina';
+    return ''; // Retorna string vazia se não encontrar correspondência
+}
+
+/**
+ * Calcula uma cor intermediária entre duas cores com base em uma porcentagem.
+ * @param {Array<number>} cor1 - Cor inicial em formato [R, G, B].
+ * @param {Array<number>} cor2 - Cor final em formato [R, G, B].
+ * @param {number} porcentagem - Um valor de 0 a 1.
+ * @returns {string} A cor no formato "rgb(r, g, b)".
+ */
+function interpolarCor(cor1, cor2, porcentagem) {
+    const p = Math.min(Math.max(porcentagem, 0), 1); // Garante que a porcentagem esteja entre 0 e 1
+    const r = Math.round(cor1[0] + (cor2[0] - cor1[0]) * p);
+    const g = Math.round(cor1[1] + (cor2[1] - cor1[1]) * p);
+    const b = Math.round(cor1[2] + (cor2[2] - cor1[2]) * p);
+    return `rgb(${r}, ${g}, ${b})`;
+}
+
 // ==========================================================================
 // 5. EVENTO DE INICIALIZAÇÃO PRINCIPAL
 // ==========================================================================
@@ -348,8 +378,6 @@ async function atualizarPainelDesempenho(usuario, cicloAtual) {
     const textoSecundarioEl = document.getElementById('foco-texto-secundario');
     
     const pilulasApoioContainer = document.getElementById('container-pilulas-apoio');
-    const legendaRitmoDiaStrong = document.querySelector('#legenda-ritmo-dia strong');
-    const legendaFeitosDiaStrong = document.querySelector('#legenda-feitos-dia strong');
     const feedbackDiarioContainer = document.getElementById('container-feedback-diario');
 
     // Referências ao slider e métricas
@@ -396,92 +424,170 @@ async function atualizarPainelDesempenho(usuario, cicloAtual) {
     renderizarObjetivosMeta(progressoParaExibir, metaSelecionada);
 
     
-    const metaDiariaFixa = pontosMetaSemanal > 0 ? pontosMetaSemanal / 5 : 0;
-    
     // --- 3. LÓGICA DE ESTADOS DO PAINEL ---
     
     textoPrincipalEl.textContent = Math.round(pontosFeitosHoje);
-    legendaFeitosDiaStrong.textContent = `${Math.round(pontosFeitosHoje)} pts`;
     
-    let ritmoSugeridoParaHoje = 0;
-     if (diaDaSemana >= 1 && diaDaSemana <= 5) {
-        const diasRestantes = 6 - diaDaSemana;
-        const pontosFaltantesSemana = Math.max(0, pontosMetaSemanal - totalPontosSemana);
-        ritmoSugeridoParaHoje = pontosFaltantesSemana > 0 ? pontosFaltantesSemana / diasRestantes : 0;
-    }
-    legendaRitmoDiaStrong.textContent = `${Math.round(ritmoSugeridoParaHoje)} pts`;
+   // Pílula 1: Progresso Semanal (permanece igual)
+    const progressoSemanalEl = document.getElementById('display-progresso-semanal');
+    progressoSemanalEl.textContent = `${Math.round(totalPontosSemana)} / ${pontosMetaSemanal} pts`;
 
-    const progressoAnelPercentual = ritmoSugeridoParaHoje > 0 ? (pontosFeitosHoje / ritmoSugeridoParaHoje) * 100 : (pontosFeitosHoje > 0 ? 100 : 0);
+    // Pílula 2: Comissão Atingida (NOVA LÓGICA)
+    const comissaoAtingidaEl = document.getElementById('display-comissao-atingida');
+    // A variável 'resultadoComissao' já contém o valor que precisamos!
+    const valorComissaoAtual = resultadoComissao.valor || 0;
+    comissaoAtingidaEl.textContent = `R$ ${valorComissaoAtual.toFixed(2)}`;
+
+    const metaDiariaFixa = pontosMetaSemanal > 0 ? pontosMetaSemanal / 5 : 0;
+    const progressoAnelPercentual = metaDiariaFixa > 0 ? (pontosFeitosHoje / metaDiariaFixa) * 100 : (pontosFeitosHoje > 0 ? 100 : 0);
+    
     const raio = progressRingFgEl.r.baseVal.value;
     const circunferencia = 2 * Math.PI * raio;
     progressRingFgEl.style.strokeDasharray = `${circunferencia} ${circunferencia}`;
+
     const progressoFinal = Math.min(progressoAnelPercentual, 100);
+
+    // --- INÍCIO DA LÓGICA DO GRADIENTE DE COR ---
+        const corInicial = [0, 123, 255];   // Azul Primário (rgb(0, 123, 255))
+        const corFinal = [40, 167, 69];     // Verde Sucesso (rgb(40, 167, 69))
+        const corDourada = [255, 215, 0];    // Ouro para > 100%
+
+        let corDoAnel;
+        if (progressoAnelPercentual >= 100) {
+            // Se bateu ou passou a meta, interpola do verde para o dourado
+            // A interpolação começa em 100% e vai até, digamos, 150%
+            const progressoExtra = (progressoAnelPercentual - 100) / 50;
+            corDoAnel = interpolarCor(corFinal, corDourada, progressoExtra);
+        } else {
+            // Se está abaixo de 100%, interpola do azul para o verde
+            corDoAnel = interpolarCor(corInicial, corFinal, progressoAnelPercentual / 100);
+        }
+        progressRingFgEl.style.stroke = corDoAnel;
+        // --- FIM DA LÓGICA DO GRADIENTE DE COR ---
+
+
+    // Força a animação a reiniciar do zero
+    progressRingFgEl.style.transition = 'none'; // Desliga a transição temporariamente
+    progressRingFgEl.style.strokeDashoffset = circunferencia; // Reseta para 0%
+
+    // Força o navegador a aplicar a mudança acima antes de continuar
+    progressRingFgEl.getBoundingClientRect(); 
+
+    // Liga a transição de volta e aplica o valor final
+    progressRingFgEl.style.transition = 'stroke-dashoffset 0.8s ease-out, stroke 0.5s ease'; // Duração um pouco maior para ficar mais bonito
     progressRingFgEl.style.strokeDashoffset = circunferencia - (progressoFinal / 100) * circunferencia;
 
+    // --- INÍCIO DA LÓGICA DE ANIMAÇÃO DE STATUS ---
+
+    // Primeiro, remove a classe de atenção, caso ela exista de uma atualização anterior.
+    progressRingFgEl.classList.remove('anel-atencao');
+
+    // Define um limiar para o status de "atenção".
+    // Vamos usar 40% como um valor. Abaixo disso, o usuário está precisando de um alerta.
+    const limiarAtrasado = 40; 
+
+    // A condição é simples: se o progresso do dia está abaixo do limiar E ele ainda não bateu a meta do dia.
+    if (progressoAnelPercentual < limiarAtrasado && pontosFeitosHoje < metaDiariaFixa) {
+        progressRingFgEl.classList.add('anel-atencao');
+    }
+
+    // --- FIM DA LÓGICA DE ANIMAÇÃO DE STATUS ---
+
     // 1. Identificar a meta máxima e a próxima meta
-const metaMaxima = metasDoNivel.length > 0 ? metasDoNivel[metasDoNivel.length - 1] : null;
-const proximaMeta = metasDoNivel.find(m => totalPontosSemana < m.pontos_meta);
+        const metaMaxima = metasDoNivel.length > 0 ? metasDoNivel[metasDoNivel.length - 1] : null;
+        const proximaMeta = metasDoNivel.find(m => totalPontosSemana < m.pontos_meta);
 
-// 2. Definir a condição de "Semana 100% Completa"
-// O usuário atingiu os pontos da meta mais alta E cumpriu as condições dela.
-const semanaRealmenteCompleta = metaMaxima && totalPontosSemana >= metaMaxima.pontos_meta && resultadoComissao.condicoesCumpridas;
+        // 2. Definir a condição de "Semana 100% Completa"
+        // O usuário atingiu os pontos da meta mais alta E cumpriu as condições dela.
+        const semanaRealmenteCompleta = metaMaxima && totalPontosSemana >= metaMaxima.pontos_meta && resultadoComissao.condicoesCumpridas;
 
-// Limpa classes e reseta estilos padrões
-focoDiarioEl.classList.remove('sucesso');
-progressRingFgEl.style.stroke = 'var(--ds-cor-primaria)';
-textoSecundarioEl.textContent = 'pontos hoje';
-pilulasApoioContainer.style.opacity = '1';
+        // Limpa classes e reseta estilos padrões
+        focoDiarioEl.classList.remove('sucesso');
+        progressRingFgEl.style.stroke = 'var(--ds-cor-primaria)';
+        textoSecundarioEl.textContent = 'pontos hoje';
+        pilulasApoioContainer.style.opacity = '1';
 
 
-if (semanaRealmenteCompleta) {
-    // ESTADO 4: SUCESSO MÁXIMO - Bateu a meta mais alta!
-    focoDiarioEl.classList.add('sucesso');
-    progressRingFgEl.style.stroke = 'var(--ds-cor-sucesso)';
-    textoPrincipalEl.textContent = '🏆'; // Um troféu é mais legal!
-    textoSecundarioEl.textContent = 'Meta Máxima Atingida!';
-    pilulasApoioContainer.style.opacity = '0'; // Esconde as pílulas de ritmo
-    feedbackDiarioContainer.innerHTML = `<div class="ds-feedback-diario-pilula status-bonus-semana">Parabéns! Você alcançou o nível máximo da semana!</div>`;
+        if (semanaRealmenteCompleta) {
+            // ESTADO 4: SUCESSO MÁXIMO - Bateu a meta mais alta!
+            focoDiarioEl.classList.add('sucesso');
+            progressRingFgEl.style.stroke = 'var(--ds-cor-sucesso)';
+            textoPrincipalEl.textContent = '🏆'; // Um troféu é mais legal!
+            textoSecundarioEl.textContent = 'Meta Máxima Atingida!';
+            pilulasApoioContainer.style.opacity = '0'; // Esconde as pílulas de ritmo
+            feedbackDiarioContainer.innerHTML = `<div class="ds-feedback-diario-pilula status-bonus-semana">Parabéns! Você alcançou o nível máximo da semana!</div>`;
 
-} else if (resultadoComissao.valor > 0) {
-    // ESTADO 3: META INTERMEDIÁRIA ATINGIDA! (Nossa melhoria de UX)
-    // O usuário já ganhou alguma comissão, mas ainda não chegou na meta máxima.
-    focoDiarioEl.classList.add('sucesso'); // Deixa verde pra comemorar
-    progressRingFgEl.style.stroke = 'var(--ds-cor-sucesso)';
-    // Encontra a última meta que ele bateu para exibir o nome
-    const metaAtualAtingida = [...metasDoNivel].reverse().find(m => totalPontosSemana >= m.pontos_meta);
-    
-    let feedbackTexto = `Parabéns, <strong>${metaAtualAtingida.descricao}</strong> atingida!`;
-    if (proximaMeta) {
-        feedbackTexto += ` Rumo à <strong>${proximaMeta.descricao}</strong>!`;
-    }
-    feedbackDiarioContainer.innerHTML = `<div class="ds-feedback-diario-pilula status-bonus-semana">${feedbackTexto}</div>`;
+        } else if (resultadoComissao.valor > 0) {
+            // ESTADO 3: META INTERMEDIÁRIA ATINGIDA! (Nossa melhoria de UX)
+            // O usuário já ganhou alguma comissão, mas ainda não chegou na meta máxima.
+            focoDiarioEl.classList.add('sucesso'); // Deixa verde pra comemorar
+            progressRingFgEl.style.stroke = 'var(--ds-cor-sucesso)';
+            // Encontra a última meta que ele bateu para exibir o nome
+            const metaAtualAtingida = [...metasDoNivel].reverse().find(m => totalPontosSemana >= m.pontos_meta);
+            
+            const classeMetaAtual = obterClasseDeMeta(metaAtualAtingida.descricao);
+            let feedbackTexto = `Parabéns, <strong class="ds-texto-meta ${classeMetaAtual}">${metaAtualAtingida.descricao}</strong> atingida!`;
 
-} else if (totalPontosSemana >= pontosMetaSemanal && pontosMetaSemanal > 0) {
-    // ESTADO 2: PONTOS DA META ATINGIDOS, CONDIÇÕES PENDENTES (relevante para tiktiks)
-    feedbackDiarioContainer.innerHTML = `<div class="ds-feedback-diario-pilula status-sucesso-dia">Pontos atingidos! Conclua os objetivos para liberar a comissão.</div>`;
+            if (proximaMeta) {
+                const classeProximaMeta = obterClasseDeMeta(proximaMeta.descricao);
+                feedbackTexto += ` Rumo à <strong class="ds-texto-meta ${classeProximaMeta}">${proximaMeta.descricao}</strong>!`;
+            }
 
-} else {
-    // ESTADO 1: EM ANDAMENTO - Foco no dia a dia
-    const metaDiariaFixa = pontosMetaSemanal > 0 ? pontosMetaSemanal / 5 : 0;
-    let debitoDeOntem = 0;
-    if (diaDaSemana > 1 && diaDaSemana <= 5) {
-        const diasUteisPassados = diaDaSemana - 1;
-        const metaEsperadaAteOntem = metaDiariaFixa * diasUteisPassados;
-        const pontosFeitosAteOntem = totalPontosSemana - pontosFeitosHoje;
-        debitoDeOntem = Math.max(0, metaEsperadaAteOntem - pontosFeitosAteOntem);
-    }
-    
-    // --- AQUI ESTÁ A CORREÇÃO DO FOCO DO DIA NEGATIVO ---
-    const calculoFaltantesHoje = (metaDiariaFixa > 0 ? metaDiariaFixa - pontosFeitosHoje : 0) + debitoDeOntem;
-    const pontosFaltantesReaisHoje = Math.max(0, calculoFaltantesHoje); // Garante que nunca seja negativo!
-    // --- FIM DA CORREÇÃO DO FOCO DO DIA ---
+            feedbackDiarioContainer.innerHTML = `<div class="ds-feedback-diario-pilula status-bonus-semana">${feedbackTexto}</div>`;
 
-    let htmlFeedback = `<div>Foco do Dia: Faltam <strong>${Math.ceil(pontosFaltantesReaisHoje)}</strong> pontos</div>`;
-    if (debitoDeOntem > 0) {
-        htmlFeedback += `<span class="ds-feedback-subtitulo">incluindo ${Math.ceil(debitoDeOntem)} pts de ontem</span>`;
-    }
-    feedbackDiarioContainer.innerHTML = `<div class="ds-feedback-diario-pilula status-foco">${htmlFeedback}</div>`;
-}
+        } else if (totalPontosSemana >= pontosMetaSemanal && pontosMetaSemanal > 0) {
+            // ESTADO 2: PONTOS DA META ATINGIDOS, CONDIÇÕES PENDENTES (relevante para tiktiks)
+            feedbackDiarioContainer.innerHTML = `<div class="ds-feedback-diario-pilula status-sucesso-dia">Pontos atingidos! Conclua os objetivos para liberar a comissão.</div>`;
+
+        } else {
+            // ESTADO 1: EM ANDAMENTO - Foco no dia a dia
+            const metaDiariaFixa = pontosMetaSemanal > 0 ? pontosMetaSemanal / 5 : 0;
+            let debitoDeOntem = 0;
+            if (diaDaSemana > 1 && diaDaSemana <= 5) {
+                const diasUteisPassados = diaDaSemana - 1;
+                const metaEsperadaAteOntem = metaDiariaFixa * diasUteisPassados;
+                const pontosFeitosAteOntem = totalPontosSemana - pontosFeitosHoje;
+                debitoDeOntem = Math.max(0, metaEsperadaAteOntem - pontosFeitosAteOntem);
+            }
+            
+            // --- CORREÇÃO DO FOCO DO DIA NEGATIVO ---
+            const calculoFaltantesHoje = (metaDiariaFixa > 0 ? metaDiariaFixa - pontosFeitosHoje : 0) + debitoDeOntem;
+            
+            // --- INÍCIO DA NOVA LÓGICA REFINADA PARA O FEEDBACK DIÁRIO ---
+                const pontosFaltantesReaisHoje = Math.max(0, calculoFaltantesHoje);
+
+                // Precisamos saber o status das condições da META ATUALMENTE SELECIONADA.
+                // A variável 'resultadoComissao' só nos dá o status da primeira meta se nenhuma foi batida.
+                // Vamos recalcular as condições para a meta que o usuário está vendo.
+                const verificacaoCondicoesMetaSelecionada = verificarCondicoes(atividadesDaSemana, metaSelecionada.condicoes, listaDeProdutosCache);
+                const condicoesDaMetaAtualCumpridas = verificacaoCondicoesMetaSelecionada.todasCumpridas;
+
+                let htmlFeedback = '';
+                let classeStatus = ''; // Vamos definir a classe dinamicamente
+
+                if (pontosFaltantesReaisHoje > 0) {
+                    // CASO 1: Usuário está ATRASADO nos pontos do dia. Esta é a prioridade máxima.
+                    classeStatus = 'status-foco'; // Amarelo de atenção
+                    htmlFeedback = `<div>Foco do Dia: Faltam <strong>${Math.ceil(pontosFaltantesReaisHoje)}</strong> pontos</div>`;
+                    if (debitoDeOntem > 0) {
+                        htmlFeedback += `<span class="ds-feedback-subtitulo">incluindo ${Math.ceil(debitoDeOntem)} pts de ontem</span>`;
+                    }
+                } else if (!condicoesDaMetaAtualCumpridas) {
+                    // CASO 2: Pontos do dia estão OK, mas as CONDIÇÕES estão PENDENTES.
+                    classeStatus = 'status-sucesso-dia'; // Azul, pois os pontos estão ok, mas o foco muda.
+                    htmlFeedback = `<div><i class="fas fa-bullseye"></i> <strong>Pontos do dia OK!</strong></div>
+                                    <span class="ds-feedback-subtitulo">Agora o foco é concluir os objetivos da semana.</span>`;
+                } else {
+                    // CASO 3: Pontos do dia estão OK E as condições (se existirem) também estão OK.
+                    classeStatus = 'status-bonus-semana'; // Verde, pois está tudo certo.
+                    htmlFeedback = `<div><i class="fas fa-thumbs-up"></i> <strong>Excelente ritmo!</strong></div>
+                                    <span class="ds-feedback-subtitulo">Você está totalmente em dia com a meta.</span>`;
+                }
+
+                feedbackDiarioContainer.innerHTML = `<div class="ds-feedback-diario-pilula ${classeStatus}">${htmlFeedback}</div>`;
+
+                // --- FIM DA NOVA LÓGICA REFINADA ---
+            }
 
     
 
@@ -502,11 +608,41 @@ if (semanaRealmenteCompleta) {
             const metaAlvo = metasDoNivel[indice];
             if (!metaAlvo) return;
             
-            feedbackMetaEl.querySelector('span:first-child').textContent = metaAlvo.descricao;
+            // --- INÍCIO DA MODIFICAÇÃO ---
+
+            // Atualiza a descrição da meta com a cor correta (já fizemos isso)
+            const spanDescricaoMeta = feedbackMetaEl.querySelector('span:first-child');
+            spanDescricaoMeta.textContent = metaAlvo.descricao;
+            spanDescricaoMeta.className = 'ds-texto-meta ' + obterClasseDeMeta(metaAlvo.descricao);
+
+            // Atualiza os pontos da meta
             feedbackMetaEl.querySelector('span:last-child').textContent = `${metaAlvo.pontos_meta} pts`;
+            
+            // Atualiza o valor da comissão projetada
             feedbackComissaoEl.textContent = `R$ ${metaAlvo.valor.toFixed(2)}`;
+
+            // --- LÓGICA DO FEEDBACK INTELIGENTE ---
             const faltamParaAlvo = metaAlvo.pontos_meta - totalPontosSemana;
-            feedbackPontosFaltantesEl.textContent = `${Math.ceil(Math.max(0, faltamParaAlvo))} pts`;
+            const ganhoAdicional = metaAlvo.valor - resultadoComissao.valor;
+
+            if (faltamParaAlvo <= 0) {
+                // Se a meta do slider já foi atingida ou superada
+                feedbackPontosFaltantesEl.textContent = `Concluído!`;
+                // Adiciona uma classe de sucesso para um feedback visual extra
+                feedbackPontosFaltantesEl.closest('.ds-feedback-item').classList.add('sucesso');
+            } else {
+                // Se a meta do slider ainda não foi atingida
+                let textoFeedback = `${Math.ceil(faltamParaAlvo)} pts`;
+                if (ganhoAdicional > 0) {
+                    // Adiciona o ganho extra se for maior que zero
+                    textoFeedback += ` p/ +R$ ${ganhoAdicional.toFixed(2)}`;
+                }
+                feedbackPontosFaltantesEl.innerHTML = textoFeedback; // Usamos innerHTML para o caso de usarmos tags no futuro
+                // Remove a classe de sucesso se houver
+                feedbackPontosFaltantesEl.closest('.ds-feedback-item').classList.remove('sucesso');
+            }
+            
+            // --- FIM DA MODIFICAÇÃO ---
             
             // ATUALIZA OS OBJETIVOS AO MUDAR O SLIDER
             const verificacaoSlider = verificarCondicoes(atividadesDaSemana, metaAlvo.condicoes, listaDeProdutosCache);
