@@ -1737,6 +1737,38 @@ body.autenticado { visibility: visible; }
     animation: oa-spin 0.8s linear infinite;
 }
 
+/* --- Estilos para o Aviso de Horário Estendido --- */
+.aviso-horario-estendido {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 6px 10px;
+    margin: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-align: center;
+}
+
+/* Cores por Nível de Alerta */
+.aviso-horario-estendido.nivel-atencao { /* Amarelo para Pausas */
+    background-color: #fffbeb;
+    color: #b38600;
+    border-bottom: 1px solid #ffeeba;
+}
+
+.aviso-horario-estendido.nivel-critico { /* Vermelho para Fora do Expediente */
+    background-color: #f8d7da;
+    color: #721c24;
+    border-bottom: 1px solid #f5c6cb;
+}
+
+.aviso-horario-estendido.nivel-info { /* Azul/Cinza para Antes do Expediente */
+    background-color: #e2e3e5;
+    color: #383d41;
+    border-bottom: 1px solid #d6d8db;
+}
+
 /*------------------------------------*\
     #RESPONSIVIDADE
 \*------------------------------------*/

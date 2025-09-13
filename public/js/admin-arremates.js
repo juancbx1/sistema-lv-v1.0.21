@@ -224,21 +224,30 @@ function atualizarFeedbackTempo() {
  * Determina o status final de um empregado baseado na hierarquia de regras.
  */
 function determinarStatusFinal(tiktik) {
-    const formatarClasse = (status) => `status-${status.toLowerCase().replace(/_/g, '-')}`;
+    const formatarClasse = (status) => {
+        // Guarda de segurança: se status for undefined ou null, retorna uma string vazia.
+        if (!status) return ''; 
+        return `status-${status.toLowerCase().replace(/_/g, '-')}`;
+    };
     const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 
-    let statusFinalBruto = tiktik.status_atual || STATUS.LIVRE; // Começa com o status do banco
+    let statusFinalBruto;
 
-    // NÍVEL 1: Status manuais que valem para o dia todo
-    const statusDiarios = [STATUS.FALTOU, STATUS.ALOCADO_EXTERNO];
-    if (statusDiarios.includes(tiktik.status_atual) && tiktik.status_data_modificacao?.startsWith(hoje)) {
+    // --- HIERARQUIA DE STATUS CORRIGIDA ---
+
+    // NÍVEL 1: Produzindo (Prioridade sobre pausas automáticas)
+    if (tiktik.status_atual === STATUS.PRODUZINDO) {
+        statusFinalBruto = STATUS.PRODUZINDO;
+    } 
+    // NÍVEL 2: Status manuais de dia inteiro
+    else if ([STATUS.FALTOU, STATUS.ALOCADO_EXTERNO].includes(tiktik.status_atual) && tiktik.status_data_modificacao?.startsWith(hoje)) {
         statusFinalBruto = tiktik.status_atual;
     }
-    // NÍVEL 2: Pausa manual (só se não for um status diário)
+    // NÍVEL 3: Pausa manual
     else if (tiktik.status_atual === STATUS.PAUSA_MANUAL) {
         statusFinalBruto = STATUS.PAUSA_MANUAL;
     }
-    // NÍVEL 3: Status automáticos baseados em horário (só se não for manual)
+    // NÍVEL 4: Lógica de horário para todos os outros casos
     else {
         const agora = new Date();
         const horaAtualStr = agora.toLocaleTimeString('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
@@ -253,7 +262,15 @@ function determinarStatusFinal(tiktik) {
             statusFinalBruto = STATUS.ALMOCO;
         } else if (horario_saida_2 && horario_entrada_3 && horaAtualStr > horario_saida_2 && horaAtualStr < horario_entrada_3) {
             statusFinalBruto = STATUS.PAUSA;
+        } else {
+            // Se passou por tudo, o status é o que está no banco (provavelmente LIVRE), ou LIVRE como fallback.
+            statusFinalBruto = tiktik.status_atual || STATUS.LIVRE;
         }
+    }
+    
+    // Fallback final para garantir que statusFinalBruto NUNCA seja undefined
+    if (!statusFinalBruto) {
+        statusFinalBruto = STATUS.LIVRE;
     }
 
     return {
@@ -264,13 +281,56 @@ function determinarStatusFinal(tiktik) {
 }
 
 /**
+ * Verifica se um tiktik produzindo está em um horário de pausa ou fora do expediente.
+ * @param {object} tiktik - O objeto completo do tiktik do cache.
+ * @returns {object|null} - Retorna um objeto { texto: string, nivel: string } ou null se o horário estiver normal.
+ */
+function verificarHorarioEstendido(tiktik) {
+    const agoraStr = new Date().toLocaleTimeString('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+    const { 
+        horario_entrada_1, horario_saida_1, horario_entrada_2, horario_saida_2, 
+        horario_entrada_3, horario_saida_3 
+    } = tiktik;
+
+    const entradaInicial = horario_entrada_1 || '00:00';
+    const saidaFinal = horario_saida_3 || horario_saida_2 || horario_saida_1 || '23:59';
+
+    if (agoraStr < entradaInicial) {
+        return { texto: '🕒 Expediente Ainda Não Iniciado', nivel: 'info' };
+    }
+    if (agoraStr > saidaFinal) {
+        return { texto: '🚫 Trabalhando Fora do Expediente', nivel: 'critico' };
+    }
+    if (horario_saida_1 && horario_entrada_2 && agoraStr > horario_saida_1 && agoraStr < horario_entrada_2) {
+        return { texto: '⚠️ Pausa para Almoço em Atraso', nivel: 'atencao' };
+    }
+    if (horario_saida_2 && horario_entrada_3 && agoraStr > horario_saida_2 && agoraStr < horario_entrada_3) {
+        return { texto: '⚠️ Pausa da Tarde em Atraso', nivel: 'atencao' };
+    }
+
+    return null; // Horário normal
+}
+
+/**
  * Cria o HTML interno de um card de status de um empregado.
  */
 function criarHTMLCardStatus(tiktik, statusFinalTexto, classeStatus, statusBrutoDecidido) {
     let infoTarefaHTML = '';
     let botoesAcaoHTML = '';
+    let avisoHorarioHTML = '';
 
      if (statusBrutoDecidido === STATUS.PRODUZINDO) {
+        // --- INÍCIO DA NOVA LÓGICA DE AVISO ---
+        const infoHorarioEstendido = verificarHorarioEstendido(tiktik);
+        if (infoHorarioEstendido) {
+            avisoHorarioHTML = `
+                <div class="aviso-horario-estendido nivel-${infoHorarioEstendido.nivel}">
+                    ${infoHorarioEstendido.texto}
+                </div>
+            `;
+        }
+        // --- FIM DA NOVA LÓGICA ---
+
         const tempoSegundosBase = tiktik.tempo_decorrido_real_segundos || 0;
         const tempoDecorridoStr = new Date(tempoSegundosBase * 1000).toISOString().substr(11, 8);
         let progresso = 0;
@@ -381,6 +441,7 @@ function criarHTMLCardStatus(tiktik, statusFinalTexto, classeStatus, statusBruto
             </div>
             ${menuAcoesHTML}
         </div>
+        ${avisoHorarioHTML}
         ${infoTarefaHTML}
         <div class="card-status-footer">
             ${botoesAcaoHTML}
