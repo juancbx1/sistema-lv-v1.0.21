@@ -2145,6 +2145,11 @@ body.autenticado { visibility: visible; }
     .oa-tabela-historico th, .oa-tabela-historico td {
         font-size: 0.58rem;
     }
+
+    .oa-painel-status-grid {
+        /* Força o grid a ter apenas uma coluna, ocupando todo o espaço */
+        grid-template-columns: 1fr; 
+    }
 }
 
 @media (max-width: 399px) {
