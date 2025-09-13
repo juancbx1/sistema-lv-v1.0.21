@@ -38,6 +38,7 @@ import perfisRouter from './api/perfis.js';
 import historicoRouter from './api/historico.js'; 
 import metasRouter from './api/metas.js';
 import realProducaoRouter from './api/real-producao.js';
+import configuracoesRouter from './api/configuracoes.js';
 
 const app = express();
 console.log('Aplicação Express inicializada.');
@@ -85,6 +86,7 @@ const routers = {
     historicoRouter,
     metasRouter,
     realProducaoRouter,
+    configuracoesRouter
 
 };
 for (const routerName in routers) {
@@ -127,6 +129,7 @@ app.use('/api/perfis', perfisRouter);
 app.use('/api/historico', historicoRouter);
 app.use('/api/metas', metasRouter);
 app.use('/api/real-producao', realProducaoRouter);
+app.use('/api/configuracoes', configuracoesRouter);
 
 
 app.get('/api/ping', (req, res) => res.status(200).json({ message: 'pong do server.js' }));

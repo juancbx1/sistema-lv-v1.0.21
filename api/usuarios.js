@@ -1,19 +1,58 @@
 // api/usuarios.js
 import 'dotenv/config';
-import pkg from 'pg';
-const { Pool } = pkg;
+import pg from 'pg'; // Modificado
+const { Pool, types } = pg; // Modificado
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import express from 'express';
-
 import { permissoesDisponiveis as frontendPermissoesDisponiveis, permissoesPorTipo as frontendPermissoesPorTipo } from '../public/js/utils/permissoes.js';
 
-const router = express.Router();
+types.setTypeParser(1114, str => str);
+// --- FIM DA CORREÇÃO ---
+
+const router = express.Router(); 
 const pool = new Pool({
     connectionString: process.env.POSTGRES_URL,
-    // Adicionar timezone: 'UTC' é uma boa prática se ainda não estiver globalmente configurado no pool
 });
+
+
 const SECRET_KEY = process.env.JWT_SECRET;
+
+
+export async function atualizarStatusUsuarioDB(usuarioId, novoStatus) {
+    // ATENÇÃO: Esta função agora ignora o dbClient passado e pega sua própria conexão.
+    
+    if (!usuarioId || !novoStatus) {
+        console.error('[ATOMIC-HAMMER] ERRO: usuarioId e novoStatus são obrigatórios.');
+        return;
+    }
+
+    let localClient; // Conexão local para esta operação
+    try {
+        localClient = await pool.connect();
+
+        const statusQueLimpamSessao = ['LIVRE', 'FALTOU', 'ALOCADO_EXTERNO'];
+        let query;
+        const params = [novoStatus, usuarioId];
+        const timestampSQL = `(NOW() AT TIME ZONE 'America/Sao_Paulo')`;
+
+        if (statusQueLimpamSessao.includes(novoStatus)) {
+            query = `UPDATE usuarios SET status_atual = $1, status_data_modificacao = ${timestampSQL}, id_sessao_trabalho_atual = NULL WHERE id = $2`;
+        } else {
+            query = `UPDATE usuarios SET status_atual = $1, status_data_modificacao = ${timestampSQL} WHERE id = $2`;
+        }
+
+        await localClient.query(query, params);
+
+    } catch (error) {
+        console.error(`[ATOMIC-HAMMER] ERRO ao atualizar status para usuário ${usuarioId}:`, error);
+        // Não relançamos o erro para não quebrar a aplicação principal, apenas logamos.
+    } finally {
+        if (localClient) {
+            localClient.release(); // Garante que a conexão local seja sempre liberada.
+        }
+    }
+}
 
 // ---------------------------------------------------------------
 // NOVA FUNÇÃO: getPermissoesCompletasUsuarioDB
@@ -196,29 +235,35 @@ router.get('/', async (req, res) => {
     const { dbCliente } = req;
     try {
         const query = `
-            SELECT 
-                u.id, u.nome, u.nome_usuario, u.email, u.tipos, u.nivel, u.permissoes,
-                u.salario_fixo, u.valor_passagem_diaria, u.elegivel_pagamento, 
-                u.id_contato_financeiro, u.data_admissao,
-                u.data_demissao, -- NOVO
-                u.horario_entrada_1, -- NOVO
-                u.horario_saida_1, -- NOVO
-                u.horario_entrada_2, -- NOVO
-                u.horario_saida_2, -- NOVO
-                u.horario_entrada_3, -- NOVO
-                u.horario_saida_3, -- NOVO
-                c.nome AS nome_contato_financeiro,
-                COALESCE(
-                    (SELECT array_agg(ucv.concessionaria_id) 
-                    FROM usuario_concessionaria_vt ucv 
-                    WHERE ucv.usuario_id = u.id),
-                    '{}'
-                ) AS concessionarias_vt
-            FROM usuarios u
-            LEFT JOIN fc_contatos c ON u.id_contato_financeiro = c.id
-            ORDER BY u.nome ASC;
-        `;
-        const result = await dbCliente.query(query);
+    SELECT 
+            u.id, u.nome, u.nome_usuario, u.email, u.tipos, u.nivel, u.permissoes,
+            u.salario_fixo, u.valor_passagem_diaria, u.elegivel_pagamento, 
+            u.id_contato_financeiro, u.data_admissao,
+            u.data_demissao,
+            u.horario_entrada_1,
+            u.horario_saida_1,
+            u.horario_entrada_2,
+            u.horario_saida_2, 
+            u.horario_entrada_3,
+            u.horario_saida_3,
+            
+            COALESCE(u.avatar_url, $1) as avatar_url,
+                        
+            c.nome AS nome_contato_financeiro,
+            COALESCE(
+                (SELECT array_agg(ucv.concessionaria_id) 
+                FROM usuario_concessionaria_vt ucv 
+                WHERE ucv.usuario_id = u.id),
+                '{}'
+            ) AS concessionarias_vt
+        FROM usuarios u
+        LEFT JOIN fc_contatos c ON u.id_contato_financeiro = c.id
+        ORDER BY u.nome ASC;
+    `;
+    // Passamos a variável de ambiente como um parâmetro para a query
+    const result = await dbCliente.query(query, [process.env.DEFAULT_AVATAR_URL]);
+
+    res.status(200).json(result.rows);
         res.status(200).json(result.rows);
     } catch (error) {
         console.error('[router/usuarios GET] Erro:', error);
@@ -515,6 +560,44 @@ router.get('/buscar-contatos-empregado', async (req, res) => {
         if (dbCliente) dbCliente.release();
     }
 });
+
+// NOVA ROTA: PUT /api/usuarios/:id/status
+router.put('/:id/status', async (req, res) => {
+    const { usuarioLogado } = req;
+    const { id: idUsuarioParaAtualizar } = req.params;
+    const { status: novoStatus } = req.body;
+
+    let dbClient;
+
+    try {
+        dbClient = await pool.connect();
+        
+        const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
+        if (!permissoes.includes('gerenciar-permissoes')) {
+            return res.status(403).json({ error: 'Permissão negada para alterar status de usuários.' });
+        }
+
+        const validStatus = ['LIVRE', 'FALTOU', 'PAUSA_MANUAL', 'ALOCADO_EXTERNO'];
+        if (!novoStatus || !validStatus.includes(novoStatus)) {
+            console.error('[BACKEND-VALIDACAO] ERRO: Status inválido!');
+            return res.status(400).json({ error: 'Status fornecido é inválido.' });
+        }
+        
+        // CORREÇÃO AQUI: A função atômica não precisa mais do dbClient.
+        await atualizarStatusUsuarioDB(idUsuarioParaAtualizar, novoStatus);
+        
+        res.status(200).json({ message: `Status do usuário ${idUsuarioParaAtualizar} atualizado para ${novoStatus}.` });
+
+    } catch (error) {
+        console.error(`[API /usuarios/:id/status] Erro:`, error);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Erro interno ao atualizar status.' });
+        }
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
 
 
 export default router;

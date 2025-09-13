@@ -781,7 +781,7 @@ body.autenticado { visibility: visible; }
 
 /* --- Estilos por Status --- */
 .oa-card-status-tiktik.status-livre { border-top-color: var(--oa-cor-verde-sucesso); }
-.oa-card-status-tiktik.status-trabalhando { border-top-color: var(--oa-cor-azul-primario); }
+.oa-card-status-tiktik.status-produzindo { border-top-color: var(--oa-cor-azul-primario); }
 .oa-card-status-tiktik.status-almoco { border-top-color: #fd7e14; } /* Laranja */
 .oa-card-status-tiktik.status-pausa { border-top-color: var(--oa-cor-amarelo-atencao); }
 .oa-card-status-tiktik.status-faltou { border-top-color: #6c757d; background-color: #f8f9fa; opacity: 0.7; }
@@ -790,6 +790,7 @@ body.autenticado { visibility: visible; }
 
 .card-status-header {
     display: flex;
+    position: relative;
     align-items: center;
     gap: 12px;
     margin-bottom: 15px;
@@ -801,6 +802,10 @@ body.autenticado { visibility: visible; }
     border-radius: 50%;
     object-fit: cover;
     border: 2px solid var(--oa-cor-cinza-borda);
+    background-size: cover;       /* Garante que a imagem preencha o círculo */
+    background-position: center;  /* Centraliza a imagem no círculo */
+    background-repeat: no-repeat; /* Evita que a imagem se repita */
+    background-color: var(--oa-cor-cinza-fundo); /* Cor de fundo enquanto carrega */
 }
 
 .info-empregado {
@@ -823,14 +828,25 @@ body.autenticado { visibility: visible; }
     display: inline-block;
 }
 
-/* Cores dos selos de status */
-.status-selo.status-livre { background-color: var(--oa-cor-verde-sucesso); }
-.status-selo.status-trabalhando { background-color: var(--oa-cor-azul-primario); }
-.status-selo.status-almoco { background-color: #fd7e14; }
-.status-selo.status-pausa { background-color: var(--oa-cor-amarelo-atencao); }
-.status-selo.status-faltou { background-color: #6c757d; }
-.status-selo.status-fora-horario { background-color: #adb5bd; }
+/* ====================================================== */
+/*  # CORES DOS SELOS DE STATUS (VERSÃO CONSISTENTE)      */
+/* ====================================================== */
 
+/* Status Ativos */
+.status-selo.status-livre { background-color: var(--oa-cor-verde-sucesso); }
+.status-selo.status-produzindo { background-color: var(--oa-cor-azul-primario); }
+
+/* Pausas e Ausências */
+.status-selo.status-almoco { background-color: #fd7e14; } /* Laranja */
+.status-selo.status-pausa { background-color: var(--oa-cor-amarelo-atencao); }
+.status-selo.status-pausa-manual { background-color: #f39c12; color: #ffffff; } /* Mesmo amarelo da pausa automática */
+
+/* Status Manuais de Dia Inteiro */
+.status-selo.status-faltou { background-color: #ff4907;; } /* laranja forte */
+.status-selo.status-alocado-externo { background-color: #8e44ad; } /* Roxo */
+
+/* Outros */
+.status-selo.status-fora-do-horario { background-color: #adb5bd; } /* Cinza claro */
 
 .btn-marcar-falta {
     background: none;
@@ -921,10 +937,14 @@ body.autenticado { visibility: visible; }
 }
 
 .btn-acao.iniciar { 
-    background-color: var(--oa-cor-verde-sucesso); 
+    background-color: var(--oa-cor-cinza-texto-secundario); 
     width: 100%;
 }
-.btn-acao.iniciar:hover { background-color: var(--oa-cor-verde-hover); }
+.btn-acao.iniciar:hover { 
+    background-color: var(--oa-cor-verde-hover); 
+}
+
+
 .btn-acao.finalizar { background-color: var(--oa-cor-azul-primario); }
 
 .btn-acao.finalizar:hover { 
@@ -1011,19 +1031,22 @@ body.autenticado { visibility: visible; }
 }
 
 .oa-accordion-content {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.3s ease-out;
+    display: none; /* Começa completamente escondido */
     background-color: var(--oa-cor-branco);
     border: 1px solid var(--oa-cor-cinza-borda);
     border-top: none;
     border-bottom-left-radius: var(--oa-raio-borda);
     border-bottom-right-radius: var(--oa-raio-borda);
-    padding: 0 20px;
+    padding: 8px; /* Padding fixo */
 }
 
+/* Quando o header tiver a classe .active, o conteúdo aparece */
+.oa-accordion-header.active + .oa-accordion-content {
+    display: block; /* Simplesmente mostra o conteúdo */
+}
+/* O conteúdo interno precisa estar dentro de um wrapper */
 #painelInativosContainer {
-    padding: 20px 0;
+    min-height: 0; /* Ajuda a animação do grid a funcionar corretamente */
 }
 
 /* ==========================================================================
@@ -1631,6 +1654,87 @@ body.autenticado { visibility: visible; }
 .btn-desfazer-tarefa:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+/* --- Estilos para o Menu de Ações Rápidas --- */
+.btn-menu-acoes {
+    background: none;
+    border: none;
+    color: var(--oa-cor-cinza-texto-secundario);
+    cursor: pointer;
+    font-size: 1.2rem;
+    padding: 5px;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    transition: color 0.2s, background-color 0.2s;
+}
+.btn-menu-acoes:hover {
+    color: var(--oa-cor-azul-primario);
+    background-color: #f0f8ff;
+}
+
+.menu-acoes-popup {
+    position: absolute; /* IMPORTANTE: Mantenha como 'absolute' */
+    top: 45px;
+    right: 15px;
+    z-index: 10;
+    background-color: var(--oa-cor-branco);
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+    width: 220px;
+    display: none;
+    padding: 5px 0;
+    border: 1px solid var(--oa-cor-cinza-borda);
+}
+
+
+.menu-acoes-popup.visivel {
+    display: block;
+}
+
+.menu-acoes-popup button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 15px;
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--oa-cor-texto-principal);
+}
+.menu-acoes-popup button:hover {
+    background-color: var(--oa-cor-cinza-fundo);
+}
+.menu-acoes-popup button i {
+    width: 20px;
+    text-align: center;
+    color: var(--oa-cor-cinza-texto-secundario);
+}   
+
+/* --- Estilo para Ações Otimistas em Andamento --- */
+.oa-card-status-tiktik.acao-em-andamento {
+    opacity: 0.6;
+    pointer-events: none; /* Impede cliques múltiplos enquanto a ação processa */
+    position: relative;
+}
+
+.oa-card-status-tiktik.acao-em-andamento::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 28px;
+    height: 28px;
+    margin-top: -14px;
+    margin-left: -14px;
+    border: 3px solid rgba(255, 255, 255, 0.5);
+    border-top-color: var(--oa-cor-branco);
+    border-radius: 50%;
+    animation: oa-spin 0.8s linear infinite;
 }
 
 /*------------------------------------*\

@@ -1,17 +1,20 @@
 // api/arremates.js
 import 'dotenv/config';
-import pkg from 'pg';
-const { Pool } = pkg;
+import pg from 'pg'; // Modificado
+const { Pool, types } = pg; // Modificado
 import jwt from 'jsonwebtoken';
 import express from 'express';
+import { getPermissoesCompletasUsuarioDB, atualizarStatusUsuarioDB } from './usuarios.js';
 
-import { getPermissoesCompletasUsuarioDB } from './usuarios.js';
+// --- INÍCIO DA CORREÇÃO DE FUSO HORÁRIO ---
+types.setTypeParser(1114, str => str);
+// --- FIM DA CORREÇÃO ---
 
-const router = express.Router(); 
+const router = express.Router();
 const pool = new Pool({
     connectionString: process.env.POSTGRES_URL,
-    timezone: 'UTC',
 });
+
 const SECRET_KEY = process.env.JWT_SECRET;
 
 const verificarTokenInterna = (reqOriginal) => {
@@ -595,14 +598,14 @@ router.get('/fila', async (req, res) => {
 
         // <<< NOVO: PASSO 1 - CALCULAR TODAS AS MÉDIAS DE TEMPO PRIMEIRO >>>
         const mediasQuery = `
-            SELECT 
-                produto_id,
-                AVG((EXTRACT(EPOCH FROM (data_fim - data_inicio)) - tempo_pausado_segundos) / NULLIF(quantidade_finalizada, 0)) as media_tempo_por_peca
-            FROM sessoes_trabalho_arremate
-            WHERE status = 'FINALIZADA' AND quantidade_finalizada > 0
-            GROUP BY produto_id;
-        `;
-        const mediasResult = await dbClient.query(mediasQuery);
+    SELECT 
+        produto_id,
+        AVG((EXTRACT(EPOCH FROM (data_fim - data_inicio)) - tempo_pausado_segundos) / NULLIF(quantidade_finalizada, 0)) as media_tempo_por_peca
+        FROM sessoes_trabalho_arremate
+        WHERE status = 'FINALIZADA' AND quantidade_finalizada > 0
+        GROUP BY produto_id;
+    `;
+    const mediasResult = await dbClient.query(mediasQuery);
         // Criamos um "mapa" para acesso rápido: { produto_id => media_tempo }
         const mapaDeMedias = new Map(mediasResult.rows.map(row => [row.produto_id, parseFloat(row.media_tempo_por_peca)]));
         
@@ -752,21 +755,26 @@ router.get('/status-tiktiks', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada.' });
         }
 
-        // 1. Resetar status "FALTOU" de dias anteriores
-        // A cláusula `WHERE status_data_modificacao < CURRENT_DATE` garante que só resetamos faltas antigas.
+        // 1. Resetar status manuais de dias anteriores
         await dbClient.query(`
-    UPDATE usuarios 
-        SET status_atual = 'LIVRE', status_data_modificacao = NULL
-        WHERE 
-            status_atual = 'FALTOU' 
-            AND status_data_modificacao IS NOT NULL
-            AND status_data_modificacao < (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
-    `);
+            UPDATE usuarios 
+            SET 
+                status_atual = 'LIVRE', 
+                -- Define o timestamp para o início do dia atual, para evitar ociosidade indevida
+                status_data_modificacao = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date 
+            WHERE status_atual IN ('FALTOU', 'ALOCADO_EXTERNO') 
+                AND status_data_modificacao IS NOT NULL
+                AND status_data_modificacao < (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+        `);
 
         // 2. Buscar todos os usuários Tiktik com seus dados e sessões atuais
         const query = `
             SELECT 
-                u.id, u.nome, u.avatar_url, u.status_atual, u.status_data_modificacao,
+                u.id, 
+                u.nome, 
+                COALESCE(u.avatar_url, $1) as avatar_url, 
+                u.status_atual, 
+                u.status_data_modificacao,
                 u.horario_entrada_1, u.horario_saida_1, u.horario_entrada_2, u.horario_saida_2, u.horario_entrada_3, u.horario_saida_3,
                 s.id as id_sessao, s.produto_id, s.variante, s.quantidade_entregue, s.data_inicio,
                 p.nome as produto_nome
@@ -776,14 +784,13 @@ router.get('/status-tiktiks', async (req, res) => {
             WHERE 'tiktik' = ANY(u.tipos)
             ORDER BY u.nome ASC;
         `;
-        const result = await dbClient.query(query);
-
+        const result = await dbClient.query(query, [process.env.DEFAULT_AVATAR_URL]);
         // 3. Processar os dados (calcular médias, etc.)
         const tiktiksComStatus = await Promise.all(result.rows.map(async (tiktik) => {
             let media_tempo_por_peca = null;
             let tempo_decorrido_real_segundos = null;
 
-            if (tiktik.status_atual === 'TRABALHANDO' && tiktik.data_inicio) {
+            if (tiktik.status_atual === 'PRODUZINDO' && tiktik.data_inicio) {
                 // Busca a média para o produto (ignorando variante)
                 const mediaQuery = `
                     SELECT AVG(
@@ -947,7 +954,8 @@ router.post('/sessoes/iniciar', async (req, res) => {
         const sessaoResult = await dbClient.query(sessaoQuery, sessaoParams);
         const novaSessaoId = sessaoResult.rows[0].id;
         
-        await dbClient.query(`UPDATE usuarios SET status_atual = 'TRABALHANDO', id_sessao_trabalho_atual = $1 WHERE id = $2`, [novaSessaoId, usuario_tiktik_id]);
+        await atualizarStatusUsuarioDB(usuario_tiktik_id, 'PRODUZINDO'); 
+        await dbClient.query(`UPDATE usuarios SET id_sessao_trabalho_atual = $1 WHERE id = $2`, [novaSessaoId, usuario_tiktik_id]);
 
         await dbClient.query('COMMIT');
         res.status(201).json({ message: 'Sessão iniciada com sucesso!', sessaoId: novaSessaoId });
@@ -1056,11 +1064,8 @@ router.post('/sessoes/finalizar', async (req, res) => {
             [dataFim, qtdFinalizadaNum, idsArrematesGerados.length > 0 ? idsArrematesGerados[0] : null, tempoPausaSegundos, id_sessao]
         );
         
-        await dbClient.query(
-            `UPDATE usuarios SET status_atual = 'LIVRE', id_sessao_trabalho_atual = NULL WHERE id = $1`,
-            [sessao.usuario_tiktik_id]
-        );
-        
+        await atualizarStatusUsuarioDB(sessao.usuario_tiktik_id, 'LIVRE');
+                
         await dbClient.query('COMMIT');
         res.status(200).json({ 
             message: 'Sessão finalizada e arremate(s) registrado(s) com sucesso!', 
@@ -1119,10 +1124,7 @@ router.post('/sessoes/cancelar', async (req, res) => {
         }
         
         // 6. Atualizar o status do usuário Tiktik para 'LIVRE'
-        await dbClient.query(
-            `UPDATE usuarios SET status_atual = 'LIVRE', id_sessao_trabalho_atual = NULL WHERE id = $1`,
-            [sessao.usuario_tiktik_id]
-        );
+        await atualizarStatusUsuarioDB(sessao.usuario_tiktik_id, 'LIVRE');
 
         // 7. EXCLUIR o registro da sessão de trabalho.
         // É isso que garante que ela nunca entrará nos cálculos de performance.
@@ -1213,41 +1215,6 @@ router.post('/sessoes/estornar', async (req, res) => {
         if (dbClient) await dbClient.query('ROLLBACK');
         console.error('[API /sessoes/estornar] Erro:', error);
         res.status(500).json({ error: 'Erro interno ao estornar a sessão.', details: error.message });
-    } finally {
-        if (dbClient) dbClient.release();
-    }
-});
-
-// ROTA: PUT /api/arremates/usuarios/:id/status (poderia estar em usuarios.js)
-router.put('/usuarios/:id/status', async (req, res) => {
-    let dbClient;
-    try {
-        const { id } = req.params;
-        const { status } = req.body;
-
-        const validStatus = ['LIVRE', 'FALTOU', 'PAUSA_MANUAL'];
-        if (!status || !validStatus.includes(status)) {
-            console.error(`[API PUT /usuarios/${id}/status] Status inválido: ${status}`);
-            return res.status(400).json({ error: 'Status inválido.' });
-        }
-
-        dbClient = await pool.connect();
-        
-        // Ao definir um status manual, atualizamos a data
-        const query = `UPDATE usuarios SET status_atual = $1, status_data_modificacao = CURRENT_DATE WHERE id = $2 RETURNING id, nome, status_atual, status_data_modificacao`;
-        const result = await dbClient.query(query, [status, id]);
-
-        if (result.rowCount > 0) {
-            console.log(`[API PUT /usuarios/${id}/status] Sucesso! Usuário atualizado no banco:`, result.rows[0]);
-        } else {
-            console.warn(`[API PUT /usuarios/${id}/status] Atenção: A query foi executada mas nenhuma linha foi atualizada. O usuário com id ${id} existe?`);
-        }
-        
-        res.status(200).json({ message: `Status do usuário atualizado para ${status}.` });
-
-    } catch (error) {
-        console.error('[API /usuarios/:id/status] Erro:', error);
-        res.status(500).json({ error: 'Erro ao atualizar status do usuário.' });
     } finally {
         if (dbClient) dbClient.release();
     }

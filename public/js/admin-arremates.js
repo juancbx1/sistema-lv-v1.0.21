@@ -1,11 +1,9 @@
 // public/js/admin-ordens-de-arremates.js
-import { verificarAutenticacao } from '/js/utils/auth.js';
+import { verificarAutenticacao } from '/js/utils/auth.js'; 
 import { mostrarMensagem, mostrarConfirmacao, mostrarPromptNumerico } from '/js/utils/popups.js';
 import { obterProdutos as obterProdutosDoStorage } from '/js/utils/storage.js';
 import { renderizarPaginacao } from './utils/Paginacao.js';
 import { inicializarControlador, atualizarDadosControlador } from './utils/ControladorFiltros.js';
-
-
 
 // --- Variáveis Globais --- 
 let usuarioLogado = null;
@@ -22,6 +20,8 @@ let modalAtribuirTarefaElemento = null;
 let statusTiktiksCache = [];
 let modalModoFocoElemento = null;
 
+// --- Cache para evitar piscada de imagens ---
+const imageCache = new Set();
 
 
 // Paginação
@@ -32,6 +32,28 @@ const itemsPerPageHistorico = 10;
 
 let historicoArrematesCurrentPage = 1;
 
+const STATUS = {
+    PRODUZINDO: 'PRODUZINDO',
+    LIVRE: 'LIVRE',
+    ALMOCO: 'ALMOÇO',
+    PAUSA: 'PAUSA',
+    FORA_DO_HORARIO: 'FORA_DO_HORARIO', // Sem espaço
+    FALTOU: 'FALTOU',
+    PAUSA_MANUAL: 'PAUSA_MANUAL',
+    ALOCADO_EXTERNO: 'ALOCADO_EXTERNO'
+};
+
+const STATUS_TEXTO_EXIBICAO = {
+    [STATUS.PRODUZINDO]: 'Produzindo',
+    [STATUS.LIVRE]: 'Livre',
+    [STATUS.ALMOCO]: 'Almoço',
+    [STATUS.PAUSA]: 'Pausa',
+    [STATUS.FORA_DO_HORARIO]: 'Fora do Horário', // Com espaço
+    [STATUS.FALTOU]: 'Faltou',
+    [STATUS.PAUSA_MANUAL]: 'Pausa Manual',
+    [STATUS.ALOCADO_EXTERNO]: 'Outro Setor'
+};
+
 
 // Controle de UI
 const lancamentosArremateEmAndamento = new Set();
@@ -39,7 +61,6 @@ const lancamentosArremateEmAndamento = new Set();
 // ==========================================================================
 // # LÓGICA DO NOVO PAINEL DE ATIVIDADES
 // ==========================================================================
-let painelUpdateInterval; // Variável para controlar o auto-update
 let cronometrosUpdateInterval;
 let ultimaAtualizacaoTimestamp = null;
 let feedbackUpdateInterval;  
@@ -59,6 +80,7 @@ async function renderizarPainelStatus() {
 
     try {
         const tiktiks = await fetchFromAPI('/arremates/status-tiktiks');
+        await precarregarImagens(tiktiks);
         statusTiktiksCache = tiktiks;
         
         containerDisponiveis.innerHTML = '';
@@ -71,33 +93,35 @@ async function renderizarPainelStatus() {
         }
 
         tiktiks.forEach(tiktik => {
-        const card = document.createElement('div');
-        card.dataset.tiktikId = tiktik.id;
-        const { statusFinal, classeStatus } = determinarStatusFinal(tiktik);
-
-        // Se estiver trabalhando, armazena a data de início no próprio card
-        if (statusFinal === 'TRABALHANDO') {
-            card.dataset.inicioTarefa = tiktik.data_inicio;
-        }
-
-        card.className = `oa-card-status-tiktik ${classeStatus}`;
-        card.innerHTML = criarHTMLCardStatus(tiktik, statusFinal, classeStatus);
+            const card = document.createElement('div');
+            card.dataset.tiktikId = tiktik.id;
             
-            // Separa em qual container o card será inserido
-            if (statusFinal === 'LIVRE' || statusFinal === 'TRABALHANDO') {
+            // --- MUDANÇA AQUI: Pegamos os 3 valores ---
+            const { statusBruto, statusFinal, classeStatus } = determinarStatusFinal(tiktik);
+
+            // Usa o status BRUTO para a lógica interna
+            if (statusBruto === STATUS.PRODUZINDO) {
+                card.dataset.inicioTarefa = tiktik.data_inicio;
+            }
+
+            card.className = `oa-card-status-tiktik ${classeStatus}`;
+            // Passa o texto de EXIBIÇÃO para a função que cria o HTML
+            card.innerHTML = criarHTMLCardStatus(tiktik, statusFinal, classeStatus, statusBruto); 
+                
+            // Usa o status BRUTO para a lógica de separação de containers
+            if (statusBruto === STATUS.LIVRE || statusBruto === STATUS.PRODUZINDO) {
                 containerDisponiveis.appendChild(card);
             } else {
                 containerInativos.appendChild(card);
                 contadorInativos++;
             }
-            
         });
         
         if(badgeInativos) badgeInativos.textContent = contadorInativos;
 
         // Ao final da renderização bem-sucedida:
-        ultimaAtualizacaoTimestamp = Date.now(); // <<< ATUALIZA O TIMESTAMP
-        atualizarFeedbackTempo(); // <<< CHAMA UMA PRIMEIRA VEZ PARA O TEXTO APARECER IMEDIATAMENTE
+        ultimaAtualizacaoTimestamp = Date.now();
+        atualizarFeedbackTempo();
 
     } catch (error) {
         console.error("Erro ao renderizar painel de status:", error);
@@ -106,35 +130,78 @@ async function renderizarPainelStatus() {
     }
 }
 
-function atualizarCronometros() {
-    // Procura por todos os cards que estão no estado 'trabalhando' ou 'livre'
-    document.querySelectorAll('.oa-card-status-tiktik.status-trabalhando, .oa-card-status-tiktik.status-livre').forEach(card => {
-        const tiktikId = parseInt(card.dataset.tiktikId);
-        const tiktikData = statusTiktiksCache.find(t => t.id === tiktikId);
+/**
+ * Garante que as imagens de uma lista de tiktiks estejam pré-carregadas no cache do navegador.
+ * @param {Array<object>} tiktiks - A lista de tiktiks vinda da API.
+ * @returns {Promise<void>} - Uma promessa que resolve quando todas as novas imagens foram carregadas.
+ */
+function precarregarImagens(tiktiks) {
+    const promessasDeImagens = [];
 
-        if (!tiktikData) return;
-
-        // <<< NOVA LÓGICA DE VERIFICAÇÃO DE PAUSA >>>
-        const { statusFinal: statusCalculadoAgora } = determinarStatusFinal(tiktikData);
+    tiktiks.forEach(tiktik => {
+        const url = tiktik.avatar_url;
         
-        // Verifica se o status que o card MOSTRA é diferente do que DEVERIA ser agora
-        if (!card.classList.contains(`status-${statusCalculadoAgora.toLowerCase().replace(' ', '-')}`)) {
-            renderizarPainelStatus(); 
-            return; // Para a execução deste loop para evitar múltiplas chamadas
-        }
-
-        // --- Lógica do cronômetro que você já tem (agora dentro do if principal) ---
-        const cronometroEl = card.querySelector('.cronometro-tarefa');
-        if (cronometroEl && tiktikData.tempo_decorrido_real_segundos !== null) {
-            const tempoAtualizadoSegundos = tiktikData.tempo_decorrido_real_segundos + 
-                ((Date.now() - (ultimaAtualizacaoTimestamp || Date.now())) / 1000);
+        // Se a URL for válida e AINDA NÃO estiver no nosso cache...
+        if (url && !imageCache.has(url)) {
             
-            const tempoDecorridoStr = new Date(Math.max(0, tempoAtualizadoSegundos) * 1000).toISOString().substr(11, 8);
+            const promessa = new Promise((resolve) => {
+                const img = new Image();
+                img.src = url;
+                // Quando a imagem carregar (ou der erro), a promessa resolve.
+                // Isso garante que não vamos travar a renderização por uma imagem quebrada.
+                img.onload = () => {
+                    imageCache.add(url); // Adiciona ao cache para não carregar de novo
+                    resolve();
+                };
+                img.onerror = () => {
+                    console.warn(`Não foi possível pré-carregar a imagem: ${url}`);
+                    resolve(); // Resolve mesmo em caso de erro.
+                };
+            });
             
-            cronometroEl.innerHTML = `<i class="fas fa-clock"></i> ${tempoDecorridoStr}`;
+            promessasDeImagens.push(promessa);
         }
     });
+    
+    // Retorna uma única promessa que espera por todas as outras
+    return Promise.all(promessasDeImagens);
 }
+
+
+function atualizarCronometros() {
+    const agora = new Date(); 
+
+    document.querySelectorAll('.oa-card-status-tiktik').forEach(card => {
+        const tiktikId = parseInt(card.dataset.tiktikId);
+        const tiktikData = statusTiktiksCache.find(t => t.id === tiktikId);
+        if (!tiktikData) return;
+
+        // --- CORREÇÃO PRINCIPAL AQUI ---
+        // Pegamos os 3 valores retornados pela função.
+        const { statusBruto, statusFinal, classeStatus } = determinarStatusFinal(tiktikData);
+
+        // A verificação de mudança de status agora usa a variável 'classeStatus' que acabamos de obter.
+        if (!card.classList.contains(classeStatus)) {
+            renderizarPainelStatus();
+            return; 
+        }
+
+        // A lógica do cronômetro agora usa 'statusBruto'
+        if (statusBruto === STATUS.PRODUZINDO) {
+            const cronometroEl = card.querySelector('.cronometro-tarefa');
+            if (cronometroEl && tiktikData.tempo_decorrido_real_segundos !== null && ultimaAtualizacaoTimestamp) {
+                const tempoBaseSegundos = tiktikData.tempo_decorrido_real_segundos;
+                const deltaSegundos = (Date.now() - ultimaAtualizacaoTimestamp) / 1000;
+                const tempoAtualizadoSegundos = tempoBaseSegundos + deltaSegundos;
+                const tempoDecorridoStr = new Date(Math.max(0, tempoAtualizadoSegundos) * 1000).toISOString().substr(11, 8);
+                cronometroEl.innerHTML = `<i class="fas fa-clock"></i> ${tempoDecorridoStr}`;
+            }
+        }
+        
+        // A lógica de ociosidade foi desativada, então removemos o resto.
+    });
+}
+
 
 function atualizarFeedbackTempo() {
     const feedbackEl = document.getElementById('feedbackAtualizacao');
@@ -157,83 +224,67 @@ function atualizarFeedbackTempo() {
  * Determina o status final de um empregado baseado na hierarquia de regras.
  */
 function determinarStatusFinal(tiktik) {
-    // 1. Verifica FALTOU (prioridade máxima)
-    const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); // Formato 'YYYY-MM-DD'
+    const formatarClasse = (status) => `status-${status.toLowerCase().replace(/_/g, '-')}`;
+    const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 
-    // Compara apenas a parte da data (YYYY-MM-DD) de 'status_data_modificacao'
-    if (tiktik.status_atual === 'FALTOU' && tiktik.status_data_modificacao?.startsWith(hoje)) {
-        return { statusFinal: 'FALTOU', classeStatus: 'status-faltou' };
+    let statusFinalBruto = tiktik.status_atual || STATUS.LIVRE; // Começa com o status do banco
+
+    // NÍVEL 1: Status manuais que valem para o dia todo
+    const statusDiarios = [STATUS.FALTOU, STATUS.ALOCADO_EXTERNO];
+    if (statusDiarios.includes(tiktik.status_atual) && tiktik.status_data_modificacao?.startsWith(hoje)) {
+        statusFinalBruto = tiktik.status_atual;
+    }
+    // NÍVEL 2: Pausa manual (só se não for um status diário)
+    else if (tiktik.status_atual === STATUS.PAUSA_MANUAL) {
+        statusFinalBruto = STATUS.PAUSA_MANUAL;
+    }
+    // NÍVEL 3: Status automáticos baseados em horário (só se não for manual)
+    else {
+        const agora = new Date();
+        const horaAtualStr = agora.toLocaleTimeString('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+        const { horario_entrada_1, horario_saida_1, horario_entrada_2, horario_saida_2, horario_entrada_3, horario_saida_3 } = tiktik;
+        
+        const saidaFinal = horario_saida_3 || horario_saida_2 || horario_saida_1 || '23:59';
+        const entradaInicial = horario_entrada_1 || '00:00';
+
+        if (horaAtualStr < entradaInicial || horaAtualStr > saidaFinal) {
+            statusFinalBruto = STATUS.FORA_DO_HORARIO;
+        } else if (horario_saida_1 && horario_entrada_2 && horaAtualStr > horario_saida_1 && horaAtualStr < horario_entrada_2) {
+            statusFinalBruto = STATUS.ALMOCO;
+        } else if (horario_saida_2 && horario_entrada_3 && horaAtualStr > horario_saida_2 && horaAtualStr < horario_entrada_3) {
+            statusFinalBruto = STATUS.PAUSA;
+        }
     }
 
-    // 2. Verifica pausas automáticas baseadas no horário
-    const agora = new Date();
-    const horaAtualStr = agora.toLocaleTimeString('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
-
-    const entrada1 = tiktik.horario_entrada_1;
-    const saida1 = tiktik.horario_saida_1;
-    const entrada2 = tiktik.horario_entrada_2;
-    const saida2 = tiktik.horario_saida_2;
-    const entrada3 = tiktik.horario_entrada_3;
-    const saida3 = tiktik.horario_saida_3;
-    
-    // Define a saída final do dia, considerando os turnos existentes
-    const saidaFinal = saida3 || saida2 || saida1 || '23:59';
-    const entradaInicial = entrada1 || '00:00';
-
-    if (horaAtualStr < entradaInicial || horaAtualStr > saidaFinal) {
-        return { statusFinal: 'FORA DO HORÁRIO', classeStatus: 'status-fora-horario' };
-    }
-    if (saida1 && entrada2 && horaAtualStr > saida1 && horaAtualStr < entrada2) {
-        return { statusFinal: 'ALMOÇO', classeStatus: 'status-almoco' };
-    }
-    if (saida2 && entrada3 && horaAtualStr > saida2 && horaAtualStr < entrada3) {
-        return { statusFinal: 'PAUSA', classeStatus: 'status-pausa' };
-    }
-
-    // 3. Se passou por tudo, usa o status do banco
-    switch (tiktik.status_atual) {
-        case 'TRABALHANDO':
-            return { statusFinal: 'TRABALHANDO', classeStatus: 'status-trabalhando' };
-        case 'LIVRE':
-        default:
-            return { statusFinal: 'LIVRE', classeStatus: 'status-livre' };
-    }
+    return {
+        statusBruto: statusFinalBruto,
+        statusFinal: STATUS_TEXTO_EXIBICAO[statusFinalBruto] || statusFinalBruto,
+        classeStatus: formatarClasse(statusFinalBruto)
+    };
 }
 
 /**
  * Cria o HTML interno de um card de status de um empregado.
  */
-function criarHTMLCardStatus(tiktik, statusFinal, classeStatus) {
+function criarHTMLCardStatus(tiktik, statusFinalTexto, classeStatus, statusBrutoDecidido) {
     let infoTarefaHTML = '';
     let botoesAcaoHTML = '';
 
-    if (statusFinal === 'TRABALHANDO') {
-        // Calcula o tempo decorrido uma vez para usar em vários lugares
-        const tempoDecorridoMs = new Date() - new Date(tiktik.data_inicio);
-        const tempoDecorridoStr = new Date(tempoDecorridoMs).toISOString().substr(11, 8);
-        
+     if (statusBrutoDecidido === STATUS.PRODUZINDO) {
+        const tempoSegundosBase = tiktik.tempo_decorrido_real_segundos || 0;
+        const tempoDecorridoStr = new Date(tempoSegundosBase * 1000).toISOString().substr(11, 8);
         let progresso = 0;
         let classeProgresso = '';
-        let mediaInfoHTML = '<p class="media-info">Sem média de tempo registrada para este produto.</p>'; // Mensagem padrão
-
-        // Lógica da barra de progresso e texto informativo
+        let mediaInfoHTML = '<p class="media-info">Sem média de tempo registrada para este produto.</p>';
         if (tiktik.media_tempo_por_peca && tiktik.quantidade_entregue > 0) {
             const tempoMedioTotalSegundos = tiktik.media_tempo_por_peca * tiktik.quantidade_entregue;
-            const tempoDecorridoSegundos = tempoDecorridoMs / 1000;
-            
+            const tempoDecorridoSegundos = tempoSegundosBase; 
             progresso = Math.min(100, (tempoDecorridoSegundos / tempoMedioTotalSegundos) * 100);
-            
-            if (progresso >= 100) {
-                classeProgresso = 'lento';
-            } else if (progresso > 75) {
-                classeProgresso = 'atencao';
-            }
-
-            // Formata o tempo médio para HH:MM:SS para exibição
+            if (progresso >= 100) classeProgresso = 'lento';
+            else if (progresso > 75) classeProgresso = 'atencao';
             const tempoMedioFormatado = new Date(tempoMedioTotalSegundos * 1000).toISOString().substr(11, 8);
             mediaInfoHTML = `<p class="media-info">Tempo médio estimado: <strong>${tempoMedioFormatado}</strong></p>`;
         }
-
         infoTarefaHTML = `
             <div class="info-tarefa">
                 <p class="produto-tarefa">${tiktik.produto_nome} ${tiktik.variante ? `(${tiktik.variante})` : ''}</p>
@@ -248,64 +299,87 @@ function criarHTMLCardStatus(tiktik, statusFinal, classeStatus) {
             </div>
         `;
 
+         // Botões de ação
         const podeFinalizar = permissoes.includes('lancar-arremate');
         const podeCancelar = permissoes.includes('cancelar-tarefa-arremate');
-
-            // Atributos para o botão Finalizar
-            const attrsFinalizar = podeFinalizar
-                ? `data-action="finalizar"`
-                : `data-action="permissao-negada" data-permissao-necessaria="Finalizar Tarefa"`;
-            
-            // Atributos para o botão Cancelar
-            const attrsCancelar = podeCancelar
-                ? `data-action="cancelar"`
-                : `data-action="permissao-negada" data-permissao-necessaria="Cancelar Tarefa"`;
-
-            botoesAcaoHTML = `
-                <div class="oa-card-botoes-acao-container">
-                    <button class="btn-acao cancelar" 
-                            ${attrsCancelar} 
-                            title="Cancelar esta tarefa"
-                            ${!podeCancelar ? 'disabled' : ''}>
-                        <i class="fas fa-times"></i> Cancelar
-                    </button>
-                    <button class="btn-acao finalizar"
-                            ${attrsFinalizar}
-                            ${!podeFinalizar ? 'disabled' : ''}>
-                        <i class="fas fa-check-double"></i> Finalizar
-                    </button>
-                </div>
-            `;
-
-        } else if (statusFinal === 'LIVRE') {
-            const podeAtribuir = permissoes.includes('lancar-arremate');
-            const attrsAtribuir = podeAtribuir
-                ? `data-action="iniciar"`
-                : `data-action="permissao-negada" data-permissao-necessaria="Atribuir Tarefa"`;
-
-            botoesAcaoHTML = `
-                <button class="btn-acao iniciar"
-                        ${attrsAtribuir}
-                        ${!podeAtribuir ? 'disabled' : ''}>
-                    <i class="fas fa-play"></i> Atribuir Tarefa
+        const attrsFinalizar = podeFinalizar ? `data-action="finalizar"` : `data-action="permissao-negada" data-permissao-necessaria="Finalizar Tarefa"`;
+        const attrsCancelar = podeCancelar ? `data-action="cancelar"` : `data-action="permissao-negada" data-permissao-necessaria="Cancelar Tarefa"`;
+        botoesAcaoHTML = `
+            <div class="oa-card-botoes-acao-container">
+                <button class="btn-acao cancelar" 
+                        ${attrsCancelar} 
+                        title="Cancelar esta tarefa"
+                        ${!podeCancelar ? 'disabled' : ''}>
+                    <i class="fas fa-times"></i> Cancelar
                 </button>
-            `;
-        }
+                <button class="btn-acao finalizar"
+                        ${attrsFinalizar}
+                        ${!podeFinalizar ? 'disabled' : ''}>
+                    <i class="fas fa-check-double"></i> Finalizar
+                </button>
+            </div>
+        `;
+    } else if (statusBrutoDecidido === STATUS.LIVRE) {
+        const podeAtribuir = permissoes.includes('lancar-arremate');
+        const attrsAtribuir = podeAtribuir ? `data-action="iniciar"` : `data-action="permissao-negada" data-permissao-necessaria="Atribuir Tarefa"`;
+        botoesAcaoHTML = `
+            <button class="btn-acao iniciar"
+                    ${attrsAtribuir}
+                    ${!podeAtribuir ? 'disabled' : ''}>
+                <i class="fas fa-play"></i> Atribuir Tarefa
+            </button>
+        `;
+    }
     
-    // Lógica para o botão de "Marcar Falta"
-    const podeMarcarFalta = ['LIVRE', 'TRABALHANDO', 'FALTOU'].includes(statusFinal);
-    const textoBotaoFalta = statusFinal === 'FALTOU' ? 'Remover Falta' : 'Marcar Falta';
-    const iconeBotaoFalta = statusFinal === 'FALTOU' ? 'fa-user-check' : 'fa-user-slash';
+     // --- LÓGICA DO NOVO MENU DE AÇÕES ---
+    let menuAcoesHTML = '';
+    const menuItens = [];
 
-    // Montagem final do HTML do card
+    // Opções disponíveis quando o tiktik está ativo
+     if ([STATUS.LIVRE, STATUS.PRODUZINDO].includes(tiktik.status_atual)) {
+        menuItens.push({ action: 'pausa-manual', label: 'Iniciar Pausa Manual', icon: 'fa-coffee' });
+        menuItens.push({ action: 'marcar-falta', label: 'Marcar Falta', icon: 'fa-user-slash' });
+        menuItens.push({ action: 'alocar-externo', label: 'Alocar em Outro Setor', icon: 'fa-shipping-fast' });
+    }
+    else if (tiktik.status_atual === STATUS.PAUSA_MANUAL) {
+        menuItens.push({ action: 'reverter-status', label: 'Finalizar Pausa', icon: 'fa-play' });
+    }
+    else if (tiktik.status_atual === STATUS.FALTOU) {
+         menuItens.push({ action: 'reverter-status', label: 'Remover Falta', icon: 'fa-user-check' });
+    }
+    else if (tiktik.status_atual === STATUS.ALOCADO_EXTERNO) {
+         menuItens.push({ action: 'reverter-status', label: 'Retornar ao Setor', icon: 'fa-undo' });
+    }
+    // ATENÇÃO: Aqui usamos o statusFinalTexto, que é o texto de exibição
+    else if (['Almoço', 'Pausa', 'Fora do Horário'].includes(statusFinalTexto)) {
+         menuItens.push({ action: 'reverter-status', label: 'Interromper e Liberar', icon: 'fa-play' });
+    }
+
+    if (menuItens.length > 0) {
+    menuAcoesHTML = `
+        <button class="btn-menu-acoes" data-action="abrir-menu-acoes" title="Mais Ações">
+            <i class="fas fa-ellipsis-v"></i>
+        </button>
+        
+        <div class="menu-acoes-popup" id="menu-acoes-${tiktik.id}">
+            ${menuItens.map(item => `
+                <button data-action="${item.action}">
+                    <i class="fas ${item.icon}"></i>
+                    <span>${item.label}</span>
+                </button>
+            `).join('')}
+        </div>
+    `;
+    }
+
     return `
         <div class="card-status-header">
-            <img src="${tiktik.avatar_url || '/img/placeholder-image.png'}" alt="Avatar" class="avatar-tiktik oa-avatar-foco" onerror="this.onerror=null; this.src='/img/placeholder-image.png';">
+            <div class="avatar-tiktik oa-avatar-foco" style="background-image: url('${tiktik.avatar_url}')"></div>
             <div class="info-empregado">
                 <span class="nome-tiktik">${tiktik.nome}</span>
-                <span class="status-selo ${classeStatus}">${statusFinal.replace('_', ' ')}</span>
+                <span class="status-selo ${classeStatus}">${statusFinalTexto}</span>
             </div>
-            ${podeMarcarFalta ? `<button class="btn-marcar-falta" data-action="marcar-falta" data-tiktik-id="${tiktik.id}" title="${textoBotaoFalta}"><i class="fas ${iconeBotaoFalta}"></i></button>` : ''}
+            ${menuAcoesHTML}
         </div>
         ${infoTarefaHTML}
         <div class="card-status-footer">
@@ -314,6 +388,38 @@ function criarHTMLCardStatus(tiktik, statusFinal, classeStatus) {
     `;
 }
 
+async function handleAcaoManualStatus(tiktik, novoStatus, mensagemConfirmacao, mensagemSucesso) {
+    if (mensagemConfirmacao) {
+        const confirmado = await mostrarConfirmacao(mensagemConfirmacao, 'aviso');
+        if (!confirmado) return;
+    }
+
+    const cardDoTiktik = document.querySelector(`.oa-card-status-tiktik[data-tiktik-id="${tiktik.id}"]`);
+    let htmlOriginalDoCard = null;
+
+    if (cardDoTiktik) {
+        htmlOriginalDoCard = cardDoTiktik.innerHTML;
+        cardDoTiktik.classList.add('acao-em-andamento');
+    }
+
+    try {
+        const payload = { status: novoStatus }; // <<< Criamos o payload
+        await fetchFromAPI(`/usuarios/${tiktik.id}/status`, {
+            method: 'PUT',
+            body: JSON.stringify(payload) // <<< Enviamos o payload
+        });
+        
+        mostrarMensagem(mensagemSucesso, 'sucesso', 2000);
+        await renderizarPainelStatus(); // Atualiza com os dados reais
+
+    } catch (error) {
+        mostrarMensagem(`Erro ao atualizar status: ${error.message}`, 'erro');
+        if (cardDoTiktik && htmlOriginalDoCard) {
+            cardDoTiktik.classList.remove('acao-em-andamento');
+            cardDoTiktik.innerHTML = htmlOriginalDoCard; // Reverte!
+        }
+    }
+}
 // --- Funções de Manipulação de Ações (Handles) ---
 async function handleAtribuirTarefa(tiktik) {
     if (!modalAtribuirTarefaElemento) {
@@ -398,7 +504,7 @@ async function handleAtribuirTarefa(tiktik) {
 
         const produtosEmTrabalho = new Map();
         statusTiktiksCache
-            .filter(t => t.status_atual === 'TRABALHANDO' && t.produto_id)
+            .filter(t => t.status_atual === 'STATUS.PRODUZINDO' && t.produto_id)
             .forEach(t => {
                 const chave = `${t.produto_id}|${t.variante || '-'}`;
                 if (!produtosEmTrabalho.has(chave)) {
@@ -474,7 +580,7 @@ async function handleAtribuirTarefa(tiktik) {
             // Mapa de produtos em trabalho
             const produtosEmTrabalho = new Map();
             statusTiktiksCache
-                .filter(t => t.status_atual === 'TRABALHANDO' && t.produto_id)
+                .filter(t => t.status_atual === 'STATUS.PRODUZINDO' && t.produto_id)
                 .forEach(t => {
                     const chave = `${t.produto_id}|${t.variante || '-'}`;
                     if (!produtosEmTrabalho.has(chave)) {
@@ -581,52 +687,40 @@ async function handleAtribuirTarefa(tiktik) {
 
         // 3. SEU LISTENER PRINCIPAL (COM O AVISO INTELIGENTE)
         inputQtd.addEventListener('input', debounce(() => {
-            const qtd = parseInt(inputQtd.value) || 0;
-            const restante = saldoDisponivel - qtd;
-            saldoRestanteEl.textContent = restante >= 0 ? restante : '--';
-            btnConfirmar.disabled = !(qtd > 0 && qtd <= saldoDisponivel);
+                const qtd = parseInt(inputQtd.value) || 0;
+                const restante = saldoDisponivel - qtd;
+                saldoRestanteEl.textContent = restante >= 0 ? restante : '--';
+                btnConfirmar.disabled = !(qtd > 0 && qtd <= saldoDisponivel);
 
-            // Lógica do aviso
-            const dadosDePerformanceDoProduto = statusTiktiksCache.find(t => t.produto_id === itemSelecionado.produto_id);
-            const mediaTempo = dadosDePerformanceDoProduto ? dadosDePerformanceDoProduto.media_tempo_por_peca : 0;
-            const tiktikDadosCompletos = statusTiktiksCache.find(t => t.id === tiktik.id);
+                // --- INÍCIO DA NOVA LÓGICA DE CONFLITO DE HORÁRIO ---
+                
+                // Remove qualquer aviso antigo
+                formContainer.querySelector('.aviso-pausa-inteligente')?.remove();
 
-            formContainer.querySelector('.aviso-pausa-inteligente')?.remove();
-
-            if (qtd > 0 && mediaTempo > 0 && tiktikDadosCompletos) {
-                    const tempoEstimadoSegundos = qtd * mediaTempo;
-                    const agora = new Date();
-                    const horaAtualStr = agora.toLocaleTimeString('en-GB', { hour: '2-digit', minute:'2-digit' });
-
-                    let proximaPausaInicio = null;
-                    if (tiktikDadosCompletos.horario_saida_1 && tiktikDadosCompletos.horario_entrada_2 && horaAtualStr < tiktikDadosCompletos.horario_saida_1) {
-                        proximaPausaInicio = tiktikDadosCompletos.horario_saida_1;
-                    } else if (tiktikDadosCompletos.horario_saida_2 && tiktikDadosCompletos.horario_entrada_3 && horaAtualStr < tiktikDadosCompletos.horario_saida_2) {
-                        proximaPausaInicio = tiktikDadosCompletos.horario_saida_2;
-                    }
+                if (qtd > 0) {
+                    // Pega a média de tempo para este produto
+                    const mediaTempo = itemSelecionado.media_tempo_por_peca || 0;
                     
-                    if (proximaPausaInicio) {
-                        const agora = new Date(); // Pega a data e hora atuais
-                        
-                        // Cria uma nova data para a pausa baseada no 'agora', garantindo que é o mesmo dia
-                        const dataPausa = new Date(agora.getTime());
-                        const [h_pausa, m_pausa] = proximaPausaInicio.split(':');
-                        dataPausa.setHours(parseInt(h_pausa), parseInt(m_pausa), 0, 0); // Define a hora da pausa
+                    // Pega os dados completos do tiktik para quem estamos atribuindo a tarefa
+                    const tiktikDadosCompletos = statusTiktiksCache.find(t => t.id === tiktik.id);
 
-                        if (dataPausa > agora) { 
-                        const segundosAtePausa = (dataPausa - agora) / 1000;
-                        if (tempoEstimadoSegundos > segundosAtePausa) {
-                            const tempoEstimadoFormatado = new Date(tempoEstimadoSegundos * 1000).toISOString().substr(11, 8);
+                    if (mediaTempo > 0 && tiktikDadosCompletos) {
+                        const tempoEstimadoSegundos = qtd * mediaTempo;
+                        const infoProximaPausa = calcularTempoAteProximaPausa(tiktikDadosCompletos);
+                        
+                        // Verifica se existe uma pausa futura E se o tempo estimado a ultrapassa
+                        if (infoProximaPausa && tempoEstimadoSegundos > infoProximaPausa.segundosAtePausa) {
+                            const tempoEstimadoFormatado = formatarDuracaoSegundos(tempoEstimadoSegundos);
                             const avisoEl = document.createElement('p');
                             avisoEl.className = 'aviso-pausa-inteligente';
-                            avisoEl.innerHTML = `⚠️ <strong>Atenção:</strong> O tempo estimado (${tempoEstimadoFormatado}) é maior que o tempo restante até a próxima pausa.`;
-                            // Coloca o aviso depois do wrapper do seletor, para melhor posicionamento
+                            avisoEl.innerHTML = `⚠️ Tempo estimado de <strong>${tempoEstimadoFormatado}</strong> excede a próxima pausa.`; 
+                                                    
+                            // Insere o aviso logo após o seletor de quantidade
                             formContainer.querySelector('.seletor-quantidade-wrapper').insertAdjacentElement('afterend', avisoEl);
                         }
                     }
                 }
-            }
-        }, 300)); // Fim do addEventListener
+            }, 300));
 
             // O resto do seu código permanece igual
             formContainer.querySelector('#btnVoltarParaLista').addEventListener('click', () => mostrarTela('lista'));
@@ -641,41 +735,85 @@ async function handleAtribuirTarefa(tiktik) {
         };
 
     const confirmarAtribuicao = async (tiktik, item, quantidade) => {
-        const btnConfirmar = formContainer.querySelector('#btnConfirmarAtribuicao');
-        if (btnConfirmar) {
-            btnConfirmar.disabled = true;
-            btnConfirmar.innerHTML = '<div class="spinner-btn-interno"></div> Confirmando...';
-        }
-        try {
-            const opDeOrigem = item.ops_detalhe.sort((a,b) => a.numero - b.numero)[0];
+            const btnConfirmar = formContainer.querySelector('#btnConfirmarAtribuicao');
             
-            const payload = {
-                usuario_tiktik_id: tiktik.id,
-                produto_id: item.produto_id,
-                variante: item.variante === '-' ? null : item.variante,
-                quantidade_entregue: quantidade,
-                op_numero: opDeOrigem.numero,
-                op_edit_id: opDeOrigem.edit_id,
-                dados_ops: item.ops_detalhe // A chave do sucesso!
-            };
+            // --- INÍCIO DA LÓGICA DE DECISÃO ---
+            const tiktikDadosCompletos = statusTiktiksCache.find(t => t.id === tiktik.id);
+            const mediaTempo = item.media_tempo_por_peca || 0;
+            const tempoEstimadoSegundos = quantidade * mediaTempo;
+            const infoProximaPausa = tiktikDadosCompletos ? calcularTempoAteProximaPausa(tiktikDadosCompletos) : null;
 
-            await fetchFromAPI('/arremates/sessoes/iniciar', {
-                method: 'POST',
-                body: JSON.stringify(payload)
-            });
+            // Se existe um conflito de horário...
+            if (infoProximaPausa && tempoEstimadoSegundos > infoProximaPausa.segundosAtePausa) {
+                const tempoEstimadoFormatado = formatarDuracaoSegundos(tempoEstimadoSegundos);
+                const tempoAtePausaFormatado = formatarDuracaoSegundos(infoProximaPausa.segundosAtePausa);
 
-            mostrarMensagem('Tarefa iniciada com sucesso!', 'sucesso');
-            fecharModal();
-            await renderizarPainelStatus();
-            await forcarAtualizacaoFilaDeArremates();
-        } catch (error) {
-            mostrarMensagem(`Deu ruim!!: ${error.message}`, 'erro');
-            if (btnConfirmar) {
-                btnConfirmar.disabled = false;
-                btnConfirmar.innerHTML = '<i class="fas fa-check"></i> Confirmar';
+                const mensagem = `
+                    <strong>Conflito de Horário!</strong><br><br>
+                    A tarefa levará cerca de <strong>${tempoEstimadoFormatado}</strong>, mas a próxima pausa de ${tiktik.nome} começa em aproximadamente <strong>${tempoAtePausaFormatado}</strong>.<br><br>
+                    Realmente deseja atribuir esta tarefa? O horário de pausa será ajustado.
+                `;
+
+                const confirmado = await mostrarConfirmacao(mensagem, 'aviso');
+
+                if (!confirmado) {
+                    return;
+                }
             }
-        }
-    };
+            // --- FIM DA LÓGICA DE DECISÃO ---
+
+            // --- INÍCIO DA LÓGICA OTIMISTA ---
+
+                // 1. Fechar o modal IMEDIATAMENTE.
+                const modal = document.getElementById('modalAtribuirTarefa');
+                if (modal) modal.style.display = 'none';
+
+                // 2. Encontrar o card do tiktik na tela.
+                const cardDoTiktik = document.querySelector(`.oa-card-status-tiktik[data-tiktik-id="${tiktik.id}"]`);
+                let htmlOriginalDoCard = null; // Guardar o estado original para reverter em caso de erro
+
+                if (cardDoTiktik) {
+                    htmlOriginalDoCard = cardDoTiktik.innerHTML; // Salva o HTML
+                    // Adiciona a classe de carregamento para feedback visual
+                    cardDoTiktik.classList.add('acao-em-andamento');
+                }
+
+                // 3. Montar o payload da API.
+                const payload = {
+                    usuario_tiktik_id: tiktik.id,
+                    produto_id: item.produto_id,
+                    variante: item.variante === '-' ? null : item.variante,
+                    quantidade_entregue: quantidade,
+                    dados_ops: item.ops_detalhe 
+                };
+
+                // 4. Chamar a API em segundo plano.
+                try {
+                    await fetchFromAPI('/arremates/sessoes/iniciar', {
+                        method: 'POST',
+                        body: JSON.stringify(payload)
+                    });
+
+                    // SUCESSO! A API confirmou.
+                    mostrarMensagem('Tarefa iniciada com sucesso!', 'sucesso', 2000);
+
+                    // Agora, atualizamos o painel e a fila com os dados reais do servidor.
+                    // A classe 'acao-em-andamento' será removida pela re-renderização.
+                    await renderizarPainelStatus();
+                    await forcarAtualizacaoFilaDeArremates();
+
+                } catch (error) {
+                    // ERRO! A API falhou.
+                    mostrarMensagem(`Erro ao iniciar tarefa: ${error.message}`, 'erro');
+
+                    // Reverte a UI para o estado anterior.
+                    if (cardDoTiktik && htmlOriginalDoCard) {
+                        cardDoTiktik.classList.remove('acao-em-andamento');
+                        cardDoTiktik.innerHTML = htmlOriginalDoCard; // Restaura o HTML
+                    }
+                }
+                // --- FIM DA LÓGICA OTIMISTA ---
+            };
     
     titulo.innerHTML = `Atribuir Tarefa para <span class="nome-destaque-modal">${tiktik.nome}</span>`;
     buscaInput.value = '';
@@ -699,6 +837,30 @@ async function handleAtribuirTarefa(tiktik) {
         console.error("Erro em handleAtribuirTarefa:", error);
         filaWrapper.innerHTML = `<p class="erro-painel">Erro ao carregar fila de arremates.</p>`;
     }
+}
+
+/**
+ * Formata uma duração em segundos para um texto amigável (ex: "1 hora e 15 minutos", "32 minutos", "45 segundos").
+ * @param {number} totalSegundos - A quantidade total de segundos.
+ * @returns {string} - O texto formatado.
+ */
+function formatarDuracaoSegundos(totalSegundos) {
+    if (totalSegundos < 60) {
+        return `${Math.round(totalSegundos)} segundos`;
+    }
+
+    const totalMinutos = Math.floor(totalSegundos / 60);
+    const horas = Math.floor(totalMinutos / 60);
+    const minutos = totalMinutos % 60;
+
+    if (horas > 0) {
+        if (minutos > 0) {
+            return `${horas} hora${horas > 1 ? 's' : ''} e ${minutos} minuto${minutos > 1 ? 's' : ''}`;
+        }
+        return `${horas} hora${horas > 1 ? 's' : ''}`;
+    }
+    
+    return `${minutos} minuto${minutos > 1 ? 's' : ''}`;
 }
 
 async function handleFinalizarTarefa(tiktik) {
@@ -756,7 +918,7 @@ async function handleCancelarTarefa(tiktik) {
         mostrarMensagem('Tarefa cancelada com sucesso!', 'sucesso');
 
         // 3. Atualiza a interface para refletir a mudança
-        await renderizarPainelStatus(); // O card do tiktik voltará ao estado "LIVRE"
+        await renderizarPainelStatus();
         await forcarAtualizacaoFilaDeArremates(); // O saldo do produto na fila principal será corrigido
 
     } catch (error) {
@@ -764,47 +926,108 @@ async function handleCancelarTarefa(tiktik) {
     }
 }
 
-async function handleMarcarFalta(tiktik, statusAtual) {
-    const novoStatus = statusAtual === 'FALTOU' ? 'LIVRE' : 'FALTOU';
-    const acao = novoStatus === 'FALTOU' ? 'registrar a falta' : 'remover a falta';
-    
-    const confirmado = await mostrarConfirmacao(`Deseja ${acao} para ${tiktik.nome} hoje?`);
-    if (!confirmado) {
-        console.log("Ação cancelada pelo usuário.");
-        return;
-    }
-
-    try {
-        await fetchFromAPI(`/arremates/usuarios/${tiktik.id}/status`, {
-            method: 'PUT',
-            body: JSON.stringify({ status: novoStatus })
-        });
-        
-        mostrarMensagem(`Status de ${tiktik.nome} atualizado.`, 'sucesso');
-        
-        await renderizarPainelStatus();
-
-    } catch (error) {
-        // ✨ LOG DE DEPURAÇÃO 3 ✨
-        console.error("Erro em handleMarcarFalta:", error);
-        mostrarMensagem(`Erro ao atualizar status: ${error.message}`, 'erro');
-    }
-}
-
 /**
  * Inicia ou para o intervalo de atualização automática do painel.
  */
 function controlarAtualizacaoPainel(iniciar = true) {
-    clearInterval(painelUpdateInterval);
+    // Para os intervalos que rodam a cada segundo, podemos mantê-los como estão,
+    // pois são leves e apenas manipulam a UI.
     clearInterval(cronometrosUpdateInterval);
     clearInterval(feedbackUpdateInterval);
 
+    // Para o polling da API, usamos a nova lógica
+    clearTimeout(pollingTimeoutId);
+
     if (iniciar) {
-        painelUpdateInterval = setInterval(renderizarPainelStatus, 20000);
+        // Inicia o loop de atualização do cronômetro e feedback de tempo
         cronometrosUpdateInterval = setInterval(atualizarCronometros, 1000);
-        feedbackUpdateInterval = setInterval(atualizarFeedbackTempo, 5000); // <<< INICIA O NOVO INTERVALO (a cada 5s)
+        feedbackUpdateInterval = setInterval(atualizarFeedbackTempo, 5000);
+
+        // Inicia o polling inteligente da API imediatamente
+        iniciarPollingPainel();
+        
+        // Adiciona um listener para pausar/retomar o polling quando a aba muda
+        document.addEventListener('visibilitychange', iniciarPollingPainel);
+
+    } else {
+        // Se a instrução for para parar, remove o listener também
+        document.removeEventListener('visibilitychange', iniciarPollingPainel);
     }
 }
+
+// Variável para controlar o timer do polling
+let pollingTimeoutId = null; 
+const POLLING_INTERVAL_MS = 20000; // 20 segundos
+
+async function iniciarPollingPainel() {
+    // Se a aba não estiver visível, não faz nada e tenta de novo mais tarde.
+    if (document.hidden) {
+        // Limpa qualquer timer antigo para garantir que não haja duplicação
+        clearTimeout(pollingTimeoutId); 
+        // Agenda uma nova verificação para quando a aba talvez já esteja visível
+        pollingTimeoutId = setTimeout(iniciarPollingPainel, POLLING_INTERVAL_MS);
+        return; // Para a execução aqui
+    }
+
+    try {
+        // Chama a função que busca os dados e atualiza a tela
+        await renderizarPainelStatus();
+    } catch (error) {
+        console.error("[Polling Inteligente] Erro ao atualizar o painel, tentando novamente mais tarde.", error);
+        // Em caso de erro, podemos aumentar o tempo de espera antes de tentar de novo
+    } finally {
+        // Bloco FINALLY: Este código SEMPRE será executado, com ou sem erro.
+        // Garante que o loop continue.
+        
+        // Limpa qualquer timer antigo para segurança
+        clearTimeout(pollingTimeoutId); 
+        // Agenda a PRÓXIMA execução da função
+        pollingTimeoutId = setTimeout(iniciarPollingPainel, POLLING_INTERVAL_MS);
+    }
+}
+
+/**
+ * Calcula o tempo em segundos até a próxima pausa programada de um tiktik.
+ * @param {object} tiktikDados - O objeto completo do tiktik do cache.
+ * @returns {object|null} - Retorna um objeto { proximaPausaInicio: 'HH:MM', segundosAtePausa: number } ou null se não houver pausas futuras no dia.
+ */
+function calcularTempoAteProximaPausa(tiktikDados) {
+    const agora = new Date();
+    const horaAtualStr = agora.toLocaleTimeString('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+
+    const { horario_saida_1, horario_entrada_2, horario_saida_2, horario_entrada_3 } = tiktikDados;
+
+    let proximaPausaInicio = null;
+
+    // Verifica se a pausa do almoço ainda vai acontecer hoje
+    if (horario_saida_1 && horario_entrada_2 && horaAtualStr < horario_saida_1) {
+        proximaPausaInicio = horario_saida_1;
+    } 
+    // Se a pausa do almoço já passou, verifica a pausa da tarde
+    else if (horario_saida_2 && horario_entrada_3 && horaAtualStr < horario_saida_2) {
+        proximaPausaInicio = horario_saida_2;
+    }
+
+    // Se não encontrou nenhuma pausa futura, retorna null
+    if (!proximaPausaInicio) {
+        return null;
+    }
+
+    // Calcula a diferença em segundos
+    const dataPausa = new Date(agora.getTime());
+    const [h_pausa, m_pausa] = proximaPausaInicio.split(':');
+    dataPausa.setHours(parseInt(h_pausa), parseInt(m_pausa), 0, 0);
+
+    // Garante que a data da pausa é no futuro (caso seja um horário que já passou)
+    if (dataPausa <= agora) {
+        return null;
+    }
+
+    const segundosAtePausa = (dataPausa - agora) / 1000;
+    
+    return { proximaPausaInicio, segundosAtePausa };
+}
+
 
 async function handleDesfazerTarefa(sessaoId) {
     const confirmado = await mostrarConfirmacao(
@@ -1131,18 +1354,18 @@ function renderizarCardsDaPagina(itensParaRenderizar, page = 1) {
     if (itensDaPagina.length === 0) {
         container.innerHTML = '<p style="text-align: center; padding: 20px;">Nenhum item encontrado com os filtros aplicados.</p>';
     } else {
-            itensDaPagina.forEach(item => {
+        itensDaPagina.forEach(item => {
             const card = document.createElement('div');
             card.className = 'oa-card-arremate';
             
-            // Antes: usava item.produto_nome, item.saldo_para_arrematar
-            // Agora: usa os nomes traduzidos e padronizados
             const produtoInfo = todosOsProdutosCadastrados.find(p => p.id == item.produto_id);
-            const imagemSrc = obterImagemProduto(produtoInfo, item.variante);
+            
+            let imagemSrc = obterImagemProduto(produtoInfo, item.variante);
+
             const opsOrigemCount = item.ops_detalhe?.length || 0;
             
             card.innerHTML = `
-                <img src="${imagemSrc}" alt="${item.produto}" class="oa-card-img" onerror="...">
+                <img src="${imagemSrc}" alt="${item.produto}" class="oa-card-img">
                 <div class="oa-card-info">
                     <h3>${item.produto}</h3>
                     <p>${item.variante && item.variante !== '-' ? item.variante : 'Padrão'}</p>
@@ -1385,14 +1608,24 @@ function paginarArray(array, page, itemsPerPage) {
 
 
 function obterImagemProduto(produtoInfo, varianteNome) {
-    if (!produtoInfo) return '/img/placeholder-image.png';
+    const placeholder = '/img/placeholder-image.png'; // Mantemos um placeholder local como último recurso
+
+    if (!produtoInfo) {
+        return placeholder;
+    }
+
+    // 1. Tenta pegar a imagem da variação específica
     if (varianteNome && varianteNome !== '-') {
         const gradeItem = produtoInfo.grade?.find(g => g.variacao === varianteNome);
-        if (gradeItem?.imagem) return gradeItem.imagem;
+        if (gradeItem?.imagem) {
+            return gradeItem.imagem;
+        }
     }
-    return produtoInfo.imagem || '/img/placeholder-image.png';
+    
+    // 2. Se não encontrou na variação, pega a imagem do "produto pai"
+    //    Se o produto pai também não tiver, retorna o placeholder.
+    return produtoInfo.imagem || placeholder;
 }
-
 
 async function handleEstornoClick(event) {
     const button = event.currentTarget;
@@ -1483,6 +1716,8 @@ async function mostrarHistoricoArremates() {
     // Inicia a busca dos dados
     await buscarErenderizarHistoricoArremates(1);
 }
+
+
 
 /**
  * Busca os dados da API e chama a função para renderizar a tabela.
@@ -1687,74 +1922,92 @@ async function handleHashChange() {
 
 //  Delegação de eventos para o painel de atividades e accordion
      const painelClickHandler = async (event) => {
+            // 1. Identifica os possíveis alvos do clique
+            const avatarClicado = event.target.closest('.oa-avatar-foco');
+            const actionButton = event.target.closest('[data-action]');
+            
+            // Se não clicou nem no avatar nem em um botão de ação, não faz nada.
+            if (!avatarClicado && !actionButton) return;
+            
+            // 2. Encontra o card pai e os dados do tiktik (lógica que já tínhamos)
+            const card = event.target.closest('.oa-card-status-tiktik');
+            if (!card) return;
 
-    // 1. Identifica os possíveis alvos do clique
-    const actionButton = event.target.closest('[data-action]');
-    const avatarClicado = event.target.closest('.oa-avatar-foco');
-
-    // 3. Encontra o card pai do elemento que foi clicado
-    const card = event.target.closest('.oa-card-status-tiktik');
-    if (!card) {
-        console.error("ERRO: Alvo interativo encontrado, mas não estava dentro de um .oa-card-status-tiktik. Isso não deveria acontecer.");
-        return;
-    }
-
-    // 4. Pega o ID do tiktik a partir do dataset do card
-    const tiktikId = parseInt(card.dataset.tiktikId);
-    if (isNaN(tiktikId)) {
-        console.error("ERRO: Não foi possível obter o tiktikId do card.", card.dataset);
-        return;
-    }
-
-    // --- DECISÃO DO QUE FAZER ---
-
-    // Ação: Abrir o "Modo Foco" tem prioridade
-    if (avatarClicado) {
-        try {
+            const tiktikId = parseInt(card.dataset.tiktikId);
             const tiktikData = statusTiktiksCache.find(t => t.id === tiktikId);
-            if (tiktikData) {
+            if (!tiktikData) return;
+
+            // 3. Decide o que fazer com base no alvo clicado
+            
+            // Se o clique foi no avatar, abre o Modo Foco.
+            if (avatarClicado) {
                 abrirModoFoco(tiktikData);
-            } else {
-                console.error(`Não foram encontrados dados no cache para o tiktikId: ${tiktikId}`);
-            }
-        } catch(e) { console.error("Erro ao tentar abrir modo foco:", e); }
-        return;
-    }
-
-    // Ação: Executar um Botão
-    if (actionButton) {
-            const action = actionButton.dataset.action;
-
-            if (action === 'permissao-negada') {
-                const permissaoNecessaria = actionButton.dataset.permissaoNecessaria || "esta ação";
-                mostrarMensagem(`Você não tem permissão para ${permissaoNecessaria.toLowerCase()}.`, 'aviso');
-                return;
+                return; // Ação concluída.
             }
 
-            try {
-                const tiktikData = statusTiktiksCache.find(t => t.id === tiktikId);
-                if (!tiktikData) throw new Error(`Dados do tiktik ID ${tiktikId} não encontrados.`);
+            // Se o clique foi em um botão de ação, continua com a lógica que já tínhamos.
+            if (actionButton) {
+                const action = actionButton.dataset.action;
 
+                // --- LÓGICA DO MENU (continua igual) ---
+                if (action === 'abrir-menu-acoes') {
+                    document.querySelectorAll('.menu-acoes-popup.visivel').forEach(menu => {
+                        if (!card.contains(menu)) menu.classList.remove('visivel');
+                    });
+                    const menu = card.querySelector('.menu-acoes-popup');
+                    if (menu) menu.classList.toggle('visivel');
+                    return;
+                }
+
+                // --- LÓGICA DAS AÇÕES (continua igual) ---
                 switch(action) {
+                    case 'abrir-menu-acoes': {
+                        const menu = card.querySelector('.menu-acoes-popup');
+                        if (menu) {
+                            // Fecha todos os outros menus antes de abrir o novo
+                            document.querySelectorAll('.menu-acoes-popup.visivel').forEach(m => {
+                                if (m !== menu) m.classList.remove('visivel');
+                            });
+                            // Alterna a visibilidade do menu atual
+                            menu.classList.toggle('visivel');
+                        }
+                        break; // Sai do switch
+                    }
                     case 'iniciar': 
                         handleAtribuirTarefa(tiktikData); 
                         break;
                     case 'finalizar': 
-                        handleFinalizarTarefa(tiktikData); 
+                    handleFinalizarTarefa(tiktikData); 
                         break;
-                    case 'cancelar':
-                        handleCancelarTarefa(tiktikData);
+                    case 'cancelar': 
+                    handleCancelarTarefa(tiktikData); 
+                        break;
+                    case 'pausa-manual':
+                        await handleAcaoManualStatus(tiktikData, STATUS.PAUSA_MANUAL, 
+                            `Confirmar início de pausa manual para <strong>${tiktikData.nome}</strong>?`,
+                            `Pausa manual iniciada para ${tiktikData.nome}.`);
                         break;
                     case 'marcar-falta':
-                        const statusAtual = determinarStatusFinal(tiktikData).statusFinal;
-                        handleMarcarFalta(tiktikData, statusAtual);
+                        await handleAcaoManualStatus(tiktikData, STATUS.FALTOU, 
+                            `Confirmar falta para <strong>${tiktikData.nome}</strong> hoje?`,
+                            `Falta registrada para ${tiktikData.nome}.`);
                         break;
+                    case 'alocar-externo':
+                        await handleAcaoManualStatus(tiktikData, STATUS.ALOCADO_EXTERNO, 
+                            `Alocar <strong>${tiktikData.nome}</strong> em outro setor pelo resto do dia? (Ele sairá desta tela)`,
+                            `${tiktikData.nome} alocado em outro setor.`);
+                        break;
+                    case 'reverter-status':
+                        await handleAcaoManualStatus(tiktikData, STATUS.LIVRE, null,
+                            `Status de ${tiktikData.nome} revertido para LIVRE.`);
+                        break;
+                        
                 }
-            } catch (error) {
-                mostrarMensagem(`Erro ao processar ação: ${error.message}`, 'erro');
+
+                const menuAberto = card.querySelector('.menu-acoes-popup');
+                if (menuAberto) menuAberto.classList.remove('visivel');
             }
-        }
-    };
+        };
 
 function configurarEventListeners() {
     // Mantém o listener para fechar a view de detalhes. Perfeito.
@@ -1802,6 +2055,8 @@ function configurarEventListeners() {
         });
     });
 
+    
+
     // =========================================================================
     // <<< INÍCIO DA NOVA LÓGICA INTEGRADA - O LISTENER MESTRE >>>
     // =========================================================================
@@ -1809,6 +2064,18 @@ function configurarEventListeners() {
     // Este único listener no documento agora gerencia as ações dinâmicas da página
     // que antes estavam espalhadas.
     document.addEventListener('click', async (event) => {
+
+         // Primeiro, verificamos se o clique foi DENTRO do botão que ABRE o menu.
+        const foiCliqueParaAbrirMenu = event.target.closest('[data-action="abrir-menu-acoes"]');
+        
+        // Se o clique NÃO foi para abrir um menu, e também NÃO foi dentro de um menu já aberto,
+        // então consideramos que foi "fora".
+        if (!foiCliqueParaAbrirMenu && !event.target.closest('.menu-acoes-popup')) {
+            document.querySelectorAll('.menu-acoes-popup.visivel').forEach(menu => {
+                menu.classList.remove('visivel');
+            });
+        }
+
         // Alvo 1: Botão de abrir o Histórico Geral (vindo do header React)
         if (event.target.closest('#btnAbrirHistorico')) {
             mostrarHistoricoArremates();
@@ -1832,23 +2099,14 @@ function configurarEventListeners() {
 
         // Alvo 4: O header do Accordion de Inativos
             const accordionHeaderClicado = event.target.closest('#accordionHeader');
-            if (accordionHeaderClicado) {
-                const accordionContent = document.getElementById('accordionContent');
-                if (accordionContent) {
+                if (accordionHeaderClicado) {
                     accordionHeaderClicado.classList.toggle('active');
-                    if (accordionContent.style.maxHeight) {
-                        accordionContent.style.maxHeight = null;
-                    } else {
-                        accordionContent.style.maxHeight = accordionContent.scrollHeight + "px";
-                    }
+                    return; // Ação concluída
                 }
-                return; // Ação concluída
-            }
-
-        
     });
-}
 
+    
+}
 
 async function carregarHistoricoDoProduto(produtoId, variante, page = 1) {
     const container = document.getElementById('historicoProdutoContainer');
@@ -1984,12 +2242,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         permissoes = auth.permissoes || [];
         document.body.classList.add('autenticado');
         
-        // 1. CARREGAMENTO DE DADOS ESSENCIAIS
-        const [produtosCadastrados, respostaFila, usuarios] = await Promise.all([
+        // 1. CARREGAMENTO DE DADOS ESSENCIAIS E CONFIGS
+        const [configuracoesPublicas, produtosCadastrados, respostaFila, usuarios] = await Promise.all([
+            fetch('/api/configuracoes/publicas').then(res => res.json()), // Busca as configs
             obterProdutosDoStorage(true),
             fetchFromAPI('/arremates/fila?fetchAll=true'),
             fetchFromAPI('/usuarios')
         ]);
+
+        // Armazena as URLs padrão na janela global para fácil acesso
+        window.DEFAULT_PRODUCT_IMAGE_URL = configuracoesPublicas.DEFAULT_PRODUCT_IMAGE_URL;
+        window.DEFAULT_AVATAR_URL = configuracoesPublicas.DEFAULT_AVATAR_URL;
 
        // "Sequestra" o modal de foco para gerenciamento via JS
         const modalFocoOriginal = document.getElementById('modalModoFoco');

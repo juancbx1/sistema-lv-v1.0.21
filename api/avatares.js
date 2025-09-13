@@ -140,7 +140,8 @@ router.delete('/:id', async (req, res) => {
         // --- LÓGICA CORRIGIDA ---
         // Se o avatar a ser excluído for o ativo, limpa a referência na tabela de usuários.
         if (avatarParaExcluir.ativo) {
-            await sql`UPDATE usuarios SET avatar_url = NULL WHERE id = ${userId};`;
+            // Agora, em vez de NULL, definimos a URL padrão
+            await sql`UPDATE usuarios SET avatar_url = ${process.env.DEFAULT_AVATAR_URL} WHERE id = ${userId};`;
             avatarUrlCleared = true;
         }
 
