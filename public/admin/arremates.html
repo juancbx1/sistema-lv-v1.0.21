@@ -29,7 +29,7 @@
             <!-- ======================================================= -->
             <section id="arrematesListView">
                 <!-- Portal para o Header React -->
-                <div id="header-root"></div>
+                <div id="app-react-root"></div>
                 
                 <!-- Painel de Informações (Dashboard) -->
                 <div class="oa-painel-info-container">
@@ -79,81 +79,11 @@
                     </div>
                 </section>
 
-                <!-- Portal para os Filtros React -->
-                <div id="filtros-root"></div>
-
                 <!-- Container para os Cards e Paginação -->
                 <div class="gs-container-cards">
-                    <div id="arremateCardsContainer" class="oa-cards-container-arremate"></div>
-                    <div id="arrematePaginationContainer" class="gs-paginacao-container" style="display: none;"></div>
                 </div>
             </section> <!-- FIM DA TELA 1 -->
 
-            <!-- ======================================================= -->
-            <!-- TELA 2: DETALHES DO ARREMATE (COMEÇA ESCONDIDA)        -->
-            <!-- ======================================================= -->
-            <section class="hidden" id="arremateDetalheView">
-                <!-- Cabeçalho da View de Detalhe -->
-                <div class="oa-detalhe-header">
-                    <div class="oa-detalhe-thumbnail" id="arremateDetalheThumbnail"></div>
-                    <div class="oa-detalhe-info">
-                        <h2 id="arremateProdutoNomeDetalhe">[Produto]</h2>
-                        <p id="arremateVarianteNomeDetalhe">[Variante]</p>
-                    </div>
-                    <div class="oa-detalhe-saldo">
-                        <label>PENDENTE DE ARREMATE</label>
-                        <span id="arremateTotalPendenteAgregado">0</span>
-                    </div>
-                    <button class="botao-fechar oa-btn-perigo" id="fecharArremateDetalheBtn" title="Voltar para Lista">X</button>
-                </div>
-                <hr class="oa-divisor">
-
-                <!-- Abas de Navegação -->
-                <div class="oa-tabs">
-                    <button class="oa-tab-btn active" data-tab="ajuste">Registrar Ajuste</button>
-                    <button class="oa-tab-btn" data-tab="historico-produto">Histórico do Produto</button>
-                </div>
-
-                <!-- Painéis das Abas -->
-                <div class="oa-tab-paineis">
-                    <!-- Aba de Registrar Ajuste -->
-                    <div class="oa-tab-panel active" id="ajuste-tab">
-                        <form id="formRegistrarAjuste" class="oa-form-acao">
-                            <p class="oa-form-instrucao">Use esta opção para corrigir o saldo, seja por uma perda física ou por um lançamento de produção que foi feito por engano.</p>
-                            <div class="oa-form-grupo">
-                                <label for="selectMotivoAjuste">Motivo do Ajuste</label>
-                                <select id="selectMotivoAjuste" class="oa-select" required>
-                                    <option value="" disabled selected>Selecione um motivo...</option>
-                                    <option value="PRODUTO_AVARIADO">Perda - Produto Avariado</option>
-                                    <option value="DIVERGENCIA_SALDO">Perda - Divergência de Saldo</option>
-                                    <option value="LANCAMENTO_ERRADO">Ajuste - Lançamento Errado</option>
-                                </select>
-                            </div>
-                            <div class="oa-form-grupo">
-                                <label for="inputQuantidadeAjuste">Quantidade a ser Descontada</label>
-                                <input type="number" id="inputQuantidadeAjuste" class="oa-input" min="1" required placeholder="Qtd. a descontar">
-                            </div>
-                            <div class="oa-form-grupo">
-                                <label for="textareaObservacaoAjuste">Observação (Opcional)</label>
-                                <textarea id="textareaObservacaoAjuste" class="oa-textarea oa-input" rows="2" placeholder="Ex: Peça rasgada, contagem errada na produção..."></textarea>
-                            </div>
-                            <div class="oa-form-botoes">
-                                <button type="button" id="btnConfirmarRegistroAjuste" class="oa-btn oa-btn-perigo">
-                                    <i class="fas fa-save"></i> Confirmar Ajuste de Saldo
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-
-                    <!-- Aba de Histórico do Produto -->
-                    <div class="oa-tab-panel" id="historico-produto-tab">
-                        <div id="historicoProdutoContainer" class="oa-tabela-wrapper">
-                            <div class="spinner">Carregando histórico do produto...</div>
-                        </div>
-                        <div id="historicoProdutoPaginacao" class="oa-paginacao-container" style="margin-top: 20px; display: none;"></div>
-                    </div>
-                </div>
-            </section> <!-- FIM DA TELA 2 -->
         </div> <!-- Fim do oa-main-content-card -->
     </main>
 
@@ -166,7 +96,7 @@
         <div class="popup-overlay"></div>
         <div class="oa-modal-historico">
             <div class="oa-modal-header">
-                <h3 class="oa-modal-titulo">Histórico Geral de Arremates</h3>
+                <h3 class="oa-modal-titulo">Histórico de Arremates</h3>
                 <button id="btnFecharHistoricoArremates" class="oa-modal-fechar-btn">X</button>
             </div>
             <div class="oa-modal-filtros">
@@ -239,35 +169,6 @@
         </div>
     </div>
 
-    <!-- MODAL PARA ATRIBUIR TAREFA -->
-    <div id="modalAtribuirTarefa" class="popup-container" style="display: none;">
-        <div class="popup-overlay"></div>
-        <div class="oa-modal-atribuir">
-            <div class="oa-modal-header">
-                <h3 id="modalAtribuirTitulo" class="oa-modal-titulo">Atribuir Tarefa para [Nome]</h3>
-            <button class="oa-modal-fechar-btn">X</button>
-            </div>
-            <div class="oa-modal-body-atribuir">
-                <div class="coluna-lista-produtos">
-                    <div class="filtro-busca-modal">
-                        <input type="text" id="buscaProdutoModal" class="oa-input-busca" placeholder="Buscar produto ou variação...">
-                    </div>
-                    <div id="modalAtribuirFilaWrapper" class="oa-cards-container-modal">
-                        <div class="spinner">Carregando fila...</div>
-                    </div>
-                    <div id="modalPaginacaoContainer" class="oa-paginacao-container"></div>
-                </div>
-                <div class="coluna-confirmacao">
-                    <div id="modalAtribuirFormContainer" class="form-confirmacao-wrapper">
-                        <div class="placeholder-confirmacao">
-                            <i class="fas fa-mouse-pointer"></i>
-                            <p>Selecione um item da lista ao lado para começar.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- MODAL "MODO FOCO" -->
     <div id="modalModoFoco" class="popup-container" style="display: none;">
@@ -276,12 +177,9 @@
             <div class="oa-modal-header">
                 <div class="header-info-foco">
                     <img id="focoAvatar" src="/img/placeholder-image.png" alt="Avatar" class="avatar-tiktik">
-                    <div>
-                        <h3 id="focoNome" class="oa-modal-titulo">Desempenho de [Nome]</h3>
-                        <span id="focoData" class="subtitulo-foco">Hoje</span>
-                    </div>
+                    <h3 id="focoTitulo" class="oa-modal-titulo">Desempenho Hoje</h3>
                 </div>
-                <button class="oa-modal-fechar-btn">X</button>
+                    <button class="oa-modal-fechar-btn">X</button>
             </div>
 
             <div class="oa-modal-body-foco">

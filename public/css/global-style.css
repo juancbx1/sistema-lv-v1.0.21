@@ -281,6 +281,19 @@ body.autenticado {
     border-color: var(--gs-borda);
 }
 
+.gs-spin {
+    animation: gs-kf-spin 1.2s linear infinite;
+}
+
+@keyframes gs-kf-spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 /* Animação de rotação para o ícone quando o botão estiver desabilitado (carregando) */
 .gs-btn-atualizar:disabled i {
     animation: es-spin 1.2s linear infinite;

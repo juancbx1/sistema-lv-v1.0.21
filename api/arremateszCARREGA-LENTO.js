@@ -504,14 +504,9 @@ router.put('/assinar-lote', async (req, res) => {
 
 router.post('/registrar-perda', async (req, res) => {
     const { usuarioLogado } = req;
+    // << MUDANÇA: Recebe 'produto_id' do frontend >>
     const { produto_id, variante, quantidadePerdida, motivo, observacao, opsOrigem } = req.body;
     let dbClient;
-
-    // <<< LOG 1: DADOS RECEBIDOS >>>
-    console.log('[API /registrar-perda] INICIANDO REGISTRO DE PERDA.');
-    console.log('[API /registrar-perda] Payload recebido do frontend:', {
-        produto_id, variante, quantidadePerdida, motivo, observacao, opsOrigem
-    });
 
     try {
         dbClient = await pool.connect();
@@ -520,20 +515,18 @@ router.post('/registrar-perda', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada para registrar perdas.' });
         }
         
-        if (!produto_id || !motivo || !quantidadePerdida || quantidadePerdida <= 0 || !Array.isArray(opsOrigem) || opsOrigem.length === 0) {
-            // Adicionamos uma validação mais robusta para opsOrigem
-            console.error('[API /registrar-perda] ERRO: Dados incompletos. opsOrigem é crucial.');
-            return res.status(400).json({ error: "Dados para registro de perda estão incompletos (produto_id, motivo, quantidade, opsOrigem)." });
+        // << MUDANÇA: Validação para produto_id >>
+        if (!produto_id || !motivo || !quantidadePerdida || quantidadePerdida <= 0) {
+            return res.status(400).json({ error: "Dados para registro de perda estão incompletos (produto_id, motivo, quantidade)." });
         }
         
+        // Busca o nome do produto para salvar na tabela de perdas (se ela ainda usa o nome)
         const produtoInfo = await dbClient.query('SELECT nome FROM produtos WHERE id = $1', [produto_id]);
         if (produtoInfo.rows.length === 0) {
             throw new Error(`Produto com ID ${produto_id} não encontrado.`);
         }
         const nomeDoProduto = produtoInfo.rows[0].nome;
 
-        // <<< LOG 2: INICIANDO TRANSAÇÃO >>>
-        console.log('[API /registrar-perda] Dados validados. Iniciando transação no banco...');
         await dbClient.query('BEGIN');
 
         // 1. Insere o registro na tabela de perdas
@@ -542,59 +535,48 @@ router.post('/registrar-perda', async (req, res) => {
             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id;
         `;
         const perdaResult = await dbClient.query(perdaQuery, [
-            nomeDoProduto, variante, quantidadePerdida, motivo,
-            observacao, usuarioLogado.nome || 'Sistema'
+            nomeDoProduto, // Salva o nome na tabela de perdas
+            variante,
+            quantidadePerdida,
+            motivo,
+            observacao,
+            usuarioLogado.nome || 'Sistema'
         ]);
         const perdaId = perdaResult.rows[0].id;
-        // <<< LOG 3: REGISTRO DE PERDA CRIADO >>>
-        console.log(`[API /registrar-perda] Registro criado com sucesso na tabela 'arremate_perdas'. ID da perda: ${perdaId}`);
 
         // 2. Cria um lançamento de arremate do tipo 'PERDA' para abater do saldo
         let quantidadeRestanteParaAbater = quantidadePerdida;
         const opsOrdenadas = opsOrigem.sort((a, b) => a.numero - b.numero);
 
-        // <<< LOG 4: LOOP DE ABATIMENTO >>>
-        console.log(`[API /registrar-perda] Iniciando loop para abater ${quantidadeRestanteParaAbater} peças das OPs de origem.`, opsOrdenadas);
-
         for (const op of opsOrdenadas) {
-            if (quantidadeRestanteParaAbater <= 0) {
-                console.log('[API /registrar-perda] Quantidade total já abatida. Saindo do loop.');
-                break;
-            }
+            if (quantidadeRestanteParaAbater <= 0) break;
             
-            // O nome da propriedade era 'saldo_op' no frontend, vamos usar esse padrão
-            const qtdAbaterDaOP = Math.min(quantidadeRestanteParaAbater, op.saldo_op);
-
-            // <<< LOG 5: DENTRO DO LOOP >>>
-            console.log(`[API /registrar-perda] Processando OP ${op.numero}. Saldo OP: ${op.saldo_op}. Abatendo desta OP: ${qtdAbaterDaOP}`);
-
+            const qtdAbaterDaOP = Math.min(quantidadeRestanteParaAbater, op.quantidade_pendente_nesta_op);
             if (qtdAbaterDaOP > 0) {
+                // << MUDANÇA: Insere produto_id na tabela 'arremates' >>
                 const lancamentoPerdaQuery = `
                     INSERT INTO arremates (op_numero, produto_id, variante, quantidade_arrematada, usuario_tiktik, lancado_por, tipo_lancamento, id_perda_origem, assinada)
-                    VALUES ($1, $2, $3, $4, 'Sistema (Perda)', $5, 'PERDA', $6, TRUE);
+                    VALUES ($1, $2, $3, $4, $5, $6, 'PERDA', $7, TRUE);
                 `;
                 await dbClient.query(lancamentoPerdaQuery, [
-                    op.numero, produto_id, variante, qtdAbaterDaOP,
-                    usuarioLogado.nome, perdaId
+                    op.numero,
+                    produto_id, // Insere o ID aqui
+                    variante,
+                    qtdAbaterDaOP,
+                    'Sistema (Perda)',
+                    usuarioLogado.nome,
+                    perdaId
                 ]);
-                console.log(`[API /registrar-perda] -> Inserido lançamento de PERDA de ${qtdAbaterDaOP} pçs para a OP ${op.numero}`);
                 quantidadeRestanteParaAbater -= qtdAbaterDaOP;
-            } else {
-                console.log(`[API /registrar-perda] -> Nenhuma peça a abater da OP ${op.numero}. Pulando.`);
             }
         }
-        
-        // <<< LOG 6: FINALIZANDO TRANSAÇÃO >>>
-        console.log('[API /registrar-perda] Loop finalizado. Dando COMMIT na transação.');
+
         await dbClient.query('COMMIT');
         res.status(201).json({ message: 'Registro de perda efetuado com sucesso.' });
 
     } catch (error) {
-        if (dbClient) {
-            console.error('[API /registrar-perda] ERRO DETECTADO! Dando ROLLBACK na transação.');
-            await dbClient.query('ROLLBACK');
-        }
-        console.error('[API /arremates/registrar-perda] Stack de erro:', error);
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error('[API /arremates/registrar-perda] Erro:', error);
         res.status(500).json({ error: 'Erro ao registrar a perda.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
@@ -637,7 +619,7 @@ router.get('/fila', async (req, res) => {
         const opsResult = await dbClient.query(opsQuery);
         const opsFinalizadas = opsResult.rows;
 
-         const arrematesQuery = `
+        const arrematesQuery = `
             SELECT produto_id, variante, op_numero, SUM(quantidade_arrematada) as total_arrematado
             FROM arremates
             WHERE tipo_lancamento IN ('PRODUCAO', 'PERDA')

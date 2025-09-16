@@ -1,6 +1,6 @@
 // public/src/components/PainelFiltros.jsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback  } from 'react';
 import { getBuscasRecentes, addBuscaRecente, removeBuscaRecente } from '../utils/searchHelpers.js';
 import FiltrosAtivos from './FiltrosAtivos.jsx';
 
@@ -35,44 +35,37 @@ function SecaoFiltro({ titulo, opcoes, filtrosSelecionados, onFiltroChange }) {
 // ==========================================================================
 //  COMPONENTE PRINCIPAL: PainelFiltros
 // ==========================================================================
-function PainelFiltros({ opcoesDeFiltro, onFiltrosChange }) {
+function PainelFiltros({ opcoesDeFiltro, onFiltrosChange, onAtualizarClick, atualizando }) {
 
-  // --- ESTADO (A "MEMÓRIA" DO COMPONENTE) ---
   const [termoBusca, setTermoBusca] = useState('');
   const [produtosSelecionados, setProdutosSelecionados] = useState([]);
   const [coresSelecionadas, setCoresSelecionadas] = useState([]);
   const [tamanhosSelecionados, setTamanhosSelecionados] = useState([]);
   const [ordenacao, setOrdenacao] = useState('mais_recentes');
-  
+
   const [filtrosMobileAberto, setFiltrosMobileAberto] = useState(false);
-  
   const [mostrarRecentes, setMostrarRecentes] = useState(false);
   const [buscasRecentes, setBuscasRecentes] = useState([]);
 
-  // --- EFEITOS (AÇÕES AUTOMÁTICAS) ---
   useEffect(() => {
     const debounceTimer = setTimeout(() => {
-      const filtros = { 
-        termoBusca, ordenacao,
-        produtos: produtosSelecionados,
-        cores: coresSelecionadas,
-        tamanhos: tamanhosSelecionados,
-      };
-      if (window.onFiltrosChange) {
+      const filtros = { termoBusca, ordenacao, produtos: produtosSelecionados, cores: coresSelecionadas, tamanhos: tamanhosSelecionados };
+      
+      if (typeof onFiltrosChange === 'function') {
+        onFiltrosChange(filtros);
+      } else if (window.onFiltrosChange) {
         window.onFiltrosChange(filtros);
       }
-      addBuscaRecente(termoBusca);
     }, 350);
     return () => clearTimeout(debounceTimer);
-  }, [termoBusca, ordenacao, produtosSelecionados, coresSelecionadas, tamanhosSelecionados]);
+  }, [termoBusca, ordenacao, produtosSelecionados, coresSelecionadas, tamanhosSelecionados, onFiltrosChange]);
+
 
   // --- HANDLERS (FUNÇÕES DE EVENTO) ---
-  const handleFiltroCheckboxChange = (opcao, filtrosAtuais, setFiltros) => {
-    const novosFiltros = filtrosAtuais.includes(opcao)
-      ? filtrosAtuais.filter(item => item !== opcao)
-      : [...filtrosAtuais, opcao];
+const handleFiltroCheckboxChange = (opcao, filtrosAtuais, setFiltros) => {
+    const novosFiltros = filtrosAtuais.includes(opcao) ? filtrosAtuais.filter(item => item !== opcao) : [...filtrosAtuais, opcao];
     setFiltros(novosFiltros);
-  };
+  }
 
   // FUNÇÃO para remover um filtro (chamada pelas pílulas)
   const handleRemoverFiltro = (tipoFiltro, valor) => {
@@ -108,8 +101,16 @@ function PainelFiltros({ opcoesDeFiltro, onFiltrosChange }) {
     removeBuscaRecente(termo);
     setBuscasRecentes(getBuscasRecentes());
   };
+
   const handleAtualizarClick = () => {
-    window.dispatchEvent(new CustomEvent('forcarAtualizacaoFila'));
+    if (typeof onAtualizarClick === 'function') {
+      onAtualizarClick();
+    } else {
+      setAtualizandoLocal(true);
+      window.dispatchEvent(new CustomEvent('forcarAtualizacaoFila', {
+        detail: { callback: () => setAtualizandoLocal(false) }
+      }));
+    }
   };
 
   const filtrosAtivosCount = produtosSelecionados.length + coresSelecionadas.length + tamanhosSelecionados.length;
@@ -157,9 +158,29 @@ function PainelFiltros({ opcoesDeFiltro, onFiltrosChange }) {
           </div>
         </div>
 
-        <button className="gs-btn-atualizar" onClick={handleAtualizarClick}>
-            <i className="fas fa-sync-alt"></i>
-            <span>Atualizar</span>
+        <button 
+          className="gs-btn-atualizar" 
+          onClick={() => {
+              if (typeof onAtualizarClick === 'function') {
+                  onAtualizarClick();
+              } else {
+                  // <<< LOG DE ERRO >>>
+                  console.error('[PainelFiltros] ERRO: onAtualizarClick NÃO é uma função! Recebido:', onAtualizarClick);
+              }
+          }}
+          disabled={atualizando}
+        >
+          {atualizando ? (
+            <>
+              <i className="fas fa-sync-alt gs-spin"></i> 
+              <span>Atualizando...</span>
+            </>
+          ) : (
+            <>
+              <i className="fas fa-sync-alt"></i>
+              <span>Atualizar</span>
+            </>
+          )}
         </button>
       </div>
 

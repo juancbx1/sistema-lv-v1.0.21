@@ -554,155 +554,131 @@ body.autenticado { visibility: visible; }
     display: inline-block; }
 
 /* Modal e Popups (com prefixo oa- para evitar conflitos) */
-.oa-popup-overlay, .popup-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(44, 62, 80, 0.5); z-index: 1000; }
+.oa-popup-overlay, .popup-overlay { 
+    position: fixed; 
+    top: 0; left: 0; 
+    width: 100%; height: 100%; 
+    background-color: rgba(44, 62, 80, 0.5); 
+    z-index: 1000; 
+}
+
 .oa-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); background-color: var(--oa-cor-branco); border-radius: var(--oa-raio-borda); box-shadow: var(--oa-sombra-padrao); width: 90%; max-width: 800px; z-index: 1001; display: flex; flex-direction: column; max-height: 90vh; }
 
-/* --- ESTILOS PARA O NOVO MODAL DE HISTÓRICO DE ARREMATES --- */
+/* ==========================================================================
+   # MODAL DE HISTÓRICO GERAL (Com Design Responsivo Corrigido)
+   ========================================================================== */
+
+/* --- Contêiner principal do modal --- */
 .oa-modal-historico {
     background-color: var(--oa-cor-branco);
     border-radius: 10px;
     box-shadow: var(--oa-sombra-padrao);
-    width: 90%;
+    width: 95%; /* Ocupa mais espaço em telas pequenas */
     max-width: 1000px;
-    z-index: 10001; /* Garante que fique acima do overlay */
+    z-index: 1001;
     display: flex;
     flex-direction: column;
-    max-height: 90vh; /* Limita a altura para não sair da tela */
-    animation: popup-slide-in 0.3s ease-out; /* Requer a keyframe do popups.css */
+    height: 90vh; /* Altura máxima */
+    max-height: 700px;
 }
 
-.oa-modal-historico .oa-tabela-historico td[data-label="Produto"],
-.oa-modal-historico .oa-tabela-historico td[data-label="Lançado/Estornado por"] {
-    white-space: normal; /* Permite a quebra de linha */
-    word-break: break-word; /* Força a quebra de palavras longas se necessário */
-    min-width: 180px; /* Garante uma largura mínima para a coluna não ficar muito espremida */
+/* --- Header, Filtros e Footer --- */
+.oa-modal-historico .oa-modal-header,
+.oa-modal-historico .oa-modal-filtros,
+.oa-modal-historico .oa-modal-footer {
+    flex-shrink: 0; /* Impede que encolham */
 }
 
-.oa-modal-header {
+.oa-modal-historico .oa-modal-header {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    justify-content: space-between; /* Empurra os itens para as pontas */
+    align-items: center; /* Alinha verticalmente */
     padding: 15px 20px;
     border-bottom: 1px solid var(--oa-cor-cinza-borda);
-    flex-shrink: 0; /* Impede que o header encolha */
 }
 
-.oa-modal-titulo {
-    font-size: 1.2rem;
-    color: var(--oa-cor-azul-escuro);
-    margin: 0;
-}
-
-.oa-modal-fechar-btn {
-    background-color: var(--oa-cor-vermelho-perigo);
-    color: var(--oa-cor-branco);
-    border: none;
-    border-radius: 50%;
-    width: 32px;
-    height: 32px;
-    font-size: 1rem;
-    font-weight: bold;
-    line-height: 32px;
-    text-align: center;
-    cursor: pointer;
-    transition: transform 0.2s ease, background-color 0.2s ease;
-}
-.oa-modal-fechar-btn:hover {
-    background-color: #c0392b; /* Vermelho mais escuro */
-    transform: scale(1.1);
-}
-
-.oa-modal-filtros {
+.oa-modal-historico .oa-modal-filtros {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr; /* Busca com mais espaço */
+    grid-template-columns: 1fr; /* Coluna única no mobile */
     gap: 15px;
-    padding: 15px 20px;
+    padding: 15px;
     background-color: #f9fbfd;
     border-bottom: 1px solid var(--oa-cor-cinza-borda);
-    flex-shrink: 0;
+}
+.oa-modal-historico .oa-modal-filtros .oa-form-grupo label {
+    font-size: 0.8rem; margin-bottom: 5px;
 }
 
-
-.oa-modal-filtros .oa-form-grupo { margin: 0; }
-.oa-modal-filtros .oa-form-grupo label { font-size: 0.8rem; margin-bottom: 5px; display: block; }
-.oa-modal-filtros .oa-select, .oa-modal-filtros .oa-input {
-    width: 100%;
-    padding: 8px 10px;
-    font-size: 0.9rem;
+.oa-modal-historico .oa-modal-body {
+    padding: 15px;
+    overflow-y: auto;
+    flex-grow: 1;
+    background-color: var(--oa-cor-fundo-pagina);
 }
 
-.oa-modal-body {
-    padding: 20px;
-    overflow-y: auto; /* Permite rolar a tabela interna */
-    flex-grow: 1; /* Faz o corpo do modal ocupar o espaço disponível */
-}
-
-.oa-modal-footer {
+.oa-modal-historico .oa-modal-footer {
     padding: 15px 20px;
     border-top: 1px solid var(--oa-cor-cinza-borda);
     background-color: #f9fbfd;
-    flex-shrink: 0;
+    border-radius: var(--oa-raio-borda);
 }
 
-.oa-modal .oa-modal-fechar-btn {
-    color: var(--oa-cor-cinza-texto-secundario);
-    transition: color 0.2s ease;
-    color: #fff4e0;
-    font-size: 1.3rem;
 
-}
-.oa-modal .oa-modal-fechar-btn:hover {
-    color: var(--oa-cor-vermelho-perigo);
-}
-
-/* Estilo para a linha de perda no histórico */
-.oa-tabela-historico tr.linha-perda { 
-    background-color: #fff5f5; 
-}
-
-.oa-tabela-historico tr.linha-perda:hover {
-    background-color: #ffebeb;
-}
-
-/* Estilo para a linha de estorno */
-.oa-tabela-historico tr.linha-estorno {
-    background-color: #fffaf0; /* Fundo levemente amarelado/laranja */
-}
-.oa-tabela-historico tr.linha-estorno:hover {
-    background-color: #fff4e0;
-}
-
-/* NOVO: Estilo para a linha de produção que foi anulada */
-.oa-tabela-historico tr.linha-anulada {
-    color: #999;
-    background-color: #f8f9fa;
-    text-decoration: line-through;
-    opacity: 0.8;
-}
-
-.oa-tabela-wrapper {
-    display: block;
-    width: 100%;
-    overflow-x: auto; /* Adiciona rolagem horizontal apenas se a tabela for muito larga */
-}
-
+/* --- ESTILO MOBILE-FIRST PARA A TABELA (VISUAL DE CARDS) --- */
 .oa-tabela-historico {
     width: 100%;
     border-collapse: collapse;
 }
-.oa-tabela-historico th, .oa-tabela-historico td {
-    padding: 10px 12px;
-    text-align: left;
-    border-bottom: 1px solid #f0f0f0;
-    font-size: 0.9rem;
-    white-space: nowrap; /* Evita que o conteúdo quebre a linha e force o layout */
+
+/* Esconde o cabeçalho da tabela no mobile */
+.oa-tabela-historico thead {
+    display: none;
 }
-.oa-tabela-historico th {
-    background-color: var(--oa-cor-cinza-fundo);
+
+.oa-tabela-historico tbody,
+.oa-tabela-historico tr {
+    display: block;
+}
+
+.oa-tabela-historico tr {
+    background-color: var(--oa-cor-branco);
+    border-radius: 8px;
+    box-shadow: var(--oa-sombra-padrao);
+    padding: 15px;
+    margin-bottom: 15px;
+}
+.oa-tabela-historico tr:last-of-type {
+    margin-bottom: 0;
+}
+
+.oa-tabela-historico td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    text-align: right;
+    border-bottom: 1px dotted var(--oa-cor-cinza-borda);
+}
+.oa-tabela-historico td:last-of-type {
+    border-bottom: none;
+}
+
+/* Gera os "labels" a partir do atributo data-label */
+.oa-tabela-historico td::before {
+    content: attr(data-label);
     font-weight: 500;
+    color: var(--oa-cor-cinza-texto-secundario);
+    text-align: left;
+    margin-right: 15px;
 }
-.oa-tabela-historico tbody tr:hover {
-    background-color: #f5faff;
+
+/* Ajustes finos de colunas específicas */
+.oa-tabela-historico td[data-label="Produto"] {
+    font-weight: 600;
+    color: var(--oa-cor-azul-escuro);
+}
+.oa-tabela-historico td[data-label="Ações"] .btn-estornar-historico {
+    margin: -8px 0; /* Compensa o padding para o botão ficar bem alinhado */
 }
 
 
@@ -772,12 +748,52 @@ body.autenticado { visibility: visible; }
     background-color: var(--oa-cor-branco);
     border-radius: var(--oa-raio-borda);
     box-shadow: var(--oa-sombra-padrao);
-    border-top: 4px solid var(--oa-cor-cinza-texto-secundario); /* Cor padrão */
+    border-top: 4px solid var(--oa-cor-cinza-texto-secundario);
     padding: 15px;
     display: flex;
     flex-direction: column;
     transition: all 0.3s ease;
+    /* Adiciona uma altura mínima para evitar que os cards fiquem de tamanhos diferentes */
+    min-height: 230px; 
 }
+
+/* Container redesenhado para a tarefa --- */
+.info-tarefa-redesenhada {
+    text-align: center;
+    padding: 15px 10px;
+    flex-grow: 1; /* Faz esta área ocupar o espaço central */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* Destaque principal para a quantidade */
+.quantidade-tarefa-destaque {
+    font-size: 2.5rem; /* BEM GRANDE */
+    font-weight: 700;
+    color: var(--oa-cor-azul-escuro);
+    line-height: 1.1;
+}
+.quantidade-tarefa-destaque small {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--oa-cor-cinza-texto-secundario);
+    margin-left: 5px;
+}
+
+/*  Estilo para o nome do produto como subtítulo */
+.produto-tarefa-subtitulo {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--oa-cor-texto-principal);
+    margin-top: 5px;
+}
+
+/* Container para as métricas (cronômetro e barra) */
+.metricas-tarefa-container {
+    margin-top: 15px;
+}
+
 
 /* --- Estilos por Status --- */
 .oa-card-status-tiktik.status-livre { border-top-color: var(--oa-cor-verde-sucesso); }
@@ -873,26 +889,40 @@ body.autenticado { visibility: visible; }
     margin-bottom: 15px;
 }
 
+.info-tarefa {
+    display: none;
+}
+
 .produto-tarefa { font-weight: 500; font-size: 0.9rem; }
 .quantidade-tarefa { font-size: 0.85rem; color: var(--oa-cor-cinza-texto-secundario); }
-.cronometro-tarefa { font-weight: 600; font-size: 1.1rem; color: var(--oa-cor-azul-escuro); margin-top: 8px; }
+
+.cronometro-tarefa {
+    font-weight: 500;
+    font-size: 1.1rem;
+    color: var(--oa-cor-cinza-texto-secundario);
+    margin-top: 8px; 
+}
+
 
 .barra-progresso-container {
     background-color: var(--oa-cor-cinza-borda);
     border-radius: 50px;
-    height: 8px;
-    margin-top: 10px;
+    height: 10px; /* Um pouco mais grossa */
+    margin-top: 8px;
     overflow: hidden;
+    cursor: help; /* Indica que há uma dica (tooltip) */
 }
 
 .barra-progresso {
     height: 100%;
     background-color: var(--oa-cor-verde-sucesso);
     border-radius: 50px;
-    transition: width 0.5s ease;
+    transition: width 0.5s linear; /* Transição linear para um crescimento suave */
 }
+
 .barra-progresso.atencao { background-color: var(--oa-cor-amarelo-atencao); }
 .barra-progresso.lento { background-color: var(--oa-cor-vermelho-perigo); }
+
 
 .card-status-footer {
     margin-top: auto; /* Empurra o rodapé para o final do card */
@@ -1175,7 +1205,7 @@ body.autenticado { visibility: visible; }
 /* DESTACA O NOME DO USUARIO NO MODAL DE ATRIBUIR TAREFA */
 .nome-destaque-modal {
     color: var(--oa-cor-azul-primario);
-    font-weight: 700;
+    font-weight: 600;
 }
 
 /* DESTACA INFORMACOES DE SALDO DO PRODUTO DE ATRIBUIR TAREFA */
@@ -1186,7 +1216,7 @@ body.autenticado { visibility: visible; }
     background-color: var(--oa-cor-branco);
     padding: 15px;
     border-radius: 8px;
-    margin: 15px 0;
+    margin: 15px 0 0;
     border: 1px solid var(--oa-cor-cinza-borda);
 }
 
@@ -1264,14 +1294,19 @@ body.autenticado { visibility: visible; }
     animation: popup-slide-in 0.3s ease-out;
 }
 .oa-modal-foco .oa-modal-header {
+    display: flex; /* Garante o alinhamento em linha */
+    justify-content: space-between; /* Empurra os itens para as pontas */
+    align-items: center; /* Alinha verticalmente */
     background-color: var(--oa-cor-branco);
     border-bottom: 1px solid var(--oa-cor-cinza-borda);
+    padding: 15px 20px;
 }
 .header-info-foco {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 15px; /* Espaço entre a imagem e o título */
 }
+
 .subtitulo-foco {
     font-size: 0.9rem;
     color: var(--oa-cor-cinza-texto-secundario);
@@ -1429,13 +1464,15 @@ body.autenticado { visibility: visible; }
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 15px; /* Espaço entre label, input e atalhos */
-    margin-top: 20px;
-    margin-bottom: 10px; /* Reduzido para aproximar do botão confirmar */
-    max-width: 280px; /* Largura máxima para manter compacto */
+    gap: 15px;
     width: 100%;
-    margin-left: auto;
-    margin-right: auto;
+    max-width: 300px;
+    margin: 20px auto;
+    padding: 20px;
+    background-color: var(--oa-cor-branco);
+    border: 1px solid var(--oa-cor-cinza-borda);
+    border-radius: var(--oa-raio-borda);
+    box-shadow: var(--oa-sombra-padrao);
 }
 
 .seletor-quantidade-wrapper label {
@@ -1448,67 +1485,72 @@ body.autenticado { visibility: visible; }
 .input-container {
     display: flex;
     align-items: center;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08); /* Sombra sutil para destacar */
-    border-radius: 8px;
-    overflow: hidden; /* Garante que os cantos arredondados funcionem */
 }
 
 .input-container .oa-input-tarefas {
     text-align: center;
-    font-size: 1.8rem;
-    font-weight: bold;
+    font-size: 2.2rem;
+    font-weight: 700;
     color: var(--oa-cor-azul-escuro);
-    width: 100px; /* Largura fixa para o input */
+    width: 120px;
     height: 60px;
     border: 1px solid var(--oa-cor-cinza-borda);
     border-left: none;
     border-right: none;
     border-radius: 0;
-    padding: 5px; /* Padding menor */
+    padding: 5px;
 }
+
 .input-container .oa-input-tarefas:focus {
     box-shadow: none; /* Remove a sombra de foco padrão para manter o visual limpo */
 }
+
 .input-container .oa-input-tarefas::-webkit-outer-spin-button,
 .input-container .oa-input-tarefas::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 
-
 .ajuste-qtd-btn {
-    width: 45px;
+    width: 50px;
     height: 60px;
-    font-size: 1.5rem;
-    font-weight: bold;
+    font-size: 1.8rem;
+    font-weight: 400;
     color: var(--oa-cor-azul-primario);
     background-color: var(--oa-cor-cinza-fundo);
     border: 1px solid var(--oa-cor-cinza-borda);
     cursor: pointer;
     transition: background-color 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 1; /* Alinhamento vertical do +/- */
+    line-height: 1;
 }
 .ajuste-qtd-btn:hover {
     background-color: #e9ecef;
 }
+.ajuste-qtd-btn:first-of-type {
+    border-top-left-radius: 8px;
+    border-bottom-left-radius: 8px;
+}
+.ajuste-qtd-btn:last-of-type {
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
 
-/* Container dos botões de atalho */
 .atalhos-qtd-container {
     display: flex;
     gap: 10px;
+    justify-content: center;
+    width: 100%;
 }
 
 .atalho-qtd-btn {
-    padding: 10px 16px;
-    font-size: 0.85rem;
+    flex-grow: 1;
+    padding: 10px;
+    font-size: 0.9rem;
     font-weight: 500;
     background-color: transparent;
     border: 1px solid var(--oa-cor-cinza-borda);
     color: var(--oa-cor-texto-principal);
-    border-radius: 20px;
+    border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s;
 }
@@ -1516,7 +1558,6 @@ body.autenticado { visibility: visible; }
     background-color: var(--oa-cor-cinza-fundo);
     border-color: var(--oa-cor-azul-primario);
     color: var(--oa-cor-azul-primario);
-    transform: translateY(-1px);
 }
 
 /* Garante que o botão confirmar tenha um bom espaçamento e largura */
@@ -1769,9 +1810,649 @@ body.autenticado { visibility: visible; }
     border-bottom: 1px solid #d6d8db;
 }
 
+/* ==========================================================================
+   # FASE 2: ESTILOS DO NOVO CARD DE ARREMATE (REACT)
+   ========================================================================== */
+
+.oa-card-arremate-react {
+    display: grid;
+    grid-template-columns: auto 1fr auto; /* Colunas: Imagem, Info, Pendente */
+    grid-template-rows: auto;
+    gap: 0 16px;
+    align-items: center;
+    background-color: var(--oa-cor-branco);
+    border-radius: var(--oa-raio-borda);
+    padding: 16px;
+    box-shadow: var(--oa-sombra-padrao);
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.oa-card-arremate-react:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--oa-sombra-hover);
+}
+
+.card-borda-charme {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 6px;
+    height: 100%;
+    background-color: var(--oa-cor-azul-primario);
+}
+
+.card-imagem-produto {
+    grid-column: 1 / 2;
+    width: 70px;
+    height: 70px;
+    object-fit: cover;
+    border-radius: 8px;
+    background-color: var(--oa-cor-cinza-fundo);
+}
+
+.card-info-principal {
+    grid-column: 2 / 3;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.card-info-principal h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--oa-cor-azul-escuro);
+    margin: 0;
+    line-height: 1.3;
+}
+
+.card-info-principal p {
+    font-size: 0.9rem;
+    color: var(--oa-cor-cinza-texto-secundario);
+    margin: 0;
+}
+
+.card-info-secundaria {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+    font-size: 0.85rem;
+    color: var(--oa-cor-cinza-texto-secundario);
+}
+
+.card-info-secundaria .info-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.card-bloco-pendente {
+    grid-column: 3 / 4;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: #f0f8ff; /* Azul bem claro */
+    align-self: stretch; /* Ocupa a altura toda */
+    padding: 10px 15px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.card-bloco-pendente .label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--oa-cor-azul-primario);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.card-bloco-pendente .valor {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--oa-cor-azul-escuro);
+    line-height: 1.1;
+}
+
+/* Estilos do Tooltip */
+.custom-tooltip {
+    background-color: var(--oa-cor-azul-escuro) !important;
+    color: #fff !important;
+    border-radius: 6px !important;
+    padding: 8px 12px !important;
+    font-size: 0.9rem !important;
+    z-index: 9999;
+}
+
+.tooltip-lista-ops {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.tooltip-lista-ops li {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 4px 0;
+}
+.tooltip-data-op {
+    color: #bdc3c7; /* Cinza claro */
+    font-size: 0.8rem;
+}
+
+.info-item-data {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background-color: #f4f6f8; /* Um cinza bem claro para destacar */
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.info-item-data i {
+    color: var(--oa-cor-cinza-texto-secundario);
+}
+
+.info-item-data span {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+    font-size: 0.8rem;
+    text-align: left;
+}
+
+.info-item-data span strong {
+    font-weight: 700;
+    color: var(--oa-cor-texto-principal);
+    font-size: 0.85rem;
+}
+
+
+/* ==========================================================================
+   # ESTILOS GERAIS PARA MODAIS E POPUPS (Refatorado)
+   ========================================================================== */
+
+/* --- Botão Voltar (Estilo Base) --- */
+.btn-voltar-header {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: 1px solid var(--oa-cor-cinza-borda);
+    color: var(--oa-cor-texto-principal);
+    font-size: 0.9rem;
+    font-weight: 500;
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.btn-voltar-header:hover {
+    background-color: var(--oa-cor-cinza-fundo);
+    border-color: var(--oa-cor-azul-primario);
+}
+
+/* --- Botão Fechar (Estilo Base) --- */
+.oa-modal-fechar-btn {
+    background-color: var(--oa-cor-vermelho-perigo);
+    color: var(--oa-cor-branco);
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
+    font-weight: bold;
+    line-height: 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: transform 0.2s ease, background-color 0.2s ease;
+}
+.oa-modal-fechar-btn:hover {
+    background-color: #c0392b;
+    transform: scale(1.1);
+}
+
+/* --- Título do Modal (Estilo Base) --- */
+.oa-modal-titulo {
+    font-size: 1.2rem;
+    color: var(--oa-cor-azul-escuro);
+    margin: 0;
+}
+
+/* ==========================================================================
+   # ESTILOS GERAIS PARA MODAIS (Refatorado e Simplificado)
+   ========================================================================== */
+.btn-voltar-header {
+    display: inline-flex; align-items: center; gap: 6px; background: none;
+    border: 1px solid var(--oa-cor-cinza-borda); color: var(--oa-cor-texto-principal);
+    font-size: 0.9rem; font-weight: 500; padding: 6px 14px; border-radius: 20px;
+    cursor: pointer; transition: all 0.2s ease;
+}
+.btn-voltar-header:hover {
+    background-color: var(--oa-cor-cinza-fundo); border-color: var(--oa-cor-azul-primario);
+}
+.oa-modal-fechar-btn {
+    background-color: var(--oa-cor-vermelho-perigo); color: var(--oa-cor-branco); border: none;
+    border-radius: 50%; width: 32px; height: 32px; font-size: 1rem; font-weight: bold;
+    line-height: 32px; text-align: center; cursor: pointer; transition: all 0.2s ease;
+}
+.oa-modal-fechar-btn:hover {
+    background-color: #c0392b; transform: scale(1.1);
+}
+
+
+/* ==========================================================================
+   # MODAL DE ATRIBUIÇÃO V2 (Com Lógica Responsiva CORRIGIDA)
+   ========================================================================== */
+.oa-modal-atribuir-v2 {
+    z-index: 1001; position: relative; width: 90%; height: 90vh;
+    background-color: var(--oa-cor-fundo-pagina); border-radius: var(--oa-raio-borda);
+    display: flex; flex-direction: column; box-shadow: var(--oa-sombra-hover);
+    transition: max-width 0.4s ease-in-out;
+}
+.oa-modal-atribuir-v2.modo-lista { max-width: 1200px; }
+.oa-modal-atribuir-v2.modo-confirmacao { max-width: 500px; }
+
+.oa-modal-atribuir-v2 .oa-modal-body {
+    padding: 15px; flex-grow: 1; overflow-y: auto;
+}
+
+/* --- ESTILOS PADRÃO (MOBILE-FIRST) --- */
+
+/* Header em duas linhas */
+.oa-modal-atribuir-v2 .oa-modal-header {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-rows: auto auto;
+    align-items: center; gap: 10px; padding: 10px 15px;
+    background-color: var(--oa-cor-branco);
+    border-bottom: 1px solid var(--oa-cor-cinza-borda);
+    flex-shrink: 0;
+    border-radius: var(--oa-raio-borda)
+}
+.oa-modal-atribuir-v2 .btn-voltar-header { grid-column: 1 / 2; grid-row: 1 / 2; }
+.oa-modal-atribuir-v2 .oa-modal-fechar-btn { grid-column: 3 / 4; grid-row: 1 / 2; justify-self: end; }
+.oa-modal-atribuir-v2 .oa-modal-titulo {
+    grid-column: 1 / 4; grid-row: 2 / 3;
+    text-align: center; font-size: 1.1rem; padding: 0;
+}
+
+/* Layout dos filtros e conteúdo empilhado */
+.layout-selecao-produto {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+.coluna-conteudo-principal {
+    padding-top: 20px;
+}
+.coluna-filtros {
+    order: 1; /* Filtros em cima */
+}
+.coluna-conteudo-principal {
+    order: 2; /* Conteúdo embaixo */
+}
+
+/* ==========================================================================
+   # ACORDEÃO DE FILTROS PARA MODAL HISTÓRICO (Mobile)
+   ========================================================================== */
+
+.oa-filtros-acordeao {
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--oa-cor-cinza-borda);
+}
+
+.oa-acordeao-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px 20px;
+    background-color: #f9fbfd;
+    border: none;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--oa-cor-texto-principal);
+    cursor: pointer;
+}
+
+.oa-acordeao-icone {
+    margin-left: auto; /* Empurra o ícone de seta para a direita */
+    transition: transform 0.3s ease;
+}
+
+.oa-acordeao-header.active .oa-acordeao-icone {
+    transform: rotate(180deg);
+}
+
+.oa-acordeao-content {
+    max-height: 0; /* Começa fechado */
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+}
+
+.oa-acordeao-content.open {
+    max-height: 500px; /* Altura suficiente para mostrar os filtros */
+}
+
+/* Os filtros em si, agora dentro do acordeão */
+.oa-modal-filtros {
+    border-bottom: none; /* A borda agora está no container do acordeão */
+    padding-top: 0;
+}
+
+
+/* ==========================================================================
+   # DESIGN DO FORMULÁRIO DE REGISTRO DE PERDA
+   ========================================================================== */
+
+/* Card que envolve o formulário */
+.form-card-perda {
+    width: 100%;
+    background-color: var(--oa-cor-branco);
+    padding: 25px;
+    border-radius: var(--oa-raio-borda);
+    border: 1px solid var(--oa-cor-cinza-borda);
+    box-shadow: var(--oa-sombra-padrao);
+}
+
+/* Estilo para o Textarea (caso não exista um genérico) */
+.oa-textarea {
+    width: 100%;
+    padding: 12px;
+    font-size: 1rem;
+    border: 1px solid var(--oa-cor-cinza-borda);
+    border-radius: 6px;
+    font-family: var(--oa-font-principal);
+    resize: vertical; /* Permite ao usuário redimensionar verticalmente */
+}
+
+/* Novo seletor de quantidade para perdas */
+.seletor-quantidade-perda {
+    text-align: center;
+}
+.seletor-quantidade-perda label {
+    font-weight: 500;
+    margin-bottom: 10px !important; /* !important para garantir a sobreposição */
+    display: block;
+}
+
+.input-container-perda {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    max-width: 200px;
+    margin: 0 auto;
+}
+/* Reutiliza o estilo do input de tarefas que já temos */
+.input-container-perda .oa-input-tarefas {
+    width: 80px;
+    height: 50px;
+    font-size: 1.8rem;
+    text-align: center; 
+}
+/* Reutiliza o estilo dos botões +/- que já temos */
+.input-container-perda .ajuste-qtd-btn {
+    width: 45px;
+    height: 50px;
+}
+
+.saldo-maximo-info {
+    display: block;
+    margin-top: 8px;
+    font-size: 0.8rem;
+    color: var(--oa-cor-cinza-texto-secundario);
+    font-style: italic;
+}
+
+/* ==========================================================================
+   # CARIMBO DE STATUS PARA CARDS INATIVOS
+   ========================================================================== */
+
+.status-carimbo-container {
+    flex-grow: 1; /* Ocupa o espaço vazio do card */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden; /* Garante que o carimbo não vaze para fora */
+    position: relative; /* Necessário para o posicionamento do carimbo */
+    min-height: 100px; /* Garante uma altura mínima para o carimbo aparecer */
+}
+
+.status-carimbo {
+    position: absolute;
+    font-size: 2rem; /* Tamanho da fonte bem grande */
+    font-weight: 700;
+    text-transform: uppercase;
+    color: currentColor; /* Pega a cor definida pela classe de status */
+    border: 4px solid currentColor; /* Borda com a mesma cor */
+    border-radius: 10px;
+    padding: 10px 25px;
+    opacity: 0.15; /* Efeito de "tinta fraca" */
+    transform: rotate(-15deg); /* A inclinação do carimbo */
+    user-select: none; /* Impede que o texto seja selecionado */
+    white-space: nowrap; /* Impede que o texto quebre a linha */
+}
+
+/* Cores específicas para cada status */
+.status-livre .status-carimbo,
+.status-livre-manual .status-carimbo {
+    color: var(--oa-cor-verde-sucesso);
+}
+.status-almoco .status-carimbo {
+    color: #fd7e14; /* Laranja */
+}
+.status-pausa .status-carimbo,
+.status-pausa-manual .status-carimbo {
+    color: var(--oa-cor-amarelo-atencao);
+}
+.status-faltou .status-carimbo {
+    color: #ff4907; /* Laranja forte */
+}
+.status-alocado-externo .status-carimbo {
+    color: #8e44ad; /* Roxo */
+}
+.status-fora-do-horario .status-carimbo {
+    color: #adb5bd; /* Cinza claro */
+}
+
+/* ==========================================================================
+   # INDICADOR DE RITMO COM EMOJI
+   ========================================================================== */
+
+.indicador-ritmo-tarefa {
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-top: 8px; /* Espaçamento */
+    height: 20px; /* Altura fixa para evitar "pulos" no layout */
+    transition: color 0.3s ease;
+}
+
+/* Cores por ritmo */
+.indicador-ritmo-tarefa.ritmo-rapido {
+    color: #1abc9c; /* Verde/Azul-piscina */
+}
+.indicador-ritmo-tarefa.ritmo-normal {
+    color: var(--oa-cor-texto-principal);
+}
+.indicador-ritmo-tarefa.ritmo-lento {
+    color: var(--oa-cor-vermelho-perigo);
+}
+
+/* ==========================================================================
+   # ESTILOS PARA O TOOLTIP DE DIAGNÓSTICO DE RITMO
+   ========================================================================== */
+
+.tooltip-ritmo p {
+    margin: 4px 0;
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+.tooltip-ritmo hr {
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    margin: 6px 0;
+}
+.tooltip-ritmo strong {
+    color: #bdc3c7; /* Cinza claro para os labels */
+}
+
 /*------------------------------------*\
     #RESPONSIVIDADE
 \*------------------------------------*/
+
+@media (min-width: 1024px) {
+
+    .oa-modal-atribuir-v2 .oa-modal-body {
+        padding: 20px; overflow: hidden;
+    }
+
+    /* Header volta a ter uma linha no desktop */
+    .oa-modal-atribuir-v2 .oa-modal-header {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        padding: 15px 20px;
+    }
+    .oa-modal-atribuir-v2 .btn-voltar-header {
+        margin-right: auto;
+    }
+    .oa-modal-atribuir-v2 .oa-modal-titulo {
+        flex-grow: 1; padding: 0 15px; font-size: 1.2rem;
+    }
+
+    /* Ativa o layout de colunas no desktop */
+    .layout-selecao-produto {
+        flex-direction: row;
+        gap: 20px;
+    }
+    .coluna-filtros {
+        flex: 0 0 280px;
+        order: 2; /* Filtros na direita */
+        border-left: 1px solid var(--oa-cor-cinza-borda);
+        padding-left: 20px;
+        overflow-y: auto;
+    }
+    .coluna-conteudo-principal {
+        flex: 1 1 auto;
+        order: 1; /* Conteúdo na esquerda */
+        padding-top: 0;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+    }
+    .gs-container-cards {
+        flex-grow: 1;
+    }
+
+    /* O alvo é o header de filtros QUANDO ele está dentro da nossa coluna */
+    .coluna-filtros .gs-filtros-header {
+        display: flex;
+        flex-wrap: wrap; /* << A MÁGICA ACONTECE AQUI */
+        gap: 10px; /* Espaçamento entre os itens que quebram de linha */
+    }
+
+    /* O título ocupa a primeira linha inteira */
+    .coluna-filtros .gs-header-titulo {
+        width: 100%;
+        margin-bottom: 5px; /* Pequeno espaço antes da busca */
+    }
+
+    /* O container da busca e o botão de atualizar dividem o espaço */
+    .coluna-filtros .gs-filtros-header-controles {
+        flex-grow: 1; /* Faz a busca tentar ocupar o máximo de espaço */
+        min-width: 150px; /* Garante uma largura mínima antes de quebrar */
+    }
+
+    .coluna-filtros .gs-btn-atualizar {
+        /* Apenas um ajuste de alinhamento se necessário */
+        align-self: center;
+    }
+
+    /* Oculta o botão "Abrir Filtros" do mobile no layout desktop */
+    .coluna-filtros .gs-filtros-mobile-toggle {
+        display: none;
+    }
+
+    /* Garante que o painel de filtros (acordeão) esteja sempre visível no desktop */
+    .coluna-filtros .gs-filtros-acordeao-conteudo {
+        display: block;
+        max-height: none; /* Remove qualquer limitação de altura */
+    }
+}
+
+@media (min-width: 768px) {
+    .oa-modal-historico .oa-modal-filtros {
+        grid-template-columns: 2fr 1fr 1fr; /* Volta para 3 colunas */
+    }
+
+    /* Restaura o visual de tabela no desktop */
+    .oa-tabela-historico thead {
+        display: table-header-group; /* Mostra o cabeçalho novamente */
+    }
+
+    .oa-tabela-historico tbody,
+    .oa-tabela-historico tr {
+        display: table-row-group;
+    }
+    .oa-tabela-historico tr {
+        display: table-row;
+        background: none;
+        box-shadow: none;
+        border-radius: 0;
+        padding: 0;
+        margin: 0;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    .oa-tabela-historico tr:hover {
+        background-color: #f5faff;
+    }
+    .oa-tabela-historico tr.linha-perda { 
+        background-color: #fff5f5; 
+    }
+    .oa-tabela-historico tr.linha-perda:hover {
+        background-color: #ffebeb;
+    }
+    .oa-tabela-historico tr.linha-estorno {
+        background-color: #fffaf0;
+    }
+    .oa-tabela-historico tr.linha-estorno:hover {
+        background-color: #fff4e0;
+    }
+    .oa-tabela-historico tr.linha-anulada {
+        color: #999; background-color: #f8f9fa; text-decoration: line-through; opacity: 0.8;
+    }
+
+    .oa-tabela-historico td {
+        display: table-cell;
+        padding: 10px 12px;
+        text-align: left;
+        border-bottom: none;
+    }
+    
+    /* Esconde os labels gerados no desktop */
+    .oa-tabela-historico td::before {
+        display: none;
+    }
+
+    .oa-filtros-acordeao {
+        border-bottom: none;
+    }
+    .oa-acordeao-header {
+        display: none; /* Esconde o botão "Filtros" */
+    }
+    .oa-acordeao-content {
+        max-height: none; /* Garante que o conteúdo seja sempre visível */
+        overflow: visible;
+    }
+    .oa-modal-filtros {
+        padding-top: 15px;
+    }
+}
+
+
 @media (max-width: 1024px) {
     .oa-main-content-card { padding: 20px; }
     .oa-cards-container-arremate { 
@@ -2153,16 +2834,49 @@ body.autenticado { visibility: visible; }
     .oa-painel-atividades .oa-secao-header .oa-btn-atualizar {
         align-self: flex-end; /* Empurra o botão para a direita */
     }
-    .oa-modal-titulo{
-    font-size: 1rem;
-    }
-
     .foco-tarefa-metricas {
         flex-direction: column;
         gap: 5px;
         align-items: flex-start;
     }
 
+    .oa-card-arremate-react {
+        grid-template-columns: auto 1fr; /* Imagem e o resto */
+        grid-template-rows: auto auto; /* Linha 1: info, Linha 2: pendente */
+        padding: 12px;
+        gap: 4px 12px;
+    }
+    .card-imagem-produto {
+        grid-row: 1 / 3; /* Imagem ocupa as duas linhas */
+        width: 60px;
+        height: 60px;
+    }
+    .card-info-principal {
+        grid-column: 2 / 3;
+        grid-row: 1 / 2;
+    }
+    .card-info-principal h3 {
+        font-size: 1rem;
+    }
+    .card-bloco-pendente {
+        grid-column: 2 / 3; /* Bloco pendente vai para a segunda linha */
+        grid-row: 2 / 3;
+        flex-direction: row;
+        justify-content: space-between;
+        width: 100%;
+        padding: 8px 12px;
+        margin-top: 8px;
+        background-color: transparent;
+        border-top: 1px solid var(--oa-cor-cinza-borda);
+        border-radius: 0;
+    }
+    .card-bloco-pendente .valor {
+        font-size: 1.5rem;
+    }
+
+    .coluna-conteudo-principal {
+    padding-top: 2px;
+}
 
 }
 

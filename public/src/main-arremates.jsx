@@ -1,48 +1,83 @@
 // public/src/main-arremates.jsx
-import React from 'react';
+
+import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 
-// Importa os componentes React que já existem e vamos reutilizar
+// Importando TODOS os componentes de seus arquivos separados
 import HeaderPagina from './components/HeaderPagina.jsx';
-import PainelFiltros from './components/PainelFiltros.jsx';
+import AtribuicaoModal from './components/AtribuicaoModal.jsx';
 
-// Função que será chamada pelo nosso JavaScript "puro" (admin-arremates.js)
-function renderizarComponentesReactArremates(dados) {
-    const { opcoesDeFiltro } = dados;
+import PerdaModal from './components/PerdaModal.jsx';
 
-    // 1. Renderiza o Header no portal #header-root
-    const headerRootElement = document.getElementById('header-root');
-    if (headerRootElement) {
-        const headerRoot = ReactDOM.createRoot(headerRootElement);
-        headerRoot.render(
-            <React.StrictMode>
-                <HeaderPagina titulo="Arremates">
-                    {/* Este é o botão de histórico. Note as classes globais 'gs-' */}
-                    {/* Adicionamos 'gs-btn-com-icone' para o estilo mobile */}
-                    <button id="btnAbrirHistorico" className="gs-btn gs-btn-secundario gs-btn-com-icone">
-                        <i className="fas fa-clipboard-list"></i>
-                        <span>Histórico</span>
-                    </button>
-                </HeaderPagina>
-            </React.StrictMode>
-        );
-    }
+// O componente raiz da aplicação React nesta página.
+function App() {
+    const [modalAberto, setModalAberto] = useState(false);
+    const [tiktikSelecionado, setTiktikSelecionado] = useState(null);
 
-    // 2. Renderiza os Filtros no portal #filtros-root
-    const filtrosRootElement = document.getElementById('filtros-root');
-    if (filtrosRootElement) {
-        const filtrosRoot = ReactDOM.createRoot(filtrosRootElement);
-        filtrosRoot.render(
-            <React.StrictMode>
-                {/* O painel de filtros é genérico, só precisa das opções e da função de callback */}
-                <PainelFiltros
-                    opcoesDeFiltro={opcoesDeFiltro}
-                    onFiltrosChange={window.onArrematesFiltrosChange} // Usaremos este nome para a "ponte"
-                />
-            </React.StrictMode>
-        );
-    }
+    // <<< 1. ADICIONE O NOVO ESTADO PARA O MODAL DE PERDA >>>
+    const [perdaModalAberto, setPerdaModalAberto] = useState(false);
+    
+    // Efeito para criar a "ponte" de comunicação do JS puro para o React
+    useEffect(() => {
+        // Expõe a função para que o admin-arremates.js possa chamá-la
+        window.abrirModalAtribuicao = (tiktik) => {
+            setTiktikSelecionado(tiktik);
+            setModalAberto(true);
+        };
+        // Limpa a função quando o componente é desmontado
+        return () => { 
+            delete window.abrirModalAtribuicao; 
+        };
+    }, []); // Array vazio garante que rode apenas uma vez
+
+    return (
+        <>
+            <HeaderPagina titulo="Arremates">
+                <button 
+                    id="btnAbrirModalPerda" 
+                    className="gs-btn gs-btn-perigo gs-btn-com-icone"
+                    onClick={() => setPerdaModalAberto(true)}
+                >
+                    <i className="fas fa-exclamation-triangle"></i>
+                    <span>Registrar Perda</span>
+                </button>
+
+                <button 
+                    id="btnAbrirHistorico" 
+                    className="gs-btn gs-btn-secundario gs-btn-com-icone"
+                    onClick={() => {
+                        // Verifica se a função do JS puro existe antes de chamar
+                        if (window.abrirModalHistorico) {
+                            window.abrirModalHistorico();
+                        } else {
+                            console.error("Função abrirModalHistorico não encontrada no escopo global.");
+                        }
+                    }}
+                >
+                    <i className="fas fa-clipboard-list"></i>
+                    <span>Histórico</span>
+                </button>
+            </HeaderPagina>
+
+            <AtribuicaoModal 
+                isOpen={modalAberto} 
+                tiktik={tiktikSelecionado} 
+                onClose={() => setModalAberto(false)} 
+            />
+             <PerdaModal
+                isOpen={perdaModalAberto}
+                onClose={() => setPerdaModalAberto(false)}
+            />
+        </>
+    );
 }
 
-// Deixa a função de renderização disponível globalmente para o admin-arremates.js
-window.renderizarComponentesReactArremates = renderizarComponentesReactArremates;
+// Ponto de entrada final
+const appRootElement = document.getElementById('app-react-root');
+if (appRootElement) {
+    ReactDOM.createRoot(appRootElement).render(
+        <React.StrictMode>
+            <App />
+        </React.StrictMode>
+    );
+}

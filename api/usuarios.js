@@ -577,7 +577,7 @@ router.put('/:id/status', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada para alterar status de usuários.' });
         }
 
-        const validStatus = ['LIVRE', 'FALTOU', 'PAUSA_MANUAL', 'ALOCADO_EXTERNO'];
+        const validStatus = ['LIVRE', 'FALTOU', 'PAUSA_MANUAL', 'ALOCADO_EXTERNO','LIVRE_MANUAL'];
         if (!novoStatus || !validStatus.includes(novoStatus)) {
             console.error('[BACKEND-VALIDACAO] ERRO: Status inválido!');
             return res.status(400).json({ error: 'Status fornecido é inválido.' });

@@ -2,7 +2,9 @@
 import { verificarAutenticacao } from '/js/utils/auth.js'; 
 import { mostrarMensagem, mostrarConfirmacao, mostrarPromptNumerico } from '/js/utils/popups.js';
 import { obterProdutos as obterProdutosDoStorage } from '/js/utils/storage.js';
-import { renderizarPaginacao } from './utils/Paginacao.js';
+import { renderizarPaginacao as renderizarPaginacaoJS } from './utils/Paginacao.js';
+window.renderizarPaginacao = renderizarPaginacaoJS;
+
 import { inicializarControlador, atualizarDadosControlador } from './utils/ControladorFiltros.js';
 
 // --- Variáveis Globais --- 
@@ -13,12 +15,11 @@ let todosOsUsuarios = [];
 let opsFinalizadasCompletas = [];
 let todosArrematesRegistradosCache = [];
 let produtosAgregadosParaArremateGlobal = [];
-let arremateAgregadoEmVisualizacao = null;
 let historicoDeArrematesCache = [];
 let totaisDaFilaDeArremate = { totalGrupos: 0, totalPecas: 0 };
-let modalAtribuirTarefaElemento = null;
 let statusTiktiksCache = [];
 let modalModoFocoElemento = null;
+let cronometroIntervalId = null;
 
 // --- Cache para evitar piscada de imagens ---
 const imageCache = new Set();
@@ -35,6 +36,7 @@ let historicoArrematesCurrentPage = 1;
 const STATUS = {
     PRODUZINDO: 'PRODUZINDO',
     LIVRE: 'LIVRE',
+    LIVRE_MANUAL: 'LIVRE_MANUAL',
     ALMOCO: 'ALMOÇO',
     PAUSA: 'PAUSA',
     FORA_DO_HORARIO: 'FORA_DO_HORARIO', // Sem espaço
@@ -46,6 +48,7 @@ const STATUS = {
 const STATUS_TEXTO_EXIBICAO = {
     [STATUS.PRODUZINDO]: 'Produzindo',
     [STATUS.LIVRE]: 'Livre',
+    [STATUS.LIVRE_MANUAL]: 'Livre',
     [STATUS.ALMOCO]: 'Almoço',
     [STATUS.PAUSA]: 'Pausa',
     [STATUS.FORA_DO_HORARIO]: 'Fora do Horário', // Com espaço
@@ -64,6 +67,126 @@ const lancamentosArremateEmAndamento = new Set();
 let cronometrosUpdateInterval;
 let ultimaAtualizacaoTimestamp = null;
 let feedbackUpdateInterval;  
+
+/**
+ * Obtém a imagem correta para um produto (versão para JS puro).
+ * @param {object} produtoInfo - O objeto completo do produto vindo do cache 'todosOsProdutosCadastrados'.
+ * @param {string} varianteNome - O nome da variação (ex: "Preto com Preto | P").
+ * @returns {string} - A URL da imagem ou um placeholder.
+ */
+function obterImagemProduto(produtoInfo, varianteNome) {
+    const placeholder = '/img/placeholder-image.png';
+
+    if (!produtoInfo) {
+        return placeholder;
+    }
+
+    // 1. Tenta encontrar a imagem específica da variação na grade.
+    if (varianteNome && varianteNome !== '-' && Array.isArray(produtoInfo.grade)) {
+        const gradeItem = produtoInfo.grade.find(g => g.variacao === varianteNome);
+        if (gradeItem && gradeItem.imagem) {
+            return gradeItem.imagem;
+        }
+    }
+    
+    // 2. Se não encontrou, retorna a imagem principal do produto "pai".
+    return produtoInfo.imagem || placeholder;
+}
+
+function atualizarCronometrosVisuais() {
+    const cards = document.querySelectorAll('.oa-card-status-tiktik.status-produzindo');
+    
+    if (cards.length === 0 && cronometroIntervalId) {
+        pararCronometrosVisuais();
+        return;
+    }
+
+    cards.forEach(card => {
+        // ... (cálculos de tempo e cronômetro continuam os mesmos)
+        const inicioTimestamp = parseFloat(card.dataset.inicioTimestamp);
+        const tempoPausadoInicial = parseFloat(card.dataset.pausadoSegundos);
+        const mediaTempoPeca = parseFloat(card.dataset.mediaTempoPeca);
+        const qtdEntregue = parseInt(card.dataset.qtdEntregue, 10);
+
+        if (isNaN(inicioTimestamp) || isNaN(tempoPausadoInicial)) return;
+
+        const agoraTimestamp = Date.now();
+        const tempoLiquidoSegundos = Math.max(0, (agoraTimestamp - inicioTimestamp) / 1000 - tempoPausadoInicial);
+        const tempoFormatado = new Date(tempoLiquidoSegundos * 1000).toISOString().substr(11, 8);
+        
+        const cronometroEl = card.querySelector('.cronometro-tarefa');
+        if (cronometroEl) {
+            cronometroEl.innerHTML = `<i class="fas fa-clock"></i> ${tempoFormatado}`;
+        }
+
+        // --- LÓGICA FINAL DA BARRA E RITMO ---
+        const barraEl = card.querySelector('.barra-progresso');
+        const containerBarraEl = card.querySelector('.barra-progresso-container');
+        const indicadorRitmoEl = card.querySelector('.indicador-ritmo-tarefa');
+
+        if (barraEl && indicadorRitmoEl && !isNaN(mediaTempoPeca) && mediaTempoPeca > 0 && !isNaN(qtdEntregue) && qtdEntregue > 0) {
+            
+            // O tempo total que a tarefa DEVERIA levar, com base na média
+            const tempoTotalEstimado = mediaTempoPeca * qtdEntregue;
+
+            // A porcentagem de progresso é baseada no TEMPO, não nas peças estimadas
+            const progressoPercentual = Math.min(100, (tempoLiquidoSegundos / tempoTotalEstimado) * 100);
+            
+            barraEl.style.width = `${progressoPercentual}%`;
+            
+            if (containerBarraEl) {
+                const tempoRestanteEstimado = Math.max(0, tempoTotalEstimado - tempoLiquidoSegundos);
+                containerBarraEl.title = `Tempo estimado restante: ${new Date(tempoRestanteEstimado * 1000).toISOString().substr(11, 8)}`;
+                containerBarraEl.dataset.tooltipMobile = `Tempo estimado restante: ${new Date(tempoRestanteEstimado * 1000).toISOString().substr(11, 8)}`;
+            }
+
+            let ritmoTexto = '';
+            let ritmoClasse = 'ritmo-normal';
+            let corBarraClasse = '';
+
+            // A lógica de cor e emoji agora é baseada diretamente no progresso do tempo
+            if (progressoPercentual > 90) {
+                ritmoTexto = '🐢 Lento';
+                ritmoClasse = 'ritmo-lento';
+                corBarraClasse = 'lento'; // Vermelho
+            } else if (progressoPercentual > 75) {
+                ritmoTexto = '⚠️ Ficar de Olho';
+                ritmoClasse = 'ritmo-normal'; // Cor do texto normal
+                corBarraClasse = 'atencao'; // Amarelo
+            } else {
+                ritmoTexto = '✅ Em andamento';
+                ritmoClasse = 'ritmo-normal';
+                corBarraClasse = ''; // Verde padrão
+            }
+            
+            indicadorRitmoEl.textContent = ritmoTexto;
+            indicadorRitmoEl.className = `indicador-ritmo-tarefa ${ritmoClasse}`;
+
+            barraEl.classList.remove('atencao', 'lento');
+            if (corBarraClasse) {
+                barraEl.classList.add(corBarraClasse);
+            }
+
+        } else if (indicadorRitmoEl) {
+            indicadorRitmoEl.textContent = '';
+            indicadorRitmoEl.className = 'indicador-ritmo-tarefa';
+        }
+    });
+}
+
+
+function iniciarCronometrosVisuais() {
+    if (cronometroIntervalId) {
+        return;
+    }
+    cronometroIntervalId = setInterval(atualizarCronometrosVisuais, 1000);
+}
+
+function pararCronometrosVisuais() {
+    clearInterval(cronometroIntervalId);
+    cronometroIntervalId = null;
+}
+
 /**
  * Função principal que busca os dados e renderiza o painel de status.
  */
@@ -81,7 +204,7 @@ async function renderizarPainelStatus() {
     try {
         const tiktiks = await fetchFromAPI('/arremates/status-tiktiks');
         await precarregarImagens(tiktiks);
-        statusTiktiksCache = tiktiks;
+        window.statusTiktiksCache = tiktiks;
         
         containerDisponiveis.innerHTML = '';
         containerInativos.innerHTML = '';
@@ -96,24 +219,38 @@ async function renderizarPainelStatus() {
             const card = document.createElement('div');
             card.dataset.tiktikId = tiktik.id;
             
-            // --- MUDANÇA AQUI: Pegamos os 3 valores ---
             const { statusBruto, statusFinal, classeStatus } = determinarStatusFinal(tiktik);
 
             // Usa o status BRUTO para a lógica interna
             if (statusBruto === STATUS.PRODUZINDO) {
-                card.dataset.inicioTarefa = tiktik.data_inicio;
+                const dataInicio = new Date(tiktik.data_inicio);
+                const agora = new Date();
+                
+                // Calcula o tempo total em segundos desde o início
+                const tempoTotalBrutoSegundos = (agora - dataInicio) / 1000;
+                
+                // O tempo pausado é a diferença entre o tempo total e o tempo que ele efetivamente trabalhou
+                const tempoPausadoSegundos = tempoTotalBrutoSegundos - (tiktik.tempo_decorrido_real_segundos || 0);
+
+                card.dataset.inicioTimestamp = dataInicio.getTime();
+                card.dataset.pausadoSegundos = tempoPausadoSegundos; // << Cálculo mais simples e robusto
+                card.dataset.mediaTempoPeca = tiktik.media_tempo_por_peca || 0;
+                card.dataset.qtdEntregue = tiktik.quantidade_entregue || 0;
             }
 
+            
             card.className = `oa-card-status-tiktik ${classeStatus}`;
-            // Passa o texto de EXIBIÇÃO para a função que cria o HTML
             card.innerHTML = criarHTMLCardStatus(tiktik, statusFinal, classeStatus, statusBruto); 
                 
-            // Usa o status BRUTO para a lógica de separação de containers
-            if (statusBruto === STATUS.LIVRE || statusBruto === STATUS.PRODUZINDO) {
-                containerDisponiveis.appendChild(card);
-            } else {
-                containerInativos.appendChild(card);
-                contadorInativos++;
+            if (
+                statusBruto === STATUS.LIVRE ||
+                statusBruto === STATUS.LIVRE_MANUAL ||
+                statusBruto === STATUS.PRODUZINDO
+                ) {
+                    containerDisponiveis.appendChild(card);
+                } else {
+                    containerInativos.appendChild(card);
+                    contadorInativos++;
             }
         });
         
@@ -125,8 +262,12 @@ async function renderizarPainelStatus() {
 
     } catch (error) {
         console.error("Erro ao renderizar painel de status:", error);
-        containerDisponiveis.innerHTML = `<p class="erro-painel">Erro ao carregar o painel. Tente atualizar a página.</p>`;
+        containerDisponiveis.innerHTML = `<p class="erro-painel">Erro ao carregar o painel. RECARREGUE A PÁGINA.</p>`;
         if (feedbackEl) feedbackEl.textContent = 'Falha ao atualizar';
+    } finally {
+        // <<< ADICIONE A CHAMADA AQUI, NO FINALLY, PARA GARANTIR QUE SEMPRE RODE >>>
+        // (Re)inicia o motor do cronômetro após cada renderização do painel
+        iniciarCronometrosVisuais();
     }
 }
 
@@ -223,62 +364,83 @@ function atualizarFeedbackTempo() {
 /**
  * Determina o status final de um empregado baseado na hierarquia de regras.
  */
-function determinarStatusFinal(tiktik) {
-    const formatarClasse = (status) => {
-        // Guarda de segurança: se status for undefined ou null, retorna uma string vazia.
-        if (!status) return ''; 
-        return `status-${status.toLowerCase().replace(/_/g, '-')}`;
-    };
-    const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    function determinarStatusFinal(tiktik) {
+        const formatarClasse = (status) => {
+            if (!status) return '';
+            // Substitui o status especial pelo status visual correto para a classe CSS
+            const statusVisual = status === STATUS.LIVRE_MANUAL ? STATUS.LIVRE : status;
+            
+            const semAcentos = statusVisual
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "");
+            
+            return `status-${semAcentos.toLowerCase().replace(/_/g, '-')}`;
+        };
+        const hoje = new Date().toLocaleString('en-CA', { timeZone: 'America/Sao_Paulo' });
 
-    let statusFinalBruto;
+        let statusFinalBruto;
 
-    // --- HIERARQUIA DE STATUS CORRIGIDA ---
+        // --- NOVA HIERARQUIA DE STATUS ---
 
-    // NÍVEL 1: Produzindo (Prioridade sobre pausas automáticas)
-    if (tiktik.status_atual === STATUS.PRODUZINDO) {
-        statusFinalBruto = STATUS.PRODUZINDO;
-    } 
-    // NÍVEL 2: Status manuais de dia inteiro
-    else if ([STATUS.FALTOU, STATUS.ALOCADO_EXTERNO].includes(tiktik.status_atual) && tiktik.status_data_modificacao?.startsWith(hoje)) {
-        statusFinalBruto = tiktik.status_atual;
-    }
-    // NÍVEL 3: Pausa manual
-    else if (tiktik.status_atual === STATUS.PAUSA_MANUAL) {
-        statusFinalBruto = STATUS.PAUSA_MANUAL;
-    }
-    // NÍVEL 4: Lógica de horário para todos os outros casos
-    else {
-        const agora = new Date();
-        const horaAtualStr = agora.toLocaleTimeString('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
-        const { horario_entrada_1, horario_saida_1, horario_entrada_2, horario_saida_2, horario_entrada_3, horario_saida_3 } = tiktik;
-        
-        const saidaFinal = horario_saida_3 || horario_saida_2 || horario_saida_1 || '23:59';
-        const entradaInicial = horario_entrada_1 || '00:00';
-
-        if (horaAtualStr < entradaInicial || horaAtualStr > saidaFinal) {
-            statusFinalBruto = STATUS.FORA_DO_HORARIO;
-        } else if (horario_saida_1 && horario_entrada_2 && horaAtualStr > horario_saida_1 && horaAtualStr < horario_entrada_2) {
-            statusFinalBruto = STATUS.ALMOCO;
-        } else if (horario_saida_2 && horario_entrada_3 && horaAtualStr > horario_saida_2 && horaAtualStr < horario_entrada_3) {
-            statusFinalBruto = STATUS.PAUSA;
-        } else {
-            // Se passou por tudo, o status é o que está no banco (provavelmente LIVRE), ou LIVRE como fallback.
-            statusFinalBruto = tiktik.status_atual || STATUS.LIVRE;
+        // NÍVEL 1: Produzindo (Prioridade máxima)
+        if (tiktik.status_atual === STATUS.PRODUZINDO) {
+            statusFinalBruto = STATUS.PRODUZINDO;
         }
-    }
-    
-    // Fallback final para garantir que statusFinalBruto NUNCA seja undefined
-    if (!statusFinalBruto) {
-        statusFinalBruto = STATUS.LIVRE;
-    }
+        // NÍVEL 2: Status manuais de dia inteiro
+        else if (
+            [STATUS.FALTOU, STATUS.ALOCADO_EXTERNO, STATUS.LIVRE_MANUAL].includes(tiktik.status_atual)
+            ) {
+            // Pega a data de hoje no formato YYYY-MM-DD, no fuso de São Paulo
+            const hojeSP = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+            
+            // Pega a data da modificação que veio do banco (ex: "2025-09-14T03:00:00.000Z")
+            // e pega APENAS a parte da data (os 10 primeiros caracteres)
+            const dataModificacao = tiktik.status_data_modificacao?.substring(0, 10);
 
-    return {
-        statusBruto: statusFinalBruto,
-        statusFinal: STATUS_TEXTO_EXIBICAO[statusFinalBruto] || statusFinalBruto,
-        classeStatus: formatarClasse(statusFinalBruto)
-    };
-}
+            // Compara APENAS as datas. Isso é à prova de fuso horário e hora.
+            if (hojeSP === dataModificacao) {
+                statusFinalBruto = tiktik.status_atual;
+            } 
+        }
+        // NÍVEL 3: Pausa manual
+        else if (tiktik.status_atual === STATUS.PAUSA_MANUAL) {
+            statusFinalBruto = STATUS.PAUSA_MANUAL;
+        }
+        // NÍVEL 4: Lógica de horário (só entra aqui se nenhum status manual prioritário for encontrado)
+        else {
+            const agora = new Date();
+            const horaAtualStr = agora.toLocaleTimeString('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+            const { horario_entrada_1, horario_saida_1, horario_entrada_2, horario_saida_2, horario_entrada_3, horario_saida_3 } = tiktik;
+            
+            const saidaFinal = horario_saida_3 || horario_saida_2 || horario_saida_1 || '23:59';
+            const entradaInicial = horario_entrada_1 || '00:00';
+
+            if (horaAtualStr < entradaInicial || horaAtualStr > saidaFinal) {
+                statusFinalBruto = STATUS.FORA_DO_HORARIO;
+            } else if (horario_saida_1 && horario_entrada_2 && horaAtualStr > horario_saida_1 && horaAtualStr < horario_entrada_2) {
+                statusFinalBruto = STATUS.ALMOCO;
+            } else if (horario_saida_2 && horario_entrada_3 && horaAtualStr > horario_saida_2 && horaAtualStr < horario_entrada_3) {
+                statusFinalBruto = STATUS.PAUSA;
+            } else {
+                statusFinalBruto = tiktik.status_atual || STATUS.LIVRE;
+            }
+        }
+        
+        if (!statusFinalBruto) {
+            statusFinalBruto = STATUS.LIVRE;
+        }
+
+        // Se o status final for LIVRE_MANUAL, o texto a ser exibido ainda é "Livre"
+        const textoExibicao = (statusFinalBruto === STATUS.LIVRE_MANUAL) 
+                                ? STATUS_TEXTO_EXIBICAO[STATUS.LIVRE] 
+                                : STATUS_TEXTO_EXIBICAO[statusFinalBruto] || statusFinalBruto;
+
+        return {
+            statusBruto: statusFinalBruto,
+            statusFinal: textoExibicao,
+            classeStatus: formatarClasse(statusFinalBruto)
+        };
+    }
 
 /**
  * Verifica se um tiktik produzindo está em um horário de pausa ou fora do expediente.
@@ -318,9 +480,11 @@ function criarHTMLCardStatus(tiktik, statusFinalTexto, classeStatus, statusBruto
     let infoTarefaHTML = '';
     let botoesAcaoHTML = '';
     let avisoHorarioHTML = '';
+    let menuAcoesHTML = '';
+    
 
      if (statusBrutoDecidido === STATUS.PRODUZINDO) {
-        // --- INÍCIO DA NOVA LÓGICA DE AVISO ---
+        // --- LÓGICA DE AVISO (EXISTENTE E MANTIDA) ---
         const infoHorarioEstendido = verificarHorarioEstendido(tiktik);
         if (infoHorarioEstendido) {
             avisoHorarioHTML = `
@@ -329,37 +493,37 @@ function criarHTMLCardStatus(tiktik, statusFinalTexto, classeStatus, statusBruto
                 </div>
             `;
         }
-        // --- FIM DA NOVA LÓGICA ---
 
+        // --- LÓGICA DO TEMPO INICIAL (EXISTENTE E MANTIDA) ---
         const tempoSegundosBase = tiktik.tempo_decorrido_real_segundos || 0;
         const tempoDecorridoStr = new Date(tempoSegundosBase * 1000).toISOString().substr(11, 8);
-        let progresso = 0;
-        let classeProgresso = '';
-        let mediaInfoHTML = '<p class="media-info">Sem média de tempo registrada para este produto.</p>';
-        if (tiktik.media_tempo_por_peca && tiktik.quantidade_entregue > 0) {
-            const tempoMedioTotalSegundos = tiktik.media_tempo_por_peca * tiktik.quantidade_entregue;
-            const tempoDecorridoSegundos = tempoSegundosBase; 
-            progresso = Math.min(100, (tempoDecorridoSegundos / tempoMedioTotalSegundos) * 100);
-            if (progresso >= 100) classeProgresso = 'lento';
-            else if (progresso > 75) classeProgresso = 'atencao';
-            const tempoMedioFormatado = new Date(tempoMedioTotalSegundos * 1000).toISOString().substr(11, 8);
-            mediaInfoHTML = `<p class="media-info">Tempo médio estimado: <strong>${tempoMedioFormatado}</strong></p>`;
-        }
-        infoTarefaHTML = `
-            <div class="info-tarefa">
-                <p class="produto-tarefa">${tiktik.produto_nome} ${tiktik.variante ? `(${tiktik.variante})` : ''}</p>
-                <p class="quantidade-tarefa">${tiktik.quantidade_entregue} pçs</p>
+
+        // --- HTML REDESENHADO (NOVO) ---
+        // --- HTML REDESENHADO (NOVO) ---
+    infoTarefaHTML = `
+        <div class="info-tarefa-redesenhada">
+            <div class="quantidade-tarefa-destaque">
+                ${tiktik.quantidade_entregue}<small>pçs</small>
+            </div>
+            <div class="produto-tarefa-subtitulo">
+                ${tiktik.produto_nome} ${tiktik.variante ? `(${tiktik.variante})` : ''}
+            </div>
+            
+            <div class="metricas-tarefa-container">
                 <div class="cronometro-tarefa">
                     <i class="fas fa-clock"></i> ${tempoDecorridoStr}
                 </div>
-                <div class="barra-progresso-container">
-                    <div class="barra-progresso ${classeProgresso}" style="width: ${progresso}%;"></div>
-                </div>
-                ${mediaInfoHTML}
-            </div>
-        `;
 
-         // Botões de ação
+                <div class="indicador-ritmo-tarefa"></div>
+
+                <div class="barra-progresso-container" title="Estimativa de conclusão baseada no tempo médio">
+                    <div class="barra-progresso" style="width: 0%;"></div>
+                </div>
+            </div>
+        </div>
+    `;
+
+        // --- LÓGICA DOS BOTÕES (EXISTENTE E MANTIDA) ---
         const podeFinalizar = permissoes.includes('lancar-arremate');
         const podeCancelar = permissoes.includes('cancelar-tarefa-arremate');
         const attrsFinalizar = podeFinalizar ? `data-action="finalizar"` : `data-action="permissao-negada" data-permissao-necessaria="Finalizar Tarefa"`;
@@ -379,57 +543,73 @@ function criarHTMLCardStatus(tiktik, statusFinalTexto, classeStatus, statusBruto
                 </button>
             </div>
         `;
-    } else if (statusBrutoDecidido === STATUS.LIVRE) {
+    } else if (statusBrutoDecidido === STATUS.LIVRE || statusBrutoDecidido === STATUS.LIVRE_MANUAL) {
+        // --- LÓGICA PARA O CARD "LIVRE" ---
         const podeAtribuir = permissoes.includes('lancar-arremate');
         const attrsAtribuir = podeAtribuir ? `data-action="iniciar"` : `data-action="permissao-negada" data-permissao-necessaria="Atribuir Tarefa"`;
-        botoesAcaoHTML = `
-            <button class="btn-acao iniciar"
-                    ${attrsAtribuir}
-                    ${!podeAtribuir ? 'disabled' : ''}>
-                <i class="fas fa-play"></i> Atribuir Tarefa
-            </button>
-        `;
+        botoesAcaoHTML = `<button class="btn-acao iniciar" ${attrsAtribuir} ${!podeAtribuir ? 'disabled' : ''}><i class="fas fa-play"></i> Atribuir Tarefa</button>`;
+        
+        // Adiciona o carimbo
+        infoTarefaHTML = `<div class="status-carimbo-container"><div class="status-carimbo">${statusFinalTexto}</div></div>`;
+
+    } else {
+        // --- LÓGICA PARA TODOS OS OUTROS CARDS INATIVOS (PAUSA, ALMOÇO, ETC) ---
+        // Apenas adiciona o carimbo, sem botões de ação no rodapé
+        infoTarefaHTML = `<div class="status-carimbo-container"><div class="status-carimbo">${statusFinalTexto}</div></div>`;
     }
     
      // --- LÓGICA DO NOVO MENU DE AÇÕES ---
-    let menuAcoesHTML = '';
+    
     const menuItens = [];
 
-    // Opções disponíveis quando o tiktik está ativo
-     if ([STATUS.LIVRE, STATUS.PRODUZINDO].includes(tiktik.status_atual)) {
-        menuItens.push({ action: 'pausa-manual', label: 'Iniciar Pausa Manual', icon: 'fa-coffee' });
-        menuItens.push({ action: 'marcar-falta', label: 'Marcar Falta', icon: 'fa-user-slash' });
-        menuItens.push({ action: 'alocar-externo', label: 'Alocar em Outro Setor', icon: 'fa-shipping-fast' });
-    }
-    else if (tiktik.status_atual === STATUS.PAUSA_MANUAL) {
-        menuItens.push({ action: 'reverter-status', label: 'Finalizar Pausa', icon: 'fa-play' });
-    }
-    else if (tiktik.status_atual === STATUS.FALTOU) {
-         menuItens.push({ action: 'reverter-status', label: 'Remover Falta', icon: 'fa-user-check' });
-    }
-    else if (tiktik.status_atual === STATUS.ALOCADO_EXTERNO) {
-         menuItens.push({ action: 'reverter-status', label: 'Retornar ao Setor', icon: 'fa-undo' });
-    }
-    // ATENÇÃO: Aqui usamos o statusFinalTexto, que é o texto de exibição
-    else if (['Almoço', 'Pausa', 'Fora do Horário'].includes(statusFinalTexto)) {
-         menuItens.push({ action: 'reverter-status', label: 'Interromper e Liberar', icon: 'fa-play' });
+    // Agora a decisão é baseada no status REAL que o usuário está vendo (statusBrutoDecidido)
+    switch (statusBrutoDecidido) {
+        case STATUS.LIVRE:
+        case STATUS.LIVRE_MANUAL:
+        case STATUS.PRODUZINDO:
+            // Ações para quando o Tiktik está ativo
+            menuItens.push({ action: 'pausa-manual', label: 'Iniciar Pausa Manual', icon: 'fa-coffee' });
+            menuItens.push({ action: 'marcar-falta', label: 'Marcar Falta', icon: 'fa-user-slash' });
+            menuItens.push({ action: 'alocar-externo', label: 'Alocar em Outro Setor', icon: 'fa-shipping-fast' });
+            break;
+
+        case STATUS.PAUSA_MANUAL:
+            menuItens.push({ action: 'reverter-status', label: 'Finalizar Pausa', icon: 'fa-play' });
+            break;
+
+        case STATUS.FALTOU:
+            menuItens.push({ action: 'reverter-status', label: 'Remover Falta', icon: 'fa-user-check' });
+            break;
+
+        case STATUS.ALOCADO_EXTERNO:
+            menuItens.push({ action: 'reverter-status', label: 'Retornar ao Setor', icon: 'fa-undo' });
+            break;
+
+        case STATUS.ALMOCO:
+        case STATUS.PAUSA:
+        case STATUS.FORA_DO_HORARIO:
+            // Aqui está a chave! Agora o botão aparecerá para esses 3 status.
+            menuItens.push({ action: 'reverter-status', label: 'Interromper e Liberar', icon: 'fa-play' });
+            break;
     }
 
+
     if (menuItens.length > 0) {
-    menuAcoesHTML = `
-        <button class="btn-menu-acoes" data-action="abrir-menu-acoes" title="Mais Ações">
-            <i class="fas fa-ellipsis-v"></i>
-        </button>
-        
-        <div class="menu-acoes-popup" id="menu-acoes-${tiktik.id}">
-            ${menuItens.map(item => `
-                <button data-action="${item.action}">
-                    <i class="fas ${item.icon}"></i>
-                    <span>${item.label}</span>
-                </button>
-            `).join('')}
-        </div>
-    `;
+        // O HTML do menu permanece o mesmo
+        menuAcoesHTML = `
+            <button class="btn-menu-acoes" data-action="abrir-menu-acoes" title="Mais Ações">
+                <i class="fas fa-ellipsis-v"></i>
+            </button>
+            
+            <div class="menu-acoes-popup" id="menu-acoes-${tiktik.id}">
+                ${menuItens.map(item => `
+                    <button data-action="${item.action}">
+                        <i class="fas ${item.icon}"></i>
+                        <span>${item.label}</span>
+                    </button>
+                `).join('')}
+            </div>
+        `;
     }
 
     return `
@@ -479,424 +659,6 @@ async function handleAcaoManualStatus(tiktik, novoStatus, mensagemConfirmacao, m
             cardDoTiktik.classList.remove('acao-em-andamento');
             cardDoTiktik.innerHTML = htmlOriginalDoCard; // Reverte!
         }
-    }
-}
-// --- Funções de Manipulação de Ações (Handles) ---
-async function handleAtribuirTarefa(tiktik) {
-    if (!modalAtribuirTarefaElemento) {
-        console.error("FALHA CRÍTICA: O elemento do modal não foi inicializado.");
-        return mostrarMensagem("Erro ao abrir painel (código: M03).", "erro");
-    }
-
-    // Garante que o modal esteja no body para ser manipulado
-    document.body.appendChild(modalAtribuirTarefaElemento);
-    
-    // A variável 'modal' continua sendo a referência ao container principal
-    const modal = modalAtribuirTarefaElemento;
-    
-    const fecharModal = () => {
-        modal.style.display = 'none';
-        if (modal.parentNode === document.body) {
-            document.body.removeChild(modal);
-        }
-    };
-
-    // Seletores mais seguros com verificação de existência
-    const overlay = modal.querySelector('.popup-overlay');
-    const btnFechar = modal.querySelector('.oa-modal-fechar-btn');
-
-    if (overlay) {
-        overlay.onclick = fecharModal;
-    } else {
-        console.warn("Aviso: O elemento .popup-overlay não foi encontrado no modal de atribuir tarefa.");
-    }
-
-    if (btnFechar) {
-        btnFechar.onclick = fecharModal;
-    } else {
-        console.warn("Aviso: O botão .oa-modal-fechar-btn não foi encontrado no modal de atribuir tarefa.");
-    }
-    
-    const titulo = modal.querySelector('#modalAtribuirTitulo');
-    const colunaLista = modal.querySelector('.coluna-lista-produtos');
-    const colunaConfirmacao = modal.querySelector('.coluna-confirmacao');
-    const filaWrapper = modal.querySelector('#modalAtribuirFilaWrapper');
-    const formContainer = modal.querySelector('#modalAtribuirFormContainer');
-    const buscaInput = modal.querySelector('#buscaProdutoModal');
-    const paginacaoContainer = modal.querySelector('#modalPaginacaoContainer');
-
-    let todosItensDaFila = [];
-    let itemSelecionado = null;
-    let currentPage = 1;
-    const itemsPerPage = 6;
-
-    // --- INICIALIZAÇÃO E EXIBIÇÃO DO MODAL (FLUXO CORRIGIDO) ---
-    titulo.innerHTML = `Atribuir Tarefa para <span class="nome-destaque-modal">${tiktik.nome}</span>`;
-    buscaInput.value = '';
-    formContainer.innerHTML = `<div class="placeholder-confirmacao"><i class="fas fa-mouse-pointer"></i><p>Selecione um item da lista para começar.</p></div>`;
-    filaWrapper.innerHTML = '<div class="spinner">Carregando fila...</div>';
-    paginacaoContainer.innerHTML = '';
-
-    colunaLista.style.display = 'flex';
-    colunaConfirmacao.style.display = 'flex';
-    
-    modal.querySelector('.popup-overlay').onclick = fecharModal;
-    modal.querySelector('.oa-modal-fechar-btn').onclick = fecharModal;
-    modal.style.display = 'flex';
-
-    const mostrarTela = (tela) => {
-        if (window.innerWidth > 768) return;
-        colunaLista.style.display = (tela === 'lista') ? 'flex' : 'none';
-        colunaConfirmacao.style.display = (tela === 'confirmacao') ? 'flex' : 'none';
-    };
-
-    const renderizarItensPaginados = () => {
-        const termoBusca = buscaInput.value.toLowerCase();
-        const itensFiltrados = todosItensDaFila.filter(item => 
-            item.produto_nome.toLowerCase().includes(termoBusca) ||
-            item.variante.toLowerCase().includes(termoBusca)
-        );
-
-        const totalPages = Math.ceil(itensFiltrados.length / itemsPerPage) || 1;
-        currentPage = Math.min(currentPage, totalPages);
-        const inicio = (currentPage - 1) * itemsPerPage;
-        const fim = inicio + itemsPerPage;
-        const itensDaPagina = itensFiltrados.slice(inicio, fim);
-
-        const produtosEmTrabalho = new Map();
-        statusTiktiksCache
-            .filter(t => t.status_atual === 'STATUS.PRODUZINDO' && t.produto_id)
-            .forEach(t => {
-                const chave = `${t.produto_id}|${t.variante || '-'}`;
-                if (!produtosEmTrabalho.has(chave)) {
-                    produtosEmTrabalho.set(chave, []);
-                }
-                produtosEmTrabalho.get(chave).push({ nome: t.nome, quantidade: t.quantidade_entregue });
-            });
-
-        filaWrapper.innerHTML = '';
-        if (itensDaPagina.length === 0) {
-            filaWrapper.innerHTML = '<p style="text-align:center; padding: 20px;">Nenhum item encontrado.</p>';
-            paginacaoContainer.style.display = 'none';
-            return;
-        }
-
-        itensDaPagina.forEach(item => {
-            const produtoInfo = todosOsProdutosCadastrados.find(p => p.id == item.produto_id);
-            const imagemSrc = obterImagemProduto(produtoInfo, item.variante);
-            
-            const chaveProduto = `${item.produto_id}|${item.variante || '-'}`;
-            const tarefasAtivas = produtosEmTrabalho.get(chaveProduto);
-
-            let saldoDisplay; // Declarada aqui
-            let classesAdicionais = '';
-            
-            if (tarefasAtivas) {
-                const quantidadeReservada = tarefasAtivas.reduce((total, task) => total + task.quantidade, 0);
-                const saldoDisponivel = item.saldo_para_arrematar - quantidadeReservada;
-
-                saldoDisplay = `Disp: ${saldoDisponivel > 0 ? saldoDisponivel : 0} / ${item.saldo_para_arrematar}`;
-                classesAdicionais = 'em-trabalho-modal';
-            } else {
-                saldoDisplay = `Disp: ${item.saldo_para_arrematar}`;
-            }
-            
-            const cardHTML = `
-                <div class="oa-card-arremate-modal ${classesAdicionais}" data-produto-id="${item.produto_id}" data-variante="${item.variante}">
-                    <img src="${imagemSrc}" alt="${item.produto_nome}" class="oa-card-img" onerror="this.src='/img/placeholder-image.png'">
-                    <div class="oa-card-info">
-                        <h3>${item.produto_nome}</h3>
-                        <p>${item.variante && item.variante !== '-' ? item.variante : 'Padrão'}</p>
-                    </div>
-                    <div class="oa-card-dados-modal">
-                        <span class="valor">${saldoDisplay}</span>
-                    </div>
-                </div>`;
-            filaWrapper.insertAdjacentHTML('beforeend', cardHTML);
-        });
-        
-        filaWrapper.querySelectorAll('.oa-card-arremate-modal').forEach(card => {
-            card.addEventListener('click', () => selecionarItem(card.dataset.produtoId, card.dataset.variante));
-        });
-        
-        renderizarPaginacao(paginacaoContainer, totalPages, currentPage, (page) => {
-            currentPage = page;
-            renderizarItensPaginados();
-        });
-    };
-
-        const selecionarItem = (produtoId, variante) => {
-        filaWrapper.querySelector('.selecionada')?.classList.remove('selecionada');
-        const cardSelecionado = filaWrapper.querySelector(`[data-produto-id="${produtoId}"][data-variante="${variante}"]`);
-        if (cardSelecionado) {
-            cardSelecionado.classList.add('selecionada');
-        }
-
-        itemSelecionado = todosItensDaFila.find(p => p.produto_id == produtoId && p.variante == variante);
-
-        if (itemSelecionado) {
-            const produtoInfo = todosOsProdutosCadastrados.find(p => p.id == itemSelecionado.produto_id);
-            const imagemSrc = obterImagemProduto(produtoInfo, itemSelecionado.variante);
-
-            // Mapa de produtos em trabalho
-            const produtosEmTrabalho = new Map();
-            statusTiktiksCache
-                .filter(t => t.status_atual === 'STATUS.PRODUZINDO' && t.produto_id)
-                .forEach(t => {
-                    const chave = `${t.produto_id}|${t.variante || '-'}`;
-                    if (!produtosEmTrabalho.has(chave)) {
-                        produtosEmTrabalho.set(chave, []);
-                    }
-                    produtosEmTrabalho.get(chave).push({ nome: t.nome, quantidade: t.quantidade_entregue });
-                });
-
-            const chaveProduto = `${itemSelecionado.produto_id}|${itemSelecionado.variante || '-'}`;
-            const tarefasAtivas = produtosEmTrabalho.get(chaveProduto);
-            
-            let saldoDisponivel = itemSelecionado.saldo_para_arrematar;
-            if (tarefasAtivas) {
-                const quantidadeReservada = tarefasAtivas.reduce((total, task) => total + task.quantidade, 0);
-                saldoDisponivel = itemSelecionado.saldo_para_arrematar - quantidadeReservada;
-            }
-            saldoDisponivel = saldoDisponivel > 0 ? saldoDisponivel : 0;
-
-            // Gera a lista de OPs de origem
-            let opsOrigemHTML = '';
-            if (itemSelecionado.ops_detalhe && itemSelecionado.ops_detalhe.length > 0) {
-                const listaOps = itemSelecionado.ops_detalhe
-                    .map(op => `<li>OP ${op.numero} (Saldo: ${op.saldo_op})</li>`)
-                    .join('');
-                opsOrigemHTML = `
-                    <div class="origem-lancamento-container">
-                        <strong>Origem do Lançamento:</strong>
-                        <ul>${listaOps}</ul>
-                    </div>
-                `;
-            }
-
-            // --- INÍCIO DA PARTE MODIFICADA ---
-            
-            // 1. ATUALIZAÇÃO DO HTML DO FORMULÁRIO
-            formContainer.innerHTML = `
-                <button id="btnVoltarParaLista" class="oa-btn-voltar-mobile"><i class="fas fa-arrow-left"></i> Voltar</button>
-                <img src="${imagemSrc}" alt="Produto" class="img-confirmacao">
-                <h4>${itemSelecionado.produto_nome}</h4>
-                <p>${itemSelecionado.variante && itemSelecionado.variante !== '-' ? itemSelecionado.variante : 'Padrão'}</p>
-                
-                ${opsOrigemHTML} 
-
-                <div class="info-saldo-atribuir">
-                    <div class="saldo-item">
-                        <label>Disponível Agora</label>
-                        <span class="saldo-valor pendente">${saldoDisponivel}</span>
-                    </div>
-                    <div class="saldo-item">
-                        <label>Restará</label>
-                        <span id="saldoRestante" class="saldo-valor restante">--</span>
-                    </div>
-                </div>
-
-                <div class="seletor-quantidade-wrapper">
-                    <label for="inputQuantidadeAtribuir">Qtd. a Arrematar:</label>
-                    <div class="input-container">
-                        <button type="button" class="ajuste-qtd-btn" data-ajuste="-1">-</button>
-                        <input type="number" id="inputQuantidadeAtribuir" class="oa-input-tarefas" min="0" max="${saldoDisponivel}" required>
-                        <button type="button" class="ajuste-qtd-btn" data-ajuste="1">+</button>
-                    </div>
-                    <div class="atalhos-qtd-container">
-                        <button type="button" class="atalho-qtd-btn" data-atalho="10">+10</button>
-                        <button type="button" class="atalho-qtd-btn" data-atalho="50">+50</button>
-                        <button type="button" class="atalho-qtd-btn" data-atalho="tudo">TUDO</button>
-                    </div>
-                </div>
-                <button id="btnConfirmarAtribuicao" class="oa-btn oa-btn-sucesso" disabled><i class="fas fa-check"></i> Confirmar</button>
-            `;
-
-            // 2. ADIÇÃO DOS NOVOS LISTENERS E LÓGICA DE INTERAÇÃO
-            const inputQtd = formContainer.querySelector('#inputQuantidadeAtribuir');
-            const btnConfirmar = formContainer.querySelector('#btnConfirmarAtribuicao');
-            const saldoRestanteEl = formContainer.querySelector('#saldoRestante');
-            const maxQtd = saldoDisponivel;
-
-            const atualizarInput = (novaQtd) => {
-                let valor = Math.max(0, Math.min(novaQtd, maxQtd));
-                inputQtd.value = valor;
-                inputQtd.dispatchEvent(new Event('input', { bubbles: true }));
-            };
-
-            formContainer.querySelectorAll('.ajuste-qtd-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const ajuste = parseInt(btn.dataset.ajuste);
-                    const valorAtual = parseInt(inputQtd.value) || 0;
-                    atualizarInput(valorAtual + ajuste);
-                });
-            });
-
-            formContainer.querySelectorAll('.atalho-qtd-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const atalho = btn.dataset.atalho;
-                    const valorAtual = parseInt(inputQtd.value) || 0;
-                    
-                    if (atalho === 'tudo') {
-                        atualizarInput(maxQtd);
-                    } else {
-                        const incremento = parseInt(atalho);
-                        atualizarInput(valorAtual + incremento);
-                    }
-                });
-            });
-
-        // 3. SEU LISTENER PRINCIPAL (COM O AVISO INTELIGENTE)
-        inputQtd.addEventListener('input', debounce(() => {
-                const qtd = parseInt(inputQtd.value) || 0;
-                const restante = saldoDisponivel - qtd;
-                saldoRestanteEl.textContent = restante >= 0 ? restante : '--';
-                btnConfirmar.disabled = !(qtd > 0 && qtd <= saldoDisponivel);
-
-                // --- INÍCIO DA NOVA LÓGICA DE CONFLITO DE HORÁRIO ---
-                
-                // Remove qualquer aviso antigo
-                formContainer.querySelector('.aviso-pausa-inteligente')?.remove();
-
-                if (qtd > 0) {
-                    // Pega a média de tempo para este produto
-                    const mediaTempo = itemSelecionado.media_tempo_por_peca || 0;
-                    
-                    // Pega os dados completos do tiktik para quem estamos atribuindo a tarefa
-                    const tiktikDadosCompletos = statusTiktiksCache.find(t => t.id === tiktik.id);
-
-                    if (mediaTempo > 0 && tiktikDadosCompletos) {
-                        const tempoEstimadoSegundos = qtd * mediaTempo;
-                        const infoProximaPausa = calcularTempoAteProximaPausa(tiktikDadosCompletos);
-                        
-                        // Verifica se existe uma pausa futura E se o tempo estimado a ultrapassa
-                        if (infoProximaPausa && tempoEstimadoSegundos > infoProximaPausa.segundosAtePausa) {
-                            const tempoEstimadoFormatado = formatarDuracaoSegundos(tempoEstimadoSegundos);
-                            const avisoEl = document.createElement('p');
-                            avisoEl.className = 'aviso-pausa-inteligente';
-                            avisoEl.innerHTML = `⚠️ Tempo estimado de <strong>${tempoEstimadoFormatado}</strong> excede a próxima pausa.`; 
-                                                    
-                            // Insere o aviso logo após o seletor de quantidade
-                            formContainer.querySelector('.seletor-quantidade-wrapper').insertAdjacentElement('afterend', avisoEl);
-                        }
-                    }
-                }
-            }, 300));
-
-            // O resto do seu código permanece igual
-            formContainer.querySelector('#btnVoltarParaLista').addEventListener('click', () => mostrarTela('lista'));
-            inputQtd.focus();
-            btnConfirmar.onclick = () => confirmarAtribuicao(tiktik, itemSelecionado, parseInt(inputQtd.value));
-            mostrarTela('confirmacao');
-            const colunaConfirmacao = formContainer.closest('.coluna-confirmacao');
-                if (colunaConfirmacao) {
-                    colunaConfirmacao.scrollTop = 0;
-                }
-            }
-        };
-
-    const confirmarAtribuicao = async (tiktik, item, quantidade) => {
-            const btnConfirmar = formContainer.querySelector('#btnConfirmarAtribuicao');
-            
-            // --- INÍCIO DA LÓGICA DE DECISÃO ---
-            const tiktikDadosCompletos = statusTiktiksCache.find(t => t.id === tiktik.id);
-            const mediaTempo = item.media_tempo_por_peca || 0;
-            const tempoEstimadoSegundos = quantidade * mediaTempo;
-            const infoProximaPausa = tiktikDadosCompletos ? calcularTempoAteProximaPausa(tiktikDadosCompletos) : null;
-
-            // Se existe um conflito de horário...
-            if (infoProximaPausa && tempoEstimadoSegundos > infoProximaPausa.segundosAtePausa) {
-                const tempoEstimadoFormatado = formatarDuracaoSegundos(tempoEstimadoSegundos);
-                const tempoAtePausaFormatado = formatarDuracaoSegundos(infoProximaPausa.segundosAtePausa);
-
-                const mensagem = `
-                    <strong>Conflito de Horário!</strong><br><br>
-                    A tarefa levará cerca de <strong>${tempoEstimadoFormatado}</strong>, mas a próxima pausa de ${tiktik.nome} começa em aproximadamente <strong>${tempoAtePausaFormatado}</strong>.<br><br>
-                    Realmente deseja atribuir esta tarefa? O horário de pausa será ajustado.
-                `;
-
-                const confirmado = await mostrarConfirmacao(mensagem, 'aviso');
-
-                if (!confirmado) {
-                    return;
-                }
-            }
-            // --- FIM DA LÓGICA DE DECISÃO ---
-
-            // --- INÍCIO DA LÓGICA OTIMISTA ---
-
-                // 1. Fechar o modal IMEDIATAMENTE.
-                const modal = document.getElementById('modalAtribuirTarefa');
-                if (modal) modal.style.display = 'none';
-
-                // 2. Encontrar o card do tiktik na tela.
-                const cardDoTiktik = document.querySelector(`.oa-card-status-tiktik[data-tiktik-id="${tiktik.id}"]`);
-                let htmlOriginalDoCard = null; // Guardar o estado original para reverter em caso de erro
-
-                if (cardDoTiktik) {
-                    htmlOriginalDoCard = cardDoTiktik.innerHTML; // Salva o HTML
-                    // Adiciona a classe de carregamento para feedback visual
-                    cardDoTiktik.classList.add('acao-em-andamento');
-                }
-
-                // 3. Montar o payload da API.
-                const payload = {
-                    usuario_tiktik_id: tiktik.id,
-                    produto_id: item.produto_id,
-                    variante: item.variante === '-' ? null : item.variante,
-                    quantidade_entregue: quantidade,
-                    dados_ops: item.ops_detalhe 
-                };
-
-                // 4. Chamar a API em segundo plano.
-                try {
-                    await fetchFromAPI('/arremates/sessoes/iniciar', {
-                        method: 'POST',
-                        body: JSON.stringify(payload)
-                    });
-
-                    // SUCESSO! A API confirmou.
-                    mostrarMensagem('Tarefa iniciada com sucesso!', 'sucesso', 2000);
-
-                    // Agora, atualizamos o painel e a fila com os dados reais do servidor.
-                    // A classe 'acao-em-andamento' será removida pela re-renderização.
-                    await renderizarPainelStatus();
-                    await forcarAtualizacaoFilaDeArremates();
-
-                } catch (error) {
-                    // ERRO! A API falhou.
-                    mostrarMensagem(`Erro ao iniciar tarefa: ${error.message}`, 'erro');
-
-                    // Reverte a UI para o estado anterior.
-                    if (cardDoTiktik && htmlOriginalDoCard) {
-                        cardDoTiktik.classList.remove('acao-em-andamento');
-                        cardDoTiktik.innerHTML = htmlOriginalDoCard; // Restaura o HTML
-                    }
-                }
-                // --- FIM DA LÓGICA OTIMISTA ---
-            };
-    
-    titulo.innerHTML = `Atribuir Tarefa para <span class="nome-destaque-modal">${tiktik.nome}</span>`;
-    buscaInput.value = '';
-    formContainer.innerHTML = `<div class="placeholder-confirmacao"><i class="fas fa-mouse-pointer"></i><p>Selecione um item da lista para começar.</p></div>`;
-    colunaLista.style.display = 'flex';
-    colunaConfirmacao.style.display = 'flex';
-    modal.querySelector('.popup-overlay').onclick = fecharModal;
-    modal.querySelector('.oa-modal-fechar-btn').onclick = fecharModal;
-    modal.style.display = 'flex';
-
-    try {
-        const response = await fetchFromAPI('/arremates/fila?fetchAll=true&sortBy=maior_quantidade');
-        todosItensDaFila = response.rows;
-        currentPage = 1;
-        renderizarItensPaginados();
-        buscaInput.oninput = debounce(() => {
-            currentPage = 1;
-            renderizarItensPaginados();
-        }, 300);
-    } catch (error) {
-        console.error("Erro em handleAtribuirTarefa:", error);
-        filaWrapper.innerHTML = `<p class="erro-painel">Erro ao carregar fila de arremates.</p>`;
     }
 }
 
@@ -1143,7 +905,7 @@ async function abrirModoFoco(tiktik) {
 
     // 2. Preenche os dados básicos e mostra o modal com spinners
     modal.querySelector('#focoAvatar').src = tiktik.avatar_url || '/img/placeholder-image.png';
-    modal.querySelector('#focoNome').textContent = `Desempenho de ${tiktik.nome}`;
+    modal.querySelector('#focoTitulo').innerHTML = `Desempenho de Hoje`;
     modal.querySelector('#focoMetricas').innerHTML = '<div class="spinner"></div>';
     modal.querySelector('#focoResumoProdutos').innerHTML = '<div class="spinner">Calculando resumo...</div>';
     modal.querySelector('#focoTarefas').innerHTML = '<div class="spinner"></div>';
@@ -1222,18 +984,21 @@ function renderizarTarefasFoco(dados) {
     const resumoProdutos = {};
     sessoes.forEach(sessao => {
         if (sessao.status === 'FINALIZADA') {
-            const nomeProduto = sessao.produto_nome;
-            if (!resumoProdutos[nomeProduto]) {
-                resumoProdutos[nomeProduto] = { 
+            // <<< 2. MODIFICAÇÃO AQUI: Buscamos o produto completo no cache
+            const produtoCompleto = todosOsProdutosCadastrados.find(p => p.id == sessao.produto_id);
+            
+            // O nome do produto continua sendo a chave para agrupar
+            const nomeProdutoAgrupado = sessao.produto_nome; 
+            
+            if (!resumoProdutos[nomeProdutoAgrupado]) {
+                resumoProdutos[nomeProdutoAgrupado] = { 
                     totalPecas: 0, 
-                    nome: nomeProduto,
-                    imagem: obterImagemProduto(
-                        todosOsProdutosCadastrados.find(p => p.id == sessao.produto_id), 
-                        null // Para o resumo, usamos a imagem principal do produto
-                    )
+                    nome: nomeProdutoAgrupado,
+                    // Usamos a imagem principal do produto para o resumo agrupado
+                    imagem: produtoCompleto ? produtoCompleto.imagem || '/img/placeholder-image.png' : '/img/placeholder-image.png'
                 };
             }
-            resumoProdutos[nomeProduto].totalPecas += sessao.quantidade_finalizada || 0;
+            resumoProdutos[nomeProdutoAgrupado].totalPecas += sessao.quantidade_finalizada || 0;
         }
     });
 
@@ -1258,7 +1023,10 @@ function renderizarTarefasFoco(dados) {
     if (sessoesFinalizadas.length > 0) {
         tarefasContainer.innerHTML = sessoesFinalizadas.map(s => {
             const produtoInfo = todosOsProdutosCadastrados.find(p => p.id == s.produto_id);
-            const imagemSrc = obterImagemProduto(produtoInfo, s.variante);
+            
+            // Agora chamamos nossa nova função para pegar a imagem da VARIAÇÃO
+            const imagemSrc = obterImagemProduto(produtoInfo, s.variante); 
+            
             const duracaoMs = s.data_fim ? new Date(s.data_fim) - new Date(s.data_inicio) : 0;
             const duracaoFormatada = new Date(duracaoMs).toISOString().substr(11, 8);
             const podeDesfazer = permissoes.includes('estornar-arremate');
@@ -1397,70 +1165,11 @@ function objectToQueryString(obj) {
         .join('&');
 }
 
-function renderizarCardsDaPagina(itensParaRenderizar, page = 1) {
-    const container = document.getElementById('arremateCardsContainer');
-    const paginationContainer = document.getElementById('arrematePaginationContainer');
-    const itemsPerPage = 6;
-
-    if (!container || !paginationContainer) return;
-
-    const totalItems = itensParaRenderizar.length;
-    const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
-    const currentPage = Math.min(page, totalPages);
-    const inicio = (currentPage - 1) * itemsPerPage;
-    const fim = inicio + itemsPerPage;
-    const itensDaPagina = itensParaRenderizar.slice(inicio, fim);
-
-    container.innerHTML = '';
-    if (itensDaPagina.length === 0) {
-        container.innerHTML = '<p style="text-align: center; padding: 20px;">Nenhum item encontrado com os filtros aplicados.</p>';
-    } else {
-        itensDaPagina.forEach(item => {
-            const card = document.createElement('div');
-            card.className = 'oa-card-arremate';
-            
-            const produtoInfo = todosOsProdutosCadastrados.find(p => p.id == item.produto_id);
-            
-            let imagemSrc = obterImagemProduto(produtoInfo, item.variante);
-
-            const opsOrigemCount = item.ops_detalhe?.length || 0;
-            
-            card.innerHTML = `
-                <img src="${imagemSrc}" alt="${item.produto}" class="oa-card-img">
-                <div class="oa-card-info">
-                    <h3>${item.produto}</h3>
-                    <p>${item.variante && item.variante !== '-' ? item.variante : 'Padrão'}</p>
-                </div>
-                <div class="oa-card-dados">
-                    <div class="dado-bloco">
-                        <span class="label">Pendente:</span>
-                        <span class="valor total-pendente">${item.total_disponivel_para_embalar}</span>
-                    </div>
-                    <div class="dado-bloco">
-                        <span class="label">OPS:</span>
-                        <span class="valor">${opsOrigemCount}</span>
-                    </div>
-                </div>
-            `;
-
-            // IMPORTANTE: O dataset para a view de detalhes deve usar os dados ORIGINAIS
-            const itemParaDetalhes = {
-                produto_id: item.produto_id,
-                produto: item.produto_nome, // <--- Usa o nome original aqui
-                variante: item.variante,
-                total_quantidade_pendente_arremate: item.saldo_para_arrematar, // <--- Usa o nome original aqui
-                ops_detalhe: item.ops_detalhe
-            };
-            card.dataset.arremateAgregado = JSON.stringify(itemParaDetalhes);
-            card.addEventListener('click', handleArremateCardClick);
-            container.appendChild(card);
-        });
+function renderizarResultadosReact(resultados) {
+    if (window.renderizarResultadosReact) {
+        window.renderizarResultadosReact(resultados);
     }
-
-    const paginacaoCallback = (newPage) => {
-        renderizarCardsDaPagina(itensParaRenderizar, newPage);
-    };
-    renderizarPaginacao(paginationContainer, totalPages, currentPage, paginacaoCallback);
+    // A antiga lógica de paginação é removida
 }
 
 function renderizarViewPrincipal() {
@@ -1470,40 +1179,6 @@ function renderizarViewPrincipal() {
     document.getElementById('arremateDetalheView').classList.add('hidden');
 }
 
-// --- Funções de Detalhe e Lançamento ---
-function handleArremateCardClick(event) {
-    const card = event.currentTarget;
-    const agregadoString = card.dataset.arremateAgregado;
-    if (!agregadoString) return;
-    arremateAgregadoEmVisualizacao = JSON.parse(agregadoString);
-    localStorage.setItem('arremateDetalheAtual', agregadoString);
-    window.location.hash = '#lancar-arremate';
-}
-
-async function carregarDetalhesArremateView(agregado) {
-    document.getElementById('arrematesListView').style.display = 'none';
-    document.getElementById('arremateDetalheView').classList.remove('hidden');
-
-    const produtoInfo = todosOsProdutosCadastrados.find(p => p.id == agregado.produto_id);
-    const imagemSrc = obterImagemProduto(produtoInfo, agregado.variante);
-    document.getElementById('arremateDetalheThumbnail').innerHTML = `<img src="${imagemSrc}" alt="${agregado.produto}" onerror="this.src='/img/placeholder-image.png'">`;
-    document.getElementById('arremateProdutoNomeDetalhe').textContent = agregado.produto;
-    document.getElementById('arremateVarianteNomeDetalhe').textContent = agregado.variante && agregado.variante !== '-' ? `(${agregado.variante})` : '';
-    document.getElementById('arremateTotalPendenteAgregado').textContent = agregado.total_quantidade_pendente_arremate;
-    const formAjuste = document.getElementById('formRegistrarAjuste');
-    if (formAjuste) {
-        formAjuste.reset();
-        document.getElementById('inputQuantidadeAjuste').max = agregado.total_quantidade_pendente_arremate;
-    }
-    document.querySelectorAll('.oa-tab-btn').forEach(btn => btn.classList.remove('active'));
-    document.querySelectorAll('.oa-tab-panel').forEach(panel => panel.classList.remove('active'));
-    const abaAjusteBtn = document.querySelector('.oa-tab-btn[data-tab="ajuste"]');
-    const abaAjustePanel = document.querySelector('#ajuste-tab');
-    if (abaAjusteBtn && abaAjustePanel) {
-        abaAjusteBtn.classList.add('active');
-        abaAjustePanel.classList.add('active');
-    }
-}
 
 async function lancarArremateAgregado() {
     if (!arremateAgregadoEmVisualizacao) return;
@@ -1608,51 +1283,6 @@ function fecharModalPerda() {
     document.getElementById('modalRegistrarPerda').classList.add('hidden');
 }
 
-async function registrarAjuste() {
-    if (!arremateAgregadoEmVisualizacao) return;
-
-    const motivo = document.getElementById('selectMotivoAjuste').value;
-    const quantidadePerdida = parseInt(document.getElementById('inputQuantidadeAjuste').value);
-    const observacao = document.getElementById('textareaObservacaoAjuste').value;
-    const totalPendente = arremateAgregadoEmVisualizacao.total_quantidade_pendente_arremate;
-
-    // Validações
-    if (!motivo) return mostrarMensagem('Por favor, selecione o motivo do ajuste.', 'aviso');
-    if (isNaN(quantidadePerdida) || quantidadePerdida <= 0) return mostrarMensagem('A quantidade a ser descontada deve ser maior que zero.', 'aviso');
-    if (quantidadePerdida > totalPendente) return mostrarMensagem(`A quantidade a descontar (${quantidadePerdida}) excede o saldo pendente (${totalPendente}).`, 'erro');
-
-    const btnConfirmar = document.getElementById('btnConfirmarRegistroAjuste');
-    btnConfirmar.disabled = true;
-    btnConfirmar.innerHTML = '<div class="spinner-btn-interno"></div> Registrando...';
-    
-    try {
-        const payload = {
-            produto_id: arremateAgregadoEmVisualizacao.produto_id,
-            variante: arremateAgregadoEmVisualizacao.variante === '-' ? null : arremateAgregadoEmVisualizacao.variante,
-            quantidadePerdida: quantidadePerdida,
-            motivo: motivo,
-            observacao: observacao,
-            // O backend precisa das OPs originais para saber de onde dar baixa no saldo
-            opsOrigem: arremateAgregadoEmVisualizacao.ops_detalhe.map(op => ({
-                numero: op.numero,
-                quantidade_pendente_nesta_op: op.saldo_op
-            }))
-        };
-        
-        // Usamos a mesma rota de registrar-perda, pois a lógica no backend é a mesma
-        await fetchFromAPI('/arremates/registrar-perda', { method: 'POST', body: JSON.stringify(payload) });
-
-        mostrarMensagem('Ajuste registrado com sucesso!', 'sucesso');
-        window.location.hash = ''; // Volta para a lista
-
-    } catch (error) {
-        mostrarMensagem(`Erro ao registrar ajuste: ${error.message}`, 'erro');
-    } finally {
-        btnConfirmar.disabled = false;
-        btnConfirmar.innerHTML = '<i class="fas fa-save"></i> Confirmar Ajuste de Saldo';
-    }
-}
-
 
 // --- Funções Auxiliares de UI (Paginação, Imagem, etc.) ---
 function paginarArray(array, page, itemsPerPage) {
@@ -1667,26 +1297,6 @@ function paginarArray(array, page, itemsPerPage) {
     };
 }
 
-
-function obterImagemProduto(produtoInfo, varianteNome) {
-    const placeholder = '/img/placeholder-image.png'; // Mantemos um placeholder local como último recurso
-
-    if (!produtoInfo) {
-        return placeholder;
-    }
-
-    // 1. Tenta pegar a imagem da variação específica
-    if (varianteNome && varianteNome !== '-') {
-        const gradeItem = produtoInfo.grade?.find(g => g.variacao === varianteNome);
-        if (gradeItem?.imagem) {
-            return gradeItem.imagem;
-        }
-    }
-    
-    // 2. Se não encontrou na variação, pega a imagem do "produto pai"
-    //    Se o produto pai também não tiver, retorna o placeholder.
-    return produtoInfo.imagem || placeholder;
-}
 
 async function handleEstornoClick(event) {
     const button = event.currentTarget;
@@ -1835,23 +1445,12 @@ function renderizarTabelaHistoricoArremates(eventos, pagination) {
         let displayQuantidade = `<span>${item.quantidade_arrematada || 0}</span>`;
         let displayTiktik = item.usuario_tiktik || 'N/A';
         let displayLancadoPor = item.lancado_por || 'N/A';
-        let acoesHTML = ''; // Inicia vazio
 
         // Lógica para formatar cada tipo de lançamento
         switch (item.tipo_lancamento) {
             case 'PRODUCAO':
                 classeLinha = 'linha-producao';
                 displayQuantidade = `<span style="color: var(--oa-cor-verde-sucesso); font-weight: bold;">+${item.quantidade_arrematada}</span>`;
-                // O botão de estorno só aparece para produções que não foram anuladas
-                if (permissoes.includes('estornar-arremate')) {
-                    acoesHTML = `
-                        <button class="oa-btn-icon oa-btn-perigo btn-estornar-historico" 
-                                title="Estornar este lançamento"
-                                data-id="${item.id}" 
-                                data-info="${item.quantidade_arrematada} pçs para ${item.usuario_tiktik}">
-                            <i class="fas fa-undo"></i>
-                        </button>`;
-                }
                 break;
 
             case 'PERDA':
@@ -1885,7 +1484,6 @@ function renderizarTabelaHistoricoArremates(eventos, pagination) {
                 <td data-label="Lançado/Estornado por">${displayLancadoPor}</td>
                 <td data-label="Data">${new Date(item.data_lancamento).toLocaleString('pt-BR')}</td>
                 <td data-label="OP Origem">${item.op_numero || '-'}</td>
-                <td data-label="Ações" style="text-align: center;">${acoesHTML}</td>
             </tr>
         `;
     });
@@ -1901,17 +1499,12 @@ function renderizarTabelaHistoricoArremates(eventos, pagination) {
                     <th>Lançado/Estornado por</th>
                     <th>Data & Hora</th>
                     <th>OP Origem</th>
-                    <th style="text-align: center;">Ações</th>
                 </tr>
             </thead>
             <tbody>${tbodyHTML}</tbody>
         </table>
     `;
 
-    // Adiciona os listeners aos botões de estorno
-    tabelaWrapper.querySelectorAll('.btn-estornar-historico').forEach(btn => {
-        btn.addEventListener('click', handleEstornoClick);
-    });
 
     // Renderiza a paginação
     renderizarPaginacao(paginacaoContainer, pagination.totalPages, pagination.currentPage, buscarErenderizarHistoricoArremates);
@@ -1933,15 +1526,35 @@ function criarElementoModalHistorico() {
                 <h3 class="oa-modal-titulo">Histórico Geral de Arremates</h3>
                 <button class="oa-modal-fechar-btn">X</button>
             </div>
-            <div class="oa-modal-filtros">
-                <div class="oa-form-grupo" style="flex-grow: 2;"><label for="filtroBuscaHistorico">Buscar</label><input type="text" id="filtroBuscaHistorico" class="oa-input" placeholder=" Busque por Produto, Tiktik ou Lançador..."></div>
-                <div class="oa-form-grupo"><label for="filtroTipoEventoHistorico">Tipo</label><select id="filtroTipoEventoHistorico" class="oa-select"><option value="todos">Todos</option><option value="PRODUCAO">Lançamentos</option><option value="PERDA">Perdas</option><option value="ESTORNO">Estornos</option></select></div>
-                <div class="oa-form-grupo"><label for="filtroPeriodoHistorico">Período</label><select id="filtroPeriodoHistorico" class="oa-select"><option value="7d">7 dias</option><option value="hoje">Hoje</option><option value="30d">30 dias</option><option value="mes_atual">Mês Atual</option></select></div>
+
+            <!-- <<< ESTRUTURA DO ACORDEÃO ADICIONADA AQUI >>> -->
+            <div class="oa-filtros-acordeao">
+                <button id="historicoFiltrosToggle" class="oa-acordeao-header">
+                    <i class="fas fa-filter"></i>
+                    <span>Filtros</span>
+                    <i class="fas fa-chevron-down oa-acordeao-icone"></i>
+                </button>
+                <div id="historicoFiltrosContent" class="oa-acordeao-content">
+                    <div class="oa-modal-filtros">
+                        <div class="oa-form-grupo" style="flex-grow: 2;"><label for="filtroBuscaHistorico">Buscar</label><input type="text" id="filtroBuscaHistorico" class="oa-input" placeholder="Busque por Produto, Tiktik ou Lançador..."></div>
+                        <div class="oa-form-grupo"><label for="filtroTipoEventoHistorico">Tipo</label><select id="filtroTipoEventoHistorico" class="oa-select"><option value="todos">Todos</option><option value="PRODUCAO">Lançamentos</option><option value="PERDA">Perdas</option><option value="ESTORNO">Estornos</option></select></div>
+                        <div class="oa-form-grupo"><label for="filtroPeriodoHistorico">Período</label><select id="filtroPeriodoHistorico" class="oa-select"><option value="7d">7 dias</option><option value="hoje">Hoje</option><option value="30d">30 dias</option><option value="mes_atual">Mês Atual</option></select></div>
+                    </div>
+                </div>
             </div>
+            
             <div class="oa-modal-body"><div id="historicoArrematesTabelaWrapper" class="oa-tabela-wrapper"></div></div>
             <div class="oa-modal-footer"><div id="historicoArrematesPaginacao" class="oa-paginacao-container"></div></div>
         </div>
     `;
+
+    // <<< LÓGICA DO ACORDEÃO >>>
+    container.querySelector('#historicoFiltrosToggle').addEventListener('click', (e) => {
+        const header = e.currentTarget;
+        const content = container.querySelector('#historicoFiltrosContent');
+        header.classList.toggle('active');
+        content.classList.toggle('open');
+    });
 
     // Listeners
     const recarregar = () => buscarErenderizarHistoricoArremates(1);
@@ -1957,216 +1570,109 @@ function criarElementoModalHistorico() {
 }
 
 
-// --- Roteador e Inicialização ---
-async function handleHashChange() {
-    const hash = window.location.hash;
-    const arrematesListView = document.getElementById('arrematesListView');
-    const arremateDetalheView = document.getElementById('arremateDetalheView');
-
-    if (hash === '#lancar-arremate') {
-        arrematesListView.style.display = 'none';
-        const data = localStorage.getItem('arremateDetalheAtual');
-        if (data) {
-            arremateDetalheView.classList.remove('hidden');
-            await carregarDetalhesArremateView(JSON.parse(data));
-        } else {
-            window.location.hash = '';
-        }
-    } else {
-        arremateDetalheView.classList.add('hidden');
-        arrematesListView.style.display = 'block';
-        localStorage.removeItem('arremateDetalheAtual');
-        arremateAgregadoEmVisualizacao = null;
-        
-    }
-}
-
 //  Delegação de eventos para o painel de atividades e accordion
      const painelClickHandler = async (event) => {
-            // 1. Identifica os possíveis alvos do clique
-            const avatarClicado = event.target.closest('.oa-avatar-foco');
-            const actionButton = event.target.closest('[data-action]');
-            
-            // Se não clicou nem no avatar nem em um botão de ação, não faz nada.
-            if (!avatarClicado && !actionButton) return;
-            
-            // 2. Encontra o card pai e os dados do tiktik (lógica que já tínhamos)
-            const card = event.target.closest('.oa-card-status-tiktik');
-            if (!card) return;
+        const avatarClicado = event.target.closest('.oa-avatar-foco');
+        const actionButton = event.target.closest('[data-action]');
+        if (!avatarClicado && !actionButton) return;
+        
+        const card = event.target.closest('.oa-card-status-tiktik');
+        if (!card) return;
 
-            const tiktikId = parseInt(card.dataset.tiktikId);
-            const tiktikData = statusTiktiksCache.find(t => t.id === tiktikId);
-            if (!tiktikData) return;
+        const tiktikId = parseInt(card.dataset.tiktikId);
+        const tiktikData = window.statusTiktiksCache.find(t => t.id === tiktikId);
+        if (!tiktikData) return;
 
-            // 3. Decide o que fazer com base no alvo clicado
-            
-            // Se o clique foi no avatar, abre o Modo Foco.
-            if (avatarClicado) {
-                abrirModoFoco(tiktikData);
-                return; // Ação concluída.
+        if (avatarClicado) {
+            abrirModoFoco(tiktikData);
+            return;
+        }
+
+        if (actionButton) {
+            const action = actionButton.dataset.action;
+            const menu = card.querySelector('.menu-acoes-popup');
+
+            if (action === 'abrir-menu-acoes') {
+                document.querySelectorAll('.menu-acoes-popup.visivel').forEach(m => {
+                    if (m !== menu) m.classList.remove('visivel');
+                });
+                if (menu) menu.classList.toggle('visivel');
+                return;
             }
 
-            // Se o clique foi em um botão de ação, continua com a lógica que já tínhamos.
-            if (actionButton) {
-                const action = actionButton.dataset.action;
-
-                // --- LÓGICA DO MENU (continua igual) ---
-                if (action === 'abrir-menu-acoes') {
-                    document.querySelectorAll('.menu-acoes-popup.visivel').forEach(menu => {
-                        if (!card.contains(menu)) menu.classList.remove('visivel');
-                    });
-                    const menu = card.querySelector('.menu-acoes-popup');
-                    if (menu) menu.classList.toggle('visivel');
-                    return;
-                }
-
-                // --- LÓGICA DAS AÇÕES (continua igual) ---
-                switch(action) {
-                    case 'abrir-menu-acoes': {
-                        const menu = card.querySelector('.menu-acoes-popup');
-                        if (menu) {
-                            // Fecha todos os outros menus antes de abrir o novo
-                            document.querySelectorAll('.menu-acoes-popup.visivel').forEach(m => {
-                                if (m !== menu) m.classList.remove('visivel');
-                            });
-                            // Alterna a visibilidade do menu atual
-                            menu.classList.toggle('visivel');
-                        }
-                        break; // Sai do switch
+            switch(action) {
+                case 'iniciar': 
+                    if (window.abrirModalAtribuicao) {
+                        window.abrirModalAtribuicao(tiktikData);
+                    } else {
+                        console.error("React não está pronto para abrir o modal.");
+                        mostrarMensagem("Erro ao abrir painel (código: R01).", "erro");
                     }
-                    case 'iniciar': 
-                        handleAtribuirTarefa(tiktikData); 
-                        break;
-                    case 'finalizar': 
-                    handleFinalizarTarefa(tiktikData); 
-                        break;
-                    case 'cancelar': 
-                    handleCancelarTarefa(tiktikData); 
-                        break;
-                    case 'pausa-manual':
-                        await handleAcaoManualStatus(tiktikData, STATUS.PAUSA_MANUAL, 
-                            `Confirmar início de pausa manual para <strong>${tiktikData.nome}</strong>?`,
-                            `Pausa manual iniciada para ${tiktikData.nome}.`);
-                        break;
-                    case 'marcar-falta':
-                        await handleAcaoManualStatus(tiktikData, STATUS.FALTOU, 
-                            `Confirmar falta para <strong>${tiktikData.nome}</strong> hoje?`,
-                            `Falta registrada para ${tiktikData.nome}.`);
-                        break;
-                    case 'alocar-externo':
-                        await handleAcaoManualStatus(tiktikData, STATUS.ALOCADO_EXTERNO, 
-                            `Alocar <strong>${tiktikData.nome}</strong> em outro setor pelo resto do dia? (Ele sairá desta tela)`,
-                            `${tiktikData.nome} alocado em outro setor.`);
-                        break;
-                    case 'reverter-status':
-                        await handleAcaoManualStatus(tiktikData, STATUS.LIVRE, null,
-                            `Status de ${tiktikData.nome} revertido para LIVRE.`);
-                        break;
-                        
+                    break;
+                case 'finalizar': handleFinalizarTarefa(tiktikData); break;
+                case 'cancelar': handleCancelarTarefa(tiktikData); break;
+                case 'pausa-manual':
+                    await handleAcaoManualStatus(tiktikData, STATUS.PAUSA_MANUAL, `Confirmar pausa para ${tiktikData.nome}?`, `Pausa iniciada.`);
+                    break;
+                case 'marcar-falta':
+                    await handleAcaoManualStatus(tiktikData, STATUS.FALTOU, `Confirmar falta para ${tiktikData.nome}?`, `Falta registrada.`);
+                    break;
+                case 'alocar-externo':
+                    await handleAcaoManualStatus(tiktikData, STATUS.ALOCADO_EXTERNO, `Alocar ${tiktikData.nome} em outro setor?`, `Status atualizado.`);
+                    break;
+                case 'reverter-status': {
+                    const { statusBruto, statusFinal } = determinarStatusFinal(tiktikData);
+                    let novoStatus = STATUS.LIVRE;
+                    let msgConfirmacao = null;
+                    let msgSucesso = `${tiktikData.nome} está livre.`;
+                    if ([STATUS.ALMOCO, STATUS.PAUSA, STATUS.FORA_DO_HORARIO].includes(statusBruto)) {
+                        novoStatus = STATUS.LIVRE_MANUAL;
+                        msgConfirmacao = `Interromper "${statusFinal}" de ${tiktikData.nome} e liberá-lo?`;
+                    }
+                    await handleAcaoManualStatus(tiktikData, novoStatus, msgConfirmacao, msgSucesso);
+                    break;
                 }
-
-                const menuAberto = card.querySelector('.menu-acoes-popup');
-                if (menuAberto) menuAberto.classList.remove('visivel');
             }
-        };
+            if (menu) menu.classList.remove('visivel');
+        }
+    };
 
 function configurarEventListeners() {
-    // Mantém o listener para fechar a view de detalhes. Perfeito.
-    document.getElementById('fecharArremateDetalheBtn')?.addEventListener('click', () => window.location.hash = '');
+    window.addEventListener('forcarAtualizacaoPainelTiktik', renderizarPainelStatus);
 
-    // Mantém o listener para o Accordion de Inativos. Perfeito.
-    const accordionHeader = document.getElementById('accordionHeader');
-    const accordionContent = document.getElementById('accordionContent');
-    if (accordionHeader && accordionContent) {
-        accordionHeader.addEventListener('click', () => {
-            accordionHeader.classList.toggle('active');
-            if (accordionContent.style.maxHeight) {
-                accordionContent.style.maxHeight = null;
-            } else {
-                accordionContent.style.maxHeight = accordionContent.scrollHeight + "px";
-            }
-        });
-    }
-    
-    // Mantém os listeners para as abas da view de detalhes. Perfeito.
-    const abasContainer = document.querySelector('.oa-tabs');
-    if (abasContainer) {
-        abasContainer.addEventListener('click', (e) => {
-            if (e.target.matches('.oa-tab-btn')) {
-                const tabId = e.target.dataset.tab;
-                document.querySelectorAll('.oa-tab-btn').forEach(btn => btn.classList.remove('active'));
-                e.target.classList.add('active');
-                document.querySelectorAll('.oa-tab-panel').forEach(panel => panel.classList.remove('active'));
-                const panelToShow = document.getElementById(`${tabId}-tab`);
-                if (panelToShow) panelToShow.classList.add('active');
-                if (tabId === 'historico-produto' && arremateAgregadoEmVisualizacao) {
-                    carregarHistoricoDoProduto(arremateAgregadoEmVisualizacao.produto_id, arremateAgregadoEmVisualizacao.variante, 1);
-                }
-            }
-        });
-    }
-
-    // Mantém o listener para o botão de ajuste. Perfeito.
-    document.getElementById('btnConfirmarRegistroAjuste')?.addEventListener('click', registrarAjuste);
-
-    // Mantém o listener para o evento customizado. Perfeito.
-    window.addEventListener('forcarAtualizacaoFila', () => {
-        forcarAtualizacaoFilaDeArremates().then(() => {
-            mostrarMensagem('Fila de arremates atualizada!', 'sucesso', 2000);
-        });
-    });
-
-    
-
-    // =========================================================================
-    // <<< INÍCIO DA NOVA LÓGICA INTEGRADA - O LISTENER MESTRE >>>
-    // =========================================================================
-    
-    // Este único listener no documento agora gerencia as ações dinâmicas da página
-    // que antes estavam espalhadas.
     document.addEventListener('click', async (event) => {
+        const barraProgressoClicada = event.target.closest('.barra-progresso-container');
+        if (barraProgressoClicada && barraProgressoClicada.dataset.tooltipMobile) {
+            // Verifica se o dispositivo é "touch" (uma boa heurística para mobile)
+            if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+                event.preventDefault(); // Evita qualquer outro comportamento de clique
+                // Usa a sua função de popup já existente!
+                mostrarMensagem(barraProgressoClicada.dataset.tooltipMobile, 'info', 3000);
+            }
+            return; // Encerra para não processar outros cliques
+        }
 
-         // Primeiro, verificamos se o clique foi DENTRO do botão que ABRE o menu.
         const foiCliqueParaAbrirMenu = event.target.closest('[data-action="abrir-menu-acoes"]');
-        
-        // Se o clique NÃO foi para abrir um menu, e também NÃO foi dentro de um menu já aberto,
-        // então consideramos que foi "fora".
         if (!foiCliqueParaAbrirMenu && !event.target.closest('.menu-acoes-popup')) {
-            document.querySelectorAll('.menu-acoes-popup.visivel').forEach(menu => {
-                menu.classList.remove('visivel');
-            });
+            document.querySelectorAll('.menu-acoes-popup.visivel').forEach(menu => menu.classList.remove('visivel'));
         }
 
-        // Alvo 1: Botão de abrir o Histórico Geral (vindo do header React)
-        if (event.target.closest('#btnAbrirHistorico')) {
-            mostrarHistoricoArremates();
-            return; 
-        }
-
-        // Alvo 2: Botão de atualizar o Painel de Atividades
-        if (event.target.closest('#btnAtualizarPainel')) {
-            renderizarPainelStatus();
-            return; 
-        }
+        if (event.target.closest('#btnAbrirHistorico')) { /* Lógica do Histórico aqui */ }
+        if (event.target.closest('#btnAtualizarPainel')) { renderizarPainelStatus(); }
         
-        // Alvo 3: Qualquer interação DENTRO do painel de atividades
-        // Verifica se o clique ocorreu dentro de um card de tiktik
         const cardClicado = event.target.closest('.oa-card-status-tiktik');
         if (cardClicado) {
-            // Se sim, delega a lógica para o painelClickHandler, que é especialista nisso.
             await painelClickHandler(event);
             return; 
         }
 
-        // Alvo 4: O header do Accordion de Inativos
-            const accordionHeaderClicado = event.target.closest('#accordionHeader');
-                if (accordionHeaderClicado) {
-                    accordionHeaderClicado.classList.toggle('active');
-                    return; // Ação concluída
-                }
+        const accordionHeader = event.target.closest('#accordionHeader');
+        if (accordionHeader) {
+            const content = document.getElementById('accordionContent');
+            accordionHeader.classList.toggle('active');
+            if (content) content.style.maxHeight = content.style.maxHeight ? null : `${content.scrollHeight}px`;
+        }
     });
-
-    
 }
 
 async function carregarHistoricoDoProduto(produtoId, variante, page = 1) {
@@ -2253,8 +1759,6 @@ async function inicializarPagina() {
         await renderizarPainelStatus(); // Carrega o painel pela primeira vez
         controlarAtualizacaoPainel(true); // Inicia o auto-update
         
-        await handleHashChange();
-
     } catch (error) {
         console.error("Erro na inicialização:", error);
         mostrarMensagem(`Falha ao carregar a página: ${error.message}`, 'erro');
@@ -2264,33 +1768,29 @@ async function inicializarPagina() {
 }
 
 async function forcarAtualizacaoFilaDeArremates() {
+    console.log("[JS Puro] Disparando evento 'atualizar-fila-react'...");
+    // Dispara um evento global que qualquer componente React pode ouvir.
+    window.dispatchEvent(new Event('atualizar-fila-react'));
+
+    // A função ainda pode ser responsável por atualizar o dashboard,
+    // pois isso é do mundo do JS puro.
     try {
         const respostaFila = await fetchFromAPI('/arremates/fila?fetchAll=true');
-        const itensOriginaisDaFila = respostaFila.rows || [];
-
-        // >>>>> A MESMA LÓGICA DE TRADUÇÃO DA INICIALIZAÇÃO <<<<<
-        const itensTraduzidosParaControlador = itensOriginaisDaFila.map(item => ({
-            produto: item.produto_nome,
-            variante: item.variante,
-            total_disponivel_para_embalar: item.saldo_para_arrematar,
-            data_lancamento_mais_recente: item.data_op_mais_recente,
-            data_lancamento_mais_antiga: item.data_op_mais_recente,
-            ...item
-        }));
-
-        // Agora entregamos os dados JÁ TRADUZIDOS para o controlador
-        atualizarDadosControlador(itensTraduzidosParaControlador);
+        const itensDaFila = respostaFila.rows || [];
         
-        // Atualiza o dashboard
-        totaisDaFilaDeArremate.totalGrupos = itensOriginaisDaFila.length;
-        totaisDaFilaDeArremate.totalPecas = itensOriginaisDaFila.reduce((acc, item) => acc + item.saldo_para_arrematar, 0);
+        totaisDaFilaDeArremate.totalGrupos = itensDaFila.length;
+        totaisDaFilaDeArremate.totalPecas = itensDaFila.reduce((acc, item) => acc + item.saldo_para_arrematar, 0);
         await atualizarDashboard();
-
     } catch (error) {
-        console.error("Erro ao forçar atualização da fila de arremates:", error);
-        mostrarMensagem("Não foi possível atualizar a lista de itens.", "erro");
+        console.error("Erro ao atualizar dados do dashboard:", error);
     }
 }
+
+
+// Garante que ao fechar a página o intervalo seja limpo
+window.addEventListener('beforeunload', () => {
+    pararCronometrosVisuais();
+});
 
 document.addEventListener('DOMContentLoaded', async () => {
     const carregamentoEl = document.getElementById('carregamentoGlobal');
@@ -2299,105 +1799,43 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         const auth = await verificarAutenticacao('admin/arremates.html', ['acesso-ordens-de-arremates']);
         if (!auth) return;
+
+        // Expõe dados globais necessários
         usuarioLogado = auth.usuario;
         permissoes = auth.permissoes || [];
         document.body.classList.add('autenticado');
         
-        // 1. CARREGAMENTO DE DADOS ESSENCIAIS E CONFIGS
-        const [configuracoesPublicas, produtosCadastrados, respostaFila, usuarios] = await Promise.all([
-            fetch('/api/configuracoes/publicas').then(res => res.json()), // Busca as configs
-            obterProdutosDoStorage(true),
-            fetchFromAPI('/arremates/fila?fetchAll=true'),
-            fetchFromAPI('/usuarios')
-        ]);
-
-        // Armazena as URLs padrão na janela global para fácil acesso
-        window.DEFAULT_PRODUCT_IMAGE_URL = configuracoesPublicas.DEFAULT_PRODUCT_IMAGE_URL;
-        window.DEFAULT_AVATAR_URL = configuracoesPublicas.DEFAULT_AVATAR_URL;
-
-       // "Sequestra" o modal de foco para gerenciamento via JS
-        const modalFocoOriginal = document.getElementById('modalModoFoco');
-        if (modalFocoOriginal) {
-            modalModoFocoElemento = modalFocoOriginal;
-            modalFocoOriginal.parentNode.removeChild(modalFocoOriginal);
-        } else {
-            console.error("CRÍTICO: Elemento #modalModoFoco não encontrado no HTML inicial.");
+        // "Sequestra" os modais do HTML para gerenciamento via JS
+        const modalFoco = document.getElementById('modalModoFoco');
+        if (modalFoco) {
+            modalModoFocoElemento = modalFoco;
+            modalFoco.parentNode.removeChild(modalFoco);
         }
+        // Expõe a função para que o componente React HeaderPagina possa chamá-la
+        window.abrirModalHistorico = mostrarHistoricoArremates;
 
-        // "Sequestra" o modal de ATRIBUIR TAREFA para gerenciamento via JS
-        const modalAtribuirOriginal = document.getElementById('modalAtribuirTarefa');
-        if (modalAtribuirOriginal) {
-            modalAtribuirTarefaElemento = modalAtribuirOriginal;
-            modalAtribuirOriginal.parentNode.removeChild(modalAtribuirOriginal);
-        } else {
-            console.error("CRÍTICO: Elemento #modalAtribuirTarefa não encontrado no HTML inicial.");
-        }
-        
-        todosOsProdutosCadastrados = produtosCadastrados || [];
-        todosOsUsuarios = usuarios || [];
-        const itensOriginaisDaFila = respostaFila.rows || [];
+        todosOsProdutosCadastrados = await obterProdutosDoStorage(true);
+        // Agora que temos os produtos, podemos carregar o resto que depende deles.
+        window.todosOsUsuarios = await fetchFromAPI('/usuarios');
 
-        const itensTraduzidosParaControlador = itensOriginaisDaFila.map(item => ({
-            // Mapeia os campos de Arremate para os campos que o Controlador espera
-            produto: item.produto_nome,
-            variante: item.variante, // <--- Mantém o mesmo nome
-            total_disponivel_para_embalar: item.saldo_para_arrematar,
-            data_lancamento_mais_recente: item.data_op_mais_recente,
-            data_lancamento_mais_antiga: item.data_op_mais_recente,
-
-            // Mantém os dados originais que usamos em outras partes do código
-            ...item
-        }));
-
-        // 2. EXTRAIR OPÇÕES DE FILTRO
-        // Agora usamos os dados JÁ traduzidos para extrair os filtros
-        const opcoesDeFiltro = extrairOpcoesDeFiltroArremates(itensTraduzidosParaControlador);
-
-        // 3. RENDERIZAÇÃO DOS COMPONENTES REACT
-        if (window.renderizarComponentesReactArremates) {
-            window.renderizarComponentesReactArremates({ opcoesDeFiltro });
-        } else {
-            console.error("ERRO: A função de renderização do React para Arremates não foi encontrada.");
-        }
-
-        // 4. INICIALIZAÇÃO DO CONTROLADOR
-        // Agora passamos os dados traduzidos. O controlador vai entender perfeitamente.
-        inicializarControlador({
-            dadosCompletos: itensTraduzidosParaControlador,
-            renderizarResultados: renderizarCardsDaPagina,
-            camposParaBusca: ['produto', 'variante'], // Agora usamos os nomes traduzidos
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                pararCronometrosVisuais();
+            } else {
+                // Ao voltar para a aba, força uma atualização dos dados da API para ter os números mais recentes
+                // antes de reiniciar os cronômetros visuais.
+                renderizarPainelStatus(); 
+            }
         });
 
-        // 5. ATUALIZAÇÃO DO DASHBOARD E PAINEL TIKTIK
-        await atualizarDashboard();
         await renderizarPainelStatus();
-        controlarAtualizacaoPainel(true); // Inicia o auto-update do painel de tiktiks
-
-        // 6. CONFIGURAÇÃO DE TODOS OS EVENT LISTENERS
         configurarEventListeners();
 
-        const accordionHeader = document.getElementById('accordionHeader');
-        const accordionContent = document.getElementById('accordionContent');
-        if (accordionHeader && accordionContent) {
-            accordionHeader.addEventListener('click', () => {
-                accordionHeader.classList.toggle('active');
-                if (accordionContent.style.maxHeight) {
-                    accordionContent.style.maxHeight = null;
-                } else {
-                    accordionContent.style.maxHeight = accordionContent.scrollHeight + "px";
-                }
-            });
-        }
-
-        // 7. NAVEGAÇÃO
-        window.addEventListener('hashchange', handleHashChange);
-        await handleHashChange(); // Executa na primeira carga para verificar o hash inicial
-
-   } catch (error) {
-    console.error("[DOMContentLoaded Arremates] Erro crítico na inicialização:", error);
-    mostrarMensagem("Erro crítico ao carregar a página. Tente recarregar.", "erro");
-  } finally {
-    if (carregamentoEl) carregamentoEl.classList.remove('visivel');
-    if (conteudoEl) conteudoEl.classList.remove('gs-conteudo-carregando');
-  }
+    } catch (error) {
+        console.error("[DOMContentLoaded Arremates] Erro crítico:", error);
+        mostrarMensagem("Erro crítico ao carregar a página. Tente recarregar.", "erro");
+    } finally {
+        if (carregamentoEl) carregamentoEl.classList.remove('visivel');
+        if (conteudoEl) conteudoEl.classList.remove('gs-conteudo-carregando');
+    }
 });

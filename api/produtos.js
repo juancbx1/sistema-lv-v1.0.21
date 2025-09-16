@@ -305,5 +305,57 @@ router.put('/:id', async (req, res) => {
 });
 
 
+// Busca produtos que têm saldo pendente de arremate.
+router.get('/search-arremate', async (req, res) => {
+    const { q } = req.query;
+    if (!q || q.length < 2) {
+        return res.json([]); // Retorna vazio se a busca for muito curta
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+
+        // A query que busca apenas produtos COM SALDO PENDENTE
+        const query = `
+            WITH op_producao_final AS (
+                SELECT
+                    op.numero, op.produto_id, op.variante,
+                    COALESCE((SELECT NULLIF(TRIM(etapa->>'quantidade'), '')::numeric FROM jsonb_array_elements(op.etapas) AS etapa WHERE etapa->>'lancado' = 'true' AND etapa->>'quantidade' IS NOT NULL AND TRIM(etapa->>'quantidade') <> '' ORDER BY etapa->>'data_lancamento' DESC LIMIT 1), op.quantidade)::numeric AS quantidade_produzida
+                FROM ordens_de_producao op
+                WHERE op.status = 'finalizado'
+            ),
+            op_arrematado_total AS (
+                SELECT op_numero, SUM(quantidade_arrematada) as total_arrematado
+                FROM arremates
+                WHERE tipo_lancamento IN ('PRODUCAO', 'PERDA')
+                GROUP BY op_numero
+            )
+            SELECT
+                opf.produto_id,
+                p.nome as produto_nome,
+                COALESCE(opf.variante, '-') as variante,
+                SUM(opf.quantidade_produzida - COALESCE(oat.total_arrematado, 0))::integer AS saldo
+            FROM op_producao_final opf
+            LEFT JOIN op_arrematado_total oat ON opf.numero = oat.op_numero
+            JOIN produtos p ON opf.produto_id = p.id
+            WHERE (opf.quantidade_produzida - COALESCE(oat.total_arrematado, 0)) > 0
+              AND (p.nome ILIKE $1 OR opf.variante ILIKE $1)
+            GROUP BY opf.produto_id, p.nome, COALESCE(opf.variante, '-')
+            ORDER BY p.nome, COALESCE(opf.variante, '-')
+            LIMIT 10;
+        `;
+        
+        const result = await dbClient.query(query, [`%${q}%`]);
+        res.json(result.rows);
+
+    } catch (error) {
+        console.error('[API /produtos/search-arremate] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar produtos para ajuste.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
 
 export default router;
