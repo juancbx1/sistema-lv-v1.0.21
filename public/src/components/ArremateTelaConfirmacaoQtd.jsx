@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 
-import { getImagemVariacao } from '../utils/produtoHelpers.js';
+import { getImagemVariacao } from '../utils/ArremateProdutoHelpers.js';
 
 
 export default function TelaConfirmacaoQtd({ item, tiktik, onVoltar, onConfirmar }) {

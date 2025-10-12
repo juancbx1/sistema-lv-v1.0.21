@@ -637,7 +637,7 @@ router.get('/fila', async (req, res) => {
         const opsResult = await dbClient.query(opsQuery);
         const opsFinalizadas = opsResult.rows;
 
-         const arrematesQuery = `
+        const arrematesQuery = `
             SELECT produto_id, variante, op_numero, SUM(quantidade_arrematada) as total_arrematado
             FROM arremates
             WHERE tipo_lancamento IN ('PRODUCAO', 'PERDA')
@@ -651,17 +651,37 @@ router.get('/fila', async (req, res) => {
             arrematadoPorOp.set(chave, parseInt(arr.total_arrematado, 10));
         });
 
-        const obterQuantidadeFinalProduzida = (op) => {
-            if (!op || !op.etapas || !Array.isArray(op.etapas) || op.etapas.length === 0) {
-                return parseInt(op?.quantidade) || 0;
+        // --- NOVA LÓGICA: Buscar tarefas ativas ---
+        const sessoesAtivasQuery = `
+            SELECT 
+                s.produto_id,
+                s.variante,
+                s.quantidade_entregue,
+                u.nome as tiktik_nome
+            FROM sessoes_trabalho_arremate s
+            JOIN usuarios u ON s.usuario_tiktik_id = u.id
+            WHERE s.status = 'EM_ANDAMENTO'
+        `;
+        const sessoesAtivasResult = await dbClient.query(sessoesAtivasQuery);
+        const emTrabalhoAgregado = new Map();
+        
+        sessoesAtivasResult.rows.forEach(sessao => {
+            const chaveAgregada = `${sessao.produto_id}|${sessao.variante || '-'}`;
+            if (!emTrabalhoAgregado.has(chaveAgregada)) {
+                emTrabalhoAgregado.set(chaveAgregada, { quantidade: 0, tiktiks: [] });
             }
+            const item = emTrabalhoAgregado.get(chaveAgregada);
+            item.quantidade += sessao.quantidade_entregue;
+            item.tiktiks.push(sessao.tiktik_nome);
+        });
+        
+        const obterQuantidadeFinalProduzida = (op) => {
+            if (!op || !op.etapas || !Array.isArray(op.etapas) || op.etapas.length === 0) return parseInt(op?.quantidade) || 0;
             for (let i = op.etapas.length - 1; i >= 0; i--) {
                 const etapa = op.etapas[i];
                 if (etapa && etapa.lancado && typeof etapa.quantidade !== 'undefined' && etapa.quantidade !== null) {
                     const qtdEtapa = parseInt(etapa.quantidade, 10);
-                    if (!isNaN(qtdEtapa) && qtdEtapa >= 0) {
-                        return qtdEtapa;
-                    }
+                    if (!isNaN(qtdEtapa) && qtdEtapa >= 0) return qtdEtapa;
                 }
             }
             return parseInt(op.quantidade) || 0;
@@ -672,18 +692,24 @@ router.get('/fila', async (req, res) => {
             const qtdProduzida = obterQuantidadeFinalProduzida(op);
             const chaveOp = `${op.numero}|${op.variante || '-'}`;
             const qtdArrematada = arrematadoPorOp.get(chaveOp) || 0;
-            const saldoOp = qtdProduzida - qtdArrematada;
+            const saldoOpBruto = qtdProduzida - qtdArrematada;
 
-            if (saldoOp > 0) {
+            if (saldoOpBruto > 0) {
                 const chaveAgregada = `${op.produto_id}|${op.variante || '-'}`;
                 if (!pendenciasAgregadas.has(chaveAgregada)) {
+                    // --- NOVA LÓGICA: Incluir dados das tarefas ativas ---
+                    const tarefaAtivaInfo = emTrabalhoAgregado.get(chaveAgregada);
+                    const qtdEmTrabalho = tarefaAtivaInfo ? tarefaAtivaInfo.quantidade : 0;
+                    
                     pendenciasAgregadas.set(chaveAgregada, {
                         produto_id: op.produto_id,
                         produto_nome: op.produto,
                         imagem: op.imagem_produto,
                         grade: op.grade,
                         variante: op.variante || '-',
-                        saldo_para_arrematar: 0,
+                        saldo_total_bruto: 0,
+                        quantidade_em_trabalho: qtdEmTrabalho, // Quantidade em tarefas ativas
+                        tarefa_ativa_por: tarefaAtivaInfo ? tarefaAtivaInfo.tiktiks.join(', ') : null, // Nomes dos tiktiks
                         ops_detalhe: [],
                         data_op_mais_recente: new Date(0),
                         data_op_mais_antiga: new Date('2999-12-31'),
@@ -692,27 +718,26 @@ router.get('/fila', async (req, res) => {
                 }
 
                 const item = pendenciasAgregadas.get(chaveAgregada);
-                item.saldo_para_arrematar += saldoOp;
+                item.saldo_total_bruto += saldoOpBruto;
                 const dataOp = op.data_final ? new Date(op.data_final) : new Date(0);
                 
                 item.ops_detalhe.push({
                     numero: op.numero,
                     edit_id: op.edit_id,
-                    saldo_op: saldoOp,
+                    saldo_op: saldoOpBruto, // Saldo bruto da OP
                     data_final: dataOp.toISOString()
                 });
                 
-                if (dataOp > item.data_op_mais_recente) {
-                    item.data_op_mais_recente = dataOp;
-                }
-                if (dataOp < item.data_op_mais_antiga) {
-                    item.data_op_mais_antiga = dataOp;
-                }
+                if (dataOp > item.data_op_mais_recente) item.data_op_mais_recente = dataOp;
+                if (dataOp < item.data_op_mais_antiga) item.data_op_mais_antiga = dataOp;
             }
         });
         
-        // A variável é definida aqui!
-        let resultadosFinais = Array.from(pendenciasAgregadas.values());
+        let resultadosFinais = Array.from(pendenciasAgregadas.values()).map(item => {
+            // O `saldo_para_arrematar` agora é o saldo real disponível para novas tarefas
+            const saldo_para_arrematar = item.saldo_total_bruto - item.quantidade_em_trabalho;
+            return { ...item, saldo_para_arrematar };
+        }).filter(item => item.saldo_total_bruto > 0); // Mostra o item mesmo se o saldo disponível for zero, mas houver peças em trabalho
         
         const totalGruposDeProdutos = resultadosFinais.length;
         const totalPecasPendentes = resultadosFinais.reduce((total, item) => total + item.saldo_para_arrematar, 0);
@@ -761,7 +786,7 @@ router.get('/fila', async (req, res) => {
     }
 });
 
-// ROTA PRINCIPAL: GET /api/arremates/status-tiktiks
+//GET /api/arremates/status-tiktiks
 router.get('/status-tiktiks', async (req, res) => {
     let dbClient;
     try {
@@ -781,61 +806,114 @@ router.get('/status-tiktiks', async (req, res) => {
                 AND status_data_modificacao IS NOT NULL
                 AND status_data_modificacao < (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
         `);
+        
+        const temposResult = await dbClient.query('SELECT produto_id, tempo_segundos_por_peca FROM tempos_padrao_arremate');
+        const temposMap = new Map(temposResult.rows.map(row => [row.produto_id, parseFloat(row.tempo_segundos_por_peca)]));
+
 
         // 2. Buscar todos os usuários Tiktik com seus dados e sessões atuais
         const query = `
             SELECT 
-                u.id, 
-                u.nome, 
-                COALESCE(u.avatar_url, $1) as avatar_url, 
-                u.status_atual, 
-                u.status_data_modificacao,
-                u.horario_entrada_1, u.horario_saida_1, u.horario_entrada_2, u.horario_saida_2, u.horario_entrada_3, u.horario_saida_3,
-                s.id as id_sessao, s.produto_id, s.variante, s.quantidade_entregue, s.data_inicio,
-                p.nome as produto_nome
+                u.id, u.nome, COALESCE(u.avatar_url, $1) as avatar_url, u.status_atual, 
+                u.status_data_modificacao, u.horario_entrada_1, u.horario_saida_1, 
+                u.horario_entrada_2, u.horario_saida_2, u.horario_entrada_3, u.horario_saida_3
             FROM usuarios u
-            LEFT JOIN sessoes_trabalho_arremate s ON u.id_sessao_trabalho_atual = s.id
-            LEFT JOIN produtos p ON s.produto_id = p.id
-            WHERE 'tiktik' = ANY(u.tipos)
+            WHERE 
+                'tiktik' = ANY(u.tipos)
+                AND u.data_demissao IS NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM ferias_empregados fe
+                    WHERE fe.id_usuario = u.id AND CURRENT_DATE BETWEEN fe.data_inicio AND fe.data_fim
+                )
             ORDER BY u.nome ASC;
         `;
         const result = await dbClient.query(query, [process.env.DEFAULT_AVATAR_URL]);
-        // 3. Processar os dados (calcular médias, etc.)
-        const tiktiksComStatus = await Promise.all(result.rows.map(async (tiktik) => {
-            let media_tempo_por_peca = null;
-            let tempo_decorrido_real_segundos = null;
+        const tiktiksBase = result.rows;
 
-            if (tiktik.status_atual === 'PRODUZINDO' && tiktik.data_inicio) {
-                // Busca a média para o produto (ignorando variante)
-                const mediaQuery = `
-                    SELECT AVG(
-                        (EXTRACT(EPOCH FROM (data_fim - data_inicio)) - tempo_pausado_segundos) / quantidade_finalizada
-                    ) as media
-                    FROM sessoes_trabalho_arremate
-                    WHERE status = 'FINALIZADA' 
-                    AND produto_id = $1 
-                    AND quantidade_finalizada > 0
-                    AND (EXTRACT(EPOCH FROM (data_fim - data_inicio)) - tempo_pausado_segundos) > 0;
-                `;
-                 const mediaResult = await dbClient.query(mediaQuery, [tiktik.produto_id]);
-                    if (mediaResult.rows[0].media) {
-                        media_tempo_por_peca = parseFloat(mediaResult.rows[0].media);
+        // Agora, buscamos TODAS as sessões ativas de TODOS os tiktiks de uma vez
+        const sessoesAtivasResult = await dbClient.query(`
+            SELECT 
+                s.id as id_sessao, s.usuario_tiktik_id, s.produto_id, s.variante, 
+                s.quantidade_entregue, s.data_inicio, s.dados_ops,
+                p.nome as produto_nome
+            FROM sessoes_trabalho_arremate s
+            LEFT JOIN produtos p ON s.produto_id = p.id
+            WHERE s.status = 'EM_ANDAMENTO' AND s.usuario_tiktik_id = ANY($1::int[])
+        `, [tiktiksBase.map(t => t.id)]);
+
+        // Agrupamos as sessões por usuário para o caso de lotes
+        const sessoesPorUsuario = sessoesAtivasResult.rows.reduce((acc, sessao) => {
+            if (!acc[sessao.usuario_tiktik_id]) {
+                acc[sessao.usuario_tiktik_id] = [];
+            }
+            acc[sessao.usuario_tiktik_id].push(sessao);
+            return acc;
+        }, {});
+
+
+        const tiktiksComStatus = await Promise.all(tiktiksBase.map(async (tiktik) => {
+            const sessoesDoTiktik = sessoesPorUsuario[tiktik.id] || [];
+            let tiktikComSessao = { ...tiktik, is_lote: false }; // Garante que is_lote sempre exista
+
+            if (sessoesDoTiktik.length > 0) {
+                tiktikComSessao.sessoes = sessoesDoTiktik; // Passa o array completo de sessões para o frontend
+                // É LOTE se houver mais de uma sessão ou se a única sessão tiver mais de uma OP.
+                const isLoteDefinido = sessoesDoTiktik.length > 1; // Simplificamos a detecção de lote
+
+                if (isLoteDefinido) {
+                    tiktikComSessao.is_lote = true;
+                    tiktikComSessao.quantidade_entregue = sessoesDoTiktik.reduce((sum, s) => sum + s.quantidade_entregue, 0);
+                    tiktikComSessao.data_inicio = sessoesDoTiktik.sort((a, b) => new Date(a.data_inicio) - new Date(b.data_inicio))[0].data_inicio;
+                    tiktikComSessao.dados_ops = sessoesDoTiktik.map(s => s.dados_ops).flat();
+                    tiktikComSessao.id_sessao = sessoesDoTiktik.map(s => s.id_sessao);
+                } else { // Tarefa individual
+                    tiktikComSessao = { ...tiktik, ...sessoesDoTiktik[0], is_lote: false };
+                }
+            }
+
+            let tempo_decor_real_segundos = null;
+            let tpe_tarefa = null;
+
+            if (tiktikComSessao.status_atual === 'PRODUZINDO' && tiktikComSessao.data_inicio) {
+                const dataInicio = new Date(tiktikComSessao.data_inicio);
+                const agora = new Date();
+                tempo_decor_real_segundos = Math.max(0, (agora - dataInicio) / 1000 - calcularTempoDePausa(tiktikComSessao, dataInicio, agora));
+                
+                // --- AQUI ESTÁ A NOVA LÓGICA DE CÁLCULO DO TPE ---
+                if (tiktikComSessao.is_lote) {
+                    let tempoTotalEstimadoLote = 0;
+                    let pecasTotaisLote = 0;
+                    
+                    // Itera sobre cada sessão que compõe o lote
+                    for (const sessao of sessoesDoTiktik) {
+                        const tpeProduto = temposMap.get(sessao.produto_id);
+                        if (tpeProduto) { // Apenas calcula se o TPE estiver definido
+                            tempoTotalEstimadoLote += tpeProduto * sessao.quantidade_entregue;
+                            pecasTotaisLote += sessao.quantidade_entregue;
+                        }
                     }
 
-                    // <<< AQUI ESTÁ A NOVA LÓGICA >>>
-                    const dataInicio = new Date(tiktik.data_inicio);
-                    const agora = new Date();
-                    const tempoTotalBrutoSegundos = (agora - dataInicio) / 1000;
-                    const tempoPausaSegundos = calcularTempoDePausa(tiktik, dataInicio, agora);
-                    
-                    tempo_decorrido_real_segundos = Math.max(0, tempoTotalBrutoSegundos - tempoPausaSegundos);
-                }
-                
-                // Adicionamos a nova informação no objeto de retorno
-                return { ...tiktik, media_tempo_por_peca, tempo_decorrido_real_segundos };
-            }));
+                    // Calcula o TPE médio ponderado, evitando divisão por zero
+                    if (pecasTotaisLote > 0 && tempoTotalEstimadoLote > 0) {
+                        tpe_tarefa = tempoTotalEstimadoLote / pecasTotaisLote;
+                    } else {
+                        tpe_tarefa = null; // Se nenhum produto no lote tiver TPE, o TPE do lote é nulo
+                    }
 
-            res.status(200).json(tiktiksComStatus);
+                } else { // Lógica para tarefa individual (continua a mesma)
+                    tpe_tarefa = temposMap.get(tiktikComSessao.produto_id) || null;
+                }
+            }
+            
+            return { 
+                ...tiktikComSessao, 
+                tempo_decorrido_real_segundos: tempo_decor_real_segundos,
+                tpe_tarefa
+            };
+        }));
+        
+        res.status(200).json(tiktiksComStatus);
 
     } catch (error) {
         console.error('[API /status-tiktiks] Erro:', error);
@@ -859,100 +937,65 @@ router.post('/sessoes/iniciar', async (req, res) => {
         dbClient = await pool.connect();
         await dbClient.query('BEGIN');
 
-        // --- TRAVA DE CONCORRÊNCIA COM ADVISORY LOCK ---
+        // --- TRAVA DE CONCORRÊNCIA (ESSENCIAL) ---
         const varianteAsNumber = variante ? variante.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) : 0;
         const lockKey = parseInt(produto_id) + varianteAsNumber;
-
         const lockResult = await dbClient.query('SELECT pg_try_advisory_xact_lock(12345, $1)', [lockKey]);
-        const lockAcquired = lockResult.rows[0].pg_try_advisory_xact_lock;
-
-        if (!lockAcquired) {
+        if (!lockResult.rows[0].pg_try_advisory_xact_lock) {
             await dbClient.query('ROLLBACK');
             return res.status(409).json({ error: `Este produto está sendo atribuído por outro supervisor. Por favor, tente novamente em alguns segundos.` });
         }
         
-        const agoraStr = (new Date()).toLocaleTimeString('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute:'2-digit' });
-
-        const sessaoAtivaQuery = `
-            SELECT
-                s.id,
-                u.nome as tiktik_nome
-            FROM sessoes_trabalho_arremate s
-            JOIN usuarios u ON s.usuario_tiktik_id = u.id
-            WHERE s.produto_id = $1
-            AND (s.variante = $2 OR (s.variante IS NULL AND $2 IS NULL))
-            AND s.status = 'EM_ANDAMENTO'
-            AND (
-                -- Considera a sessão ativa APENAS SE o Tiktik estiver DENTRO do seu horário de trabalho
-                (u.horario_entrada_1 IS NOT NULL AND u.horario_saida_1 IS NOT NULL AND $3 BETWEEN u.horario_entrada_1 AND u.horario_saida_1) OR
-                (u.horario_entrada_2 IS NOT NULL AND u.horario_saida_2 IS NOT NULL AND $3 BETWEEN u.horario_entrada_2 AND u.horario_saida_2) OR
-                (u.horario_entrada_3 IS NOT NULL AND u.horario_saida_3 IS NOT NULL AND $3 BETWEEN u.horario_entrada_3 AND u.horario_saida_3)
-            )
-            LIMIT 1
-        `;
-        const sessaoAtivaResult = await dbClient.query(sessaoAtivaQuery, [produto_id, variante, agoraStr]);
-
-        if (sessaoAtivaResult.rows.length > 0) {
-            const sessaoExistente = sessaoAtivaResult.rows[0];
-            await dbClient.query('ROLLBACK');
-            return res.status(409).json({
-                error: `Este produto já está em uma tarefa ativa com o Tiktik '${sessaoExistente.tiktik_nome}'. Finalize a tarefa atual antes de iniciar uma nova.`
-            });
-        }
-
-        // Se passou, continua com a verificação de saldo...
+        // --- CÁLCULO DE SALDO REAL E PRECISO (NOVA LÓGICA) ---
         const opNumeros = dados_ops.map(op => op.numero);
-        const opsResult = await dbClient.query( `SELECT numero, etapas, quantidade FROM ordens_de_producao WHERE numero = ANY($1::varchar[])`, [opNumeros]);
-        const opsDoBanco = opsResult.rows;
         
-        const arrematadoResult = await dbClient.query(
-            `SELECT
-                op_numero,
-                SUM(
-                    CASE
-                        WHEN tipo_lancamento = 'PRODUCAO' THEN quantidade_arrematada
-                        WHEN tipo_lancamento = 'PERDA' THEN quantidade_arrematada
-                        WHEN tipo_lancamento = 'ESTORNO' THEN -quantidade_arrematada
-                        ELSE 0
-                    END
-                )::integer as total_arrematado_liquido
-            FROM arremates
-            WHERE op_numero = ANY($1::varchar[])
-            GROUP BY op_numero`,
-            [opNumeros]
+        // 1. Pega o total produzido das OPs
+        const opsResult = await dbClient.query(`SELECT numero, etapas, quantidade FROM ordens_de_producao WHERE numero = ANY($1::varchar[])`, [opNumeros]);
+        
+        
+        // 2. Pega o total já arrematado (finalizado)
+        const arrematadoResult = await dbClient.query(`SELECT op_numero, SUM(quantidade_arrematada) as total_arrematado FROM arremates WHERE op_numero = ANY($1::varchar[]) AND tipo_lancamento IN ('PRODUCAO', 'PERDA') GROUP BY op_numero`, [opNumeros]);
+
+        const arrematadoMap = new Map(arrematadoResult.rows.map(r => [r.op_numero, parseInt(r.total_arrematado, 10)]));
+        
+        // 3. Pega o total que está EM TRABALHO agora
+        const sessoesAtivasResult = await dbClient.query(
+            `SELECT quantidade_entregue 
+             FROM sessoes_trabalho_arremate 
+             WHERE status = 'EM_ANDAMENTO' 
+             AND produto_id = $1 
+             AND (variante = $2 OR (variante IS NULL AND $2 IS NULL))`, 
+            [produto_id, variante]
         );
-        const arrematadoMap = new Map(arrematadoResult.rows.map(r => [r.op_numero, parseInt(r.total_arrematado_liquido, 10)]));
-        
-        let saldoRealDisponivel = 0;
+
+        // Somamos diretamente a quantidade entregue de cada sessão ativa.
+        const quantidadeEmTrabalho = sessoesAtivasResult.rows.reduce(
+            (total, sessao) => total + (sessao.quantidade_entregue || 0), 
+            0
+        );
+
+        let saldoBrutoTotal = 0;
         const obterQuantidadeFinalProduzida = (op) => {
-            if (!op || !op.etapas || !Array.isArray(op.etapas) || op.etapas.length === 0) {
-                return parseInt(op?.quantidade) || 0;
-            }
+            if (!op || !op.etapas || !Array.isArray(op.etapas) || op.etapas.length === 0) return parseInt(op?.quantidade) || 0;
             for (let i = op.etapas.length - 1; i >= 0; i--) {
                 const etapa = op.etapas[i];
                 if (etapa && etapa.lancado && typeof etapa.quantidade !== 'undefined' && etapa.quantidade !== null) {
                     const qtdEtapa = parseInt(etapa.quantidade, 10);
-                    if (!isNaN(qtdEtapa) && qtdEtapa >= 0) {
-                        return qtdEtapa;
-                    }
+                    if (!isNaN(qtdEtapa) && qtdEtapa >= 0) return qtdEtapa;
                 }
             }
             return parseInt(op.quantidade) || 0;
         };
         
-        // Agora iteramos sobre as OPs que buscamos do banco
-        for (const op of opsDoBanco) {
-            const produzido = obterQuantidadeFinalProduzida(op); // Usamos a função correta
+        opsResult.rows.forEach(op => {
+            const produzido = obterQuantidadeFinalProduzida(op);
             const jaArrematado = arrematadoMap.get(op.numero) || 0;
-            const saldoOpReal = produzido - jaArrematado;
+            saldoBrutoTotal += (produzido - jaArrematado);
+        });
 
-            // Somamos apenas o saldo positivo ao total
-            if (saldoOpReal > 0) {
-                saldoRealDisponivel += saldoOpReal;
-            }
-        }
-        
-        // A trava final
+        const saldoRealDisponivel = saldoBrutoTotal - quantidadeEmTrabalho;
+
+        // --- A VALIDAÇÃO FINAL E CRÍTICA ---
         if (qtdEntregueNum > saldoRealDisponivel) {
             await dbClient.query('ROLLBACK');
             return res.status(409).json({
@@ -988,104 +1031,93 @@ router.post('/sessoes/iniciar', async (req, res) => {
 // ROTA: POST /api/arremates/sessoes/finalizar
 router.post('/sessoes/finalizar', async (req, res) => {
     let dbClient;
-    const { id_sessao, quantidade_finalizada } = req.body;
+    // O body agora contém 'detalhes_finalizacao'
+    const { detalhes_finalizacao } = req.body;
 
-    if (!id_sessao || quantidade_finalizada === undefined) {
-        return res.status(400).json({ error: 'ID da sessão e quantidade finalizada são obrigatórios.' });
+    if (!Array.isArray(detalhes_finalizacao) || detalhes_finalizacao.length === 0) {
+        return res.status(400).json({ error: 'Detalhes de finalização são obrigatórios.' });
     }
     
-    const qtdFinalizadaNum = parseInt(quantidade_finalizada);
-    if (isNaN(qtdFinalizadaNum) || qtdFinalizadaNum < 0) {
-        return res.status(400).json({ error: 'Quantidade finalizada deve ser um número não-negativo.' });
-    }
-
     try {
         dbClient = await pool.connect();
         await dbClient.query('BEGIN');
 
-        const sessaoQuery = `SELECT * FROM sessoes_trabalho_arremate WHERE id = $1 FOR UPDATE`;
-        const sessaoResult = await dbClient.query(sessaoQuery, [id_sessao]);
+        const idsParaFinalizar = detalhes_finalizacao.map(d => d.id_sessao);
 
-        if (sessaoResult.rows.length === 0) throw new Error('Sessão não encontrada.');
+        const sessoesResult = await dbClient.query(
+            `SELECT * FROM sessoes_trabalho_arremate WHERE id = ANY($1::int[]) FOR UPDATE`,
+            [idsParaFinalizar]
+        );
 
-        const sessao = sessaoResult.rows[0];
-            if (sessao.status === 'FINALIZADA') throw new Error('Esta sessão de trabalho já foi finalizada.');
+        if (sessoesResult.rows.length !== idsParaFinalizar.length) {
+            throw new Error('Uma ou mais sessões não foram encontradas ou os IDs são inconsistentes.');
+        }
 
-            // 1. PRIMEIRO, buscamos os dados dos usuários
-            const userTiktikResult = await dbClient.query(`SELECT * FROM usuarios WHERE id = $1`, [sessao.usuario_tiktik_id]);
-            const lancadorResult = await dbClient.query(`SELECT nome FROM usuarios WHERE id = $1`, [req.usuarioLogado.id]);
-            if (userTiktikResult.rows.length === 0 || lancadorResult.rows.length === 0) throw new Error('Usuário Tiktik ou Lançador não encontrado.');
-            const nomeTiktik = userTiktikResult.rows[0].nome;
-            const nomeLancador = lancadorResult.rows[0].nome;
+        const sessoes = sessoesResult.rows;
+        const usuarioTiktikId = sessoes[0].usuario_tiktik_id;
 
-            // 2. AGORA SIM, com os dados do usuário em mãos, podemos calcular o tempo de pausa
-            const dataInicio = new Date(sessao.data_inicio);
-            const dataFim = new Date(); // O momento da finalização
-            const tempoPausaSegundos = calcularTempoDePausa(userTiktikResult.rows[0], dataInicio, dataFim);
+        const userTiktikResult = await dbClient.query(`SELECT * FROM usuarios WHERE id = $1`, [usuarioTiktikId]);
+        const lancadorResult = await dbClient.query(`SELECT nome FROM usuarios WHERE id = $1`, [req.usuarioLogado.id]);
+        if (userTiktikResult.rows.length === 0 || lancadorResult.rows.length === 0) throw new Error('Usuário Tiktik ou Lançador não encontrado.');
+        const nomeTiktik = userTiktikResult.rows[0].nome;
+        const nomeLancador = lancadorResult.rows[0].nome;
+        
+        const dataFim = new Date();
 
-            let idsArrematesGerados = [];
+        // Itera sobre os DETALHES que vieram do frontend
+        for (const detalhe of detalhes_finalizacao) {
+            const sessaoCorrespondente = sessoes.find(s => s.id === detalhe.id_sessao);
+            if (!sessaoCorrespondente) continue; // Segurança extra
 
-            if (qtdFinalizadaNum > 0) {
-            let valorPontoAplicado = 1.00;
-            const configPontosQuery = `
-                SELECT pontos_padrao FROM configuracoes_pontos_processos
-                WHERE produto_id = $1 AND tipo_atividade = 'arremate_tiktik' AND ativo = TRUE LIMIT 1;
-            `;
-            const configResult = await dbClient.query(configPontosQuery, [sessao.produto_id]);
-            if (configResult.rows.length > 0 && configResult.rows[0].pontos_padrao !== null) {
-                valorPontoAplicado = parseFloat(configResult.rows[0].pontos_padrao);
-            }
-
-            let quantidadeRestanteParaLancar = qtdFinalizadaNum;
+            const qtdFinalizadaNestaSessao = detalhe.quantidade_finalizada;
             
-            const opsDeOrigem = (sessao && Array.isArray(sessao.dados_ops)) ? sessao.dados_ops : [];
-            const opsOrdenadas = opsDeOrigem.sort((a, b) => a.numero - b.numero);
-
-            if (opsOrdenadas.length === 0) {
-                console.error(`ERRO: A sessão ${id_sessao} foi finalizada, mas a coluna 'dados_ops' estava vazia ou inválida.`);
-                throw new Error("Não foi possível finalizar: os dados das OPs de origem não foram encontrados nesta sessão.");
+            // Validações
+            if (qtdFinalizadaNestaSessao < 0 || qtdFinalizadaNestaSessao > sessaoCorrespondente.quantidade_entregue) {
+                throw new Error(`Quantidade finalizada inválida para o produto ${sessaoCorrespondente.produto_nome}.`);
             }
+            if (sessaoCorrespondente.status === 'FINALIZADA') continue;
 
-            for (const op of opsOrdenadas) {
-                if (quantidadeRestanteParaLancar <= 0) break;
-                const qtdParaEstaOP = Math.min(quantidadeRestanteParaLancar, op.saldo_op);
+            // Lógica de criação de arremates (agora com a quantidade correta)
+            if (qtdFinalizadaNestaSessao > 0) {
+                let quantidadeRestanteParaLancar = qtdFinalizadaNestaSessao;
+                const opsDeOrigem = (sessaoCorrespondente.dados_ops || []);
                 
-                if (qtdParaEstaOP > 0) {
-                    const pontosGeradosParaEstaOP = qtdParaEstaOP * valorPontoAplicado;
-                    const arremateResult = await dbClient.query(
-                        `INSERT INTO arremates (op_numero, op_edit_id, produto_id, variante, quantidade_arrematada, usuario_tiktik_id, usuario_tiktik, lancado_por, tipo_lancamento, valor_ponto_aplicado, pontos_gerados, id_sessao_origem)
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PRODUCAO', $9, $10, $11) RETURNING id`,
-                            [
-                                op.numero, op.edit_id, sessao.produto_id, sessao.variante, 
-                                qtdParaEstaOP, sessao.usuario_tiktik_id, nomeTiktik, nomeLancador,
-                                valorPontoAplicado, pontosGeradosParaEstaOP,
-                                id_sessao
-                            ]
+                for (const op of opsDeOrigem) {
+                    if (quantidadeRestanteParaLancar <= 0) break;
+                    const qtdParaEstaOP = Math.min(quantidadeRestanteParaLancar, op.saldo_op);
+                    
+                    if (qtdParaEstaOP > 0) {
+                        // O INSERT continua o mesmo, mas agora com a quantidade certa
+                        await dbClient.query(
+                            `INSERT INTO arremates (op_numero, op_edit_id, produto_id, variante, quantidade_arrematada, usuario_tiktik_id, usuario_tiktik, lancado_por, tipo_lancamento, id_sessao_origem)
+                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PRODUCAO', $9)`,
+                            [op.numero, op.edit_id, sessaoCorrespondente.produto_id, sessaoCorrespondente.variante, qtdParaEstaOP, usuarioTiktikId, nomeTiktik, nomeLancador, sessaoCorrespondente.id]
                         );
-                    idsArrematesGerados.push(arremateResult.rows[0].id);
-                    quantidadeRestanteParaLancar -= qtdParaEstaOP;
+                        quantidadeRestanteParaLancar -= qtdParaEstaOP;
+                    }
                 }
             }
             
-            if (quantidadeRestanteParaLancar > 0) {
-                throw new Error(`Tentativa de lançar ${qtdFinalizadaNum} peças, mas o saldo disponível nas OPs de origem era insuficiente. Lançamento cancelado.`);
-            }
+            // Atualiza a sessão individual com a quantidade exata
+            const tempoPausaSegundos = calcularTempoDePausa(userTiktikResult.rows[0], new Date(sessaoCorrespondente.data_inicio), dataFim);
+            await dbClient.query(
+                `UPDATE sessoes_trabalho_arremate SET data_fim = $1, status = 'FINALIZADA', quantidade_finalizada = $2, tempo_pausado_segundos = $3 WHERE id = $4`,
+                [dataFim, qtdFinalizadaNestaSessao, tempoPausaSegundos, sessaoCorrespondente.id]
+            );
         }
-        
-        await dbClient.query(
-            `UPDATE sessoes_trabalho_arremate 
-            SET data_fim = $1, status = 'FINALIZADA', quantidade_finalizada = $2, id_arremate_gerado = $3, tempo_pausado_segundos = $4 
-            WHERE id = $5`,
-            [dataFim, qtdFinalizadaNum, idsArrematesGerados.length > 0 ? idsArrematesGerados[0] : null, tempoPausaSegundos, id_sessao]
+
+        // A lógica de verificação de outras tarefas ativas continua a mesma
+        const outraSessaoAtivaResult = await dbClient.query(
+            `SELECT 1 FROM sessoes_trabalho_arremate WHERE usuario_tiktik_id = $1 AND status = 'EM_ANDAMENTO' LIMIT 1`,
+            [usuarioTiktikId]
         );
-        
-        await atualizarStatusUsuarioDB(sessao.usuario_tiktik_id, 'LIVRE');
+
+        if (outraSessaoAtivaResult.rowCount === 0) {
+            await atualizarStatusUsuarioDB(usuarioTiktikId, 'LIVRE');
+        }
                 
         await dbClient.query('COMMIT');
-        res.status(200).json({ 
-            message: 'Sessão finalizada e arremate(s) registrado(s) com sucesso!', 
-            arremateIds: idsArrematesGerados 
-        });
+        res.status(200).json({ message: 'Tarefa(s) finalizada(s) e arremate(s) registrado(s) com sucesso!' });
 
     } catch (error) {
         if (dbClient) await dbClient.query('ROLLBACK');
@@ -1099,59 +1131,66 @@ router.post('/sessoes/finalizar', async (req, res) => {
 // ROTA: POST /api/arremates/sessoes/cancelar
 router.post('/sessoes/cancelar', async (req, res) => {
     const { usuarioLogado } = req;
-    const { id_sessao } = req.body; // Receberemos o ID da sessão a ser cancelada
+    const { id_sessao, ids_sessoes } = req.body;
+    let dbClient;
 
-    // 1. Validação básica de entrada
-    if (!id_sessao) {
-        return res.status(400).json({ error: 'O ID da sessão é obrigatório para o cancelamento.' });
+    const idsParaCancelar = Array.isArray(ids_sessoes) ? ids_sessoes : (id_sessao ? [id_sessao] : []);
+
+    if (idsParaCancelar.length === 0) {
+        return res.status(400).json({ error: 'O ID da sessão ou uma lista de IDs são obrigatórios.' });
     }
 
-    let dbClient;
     try {
         dbClient = await pool.connect();
-
-        // 2. Verificação de permissão (vamos criar uma nova permissão para isso)
         const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
         if (!permissoes.includes('cancelar-tarefa-arremate')) {
             return res.status(403).json({ error: 'Permissão negada para cancelar tarefas.' });
         }
-
-        // 3. Iniciar a transação para garantir a integridade dos dados
+        
         await dbClient.query('BEGIN');
 
-        // 4. Buscar a sessão para garantir que ela existe e pegar o ID do tiktik
-        const sessaoQuery = `SELECT id, usuario_tiktik_id, status FROM sessoes_trabalho_arremate WHERE id = $1 FOR UPDATE`;
-        const sessaoResult = await dbClient.query(sessaoQuery, [id_sessao]);
+        const sessoesResult = await dbClient.query(
+            `SELECT id, usuario_tiktik_id, status FROM sessoes_trabalho_arremate WHERE id = ANY($1::int[]) FOR UPDATE`,
+            [idsParaCancelar]
+        );
 
-        if (sessaoResult.rows.length === 0) {
-            // Se a sessão não existe, não é um erro grave, talvez já foi cancelada.
-            // Apenas informamos e não quebramos a transação.
+        if (sessoesResult.rows.length === 0) {
             await dbClient.query('COMMIT');
-            return res.status(404).json({ error: 'Sessão de trabalho não encontrada.' });
+            return res.status(404).json({ error: 'Nenhuma sessão de trabalho encontrada.' });
         }
 
-        const sessao = sessaoResult.rows[0];
-
-        // 5. Regra de negócio: só podemos cancelar uma tarefa que está EM_ANDAMENTO
-        if (sessao.status !== 'EM_ANDAMENTO') {
-            await dbClient.query('ROLLBACK'); // Desfaz a transação
-            return res.status(409).json({ error: `Não é possível cancelar. Esta tarefa já foi '${sessao.status.toLowerCase()}'.` });
+        const usuarioTiktikId = sessoesResult.rows[0].usuario_tiktik_id;
+        for (const sessao of sessoesResult.rows) {
+            if (sessao.status !== 'EM_ANDAMENTO') {
+                await dbClient.query('ROLLBACK');
+                return res.status(409).json({ error: `A tarefa já foi '${sessao.status.toLowerCase()}'.` });
+            }
         }
         
-        // 6. Atualizar o status do usuário Tiktik para 'LIVRE'
-        await atualizarStatusUsuarioDB(sessao.usuario_tiktik_id, 'LIVRE');
+        const updateResult = await dbClient.query(
+            `UPDATE sessoes_trabalho_arremate SET status = 'CANCELADA', data_fim = NOW() WHERE id = ANY($1::int[])`,
+            [idsParaCancelar]
+        );
 
-        // 7. EXCLUIR o registro da sessão de trabalho.
-        // É isso que garante que ela nunca entrará nos cálculos de performance.
-        await dbClient.query(`DELETE FROM sessoes_trabalho_arremate WHERE id = $1`, [id_sessao]);
+        if (updateResult.rowCount === 0) {
+            await dbClient.query('ROLLBACK');
+            throw new Error('Falha ao atualizar o status da sessão para CANCELADA.');
+        }
 
-        // 8. Se tudo deu certo, confirmar a transação
+        const outraSessaoAtivaResult = await dbClient.query(
+            `SELECT 1 FROM sessoes_trabalho_arremate WHERE usuario_tiktik_id = $1 AND status = 'EM_ANDAMENTO' LIMIT 1`,
+            [usuarioTiktikId]
+        );
+        
+        if (outraSessaoAtivaResult.rowCount === 0) {
+            await atualizarStatusUsuarioDB(usuarioTiktikId, 'LIVRE');
+        }
+
         await dbClient.query('COMMIT');
         
-        res.status(200).json({ message: 'Tarefa cancelada com sucesso!' });
+        res.status(200).json({ message: 'Tarefa(s) cancelada(s) com sucesso!' });
 
     } catch (error) {
-        // Se qualquer passo falhar, a transação é desfeita
         if (dbClient) await dbClient.query('ROLLBACK');
         console.error('[API /sessoes/cancelar] Erro:', error);
         res.status(500).json({ error: 'Erro interno ao cancelar a tarefa.', details: error.message });
@@ -1499,6 +1538,173 @@ router.get('/desempenho-diario/:usuarioId', async (req, res) => {
         res.status(500).json({ error: 'Erro ao buscar dados de desempenho.' });
     } finally {
         if (dbClient) dbClient.release();
+    }
+});
+
+// ROTA: POST /api/arremates/sessoes/iniciar-lote
+router.post('/sessoes/iniciar-lote', async (req, res) => {
+    const { usuarioLogado } = req;
+    const { tiktikId, itens } = req.body;
+    let dbClient;
+
+    if (!tiktikId || !Array.isArray(itens) || itens.length === 0) {
+        return res.status(400).json({ error: 'Dados insuficientes. ID do Tiktik e lista de itens são obrigatórios.' });
+    }
+    const obterQuantidadeFinalProduzida = (op) => {
+        if (!op || !op.etapas || !Array.isArray(op.etapas) || op.etapas.length === 0) {
+            return parseInt(op?.quantidade) || 0;
+        }
+        for (let i = op.etapas.length - 1; i >= 0; i--) {
+            const etapa = op.etapas[i];
+            if (etapa && etapa.lancado && typeof etapa.quantidade !== 'undefined' && etapa.quantidade !== null) {
+                const qtdEtapa = parseInt(etapa.quantidade, 10);
+                if (!isNaN(qtdEtapa) && qtdEtapa >= 0) {
+                    return qtdEtapa;
+                }
+            }
+        }
+        return parseInt(op.quantidade) || 0;
+    };
+
+    try {
+        dbClient = await pool.connect();
+        const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
+        if (!permissoes.includes('lancar-arremate')) {
+            return res.status(403).json({ error: 'Permissão negada para atribuir tarefas.' });
+        }
+
+        await dbClient.query('BEGIN');
+
+        for (const item of itens) {
+            const { produto_id, variante, saldo_para_arrematar, ops_detalhe, produto_nome } = item;
+            
+            const opNumeros = ops_detalhe.map(op => op.numero);
+            const opsResult = await dbClient.query(`SELECT numero, etapas, quantidade FROM ordens_de_producao WHERE numero = ANY($1::varchar[])`, [opNumeros]);
+            const arrematadoResult = await dbClient.query(`SELECT op_numero, SUM(quantidade_arrematada) as total_arrematado FROM arremates WHERE op_numero = ANY($1::varchar[]) AND tipo_lancamento IN ('PRODUCAO', 'PERDA') GROUP BY op_numero`, [opNumeros]);
+            const sessoesAtivasResult = await dbClient.query(`SELECT quantidade_entregue FROM sessoes_trabalho_arremate WHERE status = 'EM_ANDAMENTO' AND produto_id = $1 AND (variante = $2 OR (variante IS NULL AND $2 IS NULL))`, [produto_id, variante === '-' ? null : variante]);
+
+            const arrematadoMap = new Map(arrematadoResult.rows.map(r => [r.op_numero, parseInt(r.total_arrematado, 10)]));
+            const quantidadeEmTrabalho = sessoesAtivasResult.rows.reduce((total, sessao) => total + (sessao.quantidade_entregue || 0), 0);
+
+            let saldoBrutoTotal = 0;
+            opsResult.rows.forEach(op => {
+                // AQUI CHAMAMOS A FUNÇÃO COMPLETA
+                const produzido = obterQuantidadeFinalProduzida(op);
+                const jaArrematado = arrematadoMap.get(op.numero) || 0;
+                saldoBrutoTotal += (produzido - jaArrematado);
+            });
+            const saldoRealDisponivel = saldoBrutoTotal - quantidadeEmTrabalho;
+
+            if (saldo_para_arrematar > saldoRealDisponivel) {
+                await dbClient.query('ROLLBACK');
+                return res.status(409).json({
+                    error: `Conflito de saldo no produto '${produto_nome}'. A quantidade solicitada (${saldo_para_arrematar}) é maior que o saldo disponível real (${saldoRealDisponivel}). A operação em lote foi cancelada. Atualize a página.`
+                });
+            }
+
+            const sessaoQuery = `INSERT INTO sessoes_trabalho_arremate (usuario_tiktik_id, produto_id, variante, quantidade_entregue, op_numero, op_edit_id, dados_ops) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb) RETURNING id`;
+            await dbClient.query(sessaoQuery, [tiktikId, produto_id, variante === '-' ? null : variante, saldo_para_arrematar, ops_detalhe[0].numero, ops_detalhe[0].edit_id, JSON.stringify(ops_detalhe)]);
+        }
+
+        await atualizarStatusUsuarioDB(tiktikId, 'PRODUZINDO'); 
+        
+        await dbClient.query('COMMIT');
+        
+        res.status(201).json({ message: 'Lote atribuído com sucesso!', totalItens: itens.length });
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error('[API /sessoes/iniciar-lote] Erro:', error);
+        res.status(500).json({ error: 'Erro ao atribuir lote.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// GET /api/arremates/tempos-padrao - Busca todos os tempos padrão configurados
+router.get('/tempos-padrao', async (req, res) => {
+    // let dbClient; aqui para que o finally possa acessá-la
+    let dbClient; 
+    try {
+        // Conecta ao banco no início da rota
+        dbClient = await pool.connect(); 
+        
+        const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, req.usuarioLogado.id);
+        if (!permissoes.includes('acesso-ordens-de-arremates')) {
+            return res.status(403).json({ error: 'Permissão negada.' });
+        }
+
+        const query = `SELECT produto_id, tempo_segundos_por_peca FROM tempos_padrao_arremate`;
+        const result = await dbClient.query(query);
+        
+        const temposMap = result.rows.reduce((acc, row) => {
+            acc[row.produto_id] = parseFloat(row.tempo_segundos_por_peca);
+            return acc;
+        }, {});
+
+        res.status(200).json(temposMap);
+
+    } catch (error) {
+        console.error('[API /tempos-padrao GET] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar tempos padrão.' });
+    } finally {
+        // Libera a conexão
+        if (dbClient) dbClient.release(); 
+    }
+});
+
+// POST /api/arremates/tempos-padrao - Salva os tempos padrão em lote
+router.post('/tempos-padrao', async (req, res) => {
+    // Mesma lógica: define a variável fora do try
+    let dbClient; 
+    const { tempos } = req.body;
+
+    if (!tempos || typeof tempos !== 'object' || Object.keys(tempos).length === 0) {
+        return res.status(400).json({ error: 'Dados de tempos inválidos ou ausentes.' });
+    }
+    
+    try {
+        // Conecta ao banco
+        dbClient = await pool.connect(); 
+        
+        const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, req.usuarioLogado.id);
+        if (!permissoes.includes('gerenciar-permissoes')) {
+            return res.status(403).json({ error: 'Permissão negada para configurar tempos padrão.' });
+        }
+
+        await dbClient.query('BEGIN');
+
+        const query = `
+            INSERT INTO tempos_padrao_arremate (produto_id, tempo_segundos_por_peca)
+            SELECT * FROM UNNEST($1::int[], $2::numeric[])
+            ON CONFLICT (produto_id) 
+            DO UPDATE SET 
+                tempo_segundos_por_peca = EXCLUDED.tempo_segundos_por_peca,
+                atualizado_em = CURRENT_TIMESTAMP;
+        `;
+
+        const produtoIds = Object.keys(tempos).map(id => parseInt(id)).filter(id => !isNaN(id));
+        const temposValores = produtoIds.map(id => parseFloat(tempos[id])).filter(tempo => !isNaN(tempo) && tempo > 0);
+
+        // Adiciona uma verificação para evitar erro com arrays vazios
+        if (produtoIds.length !== temposValores.length || produtoIds.length === 0) {
+            await dbClient.query('ROLLBACK');
+            return res.status(400).json({ error: 'Dados de tempos inválidos. Verifique se todos os valores são números positivos.' });
+        }
+        
+        await dbClient.query(query, [produtoIds, temposValores]);
+        
+        await dbClient.query('COMMIT');
+        
+        res.status(200).json({ message: 'Tempos padrão atualizados com sucesso!' });
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error('[API /tempos-padrao POST] Erro:', error);
+        res.status(500).json({ error: 'Erro ao salvar tempos padrão.', details: error.message });
+    } finally {
+        // Libera a conexão
+        if (dbClient) dbClient.release(); 
     }
 });
 

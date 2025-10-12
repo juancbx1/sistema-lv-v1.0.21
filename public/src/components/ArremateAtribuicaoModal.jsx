@@ -1,35 +1,43 @@
-// src/components/AtribuicaoModal.jsx
+//public/src/components/ArremateAtribuicaoModal.jsx
+
 import React, { useState, useEffect } from 'react';
 import { Tooltip } from 'react-tooltip';
 
 // Importa as "telas" que ele vai controlar
-import TelaSelecaoProduto from './TelaSelecaoProduto.jsx';
-import TelaConfirmacaoQtd from './TelaConfirmacaoQtd.jsx';
+import TelaSelecaoProduto from './ArremateTelaSelecaoProduto.jsx';
+import TelaConfirmacaoQtd from './ArremateTelaConfirmacaoQtd.jsx';
 
-export default function AtribuicaoModal({ tiktik, isOpen, onClose }) {
+// A assinatura da função foi simplificada. Ela não precisa mais de 'onComplete'.
+export default function AtribuicaoModal({ tiktik, isOpen, onClose, isBatchMode }) {
     const [tela, setTela] = useState('lista');
     const [itemSelecionado, setItemSelecionado] = useState(null);
 
-    // Este efeito "escuta" a propriedade 'isOpen'.
+    // Este efeito reseta o modal para a tela inicial sempre que ele é aberto.
     useEffect(() => {
         if (isOpen) {
             setTela('lista');
             setItemSelecionado(null);
         }
-    }, [isOpen]); // O array de dependências faz com que este código rode toda vez que 'isOpen' mudar.
+    }, [isOpen]);
 
+    // Função para o fluxo de TAREFA INDIVIDUAL.
+    // Chamada pela TelaSelecaoProduto quando um card é clicado (e não está em modo lote).
     const handleItemSelect = (item) => {
         setItemSelecionado(item);
-        setTela('confirmacao');
+        setTela('confirmacao'); // Muda para a tela de confirmação de quantidade
     };
 
+    // Função para voltar da tela de confirmação para a lista de produtos.
     const handleVoltar = () => {
         setItemSelecionado(null);
         setTela('lista');
     };
 
+    // Função chamada quando uma atribuição (seja individual ou em lote) é concluída com sucesso.
+    // Tanto a TelaConfirmacaoQtd quanto a TelaSelecaoProduto (no fluxo de lote) chamarão esta função.
     const handleConfirmacaoFinal = () => {
-        onClose();
+        onClose(); // A única responsabilidade é fechar o modal principal.
+        // O evento abaixo garante que o painel de Tiktiks seja atualizado.
         window.dispatchEvent(new Event('forcarAtualizacaoPainelTiktik'));
     };
 
@@ -44,18 +52,15 @@ export default function AtribuicaoModal({ tiktik, isOpen, onClose }) {
             <div className={`oa-modal-atribuir-v2 ${tela === 'lista' ? 'modo-lista' : 'modo-confirmacao'}`}>
                 <div className="oa-modal-header">
                     
-                    {tela === 'confirmacao' ? (
+                    {/* O botão 'Voltar' só aparece na tela de confirmação individual */}
+                    {tela === 'confirmacao' && (
                         <button className="btn-voltar-header" onClick={handleVoltar}>
                             <i className="fas fa-arrow-left"></i>
                             <span>Voltar</span>
                         </button>
-                    ) : (
-                        // Div vazia para manter o alinhamento do título quando o botão não está visível
-                        <div style={{width: '80px', flexShrink: 0}}></div> 
                     )}
                     
                     <h3 className="oa-modal-titulo">
-                        {/* O título também muda dinamicamente */}
                         {tela === 'lista' ? 'Selecionar Produto para' : 'Confirmar Quantidade para'} 
                         <span className="nome-destaque-modal"> {tiktik?.nome}</span>
                     </h3>
@@ -64,10 +69,18 @@ export default function AtribuicaoModal({ tiktik, isOpen, onClose }) {
                 </div>
 
                 <div className="oa-modal-body">
+                    {/* Se a tela for 'lista', renderiza o componente de seleção de produtos */}
                     {tela === 'lista' && (
-                        <TelaSelecaoProduto onItemSelect={handleItemSelect} />
+                        <TelaSelecaoProduto 
+                            onItemSelect={handleItemSelect} // Para o fluxo individual
+                            onLoteConfirmado={handleConfirmacaoFinal} // Para o fluxo de lote
+                            isBatchMode={isBatchMode}
+                            tiktikContexto={tiktik}
+                        />
                     )}
-                    {tela === 'confirmacao' && (
+
+                    {/* Se a tela for 'confirmacao' E houver um item selecionado, renderiza a confirmação */}
+                    {tela === 'confirmacao' && itemSelecionado && (
                         <TelaConfirmacaoQtd 
                             item={itemSelecionado} 
                             tiktik={tiktik} 

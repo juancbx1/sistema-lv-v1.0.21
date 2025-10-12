@@ -1,7 +1,7 @@
 // public/src/components/FormularioPerda.jsx
 
 import React, { useState } from 'react';
-import { getImagemVariacao } from '../utils/produtoHelpers.js';
+import { getImagemVariacao } from '../utils/ArremateProdutoHelpers.js';
 
 import { mostrarMensagem } from '/js/utils/popups.js';
 

@@ -235,31 +235,33 @@ router.get('/', async (req, res) => {
     const { dbCliente } = req;
     try {
         const query = `
-    SELECT 
-            u.id, u.nome, u.nome_usuario, u.email, u.tipos, u.nivel, u.permissoes,
-            u.salario_fixo, u.valor_passagem_diaria, u.elegivel_pagamento, 
-            u.id_contato_financeiro, u.data_admissao,
-            u.data_demissao,
-            u.horario_entrada_1,
-            u.horario_saida_1,
-            u.horario_entrada_2,
-            u.horario_saida_2, 
-            u.horario_entrada_3,
-            u.horario_saida_3,
-            
-            COALESCE(u.avatar_url, $1) as avatar_url,
-                        
-            c.nome AS nome_contato_financeiro,
-            COALESCE(
-                (SELECT array_agg(ucv.concessionaria_id) 
-                FROM usuario_concessionaria_vt ucv 
-                WHERE ucv.usuario_id = u.id),
-                '{}'
-            ) AS concessionarias_vt
-        FROM usuarios u
-        LEFT JOIN fc_contatos c ON u.id_contato_financeiro = c.id
-        ORDER BY u.nome ASC;
-    `;
+            SELECT 
+                u.id, u.nome, u.nome_completo,
+                u.nome_usuario, u.email, u.tipos, u.nivel, u.permissoes,
+                u.salario_fixo, u.valor_passagem_diaria, u.elegivel_pagamento, 
+                u.id_contato_financeiro, u.data_admissao,
+                u.data_demissao,
+                u.horario_entrada_1, u.horario_saida_1,
+                u.horario_entrada_2, u.horario_saida_2, 
+                u.horario_entrada_3, u.horario_saida_3, 
+                COALESCE(u.avatar_url, $1) as avatar_url,
+                c.nome AS nome_contato_financeiro,
+                COALESCE(
+                    (SELECT array_agg(ucv.concessionaria_id) 
+                    FROM usuario_concessionaria_vt ucv 
+                    WHERE ucv.usuario_id = u.id),
+                    '{}'
+                ) AS concessionarias_vt,
+                -- LÓGICA PARA VERIFICAR SE O USUÁRIO ESTÁ DE FÉRIAS HOJE --
+                EXISTS (
+                    SELECT 1
+                    FROM ferias_empregados fe
+                    WHERE fe.id_usuario = u.id AND CURRENT_DATE BETWEEN fe.data_inicio AND fe.data_fim
+                ) AS esta_de_ferias
+            FROM usuarios u
+            LEFT JOIN fc_contatos c ON u.id_contato_financeiro = c.id
+            ORDER BY u.nome ASC;
+        `;
     // Passamos a variável de ambiente como um parâmetro para a query
     const result = await dbCliente.query(query, [process.env.DEFAULT_AVATAR_URL]);
 
@@ -364,6 +366,7 @@ router.put('/', async (req, res) => {
         // Recebemos todos os campos do corpo da requisição
         const { 
             id, nome, nomeUsuario, email, tipos, nivel, 
+            nome_completo,
             salario_fixo, valor_passagem_diaria, 
             elegivel_pagamento, id_contato_financeiro, concessionaria_ids,
             permissoes: permissoesIndividuais,
@@ -389,6 +392,10 @@ router.put('/', async (req, res) => {
         let paramIndex = 1;
 
         if (nome !== undefined) { fieldsToUpdate.push(`nome = $${paramIndex++}`); values.push(nome); }
+        if (nome_completo !== undefined) { 
+            fieldsToUpdate.push(`nome_completo = $${paramIndex++}`); 
+            values.push(nome_completo); 
+        }
         if (nomeUsuario !== undefined) { fieldsToUpdate.push(`nome_usuario = $${paramIndex++}`); values.push(nomeUsuario); }
         if (email !== undefined) { fieldsToUpdate.push(`email = $${paramIndex++}`); values.push(email); }
         if (tipos !== undefined) { fieldsToUpdate.push(`tipos = $${paramIndex++}`); values.push(tipos); }
@@ -598,6 +605,72 @@ router.put('/:id/status', async (req, res) => {
     }
 });
 
+// GET /api/usuarios/:id/ferias - Busca o histórico de férias de um usuário
+router.get('/:id/ferias', async (req, res) => {
+    const { dbCliente } = req;
+    const { id: idUsuario } = req.params;
 
+    try {
+        // Para visualizar o histórico, exigimos a mesma permissão de "editar usuários",
+        // pois são informações sensíveis de RH.
+        const permissoes = await getPermissoesCompletasUsuarioDB(dbCliente, req.usuarioLogado.id);
+        if (!permissoes.includes('editar-usuarios')) {
+            return res.status(403).json({ error: 'Permissão negada para visualizar o histórico de férias.' });
+        }
+
+        const query = `
+            SELECT id, data_inicio, data_fim, observacoes 
+            FROM ferias_empregados 
+            WHERE id_usuario = $1 
+            ORDER BY data_inicio DESC
+        `;
+        const result = await dbCliente.query(query, [idUsuario]);
+        res.status(200).json(result.rows);
+
+    } catch (error) {
+        console.error(`[API /usuarios/:id/ferias GET] Erro:`, error);
+        res.status(500).json({ error: 'Erro ao buscar histórico de férias.' });
+    } finally {
+        if (dbCliente) dbCliente.release();
+    }
+});
+
+// POST /api/usuarios/:id/ferias - Adiciona um novo período de férias
+router.post('/:id/ferias', async (req, res) => {
+    const { dbCliente } = req;
+    const { id: idUsuario } = req.params;
+    const { data_inicio, data_fim, observacoes } = req.body;
+
+    // --- Validação dos dados de entrada ---
+    if (!data_inicio || !data_fim) {
+        return res.status(400).json({ error: 'Data de início e data de fim são obrigatórias.' });
+    }
+    if (new Date(data_fim) < new Date(data_inicio)) {
+        return res.status(400).json({ error: 'A data de fim não pode ser anterior à data de início.' });
+    }
+
+    try {
+        // Verificação de permissão específica
+        const permissoes = await getPermissoesCompletasUsuarioDB(dbCliente, req.usuarioLogado.id);
+        if (!permissoes.includes('adicionar-ferias')) { 
+            return res.status(403).json({ error: 'Permissão negada para adicionar férias.' });
+        }
+
+        const query = `
+            INSERT INTO ferias_empregados (id_usuario, data_inicio, data_fim, observacoes)
+            VALUES ($1, $2, $3, $4)
+            RETURNING *
+        `;
+        const result = await dbCliente.query(query, [idUsuario, data_inicio, data_fim, observacoes]);
+        
+        res.status(201).json(result.rows[0]); // Retorna o registro criado
+
+    } catch (error) { 
+        console.error(`[API /usuarios/:id/ferias POST] Erro:`, error);
+        res.status(500).json({ error: 'Erro ao registrar férias.' });
+    } finally {
+        if (dbCliente) dbCliente.release();
+    }
+});
 
 export default router;

@@ -1,8 +1,8 @@
-// public/src/components/ArremateCard.jsx (VERSÃO FINAL E CORRETA)
+// public/src/components/ArremateCard.jsx
 
 import React from 'react';
 // Importa a função helper que acabamos de verificar/criar.
-import { getImagemVariacao } from '../utils/produtoHelpers.js';
+import { getImagemVariacao } from '../utils/ArremateProdutoHelpers.js';
 
 // Função auxiliar para formatar o tempo decorrido
 function formatarTempoDecorrido(data) {
@@ -20,22 +20,51 @@ function formatarTempoDecorrido(data) {
     return 'agora mesmo';
 }
 
-export function ArremateCard({ item, onClick }) {
-    // Usa a função helper importada para buscar a imagem correta.
-    // O `item` que vem da API agora contém a 'grade' necessária.
+export function ArremateCard({ item, onClick, isSelected  }) {
     const imagemSrc = getImagemVariacao(item, item.variante); 
     const tempoEmFila = formatarTempoDecorrido(item.data_op_mais_antiga);
     
-    const handleTooltipClick = (e) => {
-        e.stopPropagation();
-    };
+    // --- LÓGICA CORRIGIDA ---
+    const emTrabalho = !!item.tarefa_ativa_por;
+    const aindaTemSaldo = item.saldo_para_arrematar > 0;
+
+    // O card só fica 'desabilitado' se NÃO tiver mais saldo
+    const desabilitado = !aindaTemSaldo;
     
-    return (
-        <div className="oa-card-arremate-react" onClick={() => onClick(item)}>
-            <div className="card-borda-charme"></div>
-            <img src={imagemSrc} alt={item.produto_nome} className="card-imagem-produto" />
-            
-            <div className="card-info-principal">
+    // 2. Adicione a classe 'selecionado' se a prop for verdadeira
+    const cardClassName = `oa-card-arremate-react ${emTrabalho ? 'em-trabalho' : ''} ${desabilitado ? 'desabilitado' : ''} ${isSelected ? 'selecionado' : ''}`;
+
+    const handleClick = () => {
+        // Permite o clique se o card NÃO estiver desabilitado
+        if (!desabilitado) {
+            onClick(item);
+        }
+    };
+
+        const handleTooltipClick = (e) => {
+            e.stopPropagation();
+        };
+        
+        return (
+            <div className={cardClassName} onClick={handleClick} style={{ position: 'relative' }}>
+                    {isSelected && (
+                        <div className="card-selecao-icone">
+                            <i className="fas fa-check-circle"></i>
+                        </div>
+                    )}
+                
+                {/* O selo de "Em Trabalho" só aparece se a condição for verdadeira */}
+                {emTrabalho && (
+                    <div className="feedback-em-trabalho">
+                        <i className="fas fa-cog fa-spin"></i>
+                        Em andamento com {item.tarefa_ativa_por}
+                    </div>
+                )}
+
+                <div className="card-borda-charme"></div>
+                <img src={imagemSrc} alt={item.produto_nome} className="card-imagem-produto" />
+                
+                <div className="card-info-principal">
                 <h3>{item.produto_nome}</h3>
                 <p>{item.variante && item.variante !== '-' ? item.variante : 'Padrão'}</p>
                 
@@ -61,9 +90,9 @@ export function ArremateCard({ item, onClick }) {
             </div>
 
             <div className="card-bloco-pendente">
-                <span className="label">PENDENTE</span>
-                <span className="valor">{item.saldo_para_arrematar}</span>
+                    <span className="label">DISPONÍVEL</span>
+                    <span className="valor">{item.saldo_para_arrematar}</span>
+                </div>
             </div>
-        </div>
-    );
-}
+        );
+    }

@@ -3,10 +3,10 @@
 import React, { useState, useEffect } from 'react';
 
 // Reutilizaremos o componente de seleção de produto
-import TelaSelecaoProduto from './TelaSelecaoProduto.jsx';
+import TelaSelecaoProduto from './ArremateTelaSelecaoProduto.jsx';
 
 // Criaremos este componente em breve
-import FormularioPerda from './FormularioPerda.jsx';
+import FormularioPerda from './ArremateFormularioPerda.jsx';
 
 export default function PerdaModal({ isOpen, onClose }) {
     const [tela, setTela] = useState('selecao_produto'); // 'selecao_produto' ou 'formulario_perda'

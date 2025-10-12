@@ -129,14 +129,116 @@ async function abrirModalVinculacao(usuarioId) {
     });
 }
 
+// ADICIONE ESTA NOVA FUNÇÃO ANTES DA FUNÇÃO adicionarEventosAosCards
+
+async function abrirModalFerias(usuarioId, usuarioNome) {
+    const overlay = document.createElement('div');
+    overlay.className = 'uc-modal-overlay';
+
+    overlay.innerHTML = `
+        <div class="uc-modal-content">
+            <div class="uc-modal-header">
+                <h2>Gerenciar Férias</h2>
+                <button class="uc-modal-close-btn">&times;</button>
+            </div>
+            <div class="uc-modal-body">
+                <p>Gerenciando férias para: <strong>${usuarioNome}</strong></p>
+                
+                <h3><i class="fas fa-plus-circle"></i> Adicionar Novo Período</h3>
+                <form class="uc-form-ferias">
+                    <div class="uc-form-group">
+                        <label for="data-inicio-ferias">Data de Início</label>
+                        <input type="date" id="data-inicio-ferias" class="gs-input" required>
+                    </div>
+                    <div class="uc-form-group">
+                        <label for="data-fim-ferias">Data de Fim</label>
+                        <input type="date" id="data-fim-ferias" class="gs-input" required>
+                    </div>
+                    <button type="submit" class="gs-btn gs-btn-primario">
+                        <i class="fas fa-save"></i> Salvar Férias
+                    </button>
+                </form>
+
+                <h3><i class="fas fa-history"></i> Histórico de Férias</h3>
+                <ul class="uc-historico-ferias-lista">
+                    <li class="nenhum-registro">Carregando histórico...</li>
+                </ul>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const form = overlay.querySelector('.uc-form-ferias');
+    const listaHistoricoEl = overlay.querySelector('.uc-historico-ferias-lista');
+
+    const fecharModal = () => {
+        // Ao fechar, recarregamos a lista principal para atualizar a pílula de status
+        carregarUsuariosCadastrados();
+        document.body.removeChild(overlay);
+    };
+
+    overlay.querySelector('.uc-modal-close-btn').addEventListener('click', fecharModal);
+    overlay.addEventListener('click', e => { if (e.target === overlay) fecharModal(); });
+
+    async function carregarHistorico() {
+        try {
+            const historico = await fetchAPI(`/api/usuarios/${usuarioId}/ferias`);
+            listaHistoricoEl.innerHTML = '';
+            if (historico.length > 0) {
+                historico.forEach(item => {
+                    const dataInicio = new Date(item.data_inicio).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+                    const dataFim = new Date(item.data_fim).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+                    const li = document.createElement('li');
+                    li.innerHTML = `<span>De <strong>${dataInicio}</strong> até <strong>${dataFim}</strong></span>`;
+                    listaHistoricoEl.appendChild(li);
+                });
+            } else {
+                listaHistoricoEl.innerHTML = '<li class="nenhum-registro">Nenhum período de férias registrado.</li>';
+            }
+        } catch (error) {
+            listaHistoricoEl.innerHTML = `<li class="nenhum-registro" style="color: red;">Erro ao carregar histórico.</li>`;
+            mostrarMensagem(`Erro ao buscar férias: ${error.message}`);
+        }
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const dataInicio = form.querySelector('#data-inicio-ferias').value;
+        const dataFim = form.querySelector('#data-fim-ferias').value;
+
+        if (!dataInicio || !dataFim) {
+            mostrarMensagem('Por favor, preencha as datas de início e fim.', 'aviso');
+            return;
+        }
+
+        const payload = { data_inicio: dataInicio, data_fim: dataFim };
+        try {
+            await fetchAPI(`/api/usuarios/${usuarioId}/ferias`, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            mostrarMensagem('Férias registradas com sucesso!', 'sucesso');
+            form.reset(); // Limpa o formulário
+            await carregarHistorico(); // Atualiza a lista
+        } catch (error) {
+            mostrarMensagem(`Erro ao salvar férias: ${error.message}`, 'erro');
+        }
+    });
+
+    await carregarHistorico(); // Carrega o histórico assim que o modal abre
+}
+
 function adicionarEventosAosCards() {
     document.querySelectorAll('.usuario-card-custom').forEach(card => {
         const usuarioId = card.dataset.usuarioId;
+        const usuarioNome = card.querySelector('.card-titulo-nome').textContent; // Pegamos o nome para o modal
         const btnEditar = card.querySelector('[data-action="editar"]');
         const btnSalvar = card.querySelector('[data-action="salvar"]');
         const btnCancelar = card.querySelector('[data-action="cancelar"]');
         const btnExcluir = card.querySelector('[data-action="excluir"]');
         const btnVincular = card.querySelector('[data-action="vincular"]');
+        const btnFerias = card.querySelector('[data-action="ferias"]');
 
         if (btnEditar) {
             btnEditar.addEventListener('click', () => {
@@ -171,6 +273,10 @@ function adicionarEventosAosCards() {
             btnVincular.addEventListener('click', () => abrirModalVinculacao(usuarioId));
         }
 
+        if (btnFerias) {
+            btnFerias.addEventListener('click', () => abrirModalFerias(usuarioId, usuarioNome));
+        }
+
         if (btnCancelar) {
             btnCancelar.addEventListener('click', () => {
                 carregarUsuariosCadastrados();
@@ -179,8 +285,9 @@ function adicionarEventosAosCards() {
         
         if (btnSalvar) {
             btnSalvar.addEventListener('click', async () => {
-                const payload = { 
+                    const payload = { 
                     id: parseInt(usuarioId),
+                    nome_completo: card.querySelector('.uc-nome-completo-input').value.trim(),
                     nomeUsuario: card.querySelector('.uc-nome-usuario-input').value.trim(),
                     email: card.querySelector('.uc-email-input').value.trim(),
                     tipos: Array.from(card.querySelectorAll('.uc-tipos-container input[name="tipoUsuario"]:checked')).map(cb => cb.value),
@@ -248,134 +355,146 @@ function renderizarCardsUsuarios(usuariosParaRenderizar) {
     }
 
     usuariosParaRenderizar.forEach((usuario) => {
-    const card = document.createElement('div');
-    card.dataset.usuarioId = usuario.id;
+        const card = document.createElement('div');
+        card.dataset.usuarioId = usuario.id;
 
-    const tiposAtuais = Array.isArray(usuario.tipos) ? usuario.tipos : [];
-    const ehEmpregado = tiposAtuais.includes('costureira') || tiposAtuais.includes('tiktik');
-    const tiposLabels = tiposAtuais.map(tipo => TIPOS_USUARIO_DISPONIVEIS.find(t => t.id === tipo)?.label || tipo).join(', ') || 'Nenhum tipo';
-    const tiposCheckboxesHtml = TIPOS_USUARIO_DISPONIVEIS.map(tipoDisp => `<label><input type="checkbox" name="tipoUsuario" value="${tipoDisp.id}" ${tiposAtuais.includes(tipoDisp.id) ? 'checked' : ''} disabled> ${tipoDisp.label}</label>`).join('');
-    const vinculoTexto = usuario.id_contato_financeiro ? `<i class="fas fa-check-circle" style="color: #27ae60;"></i> Vinculado a: <strong>${usuario.nome_contato_financeiro || 'Contato não encontrado'}</strong>` : `<i class="fas fa-exclamation-triangle" style="color: #f39c12;"></i> Não vinculado`;
-    const idsConcessionariasDoUsuario = Array.isArray(usuario.concessionarias_vt) ? usuario.concessionarias_vt : [];
-    const concessionariasCheckboxesHtml = concessionariasVTCache.map(conc => `<label><input type="checkbox" class="uc-checkbox-edit uc-concessionaria-checkbox" value="${conc.id}" ${idsConcessionariasDoUsuario.includes(conc.id) ? 'checked' : ''} disabled> ${conc.nome}</label>`).join('');
+        const tiposAtuais = Array.isArray(usuario.tipos) ? usuario.tipos : [];
+        const ehEmpregado = tiposAtuais.includes('costureira') || tiposAtuais.includes('tiktik');
+        const tiposLabels = tiposAtuais.map(tipo => TIPOS_USUARIO_DISPONIVEIS.find(t => t.id === tipo)?.label || tipo).join(', ') || 'Nenhum tipo';
+        const tiposCheckboxesHtml = TIPOS_USUARIO_DISPONIVEIS.map(tipoDisp => `<label><input type="checkbox" name="tipoUsuario" value="${tipoDisp.id}" ${tiposAtuais.includes(tipoDisp.id) ? 'checked' : ''} disabled> ${tipoDisp.label}</label>`).join('');
+        const vinculoTexto = usuario.id_contato_financeiro ? `<i class="fas fa-check-circle" style="color: #27ae60;"></i> Vinculado a: <strong>${usuario.nome_contato_financeiro || 'Contato não encontrado'}</strong>` : `<i class="fas fa-exclamation-triangle" style="color: #f39c12;"></i> Não vinculado`;
+        const idsConcessionariasDoUsuario = Array.isArray(usuario.concessionarias_vt) ? usuario.concessionarias_vt : [];
+        const concessionariasCheckboxesHtml = concessionariasVTCache.map(conc => `<label><input type="checkbox" class="uc-checkbox-edit uc-concessionaria-checkbox" value="${conc.id}" ${idsConcessionariasDoUsuario.includes(conc.id) ? 'checked' : ''} disabled> ${conc.nome}</label>`).join('');
 
-    const statusEmpregado = usuario.data_demissao ? 'EX-EMPREGADO' : 'EMPREGADO';
-    const classeStatusCard = usuario.data_demissao ? 'status-ex-empregado' : '';
+        const statusEmpregado = usuario.data_demissao ? 'EX-EMPREGADO' : 'EMPREGADO';
+        const classeStatusCard = usuario.data_demissao ? 'status-ex-empregado' : '';
 
-    const dataAdmissaoFormatadaInput = formatarDataParaInput(usuario.data_admissao);
-    const dataDemissaoFormatadaInput = formatarDataParaInput(usuario.data_demissao);
-    const dataAdmissaoFormatadaDisplay = usuario.data_admissao ? new Date(usuario.data_admissao).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'Não definida';
-    const dataDemissaoFormatadaDisplay = usuario.data_demissao ? new Date(usuario.data_demissao).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'Não definida';
+        // --- LÓGICA DA PÍLULA DE FÉRIAS ---
+        const pilulaFeriasHtml = usuario.esta_de_ferias ? `<span class="status-selo ferias">DE FÉRIAS</span>` : '';
 
-    // A classe do card principal é definida aqui
-    card.className = `gs-card usuario-card-custom ${classeStatusCard}`;
-    
-    card.innerHTML = `
-        <div class="card-cabecalho">
-            <h3 class="card-titulo-nome">${usuario.nome}</h3>
-            <span class="status-selo ${statusEmpregado.toLowerCase()}">${statusEmpregado}</span>
-        </div>
-
-        <div class="card-secao">
-            <h4 class="card-secao-titulo">Dados de Acesso</h4>
-            <p>
-            <span>Usuário:</span>
-            <span class="view-mode">${usuario.nome_usuario}</span>
-            <span class="edit-mode" style="display: none;"><input type="text" class="gs-input uc-nome-usuario-input" value="${usuario.nome_usuario}"></span>
-            </p>
-            <p>
-            <span>Email:</span>
-            <span class="view-mode">${usuario.email}</span>
-            <span class="edit-mode" style="display: none;"><input type="email" class="gs-input uc-email-input" value="${usuario.email}"></span>
-            </p>
-        </div>
-
-        <div class="card-secao">
-            <h4 class="card-secao-titulo">Vínculo Empregatício</h4>
-            <p>
-            <span>Admissão:</span>
-            <span class="view-mode">${dataAdmissaoFormatadaDisplay}</span>
-            <span class="edit-mode" style="display: none;"><input type="date" class="gs-input uc-admissao-input" value="${dataAdmissaoFormatadaInput}"></span>
-            </p>
-            <p>
-            <span>Demissão:</span>
-            <span class="view-mode">${dataDemissaoFormatadaDisplay}</span>
-            <span class="edit-mode" style="display: none;"><input type="date" class="gs-input uc-demissao-input" value="${dataDemissaoFormatadaInput}"></span>
-            </p>
-            <div>
-            <p><span>Tipos:</span><span class="view-mode">${tiposLabels}</span></p>
-            <div class="edit-mode uc-tipos-container" style="display: none;">${tiposCheckboxesHtml}</div>
+        const dataAdmissaoFormatadaInput = formatarDataParaInput(usuario.data_admissao);
+        const dataDemissaoFormatadaInput = formatarDataParaInput(usuario.data_demissao);
+        const dataAdmissaoFormatadaDisplay = usuario.data_admissao ? new Date(usuario.data_admissao).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'Não definida';
+        const dataDemissaoFormatadaDisplay = usuario.data_demissao ? new Date(usuario.data_demissao).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'Não definida';
+        
+        card.className = `gs-card usuario-card-custom ${classeStatusCard}`;
+        
+        card.innerHTML = `
+            <div class="card-cabecalho">
+                <h3 class="card-titulo-nome">${usuario.nome}</h3>
+                <div>
+                    ${pilulaFeriasHtml}
+                    <span class="status-selo ${statusEmpregado.toLowerCase()}">${statusEmpregado}</span>
+                </div>
             </div>
-            ${ehEmpregado ? `
-            <p>
-                <span>Nível:</span>
-                <span class="view-mode">Nível ${usuario.nivel || 'N/A'}</span>
-                <span class="edit-mode" style="display: none;">
-                <select class="gs-input uc-nivel-select">
-                    <option value="" ${!usuario.nivel ? 'selected' : ''}>Sem Nível</option>
-                    <option value="1" ${usuario.nivel === 1 ? 'selected' : ''}>Nível 1</option>
-                    <option value="2" ${usuario.nivel === 2 ? 'selected' : ''}>Nível 2</option>
-                    <option value="3" ${usuario.nivel === 3 ? 'selected' : ''}>Nível 3</option>
-                    <option value="4" ${usuario.nivel === 4 ? 'selected' : ''}>Nível 4</option>
-                </select>
-                </span>
-            </p>` : ''
-            }
-        </div>
 
-        <div class="card-secao" style="display: ${ehEmpregado ? 'block' : 'none'};">
-            <h4 class="card-secao-titulo">Jornada de Trabalho</h4>
-            <div class="view-mode jornada-display">
-                <span><strong>Entrada 1:</strong> ${formatarHora(usuario.horario_entrada_1) || '--:--'}</span>
-                <span><strong>Saída 1:</strong> ${formatarHora(usuario.horario_saida_1) || '--:--'}</span>
-                <span><strong>Entrada 2:</strong> ${formatarHora(usuario.horario_entrada_2) || '--:--'}</span>
-                <span><strong>Saída 2:</strong> ${formatarHora(usuario.horario_saida_2) || '--:--'}</span>
+            <div class="card-secao">
+                <h4 class="card-secao-titulo">Dados de Acesso e Pessoais</h4>
+                <p>
+                    <span>Nome Completo:</span>
+                    <span class="view-mode">${usuario.nome_completo || 'Não informado'}</span>
+                    <span class="edit-mode" style="display: none;"><input type="text" class="gs-input uc-nome-completo-input" value="${usuario.nome_completo || ''}"></span>
+                </p>
+                <p>
+                    <span>Usuário:</span>
+                    <span class="view-mode">${usuario.nome_usuario}</span>
+                    <span class="edit-mode" style="display: none;"><input type="text" class="gs-input uc-nome-usuario-input" value="${usuario.nome_usuario}"></span>
+                </p>
+                <p>
+                    <span>Email:</span>
+                    <span class="view-mode">${usuario.email}</span>
+                    <span class="edit-mode" style="display: none;"><input type="email" class="gs-input uc-email-input" value="${usuario.email}"></span>
+                </p>
+            </div>
+
+            <div class="card-secao">
+                <h4 class="card-secao-titulo">Vínculo Empregatício</h4>
+                <p>
+                    <span>Admissão:</span>
+                    <span class="view-mode">${dataAdmissaoFormatadaDisplay}</span>
+                    <span class="edit-mode" style="display: none;"><input type="date" class="gs-input uc-admissao-input" value="${dataAdmissaoFormatadaInput}"></span>
+                </p>
+                <p>
+                    <span>Demissão:</span>
+                    <span class="view-mode">${dataDemissaoFormatadaDisplay}</span>
+                    <span class="edit-mode" style="display: none;"><input type="date" class="gs-input uc-demissao-input" value="${dataDemissaoFormatadaInput}"></span>
+                </p>
+                <div>
+                    <p><span>Tipos:</span><span class="view-mode">${tiposLabels}</span></p>
+                    <div class="edit-mode uc-tipos-container" style="display: none;">${tiposCheckboxesHtml}</div>
+                </div>
+                ${ehEmpregado ? `
+                <p>
+                    <span>Nível:</span>
+                    <span class="view-mode">Nível ${usuario.nivel || 'N/A'}</span>
+                    <span class="edit-mode" style="display: none;">
+                    <select class="gs-input uc-nivel-select">
+                        <option value="" ${!usuario.nivel ? 'selected' : ''}>Sem Nível</option>
+                        <option value="1" ${usuario.nivel === 1 ? 'selected' : ''}>Nível 1</option>
+                        <option value="2" ${usuario.nivel === 2 ? 'selected' : ''}>Nível 2</option>
+                        <option value="3" ${usuario.nivel === 3 ? 'selected' : ''}>Nível 3</option>
+                        <option value="4" ${usuario.nivel === 4 ? 'selected' : ''}>Nível 4</option>
+                    </select>
+                    </span>
+                </p>` : ''
+                }
+            </div>
+
+            <div class="card-secao" style="display: ${ehEmpregado ? 'block' : 'none'};">
+                <h4 class="card-secao-titulo">Jornada de Trabalho</h4>
+                <div class="view-mode jornada-display">
+                    <span><strong>Entrada 1:</strong> ${formatarHora(usuario.horario_entrada_1) || '--:--'}</span>
+                    <span><strong>Saída 1:</strong> ${formatarHora(usuario.horario_saida_1) || '--:--'}</span>
+                    <span><strong>Entrada 2:</strong> ${formatarHora(usuario.horario_entrada_2) || '--:--'}</span>
+                    <span><strong>Saída 2:</strong> ${formatarHora(usuario.horario_saida_2) || '--:--'}</span>
+                    ${usuario.horario_entrada_3 ? `
+                    <span><strong>Entrada 3:</strong> ${formatarHora(usuario.horario_entrada_3)}</span>
+                    <span><strong>Saída 3:</strong> ${formatarHora(usuario.horario_saida_3)}</span>
+                    ` : ''}
+                </div>
+                <div class="edit-mode jornada-grid" style="display: none;">
+                    <div><label>Entrada 1</label><input type="time" class="gs-input uc-entrada1-input" value="${formatarHora(usuario.horario_entrada_1) || '07:30'}"></div>
+                    <div><label>Saída 1 (Almoço)</label><input type="time" class="gs-input uc-saida1-input" value="${formatarHora(usuario.horario_saida_1) || '11:30'}"></div>
+                    <div><label>Entrada 2</label><input type="time" class="gs-input uc-entrada2-input" value="${formatarHora(usuario.horario_entrada_2) || '12:30'}"></div>
+                    <div><label>Saída 2 (Lanche)</label><input type="time" class="gs-input uc-saida2-input" value="${formatarHora(usuario.horario_saida_2) || '15:30'}"></div>
+                    <div><label>Entrada 3</label><input type="time" class="gs-input uc-entrada3-input" value="${formatarHora(usuario.horario_entrada_3) || ''}"></div>
+                    <div><label>Saída 3 (Fim)</label><input type="time" class="gs-input uc-saida3-input" value="${formatarHora(usuario.horario_saida_3) || ''}"></div>
+                </div>
+            </div>
+
+            <div class="card-secao" style="display: ${ehEmpregado ? 'block' : 'none'};">
+                <h4 class="card-secao-titulo">Dados Financeiros</h4>
+                <p>
+                    <span>Salário Fixo:</span>
+                    <span class="view-mode">${(usuario.salario_fixo || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</span>
+                    <span class="edit-mode" style="display: none;"><input type="number" class="gs-input uc-salario-input" value="${usuario.salario_fixo || '0.00'}" step="0.01"></span>
+                </p>
+                <p>
+                    <span>Passagem/Dia:</span>
+                    <span class="view-mode">${(usuario.valor_passagem_diaria || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</span>
+                    <span class="edit-mode" style="display: none;"><input type="number" class="gs-input uc-passagem-input" value="${usuario.valor_passagem_diaria || '0.00'}" step="0.01"></span>
+                </p>
+                <p>
+                    <span>Vínculo Financeiro:</span>
+                    <span class="view-mode">${vinculoTexto}</span>
+                    <span class="edit-mode" style="display: none;"><button class="gs-btn gs-btn-secundario uc-btn-vincular" data-action="vincular">Vincular Contato</button></span>
+                    <input type="hidden" class="uc-id-contato-input" value="${usuario.id_contato_financeiro || ''}">
+                </p>
+                <div class="edit-mode uc-elegivel-container" style="display:none;"><label><input type="checkbox" class="uc-checkbox-edit uc-elegivel-checkbox" ${usuario.elegivel_pagamento ? 'checked' : ''}> Elegível para pagamentos</label></div>
+                <div class="edit-mode uc-concessionarias-container" style="display: none;"><label class="uc-dado-label">Concessionárias de VT:</label><div class="uc-checkbox-group">${concessionariasCheckboxesHtml}</div></div>
+            </div>
+
+            <div class="uc-card-botoes-container">
+                ${ehEmpregado && permissoesDoUsuarioLogado.includes('adicionar-ferias') ? `
+                <button class="gs-btn gs-btn-secundario" data-action="ferias"><i class="fas fa-plane-departure"></i> Férias</button>` : ''}
                 
-                ${/* --- LÓGICA DE EXIBIÇÃO CONDICIONAL --- */''}
-                ${usuario.horario_entrada_3 ? `
-                <span><strong>Entrada 3:</strong> ${formatarHora(usuario.horario_entrada_3)}</span>
-                <span><strong>Saída 3:</strong> ${formatarHora(usuario.horario_saida_3)}</span>
-                ` : ''}
+                ${permissoesDoUsuarioLogado.includes('editar-usuarios') ? `
+                <button class="gs-btn gs-btn-primario" data-action="editar"><i class="fas fa-edit"></i> Editar</button>
+                <button class="gs-btn gs-btn-sucesso" data-action="salvar" style="display: none;"><i class="fas fa-save"></i> Salvar</button>
+                <button class="gs-btn gs-btn-secundario" data-action="cancelar" style="display: none;"><i class="fas fa-times"></i> Cancelar</button>` : ''}
+                
+                ${permissoesDoUsuarioLogado.includes('excluir-usuarios') ? `<button class="gs-btn gs-btn-perigo" data-action="excluir"><i class="fas fa-trash"></i> Excluir</button>` : ''}
             </div>
-            <div class="edit-mode jornada-grid" style="display: none;">
-                <div><label>Entrada 1</label><input type="time" class="gs-input uc-entrada1-input" value="${formatarHora(usuario.horario_entrada_1) || '07:30'}"></div>
-                <div><label>Saída 1 (Almoço)</label><input type="time" class="gs-input uc-saida1-input" value="${formatarHora(usuario.horario_saida_1) || '11:30'}"></div>
-                <div><label>Entrada 2</label><input type="time" class="gs-input uc-entrada2-input" value="${formatarHora(usuario.horario_entrada_2) || '12:30'}"></div>
-                <div><label>Saída 2 (Lanche)</label><input type="time" class="gs-input uc-saida2-input" value="${formatarHora(usuario.horario_saida_2) || '15:30'}"></div>
-                <div><label>Entrada 3</label><input type="time" class="gs-input uc-entrada3-input" value="${formatarHora(usuario.horario_entrada_3) || ''}"></div>
-                <div><label>Saída 3 (Fim)</label><input type="time" class="gs-input uc-saida3-input" value="${formatarHora(usuario.horario_saida_3) || ''}"></div>
-            </div>
-        </div>
-
-        <div class="card-secao" style="display: ${ehEmpregado ? 'block' : 'none'};">
-            <h4 class="card-secao-titulo">Dados Financeiros</h4>
-            <p>
-            <span>Salário Fixo:</span>
-            <span class="view-mode">${(usuario.salario_fixo || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</span>
-            <span class="edit-mode" style="display: none;"><input type="number" class="gs-input uc-salario-input" value="${usuario.salario_fixo || '0.00'}" step="0.01"></span>
-            </p>
-            <p>
-            <span>Passagem/Dia:</span>
-            <span class="view-mode">${(usuario.valor_passagem_diaria || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</span>
-            <span class="edit-mode" style="display: none;"><input type="number" class="gs-input uc-passagem-input" value="${usuario.valor_passagem_diaria || '0.00'}" step="0.01"></span>
-            </p>
-            <p>
-            <span>Vínculo Financeiro:</span>
-            <span class="view-mode">${vinculoTexto}</span>
-            <span class="edit-mode" style="display: none;"><button class="gs-btn gs-btn-secundario uc-btn-vincular" data-action="vincular">Vincular Contato</button></span>
-            <input type="hidden" class="uc-id-contato-input" value="${usuario.id_contato_financeiro || ''}">
-            </p>
-            <div class="edit-mode uc-elegivel-container" style="display:none;"><label><input type="checkbox" class="uc-checkbox-edit uc-elegivel-checkbox" ${usuario.elegivel_pagamento ? 'checked' : ''}> Elegível para pagamentos</label></div>
-            <div class="edit-mode uc-concessionarias-container" style="display: none;"><label class="uc-dado-label">Concessionárias de VT:</label><div class="uc-checkbox-group">${concessionariasCheckboxesHtml}</div></div>
-        </div>
-
-        <div class="uc-card-botoes-container">
-            ${permissoesDoUsuarioLogado.includes('editar-usuarios') ? `
-            <button class="gs-btn gs-btn-primario" data-action="editar"><i class="fas fa-edit"></i> Editar</button>
-            <button class="gs-btn gs-btn-sucesso" data-action="salvar" style="display: none;"><i class="fas fa-save"></i> Salvar</button>
-            <button class="gs-btn gs-btn-secundario" data-action="cancelar" style="display: none;"><i class="fas fa-times"></i> Cancelar</button>` : ''}
-            ${permissoesDoUsuarioLogado.includes('excluir-usuarios') ? `<button class="gs-btn gs-btn-perigo" data-action="excluir"><i class="fas fa-trash"></i> Excluir</button>` : ''}
-        </div>
         `;
         listaEl.appendChild(card);
     });

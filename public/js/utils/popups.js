@@ -229,3 +229,105 @@ export function mostrarPromptTexto(mensagem, opcoes = {}) {
         textarea.focus();
     });
 }
+
+/**
+ * Exibe um popup customizado para finalizar tarefas em lote, com inputs por produto.
+ * @param {string} mensagem - A mensagem principal a ser exibida.
+ * @param {Array<object>} sessoes - O array de sessões que compõem o lote.
+ * @returns {Promise<object|null>} - Um objeto com o total e os detalhes por sessão, ou null se cancelado.
+ */
+export function mostrarPromptFinalizarLote(mensagem, sessoes) {
+    removerPopupExistente();
+
+    return new Promise((resolve) => {
+        const container = document.createElement('div');
+        container.className = 'popup-container';
+
+        // Cria a lista de inputs para cada produto/sessão no lote
+        const inputsHTML = sessoes.map(sessao => `
+            <div class="popup-lote-item">
+                <label for="lote-input-${sessao.id_sessao}">
+                    ${sessao.produto_nome} (${sessao.variante || 'Padrão'})
+                    <small>Entregue: ${sessao.quantidade_entregue}</small>
+                </label>
+                <input 
+                    type="number" 
+                    id="lote-input-${sessao.id_sessao}" 
+                    class="popup-input-numerico lote-input"
+                    data-sessao-id="${sessao.id_sessao}"
+                    data-max-qtd="${sessao.quantidade_entregue}"
+                    value="${sessao.quantidade_entregue}" 
+                    min="0" 
+                    max="${sessao.quantidade_entregue}"
+                >
+            </div>
+        `).join('');
+
+        container.innerHTML = `
+            <div class="popup-overlay"></div>
+            <div class="popup-box popup-info" style="max-width: 500px;">
+                <p>${mensagem}</p>
+                <div class="popup-lote-container">${inputsHTML}</div>
+                <div class="popup-lote-total">
+                    <strong>Total Finalizado:</strong>
+                    <span id="popupLoteTotal">0</span>
+                </div>
+                <div class="popup-botoes">
+                    <button class="popup-btn popup-btn-cancelar">Cancelar</button>
+                    <button id="popupBtnConfirmarLote" class="popup-btn popup-btn-confirmar">Confirmar</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(container);
+
+        const inputs = container.querySelectorAll('.lote-input');
+        const totalEl = container.querySelector('#popupLoteTotal');
+        const btnConfirmar = container.querySelector('#popupBtnConfirmarLote');
+        const btnCancelar = container.querySelector('.popup-btn-cancelar');
+        const overlay = container.querySelector('.popup-overlay');
+
+        function calcularTotal() {
+            let total = 0;
+            let isValido = true;
+            inputs.forEach(input => {
+                const valor = parseInt(input.value) || 0;
+                const max = parseInt(input.dataset.maxQtd);
+                if (valor < 0 || valor > max) {
+                    input.style.borderColor = 'red';
+                    isValido = false;
+                } else {
+                    input.style.borderColor = '';
+                }
+                total += valor;
+            });
+            totalEl.textContent = total;
+            btnConfirmar.disabled = !isValido;
+        }
+
+        inputs.forEach(input => input.addEventListener('input', calcularTotal));
+        
+        const fecharPopup = (valor) => {
+            removerPopupExistente();
+            resolve(valor);
+        };
+        
+        btnConfirmar.onclick = () => {
+            let totalFinalizado = 0;
+            const detalhes = [];
+            inputs.forEach(input => {
+                const quantidade = parseInt(input.value) || 0;
+                totalFinalizado += quantidade;
+                detalhes.push({
+                    id_sessao: parseInt(input.dataset.sessaoId),
+                    quantidade_finalizada: quantidade,
+                });
+            });
+            fecharPopup({ total: totalFinalizado, detalhes });
+        };
+
+        btnCancelar.onclick = () => fecharPopup(null);
+        overlay.onclick = () => fecharPopup(null);
+
+        calcularTotal(); // Calcula o total inicial
+    });
+}

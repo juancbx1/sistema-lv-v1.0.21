@@ -866,7 +866,7 @@
     background-color: var(--gs-borda);
     border-radius: 50px;
     height: 10px; /* Um pouco mais grossa */
-    margin-top: 8px;
+    margin: 8px 0;
     overflow: hidden;
     cursor: help; /* Indica que há uma dica (tooltip) */
 }
@@ -926,7 +926,6 @@
 
 .btn-acao.iniciar { 
     background-color: var(--gs-texto-secundario); 
-    width: 100%;
 }
 .btn-acao.iniciar:hover { 
     background-color: var(--gs-sucesso-hover); 
@@ -1952,25 +1951,6 @@
     border-color: var(--gs-primaria);
 }
 
-/* --- Botão Fechar (Estilo Base) --- */
-.oa-modal-fechar-btn {
-    background-color: var(--gs-perigo);
-    color: var(--gs-branco);
-    border: none;
-    border-radius: 50%;
-    width: 32px;
-    height: 32px;
-    font-size: 1rem;
-    font-weight: bold;
-    line-height: 32px;
-    text-align: center;
-    cursor: pointer;
-    transition: transform 0.2s ease, background-color 0.2s ease;
-}
-.oa-modal-fechar-btn:hover {
-    background-color: #c0392b;
-    transform: scale(1.1);
-}
 
 /* --- Título do Modal (Estilo Base) --- */
 .oa-modal-titulo {
@@ -2255,6 +2235,218 @@
 }
 .tooltip-ritmo strong {
     color: #bdc3c7; /* Cinza claro para os labels */
+}
+
+ /* ==========================================================================
+       # FEEDBACK DE TAREFA EM ANDAMENTO
+       ========================================================================== */
+    
+    /* Estilo para quando HÁ uma tarefa ativa (apenas visual, não bloqueia) */
+    .oa-card-arremate-react.em-trabalho {
+        opacity: 0.7; /* Um pouco menos opaco para indicar que ainda pode ser clicável */
+        padding-top: 48px; 
+    }
+
+
+    /* Estilo para quando o card está REALMENTE desabilitado (sem saldo) */
+    .oa-card-arremate-react.desabilitado {
+        cursor: not-allowed;
+        box-shadow: none;
+        transform: none;
+    }
+
+    .oa-card-arremate-react.desabilitado:hover {
+        box-shadow: none;
+        transform: none;
+    }
+
+    /* O selo continua igual */
+    .feedback-em-trabalho {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        background-color: var(--gs-aviso);
+        color: #5d470d;
+        padding: 5px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        z-index: 2;
+    }
+    
+    .card-bloco-pendente .label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: var(--gs-texto-secundario); /* Mudança para uma cor mais neutra */
+        text-transform: uppercase;
+    }
+
+    .oa-card-arremate-react.selecionado {
+        background-color: #eaf5ff; /* Um azul MUITO claro, quase branco */
+        transform: translateY(-2px); /* Mantém o leve efeito de elevação */
+    }
+
+    /*  Ícone de 'check' que aparecerá no card selecionado */
+    .card-selecao-icone {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        font-size: 1.5rem;
+        color: var(--gs-primaria);
+        background-color: var(--gs-branco);
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+        z-index: 3; /* Garante que fique acima de outros elementos */
+        animation: gs-fadeIn 0.2s ease-out; /* Efeito de fade-in suave */
+    }
+
+ /* ==========================================================================
+   # ESTILOS PARA MODAL DE ATRIBUIÇÃO EM LOTE
+   ========================================================================== */
+
+/* Ajuste no padding do corpo do modal para dar respiro */
+.oa-modal .oa-modal-body.body-lote {
+    padding: 15px;
+}
+
+/* Ajuste no rodapé para descolar o botão */
+.oa-modal .oa-modal-footer.footer-lote {
+    padding: 15px;
+    background-color: var(--gs-fundo-input);
+    border-top: 1px solid var(--gs-borda);
+}
+.oa-modal .oa-modal-footer.footer-lote .gs-btn {
+    width: 100%; /* O botão continua ocupando a largura total do footer */
+}
+
+/* --- Novo Componente de Busca de Tiktik --- */
+.tiktik-search-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.tiktik-search-container .oa-input {
+    font-size: 1rem;
+}
+
+.tiktik-list {
+    max-height: 250px;
+    overflow-y: auto;
+    border: 1px solid var(--gs-borda);
+    border-radius: 8px;
+    padding: 5px;
+}
+
+.tiktik-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.tiktik-card:hover {
+    background-color: var(--gs-fundo-input);
+}
+
+.tiktik-card.selecionado {
+    background-color: #eaf5ff; /* Mesmo azul claro da seleção de produtos */
+    font-weight: 600;
+}
+
+.tiktik-card .avatar-tiktik {
+    width: 40px;
+    height: 40px;
+}   
+
+/* --- Estilos para o botão Limpar no Input de Busca --- */
+
+/* Cria um container relativo para posicionar o botão 'X' dentro dele */
+.input-wrapper-com-limpar {
+    position: relative;
+    width: 100%;
+}
+
+.btn-limpar-input {
+    position: absolute;
+    right: 10px; /* Distância da borda direita */
+    top: 50%;
+    transform: translateY(-50%); /* Alinha verticalmente */
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #999;
+    font-size: 1.3rem;
+    padding: 0 5px;
+    line-height: 1;
+}
+
+.btn-limpar-input:hover {
+    color: #333;
+}
+
+/* --- Novas Cores da Barra de Progresso --- */
+.barra-progresso.super-rapido { background-color: #3498db; } /* Azul */
+.barra-progresso.rapido { background-color: #1abc9c; } /* Verde-água */
+/* A cor padrão (sem classe) já é o verde, que será  "No Ritmo" */
+.barra-progresso.atencao { background-color: var(--gs-aviso); } /* Amarelo */
+.barra-progresso.lento { background-color: var(--gs-perigo); } /* Vermelho */
+
+
+/* --- Estilos para o Tooltip de Detalhes do Lote --- */
+.lote-detalhes-trigger {
+    cursor: pointer;
+    text-decoration: underline dotted;
+}
+
+.oa-tooltip-lote {
+    position: fixed; /* Usamos fixed para flutuar sobre toda a página */
+    background-color: var(--gs-secundaria);
+    color: var(--gs-branco);
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: var(--gs-sombra-hover);
+    z-index: 1010; /* Bem na frente */
+    max-width: 280px;
+    font-size: 0.9rem;
+    display: none; /* Escondido por padrão */
+    animation: gs-fadeIn 0.2s;
+}
+
+.oa-tooltip-lote h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    font-size: 1rem;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+
+.oa-tooltip-lote ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.oa-tooltip-lote li {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+}
+.oa-tooltip-lote li span:first-child {
+    padding-right: 15px; /* Espaço para o nome do produto */
 }
 
 /*------------------------------------*\
@@ -2860,6 +3052,10 @@
     .oa-painel-atividades {
         padding: 10px;
 
+    }
+
+    .btn-acao {
+        font-size: 0.8rem;
     }
 
 }

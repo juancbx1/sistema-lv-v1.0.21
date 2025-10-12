@@ -5,34 +5,47 @@ import ReactDOM from 'react-dom/client';
 
 // Importando TODOS os componentes de seus arquivos separados
 import HeaderPagina from './components/HeaderPagina.jsx';
-import AtribuicaoModal from './components/AtribuicaoModal.jsx';
+import AtribuicaoModal from './components/ArremateAtribuicaoModal.jsx';
 
-import PerdaModal from './components/PerdaModal.jsx';
+import PerdaModal from './components/ArrematePerdaModal.jsx';
+
+import ArremateModalTempos from './components/ArremateModalTempos.jsx';
 
 // O componente raiz da aplicação React nesta página.
 function App() {
     const [modalAberto, setModalAberto] = useState(false);
     const [tiktikSelecionado, setTiktikSelecionado] = useState(null);
 
-    // <<< 1. ADICIONE O NOVO ESTADO PARA O MODAL DE PERDA >>>
+
+    // <<< ESTADO PARA O MODAL DE PERDA >>>
+    const [isBatchMode, setIsBatchMode] = useState(false);
     const [perdaModalAberto, setPerdaModalAberto] = useState(false);
+
+    const [modalTemposAberto, setModalTemposAberto] = useState(false)
     
     // Efeito para criar a "ponte" de comunicação do JS puro para o React
     useEffect(() => {
-        // Expõe a função para que o admin-arremates.js possa chamá-la
-        window.abrirModalAtribuicao = (tiktik) => {
+        // <<< ATUALIZE A FUNÇÃO GLOBAL >>>
+        window.abrirModalAtribuicao = (tiktik, batchMode) => {
             setTiktikSelecionado(tiktik);
+            setIsBatchMode(batchMode); // Define se é lote ou não
             setModalAberto(true);
         };
-        // Limpa a função quando o componente é desmontado
-        return () => { 
-            delete window.abrirModalAtribuicao; 
-        };
-    }, []); // Array vazio garante que rode apenas uma vez
+        return () => { delete window.abrirModalAtribuicao; };
+    }, []);
 
     return (
         <>
             <HeaderPagina titulo="Arremates">
+                <button 
+                    className="gs-btn gs-btn-secundario gs-btn-com-icone"
+                    onClick={() => setModalTemposAberto(true)}
+                    title="Configurar Tempos Padrão"
+                >
+                    <i className="fas fa-clock"></i>
+                    <span>Tempos Padrão</span>
+                </button>
+
                 <button 
                     id="btnAbrirModalPerda" 
                     className="gs-btn gs-btn-perigo gs-btn-com-icone"
@@ -61,12 +74,19 @@ function App() {
 
             <AtribuicaoModal 
                 isOpen={modalAberto} 
-                tiktik={tiktikSelecionado} 
+                tiktik={tiktikSelecionado}
+                isBatchMode={isBatchMode} 
                 onClose={() => setModalAberto(false)} 
             />
+            
              <PerdaModal
                 isOpen={perdaModalAberto}
                 onClose={() => setPerdaModalAberto(false)}
+            />
+
+            <ArremateModalTempos 
+                isOpen={modalTemposAberto}
+                onClose={() => setModalTemposAberto(false)}
             />
         </>
     );

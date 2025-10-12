@@ -1,6 +1,6 @@
 // public/js/admin-ordens-de-arremates.js
 import { verificarAutenticacao } from '/js/utils/auth.js'; 
-import { mostrarMensagem, mostrarConfirmacao, mostrarPromptNumerico } from '/js/utils/popups.js';
+import { mostrarMensagem, mostrarConfirmacao, mostrarPromptNumerico, mostrarPromptFinalizarLote  } from '/js/utils/popups.js';
 import { obterProdutos as obterProdutosDoStorage } from '/js/utils/storage.js';
 import { renderizarPaginacao as renderizarPaginacaoJS } from './utils/Paginacao.js';
 window.renderizarPaginacao = renderizarPaginacaoJS;
@@ -95,81 +95,69 @@ function obterImagemProduto(produtoInfo, varianteNome) {
 
 function atualizarCronometrosVisuais() {
     const cards = document.querySelectorAll('.oa-card-status-tiktik.status-produzindo');
-    
     if (cards.length === 0 && cronometroIntervalId) {
         pararCronometrosVisuais();
         return;
     }
 
     cards.forEach(card => {
-        // ... (cálculos de tempo e cronômetro continuam os mesmos)
         const inicioTimestamp = parseFloat(card.dataset.inicioTimestamp);
-        const tempoPausadoInicial = parseFloat(card.dataset.pausadoSegundos);
-        const mediaTempoPeca = parseFloat(card.dataset.mediaTempoPeca);
-        const qtdEntregue = parseInt(card.dataset.qtdEntregue, 10);
+        if (isNaN(inicioTimestamp)) return;
 
-        if (isNaN(inicioTimestamp) || isNaN(tempoPausadoInicial)) return;
-
+        // --- CÁLCULO DE TEMPO CORRIGIDO ---
         const agoraTimestamp = Date.now();
-        const tempoLiquidoSegundos = Math.max(0, (agoraTimestamp - inicioTimestamp) / 1000 - tempoPausadoInicial);
-        const tempoFormatado = new Date(tempoLiquidoSegundos * 1000).toISOString().substr(11, 8);
-        
+        // Garante que a diferença nunca seja negativa
+        const tempoDecorridoSegundos = Math.max(0, (agoraTimestamp - inicioTimestamp) / 1000);
+
+        const tempoFormatado = new Date(tempoDecorridoSegundos * 1000).toISOString().substr(11, 8);
         const cronometroEl = card.querySelector('.cronometro-tarefa');
-        if (cronometroEl) {
-            cronometroEl.innerHTML = `<i class="fas fa-clock"></i> ${tempoFormatado}`;
+        if (cronometroEl) cronometroEl.innerHTML = `<i class="fas fa-clock"></i> ${tempoFormatado}`;
+
+        // Pega o TPE do dataset
+        const tpeTarefa = parseFloat(card.dataset.tpeTarefa); 
+        
+        // Se não há TPE, exibe o feedback e para aqui
+        const indicadorRitmoEl = card.querySelector('.indicador-ritmo-tarefa');
+        if (isNaN(tpeTarefa) || tpeTarefa <= 0) {
+            if (indicadorRitmoEl) indicadorRitmoEl.textContent = 'Sem TPE';
+            return; 
         }
 
-        // --- LÓGICA FINAL DA BARRA E RITMO ---
+        // --- LÓGICA DE PERFORMANCE (AGORA SÓ RODA COM DADOS VÁLIDOS) ---
+        const qtdEntregue = parseInt(card.dataset.qtdEntregue, 10);
+        if (isNaN(qtdEntregue) || qtdEntregue <= 0) return; // Segurança extra
+
+        const tempoTotalEstimado = tpeTarefa * qtdEntregue;
+        
+        // Progresso baseado em quanto do tempo estimado já passou
+        const progressoPercentual = Math.min(100, (tempoDecorridoSegundos / tempoTotalEstimado) * 100);
+
         const barraEl = card.querySelector('.barra-progresso');
-        const containerBarraEl = card.querySelector('.barra-progresso-container');
-        const indicadorRitmoEl = card.querySelector('.indicador-ritmo-tarefa');
 
-        if (barraEl && indicadorRitmoEl && !isNaN(mediaTempoPeca) && mediaTempoPeca > 0 && !isNaN(qtdEntregue) && qtdEntregue > 0) {
-            
-            // O tempo total que a tarefa DEVERIA levar, com base na média
-            const tempoTotalEstimado = mediaTempoPeca * qtdEntregue;
-
-            // A porcentagem de progresso é baseada no TEMPO, não nas peças estimadas
-            const progressoPercentual = Math.min(100, (tempoLiquidoSegundos / tempoTotalEstimado) * 100);
-            
+        if (barraEl && indicadorRitmoEl) {
             barraEl.style.width = `${progressoPercentual}%`;
-            
-            if (containerBarraEl) {
-                const tempoRestanteEstimado = Math.max(0, tempoTotalEstimado - tempoLiquidoSegundos);
-                containerBarraEl.title = `Tempo estimado restante: ${new Date(tempoRestanteEstimado * 1000).toISOString().substr(11, 8)}`;
-                containerBarraEl.dataset.tooltipMobile = `Tempo estimado restante: ${new Date(tempoRestanteEstimado * 1000).toISOString().substr(11, 8)}`;
-            }
 
-            let ritmoTexto = '';
-            let ritmoClasse = 'ritmo-normal';
+            let ritmoTexto = '...';
+            let ritmoIcone = '👍';
             let corBarraClasse = '';
 
-            // A lógica de cor e emoji agora é baseada diretamente no progresso do tempo
-            if (progressoPercentual > 90) {
-                ritmoTexto = '🐢 Lento';
-                ritmoClasse = 'ritmo-lento';
-                corBarraClasse = 'lento'; // Vermelho
-            } else if (progressoPercentual > 75) {
-                ritmoTexto = '⚠️ Ficar de Olho';
-                ritmoClasse = 'ritmo-normal'; // Cor do texto normal
-                corBarraClasse = 'atencao'; // Amarelo
+            if (progressoPercentual >= 120) {
+                ritmoTexto = 'Lento'; ritmoIcone = '🐢'; corBarraClasse = 'lento';
+            } else if (progressoPercentual >= 100) {
+                ritmoTexto = 'Atenção'; ritmoIcone = '⚠️'; corBarraClasse = 'atencao';
+            } else if (progressoPercentual >= 60) {
+                ritmoTexto = 'No Ritmo'; ritmoIcone = '👍'; corBarraClasse = '';
+            } else if (progressoPercentual >= 30) {
+                ritmoTexto = 'Rápido'; ritmoIcone = '✅'; corBarraClasse = 'rapido';
             } else {
-                ritmoTexto = '✅ Em andamento';
-                ritmoClasse = 'ritmo-normal';
-                corBarraClasse = ''; // Verde padrão
+                ritmoTexto = 'Super Rápido'; ritmoIcone = '🚀'; corBarraClasse = 'super-rapido';
             }
-            
-            indicadorRitmoEl.textContent = ritmoTexto;
-            indicadorRitmoEl.className = `indicador-ritmo-tarefa ${ritmoClasse}`;
 
-            barraEl.classList.remove('atencao', 'lento');
+            indicadorRitmoEl.innerHTML = `${ritmoIcone} ${ritmoTexto}`;
+            barraEl.classList.remove('lento', 'atencao', 'rapido', 'super-rapido');
             if (corBarraClasse) {
                 barraEl.classList.add(corBarraClasse);
             }
-
-        } else if (indicadorRitmoEl) {
-            indicadorRitmoEl.textContent = '';
-            indicadorRitmoEl.className = 'indicador-ritmo-tarefa';
         }
     });
 }
@@ -215,29 +203,24 @@ async function renderizarPainelStatus() {
             return;
         }
 
-        tiktiks.forEach(tiktik => {
+       tiktiks.forEach(tiktik => {
+
             const card = document.createElement('div');
             card.dataset.tiktikId = tiktik.id;
             
             const { statusBruto, statusFinal, classeStatus } = determinarStatusFinal(tiktik);
 
-            // Usa o status BRUTO para a lógica interna
+            // AQUI ESTÁ A CORREÇÃO PRINCIPAL
             if (statusBruto === STATUS.PRODUZINDO) {
                 const dataInicio = new Date(tiktik.data_inicio);
-                const agora = new Date();
                 
-                // Calcula o tempo total em segundos desde o início
-                const tempoTotalBrutoSegundos = (agora - dataInicio) / 1000;
-                
-                // O tempo pausado é a diferença entre o tempo total e o tempo que ele efetivamente trabalhou
-                const tempoPausadoSegundos = tempoTotalBrutoSegundos - (tiktik.tempo_decorrido_real_segundos || 0);
-
+                // Salvamos os dados necessários para a função de atualização do cronômetro
                 card.dataset.inicioTimestamp = dataInicio.getTime();
-                card.dataset.pausadoSegundos = tempoPausadoSegundos; // << Cálculo mais simples e robusto
-                card.dataset.mediaTempoPeca = tiktik.media_tempo_por_peca || 0;
                 card.dataset.qtdEntregue = tiktik.quantidade_entregue || 0;
+                
+                // Carimbamos o TPE que veio da API no dataset do card!
+                card.dataset.tpeTarefa = tiktik.tpe_tarefa || 0; 
             }
-
             
             card.className = `oa-card-status-tiktik ${classeStatus}`;
             card.innerHTML = criarHTMLCardStatus(tiktik, statusFinal, classeStatus, statusBruto); 
@@ -265,8 +248,6 @@ async function renderizarPainelStatus() {
         containerDisponiveis.innerHTML = `<p class="erro-painel">Erro ao carregar o painel. RECARREGUE A PÁGINA.</p>`;
         if (feedbackEl) feedbackEl.textContent = 'Falha ao atualizar';
     } finally {
-        // <<< ADICIONE A CHAMADA AQUI, NO FINALLY, PARA GARANTIR QUE SEMPRE RODE >>>
-        // (Re)inicia o motor do cronômetro após cada renderização do painel
         iniciarCronometrosVisuais();
     }
 }
@@ -482,87 +463,116 @@ function criarHTMLCardStatus(tiktik, statusFinalTexto, classeStatus, statusBruto
     let avisoHorarioHTML = '';
     let menuAcoesHTML = '';
     
-
-     if (statusBrutoDecidido === STATUS.PRODUZINDO) {
-        // --- LÓGICA DE AVISO (EXISTENTE E MANTIDA) ---
+    // --- LÓGICA PARA O CARD "PRODUZINDO" ---
+    if (statusBrutoDecidido === STATUS.PRODUZINDO) {
         const infoHorarioEstendido = verificarHorarioEstendido(tiktik);
         if (infoHorarioEstendido) {
-            avisoHorarioHTML = `
-                <div class="aviso-horario-estendido nivel-${infoHorarioEstendido.nivel}">
-                    ${infoHorarioEstendido.texto}
+            avisoHorarioHTML = `<div class="aviso-horario-estendido nivel-${infoHorarioEstendido.nivel}">${infoHorarioEstendido.texto}</div>`;
+        }
+
+        const tempoDecorridoStr = new Date((tiktik.tempo_decorrido_real_segundos || 0) * 1000).toISOString().substr(11, 8);
+
+        // --- NOVA LÓGICA DE DECISÃO: LOTE vs. INDIVIDUAL ---
+        if (tiktik.is_lote) {
+            const produtosDoLote = (tiktik.sessoes || []).reduce((acc, sessao) => {
+                const nomeProduto = sessao.produto_nome || `Produto ID ${sessao.produto_id}`;
+                const variante = sessao.variante || 'Padrão';
+                const chave = `${nomeProduto}|${variante}`;
+    
+                if (!acc[chave]) {
+                    acc[chave] = { nome: nomeProduto, variante: variante, quantidade: 0 };
+                }
+                acc[chave].quantidade += sessao.quantidade_entregue;
+                return acc;
+            }, {});
+
+            // Convertemos o objeto para um array para usar no tooltip
+            const detalhesLoteArray = Object.values(produtosDoLote);
+            const detalhesLoteString = JSON.stringify(detalhesLoteArray);
+            
+            // A contagem é o número de chaves únicas no objeto agrupado.
+            const contagemProdutosDistintos = detalhesLoteArray.length;
+
+            
+            infoTarefaHTML = `
+                <div class="info-tarefa-redesenhada">
+                    <div class="quantidade-tarefa-destaque">
+                        ${tiktik.quantidade_entregue}<small>pçs</small>
+                    </div>
+                    <div 
+                        class="produto-tarefa-subtitulo lote-detalhes-trigger" 
+                        data-lote-detalhes='${detalhesLoteString}'
+                    >
+                        <i class="fas fa-boxes"></i> 
+                        Lote de ${contagemProdutosDistintos} ${contagemProdutosDistintos === 1 ? 'Produto' : 'Produtos'}
+                        <i class="fas fa-info-circle" style="margin-left: 8px; font-size: 0.9em;"></i>
+                    </div>
+                    <div class="metricas-tarefa-container">
+                        <div class="cronometro-tarefa"><i class="fas fa-clock"></i> ${tempoDecorridoStr}</div>
+                        
+                        <div class="indicador-ritmo-tarefa">N/A</div>
+                        <div class="barra-progresso-container" title="Métricas de performance para lotes...">
+                            <div class="barra-progresso" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else {
+            // Lógica para Tarefa Individual (com TPE), que já está funcionando
+            infoTarefaHTML = `
+                <div class="info-tarefa-redesenhada">
+                    <div class="quantidade-tarefa-destaque">
+                        ${tiktik.quantidade_entregue}<small>pçs</small>
+                    </div>
+                    <div class="produto-tarefa-subtitulo">
+                        ${tiktik.produto_nome} ${tiktik.variante ? `(${tiktik.variante})` : ''}
+                    </div>
+                    <div class="metricas-tarefa-container">
+                        <div class="cronometro-tarefa"><i class="fas fa-clock"></i> ${tempoDecorridoStr}</div>
+                        <div class="indicador-ritmo-tarefa">--</div>
+                        <div class="barra-progresso-container" title="Estimativa de Conclusão">
+                            <div class="barra-progresso" style="width: 0%;"></div>
+                        </div>
+                    </div>
                 </div>
             `;
         }
 
-        // --- LÓGICA DO TEMPO INICIAL (EXISTENTE E MANTIDA) ---
-        const tempoSegundosBase = tiktik.tempo_decorrido_real_segundos || 0;
-        const tempoDecorridoStr = new Date(tempoSegundosBase * 1000).toISOString().substr(11, 8);
-
-        // --- HTML REDESENHADO (NOVO) ---
-        // --- HTML REDESENHADO (NOVO) ---
-    infoTarefaHTML = `
-        <div class="info-tarefa-redesenhada">
-            <div class="quantidade-tarefa-destaque">
-                ${tiktik.quantidade_entregue}<small>pçs</small>
-            </div>
-            <div class="produto-tarefa-subtitulo">
-                ${tiktik.produto_nome} ${tiktik.variante ? `(${tiktik.variante})` : ''}
-            </div>
-            
-            <div class="metricas-tarefa-container">
-                <div class="cronometro-tarefa">
-                    <i class="fas fa-clock"></i> ${tempoDecorridoStr}
-                </div>
-
-                <div class="indicador-ritmo-tarefa"></div>
-
-                <div class="barra-progresso-container" title="Estimativa de conclusão baseada no tempo médio">
-                    <div class="barra-progresso" style="width: 0%;"></div>
-                </div>
-            </div>
-        </div>
-    `;
-
-        // --- LÓGICA DOS BOTÕES (EXISTENTE E MANTIDA) ---
+        // A lógica dos botões "Finalizar" e "Cancelar" é a mesma para ambos os tipos
         const podeFinalizar = permissoes.includes('lancar-arremate');
         const podeCancelar = permissoes.includes('cancelar-tarefa-arremate');
-        const attrsFinalizar = podeFinalizar ? `data-action="finalizar"` : `data-action="permissao-negada" data-permissao-necessaria="Finalizar Tarefa"`;
-        const attrsCancelar = podeCancelar ? `data-action="cancelar"` : `data-action="permissao-negada" data-permissao-necessaria="Cancelar Tarefa"`;
         botoesAcaoHTML = `
             <div class="oa-card-botoes-acao-container">
-                <button class="btn-acao cancelar" 
-                        ${attrsCancelar} 
-                        title="Cancelar esta tarefa"
-                        ${!podeCancelar ? 'disabled' : ''}>
+                <button class="btn-acao cancelar" data-action="cancelar" ${podeCancelar ? '' : 'disabled'} title="Cancelar esta tarefa">
                     <i class="fas fa-times"></i> Cancelar
                 </button>
-                <button class="btn-acao finalizar"
-                        ${attrsFinalizar}
-                        ${!podeFinalizar ? 'disabled' : ''}>
+                <button class="btn-acao finalizar" data-action="finalizar" ${podeFinalizar ? '' : 'disabled'}>
                     <i class="fas fa-check-double"></i> Finalizar
                 </button>
             </div>
         `;
-    } else if (statusBrutoDecidido === STATUS.LIVRE || statusBrutoDecidido === STATUS.LIVRE_MANUAL) {
-        // --- LÓGICA PARA O CARD "LIVRE" ---
+    } 
+    // --- LÓGICA PARA OUTROS STATUS (LIVRE, PAUSA, ETC.) ---
+    else if (statusBrutoDecidido === STATUS.LIVRE || statusBrutoDecidido === STATUS.LIVRE_MANUAL) {
         const podeAtribuir = permissoes.includes('lancar-arremate');
-        const attrsAtribuir = podeAtribuir ? `data-action="iniciar"` : `data-action="permissao-negada" data-permissao-necessaria="Atribuir Tarefa"`;
-        botoesAcaoHTML = `<button class="btn-acao iniciar" ${attrsAtribuir} ${!podeAtribuir ? 'disabled' : ''}><i class="fas fa-play"></i> Atribuir Tarefa</button>`;
-        
-        // Adiciona o carimbo
+        const attrsAtribuir = podeAtribuir ? '' : `disabled title="Permissão negada"`;
+        botoesAcaoHTML = `
+            <div class="oa-card-botoes-acao-container">
+                <button class="btn-acao iniciar" data-action="iniciar-lote" ${attrsAtribuir}>
+                    <i class="fas fa-boxes"></i> Atribuir Lote
+                </button>
+                <button class="btn-acao finalizar" data-action="iniciar" ${attrsAtribuir}>
+                    <i class="fas fa-play"></i> Atribuir Tarefa
+                </button>
+            </div>
+        `;
         infoTarefaHTML = `<div class="status-carimbo-container"><div class="status-carimbo">${statusFinalTexto}</div></div>`;
-
     } else {
-        // --- LÓGICA PARA TODOS OS OUTROS CARDS INATIVOS (PAUSA, ALMOÇO, ETC) ---
-        // Apenas adiciona o carimbo, sem botões de ação no rodapé
         infoTarefaHTML = `<div class="status-carimbo-container"><div class="status-carimbo">${statusFinalTexto}</div></div>`;
     }
     
-     // --- LÓGICA DO NOVO MENU DE AÇÕES ---
-    
+    // --- LÓGICA DO MENU DE AÇÕES ---
     const menuItens = [];
-
-    // Agora a decisão é baseada no status REAL que o usuário está vendo (statusBrutoDecidido)
     switch (statusBrutoDecidido) {
         case STATUS.LIVRE:
         case STATUS.LIVRE_MANUAL:
@@ -687,29 +697,44 @@ function formatarDuracaoSegundos(totalSegundos) {
 }
 
 async function handleFinalizarTarefa(tiktik) {
-    const mensagem = `Finalizando tarefa para <strong>${tiktik.nome}</strong>.<br>Produto: ${tiktik.produto_nome}<br><br>Confirme a quantidade realmente finalizada:`;
-    
-    const quantidadeFinalizada = await mostrarPromptNumerico(mensagem, {
-        valorInicial: tiktik.quantidade_entregue,
-        tipo: 'info'
-    });
-    
-    // Se o usuário cancelou, a função retorna null
-    if (quantidadeFinalizada === null) {
-        return; 
+    const isLote = Array.isArray(tiktik.id_sessao);
+    let resultadoPrompt = null;
+
+    if (isLote) {
+        resultadoPrompt = await mostrarPromptFinalizarLote(
+            `Finalizando lote para <strong>${tiktik.nome}</strong>. <br><br>Confirme as quantidades finalizadas para cada item:`,
+            tiktik.sessoes
+        );
+    } else {
+        const quantidadeNumerica = await mostrarPromptNumerico(
+            `Finalizando tarefa de <strong>${tiktik.produto_nome}</strong> para <strong>${tiktik.nome}</strong>.<br><br>Confirme a quantidade realmente finalizada:`, {
+            valorInicial: tiktik.quantidade_entregue,
+            tipo: 'info'
+        });
+        
+        if (quantidadeNumerica !== null) {
+            // Para tarefa individual, montamos a estrutura de detalhes com um único item
+            resultadoPrompt = { 
+                total: quantidadeNumerica,
+                detalhes: [{ id_sessao: tiktik.id_sessao, quantidade_finalizada: quantidadeNumerica }]
+            };
+        }
     }
+    
+    if (resultadoPrompt === null) return;
+
+    // O payload agora é mais simples e consistente para ambos os casos
+    const payload = {
+        detalhes_finalizacao: resultadoPrompt.detalhes
+    };
 
     try {
         await fetchFromAPI('/arremates/sessoes/finalizar', {
             method: 'POST',
-            body: JSON.stringify({
-                id_sessao: tiktik.id_sessao,
-                quantidade_finalizada: quantidadeFinalizada
-            })
+            body: JSON.stringify(payload)
         });
         
         mostrarMensagem('Tarefa finalizada e arremate registrado!', 'sucesso');
-
         await renderizarPainelStatus();
         await forcarAtualizacaoFilaDeArremates();
 
@@ -718,31 +743,42 @@ async function handleFinalizarTarefa(tiktik) {
     }
 }
 
-async function handleCancelarTarefa(tiktik) {
-    // 1. Pede confirmação ao usuário
+async function handleCancelarTarefa(tiktik) {    
+    // Monta a mensagem de confirmação dinamicamente
+    const isLote = Array.isArray(tiktik.id_sessao);
+    const nomeTarefa = isLote 
+        ? `o lote de ${tiktik.quantidade_entregue} peças` 
+        : `a tarefa de ${tiktik.quantidade_entregue}x ${tiktik.produto_nome}`;
+        
     const confirmado = await mostrarConfirmacao(
-        `Tem certeza que deseja cancelar a tarefa de <strong>${tiktik.produto_nome}</strong> atribuída para <strong>${tiktik.nome}</strong>? <br><br>O cronômetro será zerado e o produto voltará para a fila.`,
-        'aviso' // Usamos 'aviso' (amarelo) pois não é um erro, mas requer atenção
+        `Tem certeza que deseja cancelar ${nomeTarefa} atribuído para <strong>${tiktik.nome}</strong>? <br><br>O cronômetro será zerado e o(s) produto(s) voltarão para a fila.`,
+        'aviso'
     );
 
     if (!confirmado) {
-        return; // Usuário clicou em "Não"
+        return;
     }
 
-    // 2. Chama a nova API que criamos no backend
+    // AQUI ESTÁ A LÓGICA DE DECISÃO
+    let payload;
+    if (isLote) {
+        // Se for um lote, enviamos a propriedade 'ids_sessoes' com o array de IDs
+        payload = { ids_sessoes: tiktik.id_sessao };
+    } else {
+        // Se for individual, enviamos a propriedade 'id_sessao' com o número
+        payload = { id_sessao: tiktik.id_sessao };
+    }
+
     try {
         await fetchFromAPI('/arremates/sessoes/cancelar', {
             method: 'POST',
-            body: JSON.stringify({
-                id_sessao: tiktik.id_sessao 
-            })
+            body: JSON.stringify(payload)
         });
         
         mostrarMensagem('Tarefa cancelada com sucesso!', 'sucesso');
 
-        // 3. Atualiza a interface para refletir a mudança
         await renderizarPainelStatus();
-        await forcarAtualizacaoFilaDeArremates(); // O saldo do produto na fila principal será corrigido
+        await forcarAtualizacaoFilaDeArremates();
 
     } catch (error) {
         mostrarMensagem(`Erro ao cancelar tarefa: ${error.message}`, 'erro');
@@ -871,8 +907,8 @@ async function handleDesfazerTarefa(sessaoId) {
 
         mostrarMensagem("Tarefa desfeita com sucesso!", 'sucesso');
         
-        if (modalModoFocoElemento) {
-            modalModoFocoElemento.style.display = 'none';
+        if (modalModoFocoElemento && modalModoFocoElemento.style.display !== 'none') {
+            modalModoFocoElemento.querySelector('.oa-modal-fechar-btn').click();
         }
         
         await renderizarPainelStatus();
@@ -887,40 +923,48 @@ async function handleDesfazerTarefa(sessaoId) {
 
 
 // Em: public/js/admin-arremates.js
-// SUBSTITUA a sua função abrirModoFoco inteira por esta:
-
 async function abrirModoFoco(tiktik) {
-    // 1. Verifica se temos o elemento do modal em memória
     if (!modalModoFocoElemento) {
         console.error("ERRO CRÍTICO: O elemento do modal não foi inicializado.");
         mostrarMensagem("Erro ao abrir painel (código: M01).", "erro");
         return;
     }
     
-    // 2. GARANTE que o modal está anexado ao body do documento
-    document.body.appendChild(modalModoFocoElemento);
-    
-    // 3. Agora podemos trabalhar com ele com segurança, usando a variável global
     const modal = modalModoFocoElemento;
-
-    // 2. Preenche os dados básicos e mostra o modal com spinners
+    document.body.appendChild(modal);
+    
     modal.querySelector('#focoAvatar').src = tiktik.avatar_url || '/img/placeholder-image.png';
     modal.querySelector('#focoTitulo').innerHTML = `Desempenho de Hoje`;
     modal.querySelector('#focoMetricas').innerHTML = '<div class="spinner"></div>';
     modal.querySelector('#focoResumoProdutos').innerHTML = '<div class="spinner">Calculando resumo...</div>';
     modal.querySelector('#focoTarefas').innerHTML = '<div class="spinner"></div>';
 
-    // 3. Define as funções de fechar usando as referências recém-buscadas
-    const fecharModal = () => {
+
+    // 1. Definimos a função de clique em uma variável
+    const tarefasClickHandler = (event) => {
+        const undoButton = event.target.closest('.btn-desfazer-tarefa');
+        if (undoButton && !undoButton.disabled) {
+            const sessaoId = parseInt(undoButton.dataset.sessaoId);
+            handleDesfazerTarefa(sessaoId);
+        }
+    };
+
+    // 2. Definimos a função de fechar, que agora também remove o listener
+    const fecharModal = () => {        
+        const tarefasContainer = modal.querySelector('#focoTarefas');
+        // Remove o listener específico
+        tarefasContainer.removeEventListener('click', tarefasClickHandler);
+        
         modal.style.display = 'none';
         if (modal.parentNode === document.body) {
             document.body.removeChild(modal);
         }
     };
+
+    // 3. Atribuímos a função de fechar aos botões
     modal.querySelector('.popup-overlay').onclick = fecharModal;
     modal.querySelector('.oa-modal-fechar-btn').onclick = fecharModal;
     
-    // 4. Exibe o modal
     modal.style.display = 'flex';
 
     try {
@@ -930,19 +974,12 @@ async function abrirModoFoco(tiktik) {
         renderizarTarefasFoco(dados);
         
         const tarefasContainer = modal.querySelector('#focoTarefas');
-        // Adiciona um listener novo a cada abertura. Removê-lo ao fechar seria ideal,
-        // mas para este caso, não causará problemas significativos.
-        tarefasContainer.addEventListener('click', (event) => {
-            const undoButton = event.target.closest('.btn-desfazer-tarefa');
-            if (undoButton && !undoButton.disabled) {
-                const sessaoId = parseInt(undoButton.dataset.sessaoId);
-                handleDesfazerTarefa(sessaoId);
-            }
-        });
+        // 4. Adicionamos o listener usando a variável
+        tarefasContainer.addEventListener('click', tarefasClickHandler);
         
     } catch (error) {
         mostrarMensagem(`Erro ao carregar dados de desempenho: ${error.message}`, 'erro');
-        fecharModal(); // Fecha o modal se a API der erro
+        fecharModal();
     }
 }
 
@@ -1601,9 +1638,17 @@ function criarElementoModalHistorico() {
             }
 
             switch(action) {
-                case 'iniciar': 
+                case 'iniciar': // Botão "Atribuir Tarefa" (individual)
                     if (window.abrirModalAtribuicao) {
-                        window.abrirModalAtribuicao(tiktikData);
+                        window.abrirModalAtribuicao(tiktikData, false); // false = não é lote
+                    } else {
+                        console.error("React não está pronto para abrir o modal.");
+                        mostrarMensagem("Erro ao abrir painel (código: R01).", "erro");
+                    }
+                    break;
+                case 'iniciar-lote': // Novo botão "Atribuir Lote"
+                    if (window.abrirModalAtribuicao) {
+                        window.abrirModalAtribuicao(tiktikData, true); // true = é lote
                     } else {
                         console.error("React não está pronto para abrir o modal.");
                         mostrarMensagem("Erro ao abrir painel (código: R01).", "erro");
@@ -1768,8 +1813,6 @@ async function inicializarPagina() {
 }
 
 async function forcarAtualizacaoFilaDeArremates() {
-    console.log("[JS Puro] Disparando evento 'atualizar-fila-react'...");
-    // Dispara um evento global que qualquer componente React pode ouvir.
     window.dispatchEvent(new Event('atualizar-fila-react'));
 
     // A função ainda pode ser responsável por atualizar o dashboard,
@@ -1839,3 +1882,92 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (conteudoEl) conteudoEl.classList.remove('gs-conteudo-carregando');
     }
 });
+
+// Cria o elemento do tooltip uma única vez e o mantém em memória
+// --- LÓGICA DO TOOLTIP DE DETALHES DO LOTE (HÍBRIDA) ---
+
+const tooltipLoteElement = document.createElement('div');
+tooltipLoteElement.className = 'oa-tooltip-lote';
+document.body.appendChild(tooltipLoteElement);
+
+let activeTooltipTrigger = null; // Para controlar qual gatilho está ativo
+
+function mostrarTooltipLote(triggerElement) {
+    const detalhesString = triggerElement.dataset.loteDetalhes;
+    if (!detalhesString) return;
+    try {
+        const detalhes = JSON.parse(detalhesString);
+        let listItems = '';
+        detalhes.forEach(item => {
+            listItems += `<li><span>${item.nome} (${item.variante})</span> <strong>${item.quantidade} pçs</strong></li>`;
+        });
+        tooltipLoteElement.innerHTML = `<h4>Produtos no Lote</h4><ul>${listItems}</ul>`;
+        const rect = triggerElement.getBoundingClientRect();
+        tooltipLoteElement.style.display = 'block';
+        
+        // Posicionamento inteligente (tenta não sair da tela)
+        const tooltipHeight = tooltipLoteElement.offsetHeight;
+        const spaceBelow = window.innerHeight - rect.bottom;
+        if (spaceBelow < tooltipHeight) {
+            tooltipLoteElement.style.top = `${rect.top - tooltipHeight - 5}px`; // Acima
+        } else {
+            tooltipLoteElement.style.top = `${rect.bottom + 5}px`; // Abaixo
+        }
+        tooltipLoteElement.style.left = `${rect.left}px`;
+
+    } catch (e) { console.error("Erro no tooltip:", e); }
+}
+
+function esconderTooltipLote() {
+    tooltipLoteElement.style.display = 'none';
+}
+
+// Listener principal que gerencia tanto clique quanto hover
+document.addEventListener('click', (event) => {
+    const trigger = event.target.closest('.lote-detalhes-trigger');
+    
+    // Se o clique foi fora de um gatilho E fora do próprio tooltip, esconde.
+    if (!trigger && !event.target.closest('.oa-tooltip-lote')) {
+        esconderTooltipLote();
+        activeTooltipTrigger = null;
+    }
+});
+
+document.addEventListener('pointerover', (event) => {
+    // 'pointerover' é mais moderno e funciona para mouse, caneta, etc.
+    // Ignoramos este evento em dispositivos de toque para priorizar o clique.
+    if (event.pointerType === 'touch') return; 
+    
+    const trigger = event.target.closest('.lote-detalhes-trigger');
+    if (trigger) {
+        mostrarTooltipLote(trigger);
+        activeTooltipTrigger = trigger;
+    }
+});
+
+document.addEventListener('pointerout', (event) => {
+    if (event.pointerType === 'touch') return;
+    
+    const trigger = event.target.closest('.lote-detalhes-trigger');
+    if (trigger) {
+        esconderTooltipLote();
+        activeTooltipTrigger = null;
+    }
+});
+
+document.addEventListener('touchstart', (event) => {
+    const trigger = event.target.closest('.lote-detalhes-trigger');
+    if (trigger) {
+        event.preventDefault(); // Evita que o navegador simule um clique duplo
+        
+        if (trigger === activeTooltipTrigger) {
+            // Se tocou no mesmo gatilho que já está aberto, fecha.
+            esconderTooltipLote();
+            activeTooltipTrigger = null;
+        } else {
+            // Se tocou em um novo gatilho, mostra o tooltip para ele.
+            mostrarTooltipLote(trigger);
+            activeTooltipTrigger = trigger;
+        }
+    }
+}, { passive: false });

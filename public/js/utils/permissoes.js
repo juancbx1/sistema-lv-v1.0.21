@@ -27,6 +27,7 @@ export const permissoesDisponiveis = [
     { id: 'acesso-permissoes-usuarios', label: 'Ver Tela de Gerenciar Permissões', categoria: 'Usuários e Permissões' },
     { id: 'acesso-cadastrar-usuarios', label: 'Ação: Cadastrar novos usuários', categoria: 'Usuários e Permissões' },
     { id: 'editar-usuarios', label: 'Ação: Editar dados de usuários', categoria: 'Usuários e Permissões' },
+    { id: 'adicionar-ferias', label: 'Ação: Adicionar Férias', categoria: 'Usuários e Permissões' },
     { id: 'excluir-usuarios', label: 'Ação: Excluir usuários', categoria: 'Usuários e Permissões' },
     { id: 'gerenciar-permissoes', label: 'Ação: Alterar permissões individuais', categoria: 'Usuários e Permissões' },
 
