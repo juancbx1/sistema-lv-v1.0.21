@@ -2,10 +2,11 @@
 
 // Usa as funções de popup que já temos
 import { mostrarConfirmacao, mostrarToast  } from './popups.js';
+import urlSomAlerta from '/sounds/alerta.mp3';
 
 // --- CONFIGURAÇÕES ---
 const INTERVALO_VERIFICACAO_MS = 30000; // 30 segundos
-const SOM_ALERTA_SRC = '/sounds/alerta.mp3';
+const SOM_ALERTA_SRC = urlSomAlerta;
 
 // --- VARIÁVEIS DE CONTROLE ---
 let audioAlerta = null;
