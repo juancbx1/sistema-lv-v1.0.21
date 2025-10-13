@@ -9,20 +9,42 @@ const SOM_ALERTA_SRC = '/sounds/alerta.mp3';
 
 // --- VARIÁVEIS DE CONTROLE ---
 let audioAlerta = null;
-let ultimoAlertaDisparado = {}; // Ex: { "OCIOSIDADE_ARREMATE_4": 167... (timestamp) }
+let audioDesbloqueado = false
 
 /**
- * Toca o som de notificação.
+ * Tenta "desbloquear" a permissão de áudio.
+ * Esta função deve ser chamada após o primeiro clique do usuário.
+ */
+function desbloquearAudio() {
+    if (audioDesbloqueado || !audioAlerta) return;
+    
+    // A técnica é dar um "play" mudo e pausar imediatamente.
+    // Isso satisfaz a exigência do navegador de interação do usuário.
+    audioAlerta.muted = true;
+    audioAlerta.play().then(() => {
+        audioAlerta.pause();
+        audioAlerta.currentTime = 0;
+        audioAlerta.muted = false;
+        audioDesbloqueado = true;
+        console.log('[ÁUDIO] Permissão de áudio desbloqueada com sucesso.');
+    }).catch(error => {
+        // Não mostra um erro para o usuário, apenas no console.
+        console.warn('[ÁUDIO] Tentativa de desbloqueio de áudio falhou:', error.message);
+    });
+}
+
+/**
+ * Toca o som de notificação, se o áudio estiver desbloqueado.
  */
 function tocarSomAlerta() {
-    if (!audioAlerta) {
-        audioAlerta = new Audio(SOM_ALERTA_SRC);
+    if (audioDesbloqueado && audioAlerta) {
+        audioAlerta.currentTime = 0; // Reinicia o som
+        audioAlerta.play().catch(error => {
+            console.error("Erro ao tocar som do alerta:", error.message);
+        });
+    } else {
+        console.warn("Áudio não pôde ser tocado (ainda não desbloqueado ou falha no carregamento).");
     }
-    audioAlerta.play().catch(error => {
-        // Navegadores modernos podem bloquear a reprodução automática de áudio.
-        // O primeiro clique do usuário na página geralmente libera essa permissão.
-        console.warn("Não foi possível tocar o som do alerta:", error.message);
-    });
 }
 
 /**
@@ -44,10 +66,7 @@ function mostrarNotificacaoNavegador(mensagem) {
  * @param {object} alerta O objeto de alerta vindo da API.
  */
 function dispararAlerta(alerta) {
-    // Determina o tipo/cor do toast. Usa o 'nivel' enviado pela API, ou 'aviso' como padrão.
     const tipoToast = alerta.nivel || 'aviso';
-    
-    // Determina a duração. Se for um alerta de erro (lentidão), dura 7s. Senão, 5s.
     const duracaoToast = (tipoToast === 'erro') ? 7000 : 5000;
 
     if (alerta.config.acao_popup) {
@@ -96,8 +115,19 @@ async function verificarStatusParaAlertas() {
 /**
  * Inicia todo o sistema de alertas.
  */
-async function iniciarMotorDeAlertas() {
-    // 1. Verifica se as notificações são suportadas e se a permissão ainda não foi pedida ('default')
+function iniciarMotorDeAlertas() {
+    // 1. Pré-carrega o objeto de áudio
+    audioAlerta = new Audio(SOM_ALERTA_SRC);
+    audioAlerta.addEventListener('error', () => {
+        console.error(`ERRO: Não foi possível carregar o arquivo de som em: ${SOM_ALERTA_SRC}. Verifique o caminho.`);
+        audioAlerta = null; // Anula o objeto de áudio se der erro
+    });
+
+    // 2. Adiciona um listener global para o primeiro clique do usuário
+    document.body.addEventListener('click', desbloquearAudio, { once: true });
+    // 'once: true' é uma otimização: o listener se remove automaticamente após ser disparado uma vez.
+
+    // 3. Pede permissão para notificações (lógica não muda)
     if ('Notification' in window && Notification.permission === 'default') {
         
         // Espera 5 segundos para não ser intrusivo
