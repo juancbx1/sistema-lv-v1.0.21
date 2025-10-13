@@ -1,7 +1,33 @@
 /* public/js/utils/popups.js */
 
+import urlSomAlerta from '/sounds/alerta.mp3'; // Importa o som aqui
+
+
 const filaDeToasts = [];
 let toastEmExibicao = false;
+let audioContextDesbloqueado = false;
+const audioAlertaParaDesbloqueio = new Audio(urlSomAlerta);
+
+/**
+ * Tenta "desbloquear" a permissão de áudio, se ainda não tiver sido feito.
+ * Esta função deve ser chamada após a primeira interação do usuário com qualquer popup.
+ */
+function desbloquearAudioContext() {
+    if (audioContextDesbloqueado) return;
+
+    audioAlertaParaDesbloqueio.muted = true;
+    audioAlertaParaDesbloqueio.play().then(() => {
+        audioAlertaParaDesbloqueio.pause();
+        audioAlertaParaDesbloqueio.currentTime = 0;
+        audioAlertaParaDesbloqueio.muted = false;
+        audioContextDesbloqueado = true;
+        console.log('[ÁUDIO POPUP] Contexto de áudio desbloqueado com sucesso.');
+    }).catch(() => {
+        // Falha silenciosa no console, não incomoda o usuário
+    });
+}
+
+
 
 /**
  * Remove qualquer popup existente da tela com uma animação suave.
@@ -96,6 +122,8 @@ export function mostrarConfirmacao(mensagem, opcoes = {}) {
         const overlay = container.querySelector('.popup-overlay');
 
         const fecharPopup = (valorResolvido) => {
+            desbloquearAudioContext();
+
             removerPopupExistente();
             resolve(valorResolvido);
         };

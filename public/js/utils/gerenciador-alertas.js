@@ -10,7 +10,6 @@ const SOM_ALERTA_SRC = urlSomAlerta;
 
 // --- VARIÁVEIS DE CONTROLE ---
 let audioAlerta = null;
-let audioDesbloqueado = false
 
 /**
  * Tenta "desbloquear" a permissão de áudio.
@@ -38,13 +37,13 @@ function desbloquearAudio() {
  * Toca o som de notificação, se o áudio estiver desbloqueado.
  */
 function tocarSomAlerta() {
-    if (audioDesbloqueado && audioAlerta) {
-        audioAlerta.currentTime = 0; // Reinicia o som
+    if (audioAlerta) {
+        audioAlerta.currentTime = 0;
         audioAlerta.play().catch(error => {
-            console.error("Erro ao tocar som do alerta:", error.message);
+            console.warn("Erro ao tocar som do alerta (provavelmente por falta de interação):", error.message);
         });
     } else {
-        console.warn("Áudio não pôde ser tocado (ainda não desbloqueado ou falha no carregamento).");
+        console.warn("Objeto de áudio não carregado.");
     }
 }
 
@@ -124,11 +123,7 @@ function iniciarMotorDeAlertas() {
         audioAlerta = null; // Anula o objeto de áudio se der erro
     });
 
-    // 2. Adiciona um listener global para o primeiro clique do usuário
-    document.body.addEventListener('click', desbloquearAudio, { once: true });
-    // 'once: true' é uma otimização: o listener se remove automaticamente após ser disparado uma vez.
-
-    // 3. Pede permissão para notificações (lógica não muda)
+    // 2. Pede permissão para notificações (lógica não muda)
     if ('Notification' in window && Notification.permission === 'default') {
         
         // Espera 5 segundos para não ser intrusivo
