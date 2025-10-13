@@ -507,12 +507,6 @@ router.post('/registrar-perda', async (req, res) => {
     const { produto_id, variante, quantidadePerdida, motivo, observacao, opsOrigem } = req.body;
     let dbClient;
 
-    // <<< LOG 1: DADOS RECEBIDOS >>>
-    console.log('[API /registrar-perda] INICIANDO REGISTRO DE PERDA.');
-    console.log('[API /registrar-perda] Payload recebido do frontend:', {
-        produto_id, variante, quantidadePerdida, motivo, observacao, opsOrigem
-    });
-
     try {
         dbClient = await pool.connect();
         const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
@@ -531,9 +525,7 @@ router.post('/registrar-perda', async (req, res) => {
             throw new Error(`Produto com ID ${produto_id} não encontrado.`);
         }
         const nomeDoProduto = produtoInfo.rows[0].nome;
-
-        // <<< LOG 2: INICIANDO TRANSAÇÃO >>>
-        console.log('[API /registrar-perda] Dados validados. Iniciando transação no banco...');
+;
         await dbClient.query('BEGIN');
 
         // 1. Insere o registro na tabela de perdas
@@ -546,27 +538,18 @@ router.post('/registrar-perda', async (req, res) => {
             observacao, usuarioLogado.nome || 'Sistema'
         ]);
         const perdaId = perdaResult.rows[0].id;
-        // <<< LOG 3: REGISTRO DE PERDA CRIADO >>>
-        console.log(`[API /registrar-perda] Registro criado com sucesso na tabela 'arremate_perdas'. ID da perda: ${perdaId}`);
 
         // 2. Cria um lançamento de arremate do tipo 'PERDA' para abater do saldo
         let quantidadeRestanteParaAbater = quantidadePerdida;
         const opsOrdenadas = opsOrigem.sort((a, b) => a.numero - b.numero);
 
-        // <<< LOG 4: LOOP DE ABATIMENTO >>>
-        console.log(`[API /registrar-perda] Iniciando loop para abater ${quantidadeRestanteParaAbater} peças das OPs de origem.`, opsOrdenadas);
-
         for (const op of opsOrdenadas) {
             if (quantidadeRestanteParaAbater <= 0) {
-                console.log('[API /registrar-perda] Quantidade total já abatida. Saindo do loop.');
                 break;
             }
             
             // O nome da propriedade era 'saldo_op' no frontend, vamos usar esse padrão
             const qtdAbaterDaOP = Math.min(quantidadeRestanteParaAbater, op.saldo_op);
-
-            // <<< LOG 5: DENTRO DO LOOP >>>
-            console.log(`[API /registrar-perda] Processando OP ${op.numero}. Saldo OP: ${op.saldo_op}. Abatendo desta OP: ${qtdAbaterDaOP}`);
 
             if (qtdAbaterDaOP > 0) {
                 const lancamentoPerdaQuery = `
@@ -577,15 +560,10 @@ router.post('/registrar-perda', async (req, res) => {
                     op.numero, produto_id, variante, qtdAbaterDaOP,
                     usuarioLogado.nome, perdaId
                 ]);
-                console.log(`[API /registrar-perda] -> Inserido lançamento de PERDA de ${qtdAbaterDaOP} pçs para a OP ${op.numero}`);
                 quantidadeRestanteParaAbater -= qtdAbaterDaOP;
-            } else {
-                console.log(`[API /registrar-perda] -> Nenhuma peça a abater da OP ${op.numero}. Pulando.`);
             }
         }
         
-        // <<< LOG 6: FINALIZANDO TRANSAÇÃO >>>
-        console.log('[API /registrar-perda] Loop finalizado. Dando COMMIT na transação.');
         await dbClient.query('COMMIT');
         res.status(201).json({ message: 'Registro de perda efetuado com sucesso.' });
 
@@ -1031,7 +1009,6 @@ router.post('/sessoes/iniciar', async (req, res) => {
 // ROTA: POST /api/arremates/sessoes/finalizar
 router.post('/sessoes/finalizar', async (req, res) => {
     let dbClient;
-    // O body agora contém 'detalhes_finalizacao'
     const { detalhes_finalizacao } = req.body;
 
     if (!Array.isArray(detalhes_finalizacao) || detalhes_finalizacao.length === 0) {
@@ -1064,20 +1041,16 @@ router.post('/sessoes/finalizar', async (req, res) => {
         
         const dataFim = new Date();
 
-        // Itera sobre os DETALHES que vieram do frontend
         for (const detalhe of detalhes_finalizacao) {
             const sessaoCorrespondente = sessoes.find(s => s.id === detalhe.id_sessao);
-            if (!sessaoCorrespondente) continue; // Segurança extra
+            if (!sessaoCorrespondente || sessaoCorrespondente.status === 'FINALIZADA') continue;
 
             const qtdFinalizadaNestaSessao = detalhe.quantidade_finalizada;
             
-            // Validações
             if (qtdFinalizadaNestaSessao < 0 || qtdFinalizadaNestaSessao > sessaoCorrespondente.quantidade_entregue) {
                 throw new Error(`Quantidade finalizada inválida para o produto ${sessaoCorrespondente.produto_nome}.`);
             }
-            if (sessaoCorrespondente.status === 'FINALIZADA') continue;
 
-            // Lógica de criação de arremates (agora com a quantidade correta)
             if (qtdFinalizadaNestaSessao > 0) {
                 let quantidadeRestanteParaLancar = qtdFinalizadaNestaSessao;
                 const opsDeOrigem = (sessaoCorrespondente.dados_ops || []);
@@ -1087,7 +1060,6 @@ router.post('/sessoes/finalizar', async (req, res) => {
                     const qtdParaEstaOP = Math.min(quantidadeRestanteParaLancar, op.saldo_op);
                     
                     if (qtdParaEstaOP > 0) {
-                        // O INSERT continua o mesmo, mas agora com a quantidade certa
                         await dbClient.query(
                             `INSERT INTO arremates (op_numero, op_edit_id, produto_id, variante, quantidade_arrematada, usuario_tiktik_id, usuario_tiktik, lancado_por, tipo_lancamento, id_sessao_origem)
                              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PRODUCAO', $9)`,
@@ -1098,7 +1070,6 @@ router.post('/sessoes/finalizar', async (req, res) => {
                 }
             }
             
-            // Atualiza a sessão individual com a quantidade exata
             const tempoPausaSegundos = calcularTempoDePausa(userTiktikResult.rows[0], new Date(sessaoCorrespondente.data_inicio), dataFim);
             await dbClient.query(
                 `UPDATE sessoes_trabalho_arremate SET data_fim = $1, status = 'FINALIZADA', quantidade_finalizada = $2, tempo_pausado_segundos = $3 WHERE id = $4`,
@@ -1106,7 +1077,6 @@ router.post('/sessoes/finalizar', async (req, res) => {
             );
         }
 
-        // A lógica de verificação de outras tarefas ativas continua a mesma
         const outraSessaoAtivaResult = await dbClient.query(
             `SELECT 1 FROM sessoes_trabalho_arremate WHERE usuario_tiktik_id = $1 AND status = 'EM_ANDAMENTO' LIMIT 1`,
             [usuarioTiktikId]
@@ -1114,6 +1084,38 @@ router.post('/sessoes/finalizar', async (req, res) => {
 
         if (outraSessaoAtivaResult.rowCount === 0) {
             await atualizarStatusUsuarioDB(usuarioTiktikId, 'LIVRE');
+        }
+
+        // --- LÓGICA DE ALERTA DE META BATIDA (VERSÃO CORRIGIDA) ---
+        try {
+            const configsAtivasResult = await dbClient.query("SELECT * FROM configuracoes_alertas WHERE ativo = TRUE");
+            const configMetaBatida = configsAtivasResult.rows.find(c => c.tipo_alerta === 'META_BATIDA_ARREMATE');
+
+            if (configMetaBatida) {
+                for (const sessao of sessoes) {
+                    const tpeResult = await dbClient.query("SELECT tempo_segundos_por_peca FROM tempos_padrao_arremate WHERE produto_id = $1", [sessao.produto_id]);
+                    const tpe = tpeResult.rows[0]?.tempo_segundos_por_peca;
+                    
+                    // AQUI ESTÁ A CORREÇÃO PRINCIPAL
+                    const detalheDaSessao = detalhes_finalizacao.find(d => d.id_sessao === sessao.id);
+                    const quantidadeRealFinalizada = detalheDaSessao ? detalheDaSessao.quantidade_finalizada : 0;
+                    
+                    if (tpe && quantidadeRealFinalizada > 0) {
+                        const tempoPausaSegundos = calcularTempoDePausa(userTiktikResult.rows[0], new Date(sessao.data_inicio), dataFim);
+                        const tempoDecorridoSegundos = (dataFim - new Date(sessao.data_inicio)) / 1000 - tempoPausaSegundos;
+                        const tempoRealPorPeca = tempoDecorridoSegundos / quantidadeRealFinalizada;
+                        const eficiencia = (parseFloat(tpe) / tempoRealPorPeca);
+
+
+                        if (eficiencia >= 1.25) {
+                            const mensagem = `🚀 Excelente Performance! ${nomeTiktik} concluiu a tarefa de ${sessao.produto_nome || 'produto'} com ${Math.round(eficiencia * 100)}% de eficiência!`;
+                            await dbClient.query(`INSERT INTO eventos_sistema (tipo_evento, mensagem) VALUES ($1, $2)`, ['META_BATIDA_ARREMATE', mensagem]);
+                        }
+                    }
+                }
+            } 
+        } catch (logError) {
+            console.error("ERRO DENTRO DA LÓGICA DE LOG DE META BATIDA:", logError.message);
         }
                 
         await dbClient.query('COMMIT');
@@ -1185,6 +1187,8 @@ router.post('/sessoes/cancelar', async (req, res) => {
         if (outraSessaoAtivaResult.rowCount === 0) {
             await atualizarStatusUsuarioDB(usuarioTiktikId, 'LIVRE');
         }
+
+
 
         await dbClient.query('COMMIT');
         

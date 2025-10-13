@@ -104,50 +104,47 @@ function atualizarCronometrosVisuais() {
         const inicioTimestamp = parseFloat(card.dataset.inicioTimestamp);
         if (isNaN(inicioTimestamp)) return;
 
-        // --- CÁLCULO DE TEMPO CORRIGIDO ---
         const agoraTimestamp = Date.now();
-        // Garante que a diferença nunca seja negativa
         const tempoDecorridoSegundos = Math.max(0, (agoraTimestamp - inicioTimestamp) / 1000);
-
         const tempoFormatado = new Date(tempoDecorridoSegundos * 1000).toISOString().substr(11, 8);
         const cronometroEl = card.querySelector('.cronometro-tarefa');
         if (cronometroEl) cronometroEl.innerHTML = `<i class="fas fa-clock"></i> ${tempoFormatado}`;
 
-        // Pega o TPE do dataset
         const tpeTarefa = parseFloat(card.dataset.tpeTarefa); 
-        
-        // Se não há TPE, exibe o feedback e para aqui
         const indicadorRitmoEl = card.querySelector('.indicador-ritmo-tarefa');
         if (isNaN(tpeTarefa) || tpeTarefa <= 0) {
             if (indicadorRitmoEl) indicadorRitmoEl.textContent = 'Sem TPE';
             return; 
         }
 
-        // --- LÓGICA DE PERFORMANCE (AGORA SÓ RODA COM DADOS VÁLIDOS) ---
         const qtdEntregue = parseInt(card.dataset.qtdEntregue, 10);
-        if (isNaN(qtdEntregue) || qtdEntregue <= 0) return; // Segurança extra
+        if (isNaN(qtdEntregue) || qtdEntregue <= 0) return;
 
         const tempoTotalEstimado = tpeTarefa * qtdEntregue;
         
-        // Progresso baseado em quanto do tempo estimado já passou
-        const progressoPercentual = Math.min(100, (tempoDecorridoSegundos / tempoTotalEstimado) * 100);
-
+        // 1. Calculamos o progresso real, que PODE passar de 100%
+        const progressoRealPercentual = (tempoDecorridoSegundos / tempoTotalEstimado) * 100;
+        // 2. Criamos uma variável separada para o visual da barra, que é limitada a 100%
+        const progressoVisualPercentual = Math.min(100, progressoRealPercentual);
+        
         const barraEl = card.querySelector('.barra-progresso');
 
         if (barraEl && indicadorRitmoEl) {
-            barraEl.style.width = `${progressoPercentual}%`;
+            // A barra usa o valor visual (limitado a 100%)
+            barraEl.style.width = `${progressoVisualPercentual}%`;
 
             let ritmoTexto = '...';
             let ritmoIcone = '👍';
             let corBarraClasse = '';
 
-            if (progressoPercentual >= 120) {
+            // A lógica de performance usa o valor REAL (que pode ser > 100%)
+            if (progressoRealPercentual >= 120) {
                 ritmoTexto = 'Lento'; ritmoIcone = '🐢'; corBarraClasse = 'lento';
-            } else if (progressoPercentual >= 100) {
+            } else if (progressoRealPercentual >= 100) {
                 ritmoTexto = 'Atenção'; ritmoIcone = '⚠️'; corBarraClasse = 'atencao';
-            } else if (progressoPercentual >= 60) {
+            } else if (progressoRealPercentual >= 60) {
                 ritmoTexto = 'No Ritmo'; ritmoIcone = '👍'; corBarraClasse = '';
-            } else if (progressoPercentual >= 30) {
+            } else if (progressoRealPercentual >= 30) {
                 ritmoTexto = 'Rápido'; ritmoIcone = '✅'; corBarraClasse = 'rapido';
             } else {
                 ritmoTexto = 'Super Rápido'; ritmoIcone = '🚀'; corBarraClasse = 'super-rapido';

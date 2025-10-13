@@ -207,3 +207,46 @@
     text-align: right;
     font-size: 1.2rem;
 }
+
+/* --- ESTILOS PARA TOAST NOTIFICATIONS --- */
+.toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10001;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.toast-notification {
+    width: 320px;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    color: white;
+    opacity: 0;
+    transform: translateX(100%);
+    transition: all 0.4s ease-in-out;
+}
+
+.toast-notification.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.toast-notification.hide {
+    opacity: 0;
+    transform: translateX(120%);
+}
+
+.toast-notification.aviso { background-color: #f39c12; }
+.toast-notification.sucesso { background-color: #27ae60; }
+.toast-notification.erro { background-color: #e74c3c; }
+
+.toast-icon {
+    font-size: 1.5rem;
+}

@@ -1,5 +1,8 @@
 /* public/js/utils/popups.js */
 
+const filaDeToasts = [];
+let toastEmExibicao = false;
+
 /**
  * Remove qualquer popup existente da tela com uma animação suave.
  */
@@ -58,21 +61,23 @@ export function mostrarMensagem(mensagem, tipo = 'info', duracao = 0) {
 
 
 /**
- * Exibe um popup de confirmação e retorna uma Promise que resolve para true (confirmar) ou false (cancelar).
+ * Exibe um popup de confirmação e retorna uma Promise.
  * @param {string} mensagem - A pergunta a ser exibida.
- * @param {'perigo'|'aviso'|'sucesso'} [tipo='aviso'] - O tipo de popup (controla a cor da borda).
+ * @param {object} [opcoes={}] - Opções de configuração.
+ * @param {'perigo'|'aviso'|'sucesso'|'info'} [opcoes.tipo='aviso'] - O tipo de popup.
+ * @param {string} [opcoes.textoConfirmar='Sim'] - O texto para o botão de confirmação.
+ * @param {string} [opcoes.textoCancelar='Não'] - O texto para o botão de cancelar.
  * @returns {Promise<boolean>} - true se o usuário confirmar, false se cancelar.
  */
-export function mostrarConfirmacao(mensagem, tipo = 'aviso') {
+export function mostrarConfirmacao(mensagem, opcoes = {}) {
     removerPopupExistente();
+    
+    // Define os valores padrão se não forem fornecidos
+    const { tipo = 'aviso', textoConfirmar = 'Sim', textoCancelar = 'Não' } = opcoes;
 
     return new Promise((resolve) => {
         const container = document.createElement('div');
         container.className = 'popup-container';
-        
-        // Define o texto dos botões com base no tipo
-        const textoCancelar = (tipo === 'perigo') ? 'Não, Cancelar' : 'Não';
-        const textoConfirmar = (tipo === 'perigo') ? 'Sim, Confirmar' : 'Sim';
 
         container.innerHTML = `
             <div class="popup-overlay"></div>
@@ -97,7 +102,7 @@ export function mostrarConfirmacao(mensagem, tipo = 'aviso') {
         
         btnConfirmar.onclick = () => fecharPopup(true);
         btnCancelar.onclick = () => fecharPopup(false);
-        overlay.onclick = () => fecharPopup(false); // Clicar fora cancela
+        overlay.onclick = () => fecharPopup(false);
     });
 }
 
@@ -330,4 +335,67 @@ export function mostrarPromptFinalizarLote(mensagem, sessoes) {
 
         calcularTotal(); // Calcula o total inicial
     });
+}
+
+export function mostrarToast(mensagem, tipo = 'info', duracao = 5000) {
+    // A função 'mostrarToast' apenas adiciona o trabalho à fila
+    filaDeToasts.push({ mensagem, tipo, duracao });
+    // E tenta iniciar o processamento
+    processarFilaDeToasts();
+}
+
+function processarFilaDeToasts() {
+    // Se um toast já está na tela, ou a fila está vazia, não faz nada.
+    if (toastEmExibicao || filaDeToasts.length === 0) {
+        return;
+    }
+
+    // "Fecha o semáforo" para bloquear novos toasts
+    toastEmExibicao = true;
+    
+    // Pega o próximo da fila
+    const toastParaMostrar = filaDeToasts.shift();
+    const { mensagem, tipo, duracao } = toastParaMostrar;
+
+    let container = document.getElementById('toast-container-global');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container-global';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    // A classe customizada é aplicada aqui
+    toast.className = `toast-notification ${tipo}`;
+    
+    // O ícone customizado é definido aqui
+    let iconClass = 'fa-info-circle';
+    if (tipo === 'sucesso') iconClass = 'fa-check-circle';
+    if (tipo === 'erro') iconClass = 'fa-times-circle';
+    if (tipo === 'aviso') iconClass = 'fa-exclamation-triangle';
+
+    toast.innerHTML = `
+        <i class="fas ${iconClass} toast-icon"></i>
+        <div>${mensagem}</div>
+    `;
+
+    container.prepend(toast);
+
+    // Animação de entrada
+    setTimeout(() => toast.classList.add('show'), 10);
+
+    // Animação de saída, usando a 'duração' customizada
+    setTimeout(() => {
+        toast.classList.remove('show');
+        toast.classList.add('hide');
+        
+        setTimeout(() => {
+            toast.remove();
+            // "Abre o semáforo" para o próximo toast
+            toastEmExibicao = false;
+            // Tenta processar o próximo da fila
+            processarFilaDeToasts();
+        }, 500);
+    }, duracao);
 }
