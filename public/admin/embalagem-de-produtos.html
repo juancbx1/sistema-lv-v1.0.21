@@ -27,48 +27,17 @@
     </div>
 
 <main id="conteudoPrincipal" class="container-ep gs-conteudo-carregando">
-<section class="ep-card" id="embalagemListViewNova">
 
-    <!-- CABEÇALHO PRINCIPAL DA PÁGINA (PADRONIZADO) -->
-       <div id="header-root"></div>
+    <section class="ep-card" id="embalagemListViewNova">
+        <!-- 1. O HEADER (agora será preservado) -->
+        <div id="header-root"></div>
 
-    <!-- NOVO PAINEL DE INFORMAÇÕES RÁPIDAS -->
-    <div class="ep-painel-info-container">
-        <div class="ep-info-card principal">
-            <i class="fas fa-box-open ep-info-card-icone"></i>
-            <h3>Total a Embalar</h3>
-            <span class="ep-info-card-contador" id="contadorTotalAEmbalar">0</span>
-            <p class="ep-info-card-descricao">Soma de todos os itens pendentes.</p>
+        <!-- 3. O ALVO DO REACT (continua o mesmo) -->
+        <div id="painel-principal-root" class="ep-painel-principal-com-filtros">
+            <!-- O React vai renderizar o layout de 2 colunas aqui dentro -->
         </div>
-        <div class="ep-info-card alerta">
-            <i class="fas fa-history ep-info-card-icone"></i>
-            <h3>Aguardando há > 2 Dias</h3>
-            <span class="ep-info-card-contador" id="contadorAguardandoMuitoTempo">0</span>
-            <p class="ep-info-card-descricao">Itens mais antigos na fila.</p>
-        </div>
-        <div class="ep-info-card sucesso">
-            <i class="fas fa-check-double ep-info-card-icone"></i>
-            <h3>Embalado Hoje</h3>
-            <span class="ep-info-card-contador" id="contadorEmbaladoHoje">0</span>
-            <p class="ep-info-card-descricao">Total de unidades embaladas.</p>
-        </div>
-    </div>
-
-        <!-- Portal para o componente React de Filtros -->
-        <div id="filtros-root"></div>
-        
-        <!-- Container para os resultados(retorno dos itens a serem exibidos) -->
-        <div class="gs-container-cards">
-            <div id="embalagemCardsContainer" class="ep-embalagem-card-container">
-                <!-- VAZIO POR PADRÃO. O JS VAI PREENCHER. -->
-            </div>
-
-            <div id="embalagemPaginationContainer" class="gs-paginacao-container" style="display: none;">
-                <!-- Paginação será inserida aqui pelo JS -->
-            </div>
-        </div>    
-</section>
-
+            
+    </section>
 <!-- Nova Seção para Detalhes da Embalagem -->
         <section class="ep-card" id="embalarDetalheView" style="display: none;">
             <!-- CABEÇALHO DA VIEW DE DETALHE -->

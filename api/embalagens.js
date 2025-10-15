@@ -104,8 +104,6 @@ router.get('/historico', async (req, res) => {
         `;
         
         const result = await dbClient.query(dataQuery, [produto_ref_id, parseInt(limit), offset]);
-
-        console.log(`[API /historico] Buscando para SKU: ${produto_ref_id}. Encontrados ${total} registros no total.`);
         
         res.status(200).json({ rows: result.rows, total: total, page: parseInt(page), pages: totalPages });
 
@@ -176,7 +174,6 @@ router.post('/estornar', async (req, res) => {
             (usuarioLogado.nome || usuarioLogado.nome_usuario),
             `Estorno referente à embalagem #${id_embalagem_realizada}`
         ]);
-        console.log(`[API Estorno] Movimento de estoque reverso criado para embalagem #${id_embalagem_realizada}.`);
 
         // 4. ATUALIZA OS ARREMATES para "devolver" a quantidade ao saldo "Pronto para Embalar".
         if (tipo_embalagem === 'UNIDADE') {
@@ -187,7 +184,6 @@ router.post('/estornar', async (req, res) => {
                     `UPDATE arremates SET quantidade_ja_embalada = quantidade_ja_embalada - $1 WHERE id = $2`,
                     [quantidade_embalada, arremateOrigemId]
                 );
-                console.log(`[API Estorno] Saldo do arremate #${arremateOrigemId} revertido em ${quantidade_embalada} unidades.`);
             } else {
                 throw new Error(`Não foi possível rastrear o arremate de origem para a embalagem de UNIDADE #${id_embalagem_realizada}.`);
             }
@@ -202,7 +198,6 @@ router.post('/estornar', async (req, res) => {
                     `UPDATE arremates SET quantidade_ja_embalada = quantidade_ja_embalada - $1 WHERE id = $2`,
                     [componente.quantidade_usada, componente.id_arremate]
                 );
-                console.log(`[API Estorno] Saldo do arremate componente #${componente.id_arremate} revertido em ${componente.quantidade_usada} unidades.`);
             }
         } else {
              // Lança um erro se não for possível rastrear a origem, forçando o ROLLBACK.
@@ -211,7 +206,6 @@ router.post('/estornar', async (req, res) => {
 
         // 5. Marca a embalagem original como estornada.
         await dbClient.query(`UPDATE embalagens_realizadas SET status = 'ESTORNADO' WHERE id = $1`, [id_embalagem_realizada]);
-        console.log(`[API Estorno] Embalagem #${id_embalagem_realizada} marcada como ESTORNADO.`);
 
         // 6. Confirma a transação
         await dbClient.query('COMMIT');
@@ -285,16 +279,30 @@ router.get('/fila', async (req, res) => {
         
         // --- ETAPA 1: Construir a Query Base ---
         let baseQuery = `
+            WITH ArrematesComSaldo AS (
+                -- Primeiro, encontramos os arremates que ainda têm saldo
+                SELECT 
+                    produto_id, 
+                    variante, 
+                    op_numero,
+                    (quantidade_arrematada - quantidade_ja_embalada) as saldo
+                FROM arremates
+                WHERE tipo_lancamento = 'PRODUCAO' AND (quantidade_arrematada - quantidade_ja_embalada) > 0
+            )
+            -- Agora, usamos esses arremates para buscar as informações corretas
             SELECT
-                a.produto_id, p.nome as produto, a.variante,
-                SUM(a.quantidade_arrematada - a.quantidade_ja_embalada)::integer as total_disponivel_para_embalar,
-                MIN(a.data_lancamento) as data_lancamento_mais_antiga,
-                MAX(a.data_lancamento) as data_lancamento_mais_recente
-            FROM arremates a
-            JOIN produtos p ON a.produto_id = p.id
-            WHERE a.tipo_lancamento = 'PRODUCAO'
-            GROUP BY a.produto_id, p.nome, a.variante
-            HAVING SUM(a.quantidade_arrematada - a.quantidade_ja_embalada) > 0
+                ars.produto_id,
+                p.nome as produto,
+                ars.variante,
+                SUM(ars.saldo)::integer as total_disponivel_para_embalar,
+                -- A MUDANÇA CRUCIAL: Usamos a data_final da OP como base para a data mais antiga
+                MIN(op.data_final) as data_lancamento_mais_antiga,
+                MAX(op.data_final) as data_lancamento_mais_recente
+            FROM ArrematesComSaldo ars
+            JOIN produtos p ON ars.produto_id = p.id
+            -- Usamos LEFT JOIN para o caso de uma OP ter sido deletada mas o arremate ainda existir
+            LEFT JOIN ordens_de_producao op ON ars.op_numero = op.numero
+            GROUP BY ars.produto_id, p.nome, ars.variante
         `;
         let fromClause = `FROM (${baseQuery}) as subquery`;
 
@@ -320,14 +328,12 @@ router.get('/fila', async (req, res) => {
         if (todos === 'true') {
             // Se 'todos=true', montamos a query SEM LIMIT e OFFSET
             finalQuery = `SELECT * ${fromClause} ${whereClause} ${orderByClause}`;
-            console.log(`[API Fila] Executando query para buscar todos os itens.`);
         } else {
             // Se não, montamos a query COM LIMIT e OFFSET
             const limitNum = parseInt(limit, 10);
             const offset = (parseInt(page, 10) - 1) * limitNum;
             queryParams.push(limitNum, offset);
             finalQuery = `SELECT * ${fromClause} ${whereClause} ${orderByClause} LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
-            console.log(`[API Fila] Executando query paginada para a página ${page}.`);
         }
 
         const dataResult = await dbClient.query(finalQuery, queryParams);
@@ -337,8 +343,6 @@ router.get('/fila', async (req, res) => {
         // Usamos os parâmetros de filtro (se houver), mas não os de paginação
         const countResult = await dbClient.query(countQuery, queryParams.slice(0, paramIndex - 1));
         const totalItems = parseInt(countResult.rows[0].count, 10);
-
-        console.log(`[API Fila] Query executada. Retornando ${dataResult.rows.length} de ${totalItems} itens totais.`);
 
         res.status(200).json({
             rows: dataResult.rows,

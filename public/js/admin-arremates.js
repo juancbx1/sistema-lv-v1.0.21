@@ -1368,33 +1368,6 @@ async function handleEstornoClick(event) {
     }
 }
 
-async function atualizarDashboard() {
-    // Referências aos elementos
-    const contadorProdutosFilaEl = document.getElementById('contadorProdutosFila');
-    const contadorPecasPendentesEl = document.getElementById('contadorPecasPendentes');
-    const contadorArrematadoHojeEl = document.getElementById('contadorArrematadoHoje');
-
-    // 1. e 2. Produtos na Fila e Peças Pendentes (usam dados da variável de cache)
-    if (contadorProdutosFilaEl) {
-        contadorProdutosFilaEl.textContent = totaisDaFilaDeArremate.totalGrupos;
-    }
-    if (contadorPecasPendentesEl) {
-        contadorPecasPendentesEl.textContent = totaisDaFilaDeArremate.totalPecas;
-    }
-
-    // 3. Arrematado Hoje (continua com sua chamada de API dedicada)
-    if (contadorArrematadoHojeEl) {
-        try {
-            contadorArrematadoHojeEl.textContent = '...';
-            const response = await fetchFromAPI('/arremates/contagem-hoje');
-            contadorArrematadoHojeEl.textContent = response.total || 0;
-        } catch (error) {
-            console.error("Erro ao buscar contagem de arremates de hoje:", error);
-            contadorArrematadoHojeEl.textContent = "?";
-        }
-    }
-}
-
 // --- LÓGICA COMPLETA E REATORADA PARA O MODAL DE HISTÓRICO GERAL DE ARREMATES ---
 
 // Adicione esta variável global no topo do seu arquivo
@@ -1820,7 +1793,6 @@ async function forcarAtualizacaoFilaDeArremates() {
         
         totaisDaFilaDeArremate.totalGrupos = itensDaFila.length;
         totaisDaFilaDeArremate.totalPecas = itensDaFila.reduce((acc, item) => acc + item.saldo_para_arrematar, 0);
-        await atualizarDashboard();
     } catch (error) {
         console.error("Erro ao atualizar dados do dashboard:", error);
     }

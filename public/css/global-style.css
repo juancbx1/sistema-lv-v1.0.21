@@ -923,6 +923,404 @@ body.autenticado {
 }
 
 /* ==========================================================================
+   # COMPONENTE GLOBAL: FEEDBACK NOT FOUND
+   Para exibir quando uma busca ou filtro não retorna resultados.
+   ========================================================================== */
+
+.gs-feedback-not-found-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 40px 20px;
+    width: 100%;
+    /* Garante que ocupe toda a largura se estiver dentro de um grid */
+    grid-column: 1 / -1; 
+    border: 2px dashed var(--gs-borda);
+    border-radius: var(--gs-raio-borda-card);
+    background-color: var(--gs-fundo-pagina);
+    margin-top: 20px;
+}
+
+.gs-feedback-not-found-icone {
+    font-size: 3rem;
+    color: #ced4da;
+    margin-bottom: 20px;
+}
+
+.gs-feedback-not-found-titulo {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--gs-secundaria);
+    margin: 0 0 10px 0;
+}
+
+.gs-feedback-not-found-mensagem {
+    font-size: 1rem;
+    color: var(--gs-texto-secundario);
+    max-width: 450px;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.gs-feedback-not-found-acoes {
+    margin-top: 25px;
+}
+
+/* ==========================================================================
+   # COMPONENTE GLOBAL: RADAR DE PRODUTO
+   ========================================================================== */
+
+.gs-radar-container {
+    background-color: var(--gs-fundo-card);
+    border: 1px solid var(--gs-borda);
+    border-radius: var(--gs-raio-borda-card);
+    margin-bottom: 25px;
+    transition: all 0.3s ease-in-out;
+}
+
+/* --- Cabeçalho do Radar --- */
+.gs-radar-header {
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    cursor: default;
+}
+
+
+/* --- Header de Alerta (Versão Melhorada para Desktop) --- */
+.gs-radar-header-alerta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    color: var(--gs-perigo);
+    background-color: rgba(231, 76, 60, 0.08); /* Fundo vermelho sutil */
+    border-left: 4px solid var(--gs-perigo); /* Borda de destaque */
+    padding: 8px 12px;
+    border-radius: var(--gs-raio-borda-input);
+}
+
+.gs-radar-header-alerta .alerta-titulo {
+    font-weight: 700;
+    flex-shrink: 0; /* Impede que o título encolha */
+}
+
+.gs-radar-header-alerta .alerta-mensagem {
+    font-weight: 500;
+    color: var(--gs-texto-principal);
+    flex-grow: 1; /* Faz a mensagem ocupar o espaço do meio */
+    text-align: left;
+}
+
+.gs-radar-botao-ver {
+    margin-left: auto;
+    background-color: var(--gs-perigo);
+    color: var(--gs-branco);
+    border: none;
+    padding: 6px 12px;
+    border-radius: var(--gs-raio-borda-botao);
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0; /* Impede que o botão encolha */
+}
+
+/* Header de Busca */
+.gs-radar-header-busca {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+}
+.gs-radar-header-busca label {
+    font-weight: 600;
+    color: var(--gs-secundaria);
+}
+.gs-radar-header-busca form {
+    flex-grow: 1;
+}
+.gs-radar-header-busca input {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 0.95rem;
+    border: 1px solid var(--gs-borda);
+    border-radius: var(--gs-raio-borda-input);
+}
+
+/* --- Conteúdo Expansível --- */
+.gs-radar-conteudo {
+    padding: 0 20px 20px 20px;
+    border-top: 1px solid var(--gs-borda);
+    animation: gs-fadeIn 0.5s;
+}
+
+/* Conteúdo: Lista de Alertas */
+.gs-radar-conteudo-lista h4 {
+    margin-top: 15px;
+    color: var(--gs-secundaria);
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--gs-borda);
+}
+
+.gs-radar-lista-critica {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 0;
+    margin-top: 15px;
+}
+
+.gs-radar-item-critico {
+    display: grid;
+    grid-template-columns: auto 1fr auto; /* Imagem | Texto | Ações */
+    gap: 15px;
+    align-items: center;
+    padding: 10px;
+    background-color: var(--gs-fundo-pagina);
+    border-radius: var(--gs-raio-borda-card);
+    border: 1px solid var(--gs-borda);
+}
+
+.gs-radar-item-imagem {
+    width: 45px;
+    height: 45px;
+    object-fit: cover;
+    border-radius: 6px;
+}
+
+.gs-radar-item-info .nome-produto {
+    font-weight: 600;
+    color: var(--gs-texto-principal);
+}
+.gs-radar-item-info .nome-variacao {
+    font-size: 0.85rem;
+    color: var(--gs-texto-secundario);
+}
+
+
+.gs-radar-conteudo-lista ul {
+    list-style: none;
+    padding: 0;
+}
+.gs-radar-conteudo-lista li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid var(--gs-borda);
+    gap: 15px;
+}
+.gs-radar-conteudo-lista li:last-child {
+    border-bottom: none;
+}
+.gs-radar-conteudo-lista button {
+    background: none;
+    border: 1px solid var(--gs-primaria);
+    color: var(--gs-primaria);
+    padding: 4px 10px;
+    border-radius: var(--gs-raio-borda-botao);
+    cursor: pointer;
+}
+
+/* Conteúdo: Funil de Resultados */
+.gs-radar-conteudo-funil h4 {
+    text-align: center;
+    font-style: italic;
+    color: var(--gs-texto-secundario);
+    margin: 15px 0 20px 0;
+}
+.gs-radar-cards-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+.gs-radar-card-resultado {
+    background-color: var(--gs-fundo-pagina);
+    border-radius: var(--gs-raio-borda-card);
+    padding: 15px;
+    text-align: center;
+    border-top: 4px solid var(--gs-primaria);
+}
+.gs-radar-card-titulo {
+    font-size: 1rem;
+    color: var(--gs-secundaria);
+    margin: 0 0 15px 0;
+}
+.gs-radar-card-metrica {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--gs-secundaria);
+}
+.gs-radar-card-info {
+    font-size: 0.85rem;
+    color: var(--gs-texto-secundario);
+    min-height: 20px;
+    margin-bottom: 15px;
+}
+.gs-radar-card-botao {
+    width: 100%;
+    background-color: var(--gs-branco);
+    border: 1px solid var(--gs-borda);
+    padding: 8px;
+    border-radius: var(--gs-raio-borda-botao);
+    cursor: pointer;
+}
+
+.gs-radar-funil-header {
+display: flex;
+align-items: center;
+justify-content: center;
+position: relative;
+margin: 15px 0 20px 0;
+}
+.gs-radar-funil-header h4 {
+margin: 0;
+text-align: center;
+font-style: italic;
+color: var(--gs-texto-secundario);
+}
+.gs-radar-botao-voltar {
+position: absolute;
+left: 0;
+top: 50%;
+transform: translateY(-50%);
+background: none;
+border: none;
+color: var(--gs-primaria);
+cursor: pointer;
+font-size: 0.9rem;
+font-weight: 500;
+}
+
+/* --- NOVO PUXADOR DO ACORDEÃO --- */
+.gs-radar-puxador {
+    width: 60px;
+    height: 20px;
+    background-color: var(--gs-fundo-card);
+    border: 1px solid var(--gs-borda);
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+    margin: 10px auto ; /* Centraliza e corrige o espaçamento */
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--gs-texto-secundario);
+    transition: background-color 0.2s;
+    position: relative; /* Para o posicionamento dos ícones */
+}
+
+.gs-radar-puxador:hover {
+    background-color: var(--gs-fundo-input);
+}
+.gs-radar-puxador .gs-radar-seta {
+    transition: transform 0.3s ease;
+}
+.gs-radar-container.expandido .gs-radar-puxador .gs-radar-seta {
+    transform: rotate(180deg);
+}
+
+/* Esconde a seta para CIMA por padrão */
+.gs-radar-puxador .gs-radar-seta-cima {
+    display: none;
+}
+
+/* Mostra a seta para BAIXO por padrão */
+.gs-radar-puxador .gs-radar-seta-baixo {
+    display: inline-block;
+}
+
+/* Esconde a seta para BAIXO */
+.gs-radar-container.expandido .gs-radar-puxador .gs-radar-seta-baixo {
+    display: none;
+}
+
+/* Mostra a seta para CIMA */
+.gs-radar-container.expandido .gs-radar-puxador .gs-radar-seta-cima {
+    display: inline-block;
+}
+
+/* --- ANIMAÇÃO DE PULSAR PARA O ALERTA --- */
+@keyframes gs-pulsar-alerta {
+    0% { box-shadow: inset 0 0 0 0 rgba(231, 76, 60, 0.1); }
+    70% { box-shadow: inset 0 0 0 10px rgba(231, 76, 60, 0); }
+    100% { box-shadow: inset 0 0 0 0 rgba(231, 76, 60, 0); }
+}
+
+.gs-radar-container:not(.expandido) .gs-radar-header-alerta {
+    /* Usamos box-shadow para o pulsar, que é mais performático que mudar background-color */
+    animation: gs-pulsar-alerta 2s infinite;
+}
+
+
+/* --- ESTILOS PARA O HEADER DO FUNIL (COM BOTÃO VOLTAR) --- */
+.gs-radar-funil-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    margin: 15px 0 20px 0;
+}
+.gs-radar-funil-header h4 {
+    margin: 0;
+    text-align: center;
+    font-style: italic;
+    color: var(--gs-texto-secundario);
+    padding: 0 100px; /* Garante espaço para o botão voltar não sobrepor o texto */
+}
+.gs-radar-botao-voltar {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--gs-primaria);
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.gs-radar-botao-voltar:hover {
+    text-decoration: underline;
+}
+
+/* Os botões de ação  */
+
+
+.gs-radar-lista-acoes {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto; /* Empurra os botões para a direita */
+}
+.gs-radar-lista-acoes button {
+    background-color: var(--gs-fundo-pagina);
+    border: 1px solid var(--gs-borda);
+    color: var(--gs-texto-secundario);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+}
+.gs-radar-lista-acoes button:hover {
+    color: var(--gs-branco);
+}
+.gs-radar-lista-acoes button[title="Consultar Funil"]:hover {
+    background-color: var(--gs-primaria);
+    border-color: var(--gs-primaria);
+}
+.gs-radar-lista-acoes button[title="Marcar como resolvido"]:hover {
+    background-color: var(--gs-sucesso);
+    border-color: var(--gs-sucesso);
+}
+
+/* ==========================================================================
    # AJUSTES PARA MOBILE 
    ========================================================================== */
 
@@ -1008,7 +1406,21 @@ body.autenticado {
   .gs-filtros-header-controles {
     grid-column: 1 / 3; /* Mantemos ocupando as duas colunas para garantir 100% de largura */
   }
+
+  /* --- RESPONSIVIDADE PARA O HEADER DE ALERTA (Mobile) --- */
   
+  .gs-radar-header-alerta {
+        flex-wrap: wrap; /* PERMITE A QUEBRA DE LINHA! */
+        padding: 12px;
+        gap: 8px 12px; /* Espaçamento vertical e horizontal */
+    }
+
+
+    .gs-radar-botao-ver {
+        width: 100%; /* Botão ocupa a largura toda na segunda linha */
+        margin-top: 8px; /* Espaço entre o texto e o botão */
+        padding: 10px; /* Botão maior para facilitar o toque */
+    }
 
 }
 

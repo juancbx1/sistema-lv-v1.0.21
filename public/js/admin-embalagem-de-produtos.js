@@ -38,8 +38,6 @@ async function forcarAtualizacaoEmbalagem() {
     const originalText = span ? span.textContent : 'Atualizar';
     if (span) span.textContent = 'Atualizando...';
 
-    console.log('[forcarAtualizacaoEmbalagem] Forçando atualização da fila de embalagem...');
-
     try {
         // A função que busca todos os dados e reinicializa o controlador
         await carregarDadosEInicializarFiltros(); 
@@ -56,7 +54,6 @@ async function forcarAtualizacaoEmbalagem() {
         if (span) span.textContent = originalText;
         if (btn) btn.disabled = false;
         
-        console.log('[forcarAtualizacaoEmbalagem] Atualização concluída.');
     }
 }
 window.forcarAtualizacaoEmbalagem = forcarAtualizacaoEmbalagem;
@@ -1070,41 +1067,6 @@ async function montarKits() {
     }
 }
 
-async function atualizarContadoresPainel(produtosDaFila) {
-  const contadorTotalEl = document.getElementById('contadorTotalAEmbalar');
-  const contadorAguardandoEl = document.getElementById('contadorAguardandoMuitoTempo');
-  const contadorHojeEl = document.getElementById('contadorEmbaladoHoje');
-
-  // 1. Calcula o total de itens a embalar a partir da lista recebida
-  if (contadorTotalEl) {
-      // O total de grupos de produtos na fila
-      contadorTotalEl.textContent = produtosDaFila.length;
-  }
-
-  // 2. Calcula quantos itens estão aguardando há muito tempo
-  if (contadorAguardandoEl) {
-      const aguardandoMuito = produtosDaFila.filter(item => {
-          if (!item.data_lancamento_mais_antiga) return false;
-          const diffDias = (new Date() - new Date(item.data_lancamento_mais_antiga)) / (1000 * 60 * 60 * 24);
-          return diffDias >= 2;
-      }).length;
-      contadorAguardandoEl.textContent = aguardandoMuito;
-  }
-  
-  // 3. O único que ainda precisa de uma chamada à API é o "Embalado Hoje",
-  //    pois essa informação não está na lista da fila.
-  if (contadorHojeEl) {
-      try {
-          contadorHojeEl.textContent = '...';
-          const response = await fetchFromAPI('/embalagens/contagem-hoje');
-          contadorHojeEl.textContent = response.total || 0;
-      } catch (error) {
-          console.error("Erro ao buscar contagem de embalagens de hoje:", error);
-          contadorHojeEl.textContent = "?";
-      }
-  }
-}
-
 // --- Funções Auxiliares de Kit (copiadas e adaptadas com sufixo Nova) ---
 async function temKitsDisponiveis(produtoIdBase, varianteBase) {
     if (todosOsProdutosCadastrados.length === 0) {
@@ -1636,48 +1598,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     permissoes = auth.permissoes || [];
     document.body.classList.add('autenticado');
 
-    // 2. MOSTRA SPINNER DE CARREGAMENTO GERAL
-    const containerEl = document.getElementById('embalagemCardsContainer');
-    if(containerEl) containerEl.innerHTML = '<div class="spinner">Carregando informações da página...</div>';
-
-    // 3. CARREGAMENTO DE DADOS ESSENCIAIS E GLOBAIS
-    // Usamos Promise.all para carregar tudo em paralelo e acelerar a inicialização.
-    const [produtosCadastrados, respostaFila] = await Promise.all([
-        obterProdutosDoStorage(true),
-        fetchFromAPI('/embalagens/fila?todos=true')
-    ]);
-    
-    // Populamos nossas variáveis globais com os dados carregados.
-    todosOsProdutosCadastrados = produtosCadastrados || [];
-    const todosOsProdutosDaFila = respostaFila.rows || [];
-
-    // 3.5: EXTRAIR FILTROS
-    const opcoesDeFiltro = extrairOpcoesDeFiltro(todosOsProdutosDaFila);
-
-    // 4. INICIALIZAÇÃO DO SISTEMA DE FILTROS PARA EMBALAGENS
-    inicializarControlador({
-        dadosCompletos: todosOsProdutosDaFila,
-        renderizarResultados: renderizarCardsDaPagina,
-        // Mapeamento para os dados da Embalagem
-        mapeamentoDeCampos: {
-            busca: ['produto', 'variante', 'sku'],
-            produto: 'produto',
-            variante: 'variante',
-            quantidade: 'total_disponivel_para_embalar',
-            dataRecente: 'data_lancamento_mais_recente',
-            dataAntiga: 'data_lancamento_mais_antiga'
-        }
-    });
-
-    // 5. ATUALIZAÇÃO DOS WIDGETS (CONTADORES)
-    await atualizarContadoresPainel(todosOsProdutosDaFila);
-
-    // 6. RENDERIZAÇÃO DOS COMPONENTES REACT
-    if (window.renderizarComponentesReact) {
-        window.renderizarComponentesReact({ opcoesDeFiltro });
-    } else {
-        console.error("ERRO: A função de renderização do React (window.renderizarComponentesReact) não foi encontrada. Verifique se o script 'main-embalagem.jsx' está sendo carregado no HTML.");
-    }
+    todosOsProdutosCadastrados = await obterProdutosDoStorage(true);
 
     // 7. CONFIGURAÇÃO DOS LISTENERS DE EVENTOS DA PÁGINA
     // Todos os listeners que não dependem dos dados acima podem ser configurados aqui.
@@ -1795,17 +1716,7 @@ document.addEventListener('DOMContentLoaded', async () => {
    } catch (error) {
     console.error("[DOMContentLoaded Embalagem] Erro crítico na inicialização:", error);
     mostrarMensagem("Erro crítico ao carregar a página. Tente recarregar.", "erro", 0);
-  } finally {
-    // --->> A MÁGICA ACONTECE AQUI <<---
-    // Este bloco 'finally' executa SEMPRE, tenha dado certo (try) ou errado (catch).
-    // Garantimos que o usuário nunca ficará preso na tela de loading.
-    if (carregamentoEl) {
-        carregamentoEl.classList.remove('visivel');
-    }
-    if (conteudoEl) {
-        conteudoEl.classList.remove('gs-conteudo-carregando');
-    }
-  }
+  } 
 });
 
 // Função global para limpar cache (se necessário para debug)

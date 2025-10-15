@@ -10,6 +10,7 @@ import AtribuicaoModal from './components/ArremateAtribuicaoModal.jsx';
 import PerdaModal from './components/ArrematePerdaModal.jsx';
 
 import ArremateModalTempos from './components/ArremateModalTempos.jsx';
+import RadarProduto from './components/RadarProduto.jsx';
 
 // O componente raiz da aplicação React nesta página.
 function App() {
@@ -36,6 +37,7 @@ function App() {
 
     return (
         <>
+        <React.Fragment>
             <HeaderPagina titulo="Arremates">
                 <button 
                     className="gs-btn gs-btn-secundario gs-btn-com-icone"
@@ -71,6 +73,10 @@ function App() {
                     <span>Histórico</span>
                 </button>
             </HeaderPagina>
+
+            {/* 3. ADICIONA O RADAR LOGO ABAIXO DO HEADER */}
+                <RadarProduto />
+            </React.Fragment>
 
             <AtribuicaoModal 
                 isOpen={modalAberto} 

@@ -7,6 +7,7 @@ import { ArremateCard } from './ArremateCard.jsx';
 import Paginacao from './Paginacao.jsx';
 import ArremateAcoesLote from './ArremateAcoesLote.jsx';
 import { mostrarMensagem } from '/js/utils/popups.js';
+import FeedbackNotFound from './FeedbackNotFound.jsx';
 
 // Função auxiliar para extrair as opções para os menus de filtro
 function extrairOpcoesDeFiltro(itensDaFila) {
@@ -278,7 +279,7 @@ export default function TelaSelecaoProduto({ onItemSelect, isBatchMode, tiktikCo
                 <div className="gs-container-cards" style={{ marginTop: '0' }}>
                     {itensFiltrados.length > 0 ? (
                         <div className="oa-cards-container-arremate">
-                            {itensDaPagina.map(item => {
+                            {itensDaPagina.map(item => { // Usando itensDaPagina para consistência com a paginação
                                 const isSelected = itensSelecionados.some(i => i.produto_id === item.produto_id && i.variante === item.variante);
                                 return (
                                     <ArremateCard
@@ -291,7 +292,12 @@ export default function TelaSelecaoProduto({ onItemSelect, isBatchMode, tiktikCo
                             })}
                         </div>
                     ) : (
-                        <p style={{ textAlign: 'center', padding: '20px' }}>Nenhum item encontrado com os filtros aplicados.</p>
+                        
+                        <FeedbackNotFound 
+                            icon="fa-cut" // Ícone de tesoura, temático para Arremate
+                            titulo="Nenhum Produto na Fila"
+                            mensagem="Não há produtos aguardando arremate ou os filtros aplicados não encontraram resultados."
+                        />
                     )}
                 </div>
 
