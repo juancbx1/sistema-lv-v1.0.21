@@ -1,0 +1,46 @@
+// public/src/main-embalagem.jsx
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+
+// Importa os componentes React que a página precisa
+import HeaderPagina from './components/HeaderPagina.jsx';
+import PainelFiltros from './components/PainelFiltros.jsx';
+
+// Esta função será colocada no "quadro de avisos" (window) para que
+// o seu admin-embalagem-de-produtos.js possa chamá-la quando estiver pronto.
+function renderizarComponentesReact(dados) {
+    const { opcoesDeFiltro } = dados;
+
+    // Renderiza o Header
+    const headerRootElement = document.getElementById('header-root');
+    if (headerRootElement) {
+        const headerRoot = ReactDOM.createRoot(headerRootElement);
+        headerRoot.render(
+            <React.StrictMode>
+                <HeaderPagina titulo="Embalagem">
+                    <button id="btnAbrirHistoricoGeral" className="gs-btn gs-btn-secundario gs-btn-com-icone">
+                        <i className="fas fa-clipboard-list"></i>
+                        <span>Histórico</span>
+                    </button>
+                </HeaderPagina>
+            </React.StrictMode>
+        );
+    }
+
+    // Renderiza os Filtros
+    const filtrosRootElement = document.getElementById('filtros-root');
+    if (filtrosRootElement) {
+        const filtrosRoot = ReactDOM.createRoot(filtrosRootElement);
+        filtrosRoot.render(
+            <React.StrictMode>
+                <PainelFiltros
+                    opcoesDeFiltro={opcoesDeFiltro}
+                    onFiltrosChange={window.onFiltrosChange}
+                />
+            </React.StrictMode>
+        );
+    }
+}
+
+// Deixa a função de renderização disponível globalmente
+window.renderizarComponentesReact = renderizarComponentesReact;
