@@ -10,34 +10,41 @@ import AtribuicaoModal from './components/ArremateAtribuicaoModal.jsx';
 import PerdaModal from './components/ArrematePerdaModal.jsx';
 
 import ArremateModalTempos from './components/ArremateModalTempos.jsx';
-import RadarProduto from './components/RadarProduto.jsx';
+import RadarDeAlertas from './components/RadarDeAlertas.jsx';
+import BotaoBuscaFunil from './components/BotaoBuscaFunil.jsx';
+
+const handleConsultarFunilDesdeAlerta = (item) => {
+    if (!item || !item.sku) {
+        console.error("Tentativa de consultar funil sem um item ou SKU válido.", item);
+        mostrarMensagem("Não foi possível obter o SKU deste item para a consulta.", "erro");
+        return;
+    }
+    const event = new CustomEvent('radar:consultarFunil', { detail: { sku: item.sku } });
+    window.dispatchEvent(event);
+};
 
 // O componente raiz da aplicação React nesta página.
 function App() {
-    const [modalAberto, setModalAberto] = useState(false);
+     const [modalAberto, setModalAberto] = useState(false);
     const [tiktikSelecionado, setTiktikSelecionado] = useState(null);
-
-
-    // <<< ESTADO PARA O MODAL DE PERDA >>>
     const [isBatchMode, setIsBatchMode] = useState(false);
     const [perdaModalAberto, setPerdaModalAberto] = useState(false);
-
-    const [modalTemposAberto, setModalTemposAberto] = useState(false)
+    const [modalTemposAberto, setModalTemposAberto] = useState(false);
     
     // Efeito para criar a "ponte" de comunicação do JS puro para o React
-    useEffect(() => {
-        // <<< ATUALIZE A FUNÇÃO GLOBAL >>>
+     useEffect(() => {
         window.abrirModalAtribuicao = (tiktik, batchMode) => {
             setTiktikSelecionado(tiktik);
-            setIsBatchMode(batchMode); // Define se é lote ou não
+            setIsBatchMode(batchMode);
             setModalAberto(true);
         };
         return () => { delete window.abrirModalAtribuicao; };
     }, []);
 
-    return (
+     return (
+        // Usamos React.Fragment <> para agrupar múltiplos componentes
         <>
-        <React.Fragment>
+            {/* 1. COMPONENTES VISÍVEIS NO FLUXO NORMAL DA PÁGINA */}
             <HeaderPagina titulo="Arremates">
                 <button 
                     className="gs-btn gs-btn-secundario gs-btn-com-icone"
@@ -60,45 +67,32 @@ function App() {
                 <button 
                     id="btnAbrirHistorico" 
                     className="gs-btn gs-btn-secundario gs-btn-com-icone"
-                    onClick={() => {
-                        // Verifica se a função do JS puro existe antes de chamar
-                        if (window.abrirModalHistorico) {
-                            window.abrirModalHistorico();
-                        } else {
-                            console.error("Função abrirModalHistorico não encontrada no escopo global.");
-                        }
-                    }}
+                    onClick={() => window.abrirModalHistorico?.()}
                 >
                     <i className="fas fa-clipboard-list"></i>
                     <span>Histórico</span>
                 </button>
             </HeaderPagina>
 
-            {/* 3. ADICIONA O RADAR LOGO ABAIXO DO HEADER */}
-                <RadarProduto />
-            </React.Fragment>
-
-            <AtribuicaoModal 
-                isOpen={modalAberto} 
-                tiktik={tiktikSelecionado}
-                isBatchMode={isBatchMode} 
-                onClose={() => setModalAberto(false)} 
-            />
+            {/* O RadarDeAlertas agora recebe a prop corretamente */}
+            <RadarDeAlertas onConsultarFunil={handleConsultarFunilDesdeAlerta} />
             
-             <PerdaModal
-                isOpen={perdaModalAberto}
-                onClose={() => setPerdaModalAberto(false)}
-            />
+            {/* 2. COMPONENTES FLUTUANTES (MODAIS E FAB) */}
+            
+            {/* Modais são renderizados aqui, mas só aparecem quando seus estados 'isOpen' são verdadeiros */}
+            <AtribuicaoModal isOpen={modalAberto} tiktik={tiktikSelecionado} isBatchMode={isBatchMode} onClose={() => setModalAberto(false)} />
+            <PerdaModal isOpen={perdaModalAberto} onClose={() => setPerdaModalAberto(false)} />
+            <ArremateModalTempos isOpen={modalTemposAberto} onClose={() => setModalTemposAberto(false)} />
 
-            <ArremateModalTempos 
-                isOpen={modalTemposAberto}
-                onClose={() => setModalTemposAberto(false)}
-            />
+            {/* O Botão FAB é renderizado aqui e se posicionará corretamente via CSS */}
+            <BotaoBuscaFunil />
         </>
     );
 }
 
-// Ponto de entrada final
+// ==========================================================================
+// PONTO DE ENTRADA ÚNICO
+// ==========================================================================
 const appRootElement = document.getElementById('app-react-root');
 if (appRootElement) {
     ReactDOM.createRoot(appRootElement).render(

@@ -1,0 +1,2865 @@
+/* public/css/ordens-de-arremates.css */
+
+/*------------------------------------*\
+    # OVERLAY DE CARREGAMENTO DE PÁGINA
+\*------------------------------------*/
+.oa-page-loading-overlay {
+    position: fixed; /* Cobre a tela inteira */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(244, 246, 248, 0.9); /* Usa a cor de fundo da página, mas com transparência */
+    z-index: 9999; /* Garante que fique acima de tudo */
+    display: flex; /* Para centralizar o spinner */
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.3s ease-out;
+}
+
+.oa-page-loading-overlay.hidden {
+    opacity: 0;
+    pointer-events: none; /* Impede que o overlay bloqueie cliques quando estiver invisível */
+}
+
+/*------------------------------------*\
+    #LAYOUT E COMPONENTES PRINCIPAIS
+\*------------------------------------*/
+.oa-container-principal { padding: 25px; max-width: 1600px; margin: 0 auto; }
+
+/* NOVO: Card contêiner principal */
+.oa-main-content-card {
+    background-color: var(--gs-branco);
+    padding: 30px;
+    border-radius: var(--gs-raio-borda-card);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.05);
+}
+
+.oa-cabecalho-pagina { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid var(--gs-borda); }
+.oa-cabecalho-pagina h1 { font-size: 1.8rem; color: var(--gs-secundaria); font-weight: 600; }
+.oa-card { background-color: var(--gs-branco); border-radius: var(--gs-raio-borda-card); padding: 10px; box-shadow: var(--gs-sombra-padrao); margin-bottom: 25px; }
+.oa-titulo-secao { font-size: 1.4rem; color: var(--gs-secundaria); margin-bottom: 20px; padding-bottom:10px; border-bottom:1px solid var(--gs-borda); font-weight: 500;}
+.hidden { display: none !important; }
+
+
+/* --- ESTILOS PARA O NOVO DASHBOARD SUPERIOR --- */
+
+.oa-painel-info-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.oa-info-card {
+    background-color: var(--gs-branco);
+    border-radius: var(--gs-raio-borda-card);
+    padding: 20px;
+    box-shadow: var(--gs-sombra-padrao);
+    text-align: center;
+    border-left: 5px solid;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.oa-info-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--gs-sombra-hover);
+}
+
+.oa-info-card-icone {
+    font-size: 1.5rem;
+    display: inline-block;
+}
+
+.oa-info-card h3 {
+    font-size: 1.1rem;
+    color: var(--gs-secundaria);
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.oa-info-card-contador {
+    font-size: 2.5rem;
+    font-weight: 700;
+    display: block;
+    line-height: 1.1;
+}
+
+.oa-info-card-descricao {
+    font-size: 0.85rem;
+    color: var(--gs-texto-secundario);
+}
+
+/* Cores específicas */
+.oa-info-card.principal { border-left-color: var(--gs-primaria); }
+.oa-info-card.principal .oa-info-card-icone,
+.oa-info-card.principal .oa-info-card-contador { color: var(--gs-primaria); }
+
+.oa-info-card.alerta { border-left-color: var(--gs-aviso); }
+.oa-info-card.alerta .oa-info-card-icone,
+.oa-info-card.alerta .oa-info-card-contador { color: var(--gs-aviso); }
+
+.oa-info-card.sucesso { border-left-color: var(--gs-sucesso); }
+.oa-info-card.sucesso .oa-info-card-icone,
+.oa-info-card.sucesso .oa-info-card-contador { color: var(--gs-sucesso); }
+
+/* Remove o dashboard antigo */
+.oa-card-dashboard {
+    display: none;
+}
+
+/* Estilo para o input de quantidade específico */
+.oa-input-qtd {
+    max-width: 150px; /* Define uma largura máxima */
+    margin-left: auto;  /* Centraliza o input */
+    margin-right: auto; /* Centraliza o input */
+}
+
+/*------------------------------------*\
+    #ESTILOS NOVA TELA DE DETALHES
+\*------------------------------------*/
+
+/* Novo Cabeçalho */
+.oa-detalhe-header {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    gap: 20px;
+    align-items: center;
+    position: relative;
+}
+.oa-detalhe-thumbnail {
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    overflow: hidden;
+    background-color: #f0f2f5;
+}
+.oa-detalhe-thumbnail img {
+    width: 100%; height: 100%; object-fit: cover;
+}
+.oa-detalhe-info h2 { font-size: 1.7rem; margin: 0; color: var(--gs-secundaria); }
+
+.oa-detalhe-info p { 
+    font-size: 1rem; 
+    color: var(--gs-texto-secundario); 
+}
+
+.oa-detalhe-saldo {
+    text-align: center;
+    padding: 10px 20px;
+    background-color: var(--gs-fundo-pagina);
+    border-radius: 8px;
+}
+.oa-detalhe-saldo label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--gs-texto-secundario);
+}
+.oa-detalhe-saldo span {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--gs-aviso);
+}
+.oa-detalhe-header .botao-fechar {
+    position: static; /* Remove o position absolute antigo */
+    align-self: start; /* Alinha no topo da sua célula da grade */
+}
+
+/* Abas */
+.oa-tabs {
+    display: flex;
+    border-bottom: 2px solid var(--gs-borda);
+    margin-bottom: 25px;
+}
+.oa-tab-btn {
+    padding: 10px 20px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--gs-texto-secundario);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px; /* Puxa o botão para baixo para a borda sobrepor a borda do container */
+    transition: color 0.2s, border-color 0.2s;
+}
+.oa-tab-btn:hover {
+    color: var(--gs-secundaria);
+}
+.oa-tab-btn.active {
+    color: var(--gs-primaria);
+    border-bottom-color: var(--gs-primaria);
+    font-weight: 600;
+}
+
+/* Painéis das Abas */
+.oa-tab-panel {
+    display: none; /* Escondido por padrão */
+}
+.oa-tab-panel.active {
+    display: block; /* Visível quando ativo */
+}
+
+.oa-form-acao {
+    max-width: 500px;
+    margin: 0 auto; /* Centraliza os formulários */
+    padding: 10px;
+}
+.oa-form-instrucao {
+    font-size: 0.9rem;
+    color: var(--gs-texto-secundario);
+    text-align: center;
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+.oa-input-grande {
+    font-size: 1.5rem;
+    text-align: center;
+    padding: 12px;
+}
+.oa-btn-grande {
+    padding: 12px 25px;
+    font-size: 1.1rem;
+}
+
+/*------------------------------------*\
+    #CARDS DE ARREMATE
+\*------------------------------------*/
+.oa-cards-container-arremate { 
+    display: grid; 
+    grid-template-columns: repeat(auto-fill, 
+    minmax(320px, 1fr)); 
+    gap: 20px; 
+}
+.oa-card-arremate { display: grid; grid-template-columns: auto 1fr auto; background-color: var(--gs-branco); border-radius: var(--gs-raio-borda-card); box-shadow: var(--gs-sombra-padrao); border-left: 6px solid var(--gs-borda); /* CORREÇÃO: Borda sempre cinza */ cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; overflow: hidden; align-items: center; }
+.oa-card-arremate:hover { transform: translateY(-4px); box-shadow: var(--gs-sombra-hover); }
+
+.oa-card-img { width: 65px; 
+    height: 65px; 
+    object-fit: cover; 
+    margin: 15px; 
+    border-radius: 50%; 
+    background-color: var(--gs-fundo-input); 
+}
+.oa-card-info { padding: 15px 10px; }
+.oa-card-info h3 { font-size: 1rem; color: var(--gs-secundaria); margin: 0 0 5px 0; font-weight: 600; }
+.oa-card-info p { font-size: 0.85rem; color: var(--gs-texto-secundario); margin: 0; }
+.oa-card-dados { display: flex; gap: 20px; padding: 15px; background-color: var(--gs-fundo-input); border-left: 1px solid var(--gs-borda); height: 100%; align-items: center; }
+.dado-bloco { text-align: center; }
+.dado-bloco .label { font-size: 0.7rem; color: var(--gs-texto-secundario); text-transform: uppercase; font-weight: 600; }
+.dado-bloco .valor { font-size: 1.4rem; font-weight: 700; line-height: 1.2; }
+.dado-bloco .valor.total-pendente { color: var(--gs-primaria); }
+
+/*------------------------------------*\
+    #TELA DE DETALHES
+\*------------------------------------*/
+.oa-detalhe-grid { display: grid; grid-template-columns: 1fr 1.5fr; gap: 40px; }
+.oa-detalhe-thumbnail { width: 120px; height: 120px; border-radius: var(--gs-raio-borda-card); margin: 0 auto 15px auto; background-color: var(--gs-fundo-input); border: 1px solid var(--gs-borda); overflow: hidden; }
+.oa-detalhe-thumbnail img { width: 100%; height: 100%; object-fit: cover; }
+.oa-detalhe-info { text-align: center; padding: 20px; background-color: var(--gs-fundo-input); border-radius: var(--gs-raio-borda-card); }
+.oa-detalhe-info h3 { font-size: 1.4rem; color: var(--gs-secundaria); }
+
+.oa-detalhe-total-pendente { font-size: 1.1rem; }
+.oa-detalhe-total-pendente strong { font-size: 2rem; color: var(--gs-aviso); margin-left: 10px; }
+.oa-divisor { border: 0; height: 1px; background-color: var(--gs-borda); margin: 20px 0; }
+.oa-lista-origem { max-height: 200px; overflow-y: auto; padding: 15px; }
+.oa-lista-origem p { font-size: 0.9rem; margin-bottom: 8px; border-bottom: 1px dashed var(--gs-borda); padding-bottom: 8px; }
+.oa-lista-origem p:last-child { border-bottom: none; }
+.oa-form-grupo { margin-bottom: 20px; }
+
+.oa-form-grupo label { 
+    display: block; 
+    margin: 8px; 
+    font-weight: 500;
+    font-size: 0.9rem; 
+    text-align: left; 
+}
+
+.oa-input, .oa-select { width: 100%; padding: 12px; font-size: 1rem; border: 1px solid var(--gs-borda); border-radius: 6px; }
+/* Ajusta o alinhamento do flex container dos botões */
+
+.oa-form-botoes {
+    display: flex;
+    justify-content: flex-end; /* Mantém "Lançar Arremate" à direita */
+    align-items: center; /* Alinha os botões verticalmente */
+    margin-top: 20px;
+}
+
+.oa-input-tarefas {
+    width: 100%;
+    padding: 12px;
+    font-size: 1rem;
+    border: 1px solid var(--gs-borda);
+    border-radius: 6px;
+}
+
+
+/* --- ESTILOS PARA FILTROS E BUSCA --- */
+
+.oa-card-filtros {
+    padding: 20px;
+}
+
+.oa-secao-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--gs-borda);
+}
+
+.oa-secao-header .oa-titulo-secao {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.oa-btn-atualizar {
+    background-color: transparent;
+    color: var(--gs-primaria);
+    border: 1px solid var(--gs-borda);
+    border-radius: 50px;
+    padding: 6px 14px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+.oa-btn-atualizar:hover:not(:disabled) {
+    background-color: var(--gs-primaria);
+    color: var(--gs-branco);
+    border-color: var(--gs-primaria);
+}
+.oa-btn-atualizar:disabled i {
+    animation: oa-spin 1.2s linear infinite;
+}
+
+.oa-filtros-linha {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+}
+
+.oa-form-grupo {
+    margin-bottom: 0;
+}
+
+.oa-input-busca {
+    padding: 10px 14px;
+    border: 1px solid var(--gs-borda);
+    border-radius: 6px;
+    font-size: 1rem;
+    width: 100%;
+}
+
+.oa-btn-filtros {
+    background-color: transparent;
+    border: 1px solid var(--gs-borda);
+    color: var(--gs-texto-principal);
+    padding: 10px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.oa-filtros-avancados-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 20px;
+    align-items: flex-end;
+    padding: 20px;
+    margin-top: 15px;
+    background-color: #f9fbfd;
+    border-radius: 8px;
+    border: 1px solid #eef2f7;
+    max-height: 0;
+    overflow: hidden;
+    padding-top: 0;
+    padding-bottom: 0;
+    transition: max-height 0.4s ease-out, padding 0.4s ease-out;
+}
+.oa-filtros-avancados-container:not(.hidden) {
+    max-height: 300px;
+    padding-top: 20px;
+    padding-bottom: 20px;
+}
+
+.oa-btn-limpar-filtros {
+    background-color: var(--gs-perigo);
+    color: var(--gs-branco);
+    padding: 10px 15px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    width: 100%;
+    justify-content: center;
+}
+.oa-btn-limpar-filtros:hover {
+    background-color: #c0392b; /* vermelho mais escuro */
+}
+
+
+.oa-tabela-historico .coluna-acoes {
+    text-align: center;
+}
+
+/*------------------------------------*\
+    BOTAO E LINHA ESTORNADA
+\*------------------------------------*/
+
+.oa-btn-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-size: 0.9rem;
+    padding: 0;
+    line-height: 32px;
+}
+
+.linha-estornada {
+    background-color: #f8f9fa;
+    color: #999;
+    text-decoration: line-through;
+    opacity: 0.7;
+}
+.linha-estornada:hover {
+    text-decoration: line-through;
+}
+
+/*------------------------------------*\
+    #COMPONENTES GENÉRICOS
+\*------------------------------------*/
+.oa-btn { padding: 10px 20px; font-size: 0.95rem; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px; color: var(--gs-branco); }
+.oa-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--gs-sombra-hover); }
+.oa-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.oa-btn-sucesso { background-color: var(--gs-sucesso); }
+.oa-btn-sucesso:hover:not(:disabled) { background-color: var(--gs-sucesso-hover); }
+.oa-btn-secundario { background-color: var(--gs-texto-secundario); }
+.oa-btn-secundario:hover:not(:disabled) { background-color: #6c7a7b; }
+.oa-btn-perigo { background-color: var(--gs-perigo); }
+
+/* Botão de Ícone (para ações secundárias como "Registrar Perda") */
+.oa-btn-icon {
+    padding: 0;
+    width: 44px; /* Tamanho do botão */
+    height: 44px;
+    border-radius: 50%; /* Deixa o botão redondo */
+    font-size: 1.1rem;
+    line-height: 44px; /* Ajuda a centralizar o ícone */
+    margin-right: auto; /* IMPORTANTE: Empurra ele para a esquerda */
+    color: #fff4e0;
+    border: none;
+
+}
+
+.botao-fechar { position: absolute; top: 20px; right: 20px; width: 32px; height: 32px; border-radius: 50%; border: none; font-size: 1.1rem; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.2); transition: all 0.2s; z-index: 10; display: flex; align-items: center; justify-content: center; color: var(--gs-branco); }
+
+.oa-paginacao-container { 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    gap: 10px; 
+    margin-top: 15px; 
+}
+.oa-paginacao-container .pagination-btn { background-color: var(--gs-branco); color: var(--gs-primaria); border: 1px solid var(--gs-primaria); padding: 8px 16px; font-size: 0.9rem; border-radius: 6px; cursor: pointer; transition: all 0.2s; }
+.oa-paginacao-container .pagination-btn:hover:not(:disabled) { background-color: var(--gs-primaria); color: var(--gs-branco); }
+.oa-paginacao-container .pagination-btn:disabled { border-color: var(--gs-borda); color: #aabbc3; background-color: var(--gs-fundo-input); cursor: not-allowed; }
+.oa-paginacao-container .pagination-current { font-size: 0.9rem; font-weight: 500; }
+
+.spinner {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+    font-size: 1rem;
+    color: var(--gs-texto-secundario); /* Cor mais suave */
+    gap: 15px; /* Espaço entre o ícone e o texto */
+}
+.spinner::before {
+    content: '';
+    width: 28px;
+    height: 28px;
+    border: 4px solid var(--gs-borda);
+    border-top-color: var(--gs-primaria);
+    border-radius: 50%;
+    animation: oa-spin 1s linear infinite;
+}
+
+@keyframes oa-spin { to { transform: rotate(360deg); } 
+
+}
+.spinner-btn-interno { width: 1em; 
+    height: 1em; 
+    border-width: 2px; 
+    margin-right: 8px; 
+    border-style: solid; 
+    border-color: rgba(255,255,255,0.3); 
+    border-top-color: var(--gs-branco); 
+    border-radius: 50%; 
+    animation: oa-spin 0.8s linear infinite; 
+    display: inline-block; }
+
+/* Modal e Popups (com prefixo oa- para evitar conflitos) */
+.oa-popup-overlay, .popup-overlay { 
+    position: fixed; 
+    top: 0; left: 0; 
+    width: 100%; height: 100%; 
+    background-color: rgba(44, 62, 80, 0.5); 
+    z-index: 1000; 
+}
+
+.oa-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); background-color: var(--gs-branco); border-radius: var(--gs-raio-borda-card); box-shadow: var(--gs-sombra-padrao); width: 90%; max-width: 800px; z-index: 1001; display: flex; flex-direction: column; max-height: 90vh; }
+
+/* ==========================================================================
+   # MODAL DE HISTÓRICO GERAL (Com Design Responsivo Corrigido)
+   ========================================================================== */
+
+/* --- Contêiner principal do modal --- */
+.oa-modal-historico {
+    background-color: var(--gs-branco);
+    border-radius: 10px;
+    box-shadow: var(--gs-sombra-padrao);
+    width: 95%; /* Ocupa mais espaço em telas pequenas */
+    max-width: 1000px;
+    z-index: 1001;
+    display: flex;
+    flex-direction: column;
+    height: 90vh; /* Altura máxima */
+    max-height: 700px;
+}
+
+/* --- Header, Filtros e Footer --- */
+.oa-modal-historico .oa-modal-header,
+.oa-modal-historico .oa-modal-filtros,
+.oa-modal-historico .oa-modal-footer {
+    flex-shrink: 0; /* Impede que encolham */
+}
+
+.oa-modal-historico .oa-modal-header {
+    display: flex;
+    justify-content: space-between; /* Empurra os itens para as pontas */
+    align-items: center; /* Alinha verticalmente */
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--gs-borda);
+}
+
+.oa-modal-historico .oa-modal-filtros {
+    display: grid;
+    grid-template-columns: 1fr; /* Coluna única no mobile */
+    gap: 15px;
+    padding: 15px;
+    background-color: #f9fbfd;
+    border-bottom: 1px solid var(--gs-borda);
+}
+.oa-modal-historico .oa-modal-filtros .oa-form-grupo label {
+    font-size: 0.8rem; margin-bottom: 5px;
+}
+
+.oa-modal-historico .oa-modal-body {
+    padding: 15px;
+    overflow-y: auto;
+    flex-grow: 1;
+    background-color: var(--gs-fundo-pagina);
+}
+
+.oa-modal-historico .oa-modal-footer {
+    padding: 15px 20px;
+    border-top: 1px solid var(--gs-borda);
+    background-color: #f9fbfd;
+    border-radius: var(--gs-raio-borda-card);
+}
+
+
+/* --- ESTILO MOBILE-FIRST PARA A TABELA (VISUAL DE CARDS) --- */
+.oa-tabela-historico {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+/* Esconde o cabeçalho da tabela no mobile */
+.oa-tabela-historico thead {
+    display: none;
+}
+
+.oa-tabela-historico tbody,
+.oa-tabela-historico tr {
+    display: block;
+}
+
+.oa-tabela-historico tr {
+    background-color: var(--gs-branco);
+    border-radius: 8px;
+    box-shadow: var(--gs-sombra-padrao);
+    padding: 15px;
+    margin-bottom: 15px;
+}
+.oa-tabela-historico tr:last-of-type {
+    margin-bottom: 0;
+}
+
+.oa-tabela-historico td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    text-align: right;
+    border-bottom: 1px dotted var(--gs-borda);
+}
+.oa-tabela-historico td:last-of-type {
+    border-bottom: none;
+}
+
+/* Gera os "labels" a partir do atributo data-label */
+.oa-tabela-historico td::before {
+    content: attr(data-label);
+    font-weight: 500;
+    color: var(--gs-texto-secundario);
+    text-align: left;
+    margin-right: 15px;
+}
+
+/* Ajustes finos de colunas específicas */
+.oa-tabela-historico td[data-label="Produto"] {
+    font-weight: 600;
+    color: var(--gs-secundaria);
+}
+.oa-tabela-historico td[data-label="Ações"] .btn-estornar-historico {
+    margin: -8px 0; /* Compensa o padding para o botão ficar bem alinhado */
+}
+
+
+@keyframes oa-fadeInPopup { 
+    from { opacity: 0; transform: translate(-50%, -55%); } 
+    to { opacity: 1; transform: translate(-50%, -50%); } 
+}
+@keyframes oa-fadeOutPopup {
+    from { opacity: 1; transform: translate(-50%, -50%); } 
+    to { opacity: 0; transform: translate(-50%, -60%); } 
+}
+@keyframes oa-fadeInOverlayPopup { 
+    from { opacity: 0; } 
+    to { opacity: 1; } 
+}
+@keyframes oa-fadeOutOverlayPopup {
+    from { opacity: 1; } 
+    to { opacity: 0; } 
+}
+
+.popup-mensagem { 
+    position: fixed; 
+    top: 50%; 
+    left: 50%; 
+    transform: translate(-50%,-50%); 
+    padding: 25px 30px; 
+    border-radius: var(--gs-raio-borda-card); 
+    box-shadow: 0 8px 25px rgba(0,0,0,0.2); 
+    z-index: 10002; 
+    max-width: 480px; 
+    width: 90%; 
+    text-align: center;
+    animation: oa-fadeInPopup 0.3s ease-out;
+}
+.popup-mensagem p { font-size: 1.05rem; line-height: 1.5; margin-bottom: 20px; }
+.popup-mensagem.popup-sucesso { background-color: #e6ffed; border-left: 5px solid var(--gs-sucesso); }
+.popup-mensagem.popup-erro { background-color: #ffebee; border-left: 5px solid var(--gs-perigo); }
+.popup-mensagem.popup-aviso { background-color: #fff4e0; border-left: 5px solid var(--gs-aviso); }
+.popup-mensagem button { padding: 10px 28px; margin-top: 10px; background-color: var(--gs-secundaria); color: var(--gs-branco); border: none; border-radius: 6px; cursor: pointer; transition: background-color 0.2s; }
+.popup-mensagem button:hover { 
+    background-color: #4a617a; 
+}
+.popup-overlay {
+    animation: oa-fadeInOverlayPopup 0.3s ease-out;
+}
+
+/* ==========================================================================
+   # ESTILOS DO NOVO PAINEL DE ATIVIDADES
+   ========================================================================== */
+
+.oa-painel-atividades {
+    background-color: var(--gs-fundo-input);
+    border-radius: var(--gs-raio-borda-card);
+    padding: 20px;
+    margin-top: 30px;
+    border: 1px solid var(--gs-borda);
+}
+
+.oa-painel-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.oa-card-status-tiktik {
+    background-color: var(--gs-branco);
+    border-radius: var(--gs-raio-borda-card);
+    box-shadow: var(--gs-sombra-padrao);
+    border-top: 4px solid var(--gs-texto-secundario);
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s ease;
+    /* Adiciona uma altura mínima para evitar que os cards fiquem de tamanhos diferentes */
+    min-height: 230px; 
+}
+
+/* Container redesenhado para a tarefa --- */
+.info-tarefa-redesenhada {
+    text-align: center;
+    padding: 15px 10px;
+    flex-grow: 1; /* Faz esta área ocupar o espaço central */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* Destaque principal para a quantidade */
+.quantidade-tarefa-destaque {
+    font-size: 2.5rem; /* BEM GRANDE */
+    font-weight: 700;
+    color: var(--gs-secundaria);
+    line-height: 1.1;
+}
+.quantidade-tarefa-destaque small {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--gs-texto-secundario);
+    margin-left: 5px;
+}
+
+/*  Estilo para o nome do produto como subtítulo */
+.produto-tarefa-subtitulo {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--gs-texto-principal);
+    margin-top: 5px;
+}
+
+/* Container para as métricas (cronômetro e barra) */
+.metricas-tarefa-container {
+    margin-top: 15px;
+}
+
+
+/* --- Estilos por Status --- */
+.oa-card-status-tiktik.status-livre { border-top-color: var(--gs-sucesso); }
+.oa-card-status-tiktik.status-produzindo { border-top-color: var(--gs-primaria); }
+.oa-card-status-tiktik.status-almoco { border-top-color: #fd7e14; } /* Laranja */
+.oa-card-status-tiktik.status-pausa { border-top-color: var(--gs-aviso); }
+.oa-card-status-tiktik.status-faltou { border-top-color: #6c757d; background-color: #f8f9fa; opacity: 0.7; }
+.oa-card-status-tiktik.status-fora-horario { border-top-color: #adb5bd; opacity: 0.6; }
+
+
+.card-status-header {
+    display: flex;
+    position: relative;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 15px;
+}
+
+.avatar-tiktik {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--gs-borda);
+    background-size: cover;       /* Garante que a imagem preencha o círculo */
+    background-position: center;  /* Centraliza a imagem no círculo */
+    background-repeat: no-repeat; /* Evita que a imagem se repita */
+    background-color: var(--gs-fundo-input); /* Cor de fundo enquanto carrega */
+}
+
+.info-empregado {
+    flex-grow: 1;
+}
+
+.nome-tiktik {
+    font-weight: 600;
+    color: var(--gs-secundaria);
+    display: block;
+}
+
+.status-selo {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    color: var(--gs-branco);
+    text-transform: uppercase;
+    display: inline-block;
+}
+
+/* ====================================================== */
+/*  # CORES DOS SELOS DE STATUS (VERSÃO CONSISTENTE)      */
+/* ====================================================== */
+
+/* Status Ativos */
+.status-selo.status-livre { background-color: var(--gs-sucesso); }
+.status-selo.status-produzindo { background-color: var(--gs-primaria); }
+
+/* Pausas e Ausências */
+.status-selo.status-almoco { background-color: #fd7e14; } /* Laranja */
+.status-selo.status-pausa { background-color: var(--gs-aviso); }
+.status-selo.status-pausa-manual { background-color: #f39c12; color: #ffffff; } /* Mesmo amarelo da pausa automática */
+
+/* Status Manuais de Dia Inteiro */
+.status-selo.status-faltou { background-color: #ff4907; } /* laranja forte */
+.status-selo.status-alocado-externo { background-color: #8e44ad; } /* Roxo */
+
+/* Outros */
+.status-selo.status-fora-do-horario { background-color: #adb5bd; } /* Cinza claro */
+
+.btn-marcar-falta {
+    background: none;
+    border: none;
+    color: var(--gs-texto-secundario);
+    cursor: pointer;
+    font-size: 1.2rem;
+    padding: 5px;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    transition: color 0.2s, background-color 0.2s;
+}
+.btn-marcar-falta:hover {
+    color: var(--gs-perigo);
+    background-color: #fbeeee;
+}
+
+.info-tarefa {
+    background-color: #f9fbfd;
+    border: 1px solid #eef2f7;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 15px;
+}
+
+.info-tarefa {
+    display: none;
+}
+
+.produto-tarefa { font-weight: 500; font-size: 0.9rem; }
+.quantidade-tarefa { font-size: 0.85rem; color: var(--gs-texto-secundario); }
+
+.cronometro-tarefa {
+    font-weight: 500;
+    font-size: 1.1rem;
+    color: var(--gs-texto-secundario);
+    margin-top: 8px; 
+}
+
+
+.barra-progresso-container {
+    background-color: var(--gs-borda);
+    border-radius: 50px;
+    height: 10px; /* Um pouco mais grossa */
+    margin-top: 8px;
+    overflow: hidden;
+    cursor: help; /* Indica que há uma dica (tooltip) */
+}
+
+.barra-progresso {
+    height: 100%;
+    background-color: var(--gs-sucesso);
+    border-radius: 50px;
+    transition: width 0.5s linear; /* Transição linear para um crescimento suave */
+}
+
+.barra-progresso.atencao { background-color: var(--gs-aviso); }
+.barra-progresso.lento { background-color: var(--gs-perigo); }
+
+
+.card-status-footer {
+    margin-top: auto; /* Empurra o rodapé para o final do card */
+    padding-top: 15px;
+    border-top: 1px dashed var(--gs-borda);
+}
+
+/* Novo container para os botões de ação no rodapé do card de status */
+.oa-card-botoes-acao-container {
+    display: flex;
+    gap: 10px; /* Espaço entre os botões */
+    width: 100%;
+}
+
+.aviso-pausa-inteligente {
+    font-size: 0.85rem;
+    color: var(--gs-aviso);
+    background-color: #fffbeb;
+    border: 1px solid var(--gs-aviso);
+    border-radius: 6px;
+    padding: 10px;
+    text-align: center;
+    max-width: 280px;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 5px;
+    margin-bottom: 15px;
+}
+
+.btn-acao {
+    flex-grow: 1;
+    width: auto; 
+    padding: 10px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--gs-branco);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-acao.iniciar { 
+    background-color: var(--gs-texto-secundario); 
+    width: 100%;
+}
+.btn-acao.iniciar:hover { 
+    background-color: var(--gs-sucesso-hover); 
+}
+
+
+.btn-acao.finalizar { background-color: var(--gs-primaria); }
+
+.btn-acao.finalizar:hover { 
+    background-color: var(--gs-primaria-hover); 
+}
+
+.btn-acao:disabled {
+    background-color: #bdc3c7; /* Um cinza claro */
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+/* Remove os efeitos de hover quando o botão está desabilitado */
+.btn-acao:disabled:hover {
+    background-color: #bdc3c7;
+    transform: none; /* Remove o efeito de "levantar" */
+    box-shadow: none;
+}
+
+/* Estilo específico para o botão de cancelar */
+.btn-acao.cancelar {
+    background-color: var(--gs-texto-secundario); /* Cor neutra, menos destaque que finalizar */
+}
+.btn-acao.cancelar:hover {
+    background-color: var(--gs-perigo); /* Fica vermelho no hover, indicando uma ação destrutiva */
+    color: var(--gs-branco);
+}
+
+.erro-painel {
+    text-align: center;
+    color: var(--gs-perigo);
+    padding: 20px;
+}
+
+/* Estilos para o Accordion de Inativos */
+.oa-accordion-inativos {
+    margin-top: 20px;
+}
+
+.oa-accordion-header {
+    background-color: var(--gs-branco);
+    border: 1px solid var(--gs-borda);
+    border-radius: var(--gs-raio-borda-card);
+    width: 100%;
+    padding: 12px 20px;
+    text-align: left;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--gs-texto-secundario);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: background-color 0.3s, border-radius 0.3s;
+}
+
+.oa-accordion-header:hover {
+    background-color: #fcfdff;
+}
+
+.oa-accordion-header.active {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.oa-accordion-badge {
+    background-color: var(--gs-texto-secundario);
+    color: var(--gs-branco);
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    font-size: 0.8rem;
+    line-height: 24px;
+    text-align: center;
+    margin-left: 10px;
+}
+
+.accordion-icone {
+    margin-left: auto;
+    transition: transform 0.3s ease;
+}
+
+.oa-accordion-header.active .accordion-icone {
+    transform: rotate(180deg);
+}
+
+.oa-accordion-content {
+    display: none; /* Começa completamente escondido */
+    background-color: var(--gs-branco);
+    border: 1px solid var(--gs-borda);
+    border-top: none;
+    border-bottom-left-radius: var(--gs-raio-borda-card);
+    border-bottom-right-radius: var(--gs-raio-borda-card);
+    padding: 8px; /* Padding fixo */
+}
+
+/* Quando o header tiver a classe .active, o conteúdo aparece */
+.oa-accordion-header.active + .oa-accordion-content {
+    display: block; /* Simplesmente mostra o conteúdo */
+}
+/* O conteúdo interno precisa estar dentro de um wrapper */
+#painelInativosContainer {
+    min-height: 0; /* Ajuda a animação do grid a funcionar corretamente */
+}
+
+/* ==========================================================================
+   # ESTILOS DO NOVO MODAL DE ATRIBUIÇÃO DE TAREFA
+   ========================================================================== */
+.oa-modal-atribuir {
+    background-color: var(--gs-branco);
+    border-radius: 10px;
+    box-shadow: var(--gs-sombra-padrao);
+    width: 90%;
+    max-width: 900px;
+    z-index: 10001;
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh;
+    height: auto;
+    animation: popup-slide-in 0.3s ease-out;
+}
+
+.oa-modal-body-atribuir {
+    display: flex;
+    flex-grow: 1;
+    overflow: hidden; /* Evita que o body do modal tenha scroll */
+}
+
+.coluna-lista-produtos {
+    flex: 3; /* Ocupa mais espaço */
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--gs-borda);
+}
+
+.filtro-busca-modal {
+    margin-bottom: 15px;
+}
+
+.oa-cards-container-modal {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    max-height: 40vh;
+    overflow-y: auto;
+    padding: 5px;
+    align-content: start;
+}
+
+.oa-card-arremate-modal {
+    display: flex; /* Mudar para flex para melhor alinhamento */
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border: 1px solid var(--gs-borda);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.oa-card-arremate-modal:hover {
+    border-color: var(--gs-primaria);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.oa-card-arremate-modal.selecionada {
+    border-color: var(--gs-primaria);
+    background-color: #f0f8ff;
+    border-width: 2px;
+}
+.oa-card-arremate-modal .oa-card-img { width: 40px; height: 40px; flex-shrink: 0; }
+.oa-card-arremate-modal .oa-card-info { padding: 0; }
+.oa-card-arremate-modal .oa-card-info h3 { font-size: 0.9rem; margin-bottom: 2px; }
+.oa-card-arremate-modal .oa-card-info p { font-size: 0.8rem; margin: 0; }
+.oa-card-arremate-modal .oa-card-dados { display: none; } /* Esconde os dados numéricos no card pequeno */
+
+#modalPaginacaoContainer {
+    padding-top: 15px;
+    flex-shrink: 0;
+}
+
+.coluna-confirmacao {
+    flex: 2;
+    background-color: var(--gs-fundo-input);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.form-confirmacao-wrapper, .placeholder-confirmacao {
+    width: 100%;
+    text-align: center;
+}
+
+.form-confirmacao-wrapper {
+    width: 100%;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex-grow: 1;
+}
+
+
+.placeholder-confirmacao i { font-size: 3rem; color: #ced4da; }
+.placeholder-confirmacao p { color: var(--gs-texto-secundario); margin-top: 15px; }
+
+.img-confirmacao {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 15px;
+    border: 1px solid var(--gs-borda);
+}
+
+.form-confirmacao-wrapper h4 {
+    font-size: 1.2rem;
+    color: var(--gs-secundaria);
+}
+.form-confirmacao-wrapper p {
+    margin-bottom: 20px;
+}
+.form-confirmacao-wrapper .oa-btn {
+    width: 100%;
+}
+
+/* DESTACA O NOME DO USUARIO NO MODAL DE ATRIBUIR TAREFA */
+.nome-destaque-modal {
+    color: var(--gs-primaria);
+    font-weight: 600;
+}
+
+/* DESTACA INFORMACOES DE SALDO DO PRODUTO DE ATRIBUIR TAREFA */
+.info-saldo-atribuir {
+    display: flex;
+    justify-content: space-around;
+    gap: 15px;
+    background-color: var(--gs-branco);
+    padding: 15px;
+    border-radius: 8px;
+    margin: 15px 0 0;
+    border: 1px solid var(--gs-borda);
+}
+
+.saldo-item {
+    text-align: center;
+}
+
+.saldo-item label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--gs-texto-secundario);
+    font-weight: 500;
+    margin-bottom: 5px;
+}
+
+.saldo-valor {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.saldo-valor.pendente {
+    color: var(--gs-aviso);
+}
+
+.saldo-valor.restante {
+    color: var(--gs-texto-principal);
+}
+
+/* DESTACA INFORMACOES DO USO DO CRONOMETRO DO CARD ATRIBUIR TAREFA */
+.media-info {
+    font-size: 0.75rem;
+    color: var(--gs-texto-secundario);
+    text-align: center;
+    margin-top: 8px;
+    margin-bottom: 0;
+}
+.media-info strong {
+    color: var(--gs-texto-principal);
+    font-weight: 600;
+}
+
+/* --- Estilos para o Input no Popup --- */
+.popup-input-container {
+    margin-bottom: 25px;
+}
+
+/* Container para alinhar feedback e botão no header */
+.header-acoes {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.feedback-atualizacao {
+    font-size: 0.8rem;
+    color: var(--gs-texto-secundario);
+    font-style: italic;
+    transition: color 0.3s;
+}
+
+/* ==========================================================================
+   # ESTILOS DO MODAL "MODO FOCO"
+   ========================================================================== */
+.oa-modal-foco {
+    background-color: var(--gs-fundo-pagina); /* Fundo cinza para destacar os cards internos */
+    border-radius: 12px;
+    box-shadow: var(--gs-sombra-hover);
+    width: 90%;
+    max-width: 800px;
+    z-index: 10001;
+    display: flex;
+    flex-direction: column;
+    height: 90vh;
+    max-height: 800px;
+    animation: popup-slide-in 0.3s ease-out;
+}
+.oa-modal-foco .oa-modal-header {
+    display: flex; /* Garante o alinhamento em linha */
+    justify-content: space-between; /* Empurra os itens para as pontas */
+    align-items: center; /* Alinha verticalmente */
+    background-color: var(--gs-branco);
+    border-bottom: 1px solid var(--gs-borda);
+    padding: 15px 20px;
+}
+.header-info-foco {
+    display: flex;
+    align-items: center;
+    gap: 15px; /* Espaço entre a imagem e o título */
+}
+
+.subtitulo-foco {
+    font-size: 0.9rem;
+    color: var(--gs-texto-secundario);
+}
+.oa-modal-body-foco {
+    padding: 20px;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+.oa-modal-body-foco h4 {
+    font-size: 1rem;
+    color: var(--gs-secundaria);
+    margin-top: 25px;
+    margin-bottom: 15px;
+    border-bottom: 1px solid var(--gs-borda);
+    padding-bottom: 8px;
+}
+.foco-metricas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    background-color: var(--gs-branco);
+    padding: 20px;
+    border-radius: var(--gs-raio-borda-card);
+}
+.metrica-item {
+    text-align: center;
+}
+.metrica-valor {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--gs-primaria);
+    display: block;
+}
+.metrica-label {
+    font-size: 0.85rem;
+    color: var(--gs-texto-secundario);
+    font-weight: 500;
+}
+
+/* Estilos para a lista de OPs no modal de atribuição */
+.origem-lancamento-container {
+    text-align: left;
+    font-size: 0.85rem;
+    background-color: #f0f2f5;
+    padding: 10px 15px;
+    border-radius: 6px;
+    margin: 15px 0;
+    border: 1px solid #e0e4e8;
+}
+
+.origem-lancamento-container strong {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--gs-secundaria);
+}
+
+.origem-lancamento-container ul {
+    list-style-type: none;
+    padding-left: 0;
+    margin: 0;
+    max-height: 80px; /* Evita listas muito longas */
+    overflow-y: auto;
+}
+
+.origem-lancamento-container li {
+    padding: 3px 0;
+    color: var(--gs-texto-secundario);
+}
+
+/* Estilos para feedback de concorrência nos cards de arremate */
+.oa-card-arremate.em-trabalho {
+    border-left-color: var(--gs-aviso);
+    background-color: #fffbeb;
+    position: relative;
+}
+
+.feedback-em-trabalho {
+    /* Removido: grid-column: 1 / -1; */
+    width: 100%; /* Ocupa a largura total */
+    grid-column-start: 1;
+    grid-column-end: 4; /* Força a ocupar as 3 colunas do grid do card */
+    background-color: var(--gs-aviso);
+    color: #5d470d;
+    padding: 8px 15px;
+    font-size: 0.8rem;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    order: 4; /* Garante que ele seja o último elemento no card */
+}
+
+.feedback-em-trabalho .fa-cog {
+    font-size: 0.9rem;
+}
+
+/* Estilos para o saldo dinâmico no card de arremate */
+.dado-bloco .valor.saldo-dinamico {
+    display: inline-block; /* Permite que fiquem na mesma linha */
+    line-height: 1.2;
+}
+
+.dado-bloco .valor.saldo-dinamico.disponivel {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--gs-aviso); /* Destaca o saldo disponível */
+}
+
+.dado-bloco .valor.saldo-dinamico.total {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--gs-texto-secundario);
+    margin-left: 4px;
+}
+
+/* Estilos para feedback no modal de atribuição */
+.oa-card-dados-modal {
+    margin-left: auto;
+    padding-right: 10px;
+    text-align: right;
+}
+.oa-card-dados-modal .valor {
+    font-weight: 600;
+    color: var(--gs-texto-principal);
+}
+.oa-card-arremate-modal.em-trabalho-modal {
+    background-color: #fffbeb;
+    border-color: var(--gs-aviso);
+}
+.oa-card-arremate-modal.em-trabalho-modal .oa-card-dados-modal .valor {
+    color: var(--gs-aviso);
+}
+
+/* Adiciona o cursor de "ponteiro" ao avatar para indicar que é clicável */
+.oa-avatar-foco {
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Efeito de "zoom" sutil ao passar o mouse */
+.oa-avatar-foco:hover {
+    transform: scale(1.08);
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+}
+
+
+/* ==========================================================================
+   # NOVO COMPONENTE SELETOR DE QUANTIDADE (MODAL ATRIBUIR)
+   ========================================================================== */
+
+/* Wrapper principal do novo componente */
+.seletor-quantidade-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    width: 100%;
+    max-width: 300px;
+    margin: 20px auto;
+    padding: 20px;
+    background-color: var(--gs-branco);
+    border: 1px solid var(--gs-borda);
+    border-radius: var(--gs-raio-borda-card);
+    box-shadow: var(--gs-sombra-padrao);
+}
+
+.seletor-quantidade-wrapper label {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--gs-texto-secundario);
+}
+
+/* Container do input com os botões +/- */
+.input-container {
+    display: flex;
+    align-items: center;
+}
+
+.input-container .oa-input-tarefas {
+    text-align: center;
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--gs-secundaria);
+    width: 120px;
+    height: 60px;
+    border: 1px solid var(--gs-borda);
+    border-left: none;
+    border-right: none;
+    border-radius: 0;
+    padding: 5px;
+}
+
+.input-container .oa-input-tarefas:focus {
+    box-shadow: none; /* Remove a sombra de foco padrão para manter o visual limpo */
+}
+
+.input-container .oa-input-tarefas::-webkit-outer-spin-button,
+.input-container .oa-input-tarefas::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.ajuste-qtd-btn {
+    width: 50px;
+    height: 60px;
+    font-size: 1.8rem;
+    font-weight: 400;
+    color: var(--gs-primaria);
+    background-color: var(--gs-fundo-input);
+    border: 1px solid var(--gs-borda);
+    cursor: pointer;
+    transition: background-color 0.2s;
+    line-height: 1;
+}
+.ajuste-qtd-btn:hover {
+    background-color: #e9ecef;
+}
+.ajuste-qtd-btn:first-of-type {
+    border-top-left-radius: 8px;
+    border-bottom-left-radius: 8px;
+}
+.ajuste-qtd-btn:last-of-type {
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+
+.atalhos-qtd-container {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    width: 100%;
+}
+
+.atalho-qtd-btn {
+    flex-grow: 1;
+    padding: 10px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    background-color: transparent;
+    border: 1px solid var(--gs-borda);
+    color: var(--gs-texto-principal);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.atalho-qtd-btn:hover {
+    background-color: var(--gs-fundo-input);
+    border-color: var(--gs-primaria);
+    color: var(--gs-primaria);
+}
+
+/* Garante que o botão confirmar tenha um bom espaçamento e largura */
+#btnConfirmarAtribuicao {
+    width: 100%;
+    max-width: 280px;
+    padding: 12px;
+    margin: 15px auto 0 auto; 
+    display: block;
+    flex-shrink: 0;
+}
+
+.coluna-confirmacao::-webkit-scrollbar {
+    display: none; /* Esconde a barra de rolagem */
+}
+
+
+/* ==========================================================================
+   # ESTILOS REDESIGN MODO FOCO
+   ========================================================================== */
+
+.foco-resumo-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.foco-resumo-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background-color: var(--gs-branco);
+    padding: 10px;
+    border-radius: var(--gs-raio-borda-card);
+    border: 1px solid var(--gs-borda);
+}
+
+.foco-resumo-img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.foco-resumo-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.foco-resumo-nome {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--gs-texto-principal);
+    line-height: 1.2;
+}
+
+.foco-resumo-qtd {
+    font-size: 0.85rem;
+    color: var(--gs-texto-secundario);
+}
+
+/* Estilos para os cards de tarefa detalhada */
+#focoTarefas {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.foco-tarefa-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background-color: var(--gs-branco);
+    padding: 12px 15px;
+    border-radius: var(--gs-raio-borda-card);
+    border: 1px solid var(--gs-borda);
+    box-shadow: var(--gs-sombra-padrao);
+}
+
+.foco-tarefa-img {
+    width: 50px;
+    height: 50px;
+    border-radius: 6px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.foco-tarefa-info {
+    flex-grow: 1;
+}
+
+.foco-tarefa-produto {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--gs-secundaria);
+    display: block;
+}
+
+.foco-tarefa-variante {
+    font-size: 0.85rem;
+    color: var(--gs-texto-secundario);
+    margin-bottom: 8px;
+    display: block;
+}
+
+.foco-tarefa-metricas {
+    display: flex;
+    gap: 20px;
+    font-size: 0.9rem;
+}
+.foco-tarefa-metricas i {
+    margin-right: 6px;
+    color: var(--gs-texto-secundario);
+}
+
+.btn-desfazer-tarefa {
+    background-color: var(--gs-fundo-input);
+    color: var(--gs-texto-secundario);
+    border: 1px solid var(--gs-borda);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+.btn-desfazer-tarefa:hover:not(:disabled) {
+    background-color: var(--gs-perigo);
+    color: var(--gs-branco);
+    border-color: var(--gs-perigo);
+    transform: scale(1.1);
+}
+.btn-desfazer-tarefa:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* --- Estilos para o Menu de Ações Rápidas --- */
+.btn-menu-acoes {
+    background: none;
+    border: none;
+    color: var(--gs-texto-secundario);
+    cursor: pointer;
+    font-size: 1.2rem;
+    padding: 5px;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    transition: color 0.2s, background-color 0.2s;
+}
+.btn-menu-acoes:hover {
+    color: var(--gs-primaria);
+    background-color: #f0f8ff;
+}
+
+.menu-acoes-popup {
+    position: absolute; /* IMPORTANTE: Mantenha como 'absolute' */
+    top: 45px;
+    right: 15px;
+    z-index: 10;
+    background-color: var(--gs-branco);
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+    width: 220px;
+    display: none;
+    padding: 5px 0;
+    border: 1px solid var(--gs-borda);
+}
+
+
+.menu-acoes-popup.visivel {
+    display: block;
+}
+
+.menu-acoes-popup button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 15px;
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--gs-texto-principal);
+}
+.menu-acoes-popup button:hover {
+    background-color: var(--gs-fundo-input);
+}
+.menu-acoes-popup button i {
+    width: 20px;
+    text-align: center;
+    color: var(--gs-texto-secundario);
+}   
+
+/* --- Estilo para Ações Otimistas em Andamento --- */
+.oa-card-status-tiktik.acao-em-andamento {
+    opacity: 0.6;
+    pointer-events: none; /* Impede cliques múltiplos enquanto a ação processa */
+    position: relative;
+}
+
+.oa-card-status-tiktik.acao-em-andamento::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 28px;
+    height: 28px;
+    margin-top: -14px;
+    margin-left: -14px;
+    border: 3px solid rgba(255, 255, 255, 0.5);
+    border-top-color: var(--gs-branco);
+    border-radius: 50%;
+    animation: oa-spin 0.8s linear infinite;
+}
+
+/* --- Estilos para o Aviso de Horário Estendido --- */
+.aviso-horario-estendido {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 6px 10px;
+    margin: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-align: center;
+}
+
+/* Cores por Nível de Alerta */
+.aviso-horario-estendido.nivel-atencao { /* Amarelo para Pausas */
+    background-color: #fffbeb;
+    color: #b38600;
+    border-bottom: 1px solid #ffeeba;
+}
+
+.aviso-horario-estendido.nivel-critico { /* Vermelho para Fora do Expediente */
+    background-color: #f8d7da;
+    color: #721c24;
+    border-bottom: 1px solid #f5c6cb;
+}
+
+.aviso-horario-estendido.nivel-info { /* Azul/Cinza para Antes do Expediente */
+    background-color: #e2e3e5;
+    color: #383d41;
+    border-bottom: 1px solid #d6d8db;
+}
+
+/* ==========================================================================
+   # FASE 2: ESTILOS DO NOVO CARD DE ARREMATE (REACT)
+   ========================================================================== */
+
+.oa-card-arremate-react {
+    display: grid;
+    grid-template-columns: auto 1fr auto; /* Colunas: Imagem, Info, Pendente */
+    grid-template-rows: auto;
+    gap: 0 16px;
+    align-items: center;
+    background-color: var(--gs-branco);
+    border-radius: var(--gs-raio-borda-card);
+    padding: 16px;
+    box-shadow: var(--gs-sombra-padrao);
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.oa-card-arremate-react:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--gs-sombra-hover);
+}
+
+.card-borda-charme {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 6px;
+    height: 100%;
+    background-color: var(--gs-primaria);
+}
+
+.card-imagem-produto {
+    grid-column: 1 / 2;
+    width: 70px;
+    height: 70px;
+    object-fit: cover;
+    border-radius: 8px;
+    background-color: var(--gs-fundo-input);
+}
+
+.card-info-principal {
+    grid-column: 2 / 3;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.card-info-principal h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--gs-secundaria);
+    margin: 0;
+    line-height: 1.3;
+}
+
+.card-info-principal p {
+    font-size: 0.9rem;
+    color: var(--gs-texto-secundario);
+    margin: 0;
+}
+
+.card-info-secundaria {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+    font-size: 0.85rem;
+    color: var(--gs-texto-secundario);
+}
+
+.card-info-secundaria .info-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.card-bloco-pendente {
+    grid-column: 3 / 4;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: #f0f8ff; /* Azul bem claro */
+    align-self: stretch; /* Ocupa a altura toda */
+    padding: 10px 15px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.card-bloco-pendente .label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--gs-primaria);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.card-bloco-pendente .valor {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--gs-secundaria);
+    line-height: 1.1;
+}
+
+/* Estilos do Tooltip */
+.custom-tooltip {
+    background-color: var(--gs-secundaria) !important;
+    color: #fff !important;
+    border-radius: 6px !important;
+    padding: 8px 12px !important;
+    font-size: 0.9rem !important;
+    z-index: 9999;
+}
+
+.tooltip-lista-ops {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.tooltip-lista-ops li {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 4px 0;
+}
+.tooltip-data-op {
+    color: #bdc3c7; /* Cinza claro */
+    font-size: 0.8rem;
+}
+
+.info-item-data {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background-color: #f4f6f8; /* Um cinza bem claro para destacar */
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.info-item-data i {
+    color: var(--gs-texto-secundario);
+}
+
+.info-item-data span {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+    font-size: 0.8rem;
+    text-align: left;
+}
+
+.info-item-data span strong {
+    font-weight: 700;
+    color: var(--gs-texto-principal);
+    font-size: 0.85rem;
+}
+
+
+/* ==========================================================================
+   # ESTILOS GERAIS PARA MODAIS E POPUPS (Refatorado)
+   ========================================================================== */
+
+/* --- Botão Voltar (Estilo Base) --- */
+.btn-voltar-header {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: 1px solid var(--gs-borda);
+    color: var(--gs-texto-principal);
+    font-size: 0.9rem;
+    font-weight: 500;
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.btn-voltar-header:hover {
+    background-color: var(--gs-fundo-input);
+    border-color: var(--gs-primaria);
+}
+
+/* --- Botão Fechar (Estilo Base) --- */
+.oa-modal-fechar-btn {
+    background-color: var(--gs-perigo);
+    color: var(--gs-branco);
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
+    font-weight: bold;
+    line-height: 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: transform 0.2s ease, background-color 0.2s ease;
+}
+.oa-modal-fechar-btn:hover {
+    background-color: #c0392b;
+    transform: scale(1.1);
+}
+
+/* --- Título do Modal (Estilo Base) --- */
+.oa-modal-titulo {
+    font-size: 1.2rem;
+    color: var(--gs-secundaria);
+    margin: 0;
+}
+
+/* ==========================================================================
+   # ESTILOS GERAIS PARA MODAIS (Refatorado e Simplificado)
+   ========================================================================== */
+.btn-voltar-header {
+    display: inline-flex; align-items: center; gap: 6px; background: none;
+    border: 1px solid var(--gs-borda); color: var(--gs-texto-principal);
+    font-size: 0.9rem; font-weight: 500; padding: 6px 14px; border-radius: 20px;
+    cursor: pointer; transition: all 0.2s ease;
+}
+.btn-voltar-header:hover {
+    background-color: var(--gs-fundo-input); border-color: var(--gs-primaria);
+}
+.oa-modal-fechar-btn {
+    background-color: var(--gs-perigo); color: var(--gs-branco); border: none;
+    border-radius: 50%; width: 32px; height: 32px; font-size: 1rem; font-weight: bold;
+    line-height: 32px; text-align: center; cursor: pointer; transition: all 0.2s ease;
+}
+.oa-modal-fechar-btn:hover {
+    background-color: #c0392b; transform: scale(1.1);
+}
+
+
+/* ==========================================================================
+   # MODAL DE ATRIBUIÇÃO V2 (Com Lógica Responsiva CORRIGIDA)
+   ========================================================================== */
+.oa-modal-atribuir-v2 {
+    z-index: 1001; position: relative; width: 90%; height: 90vh;
+    background-color: var(--gs-fundo-pagina); border-radius: var(--gs-raio-borda-card);
+    display: flex; flex-direction: column; box-shadow: var(--gs-sombra-hover);
+    transition: max-width 0.4s ease-in-out;
+}
+.oa-modal-atribuir-v2.modo-lista { max-width: 1200px; }
+.oa-modal-atribuir-v2.modo-confirmacao { max-width: 500px; }
+
+.oa-modal-atribuir-v2 .oa-modal-body {
+    padding: 15px; flex-grow: 1; overflow-y: auto;
+}
+
+/* --- ESTILOS PADRÃO (MOBILE-FIRST) --- */
+
+/* Header em duas linhas */
+.oa-modal-atribuir-v2 .oa-modal-header {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-rows: auto auto;
+    align-items: center; gap: 10px; padding: 10px 15px;
+    background-color: var(--gs-branco);
+    border-bottom: 1px solid var(--gs-borda);
+    flex-shrink: 0;
+    border-radius: var(--gs-raio-borda-card)
+}
+.oa-modal-atribuir-v2 .btn-voltar-header { grid-column: 1 / 2; grid-row: 1 / 2; }
+.oa-modal-atribuir-v2 .oa-modal-fechar-btn { grid-column: 3 / 4; grid-row: 1 / 2; justify-self: end; }
+.oa-modal-atribuir-v2 .oa-modal-titulo {
+    grid-column: 1 / 4; grid-row: 2 / 3;
+    text-align: center; font-size: 1.1rem; padding: 0;
+}
+
+/* Layout dos filtros e conteúdo empilhado */
+.layout-selecao-produto {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+.coluna-conteudo-principal {
+    padding-top: 20px;
+}
+.coluna-filtros {
+    order: 1; /* Filtros em cima */
+}
+.coluna-conteudo-principal {
+    order: 2; /* Conteúdo embaixo */
+}
+
+/* ==========================================================================
+   # ACORDEÃO DE FILTROS PARA MODAL HISTÓRICO (Mobile)
+   ========================================================================== */
+
+.oa-filtros-acordeao {
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--gs-borda);
+}
+
+.oa-acordeao-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px 20px;
+    background-color: #f9fbfd;
+    border: none;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--gs-texto-principal);
+    cursor: pointer;
+}
+
+.oa-acordeao-icone {
+    margin-left: auto; /* Empurra o ícone de seta para a direita */
+    transition: transform 0.3s ease;
+}
+
+.oa-acordeao-header.active .oa-acordeao-icone {
+    transform: rotate(180deg);
+}
+
+.oa-acordeao-content {
+    max-height: 0; /* Começa fechado */
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+}
+
+.oa-acordeao-content.open {
+    max-height: 500px; /* Altura suficiente para mostrar os filtros */
+}
+
+/* Os filtros em si, agora dentro do acordeão */
+.oa-modal-filtros {
+    border-bottom: none; /* A borda agora está no container do acordeão */
+    padding-top: 0;
+}
+
+
+/* ==========================================================================
+   # DESIGN DO FORMULÁRIO DE REGISTRO DE PERDA
+   ========================================================================== */
+
+/* Card que envolve o formulário */
+.form-card-perda {
+    width: 100%;
+    background-color: var(--gs-branco);
+    padding: 25px;
+    border-radius: var(--gs-raio-borda-card);
+    border: 1px solid var(--gs-borda);
+    box-shadow: var(--gs-sombra-padrao);
+}
+
+/* Estilo para o Textarea (caso não exista um genérico) */
+.oa-textarea {
+    width: 100%;
+    padding: 12px;
+    font-size: 1rem;
+    border: 1px solid var(--gs-borda);
+    border-radius: 6px;
+    font-family: var(--gs-fonte-principal);
+    resize: vertical; /* Permite ao usuário redimensionar verticalmente */
+}
+
+/* Novo seletor de quantidade para perdas */
+.seletor-quantidade-perda {
+    text-align: center;
+}
+.seletor-quantidade-perda label {
+    font-weight: 500;
+    margin-bottom: 10px !important; /* !important para garantir a sobreposição */
+    display: block;
+}
+
+.input-container-perda {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    max-width: 200px;
+    margin: 0 auto;
+}
+/* Reutiliza o estilo do input de tarefas que já temos */
+.input-container-perda .oa-input-tarefas {
+    width: 80px;
+    height: 50px;
+    font-size: 1.8rem;
+    text-align: center; 
+}
+/* Reutiliza o estilo dos botões +/- que já temos */
+.input-container-perda .ajuste-qtd-btn {
+    width: 45px;
+    height: 50px;
+}
+
+.saldo-maximo-info {
+    display: block;
+    margin-top: 8px;
+    font-size: 0.8rem;
+    color: var(--gs-texto-secundario);
+    font-style: italic;
+}
+
+/* ==========================================================================
+   # CARIMBO DE STATUS PARA CARDS INATIVOS
+   ========================================================================== */
+
+.status-carimbo-container {
+    flex-grow: 1; /* Ocupa o espaço vazio do card */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden; /* Garante que o carimbo não vaze para fora */
+    position: relative; /* Necessário para o posicionamento do carimbo */
+    min-height: 100px; /* Garante uma altura mínima para o carimbo aparecer */
+}
+
+.status-carimbo {
+    position: absolute;
+    font-size: 2rem; /* Tamanho da fonte bem grande */
+    font-weight: 700;
+    text-transform: uppercase;
+    color: currentColor; /* Pega a cor definida pela classe de status */
+    border: 4px solid currentColor; /* Borda com a mesma cor */
+    border-radius: 10px;
+    padding: 10px 25px;
+    opacity: 0.15; /* Efeito de "tinta fraca" */
+    transform: rotate(-15deg); /* A inclinação do carimbo */
+    user-select: none; /* Impede que o texto seja selecionado */
+    white-space: nowrap; /* Impede que o texto quebre a linha */
+}
+
+/* Cores específicas para cada status */
+.status-livre .status-carimbo,
+.status-livre-manual .status-carimbo {
+    color: var(--gs-sucesso);
+}
+.status-almoco .status-carimbo {
+    color: #fd7e14; /* Laranja */
+}
+.status-pausa .status-carimbo,
+.status-pausa-manual .status-carimbo {
+    color: var(--gs-aviso);
+}
+.status-faltou .status-carimbo {
+    color: #ff4907; /* Laranja forte */
+}
+.status-alocado-externo .status-carimbo {
+    color: #8e44ad; /* Roxo */
+}
+.status-fora-do-horario .status-carimbo {
+    color: #adb5bd; /* Cinza claro */
+}
+
+/* ==========================================================================
+   # INDICADOR DE RITMO COM EMOJI
+   ========================================================================== */
+
+.indicador-ritmo-tarefa {
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-top: 8px; /* Espaçamento */
+    height: 20px; /* Altura fixa para evitar "pulos" no layout */
+    transition: color 0.3s ease;
+}
+
+/* Cores por ritmo */
+.indicador-ritmo-tarefa.ritmo-rapido {
+    color: #1abc9c; /* Verde/Azul-piscina */
+}
+.indicador-ritmo-tarefa.ritmo-normal {
+    color: var(--gs-texto-principal);
+}
+.indicador-ritmo-tarefa.ritmo-lento {
+    color: var(--gs-perigo);
+}
+
+/* ==========================================================================
+   # ESTILOS PARA O TOOLTIP DE DIAGNÓSTICO DE RITMO
+   ========================================================================== */
+
+.tooltip-ritmo p {
+    margin: 4px 0;
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+.tooltip-ritmo hr {
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    margin: 6px 0;
+}
+.tooltip-ritmo strong {
+    color: #bdc3c7; /* Cinza claro para os labels */
+}
+
+/*------------------------------------*\
+    #RESPONSIVIDADE
+\*------------------------------------*/
+
+@media (min-width: 1024px) {
+
+    .oa-modal-atribuir-v2 .oa-modal-body {
+        padding: 20px; overflow: hidden;
+    }
+
+    /* Header volta a ter uma linha no desktop */
+    .oa-modal-atribuir-v2 .oa-modal-header {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        padding: 15px 20px;
+    }
+    .oa-modal-atribuir-v2 .btn-voltar-header {
+        margin-right: auto;
+    }
+    .oa-modal-atribuir-v2 .oa-modal-titulo {
+        flex-grow: 1; padding: 0 15px; font-size: 1.2rem;
+    }
+
+    /* Ativa o layout de colunas no desktop */
+    .layout-selecao-produto {
+        flex-direction: row;
+        gap: 20px;
+    }
+    .coluna-filtros {
+        flex: 0 0 280px;
+        order: 2; /* Filtros na direita */
+        border-left: 1px solid var(--gs-borda);
+        padding-left: 20px;
+        overflow-y: auto;
+    }
+    .coluna-conteudo-principal {
+        flex: 1 1 auto;
+        order: 1; /* Conteúdo na esquerda */
+        padding-top: 0;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+    }
+    .gs-container-cards {
+        flex-grow: 1;
+    }
+
+    /* O alvo é o header de filtros QUANDO ele está dentro da nossa coluna */
+    .coluna-filtros .gs-filtros-header {
+        display: flex;
+        flex-wrap: wrap; /* << A MÁGICA ACONTECE AQUI */
+        gap: 10px; /* Espaçamento entre os itens que quebram de linha */
+    }
+
+    /* O título ocupa a primeira linha inteira */
+    .coluna-filtros .gs-header-titulo {
+        width: 100%;
+        margin-bottom: 5px; /* Pequeno espaço antes da busca */
+    }
+
+    /* O container da busca e o botão de atualizar dividem o espaço */
+    .coluna-filtros .gs-filtros-header-controles {
+        flex-grow: 1; /* Faz a busca tentar ocupar o máximo de espaço */
+        min-width: 150px; /* Garante uma largura mínima antes de quebrar */
+    }
+
+    .coluna-filtros .gs-btn-atualizar {
+        /* Apenas um ajuste de alinhamento se necessário */
+        align-self: center;
+    }
+
+    /* Oculta o botão "Abrir Filtros" do mobile no layout desktop */
+    .coluna-filtros .gs-filtros-mobile-toggle {
+        display: none;
+    }
+
+    /* Garante que o painel de filtros (acordeão) esteja sempre visível no desktop */
+    .coluna-filtros .gs-filtros-acordeao-conteudo {
+        display: block;
+        max-height: none; /* Remove qualquer limitação de altura */
+    }
+}
+
+@media (min-width: 768px) {
+    .oa-modal-historico .oa-modal-filtros {
+        grid-template-columns: 2fr 1fr 1fr; /* Volta para 3 colunas */
+    }
+
+    /* Restaura o visual de tabela no desktop */
+    .oa-tabela-historico thead {
+        display: table-header-group; /* Mostra o cabeçalho novamente */
+    }
+
+    .oa-tabela-historico tbody,
+    .oa-tabela-historico tr {
+        display: table-row-group;
+    }
+    .oa-tabela-historico tr {
+        display: table-row;
+        background: none;
+        box-shadow: none;
+        border-radius: 0;
+        padding: 0;
+        margin: 0;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    .oa-tabela-historico tr:hover {
+        background-color: #f5faff;
+    }
+    .oa-tabela-historico tr.linha-perda { 
+        background-color: #fff5f5; 
+    }
+    .oa-tabela-historico tr.linha-perda:hover {
+        background-color: #ffebeb;
+    }
+    .oa-tabela-historico tr.linha-estorno {
+        background-color: #fffaf0;
+    }
+    .oa-tabela-historico tr.linha-estorno:hover {
+        background-color: #fff4e0;
+    }
+    .oa-tabela-historico tr.linha-anulada {
+        color: #999; background-color: #f8f9fa; text-decoration: line-through; opacity: 0.8;
+    }
+
+    .oa-tabela-historico td {
+        display: table-cell;
+        padding: 10px 12px;
+        text-align: left;
+        border-bottom: none;
+    }
+    
+    /* Esconde os labels gerados no desktop */
+    .oa-tabela-historico td::before {
+        display: none;
+    }
+
+    .oa-filtros-acordeao {
+        border-bottom: none;
+    }
+    .oa-acordeao-header {
+        display: none; /* Esconde o botão "Filtros" */
+    }
+    .oa-acordeao-content {
+        max-height: none; /* Garante que o conteúdo seja sempre visível */
+        overflow: visible;
+    }
+    .oa-modal-filtros {
+        padding-top: 15px;
+    }
+}
+
+
+@media (max-width: 1024px) {
+    .oa-main-content-card { padding: 20px; }
+    .oa-cards-container-arremate { 
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
+        grid-auto-rows: 1fr; 
+    }
+
+    .oa-card-arremate {
+        display: flex;
+        flex-direction: column;
+        height: 100%; /* Força o card a ocupar toda a altura da célula da grade */
+    }
+    .oa-card-info {
+        flex-grow: 1; /* Faz a área de info crescer para empurrar os dados para baixo */
+    }
+}
+
+@media (max-width: 768px) {
+     .oa-container-principal { padding: 20px; }
+    .oa-main-content-card { padding: 15px; }
+    .oa-cabecalho-pagina { flex-direction: column; gap: 15px; align-items: stretch; text-align: center; }
+    .oa-cabecalho-pagina .oa-botoes-cabecalho { justify-content: center; display: flex; }
+    .oa-cards-container-arremate { 
+        grid-template-columns: 1fr; 
+        grid-auto-rows: auto;
+    }
+    .oa-detalhe-grid { grid-template-columns: 1fr; }
+    .oa-info-box i { font-size: 2rem; margin-right: 15px; }
+
+    .oa-modal-filtros {
+    gap: 5px;
+    }
+
+    .oa-input-tarefas {
+    width: 50%;
+    }
+
+        /* Ajuste para o alinhamento do saldo no card principal em telas mobile */
+    .oa-card-arremate .dado-bloco {
+        text-align: left;
+    }
+
+    .oa-card-arremate .dado-bloco .label {
+        display: inline; /* Impede a quebra de linha */
+        margin-right: 6px; /* Adiciona um espaço depois de "PENDENTE:" */
+    }
+
+    /* Garante que o container dos dados alinhe os blocos pela base do texto */
+    .oa-card-arremate .oa-card-dados {
+        align-items: baseline;
+    }
+
+    /* Resetando o layout do card para voltar a usar grid interno */
+    .oa-card-arremate {
+        display: grid; /* Volta a ser grid */
+        grid-template-columns: auto 1fr;
+        grid-template-rows: auto auto;
+        gap: 0 15px;
+        height: auto; /* Reseta a altura */
+    }
+    .oa-card-info {
+        flex-grow: 0; /* Reseta o flex-grow */
+        grid-column: 2 / 3;
+        grid-row: 1 / 2;
+        padding: 10px 10px 5px 0;
+        text-align: left;
+    }
+    
+    /* Reaplicando a posição da imagem e dados no grid mobile */
+    .oa-card-img {
+        grid-row: 1 / 3;
+        width: 60px;
+        height: 60px;
+        margin: 10px;
+    }
+
+    .oa-modal-filtros {
+        grid-template-columns: 1fr; /* Empilha os filtros no mobile */
+    }
+
+    /* Regra da linha divisória (agora aplicada ao grid) */
+    .oa-card-dados {
+        grid-column: 2 / 3;
+        grid-row: 2 / 3;
+        justify-content: flex-start;
+        background: transparent;
+        border: 0; /* Reseta todas as bordas primeiro */
+        border-top: 1px solid var(--gs-borda); /* E aplica APENAS a borda superior */
+        height: auto;
+        margin-top: 10px; /* Espaço entre a informação e a linha */
+        padding: 10px 0 0 0; /* Espaço entre a linha e os dados */
+    }
+
+    .oa-input-qtd-lancar{
+        width: 40%;
+        padding:15px
+    }
+
+/* --- RESPONSIVIDADE DO NOVO DASHBOARD --- */
+    .oa-painel-info-container {
+        gap: 12px;
+    }
+
+    .oa-info-card {
+        padding: 12px 15px;
+        text-align: left;
+        
+        display: grid;
+        align-items: center;
+        /* Colunas: uma para o número, uma para o texto */
+        grid-template-columns: 60px 1fr; 
+        gap: 0 12px; 
+    }
+    
+    /* Escondemos o ícone, pois no seu print ele não aparece */
+    .oa-info-card-icone {
+        display: none;
+    }
+
+    /* O NÚMERO fica na primeira coluna, grande e centralizado */
+    .oa-info-card-contador {
+        grid-column: 1 / 2;
+        grid-row: 1 / 3; /* Ocupa as duas linhas de altura */
+        font-size: 2.5rem;
+        font-weight: 700;
+        align-self: center;
+        line-height: 1;
+    }
+
+    /* O TÍTULO fica na segunda coluna, primeira linha */
+    .oa-info-card h3 {
+        grid-column: 2 / 3;
+        grid-row: 1 / 2;
+        font-size: 0.95rem;
+        margin: 0;
+        font-weight: 600;
+        align-self: end; /* Alinha na base da sua célula, empurrando para cima */
+        padding-bottom: 1px; /* Pequeno ajuste de alinhamento */
+    }
+
+    /* A DESCRIÇÃO fica na segunda coluna, segunda linha */
+    .oa-info-card-descricao {
+        display: block; /* Garante que fique na sua própria linha */
+        grid-column: 2 / 3;
+        grid-row: 2 / 3;
+        font-size: 0.8rem;
+        margin: 0;
+        color: var(--gs-texto-secundario);
+        align-self: start; /* Alinha no topo da sua célula, empurrando para baixo */
+    }
+
+      /* Ajusta o cabeçalho para empilhar os elementos */
+    .oa-detalhe-header {
+        grid-template-columns: 1fr; /* Coluna única */
+        text-align: center; /* Centraliza tudo */
+        gap: 15px; /* Espaçamento entre os elementos empilhados */
+        padding-top: 40px; /* Deixa espaço para o botão de fechar */
+    }
+
+    .oa-detalhe-thumbnail {
+        margin: 0 auto; /* Centraliza a imagem */
+    }
+
+    .oa-detalhe-saldo {
+        margin: 0 auto; /* Centraliza o card de saldo */
+        width: 60%;
+        max-width: 200px;
+    }
+
+    /* Posiciona o botão de fechar no canto superior direito */
+    #arremateDetalheView {
+        position: relative; /* Garante que o botão se posicione em relação a esta seção */
+    }
+    .oa-detalhe-header .botao-fechar {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+    }
+    
+    /* Abas com quebra de linha */
+    .oa-tabs {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    .oa-tab-btn {
+        font-size: 0.9rem;
+        padding: 15px 12px;
+    }
+
+    .oa-modal-body .oa-tabela-historico thead {
+        display: none; /* Esconde o cabeçalho no mobile */
+    }
+
+    .oa-modal-body .oa-tabela-historico tr {
+        display: block;
+        margin-bottom: 15px;
+        border: 1px solid var(--gs-borda);
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    }
+
+    .oa-modal-body .oa-tabela-historico td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px dotted var(--gs-borda);
+        text-align: right;
+        white-space: normal; /* Permite que o texto quebre a linha */
+    }
+
+    .oa-modal-body .oa-tabela-historico tr:last-of-type td:last-of-type,
+    .oa-modal-body .oa-tabela-historico tr td:last-of-type {
+        border-bottom: none; /* Remove a linha do último item do card */
+    }
+
+    .oa-modal-body .oa-tabela-historico td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: var(--gs-texto-secundario);
+        text-align: left;
+        margin-right: 15px;
+        flex-shrink: 0; /* Impede que o rótulo seja espremido */
+    }
+/* --- Responsividade do Modal de Atribuição --- */
+    .oa-modal-body-atribuir {
+        flex-direction: column;
+        /* Adicionamos a linha abaixo para que a troca de telas funcione */
+        display: block; /* MUITO IMPORTANTE: muda para block para controlar visibilidade */
+    }
+
+    /* Esconde a coluna de confirmação por padrão no mobile */
+    .coluna-confirmacao {
+        display: none;
+        scrollbar-width: thin;          /* Deixa a barra de rolagem fina no Firefox */
+        scrollbar-color: #dcdfe4 #f9fbfd; /* Cor da barra e do fundo no Firefox */
+    }
+
+    .coluna-lista-produtos {
+        border-right: none;
+        /* Remove a borda de baixo para um visual mais limpo na troca de tela */
+        /* border-bottom: 1px solid var(--gs-borda); */
+        height: 100%; /* Faz a coluna da lista ocupar toda a altura do body do modal */
+    }
+
+    /* --- Novos Estilos para a Tela de Confirmação no Mobile --- */
+    .oa-btn-voltar-mobile {
+        display: flex; /* Por padrão, é flex para ser visível. Ocultaremos no desktop. */
+        align-items: center;
+        gap: 8px;
+        background: none;
+        border: none;
+        color: var(--gs-primaria);
+        font-weight: 500;
+        cursor: pointer;
+        margin-bottom: 15px;
+        align-self: flex-start; /* Alinha à esquerda */
+        margin: 10px 15px 0;
+    }
+
+    .oa-form-grupo-atribuir {
+        width: 100%;
+        margin-bottom: 15px; /* Adiciona espaço entre o input e o botão */
+    }
+    .oa-form-grupo-atribuir label {
+        display: block;
+        text-align: center;
+        margin-bottom: 5px;
+        font-size: 1.1rem;
+        font-weight: 500;
+    }
+    .form-confirmacao-wrapper .oa-btn {
+        width: 60%; /* Mantém o botão com largura total */
+        padding: 12px; /* Reduz um pouco o padding vertical */
+        font-size: 1rem; /* Tamanho de fonte razoável */
+    }
+
+     /* Alvo: O header específico do Painel de Atividades */
+    .oa-painel-atividades .oa-secao-header {
+        flex-direction: column; /* Empilha os itens verticalmente */
+        align-items: flex-start; /* Alinha tudo à esquerda */
+        gap: 8px; /* Adiciona um pequeno espaço entre as linhas */
+    }
+
+    /* Alvo: O título "Painel de Atividades..." */
+    .oa-painel-atividades .oa-secao-header .oa-titulo-secao {
+        width: 100%; /* Garante que o título ocupe a linha inteira */
+        margin-bottom: 0; /* Remove a margem padrão para não criar espaço extra */
+    }
+
+    /* Alvo: O container que agrupa o feedback e o botão */
+    .oa-painel-atividades .oa-secao-header .header-acoes {
+        width: 100%; /* Faz o container ocupar a linha inteira */
+        justify-content: space-between; /* Empurra o feedback para a esquerda e o botão para a direita */
+        align-items: center; /* Alinha verticalmente o texto e o botão */
+    }
+
+    /* --- AJUSTES PARA ROLAGEM DO MODAL NO MOBILE --- */
+
+    /* 1. Força o modal a ter uma altura máxima definida no mobile */
+    .oa-modal-atribuir {
+        height: 90vh;
+    }
+
+    /* 2. Garante que o corpo do modal ocupe o espaço restante */
+    .oa-modal-body-atribuir {
+        flex-direction: column;
+        display: flex; /* Garante que é flex, não block */
+        flex-grow: 1;
+        min-height: 0;
+    }
+
+    /* 3. Habilita a rolagem APENAS na coluna de confirmação */
+    .coluna-confirmacao {
+        display: flex; /* Garante que está visível e usando flex */
+        flex-grow: 1; /* Faz ela ocupar o espaço disponível no modo de confirmação */
+        min-height: 0;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    .coluna-confirmacao::-webkit-scrollbar {
+        display: none;
+    }
+
+}
+
+/* --- Esconde o botão de voltar no Desktop --- */
+@media (min-width: 769px) {
+    .oa-btn-voltar-mobile {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .oa-cabecalho-pagina h1 { font-size: 1.5rem; }
+    .oa-cabecalho-pagina .oa-botoes-cabecalho span { display: none; }
+    .oa-cabecalho-pagina .oa-btn { 
+        border-radius: 50%; 
+        width: 44px; 
+        height: 44px; 
+        padding: 0;
+        display: inline;
+    }
+    .oa-info-box { flex-direction: column; text-align: center; }
+    .oa-info-box i { margin: 0 0 10px 0; }
+    
+    .oa-card-arremate { grid-template-columns: auto 1fr; grid-template-rows: auto auto; gap: 0 15px; }
+    .oa-card-img { grid-row: 1 / 3; width: 60px; height: 60px; margin: 10px; }
+    .oa-card-info { grid-column: 2 / 3; grid-row: 1 / 2; padding: 10px 10px 5px 0; text-align: left; }
+    .oa-card-dados { grid-column: 2 / 3; grid-row: 2 / 3; padding: 5px 10px 10px 0; justify-content: flex-start; background: transparent; border: none; height: auto; }
+
+    .oa-info-card h3 {
+        font-size: 0.85rem;
+    }
+    .oa-info-card-contador {
+        font-size: 1.8rem;
+    }
+
+    .oa-tabela-historico th, .oa-tabela-historico td {
+    font-size: 0.8rem;
+    }
+
+    
+    .oa-cards-container-modal {
+        grid-template-columns: 1fr; /* Uma coluna no mobile */
+    }
+    .oa-card-arremate-modal .oa-card-info h3 {
+        font-size: 0.85rem; /* Ajuste fino de fonte */
+    }
+
+     /* Em telas muito pequenas, podemos centralizar o botão de atualizar */
+    .oa-painel-atividades .oa-secao-header .header-acoes {
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .oa-painel-atividades .oa-secao-header .oa-btn-atualizar {
+        align-self: flex-end; /* Empurra o botão para a direita */
+    }
+    .foco-tarefa-metricas {
+        flex-direction: column;
+        gap: 5px;
+        align-items: flex-start;
+    }
+
+    .oa-card-arremate-react {
+        grid-template-columns: auto 1fr; /* Imagem e o resto */
+        grid-template-rows: auto auto; /* Linha 1: info, Linha 2: pendente */
+        padding: 12px;
+        gap: 4px 12px;
+    }
+    .card-imagem-produto {
+        grid-row: 1 / 3; /* Imagem ocupa as duas linhas */
+        width: 60px;
+        height: 60px;
+    }
+    .card-info-principal {
+        grid-column: 2 / 3;
+        grid-row: 1 / 2;
+    }
+    .card-info-principal h3 {
+        font-size: 1rem;
+    }
+    .card-bloco-pendente {
+        grid-column: 2 / 3; /* Bloco pendente vai para a segunda linha */
+        grid-row: 2 / 3;
+        flex-direction: row;
+        justify-content: space-between;
+        width: 100%;
+        padding: 8px 12px;
+        margin-top: 8px;
+        background-color: transparent;
+        border-top: 1px solid var(--gs-borda);
+        border-radius: 0;
+    }
+    .card-bloco-pendente .valor {
+        font-size: 1.5rem;
+    }
+
+    .coluna-conteudo-principal {
+    padding-top: 2px;
+}
+
+}
+
+@media (max-width: 414px) {
+    .oa-container-principal { padding: 20px; }
+    .oa-main-content-card { padding: 10px; }
+    .oa-cabecalho-pagina h1 { font-size: 1.3rem; }
+    .oa-titulo-secao { font-size: 1.2rem; }
+    .oa-card-info h3 { font-size: 0.9rem; }
+    .oa-card-info p { font-size: 0.8rem; }
+
+    .oa-tabela-historico th, .oa-tabela-historico td {
+        font-size: 0.58rem;
+    }
+
+    .oa-painel-status-grid {
+        /* Força o grid a ter apenas uma coluna, ocupando todo o espaço */
+        grid-template-columns: 1fr; 
+    }
+}
+
+@media (max-width: 399px) {
+    .oa-painel-atividades {
+        padding: 10px;
+
+    }
+
+}

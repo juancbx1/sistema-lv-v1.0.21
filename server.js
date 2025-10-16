@@ -41,6 +41,7 @@ import metasRouter from './api/metas.js';
 import realProducaoRouter from './api/real-producao.js';
 import configuracoesRouter from './api/configuracoes.js';
 import alertasRouter from './api/alertas.js';
+import radarProducaoRouter from './api/radar-producao.js';
 
 const app = express();
 console.log('Aplicação Express inicializada.');
@@ -89,7 +90,8 @@ const routers = {
     metasRouter,
     realProducaoRouter,
     configuracoesRouter,
-    alertasRouter
+    alertasRouter,
+    radarProducaoRouter
 
 };
 for (const routerName in routers) {
@@ -134,6 +136,7 @@ app.use('/api/metas', metasRouter);
 app.use('/api/real-producao', realProducaoRouter);
 app.use('/api/configuracoes', configuracoesRouter);
 app.use('/api/alertas', alertasRouter);
+app.use('/api/radar-producao', radarProducaoRouter);
 
 
 app.get('/api/ping', (req, res) => res.status(200).json({ message: 'pong do server.js' }));

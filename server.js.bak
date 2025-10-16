@@ -40,6 +40,7 @@ import historicoRouter from './api/historico.js';
 import metasRouter from './api/metas.js';
 import realProducaoRouter from './api/real-producao.js';
 import configuracoesRouter from './api/configuracoes.js';
+import alertasRouter from './api/alertas.js';
 
 const app = express();
 console.log('Aplicação Express inicializada.');
@@ -87,7 +88,8 @@ const routers = {
     historicoRouter,
     metasRouter,
     realProducaoRouter,
-    configuracoesRouter
+    configuracoesRouter,
+    alertasRouter
 
 };
 for (const routerName in routers) {
@@ -131,13 +133,14 @@ app.use('/api/historico', historicoRouter);
 app.use('/api/metas', metasRouter);
 app.use('/api/real-producao', realProducaoRouter);
 app.use('/api/configuracoes', configuracoesRouter);
+app.use('/api/alertas', alertasRouter);
 
 
 app.get('/api/ping', (req, res) => res.status(200).json({ message: 'pong do server.js' }));
 console.log("Rota /api/ping configurada.");
 
 
-app.use((err, req, res, next) => { /* ... seu error handler global ... */
+app.use((err, req, res, next) => {
     console.error("[server.js] Erro não tratado:", err.stack || err.message || err);
     if (!res.headersSent) {
         res.status(err.statusCode || 500).json({

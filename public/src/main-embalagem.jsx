@@ -9,10 +9,24 @@ import { normalizeText } from '/src/utils/EmbalagemSearchHelpers.js';
 import { renderizarPaginacao } from '/js/utils/Paginacao.js';
 import HeaderPagina from './components/HeaderPagina.jsx'; 
 import FeedbackNotFound from './components/FeedbackNotFound.jsx';
-import RadarProduto from './components/RadarProduto.jsx';
+import RadarDeAlertas from './components/RadarDeAlertas.jsx';
+import BotaoBuscaFunil from './components/BotaoBuscaFunil.jsx';
+import { mostrarMensagem } from '/js/utils/popups.js';
 
 const ITENS_POR_PAGINA = 6; // Defina quantos cards quer por página
 
+const handleConsultarFunilDesdeAlerta = (item) => {
+        if (!item || !item.sku) {
+            console.error("Tentativa de consultar funil sem um item ou SKU válido.", item);
+            mostrarMensagem("Não foi possível obter o SKU deste item para a consulta.", "erro");
+            return;
+        }
+        
+        // Cria um novo evento customizado com o SKU do item nos detalhes
+        const event = new CustomEvent('radar:consultarFunil', { detail: { sku: item.sku } });
+        // Dispara o evento globalmente
+        window.dispatchEvent(event);
+    };
 
 // Componente principal que irá controlar a página
 function PainelEmbalagem() {
@@ -164,7 +178,6 @@ function PainelEmbalagem() {
         }
     }, [totalPaginas, paginaAtual]); // Roda sempre que a página ou o total de páginas mudar
 
-
     const handleCardClick = async (itemClicado) => {
         // Mostra um feedback visual de que algo está acontecendo
         document.getElementById('carregamentoGlobal').classList.add('visivel');
@@ -247,7 +260,6 @@ function PainelEmbalagem() {
         };
     }
 
-
     if (carregando) {
         // Não renderiza nada, pois o loader global já está visível
         return null;
@@ -305,34 +317,36 @@ function PainelEmbalagem() {
     );
 }
 
-// Ponto de entrada para o Header
+// --- Ponto de Entrada 1: O Cabeçalho da Página ---
 const headerRootElement = document.getElementById('header-root');
 if (headerRootElement) {
     const headerRoot = ReactDOM.createRoot(headerRootElement);
     headerRoot.render(
-        <React.Fragment>
-            <HeaderPagina titulo="Embalagem de Produtos">
-                <button id="btnAbrirHistoricoGeral" className="gs-btn gs-btn-secundario">
-                    <i className="fas fa-history"></i>
-                    <span>Histórico Geral</span>
-                </button>
-            </HeaderPagina>
-
-            {/* 2. ADICIONA O RADAR LOGO ABAIXO DO HEADER */}
-            <RadarProduto />
-            
-        </React.Fragment>
+        <HeaderPagina titulo="Embalagem de Produtos">
+            <button id="btnAbrirHistoricoGeral" className="gs-btn gs-btn-secundario gs-btn-com-icone">
+                <i className="fas fa-history"></i>
+                <span>Histórico Geral</span>
+            </button>
+        </HeaderPagina>
     );
-} else {
-    console.error('Elemento root #header-root não encontrado no DOM.');
 }
 
-// Ponto de entrada para o Painel Principal (cards e filtros)
+// --- Ponto de Entrada 2: O Radar de Alertas ---
+const radarRootElement = document.getElementById('radar-root');
+if (radarRootElement) {
+    const radarRoot = ReactDOM.createRoot(radarRootElement);
+    // A prop onConsultarFunil será usada no futuro para conectar os dois componentes
+    radarRoot.render(<RadarDeAlertas onConsultarFunil={handleConsultarFunilDesdeAlerta} />);
+}
+
+// --- Ponto de Entrada 3: O Conteúdo Principal (Cards, Filtros e Botão Flutuante) ---
 const painelRootElement = document.getElementById('painel-principal-root');
 if (painelRootElement) {
     const painelRoot = ReactDOM.createRoot(painelRootElement);
-    painelRoot.render(<PainelEmbalagem />);
-} else {
-    console.error('Elemento root #painel-principal-root não encontrado no DOM.');
+    painelRoot.render(
+        <React.Fragment>
+            <PainelEmbalagem />
+            <BotaoBuscaFunil />
+        </React.Fragment>
+    );
 }
-
