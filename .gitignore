@@ -9,4 +9,4 @@ test-jwt.js
 dist
 build
 .env.development.local
-.bak
+*.bak
