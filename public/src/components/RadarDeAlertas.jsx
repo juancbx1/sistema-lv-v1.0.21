@@ -5,7 +5,7 @@ import RadarBuscaLocal from './RadarBuscaLocal.jsx';
 import { renderizarPaginacao } from '/js/utils/Paginacao.js';
 import { normalizeText } from '/src/utils/searchHelpers.js';
 
-const ITENS_POR_PAGINA = 6;
+const ITENS_POR_PAGINA = 5;
 const AUTO_REFRESH_INTERVAL = 30000; // 30 segundos
 
 // --- Sub-componente para o Item da Lista Crítica (com novo design) ---
@@ -158,7 +158,9 @@ export default function RadarDeAlertas({ onConsultarFunil }) {
         };
     }, [alertasFiltrados, paginaAtual]);
 
-    useEffect(() => { setPaginaAtual(1); }, [termoBusca]);
+    useEffect(() => {
+        setPaginaAtual(1);
+    }, [termoBusca, filtroAlerta]); // Adiciona 'filtroAlerta' ao array de dependências
 
     useEffect(() => {
         // 1. O container da paginação existe no DOM? (Isso só é verdade se o painel estiver expandido)
@@ -198,8 +200,8 @@ export default function RadarDeAlertas({ onConsultarFunil }) {
                 </button>
                 <div className="gs-radar-header-alerta">
                     <div className="alerta-linha principal">
-                        <span className="alerta-titulo"><i className="fas fa-fire"></i> ALERTA PRINCIPAL:</span>
-                        <span className="alerta-mensagem">{itensZerados.length} produto(s) com estoque ZERADO!</span>
+                        <span className="alerta-titulo"><i className="fas fa-fire"></i> ESTOQUE ZERADO:</span>
+                        <span className="alerta-mensagem">{itensZerados.length} produto(s) SEM ESTOQUE!</span>
                         {itensZerados.length > 0 && 
                             <button className="gs-radar-botao-ver" onClick={(e) => { e.stopPropagation(); setExpandido(true); }}>Ver Lista</button>
                         }

@@ -1531,26 +1531,38 @@ font-weight: 500;
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background-color: rgba(0, 0, 0, 0.6);
     display: flex; align-items: flex-start; justify-content: center;
-    z-index: 1000; padding-top: 5vh;
+    z-index: 1000; 
+    padding: 5vh 15px 15px 15px; 
     animation: gs-fadeIn 0.3s;
 }
 .gs-busca-modal-conteudo {
     background-color: var(--gs-fundo-card);
     border-radius: var(--gs-raio-borda-card);
-    width: 90%; max-width: 700px;
+    width: 90%; 
+    max-width: 700px;
+    max-height: 90vh;
     box-shadow: var(--gs-sombra-hover);
-    display: flex; flex-direction: column;
+    display: flex; 
+    flex-direction: column;
 }
 .gs-busca-modal-header {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 15px 20px; border-bottom: 1px solid var(--gs-borda);
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center;
+    padding: 15px 20px; 
+    border-bottom: 1px solid var(--gs-borda);
+    flex-shrink: 0;
 }
 .gs-busca-modal-header h3 { margin: 0; color: var(--gs-secundaria); }
 .gs-busca-modal-fechar {
     background: none; border: none; font-size: 1.8rem;
     color: var(--gs-texto-secundario); cursor: pointer;
 }
-.gs-busca-modal-body { padding: 20px; }
+.gs-busca-modal-body { 
+    padding: 20px; 
+    overflow-y: auto; /* Adiciona a barra de rolagem vertical APENAS se necessário */
+    flex-grow: 1; /* Faz o corpo do modal ocupar todo o espaço vertical disponível */
+}
 .gs-busca-modal-resultados { margin-top: 25px; min-height: 200px; }
 
 /* --- AJUSTES PARA PAGINAÇÃO DENTRO DO RADAR --- */
