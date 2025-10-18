@@ -73,6 +73,13 @@
     }
 }
 
+/* --- Animação de Pulsar para Status Crítico --- */
+@keyframes gs-pulsar-critico {
+    0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+}
+
 @keyframes gs-pulsar-gradual {
     0% { background-position: 0 50%, 50% 50%, 100% 50%; }
     25% { background-position: 0 0, 50% 50%, 100% 50%; }
@@ -1242,7 +1249,6 @@ body.autenticado {
     background: none;
     border: 1px solid var(--gs-primaria);
     color: var(--gs-primaria);
-    padding: 4px 10px;
     border-radius: var(--gs-raio-borda-botao);
     cursor: pointer;
 }
@@ -1474,8 +1480,19 @@ font-weight: 500;
 }
 .gs-radar-funil-info p {
     margin: 0;
-    font-size: 0.9rem;
+}
+
+.gs-radar-funil-info .variante-principal {
+    display: block; /* Força a quebra de linha */
+    font-size: 1rem;
     color: var(--gs-texto-secundario);
+    line-height: 1.2;
+}
+
+.gs-radar-funil-info .sku-principal {
+    display: block; /* Força a quebra de linha */
+    font-size: 0.8rem;
+    color: var(--gs-terciaria);
 }
 
 /* --- ESTILOS BÁSICOS PARA O NOVO MODAL DE DETALHES --- */
@@ -1545,6 +1562,16 @@ font-weight: 500;
     display: flex; 
     flex-direction: column;
 }
+
+/* --- AJUSTE DE CENTRALIZAÇÃO DO MODAL (VERSÃO CORRIGIDA) --- */
+/* Adicione este bloco abaixo das regras originais */
+@media (min-width: 1025px) {
+  .gs-busca-modal-overlay {
+    padding-left: 250px;
+  }
+}
+
+
 .gs-busca-modal-header {
     display: flex; 
     justify-content: space-between; 
@@ -1563,7 +1590,8 @@ font-weight: 500;
     overflow-y: auto; /* Adiciona a barra de rolagem vertical APENAS se necessário */
     flex-grow: 1; /* Faz o corpo do modal ocupar todo o espaço vertical disponível */
 }
-.gs-busca-modal-resultados { margin-top: 25px; min-height: 200px; }
+.gs-busca-modal-resultados { 
+    min-height: 200px; }
 
 /* --- AJUSTES PARA PAGINAÇÃO DENTRO DO RADAR --- */
 
@@ -1646,6 +1674,547 @@ font-weight: 500;
     flex-grow: 1; /* Faz a busca ocupar o espaço disponível */
     margin-bottom: 0;
 }
+
+/* ==========================================================================
+   # NOVO FUNIL DE PRODUTO (PIPELINE & KITS)
+   ========================================================================== */
+
+/* --- Títulos de Seção dentro do Modal --- */
+.gs-funil-secao-titulo {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--gs-texto-secundario);
+    text-transform: uppercase;
+    margin: 30px 0 15px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--gs-borda);
+}
+
+/* --- Informações Adicionais na Identificação do Produto --- */
+.gs-sku-info {
+    color: var(--gs-terciaria);
+    font-size: 0.8rem;
+    font-weight: normal;
+}
+.gs-tag-kit {
+    display: inline-block;
+    background-color: var(--gs-primaria);
+    color: var(--gs-branco);
+    font-size: 0.7rem;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+/* --- Layout do Pipeline Vertical (Funil Simples) --- */
+.gs-funil-pipeline-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-top: 25px;
+}
+.gs-funil-estagio {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 12px;
+    background-color: var(--gs-fundo-alternativo);
+    border-radius: var(--gs-raio-borda-card);
+    border-left: 4px solid; /* A cor será definida inline */
+}
+.gs-funil-estagio-icone {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--gs-branco);
+    font-size: 1.1rem;
+}
+.gs-funil-estagio-info {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+.gs-funil-estagio-titulo {
+    font-weight: 600;
+    color: var(--gs-texto-principal);
+}
+.gs-funil-estagio-subinfo {
+    font-size: 0.8rem;
+    color: var(--gs-texto-secundario);
+}
+.gs-funil-estagio-valor {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--gs-secundaria);
+}
+
+/* Estilo para o estágio desativado do funil */
+.gs-funil-estagio.desativado {
+    opacity: 0.6;
+    background-color: #f8f9fa; /* Um fundo um pouco mais escuro */
+}
+
+/* --- Termômetro de Estoque --- */
+.gs-termometro-container {
+    padding: 10px 0;
+    margin-top: 5px;
+}
+.gs-termometro-barra {
+    position: relative;
+    width: 100%;
+    height: 16px;
+    background-color: #e9ecef;
+    border-radius: 10px;
+}
+.gs-termometro-fill {
+    position: absolute; left: 0; top: 0; height: 100%;
+    border-radius: 10px;
+    transition: width 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Quando a barra tem a classe 'zerado', nós esconde a barra de preenchimento */
+.gs-termometro-barra.zerado .gs-termometro-fill {
+    display: none;
+}
+
+/* E, em vez disso, aplica a animação de pulsar a um pseudoelemento no início da barra */
+.gs-termometro-barra.zerado::before {
+    content: '';
+    position: absolute;
+    left: 4px; /* Um pequeno deslocamento para dentro */
+    top: 50%;
+    transform: translateY(-50%);
+    width: 10px; /* Tamanho do círculo pulsante */
+    height: 10px;
+    background-color: var(--gs-perigo);
+    border-radius: 50%;
+    z-index: 2; /* Fica na frente de tudo */
+    animation: gs-pulsar-critico 2s infinite; /* Usa a mesma animação */
+}
+
+/* Cores da barra (sem a animação aqui) */
+.gs-termometro-fill.critico { background-color: var(--gs-perigo); }
+.gs-termometro-fill.atencao { background-color: var(--gs-aviso); }
+.gs-termometro-fill.saudavel { background-color: var(--gs-sucesso); }
+
+/* Marcadores */
+.gs-termometro-marcador {
+    position: absolute;
+    top: -4px;
+    width: 2px;
+    height: 24px; /* Um pouco mais alto para se destacar */
+    transform: translateX(-50%);
+    z-index: 1; /* Garante que fiquem acima da barra de preenchimento */
+}
+.gs-termometro-marcador.urgente { background-color: var(--gs-perigo); }
+.gs-termometro-marcador.baixo { background-color: var(--gs-aviso); }
+.gs-termometro-marcador.ideal { background-color: var(--gs-sucesso); }
+
+
+/* --- Visão de KITS --- */
+.gs-funil-potencial-montagem {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--gs-sucesso-fundo, #e8f8f5);
+    border-left: 4px solid;
+    padding: 15px;
+    border-radius: var(--gs-raio-borda-card);
+    margin-top: 25px;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+.gs-funil-potencial-montagem .valor {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--gs-sucesso);
+}
+.gs-funil-kit-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.gs-kit-componente-item {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 10px;
+    background-color: var(--gs-fundo-pagina);
+    border-radius: var(--gs-raio-borda-input);
+}
+
+/*  Estilo para destacar o componente gargalo */
+.gs-kit-componente-item.gargalo {
+    background-color: var(--gs-negativo-fundo);
+    border: 1px solid var(--gs-negativo-borda);
+}
+
+.gs-componente-imagem {
+    width: 45px;
+    height: 45px;
+    object-fit: cover;
+    border-radius: 6px;
+}
+.gs-componente-info .nome {
+    font-weight: 600;
+}
+.gs-componente-info .necessario {
+    font-size: 0.8rem;
+    color: var(--gs-texto-secundario);
+}
+.gs-componente-mini-funil {
+    display: flex;
+    gap: 15px;
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--gs-texto-secundario);
+}
+.gs-componente-mini-funil .valor {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--gs-secundaria);
+}
+
+
+/* --- Estilos para a Lista de Resultados da Busca --- */
+.gs-busca-lista-resultados {
+    margin-top: 20px;
+}
+.gs-busca-lista-resultados h4 {
+    font-size: 1rem;
+    color: var(--gs-secundaria);
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--gs-borda);
+}
+.gs-busca-item-resultado {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 12px;
+    border-radius: var(--gs-raio-borda-input);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+.gs-busca-item-resultado:hover {
+    background-color: var(--gs-fundo-alternativo);
+}
+.gs-busca-item-resultado img {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 6px;
+    flex-shrink: 0;
+}
+.gs-busca-item-resultado .info {
+    flex-grow: 1;
+}
+.gs-busca-item-resultado .info .nome {
+    font-weight: 600;
+}
+.gs-busca-item-resultado .info .variante {
+    display: block; /* Força a quebra de linha */
+    font-size: 0.9rem;
+    color: var(--gs-texto-secundario);
+}
+.gs-busca-item-resultado .fa-chevron-right {
+    color: var(--gs-terciaria);
+}
+.gs-busca-voltar-btn {
+    margin-bottom: 20px;
+}
+
+/* --- Botão de Navegação Dentro do Funil --- */
+.gs-funil-nav-btn {
+    background-color: var(--gs-fundo-pagina);
+    border: 1px solid var(--gs-borda);
+    color: var(--gs-texto-secundario);
+    padding: 8px 16px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    border-radius: var(--gs-raio-borda-botao);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    margin-bottom: 20px; /* Espaçamento */
+}
+
+.gs-funil-nav-btn:hover {
+    background-color: var(--gs-borda);
+    color: var(--gs-texto-principal);
+}
+
+/* --- NOVO: Estilos para o Painel de Oportunidades de Kit --- */
+.gs-oportunidade-kit-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.gs-oportunidade-kit-card {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 15px;
+    align-items: center;
+    padding: 12px;
+    background-color: var(--gs-fundo-pagina);
+    border-radius: var(--gs-raio-borda-input);
+    border: 1px solid var(--gs-borda);
+}
+
+.gs-oportunidade-kit-card img {
+    width: 45px;
+    height: 45px;
+    object-fit: cover;
+    border-radius: 6px;
+}
+
+.gs-oportunidade-kit-card .info .nome {
+    font-weight: 600;
+}
+.gs-oportunidade-kit-card .info .variante {
+    font-size: 0.85rem;
+    color: var(--gs-texto-secundario);
+}
+
+.gs-oportunidade-kit-card .dados {
+    display: flex;
+    gap: 20px;
+    text-align: center;
+}
+
+.gs-oportunidade-kit-card .dado-bloco {
+    display: flex;
+    flex-direction: column;
+}
+
+.gs-oportunidade-kit-card .label {
+    font-size: 0.75rem;
+    color: var(--gs-texto-secundario);
+    text-transform: uppercase;
+}
+
+.gs-oportunidade-kit-card .valor {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.gs-oportunidade-kit-card .valor.potencial {
+    color: var(--gs-primaria);
+}
+
+.gs-oportunidade-kit-card .valor.estoque.critico {
+    color: var(--gs-perigo);
+}
+.gs-oportunidade-kit-card .valor.estoque.baixo {
+    color: var(--gs-aviso);
+}
+
+/* --- Estilos para o Acordeão do Funil --- */
+.gs-funil-estagio.clicavel {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+.gs-funil-estagio.clicavel:hover {
+    background-color: #f0f2f5;
+}
+.gs-funil-estagio .gs-funil-acordeao-seta {
+    margin-left: auto;
+    padding: 0 10px;
+    color: var(--gs-texto-secundario);
+    font-size: 0.9rem;
+}
+.gs-acordeao-conteudo {
+    padding: 15px;
+    background-color: var(--gs-fundo-pagina);
+    border: 1px solid var(--gs-borda);
+    border-top: none;
+    border-radius: 0 0 var(--gs-raio-borda-input) var(--gs-raio-borda-input);
+    animation: gs-fadeIn 0.4s;
+}
+.gs-acordeao-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 5px;
+    border-bottom: 1px solid #e9ecef;
+    font-size: 0.9rem;
+}
+.gs-acordeao-item:last-child {
+    border-bottom: none;
+}
+.gs-acordeao-item .nome {
+    font-weight: 500;
+}
+.gs-acordeao-item .saldos {
+    display: flex;
+    gap: 15px;
+    font-size: 0.85rem;
+    color: var(--gs-texto-secundario);
+}
+.gs-acordeao-vazio {
+    text-align: center;
+    color: var(--gs-texto-secundario);
+    font-size: 0.9rem;
+    padding: 10px;
+}
+
+/* Estilo para o item de componente com imagem */
+.gs-acordeao-item-com-imagem {
+    display: grid;
+    grid-template-columns: auto 1fr auto; /* Colunas: Imagem | Info | Saldos */
+    gap: 15px;
+    align-items: center;
+    padding: 10px 5px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.gs-acordeao-item-com-imagem:last-child {
+    border-bottom: none;
+}
+
+.gs-acordeao-item-imagem {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 6px;
+}
+
+.gs-acordeao-item-com-imagem .info .nome {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.gs-acordeao-item-com-imagem .info .variante {
+    display: block; /* Força a quebra de linha */
+    font-size: 0.85rem;
+    color: var(--gs-texto-secundario);
+}
+
+.gs-acordeao-item-com-imagem .saldos {
+    display: flex;
+    flex-direction: column; /* Empilha os saldos */
+    align-items: flex-end; /* Alinha à direita */
+    gap: 4px;
+    font-size: 0.85rem;
+    color: var(--gs-texto-secundario);
+    white-space: nowrap;
+}
+
+/* --- Estilos para a Tabela de Histórico --- */
+.gs-historico-tabela {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+.gs-historico-tabela th, .gs-historico-tabela td {
+    padding: 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--gs-borda);
+}
+.gs-historico-tabela th {
+    font-weight: 600;
+    color: var(--gs-texto-secundario);
+}
+.gs-historico-tabela td.positivo {
+    color: var(--gs-sucesso);
+    font-weight: 600;
+}
+.gs-historico-tabela td.negativo {
+    color: var(--gs-perigo);
+    font-weight: 600;
+}
+
+/* --- Estilos para o Card de Status --- */
+.gs-card-status {
+    padding: 15px;
+    border-radius: var(--gs-raio-borda-card);
+    margin-top: 15px;
+    border-left: 5px solid;
+}
+.gs-card-status-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+.gs-card-status-header h4 {
+    margin: 0;
+    font-size: 1.1rem;
+}
+.gs-card-status p {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+/* Cores do Card de Status */
+.gs-card-status.critico {
+    background-color: var(--gs-negativo-fundo);
+    border-color: var(--gs-perigo);
+    color: var(--gs-perigo);
+}
+.gs-card-status.atencao {
+    background-color: #fff9e6;
+    border-color: var(--gs-aviso);
+    color: #b88100;
+}
+.gs-card-status.saudavel {
+    background-color: var(--gs-positivo-fundo);
+    border-color: var(--gs-sucesso);
+    color: #207a4a;
+}
+
+/* --- Estilos Aprimorados para o Termômetro --- */
+.gs-termometro-container {
+    padding: 10px 0;
+    margin-top: 5px; /* Espaço após o Card de Status */
+}
+.gs-termometro-barra {
+    position: relative;
+    width: 100%;
+    height: 16px; /* Um pouco mais alta */
+    background-color: #e9ecef;
+    border-radius: 10px;
+}
+.gs-termometro-fill {
+    position: absolute; left: 0; top: 0; height: 100%;
+    border-radius: 10px;
+    transition: width 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94); /* Animação de crescimento */
+}
+
+/* Cores e Animação da barra */
+.gs-termometro-fill.critico {
+    background-color: var(--gs-perigo);
+    animation: gs-pulsar-critico 2s infinite; /* Aplica a animação de pulsar */
+}
+.gs-termometro-fill.atencao { background-color: var(--gs-aviso); }
+.gs-termometro-fill.saudavel { background-color: var(--gs-sucesso); }
+
+/* Legenda Numérica */
+.gs-termometro-legenda {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+    padding: 0 5px;
+    font-size: 0.8rem;
+}
+.gs-termometro-legenda .legenda-item {
+    color: var(--gs-texto-secundario);
+}
+.gs-termometro-legenda .legenda-item.critico strong { color: var(--gs-perigo); }
+.gs-termometro-legenda .legenda-item.atencao strong { color: var(--gs-aviso); }
+.gs-termometro-legenda .legenda-item.saudavel strong { color: var(--gs-sucesso); }
 
 /* ==========================================================================
    # AJUSTES PARA MOBILE 
@@ -1769,6 +2338,32 @@ font-weight: 500;
         margin:auto;
     }
 
+    /* --- RESPONSIVIDADE PARA A LISTA DE COMPONENTES (funil de produtos botao FAB)--- */
+    .gs-kit-componente-item {
+        /* Muda o layout de grid para flex em coluna */
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start; /* Alinha tudo à esquerda */
+        padding: 15px;
+    }
+
+    .gs-kit-componente-item .gs-componente-info {
+        /* Cria um mini-header para a imagem e o nome */
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        margin-bottom: 15px;
+    }
+
+    .gs-kit-componente-item .gs-componente-mini-funil {
+        /* Ocupa toda a largura e distribui o espaço */
+        width: 100%;
+        justify-content: space-around;
+        background-color: var(--gs-fundo-alternativo);
+        padding: 10px;
+        border-radius: var(--gs-raio-borda-input);
+    }
 
 }
 

@@ -203,6 +203,82 @@ router.get('/alertas', async (req, res) => {
 });
 
 // ==========================================================================
+// ROTA: BUSCAR SUGESTÕES DE PRODUTOS
+// GET /api/radar-producao/buscar?termo=...
+// ==========================================================================
+
+router.get('/buscar', async (req, res) => {
+    const { termo, page = 1, limit = 5 } = req.query;
+    if (!termo) {
+        return res.status(400).json({
+            rows: [],
+            pagination: { currentPage: 1, totalPages: 1, totalItems: 0 }
+        });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        // A busca agora ignora acentos no termo de busca também
+        const termoBusca = `%${termo.replace(/\s+/g, '%')}%`;
+        
+        const limitNum = parseInt(limit);
+        const offset = (parseInt(page) - 1) * limitNum;
+
+        // --- A MUDANÇA ESTÁ NO USO DA FUNÇÃO unaccent() ---
+        const baseQuery = `
+            FROM produtos p
+            INNER JOIN (
+                SELECT DISTINCT produto_id, variante FROM arremates
+                UNION
+                SELECT DISTINCT produto_embalado_id as produto_id, variante_embalada_nome as variante FROM embalagens_realizadas
+                UNION
+                SELECT DISTINCT produto_id, variante_nome as variante FROM estoque_movimentos
+            ) AS ativos ON p.id = ativos.produto_id
+            LEFT JOIN jsonb_to_recordset(p.grade) AS g(sku TEXT, variacao TEXT, imagem TEXT) 
+                ON (g.variacao = ativos.variante OR (g.variacao IS NULL AND ativos.variante IS NULL))
+            WHERE 
+                g.sku NOT IN (SELECT produto_ref_id FROM estoque_itens_arquivados)
+                AND (
+                    -- Aplicamos unaccent() tanto no campo do banco quanto no termo de busca
+                    unaccent(g.variacao) ILIKE unaccent($1)
+                    OR unaccent(p.nome || ' ' || g.variacao) ILIKE unaccent($1)
+                    OR unaccent(g.sku) ILIKE unaccent($1)
+                )
+        `;
+        
+        // As queries de contagem e dados usam a baseQuery e permanecem as mesmas
+        const countQuery = `SELECT COUNT(*) ${baseQuery}`;
+        const countResult = await dbClient.query(countQuery, [termoBusca]);
+        const totalItems = parseInt(countResult.rows[0].count, 10);
+        const totalPages = Math.ceil(totalItems / limitNum) || 1;
+
+        const dataQuery = `
+            SELECT p.id as produto_id, p.nome, g.variacao as variante, g.sku, COALESCE(g.imagem, p.imagem) as imagem
+            ${baseQuery}
+            ORDER BY p.nome, g.variacao
+            LIMIT $2 OFFSET $3;
+        `;
+        const dataResult = await dbClient.query(dataQuery, [termoBusca, limitNum, offset]);
+        
+        res.status(200).json({
+            rows: dataResult.rows,
+            pagination: {
+                currentPage: parseInt(page),
+                totalPages: totalPages,
+                totalItems: totalItems
+            }
+        });
+
+    } catch (error) {
+        console.error('[API /radar-producao/buscar] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar produtos.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// ==========================================================================
 // ROTA 2: CONSULTA DE FUNIL DE PRODUÇÃO
 // GET /api/radar-producao/funil?busca=...
 // ==========================================================================
@@ -215,21 +291,20 @@ router.get('/funil', async (req, res) => {
     let dbClient;
     try {
         dbClient = await pool.connect();
-        const termoBusca = `%${busca}%`;
-
-        // Passo 1: Encontrar o produto correspondente (sem alterações)
+        
+        // A busca pelo produto principal (seja por nome, variação ou SKU)
+        const termoBusca = `%${busca.replace(/\s+/g, '%')}%`;
         const produtoQuery = `
             SELECT 
-                p.id as produto_id, p.nome,
-                g.variacao as variante, g.sku,
+                p.id as produto_id, p.nome, p.is_kit, p.grade, 
+                g.variacao as variante, g.sku, 
                 COALESCE(g.imagem, p.imagem) as imagem
             FROM produtos p
-            LEFT JOIN jsonb_to_recordset(p.grade) AS g(sku TEXT, variacao TEXT, imagem TEXT) ON true
+            LEFT JOIN jsonb_to_recordset(p.grade) AS g(sku TEXT, variacao TEXT, imagem TEXT, composicao JSONB) ON true
             WHERE 
-                (p.sku ILIKE $1) OR (g.sku ILIKE $1) OR
-                (p.nome ILIKE $1 AND g.variacao IS NULL) OR 
-                (p.nome ILIKE $1 AND g.variacao ILIKE $1) OR
-                (g.variacao ILIKE $1)
+                unaccent(p.nome || ' ' || g.variacao) ILIKE unaccent($1)
+                OR unaccent(g.variacao || ' ' || p.nome) ILIKE unaccent($1)
+                OR unaccent(g.sku) ILIKE unaccent($1)
             LIMIT 1;
         `;
         const produtoResult = await dbClient.query(produtoQuery, [termoBusca]);
@@ -237,67 +312,102 @@ router.get('/funil', async (req, res) => {
         if (produtoResult.rows.length === 0) {
             return res.status(404).json({ error: 'Nenhum produto encontrado.' });
         }
+        
         const produtoInfo = produtoResult.rows[0];
 
-        // --- INÍCIO DA NOVA LÓGICA DE CÁLCULO "BULK DATA" PARA UM ÚNICO PRODUTO ---
-        
-        const { produto_id, variante } = produtoInfo;
+        // --- LÓGICA HELPER REUTILIZÁVEL ---
+        const calcularSaldosParaItem = async (prodId, prodVariante) => {
+            const [opsResult, arrematesResult, sessoesResult, embalagemResult, estoqueResult] = await Promise.all([
+                dbClient.query("SELECT numero, quantidade, etapas FROM ordens_de_producao WHERE status = 'finalizado' AND produto_id = $1 AND (variante = $2 OR (variante IS NULL AND $2 IS NULL))", [prodId, prodVariante]),
+                dbClient.query("SELECT op_numero, SUM(quantidade_arrematada) as total FROM arremates WHERE tipo_lancamento IN ('PRODUCAO', 'PERDA') AND produto_id = $1 AND (variante = $2 OR (variante IS NULL AND $2 IS NULL)) GROUP BY op_numero", [prodId, prodVariante]),
+                dbClient.query("SELECT COALESCE(SUM(quantidade_entregue), 0)::integer as total FROM sessoes_trabalho_arremate WHERE status = 'EM_ANDAMENTO' AND produto_id = $1 AND (variante = $2 OR (variante IS NULL AND $2 IS NULL))", [prodId, prodVariante]),
+                dbClient.query("SELECT COALESCE(SUM(quantidade_arrematada - quantidade_ja_embalada), 0)::integer as total FROM arremates WHERE tipo_lancamento = 'PRODUCAO' AND produto_id = $1 AND (variante = $2 OR (variante IS NULL AND $2 IS NULL))", [prodId, prodVariante]),
+                dbClient.query("SELECT COALESCE(SUM(quantidade), 0)::integer as total FROM estoque_movimentos WHERE produto_id = $1 AND (variante_nome = $2 OR (variante_nome IS NULL AND $2 IS NULL))", [prodId, prodVariante])
+            ]);
 
-        const [opsResult, arrematesResult, sessoesResult, embalagemResult, estoqueResult] = await Promise.all([
-            dbClient.query("SELECT numero, quantidade, etapas FROM ordens_de_producao WHERE status = 'finalizado' AND produto_id = $1 AND variante = $2", [produto_id, variante]),
-            dbClient.query("SELECT op_numero, quantidade_arrematada, tipo_lancamento FROM arremates WHERE tipo_lancamento IN ('PRODUCAO', 'PERDA') AND produto_id = $1 AND variante = $2", [produto_id, variante]),
-            dbClient.query("SELECT COALESCE(SUM(quantidade_entregue), 0)::integer as total FROM sessoes_trabalho_arremate WHERE status = 'EM_ANDAMENTO' AND produto_id = $1 AND variante = $2", [produto_id, variante]),
-            dbClient.query("SELECT COALESCE(SUM(quantidade_arrematada - quantidade_ja_embalada), 0)::integer as total FROM arremates WHERE tipo_lancamento = 'PRODUCAO' AND produto_id = $1 AND variante = $2", [produto_id, variante]),
-            dbClient.query("SELECT COALESCE(SUM(quantidade), 0)::integer as total FROM estoque_movimentos WHERE produto_id = $1 AND variante_nome = $2", [produto_id, variante])
-        ]);
+            const obterQuantidadeFinalProduzida = (op) => {
+                if (!op || !Array.isArray(op.etapas) || op.etapas.length === 0) return parseInt(op?.quantidade, 10) || 0;
+                for (let i = op.etapas.length - 1; i >= 0; i--) { const etapa = op.etapas[i]; if (etapa && etapa.lancado && etapa.quantidade !== null && etapa.quantidade !== undefined) { const qtdString = String(etapa.quantidade).trim(); if (qtdString !== '') { const qtdNumerica = parseInt(qtdString, 10); if (!isNaN(qtdNumerica) && qtdNumerica >= 0) return qtdNumerica; } } }
+                return parseInt(op.quantidade, 10) || 0;
+            };
+            const arrematadoMap = new Map(arrematesResult.rows.map(ar => [ar.op_numero, parseInt(ar.total, 10)]));
+            let saldoBrutoArremate = 0;
+            opsResult.rows.forEach(op => { const produzido = obterQuantidadeFinalProduzida(op); const jaArrematado = arrematadoMap.get(op.numero) || 0; if (produzido - jaArrematado > 0) saldoBrutoArremate += (produzido - jaArrematado); });
+            
+            const noArremate = Math.max(0, saldoBrutoArremate - sessoesResult.rows[0].total);
+            const naEmbalagem = embalagemResult.rows[0].total;
+            const emEstoque = estoqueResult.rows[0].total;
 
-        const obterQuantidadeFinalProduzida = (op) => {
-            if (!op || !Array.isArray(op.etapas) || op.etapas.length === 0) return parseInt(op?.quantidade, 10) || 0;
-            for (let i = op.etapas.length - 1; i >= 0; i--) {
-                const etapa = op.etapas[i];
-                if (etapa && etapa.lancado && etapa.quantidade !== null && etapa.quantidade !== undefined) {
-                    const qtdString = String(etapa.quantidade).trim();
-                    if (qtdString !== '') {
-                        const qtdNumerica = parseInt(qtdString, 10);
-                        if (!isNaN(qtdNumerica) && qtdNumerica >= 0) return qtdNumerica;
-                    }
-                }
-            }
-            return parseInt(op.quantidade, 10) || 0;
+            return { noArremate, naEmbalagem, emEstoque };
         };
 
-        const arrematadoMap = new Map();
-        arrematesResult.rows.forEach(ar => {
-            arrematadoMap.set(ar.op_numero, (arrematadoMap.get(ar.op_numero) || 0) + ar.quantidade_arrematada);
-        });
+        // --- CÁLCULO DO FUNIL DO PRODUTO PRINCIPAL ---
+        const saldosPrincipais = await calcularSaldosParaItem(produtoInfo.produto_id, produtoInfo.variante);
+        const niveisResult = await dbClient.query("SELECT * FROM produto_niveis_estoque_alerta WHERE produto_ref_id = $1 AND ativo = TRUE LIMIT 1", [produtoInfo.sku]);
+        const niveisEstoque = niveisResult.rows[0] || null;
+        const nivelIdeal = niveisEstoque?.nivel_estoque_ideal || 0;
+        const necessidadeProducao = Math.max(0, nivelIdeal - (saldosPrincipais.emEstoque + saldosPrincipais.naEmbalagem + saldosPrincipais.noArremate));
 
-        let saldoBrutoTotal = 0;
-        opsResult.rows.forEach(op => {
-            const produzido = obterQuantidadeFinalProduzida(op);
-            const jaArrematado = arrematadoMap.get(op.numero) || 0;
-            const saldoOp = produzido - jaArrematado;
-            if (saldoOp > 0) {
-                saldoBrutoTotal += saldoOp;
+        const funilPrincipal = {
+            emEstoque: { qtd: saldosPrincipais.emEstoque },
+            naEmbalagem: { qtd: saldosPrincipais.naEmbalagem },
+            noArremate: { qtd: saldosPrincipais.noArremate },
+            paraProduzir: { qtd: necessidadeProducao }
+        };
+
+        // --- BUSCAS ADICIONAIS: HISTÓRICO E COMPONENTES ---
+        let historicoEstoque = [];
+        let componentesKit = null;
+
+        const historicoResult = await dbClient.query(
+            `SELECT id, data_movimento, tipo_movimento, quantidade, usuario_responsavel, observacao 
+             FROM estoque_movimentos 
+             WHERE produto_id = $1 AND (variante_nome = $2 OR (variante_nome IS NULL AND $2 IS NULL)) 
+             ORDER BY data_movimento DESC LIMIT 10`,
+            [produtoInfo.produto_id, produtoInfo.variante]
+        );
+        historicoEstoque = historicoResult.rows;
+        
+        if (produtoInfo.is_kit) {
+            const variacaoKit = (produtoInfo.grade || []).find(g => g.sku === produtoInfo.sku);
+            if (variacaoKit && variacaoKit.composicao) {
+                componentesKit = [];
+                let potencialMontagem = Infinity;
+
+                for (const componenteDef of variacaoKit.composicao) {
+                    const saldosComponente = await calcularSaldosParaItem(componenteDef.produto_id, componenteDef.variacao);
+                    
+                    componentesKit.push({
+                        produto_id: componenteDef.produto_id,
+                        // ===================================
+                        nome: componenteDef.produto_nome,
+                        variante: componenteDef.variacao,
+                        quantidade_no_kit: componenteDef.quantidade,
+                        saldoArremate: saldosComponente.noArremate,
+                        saldoEmbalagem: saldosComponente.naEmbalagem
+                    });
+
+                    const podeMontarComEste = Math.floor(saldosComponente.naEmbalagem / (componenteDef.quantidade || 1));
+                    if (podeMontarComEste < potencialMontagem) {
+                        potencialMontagem = podeMontarComEste;
+                    }
+                }
+                produtoInfo.potencial_montagem = potencialMontagem;
             }
-        });
+        }
         
-        const quantidadeEmTrabalho = sessoesResult.rows[0].total;
-        const saldoFinalArremate = saldoBrutoTotal - quantidadeEmTrabalho;
-        
-        // --- FIM DA NOVA LÓGICA DE CÁLCULO ---
-
+        // --- RESPOSTA FINAL E COMPLETA ---
         res.status(200).json({
             produto: produtoInfo,
-            funil: {
-                arremate: { qtd: Math.max(0, saldoFinalArremate), info: "" },
-                embalagem: { qtd: embalagemResult.rows[0].total, info: "" },
-                estoque: { qtd: estoqueResult.rows[0].total, info: "" }
-            }
+            funil: funilPrincipal,
+            niveisEstoque: niveisEstoque,
+            historicoEstoque: historicoEstoque,
+            componentes: componentesKit
         });
 
     } catch (error) {
         console.error('[API /radar-producao/funil] Erro:', error);
-        res.status(500).json({ error: 'Erro ao consultar o funil do produto.' });
+        res.status(500).json({ error: 'Erro ao consultar o funil do produto.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }

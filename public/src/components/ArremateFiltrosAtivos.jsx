@@ -1,4 +1,4 @@
-// public/src/components/FiltrosAtivos.jsx
+// public/src/components/ArremateFiltrosAtivos.jsx
 import React from 'react';
 
 // Este componente recebe os filtros ativos e as funções para removê-los
