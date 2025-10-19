@@ -370,6 +370,11 @@ export default function BotaoBuscaFunil() {
             const url = `/api/radar-producao/buscar?termo=${encodeURIComponent(termo)}&page=${page}&limit=5`;
             const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
             const data = await response.json();
+
+            // ======================================================================
+            // ===== LOG 2: VER A LISTA DE RESULTADOS RECEBIDA PELA API =========
+            // ======================================================================
+            console.log("[LOG FRONT-END 1 - Lista Recebida] A API retornou:", data.rows);
             
             if (data.rows && data.rows.length === 1 && data.pagination.totalItems === 1) {
                 await executarBuscaDeFunil(data.rows[0]);
@@ -391,6 +396,13 @@ export default function BotaoBuscaFunil() {
     }, [paginaAtual]);
 
     const executarBuscaDeFunil = async (item) => {
+
+        // ======================================================================
+        // ===== LOG 3: VER O ITEM EXATO QUE FOI CLICADO OU SELECIONADO =====
+        // ======================================================================
+        console.log("[LOG FRONT-END 2 - Item Selecionado] Tentando buscar funil para o item:", item);
+
+
         setCarregando(true);
         setItemSelecionado(null); 
         try {

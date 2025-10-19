@@ -206,7 +206,6 @@ router.get('/alertas', async (req, res) => {
 // ROTA: BUSCAR SUGESTÕES DE PRODUTOS
 // GET /api/radar-producao/buscar?termo=...
 // ==========================================================================
-
 router.get('/buscar', async (req, res) => {
     const { termo, page = 1, limit = 5 } = req.query;
     if (!termo) {
@@ -219,13 +218,24 @@ router.get('/buscar', async (req, res) => {
     let dbClient;
     try {
         dbClient = await pool.connect();
-        // A busca agora ignora acentos no termo de busca também
-        const termoBusca = `%${termo.replace(/\s+/g, '%')}%`;
         
+        // --- LÓGICA DE TERMOS DE BUSCA ---
+        const termoPrincipal = `%${termo.replace(/\s+/g, '%')}%`;
+        let termoAlternativo = null;
+
+        // Gera o termo alternativo se a busca for por "sortido" ou "sortida"
+        if (termo.toLowerCase().includes('sortido')) {
+            termoAlternativo = `%${termo.toLowerCase().replace('sortido', 'sortida').replace(/\s+/g, '%')}%`;
+        } else if (termo.toLowerCase().includes('sortida')) {
+            termoAlternativo = `%${termo.toLowerCase().replace('sortida', 'sortido').replace(/\s+/g, '%')}%`;
+        }
+        // --- FIM DA LÓGICA DE TERMOS ---
+
         const limitNum = parseInt(limit);
         const offset = (parseInt(page) - 1) * limitNum;
 
-        // --- A MUDANÇA ESTÁ NO USO DA FUNÇÃO unaccent() ---
+        // --- QUERY BASE DINÂMICA ---
+        // A query agora se ajusta se houver um termo alternativo
         const baseQuery = `
             FROM produtos p
             INNER JOIN (
@@ -240,26 +250,49 @@ router.get('/buscar', async (req, res) => {
             WHERE 
                 g.sku NOT IN (SELECT produto_ref_id FROM estoque_itens_arquivados)
                 AND (
-                    -- Aplicamos unaccent() tanto no campo do banco quanto no termo de busca
-                    unaccent(g.variacao) ILIKE unaccent($1)
-                    OR unaccent(p.nome || ' ' || g.variacao) ILIKE unaccent($1)
-                    OR unaccent(g.sku) ILIKE unaccent($1)
+                    (
+                        unaccent(g.variacao) ILIKE unaccent($1)
+                        OR unaccent(p.nome || ' ' || g.variacao) ILIKE unaccent($1)
+                        OR unaccent(g.sku) ILIKE unaccent($1)
+                    )
+                    ${termoAlternativo ? `
+                    OR (
+                        unaccent(g.variacao) ILIKE unaccent($2)
+                        OR unaccent(p.nome || ' ' || g.variacao) ILIKE unaccent($2)
+                        OR unaccent(g.sku) ILIKE unaccent($2)
+                    )
+                    ` : ''}
                 )
         `;
         
-        // As queries de contagem e dados usam a baseQuery e permanecem as mesmas
+        // --- PARÂMETROS DINÂMICOS ---
+        const params = [termoPrincipal];
+        if (termoAlternativo) {
+            params.push(termoAlternativo);
+        }
+        
+        // --- QUERY DE CONTAGEM ---
         const countQuery = `SELECT COUNT(*) ${baseQuery}`;
-        const countResult = await dbClient.query(countQuery, [termoBusca]);
+        const countResult = await dbClient.query(countQuery, params);
         const totalItems = parseInt(countResult.rows[0].count, 10);
         const totalPages = Math.ceil(totalItems / limitNum) || 1;
+
+        // --- QUERY DE DADOS ---
+        // Adiciona os parâmetros de paginação (LIMIT e OFFSET)
+        const dataParams = [...params, limitNum, offset];
+        // Ajusta os placeholders de LIMIT e OFFSET
+        const limitPlaceholder = `$${params.length + 1}`;
+        const offsetPlaceholder = `$${params.length + 2}`;
 
         const dataQuery = `
             SELECT p.id as produto_id, p.nome, g.variacao as variante, g.sku, COALESCE(g.imagem, p.imagem) as imagem
             ${baseQuery}
             ORDER BY p.nome, g.variacao
-            LIMIT $2 OFFSET $3;
+            LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder};
         `;
-        const dataResult = await dbClient.query(dataQuery, [termoBusca, limitNum, offset]);
+        const dataResult = await dbClient.query(dataQuery, dataParams);
+        
+        console.log(`[LOG BACK-END /buscar] Para o termo "${termo}", a query encontrou:`, dataResult.rows);
         
         res.status(200).json({
             rows: dataResult.rows,
@@ -292,22 +325,41 @@ router.get('/funil', async (req, res) => {
     try {
         dbClient = await pool.connect();
         
-        // A busca pelo produto principal (seja por nome, variação ou SKU)
-        const termoBusca = `%${busca.replace(/\s+/g, '%')}%`;
+        // --- INÍCIO DA CORREÇÃO ---
+        // A query agora é dividida em duas partes para priorizar a busca por SKU
         const produtoQuery = `
-            SELECT 
-                p.id as produto_id, p.nome, p.is_kit, p.grade, 
-                g.variacao as variante, g.sku, 
-                COALESCE(g.imagem, p.imagem) as imagem
-            FROM produtos p
-            LEFT JOIN jsonb_to_recordset(p.grade) AS g(sku TEXT, variacao TEXT, imagem TEXT, composicao JSONB) ON true
-            WHERE 
-                unaccent(p.nome || ' ' || g.variacao) ILIKE unaccent($1)
-                OR unaccent(g.variacao || ' ' || p.nome) ILIKE unaccent($1)
-                OR unaccent(g.sku) ILIKE unaccent($1)
-            LIMIT 1;
+            WITH EncontradoPorSKU AS (
+                -- 1. Tenta encontrar uma correspondência EXATA de SKU primeiro
+                SELECT 
+                    p.id as produto_id, p.nome, p.is_kit, p.grade, 
+                    g.variacao as variante, g.sku, 
+                    COALESCE(g.imagem, p.imagem) as imagem
+                FROM produtos p, jsonb_to_recordset(p.grade) AS g(sku TEXT, variacao TEXT, imagem TEXT, composicao JSONB)
+                WHERE g.sku = $1
+                LIMIT 1
+            ),
+            EncontradoPorNome AS (
+                -- 2. Se não encontrar por SKU, tenta por nome/variação (busca aproximada)
+                SELECT 
+                    p.id as produto_id, p.nome, p.is_kit, p.grade, 
+                    g.variacao as variante, g.sku, 
+                    COALESCE(g.imagem, p.imagem) as imagem
+                FROM produtos p
+                LEFT JOIN jsonb_to_recordset(p.grade) AS g(sku TEXT, variacao TEXT, imagem TEXT, composicao JSONB) ON true
+                WHERE 
+                    unaccent(p.nome || ' ' || g.variacao) ILIKE unaccent($2)
+                    AND NOT EXISTS (SELECT 1 FROM EncontradoPorSKU) -- Só executa se a primeira busca falhar
+                LIMIT 1
+            )
+            -- Junta os resultados (apenas um deles terá dados)
+            SELECT * FROM EncontradoPorSKU
+            UNION ALL
+            SELECT * FROM EncontradoPorNome;
         `;
-        const produtoResult = await dbClient.query(produtoQuery, [termoBusca]);
+        // --- FIM DA CORREÇÃO ---
+
+        // Passamos a busca como dois parâmetros: um para a busca exata de SKU, outro para a busca aproximada
+        const produtoResult = await dbClient.query(produtoQuery, [busca, `%${busca.replace(/\s+/g, '%')}%`]);
 
         if (produtoResult.rows.length === 0) {
             return res.status(404).json({ error: 'Nenhum produto encontrado.' });

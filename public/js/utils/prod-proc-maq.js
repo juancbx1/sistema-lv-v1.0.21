@@ -15,7 +15,7 @@ export const PRODUTOSKITS = [
     'Kit 5 Scrunchies',
     'Kit 4 Scrunchies',
     'Kit 5 Scrunchies - Fina',
-    ''
+    'Kit 5 Xuxona Scrunchie',
 ];
 
 export const MAQUINAS = [
