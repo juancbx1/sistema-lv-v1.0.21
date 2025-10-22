@@ -291,9 +291,7 @@ router.get('/buscar', async (req, res) => {
             LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder};
         `;
         const dataResult = await dbClient.query(dataQuery, dataParams);
-        
-        console.log(`[LOG BACK-END /buscar] Para o termo "${termo}", a query encontrou:`, dataResult.rows);
-        
+                
         res.status(200).json({
             rows: dataResult.rows,
             pagination: {

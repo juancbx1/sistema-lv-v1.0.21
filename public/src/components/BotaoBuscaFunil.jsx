@@ -4,6 +4,7 @@ import FeedbackNotFound from './FeedbackNotFound.jsx';
 import { mostrarMensagem } from '/js/utils/popups.js';
 import { renderizarPaginacao } from '/js/utils/Paginacao.js';
 import { obterProdutos } from '/js/utils/storage.js';
+import PainelDemandas from './BotaoBuscaPainelDemandas.jsx';
 
 // --- SUBCOMPONENTES ---
 
@@ -339,6 +340,7 @@ export default function BotaoBuscaFunil() {
     const [paginacao, setPaginacao] = useState(null);
     const [paginaAtual, setPaginaAtual] = useState(1);
     const [termoBuscaAnterior, setTermoBuscaAnterior] = useState('');
+    const [view, setView] = useState('funil');
 
     // Estado para guardar a lista completa de produtos
     const [todosOsProdutos, setTodosOsProdutos] = useState([]);
@@ -370,12 +372,6 @@ export default function BotaoBuscaFunil() {
             const url = `/api/radar-producao/buscar?termo=${encodeURIComponent(termo)}&page=${page}&limit=5`;
             const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
             const data = await response.json();
-
-            // ======================================================================
-            // ===== LOG 2: VER A LISTA DE RESULTADOS RECEBIDA PELA API =========
-            // ======================================================================
-            console.log("[LOG FRONT-END 1 - Lista Recebida] A API retornou:", data.rows);
-            
             if (data.rows && data.rows.length === 1 && data.pagination.totalItems === 1) {
                 await executarBuscaDeFunil(data.rows[0]);
             } else if (data.rows) {
@@ -396,13 +392,6 @@ export default function BotaoBuscaFunil() {
     }, [paginaAtual]);
 
     const executarBuscaDeFunil = async (item) => {
-
-        // ======================================================================
-        // ===== LOG 3: VER O ITEM EXATO QUE FOI CLICADO OU SELECIONADO =====
-        // ======================================================================
-        console.log("[LOG FRONT-END 2 - Item Selecionado] Tentando buscar funil para o item:", item);
-
-
         setCarregando(true);
         setItemSelecionado(null); 
         try {
@@ -523,22 +512,44 @@ export default function BotaoBuscaFunil() {
         <div className="gs-busca-modal-overlay" onClick={fecharModal}>
             <div className="gs-busca-modal-conteudo" onClick={(e) => e.stopPropagation()}>
                 <div className="gs-busca-modal-header">
-                    <h3>Consultar Funil de Produto</h3>
+                    {/* --- INÍCIO DA MODIFICAÇÃO --- */}
+                    <div className="gs-modal-view-switcher">
+                        <button
+                            className={`gs-btn-switch ${view === 'funil' ? 'ativo' : ''}`}
+                            onClick={() => setView('funil')}
+                        >
+                            <i className="fas fa-search"></i> Consultar Funil
+                        </button>
+                        <button
+                            className={`gs-btn-switch ${view === 'demandas' ? 'ativo' : ''}`}
+                            onClick={() => setView('demandas')}
+                        >
+                            <i className="fas fa-list-alt"></i> Painel de Prioridades
+                        </button>
+                    </div>
+                    {/* --- FIM DA MODIFICAÇÃO --- */}
                     <button onClick={fecharModal} className="gs-busca-modal-fechar">&times;</button>
                 </div>
                 <div className="gs-busca-modal-body">
-                    {/* A lógica de exibição do formulário da sua versão, que está correta */}
-                    {!itemSelecionado && (
-                        <form onSubmit={handleBuscaSubmit} className="gs-busca-wrapper" style={{display: 'flex', gap: '10px'}}>
-                            <input type="text" className="gs-input" placeholder="Digite a cor ou nome do produto..." value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} autoFocus />
-                            <button type="submit" className="gs-btn gs-btn-primario" disabled={carregando}>
-                                {carregando ? <div className="spinner-btn-interno"></div> : 'Buscar'}
-                            </button>
-                        </form>
+                    {view === 'funil' ? (
+                        <>
+                            {/* Toda a lógica de busca que já existia fica aqui dentro */}
+                            {!itemSelecionado && (
+                                <form onSubmit={handleBuscaSubmit} className="gs-busca-wrapper" style={{display: 'flex', gap: '10px'}}>
+                                    <input type="text" className="gs-input" placeholder="Digite a cor ou nome do produto..." value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} autoFocus />
+                                    <button type="submit" className="gs-btn gs-btn-primario" disabled={carregando}>
+                                        {carregando ? <div className="spinner-btn-interno"></div> : 'Buscar'}
+                                    </button>
+                                </form>
+                            )}
+                            <div className="gs-busca-modal-resultados">
+                                {renderizarConteudo()}
+                            </div>
+                        </>
+                    ) : (
+                        // Quando a view for 'demandas', renderizamos nosso novo painel
+                        <PainelDemandas />
                     )}
-                    <div className="gs-busca-modal-resultados">
-                        {renderizarConteudo()}
-                    </div>
                 </div>
             </div>
         </div>

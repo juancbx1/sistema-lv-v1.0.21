@@ -2216,6 +2216,446 @@ font-weight: 500;
 .gs-termometro-legenda .legenda-item.atencao strong { color: var(--gs-aviso); }
 .gs-termometro-legenda .legenda-item.saudavel strong { color: var(--gs-sucesso); }
 
+/* --- ESTILOS PARA O SWITCHER DE VISÃO DO MODAL --- */
+.gs-busca-modal-header {
+    position: relative; /* Necessário para o posicionamento do botão de fechar */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.gs-modal-view-switcher {
+    display: flex;
+    background-color: #e9ecef;
+    border-radius: var(--gs-raio-borda-botao);
+    padding: 4px;
+}
+
+.gs-btn-switch {
+    background-color: transparent;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--gs-texto-secundario);
+    transition: all 0.2s ease-in-out;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.gs-btn-switch:hover:not(.ativo) {
+    background-color: #dfe3e6;
+}
+
+.gs-btn-switch.ativo {
+    background-color: var(--gs-branco);
+    color: var(--gs-primaria);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Ajusta o título h3 original para não atrapalhar */
+.gs-busca-modal-header h3 {
+    display: none; /* Escondemos o título antigo */
+}
+
+/* --- ESTILOS PARA O PAINEL DE DEMANDAS --- */
+.gs-painel-demandas-container {
+    animation: gs-fadeIn 0.4s;
+}
+
+.gs-painel-demandas-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 15px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--gs-borda);
+}
+
+.gs-painel-demandas-header h2 {
+    margin: 0;
+    font-size: 1.3rem;
+    color: var(--gs-secundaria);
+}
+
+.gs-demandas-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* --- ESTILOS PARA O CARD DE DEMANDA INDIVIDUAL --- */
+.gs-demanda-card {
+    background-color: var(--gs-fundo-card);
+    border-radius: var(--gs-raio-borda-card);
+    border: 1px solid var(--gs-borda);
+    transition: all 0.3s ease;
+    border-left-width: 5px;
+}
+
+.gs-demanda-card.com-deficit {
+    border-left-color: var(--gs-perigo);
+}
+.gs-demanda-card.sem-deficit {
+    border-left-color: var(--gs-sucesso);
+}
+
+.gs-demanda-card-header {
+    display: grid;
+    /* Prioridade, Imagem, Info, Métricas, Ações */
+    grid-template-columns: auto 60px 1fr auto auto; 
+    gap: 15px;
+    align-items: center;
+    padding: 12px 15px;
+    cursor: pointer;
+}
+
+.acoes-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.btn-acao-demanda {
+    background: none;
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--gs-texto-secundario);
+    transition: all 0.2s ease;
+}
+
+.btn-acao-demanda:hover {
+    background-color: #f1f1f1;
+}
+
+.btn-acao-demanda.deletar:hover {
+    background-color: var(--gs-negativo-fundo);
+    color: var(--gs-perigo);
+}
+
+.gs-demanda-card:not(.expandido):hover {
+    background-color: var(--gs-fundo-alternativo);
+    transform: translateY(-2px);
+    box-shadow: var(--gs-sombra-hover);
+}
+
+.prioridade-tag {
+    font-weight: 700;
+    color: var(--gs-secundaria);
+    font-size: 1.1rem;
+}
+
+.gs-demanda-card-header img {
+    width: 50px;
+    height: 50px;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.info-principal {
+    display: flex;
+    flex-direction: column; /* Coloca os spans um sobre o outro */
+    justify-content: center; /* Alinha verticalmente se houver espaço */
+}
+
+.info-principal .nome {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: var(--gs-texto-principal);
+    line-height: 1.3;
+}
+
+.info-principal .sku {
+    font-size: 0.8rem;
+    color: var(--gs-texto-secundario);
+}
+
+.metricas-resumo {
+    display: flex;
+    gap: 20px;
+    text-align: center;
+}
+.metricas-resumo span {
+    font-size: 0.8rem;
+    color: var(--gs-texto-secundario);
+    display: block;
+}
+.metricas-resumo strong {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+.metricas-resumo .deficit-valor {
+    color: var(--gs-perigo);
+}
+
+.metricas-resumo.sem-deficit .deficit-valor {
+    color: var(--gs-sucesso); /* Verde! */
+}
+
+
+
+.expansor {
+    color: var(--gs-texto-secundario);
+    padding: 0 10px;
+}
+
+.gs-demanda-card-body {
+    padding: 20px;
+    border-top: 1px solid var(--gs-borda);
+    background-color: var(--gs-fundo-alternativo);
+    animation: gs-fadeIn 0.5s;
+}
+
+.diagnostico-titulo {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--gs-texto-secundario);
+    margin: 0 0 20px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.lista-componentes-diagnostico {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.componente-diagnostico {
+    background-color: var(--gs-fundo-card);
+    border-radius: var(--gs-raio-borda-input);
+    padding: 15px;
+    border: 1px solid #e9ecef;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px 20px;
+}
+
+.componente-info {
+    grid-column: 1 / 2;
+}
+.componente-info .nome { font-weight: 600; }
+.componente-info .variante { font-size: 0.9rem; color: #6c757d; }
+
+.componente-saldos {
+    grid-column: 1 / 2;
+    display: flex;
+    gap: 20px;
+    background-color: #f8f9fa;
+    padding: 10px;
+    border-radius: 6px;
+    margin-top: 10px;
+    text-align: center;
+}
+.componente-saldos > div { flex: 1; }
+.componente-saldos span { font-size: 0.75rem; color: #6c757d; display: block; }
+.componente-saldos strong { font-size: 1.2rem; font-weight: 700; }
+.componente-saldos .necessario { color: var(--gs-primaria); }
+
+.componente-deficit {
+    grid-column: 2 / 3;
+    grid-row: 1 / 3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: #fff5f5;
+    border-radius: 6px;
+    padding: 10px 20px;
+    text-align: center;
+}
+.componente-deficit span { font-size: 0.8rem; font-weight: 600; color: var(--gs-perigo); }
+.componente-deficit .deficit-valor { font-size: 2rem; font-weight: 700; color: var(--gs-perigo); }
+
+.componente-deficit.sem-deficit {
+    background-color: #e8f8f5; /* Fundo verde claro */
+    color: var(--gs-sucesso);
+}
+
+.componente-deficit.sem-deficit span,
+.componente-deficit.sem-deficit .deficit-valor {
+    color: var(--gs-sucesso);
+}
+
+/* --- ESTILOS NOVOS PARA O RESUMO DE KIT --- */
+.kit-resumo-geral {
+    background-color: var(--gs-branco);
+    padding: 15px;
+    border-radius: var(--gs-raio-borda-input);
+    border: 1px solid var(--gs-borda);
+    margin-bottom: 20px;
+}
+
+.kit-resumo-geral h4 {
+    margin: 0 0 15px 0;
+    font-size: 1rem;
+    color: var(--gs-secundaria);
+}
+
+.kit-metricas-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+    text-align: center;
+}
+
+.kit-metrica span {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--gs-texto-secundario);
+    margin-bottom: 5px;
+}
+
+.kit-metrica strong {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--gs-secundaria);
+}
+
+.kit-metrica.estoque strong { color: var(--gs-primaria); }
+.kit-metrica.potencial strong { color: var(--gs-aviso); }
+.kit-metrica.total strong { color: var(--gs-sucesso); }
+
+.saldo-bloqueado {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* --- ABAS INTERNAS DO PAINEL --- */
+.gs-view-switcher-interno {
+    display: flex;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--gs-borda);
+}
+.gs-view-switcher-interno .gs-btn-switch {
+    background: none;
+    border: none;
+    padding: 10px 20px;
+    font-weight: 600;
+    color: var(--gs-texto-secundario);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -1px; /* Alinha com a borda principal */
+}
+.gs-view-switcher-interno .gs-btn-switch.ativo {
+    color: var(--gs-primaria);
+    border-bottom-color: var(--gs-primaria);
+    background: none; box-shadow: none;
+}
+
+
+/* --- CARD DA VISÃO AGREGADA --- */
+.gs-agregado-lista {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+}
+
+.gs-agregado-card {
+    background-color: var(--gs-fundo-card);
+    border: 1px solid var(--gs-borda);
+    border-radius: var(--gs-raio-borda-card);
+    display: flex;
+    flex-direction: column;
+}
+
+.agregado-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+}
+.agregado-header img { width: 45px; height: 45px; object-fit: cover; border-radius: 6px; }
+
+.agregado-info {
+    display: flex; /* Adiciona flexbox */
+    flex-direction: column; /* Coloca os itens em coluna */
+}
+
+.agregado-info .nome { 
+    font-weight: 600; 
+    line-height: 1.2; /* Melhora o espaçamento */
+}
+
+.agregado-info .variante { 
+    font-size: 0.9rem; 
+    color: #6c757d; 
+}
+
+.agregado-body {
+    display: flex;
+    gap: 15px;
+    padding: 15px;
+    background-color: var(--gs-fundo-alternativo);
+    border-top: 1px solid var(--gs-borda);
+    border-bottom: 1px solid var(--gs-borda);
+}
+
+.necessidade-principal {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: #fff5f5;
+    color: var(--gs-perigo);
+    border-radius: 6px;
+    padding: 10px;
+}
+.necessidade-principal span { font-size: 0.8rem; font-weight: 600; }
+.necessidade-principal .valor-deficit { font-size: 2.5rem; font-weight: 700; line-height: 1.1; }
+
+.saldos-disponiveis {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.saldo-bloco {
+    background-color: var(--gs-branco);
+    border: 1px solid var(--gs-borda);
+    border-radius: 6px;
+    padding: 8px;
+    text-align: center;
+}
+.saldo-bloco span { font-size: 0.75rem; color: #6c757d; display: block; }
+.saldo-bloco strong { font-size: 1.3rem; font-weight: 700; }
+
+.saldo-bloco.estoque {
+    background-color: #e8f8f5; /* Fundo verde claro */
+    border-color: var(--gs-sucesso);
+}
+
+.agregado-footer {
+    padding: 15px;
+    font-size: 0.85rem;
+}
+.agregado-footer p { margin: 0 0 10px 0; color: #6c757d; }
+.agregado-footer ul {
+    list-style: none;
+    padding-left: 15px;
+    margin: 0;
+}
+.agregado-footer li {
+    position: relative;
+    padding-bottom: 5px;
+}
+.agregado-footer li::before {
+    content: '›';
+    position: absolute;
+    left: -12px;
+    color: var(--gs-primaria);
+}
+
+
+
 /* ==========================================================================
    # AJUSTES PARA MOBILE 
    ========================================================================== */
@@ -2363,6 +2803,79 @@ font-weight: 500;
         background-color: var(--gs-fundo-alternativo);
         padding: 10px;
         border-radius: var(--gs-raio-borda-input);
+    }
+
+     /* --- 1. AJUSTE DO CABEÇALHO DO PAINEL ('gs-painel-demandas-header') --- */
+    .gs-painel-demandas-header {
+        flex-direction: column; /* Empilha o título e os botões */
+        align-items: flex-start; /* Alinha tudo à esquerda */
+        gap: 15px; /* Adiciona um espaço entre o título e os botões */
+    }
+
+    .gs-painel-demandas-header h2 {
+        font-size: 1.2rem; /* Reduz um pouco o tamanho do título */
+    }
+    
+    .gs-painel-demandas-header > div {
+        width: 100%; /* Faz o container dos botões ocupar toda a largura */
+        display: flex;
+        justify-content: space-between; /* Coloca um botão em cada ponta */
+    }
+
+    .gs-painel-demandas-header .gs-btn {
+        flex-grow: 1; /* Faz os botões crescerem para ocupar o espaço */
+        padding: 10px 5px; /* Reduz o padding para caber mais texto */
+        font-size: 0.85rem;
+        gap: 6px;
+    }
+
+    /* --- 2. AJUSTE DO CARD DA DEMANDA ('gs-demanda-card-header') --- */
+    .gs-demanda-card-header {
+        /* Muda o layout de grid para flexbox em coluna */
+        display: flex;
+        flex-wrap: wrap; /* Permite que os itens quebrem para a linha de baixo */
+        align-items: center;
+        gap: 10px 15px; /* Espaçamento vertical e horizontal */
+    }
+    
+    /* A prioridade e a imagem ficam na mesma linha */
+    .gs-demanda-card-header .prioridade-input,
+    .gs-demanda-card-header .prioridade-tag {
+       order: 1; /* Ordem visual 1 */
+    }
+    .gs-demanda-card-header img {
+       order: 2; /* Ordem visual 2 */
+    }
+
+    /* As informações principais (nome e sku) ocupam a linha inteira abaixo */
+    .gs-demanda-card-header .info-principal {
+       order: 4; /* Ordem visual 4 */
+       width: 100%; /* Ocupa a largura toda, forçando a quebra de linha */
+       padding-top: 5px;
+       border-top: 1px solid var(--gs-borda);
+    }
+    .info-principal .nome { font-size: 1rem; }
+    .info-principal .sku { font-size: 0.75rem; }
+
+
+    /* As métricas de resumo ficam ao lado da imagem */
+    .gs-demanda-card-header .metricas-resumo {
+        order: 3; /* Ordem visual 3 */
+        flex-grow: 1; /* Ocupa o espaço restante na primeira linha */
+        justify-content: flex-end; /* Alinha as métricas à direita */
+        gap: 15px;
+    }
+    .metricas-resumo span { font-size: 0.7rem; }
+    .metricas-resumo strong { font-size: 1.2rem; }
+
+    /* Os botões de ação ficam no final da primeira linha */
+    .gs-demanda-card-header .acoes-card {
+        order: 5;
+        margin-left: auto; /* Empurra para a extrema direita */
+    }
+
+    .gs-busca-modal-header {
+    gap: 8px;
     }
 
 }
