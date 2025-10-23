@@ -102,6 +102,23 @@ function PainelEmbalagem() {
         setAtualizando(false);
     };
 
+    useEffect(() => {
+        // A função que será chamada quando o evento for disparado
+        const escutarAtualizacao = () => {
+            console.log('[REACT] Evento "forcarAtualizacaoFila" recebido! Atualizando dados...');
+            handleAtualizar();
+        };
+
+        // Adiciona o "ouvinte" ao window
+        window.addEventListener('forcarAtualizacaoFila', escutarAtualizacao);
+
+        // Função de limpeza: remove o "ouvinte" quando o componente for desmontado
+        // Isso é importante para evitar vazamentos de memória
+        return () => {
+            window.removeEventListener('forcarAtualizacaoFila', escutarAtualizacao);
+        };
+    }, [handleAtualizar]); // A dependência garante que a função de atualização esteja sempre correta
+
     const produtosFiltrados = useMemo(() => {
         let produtos = [...produtosFila];
         const { termoBusca, ordenacao, produtos: produtosSel, cores: coresSel, tamanhos: tamanhosSel } = filtros;
@@ -193,6 +210,9 @@ function PainelEmbalagem() {
                 fetchAll: 'true' // Para obter todos os lotes, mesmo os com saldo zero (embora a API de arremate já filtre)
             });
 
+            params.append('tipo_lancamento', 'PRODUCAO');
+
+
             const response = await fetch(`/api/arremates?${params.toString()}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -206,12 +226,18 @@ function PainelEmbalagem() {
             // Filtra apenas os arremates que realmente têm saldo para embalar
             const arrematesComSaldo = (dataArremates.rows || []).filter(arr => (arr.quantidade_arrematada - arr.quantidade_ja_embalada) > 0);
 
+            // ▼▼▼ ADICIONE ESTE LOG DE VERIFICAÇÃO AQUI ▼▼▼
+            console.log(`[VERIFICAÇÃO 1.1] Lista de arremates com saldo após filtro final. Total de lotes: ${arrematesComSaldo.length}. Tipos:`, [...new Set(arrematesComSaldo.map(a => a.tipo_lancamento))]);
+            // ▲▲▲ FIM DO LOG ▲▲▲
+            // ========================================================================
+
             // Passo 2: Montar o objeto completo que a tela de detalhes espera
             const agregadoCompleto = {
                 ...itemClicado, // Inclui todas as propriedades do item (produto_id, nome, etc.)
                 total_quantidade_disponivel_para_embalar: itemClicado.total_disponivel_para_embalar, // Garante que o total está correto
-                arremates_detalhe: arrematesComSaldo // <<-- A PROPRIEDADE QUE FALTAVA!
+                arremates_detalhe: arrematesComSaldo
             };
+
 
             // Passo 3: Salvar no localStorage e navegar
             localStorage.setItem('embalarDetalheAtual', JSON.stringify(agregadoCompleto));

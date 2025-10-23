@@ -1716,6 +1716,47 @@ body {
 }
 
 
+/* --- ESTILOS PARA O OVERLAY DE PROCESSAMENTO --- */
+.ep-detalhe-processando-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.85);
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    border-radius: var(--ep-raio-borda-container);
+    cursor: wait;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.ep-detalhe-processando-overlay.visivel {
+    opacity: 1;
+    visibility: visible;
+}
+
+.ep-detalhe-processando-overlay .spinner-overlay {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #ccc;
+    border-top-color: var(--ep-cor-azul-primario);
+    border-radius: 50%;
+    animation: ep-spin 1s linear infinite; /* Reutiliza a animação de spin que já existe */
+}
+
+.ep-detalhe-processando-overlay .texto-overlay {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--ep-cor-azul-escuro);
+}
+
 /*------------------------------------*\
     #RESPONSIVIDADE
 \*------------------------------------*/

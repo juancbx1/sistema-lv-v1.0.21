@@ -30,59 +30,44 @@ const itemsPerPageHistorico = 5;
 
 
 async function forcarAtualizacaoEmbalagem() {
-    const btn = document.querySelector('.gs-btn-atualizar'); // Usamos a classe que está no React
-    if (!btn || btn.disabled) return;
-
-    btn.disabled = true;
-    const span = btn.querySelector('span');
-    const originalText = span ? span.textContent : 'Atualizar';
-    if (span) span.textContent = 'Atualizando...';
-
-    try {
-        // A função que busca todos os dados e reinicializa o controlador
-        await carregarDadosEInicializarFiltros(); 
-        
-        mostrarMensagem('Fila de embalagem atualizada com sucesso!', 'sucesso', 2500);
-
-    } catch (error) {
-        console.error('[forcarAtualizacaoEmbalagem] Erro:', error);
-        
-        mostrarMensagem('Falha ao atualizar a fila. Tente novamente.', 'erro');
-
-    } finally {
-        // Restaura o botão ao seu estado original
-        if (span) span.textContent = originalText;
-        if (btn) btn.disabled = false;
-        
-    }
+    console.log('[JS Puro] Disparando evento "forcarAtualizacaoFila" para o React.');
+    // Esta função agora só tem uma responsabilidade:
+    // Avisar o React que ele precisa se atualizar.
+    window.dispatchEvent(new CustomEvent('forcarAtualizacaoFila'));
 }
 window.forcarAtualizacaoEmbalagem = forcarAtualizacaoEmbalagem;
 
+// Função auxiliar para controlar o overlay de processamento
+function controlarOverlayProcessamento(mostrar, texto = 'Processando...') {
+    const detalheViewEl = document.getElementById('embalarDetalheView');
+    if (!detalheViewEl) return;
+
+    let overlay = detalheViewEl.querySelector('.ep-detalhe-processando-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'ep-detalhe-processando-overlay';
+        overlay.innerHTML = `
+            <div class="spinner-overlay"></div>
+            <p class="texto-overlay">${texto}</p>
+        `;
+        detalheViewEl.appendChild(overlay);
+    }
+
+    const textoEl = overlay.querySelector('.texto-overlay');
+    if (textoEl) textoEl.textContent = texto;
+
+    if (mostrar) {
+        overlay.classList.add('visivel');
+    } else {
+        overlay.classList.remove('visivel');
+    }
+}
+
 
 async function carregarDadosEInicializarFiltros() {
-    const containerEl = document.getElementById('embalagemCardsContainer');
-    if(containerEl) containerEl.innerHTML = '<div class="spinner">Carregando produtos na fila...</div>';
-
-    try {
-        const [produtosCadastrados, respostaFila] = await Promise.all([
-            obterProdutosDoStorage(true),
-            fetchFromAPI('/embalagens/fila?todos=true')
-        ]);
-        todosOsProdutosCadastrados = produtosCadastrados || [];
-        const todosOsProdutosDaFila = respostaFila.rows || [];
-        
-        inicializarControlador({
-            dadosCompletos: todosOsProdutosDaFila,
-            renderizarResultados: renderizarCardsDaPagina,
-            camposParaBusca: ['produto', 'variante', 'sku']
-        });
-
-        await atualizarContadoresPainel(todosOsProdutosDaFila);
-    } catch (error) {
-        console.error("Falha ao carregar dados da fila e inicializar filtros:", error);
-        if(containerEl) containerEl.innerHTML = '<p style="text-align:center; color: red;">Não foi possível carregar os dados da fila.</p>';
-        throw error; // Re-lança o erro para o `catch` do forcarAtualizacaoEmbalagem funcionar
-    }
+    // A lógica foi movida para o componente React.
+    console.warn("A função 'carregarDadosEInicializarFiltros' do JS puro foi chamada, mas está aposentada. O React deve controlar o carregamento.");
+    return; // Não faz mais nada.
 }
 
 /**
@@ -527,15 +512,19 @@ async function buscarArrematesDetalhados(produtoId, variante) {
         const params = new URLSearchParams({ 
             produto_id: produtoId,
             variante: variante || '-',
-            fetchAll: 'true' 
+            fetchAll: 'true',
+            tipo_lancamento: 'PRODUCAO' 
+
         });
         const response = await fetchFromAPI(`/arremates?${params.toString()}`);
-        // A API já filtra por saldo, então apenas retornamos as linhas
-        return response.rows || [];
+        
+        // Agora o frontend não precisa mais se preocupar em filtrar, pois o backend já fará isso.
+        return (response.rows || []).filter(arr => (arr.quantidade_arrematada - arr.quantidade_ja_embalada) > 0);
+
     } catch (error) {
         console.error(`Erro ao buscar detalhes para produto ${produtoId}:`, error);
         mostrarMensagem(`Não foi possível buscar os lotes de arremate para este item.`, 'erro');
-        return []; // Retorna um array vazio em caso de erro
+        return [];
     }
 }
 
@@ -879,8 +868,7 @@ async function embalarUnidade() {
     }
 
     operacaoEmAndamento.add('embalarUnidade');
-    btnEmbalarEl.disabled = true;
-    btnEmbalarEl.innerHTML = '<div class="spinner-btn-interno"></div> Processando...';
+    controlarOverlayProcessamento(true, 'Registrando embalagem...');
 
     try {
         let quantidadeRestanteDaMeta = quantidadeEnviada;
@@ -937,26 +925,30 @@ async function embalarUnidade() {
             id_arremate_origem: arrematesOrdenados[0]?.id || null, 
             observacao: observacao || null
         };
-        
+
         // O backend /estoque/entrada-producao precisa estar preparado para receber 'id_arremate_origem'
         await fetchFromAPI('/estoque/entrada-producao', {
             method: 'POST',
             body: JSON.stringify(payloadEstoque)
         });
         
-        mostrarMensagem(`${quantidadeEnviada} unidade(s) embalada(s) com sucesso!`, 'sucesso', 2500);
-        
-        // <<< A MUDANÇA ESTÁ AQUI: APENAS REDIRECIONA >>>
-        // Não chamamos mais nenhuma função de cálculo.
-        window.location.hash = '';
+        mostrarMensagem(`${quantidadeEnviada} unidade(s) embalada(s) com sucesso!`, 'sucesso', 2000);
+        // 1. Dispara um evento global que o React vai ouvir
+        window.dispatchEvent(new CustomEvent('forcarAtualizacaoFila'));
+
+        // 2. Aguarda um pouquinho para o React começar a atualizar em segundo plano
+        setTimeout(() => {
+            // 3. Volta para a tela de lista
+            window.location.hash = '';
+        }, 100); // 100ms é suficiente
 
     } catch (error) {
         console.error('[embalarUnidade] Erro:', error);
         mostrarMensagem(`Falha ao embalar unidade: ${error.message}`, 'erro');
     } finally {
         operacaoEmAndamento.delete('embalarUnidade');
-        btnEmbalarEl.disabled = false;
-        btnEmbalarEl.innerHTML = '<i class="fas fa-box-open"></i> EMBALAR E ESTOCAR UNIDADES';
+        // Esconde o overlay independentemente do resultado
+        controlarOverlayProcessamento(false);
     }
 }
 
@@ -1000,8 +992,7 @@ async function montarKits() {
     if (!confirmado) return;
 
     operacaoEmAndamento.add('montarKits');
-    btnMontarEl.disabled = true;
-    btnMontarEl.innerHTML = '<div class="spinner-btn-interno"></div> Montando Kits...';
+    controlarOverlayProcessamento(true, 'Montando e estocando kits...');
     
     try {
         const variacaoDoKitObj = kitProdutoSelecionadoObj.grade?.find(g => g.variacao === variacaoKitProduto);
@@ -1054,16 +1045,19 @@ async function montarKits() {
         // Chama o endpoint correto em api/kits.js
         await fetchFromAPI('/kits/montar', { method: 'POST', body: JSON.stringify(payloadAPI) });
         
-        mostrarMensagem(`${qtdKitsParaEnviar} kit(s) montado(s) com sucesso!`, 'sucesso', 3000);
-        window.location.hash = '';
+        mostrarMensagem(`${qtdKitsParaEnviar} kit(s) montado(s) com sucesso!`, 'sucesso', 2000);
+        
+        window.dispatchEvent(new CustomEvent('forcarAtualizacaoFila'));
+        setTimeout(() => {
+            window.location.hash = '';
+        }, 100);
         
     } catch (error) {
         console.error('[montarKits] Erro:', error);
         mostrarMensagem(`Erro ao montar kits: ${error.message}`, 'erro');
     } finally {
         operacaoEmAndamento.delete('montarKits');
-        btnMontarEl.disabled = false;
-        btnMontarEl.innerHTML = '<i class="fas fa-boxes"></i> MONTAR E ESTOCAR KITS';
+        controlarOverlayProcessamento(false);
     }
 }
 
@@ -1609,7 +1603,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         abrirModalHistoricoGeral();
       }
     });
-    window.addEventListener('forcarAtualizacaoFila', forcarAtualizacaoEmbalagem);
 
     // Listeners para os botões de ação na TELA DE DETALHES
     document.getElementById('btnEmbalarEnviarEstoqueUnidade')?.addEventListener('click', embalarUnidade);

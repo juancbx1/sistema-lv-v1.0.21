@@ -405,7 +405,7 @@ router.get('/diagnostico-completo', async (req, res) => {
                         }
                     }
                 }
-            } else {
+            } else { // É um produto simples (unidade avulsa)
                 const variante = produtoPrincipal.gradeInfo?.variacao;
                 const chave = `${produtoPrincipal.id}|${variante || '-'}`;
                 if (componentesAgregados.has(chave)) {
@@ -413,6 +413,9 @@ router.get('/diagnostico-completo', async (req, res) => {
                     if (!agregado.demandas_dependentes.includes(nomeDemanda)) {
                         agregado.demandas_dependentes.push(nomeDemanda);
                     }
+                    // AQUI ESTÁ A MÁGICA: Se chegamos aqui, é porque este componente
+                    // também foi demandado como uma unidade. Ligamos a bandeira.
+                    agregado.is_demanded_as_unit = true;
                 }
             }
         }

@@ -160,12 +160,20 @@ router.post('/', async (req, res) => {
 
 // GET /api/arremates/
 router.get('/', async (req, res) => {
+
+     // ========================================================================
+    // ▼▼▼ ADICIONE ESTE LOG DE VERIFICAÇÃO AQUI ▼▼▼
+    console.log('[VERIFICAÇÃO 2.1] Rota GET /arremates chamada com os seguintes parâmetros:', req.query);
+    // ▲▲▲ FIM DO LOG ▲▲▲
+    // ========================================================================
+
     const { 
         produto_id, 
         variante,
         fetchAll = 'false',
         page = 1,
-        limit = 6 
+        limit = 6,
+        tipo_lancamento  
     } = req.query;
 
     const varianteDecodificada = variante ? variante.replace(/\+/g, ' ') : null;
@@ -192,10 +200,12 @@ router.get('/', async (req, res) => {
             whereClauses.push(`(a.variante IS NULL OR a.variante = '-' OR a.variante = '')`);
         }
 
-        // --- LÓGICA CONDICIONAL: A CHAVE DA CORREÇÃO ---
         if (fetchAll === 'true') {
-            // LÓGICA ANTIGA PARA COMPATIBILIDADE: Retorna todos os arremates (com e sem saldo)
-            // A sua função buscarArrematesDetalhados já faz o filtro de saldo no JS depois
+            // ADICIONA A LÓGICA PARA FILTRAR POR TIPO DE LANÇAMENTO
+            if (tipo_lancamento) {
+                whereClauses.push(`a.tipo_lancamento = $${paramIndex++}`);
+                queryParams.push(tipo_lancamento);
+            }
             const whereString = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
             
             const dataQuery = `
@@ -352,6 +362,7 @@ router.put('/:id_arremate/registrar-embalagem', async (req, res) => {
     let dbClient;
 
     try {
+
         dbClient = await pool.connect(); // Obtém conexão para esta rota
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
 
@@ -413,6 +424,7 @@ router.put('/:id_arremate/registrar-embalagem', async (req, res) => {
         if (dbClient) { // Só tenta rollback se dbClient foi conectado
             try {
                 await dbClient.query('ROLLBACK');
+
             } catch (rollbackError) {
                 console.error('[router/arremates PUT /:id/registrar-embalagem] Erro ao tentar executar ROLLBACK:', rollbackError);
             }

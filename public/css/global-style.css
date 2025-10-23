@@ -2407,7 +2407,7 @@ font-weight: 500;
 }
 
 .gs-demanda-card-body {
-    padding: 20px;
+    padding: 10px;
     border-top: 1px solid var(--gs-borda);
     background-color: var(--gs-fundo-alternativo);
     animation: gs-fadeIn 0.5s;
@@ -2439,10 +2439,19 @@ font-weight: 500;
 }
 
 .componente-info {
-    grid-column: 1 / 2;
+    display: flex;
+    flex-direction: column; /* Coloca o nome e a variante em linhas separadas */
 }
-.componente-info .nome { font-weight: 600; }
-.componente-info .variante { font-size: 0.9rem; color: #6c757d; }
+
+.componente-info .nome {
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.componente-info .variante {
+    font-size: 0.9rem;
+    color: #6c757d;
+}
 
 .componente-saldos {
     grid-column: 1 / 2;
@@ -2654,7 +2663,85 @@ font-weight: 500;
     color: var(--gs-primaria);
 }
 
+.saldo-bloco.bloqueado {
+    background-color: #f8f9fa;
+    border-color: var(--gs-borda);
+    opacity: 0.6;
+    cursor: help; /* Mostra um ícone de ajuda ao passar o mouse */
+}
 
+/* ==========================================================================
+   # ESTILOS PARA O TOOLTIP (i)
+   ========================================================================== */
+
+/* O container do 'i' */
+.tooltip-container {
+    position: relative;
+    display: inline-flex; /* Usa flex para centralização perfeita */
+    align-items: center;    /* Alinha o 'i' verticalmente */
+    justify-content: center; /* Alinha o 'i' horizontalmente */
+    margin-left: 8px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background-color: var(--gs-terciaria);
+    color: var(--gs-branco);
+    font-size: 12px;
+    font-weight: bold;
+    font-style: normal; /* Garante que não fique itálico */
+    cursor: help;
+    vertical-align: middle;
+}
+
+/* O texto do tooltip (escondido por padrão) */
+.tooltip-container .tooltip-text {
+    visibility: hidden;
+    width: 240px; /* Um pouco mais de espaço para o texto */
+    background-color: #333; /* Um preto um pouco mais suave */
+    color: #fff;
+    text-align: left; /* Melhor para ler textos explicativos */
+    border-radius: 6px;
+    padding: 10px;
+    position: absolute;
+    z-index: 10;
+    
+    /* --- MUDANÇA PRINCIPAL: POSICIONAMENTO À ESQUERDA --- */
+    top: 50%;
+    right: 150%; /* Posiciona à direita do ícone, mais uma margem */
+    transform: translateY(-50%); /* Centraliza verticalmente */
+    
+    opacity: 0;
+    transition: opacity 0.3s, visibility 0.3s;
+    font-size: 0.8rem;
+    font-weight: normal;
+    line-height: 1.5;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+/* A pequena seta agora aponta para a direita */
+.tooltip-container .tooltip-text::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 100%; /* Na borda direita do tooltip */
+    margin-top: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: transparent transparent transparent #333; /* Seta para a esquerda */
+}
+
+/* Mostra o tooltip ao passar o mouse */
+.tooltip-container:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Ajuste no título do saldo-bloco para o ícone caber bem */
+.saldo-bloco span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
 
 /* ==========================================================================
    # AJUSTES PARA MOBILE 
@@ -2876,6 +2963,34 @@ font-weight: 500;
 
     .gs-busca-modal-header {
     gap: 8px;
+    }
+
+    /* --- AJUSTE DO DIAGNÓSTICO EXPANDIDO NO MOBILE --- */
+.componente-diagnostico {
+    display: flex; /* Muda de grid para flex */
+    flex-direction: column; /* Empilha os elementos */
+    gap: 15px;
+}
+
+.componente-diagnostico > * {
+    grid-column: auto; /* Reseta as propriedades de grid */
+    grid-row: auto;
+}
+
+.componente-saldos {
+    flex-wrap: wrap; /* Permite que os blocos de saldo quebrem a linha */
+    justify-content: space-around;
+    margin-top: 0;
+}
+
+.componente-deficit {
+    width: 100%; /* Faz o bloco de déficit ocupar toda a largura */
+    padding: 15px;
+}
+
+ .tooltip-container .tooltip-text {
+        width: 180px; /* Largura menor para telas pequenas */
+        right: 120%; /* Posição um pouco mais próxima */
     }
 
 }
