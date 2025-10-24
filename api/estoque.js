@@ -5,6 +5,8 @@ const { Pool } = pkg;
 import jwt from 'jsonwebtoken';
 import express from 'express';
 import { getPermissoesCompletasUsuarioDB } from './usuarios.js';
+import { verificarEAtualizarDemandasPorSKU } from './utils/diagnosticoProducao.js';
+
 
 async function registrarEventoAuditoria(dbClient, evento) {
     const { usuarioLogado, tipo_evento, entidade, entidade_id, detalhes } = evento;
@@ -251,6 +253,12 @@ router.post('/entrada-producao', async (req, res) => {
         ]);
 
         await dbClient.query('COMMIT'); 
+
+        // ======================= ADIÇÃO SEGURA =======================
+        // Dispara a verificação em segundo plano e não espera pela sua conclusão.
+        verificarEAtualizarDemandasPorSKU(pool, parseInt(produto_id), varianteParaDB)
+            .catch(err => console.error("[BACKGROUND-TASK] Erro ao verificar demandas após entrada de estoque:", err));
+        // ===========================================================================
 
         res.status(201).json({ 
             message: 'Entrada de produção registrada com sucesso.',

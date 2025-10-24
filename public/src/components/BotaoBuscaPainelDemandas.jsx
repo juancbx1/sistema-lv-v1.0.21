@@ -13,9 +13,11 @@ import { renderizarPaginacao } from '/js/utils/Paginacao.js';
 export default function PainelDemandas() {
     const [demandasPorItem, setDemandasPorItem] = useState([]); 
     const [demandasAgregadas, setDemandasAgregadas] = useState([]);
+    const demandasAgregadasAnterioresRef = useRef([]);
     const [visaoPainel, setVisaoPainel] = useState('demandas');
     const [carregando, setCarregando] = useState(true);
     const [modalAddAberto, setModalAddAberto] = useState(false);
+    
 
     const ITENS_POR_PAGINA = 6; // Defina quantos itens por página
     const [paginaAtualDemandas, setPaginaAtualDemandas] = useState(1);
@@ -65,7 +67,7 @@ export default function PainelDemandas() {
             const response = await fetch('/api/demandas/diagnostico-completo', {
                 headers: {
                     'Authorization': `Bearer ${token}`,
-                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Cache-Control': 'no-cache',
                     'Pragma': 'no-cache',
                     'Expires': '0'
                 }
@@ -77,14 +79,26 @@ export default function PainelDemandas() {
 
             const data = await response.json();
 
-            setDemandasPorItem(data.diagnosticoPorDemanda || []);
-            setDemandasAgregadas(data.diagnosticoAgregado || []);
+            // ETAPA 1: Guardar o estado ATUAL antes de qualquer mudança.
+            // Usamos uma função de setState para garantir que estamos pegando o valor mais recente.
+            setDemandasAgregadas(estadoAtual => {
+                demandasAgregadasAnterioresRef.current = estadoAtual;
+                return estadoAtual; // Retornamos o mesmo estado, sem mudanças por enquanto.
+            });
+
+            // ETAPA 2: Agora, com o estado anterior garantido, atualizamos para os novos dados.
+            // Usamos um setTimeout(..., 0) para empurrar essa atualização para o final da "fila de tarefas" do JavaScript.
+            // Isso garante que a atualização da ETAPA 1 seja processada antes desta.
+            setTimeout(() => {
+                setDemandasPorItem(data.diagnosticoPorDemanda || []);
+                setDemandasAgregadas(data.diagnosticoAgregado || []);
+                setCarregando(false);
+            }, 0);
 
         } catch (error) {
             console.error("Erro ao carregar diagnóstico de demandas:", error);
             mostrarMensagem(error.message, "erro");
-        } finally {
-            setCarregando(false);
+            setCarregando(false); // Garante que o carregando termine em caso de erro
         }
     }, []);
 
@@ -144,6 +158,25 @@ export default function PainelDemandas() {
         }
     };
 
+    const handleAssumirProducao = async (componente_chave) => { 
+            try {
+            const token = localStorage.getItem('token');
+            const response = await fetch('/api/demandas/assumir-producao-componente', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ componente_chave }) // <-- Envia o objeto correto
+            });
+            if (!response.ok) throw new Error('Falha ao assumir a produção.');
+            
+            mostrarMensagem('Produção assumida com sucesso!', 'sucesso');
+            fetchDiagnostico(); // Recarrega para mostrar o novo status
+
+        } catch (error) {
+            mostrarMensagem(error.message, 'erro');
+        }
+    };
+
+
     // Função para renderizar o conteúdo principal
     const renderizarConteudo = () => {
         if (carregando) {
@@ -179,11 +212,23 @@ export default function PainelDemandas() {
             return (
                 <>
                     <div className="gs-agregado-lista">
-                        {itensPaginadosAgregado.map(item => ( // <-- USA A LISTA 'FATIADA'
-                            <BotaoBuscaItemAgregado key={`${item.produto_id}|${item.variacao}`} item={item} />
-                        ))}
+                        {itensPaginadosAgregado.map(item => {
+                                // Lendo da propriedade .current
+                                const itemAnterior = demandasAgregadasAnterioresRef.current.find(
+                                    prevItem => prevItem.produto_id === item.produto_id && prevItem.variacao === item.variacao
+                                );
+                                return (
+                                    <BotaoBuscaItemAgregado
+                                    key={`${item.produto_id}|${item.variacao}`}
+                                    item={item}
+                                    itemAnterior={itemAnterior}
+                                    // Passa a lista completa de demandas para encontrar os nomes
+                                    demandasSource={demandasPorItem}
+                                    onAssumir={handleAssumirProducao}
+                                />
+                            );
+                        })}
                     </div>
-                    {/* Container vazio que será preenchido pela sua função Paginacao.js */}
                     <div ref={paginacaoAgregadoRef} className="gs-paginacao-container" style={{marginTop: '20px'}}></div>
                 </>
             );

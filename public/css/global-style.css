@@ -2680,7 +2680,7 @@ font-weight: 500;
     display: inline-flex; /* Usa flex para centralização perfeita */
     align-items: center;    /* Alinha o 'i' verticalmente */
     justify-content: center; /* Alinha o 'i' horizontalmente */
-    margin-left: 8px;
+    margin-right: 8px;
     width: 16px;
     height: 16px;
     border-radius: 50%;
@@ -2741,6 +2741,67 @@ font-weight: 500;
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+
+/* ==========================================================================
+   # DESTAQUE E NOTIFICACAO DO BOTAO FAB FUNIL DE PRODUTOS
+   ========================================================================== */
+
+@keyframes highlight-fade {
+    0% { background-color: #fff3cd; border-color: #ffeeba; }
+    100% { background-color: var(--gs-fundo-card); border-color: var(--gs-borda); }
+}
+
+.gs-agregado-card.highlight-change {
+    animation: highlight-fade 7s ease-out forwards;
+}
+
+.agregado-notificacao-mudanca {
+    background-color: #fffbe6;
+    border-top: 1px solid #ffeeba;
+    border-bottom: 1px solid #ffeeba;
+    padding: 10px 15px;
+    margin: -1px 0; /* Ocupa o espaço da borda */
+}
+
+.notificacao-titulo {
+    color: #856404;
+    font-weight: 700;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.notificacao-causa {
+    font-size: 0.8rem;
+    color: #66512c;
+    margin-top: 5px;
+    padding-left: 22px; /* Alinha com o texto do título */
+}
+.notificacao-causa small { font-weight: 600; }
+.notificacao-causa ul { list-style: none; margin: 0; padding: 0; }
+.notificacao-causa li { font-style: italic; }
+
+/* ==========================================================================
+   # BLOCO ATRIBUICAO SUPERIVOR BOTAO FAV PAINEL PRIORIDADES
+   ========================================================================== */
+
+.atribuicao-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px;
+    background-color: var(--gs-positivo-fundo);
+    color: var(--gs-sucesso);
+    font-weight: 600;
+    border-radius: var(--gs-raio-borda-input);
+}
+
+.agregado-footer button {
+    width: 100%;
 }
 
 /* ==========================================================================
