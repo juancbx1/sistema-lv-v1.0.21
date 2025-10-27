@@ -2804,6 +2804,27 @@ font-weight: 500;
     width: 100%;
 }
 
+
+.agregado-notificacao-extra {
+    background-color: #fff3cd; /* Amarelo de aviso */
+    border-top: 1px solid #ffeeba;
+    border-bottom: 1px solid #ffeeba;
+    padding: 15px;
+    margin: -1px 0;
+    text-align: center;
+}
+
+.agregado-notificacao-extra .notificacao-titulo {
+    color: #856404;
+    font-weight: 700;
+}
+
+.agregado-notificacao-extra p {
+    font-size: 0.85rem;
+    color: #856404;
+    margin: 5px 0 10px 0;
+}
+
 /* ==========================================================================
    # AJUSTES PARA MOBILE 
    ========================================================================== */
@@ -3090,4 +3111,30 @@ font-weight: 500;
     .gs-btn-com-icone span {
       display: none;
     }
+}
+
+@media (max-width: 399px) {
+    
+    .gs-busca-modal-conteudo {
+        width: 98%;
+    }
+
+    .gs-busca-modal-header {
+        padding: 10px 12px;
+    }
+
+    .gs-busca-modal-body{
+        padding: 10px;
+    }
+    .agregado-header{
+        padding: 6px;
+    }
+    .agregado-body{
+        padding: 6px; 
+    }
+    .gs-agregado-lista {
+        grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+    }
+
+
 }

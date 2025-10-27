@@ -1,5 +1,6 @@
 // public/src/components/BotaoBuscaItemAgregado.jsx
 import React, { useState, useEffect, useMemo } from 'react';
+import { mostrarConfirmacao } from '/js/utils/popups.js'; 
 
 const TooltipIcon = ({ text }) => (
     <div className="tooltip-container">
@@ -8,7 +9,7 @@ const TooltipIcon = ({ text }) => (
     </div>
 );
 
-export default function BotaoBuscaItemAgregado({ item, itemAnterior, demandasSource, onAssumir }) {
+export default function BotaoBuscaItemAgregado({ item, itemAnterior, demandasSource, onAssumir, onAtualizarMeta }) {
     const [highlight, setHighlight] = useState(false);
     const [needsAcknowledgement, setNeedsAcknowledgement] = useState(false);
 
@@ -36,7 +37,7 @@ export default function BotaoBuscaItemAgregado({ item, itemAnterior, demandasSou
     // Função para ser chamada pelo botão
     const handleAssumirClick = () => {
         // Envia a chave do componente, e não a lista de IDs de demanda
-        onAssumir(componenteChave);
+        onAssumir(componenteChave, item.necessidade_total_producao);
     };
 
     // A informação de atribuição agora vem diretamente da propriedade 'atribuida_a' do item agregado
@@ -68,9 +69,19 @@ export default function BotaoBuscaItemAgregado({ item, itemAnterior, demandasSou
         }
     }, [diffInfo]);
 
+    const handleAdicionarAMeta = async () => {
+        const confirmado = await mostrarConfirmacao(
+            `Você deseja adicionar as ${item.deficit_adicional_nao_assumido} peças extras à sua meta de produção atual para este item?`,
+            { tipo: 'aviso', textoConfirmar: 'Sim, adicionar', textoCancelar: 'Agora não' }
+        );
+        if (confirmado) {
+            onAtualizarMeta(componenteChave, item.deficit_adicional_nao_assumido);
+        }
+    };
+
 
     return (
-        <div className={`gs-agregado-card ${highlight ? 'highlight-change' : ''}`}>
+        <div className={`gs-agregado-card ${highlight ? 'highlight-change' : ''}`} onClick={() => setNeedsAcknowledgement(false)}>
             <div className="agregado-header">
                 <img src={item.imagem || '/img/placeholder-image.png'} alt={item.produto_nome} />
                 <div className="agregado-info">
@@ -82,8 +93,8 @@ export default function BotaoBuscaItemAgregado({ item, itemAnterior, demandasSou
             <div className="agregado-body">
                 <div className="necessidade-principal">
                     <span>
-                        Necessidade de Produção
-                        {/* O ícone de alerta persistente */}
+                        {/* Se foi atribuído, o texto muda para "Meta" */}
+                        {item.atribuida_a ? 'Meta de Produção' : 'Necessidade de Produção'}
                         {needsAcknowledgement && <i className="fas fa-arrow-up fa-beat" style={{ color: 'var(--gs-aviso)', marginLeft: '8px' }}></i>}
                     </span>
                     {/* Apenas UM strong para o valor */}
@@ -116,6 +127,20 @@ export default function BotaoBuscaItemAgregado({ item, itemAnterior, demandasSou
                 </div>
             </div>
 
+            {/* --- BLOCO DE ALERTA DE DÉFICIT ADICIONAL --- */}
+            {item.atribuida_a && item.deficit_adicional_nao_assumido > 0 && (
+                <div className="agregado-notificacao-extra">
+                    <div className="notificacao-titulo">
+                        <i className="fas fa-exclamation-triangle"></i>
+                        NOVA NECESSIDADE: {item.deficit_adicional_nao_assumido} PÇS
+                    </div>
+                    <p>Novas demandas chegaram. Você pode adicionar esta necessidade à sua meta atual.</p>
+                    <button className="gs-btn gs-btn-secundario" onClick={handleAdicionarAMeta}>
+                        Adicionar à Meta
+                    </button>
+                </div>
+            )}
+
             {/* --- NOVA SEÇÃO DE NOTIFICAÇÃO DE MUDANÇA --- */}
             {highlight && diffInfo.diferenca > 0 && (
                 <div className="agregado-notificacao-mudanca">
@@ -135,14 +160,14 @@ export default function BotaoBuscaItemAgregado({ item, itemAnterior, demandasSou
             )}
 
             <div className="agregado-footer">
-                {atribuicao ? ( // <-- Usa a nova variável 'atribuicao'
+                {item.atribuida_a ? (
                     <div className="atribuicao-info">
                         <i className="fas fa-user-check"></i>
-                        Produção com: <strong>{atribuicao}</strong> {/* <-- Usa a nova variável 'atribuicao' */}
+                        Produção com: <strong>{item.atribuida_a}</strong>
                     </div>
                 ) : (
-                    <button className="gs-btn gs-btn-primario" onClick={handleAssumirClick}>
-                        <i className="fas fa-hammer"></i> Assumir Produção
+                    <button className="gs-btn gs-btn-primario" onClick={() => onAssumir(componenteChave, item.necessidade_total_producao)}>
+                        <i className="fas fa-hammer"></i> Assumir Produção de {item.necessidade_total_producao} pçs
                     </button>
                 )}
             </div>

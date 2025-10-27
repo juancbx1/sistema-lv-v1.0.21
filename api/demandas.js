@@ -5,7 +5,7 @@ import pg from 'pg';
 const { Pool } = pg;
 import jwt from 'jsonwebtoken';
 import express from 'express';
-import { gerarDiagnosticoCompleto } from './utils/diagnosticoProducao.js';
+import { gerarDiagnosticoCompleto, limparAtribuicoesOrfas } from './utils/diagnosticoProducao.js';
 
 
 // 1. Inicialização do Express Router e do Pool de Conexão com o Banco
@@ -155,6 +155,9 @@ router.get('/diagnostico-completo', async (req, res) => {
             // ===================================================================================
         });
 
+        // Dispara a limpeza em segundo plano
+        limparAtribuicoesOrfas(dbClient).catch(err => console.error("Erro na rotina de limpeza em segundo plano:", err));
+
         // 3. Envia a resposta final para o frontend
         res.status(200).json(diagnostico);
 
@@ -169,73 +172,160 @@ router.get('/diagnostico-completo', async (req, res) => {
 
 // DELETE /api/demandas/:id
 router.delete('/:id', async (req, res) => {
-    const { usuarioLogado } = req;
+    const { id } = req.params;
     let dbClient;
 
     try {
         dbClient = await pool.connect();
-        const { id } = req.params; // Pega o ID da URL (ex: /api/demandas/5)
+        await dbClient.query('BEGIN');
 
-        // OPCIONAL, MAS RECOMENDADO: Verificar permissões específicas para deleção
-        // Se você tiver uma permissão como 'gerenciar-demandas', poderia checar aqui.
+        // 1. Deleta a demanda
+        const deleteResult = await dbClient.query('DELETE FROM demandas_producao WHERE id = $1', [id]);
 
-        const deleteQuery = 'DELETE FROM demandas_producao WHERE id = $1';
-        const result = await dbClient.query(deleteQuery, [id]);
-
-        // O 'result.rowCount' nos diz quantas linhas foram afetadas.
-        if (result.rowCount === 0) {
-            // Se for 0, significa que não encontrou uma demanda com aquele ID.
+        if (deleteResult.rowCount === 0) {
+            await dbClient.query('ROLLBACK');
             return res.status(404).json({ error: 'Demanda não encontrada.' });
         }
 
-        // Se chegou aqui, a deleção foi bem-sucedida.
-        res.status(200).json({ message: 'Demanda removida com sucesso.' });
+        // 2. Chama a função de limpeza para remover quaisquer atribuições que se tornaram órfãs
+        await limparAtribuicoesOrfas(dbClient);
+
+        await dbClient.query('COMMIT');
+        res.status(200).json({ message: 'Demanda removida e atribuições limpas com sucesso.' });
 
     } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
         console.error('[API /demandas DELETE] Erro ao deletar demanda:', error);
         res.status(500).json({ error: 'Erro interno ao remover a demanda.', details: error.message });
     } finally {
-        if (dbClient) {
-            dbClient.release();
-        }
+        if (dbClient) dbClient.release();
     }
 });
 
 // ROTA PARA UM SUPERVISOR "ASSUMIR" A PRODUÇÃO DE UM COMPONENTE
-// Isso atualiza todas as demandas dependentes daquele componente.
+// Agora ela também "congela" a meta de produção no momento da atribuição.
 router.put('/assumir-producao-componente', async (req, res) => {
     const { usuarioLogado } = req;
-    const { componente_chave } = req.body;
+    // Recebe a chave do componente E a necessidade de produção calculada pelo frontend
+    const { componente_chave, necessidade_producao } = req.body;
 
-    if (!componente_chave) {
-        return res.status(400).json({ error: 'A chave do componente é obrigatória.' });
+    // Validação robusta dos dados de entrada
+    if (!componente_chave || necessidade_producao === undefined) {
+        return res.status(400).json({ error: 'A chave do componente e a necessidade de produção são obrigatórias.' });
+    }
+
+    const necessidadeNum = parseInt(necessidade_producao);
+    if (isNaN(necessidadeNum) || necessidadeNum < 0) {
+        return res.status(400).json({ error: 'A necessidade de produção deve ser um número válido.' });
     }
 
     let dbClient;
     try {
         dbClient = await pool.connect();
 
+        // Query de inserção/atualização na tabela de atribuições
         const insertQuery = `
-            INSERT INTO demandas_componentes_atribuidos (componente_chave, atribuida_a)
-            VALUES ($1, $2)
+            INSERT INTO demandas_componentes_atribuidos 
+                (componente_chave, atribuida_a, necessidade_producao_no_momento)
+            VALUES ($1, $2, $3)
             ON CONFLICT (componente_chave) DO UPDATE SET
                 atribuida_a = EXCLUDED.atribuida_a,
                 data_atribuicao = NOW();
+                -- Propositalmente NÃO atualizamos a 'necessidade_producao_no_momento' em um conflito (ON CONFLICT).
+                -- Isso garante que a meta original "congelada" no primeiro clique seja mantida,
+                -- mesmo que outro supervisor assuma a tarefa depois.
         `;
-        // ON CONFLICT... garante que se alguém já assumiu, o novo clique "rouba" a tarefa.
 
         await dbClient.query(insertQuery, [
             componente_chave,
-            usuarioLogado.nome
+            usuarioLogado.nome,
+            necessidadeNum
         ]);
 
+        // Passo Adicional: Atualizar o status de TODAS as demandas dependentes para 'em_producao'
+        // Primeiro, precisamos encontrar os IDs das demandas.
+        // (Esta lógica é uma simplificação; idealmente, ela viria do frontend, mas faremos aqui para garantir)
+        const demandasAfetadasQuery = `
+            SELECT id FROM (
+                SELECT d.id, p.id as produto_id, g.variacao
+                FROM demandas_producao d
+                JOIN produtos p ON p.sku = d.produto_sku OR EXISTS (SELECT 1 FROM jsonb_to_recordset(p.grade) as gr(sku TEXT) WHERE gr.sku = d.produto_sku)
+                LEFT JOIN jsonb_to_recordset(p.grade) as g(sku TEXT, variacao TEXT) ON g.sku = d.produto_sku
+                WHERE d.status = 'pendente' AND p.is_kit = FALSE
+                
+                UNION
+                
+                SELECT d.id, (comp->>'produto_id')::int as produto_id, comp->>'variacao' as variacao
+                FROM demandas_producao d
+                JOIN produtos p ON p.sku = d.produto_sku OR EXISTS (SELECT 1 FROM jsonb_to_recordset(p.grade) as gr(sku TEXT) WHERE gr.sku = d.produto_sku)
+                JOIN jsonb_to_recordset(p.grade) as g(composicao JSONB) ON p.is_kit = TRUE
+                CROSS JOIN jsonb_array_elements(g.composicao) as comp
+                WHERE d.status = 'pendente'
+            ) as subquery
+            WHERE subquery.produto_id = $1 AND (subquery.variacao = $2 OR (subquery.variacao IS NULL AND $2 IS NULL));
+        `;
+        const [produtoId, variacao] = componente_chave.split('|');
+        const resDemandas = await dbClient.query(demandasAfetadasQuery, [produtoId, variacao === '-' ? null : variacao]);
+        const idsDemandasAfetadas = resDemandas.rows.map(r => r.id);
+
+        if (idsDemandasAfetadas.length > 0) {
+            await dbClient.query(
+                `UPDATE demandas_producao SET status = 'em_producao' WHERE id = ANY($1::int[])`,
+                [idsDemandasAfetadas]
+            );
+        }
+
         res.status(200).json({ 
-            message: `Produção do componente ${componente_chave} foi atribuída a ${usuarioLogado.nome}.` 
+            message: `Produção do componente ${componente_chave} foi atribuída a ${usuarioLogado.nome} com a meta de ${necessidadeNum} pçs.`
         });
 
     } catch (error) {
         console.error('[API /assumir-producao-componente PUT] Erro:', error);
         res.status(500).json({ error: 'Erro interno ao atribuir produção do componente.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// ROTA PARA ATUALIZAR A META DE PRODUÇÃO DE UM COMPONENTE JÁ ASSUMIDO
+router.put('/atualizar-meta-componente', async (req, res) => {
+    const { usuarioLogado } = req;
+    const { componente_chave, valor_a_adicionar } = req.body;
+
+    if (!componente_chave || valor_a_adicionar === undefined) {
+        return res.status(400).json({ error: 'A chave do componente e o valor a adicionar são obrigatórios.' });
+    }
+    const valorNum = parseInt(valor_a_adicionar);
+    if (isNaN(valorNum) || valorNum < 0) {
+        return res.status(400).json({ error: 'O valor a adicionar deve ser um número positivo.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+
+        // Query que atualiza a meta somando o valor adicional
+        const updateQuery = `
+            UPDATE demandas_componentes_atribuidos
+            SET necessidade_producao_no_momento = necessidade_producao_no_momento + $1
+            WHERE componente_chave = $2
+            RETURNING *;
+        `;
+
+        const result = await dbClient.query(updateQuery, [valorNum, componente_chave]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Atribuição para este componente não encontrada. Não foi possível atualizar a meta.' });
+        }
+
+        res.status(200).json({ 
+            message: `Meta para ${componente_chave} atualizada com sucesso.`,
+            atribuicaoAtualizada: result.rows[0]
+        });
+
+    } catch (error) {
+        console.error('[API /atualizar-meta-componente PUT] Erro:', error);
+        res.status(500).json({ error: 'Erro interno ao atualizar a meta de produção.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }

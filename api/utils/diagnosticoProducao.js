@@ -21,7 +21,7 @@ export async function gerarDiagnosticoCompleto(dbClient) {
             dbClient.query("SELECT produto_id, variante, quantidade_entregue FROM sessoes_trabalho_arremate WHERE status = 'EM_ANDAMENTO'"),
             dbClient.query(`SELECT produto_id, variante_nome, SUM(quantidade)::integer as saldo_atual FROM estoque_movimentos GROUP BY produto_id, variante_nome`),
             dbClient.query("SELECT id, nome, sku, is_kit, grade, imagem FROM produtos"),
-            dbClient.query("SELECT componente_chave, atribuida_a FROM demandas_componentes_atribuidos")
+            dbClient.query("SELECT componente_chave, atribuida_a, necessidade_producao_no_momento FROM demandas_componentes_atribuidos")
         ]);
         
         const demandasAtivas = demandasResult.rows;
@@ -40,8 +40,8 @@ export async function gerarDiagnosticoCompleto(dbClient) {
         };
         
         // Mapear produtos por ID para acesso rápido
-       const produtosMapById = new Map(produtosResult.rows.map(p => [p.id, p]));
-        const atribuicoesMap = new Map(atribuicoesResult.rows.map(a => [a.componente_chave, a.atribuida_a]));
+        const produtosMapById = new Map(produtosResult.rows.map(p => [p.id, p]));
+        const atribuicoesMap = new Map(atribuicoesResult.rows.map(a => [a.componente_chave, a]));
         
         // --- Cálculo do Saldo de Arremate ---
         const arrematadoPorOp = new Map();
@@ -232,21 +232,46 @@ export async function gerarDiagnosticoCompleto(dbClient) {
     // Etapa 2: Para cada componente com necessidade, calcular o déficit real e agregar
     const componentesAgregados = new Map(); // A declaração correta, apenas uma vez.
 
-    for (const [chave, necessidadeTotal] of necessidadeBruta.entries()) {
+        for (const [chave, necessidadeTotal] of necessidadeBruta.entries()) {
         const [produtoIdStr, ...variacaoParts] = chave.split('|');
         const produtoId = parseInt(produtoIdStr);
         const variacao = variacaoParts.join('|');
 
         const produtoInfo = produtosMapById.get(produtoId);
-        if (!produtoInfo) {
-            continue;
-        }
+        if (!produtoInfo) continue;
 
         const saldos = getSaldosFromMaps(produtoId, variacao === '-' ? null : variacao);
-        const disponivelTotal = saldos.saldoArremate + saldos.saldoEmbalagem + saldos.saldoEstoque;
-        const deficitReal = Math.max(0, necessidadeTotal - disponivelTotal);
+        
+        // CORREÇÃO DO "ESTOQUE FANTASMA"
+        const isDemandedAsUnit = diagnosticoFinal.some(
+            demanda => !demanda.is_kit && `${demanda.produto_id}|${demanda.diagnostico_geral.variante || '-'}` === chave
+        );
+        const disponivelTotal = isDemandedAsUnit
+            ? saldos.saldoArremate + saldos.saldoEmbalagem + saldos.saldoEstoque
+            : saldos.saldoArremate + saldos.saldoEmbalagem;
+        
+        const deficitDinamico = Math.max(0, necessidadeTotal - disponivelTotal);
+        
+        const atribuicao = atribuicoesMap.get(chave);
+        let alvoFinalProducao = 0;
+        let deficitAdicional = 0;
 
-        if (deficitReal > 0) {
+        if (atribuicao && atribuicao.necessidade_producao_no_momento !== null) {
+            // --- LÓGICA PARA ITEM JÁ ASSUMIDO ---
+            const metaCongelada = atribuicao.necessidade_producao_no_momento;
+            alvoFinalProducao = metaCongelada;
+
+            // Calcula o déficit dinâmico atual e verifica se ele é maior que a meta já assumida
+            if (deficitDinamico > metaCongelada) {
+                deficitAdicional = deficitDinamico - metaCongelada;
+            }
+        } else {
+            // --- LÓGICA PARA ITEM NÃO ASSUMIDO ---
+            alvoFinalProducao = deficitDinamico;
+        }
+
+        // Só adiciona ao painel se houver um alvo de produção (seja ele dinâmico ou congelado)
+        if (alvoFinalProducao > 0 || deficitAdicional > 0) {
             const gradeInfo = produtoInfo.grade?.find(g => g.variacao === (variacao === '-' ? null : variacao));
             const imagemCorreta = gradeInfo?.imagem || produtoInfo.imagem;
 
@@ -259,13 +284,14 @@ export async function gerarDiagnosticoCompleto(dbClient) {
                     saldo_disponivel_estoque: saldos.saldoEstoque,
                     demandas_dependentes: [], 
                     demandas_dependentes_ids: [],
-                    atribuida_a: atribuicoesMap.get(chave) || null
+                    atribuida_a: atribuicao?.atribuida_a || null,
+                    deficit_adicional_nao_assumido: 0 // Inicia com 0
                 });
             }
             
             const agregado = componentesAgregados.get(chave);
-            // CORREÇÃO: A necessidade de produção é o próprio déficit real.
-            agregado.necessidade_total_producao = deficitReal; 
+            agregado.necessidade_total_producao = alvoFinalProducao;
+            agregado.deficit_adicional_nao_assumido = deficitAdicional;
         }
     }
 
@@ -307,6 +333,7 @@ export async function gerarDiagnosticoCompleto(dbClient) {
     const diagnosticoAgregadoFinal = Array.from(componentesAgregados.values()).sort((a, b) => b.necessidade_total_producao - a.necessidade_total_producao);
 
     // ======================= FIM DA NOVA LÓGICA DE AGREGAÇÃO =======================
+
 
     // No final, em vez de res.json, a função RETORNA o objeto completo.
     return {
@@ -402,3 +429,45 @@ export async function verificarEAtualizarDemandasPorSKU(pool, produtoId, variant
         if (dbClient) dbClient.release();
     }
 }
+
+// ======================= NOVA FUNÇÃO DE LIMPEZA REUTILIZÁVEL =======================
+export async function limparAtribuicoesOrfas(dbClient) {
+    try {
+        console.log('[LIMPEZA] Iniciando rotina de limpeza de atribuições órfãs...');
+        
+        // 1. Gera o diagnóstico mais recente para saber o que AINDA precisa de produção.
+        // OBS: Chamamos a função passando o mesmo cliente de banco para manter a transação.
+        const diagnostico = await gerarDiagnosticoCompleto(dbClient);
+
+        // 2. Pega a lista de todas as chaves que AINDA têm déficit de produção.
+        const chavesComDeficit = new Set(diagnostico.diagnosticoAgregado.map(item => `${item.produto_id}|${item.variacao || '-'}`));
+
+        // 3. Busca TODAS as atribuições que existem no banco.
+        const atribuicoesRes = await dbClient.query('SELECT componente_chave FROM demandas_componentes_atribuidos');
+        const chavesAtribuidas = new Set(atribuicoesRes.rows.map(a => a.componente_chave));
+
+        // 4. Compara as duas listas para encontrar as atribuições órfãs.
+        const chavesParaLimpar = [];
+        for (const chaveAtribuida of chavesAtribuidas) {
+            if (!chavesComDeficit.has(chaveAtribuida)) {
+                chavesParaLimpar.push(chaveAtribuida);
+            }
+        }
+
+        // 5. Se encontrar alguma, executa a limpeza.
+        if (chavesParaLimpar.length > 0) {
+            console.log('[LIMPEZA] Atribuições órfãs/concluídas encontradas. Removendo:', chavesParaLimpar);
+            await dbClient.query('DELETE FROM demandas_componentes_atribuidos WHERE componente_chave = ANY($1::text[])', [chavesParaLimpar]);
+            return chavesParaLimpar.length; // Retorna o número de itens limpos
+        } else {
+            console.log('[LIMPEZA] Nenhuma atribuição órfã encontrada.');
+            return 0; // Retorna 0 se nada foi limpo
+        }
+
+    } catch (error) {
+        console.error('[LIMPEZA] Erro ao executar a rotina de limpeza:', error);
+        // Lança o erro para que a transação principal possa fazer rollback
+        throw error;
+    }
+}
+// ====================================================================================

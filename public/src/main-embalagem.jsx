@@ -348,7 +348,7 @@ const headerRootElement = document.getElementById('header-root');
 if (headerRootElement) {
     const headerRoot = ReactDOM.createRoot(headerRootElement);
     headerRoot.render(
-        <HeaderPagina titulo="Embalagem de Produtos">
+        <HeaderPagina titulo="Embalagem">
             <button id="btnAbrirHistoricoGeral" className="gs-btn gs-btn-secundario gs-btn-com-icone">
                 <i className="fas fa-history"></i>
                 <span>Histórico Geral</span>

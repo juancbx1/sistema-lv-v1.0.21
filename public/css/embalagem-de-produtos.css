@@ -2210,7 +2210,7 @@ body {
     }
 
     .container-ep {
-        padding: 20px;
+        padding: 15px;
     }
 
     .ep-titulo-secao {
@@ -2517,8 +2517,7 @@ body {
       dando mais espaço para o card interno.
     */
     .container-ep {
-        padding-left: 10px;
-        padding-right: 10px;
+        padding:15px;
     }
 
     /* 

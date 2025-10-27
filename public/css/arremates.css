@@ -2555,7 +2555,9 @@
 }
 
 @media (max-width: 768px) {
-     .oa-container-principal { padding: 20px; }
+     .oa-container-principal { 
+        padding: 15px; 
+    }
     .oa-main-content-card { padding: 15px; }
     .oa-cabecalho-pagina { flex-direction: column; gap: 15px; align-items: stretch; text-align: center; }
     .oa-cabecalho-pagina .oa-botoes-cabecalho { justify-content: center; display: flex; }
@@ -2906,7 +2908,9 @@
 }
 
 @media (max-width: 414px) {
-    .oa-container-principal { padding: 20px; }
+    .oa-container-principal { 
+        padding: 15px; 
+    }
     .oa-main-content-card { padding: 10px; }
     .oa-cabecalho-pagina h1 { font-size: 1.3rem; }
     .oa-titulo-secao { font-size: 1.2rem; }

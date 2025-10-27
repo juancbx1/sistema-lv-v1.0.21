@@ -158,13 +158,13 @@ export default function PainelDemandas() {
         }
     };
 
-    const handleAssumirProducao = async (componente_chave) => { 
+    const handleAssumirProducao = async (componente_chave, necessidade_producao) => { 
             try {
             const token = localStorage.getItem('token');
             const response = await fetch('/api/demandas/assumir-producao-componente', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ componente_chave }) // <-- Envia o objeto correto
+                body: JSON.stringify({ componente_chave, necessidade_producao }) // <-- Envia o objeto correto
             });
             if (!response.ok) throw new Error('Falha ao assumir a produção.');
             
@@ -175,6 +175,25 @@ export default function PainelDemandas() {
             mostrarMensagem(error.message, 'erro');
         }
     };
+
+    const handleAtualizarMeta = async (componente_chave, valor_a_adicionar) => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch('/api/demandas/atualizar-meta-componente', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ componente_chave, valor_a_adicionar })
+            });
+            if (!response.ok) throw new Error('Falha ao atualizar a meta.');
+            
+            mostrarMensagem('Meta de produção atualizada!', 'sucesso');
+            fetchDiagnostico(); // Recarrega para mostrar a nova meta
+
+        } catch (error) {
+            mostrarMensagem(error.message, 'erro');
+        }
+    };
+
 
 
     // Função para renderizar o conteúdo principal
@@ -225,6 +244,7 @@ export default function PainelDemandas() {
                                     // Passa a lista completa de demandas para encontrar os nomes
                                     demandasSource={demandasPorItem}
                                     onAssumir={handleAssumirProducao}
+                                    onAtualizarMeta={handleAtualizarMeta}
                                 />
                             );
                         })}
