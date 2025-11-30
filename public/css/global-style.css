@@ -444,6 +444,7 @@ body.autenticado {
     font-size: 0.95rem;
     color: var(--gs-texto-principal);
     font-weight: 500;
+    margin:0 8px;
 }
 
 /* ==========================================================================

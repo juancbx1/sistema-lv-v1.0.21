@@ -138,29 +138,74 @@ router.get('/:id', async (req, res) => {
     let dbClient; 
 
     try {
+        console.log(`\n--- INÍCIO: GET /ordens-de-producao/${opIdentifier} ---`);
+
         dbClient = await pool.connect();
         const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
         if (!permissoes.includes('acesso-ordens-de-producao')) {
             return res.status(403).json({ error: 'Permissão negada.' });
         }
 
-        const query = `
-        SELECT 
-            op.id, op.numero, op.variante, op.quantidade, op.data_entrega, 
-            op.observacoes, op.status, op.edit_id, op.etapas, op.data_final,
-            op.produto_id, -- INCLUINDO O ID
-            p.nome as produto
-        FROM ordens_de_producao op
-        LEFT JOIN produtos p ON op.produto_id = p.id
-        WHERE op.edit_id = $1 OR op.numero = $1
-    `;
-        const result = await dbClient.query(query, [opIdentifier]);
+        // 1. Busca a OP principal (como antes)
+        const opQuery = `
+            SELECT op.*, p.nome as produto
+            FROM ordens_de_producao op
+            LEFT JOIN produtos p ON op.produto_id = p.id
+            WHERE op.edit_id = $1 OR op.numero = $1
+        `;
+        const opResult = await dbClient.query(opQuery, [opIdentifier]);
 
-        if (result.rows.length === 0) {
+        if (opResult.rows.length === 0) {
             return res.status(404).json({ error: 'Ordem de Produção não encontrada.' });
         }
         
-        res.status(200).json(result.rows[0]);
+        let op = opResult.rows[0];
+
+        // --- INÍCIO DA NOVA LÓGICA DE ENRIQUECIMENTO ---
+        // 2. Busca todos os lançamentos de produção para esta OP
+        const lancamentosResult = await dbClient.query(
+            'SELECT etapa_index, quantidade, funcionario, funcionario_id FROM producoes WHERE op_numero = $1',
+            [op.numero]
+        );
+        console.log(`1. Encontrados ${lancamentosResult.rowCount} registros em 'producoes' para a OP #${op.numero}:`, lancamentosResult.rows);
+
+        // 3. Agrupa os lançamentos por etapa para somar as quantidades
+        const lancamentosPorEtapa = lancamentosResult.rows.reduce((acc, lancamento) => {
+            const index = lancamento.etapa_index;
+            if (!acc[index]) {
+                acc[index] = {
+                    quantidadeTotal: 0,
+                    // Vamos assumir o último funcionário que lançou como o "dono" da etapa
+                    funcionario: lancamento.funcionario,
+                    funcionario_id: lancamento.funcionario_id,
+                };
+            }
+            acc[index].quantidadeTotal += lancamento.quantidade;
+            return acc;
+        }, {});
+        console.log("2. Lançamentos agrupados por etapa_index:", lancamentosPorEtapa);
+
+        // 4. Mapeia as etapas da OP, atualizando com os dados dos lançamentos
+        if (Array.isArray(op.etapas)) {
+            op.etapas = op.etapas.map((etapa, index) => {
+                const lancamentoInfo = lancamentosPorEtapa[index];
+                if (lancamentoInfo) {
+                    return {
+                        ...etapa,
+                        lancado: true,
+                        quantidade: lancamentoInfo.quantidadeTotal,
+                        // O usuário já é o ID, vindo da tabela de produções
+                        usuario: lancamentoInfo.funcionario_id 
+                    };
+                }
+                return etapa; // Retorna a etapa como está se não houver lançamento
+            });
+        }
+        console.log("3. Objeto 'etapas' final enviado para o frontend:", op.etapas);
+        // --- FIM DA NOVA LÓGICA DE ENRIQUECIMENTO ---
+
+        console.log("--- FIM: GET /ordens-de-producao/:id ---");
+        res.status(200).json(op);
 
     } catch (error) {
         console.error(`[router/ordens-de-producao GET /:id] Erro:`, error);
@@ -177,76 +222,87 @@ router.post('/', async (req, res) => {
     let dbClient;
 
     try {
-        // Log inicial para ver exatamente o que o backend recebeu
-        console.log('[API POST OP] Corpo da requisição recebido:', JSON.stringify(req.body, null, 2));
+        console.log("[API POST OP V3] Corpo recebido:", JSON.stringify(req.body, null, 2));
 
         dbClient = await pool.connect();
-        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
-        if (!permissoesCompletas.includes('criar-op')) {
-            return res.status(403).json({ error: 'Permissão negada.' });
-        }
-        
-        const { numero, produto_id, variante, quantidade, data_entrega, observacoes, status, etapas, edit_id } = req.body;
-        
-        if (!numero || !produto_id || quantidade === undefined || !data_entrega) {
-            return res.status(400).json({ error: 'Campos obrigatórios ausentes.' });
-        }
-        
-        // Inicia a transação
         await dbClient.query('BEGIN');
-        console.log('[API POST OP] Transação iniciada (BEGIN).');
 
-        const final_edit_id = edit_id || Date.now().toString() + Math.random().toString(36).substring(2, 7);
-
-        const queryText = `
-            INSERT INTO ordens_de_producao (
-                numero, produto_id, variante, quantidade, data_entrega, 
-                observacoes, status, edit_id, etapas
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
-            RETURNING *
-        `;
-
-        const values = [
-            numero, 
-            parseInt(produto_id),
-            variante || null, 
-            parseInt(quantidade),
-            data_entrega, 
-            observacoes || '', 
-            status || 'em-aberto', 
-            final_edit_id, 
-            JSON.stringify(etapas || [])
-        ];
-
-        console.log('[API POST OP] Query a ser executada:', queryText);
-        console.log('[API POST OP] Valores para a query:', values);
-
-        const result = await dbClient.query(queryText, values);
-
-        // Confirma a transação
-        await dbClient.query('COMMIT');
-        console.log('[API POST OP] Transação confirmada (COMMIT).');
+        const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
+        if (!permissoes.includes('criar-op')) {
+            throw new Error('Permissão negada.');
+        }
         
-        // Se o resultado voltou, loga o que foi inserido
-        if (result.rows[0]) {
-            console.log('[API POST OP] Linha retornada pelo banco:', result.rows[0]);
+        // Agora esperamos o 'corte_origem_id'
+        const { numero, data_entrega, observacoes, corte_origem_id } = req.body;
+        
+        if (!numero || !data_entrega || !corte_origem_id) {
+            throw new Error('Dados incompletos: Número da OP, data de entrega e ID do corte de origem são obrigatórios.');
+        }
+        
+        // 1. BUSCAR E TRAVAR O CORTE DE ORIGEM
+        const corteResult = await dbClient.query('SELECT * FROM cortes WHERE id = $1 FOR UPDATE', [corte_origem_id]);
+        if (corteResult.rows.length === 0) throw new Error('Corte de origem não encontrado.');
+        const corte = corteResult.rows[0];
+        if (corte.op) throw new Error(`Este corte (PC: ${corte.pn}) já foi utilizado na OP #${corte.op}.`);
+
+        // 2. BUSCAR DETALHES DO PRODUTO (ETAPAS)
+        const produtoResult = await dbClient.query('SELECT etapas FROM produtos WHERE id = $1', [corte.produto_id]);
+        if (produtoResult.rows.length === 0) throw new Error('Produto do corte não encontrado.');
+        const etapasConfig = produtoResult.rows[0].etapas || [];
+
+        // 3. CRIAR A NOVA OP
+        const opPayload = {
+            numero,
+            produto_id: corte.produto_id,
+            variante: corte.variante,
+            quantidade: corte.quantidade,
+            data_entrega,
+            observacoes,
+            status: 'produzindo', // JÁ NASCE PRODUZINDO
+            edit_id: `${Date.now()}${Math.random().toString(36).substring(2, 7)}`,
+            etapas: etapasConfig.map(e => ({ processo: (e.processo || e), lancado: false, quantidade: 0, usuario: '' }))
+        };
+        const opInsertResult = await dbClient.query(
+            `INSERT INTO ordens_de_producao (numero, produto_id, variante, quantidade, data_entrega, observacoes, status, edit_id, etapas)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+            [opPayload.numero, opPayload.produto_id, opPayload.variante, opPayload.quantidade, opPayload.data_entrega, opPayload.observacoes, opPayload.status, opPayload.edit_id, JSON.stringify(opPayload.etapas)]
+        );
+        const opCriada = opInsertResult.rows[0];
+
+        // 4. VINCULAR O CORTE À OP CRIADA
+        await dbClient.query('UPDATE cortes SET op = $1, status = \'usado\' WHERE id = $2', [opCriada.numero, corte_origem_id]);
+
+        // 5. LANÇAR AUTOMATICAMENTE A ETAPA DE CORTE NA TABELA 'producoes'
+        const etapaCorteIndex = etapasConfig.findIndex(e => (e.processo || e).toLowerCase() === 'corte');
+        
+        if (etapaCorteIndex !== -1) {
+            const etapaConfigCorte = etapasConfig[etapaCorteIndex];
+            const maquinaDoCorte = etapaConfigCorte?.maquina || 'Não Definida';
+            const cortadorInfo = await dbClient.query('SELECT id FROM usuarios WHERE nome ILIKE $1', [corte.cortador]);
+            const cortadorId = cortadorInfo.rows.length > 0 ? cortadorInfo.rows[0].id : null;
+            
+            const idProducaoTexto = `prod_${Date.now()}`;
+
+            // --- INÍCIO DA CORREÇÃO ---
+            await dbClient.query(
+                // Removemos a coluna 'data_final' da lista
+                `INSERT INTO producoes (id, op_numero, etapa_index, processo, produto_id, variacao, maquina, quantidade, funcionario, funcionario_id, data, lancado_por)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, // A contagem de parâmetros agora vai até $12
+                // Removemos o 'NOW()' do final da lista de valores
+                [idProducaoTexto, opCriada.numero, etapaCorteIndex, 'Corte', corte.produto_id, corte.variante, maquinaDoCorte, corte.quantidade, corte.cortador, cortadorId, corte.data, usuarioLogado.nome]
+            );
+            // --- FIM DA CORREÇÃO ---
         }
 
-        res.status(201).json(result.rows[0]);
+        await dbClient.query('COMMIT');
+        res.status(201).json(opCriada);
 
     } catch (error) {
-        if (dbClient) {
-            // Se der erro, desfaz a transação
-            await dbClient.query('ROLLBACK');
-            console.error('[API POST OP] ERRO! Transação desfeita (ROLLBACK).');
-        }
-        console.error('[API POST OP] Erro detalhado:', error);
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error('[API POST OP V3 - ERRO]', error);
         res.status(500).json({ error: 'Erro ao criar Ordem de Produção.', details: error.message });
     } finally {
-        if (dbClient) {
-            dbClient.release();
-        }
+        if (dbClient) dbClient.release();
     }
 });
 
@@ -296,99 +352,117 @@ router.put('/', async (req, res) => {
     let dbClient;
     try {
         dbClient = await pool.connect();
+        await dbClient.query('BEGIN'); // <<< 1. INICIA A TRANSAÇÃO NO COMEÇO
+
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
         
         const opData = req.body;
         const { edit_id, numero, status, produto_id } = opData;
 
-        // Validação de dados essenciais
         if (!edit_id) {
-            return res.status(400).json({ error: 'O campo "edit_id" é obrigatório para atualização.' });
+            throw new Error('O campo "edit_id" é obrigatório para atualização.');
         }
-        if (!produto_id && status !== 'cancelada') { // Permite cancelar mesmo sem produto_id (caso de erro antigo)
-            return res.status(400).json({ error: 'O campo "produto_id" é obrigatório para atualização.' });
+        if (!produto_id && status !== 'cancelada') {
+            throw new Error('O campo "produto_id" é obrigatório para atualização.');
         }
 
-        // Lógica de permissão para a ação específica
         let permissaoConcedida = false;
-        if (status === 'cancelada' && permissoesCompletas.includes('cancelar-op')) {
-            permissaoConcedida = true;
-        } else if (status === 'finalizado' && permissoesCompletas.includes('finalizar-op')) {
-            permissaoConcedida = true;
-        } else if (permissoesCompletas.includes('editar-op')) {
-            permissaoConcedida = true;
-        }
+        if (status === 'cancelada' && permissoesCompletas.includes('cancelar-op')) permissaoConcedida = true;
+        else if (status === 'finalizado' && permissoesCompletas.includes('finalizar-op')) permissaoConcedida = true;
+        else if (permissoesCompletas.includes('editar-op')) permissaoConcedida = true;
 
         if (!permissaoConcedida) {
-            return res.status(403).json({ error: 'Permissão negada para realizar esta alteração na Ordem de Produção.' });
+            return res.status(403).json({ error: 'Permissão negada para realizar esta alteração.' });
         }
+        
+        // --- INÍCIO DA NOVA LÓGICA DE LIMPEZA DE STATUS ---
+        if (status === 'finalizado' || status === 'cancelada') {
+            console.log(`[API OP PUT] Iniciando limpeza para OP #${numero} (Status: ${status})`);
+            
+            // 1. Buscamos SESSÕES de trabalho ativas (Inteiros), não produções passadas (Texto).
+            // Isso corrige o erro de tipo "integer = text".
+            const sessoesAtivasResult = await dbClient.query(
+                `SELECT id, funcionario_id FROM sessoes_trabalho_producao 
+                 WHERE op_numero = $1 AND status = 'EM_ANDAMENTO'`, 
+                [numero]
+            );
+            
+            console.log(`[API OP PUT] Encontradas ${sessoesAtivasResult.rowCount} sessões ativas presas nesta OP.`);
 
-        // Lógica de cascata para cancelar ou finalizar OPs filhas
+            if (sessoesAtivasResult.rows.length > 0) {
+                const idsSessoes = sessoesAtivasResult.rows.map(r => r.id);
+                console.log(`[API OP PUT] IDs das sessões (Inteiros) para liberar:`, idsSessoes);
+
+                // 2. Agora podemos usar ::int[] com segurança, pois estamos comparando
+                // id_sessao_trabalho_atual (Inteiro) com idsSessoes (Inteiros).
+                const updateUserResult = await dbClient.query(
+                    `UPDATE usuarios 
+                     SET status_atual = 'LIVRE', id_sessao_trabalho_atual = NULL 
+                     WHERE id_sessao_trabalho_atual = ANY($1::int[])`,
+                    [idsSessoes]
+                );
+                
+                // 3. Opcional: Marcar essas sessões como CANCELADAS ou FINALIZADAS no banco
+                // para não ficarem "EM_ANDAMENTO" para sempre órfãs.
+                await dbClient.query(
+                    `UPDATE sessoes_trabalho_producao 
+                     SET status = 'FINALIZADA_FORCADA', data_fim = NOW() 
+                     WHERE id = ANY($1::int[])`,
+                    [idsSessoes]
+                );
+
+                console.log(`[API OP PUT] SUCESSO: ${updateUserResult.rowCount} usuários foram liberados e suas sessões encerradas.`);
+            } else {
+                console.log(`[API OP PUT] Nenhum usuário estava preso nesta OP. Nenhuma ação necessária.`);
+            }
+        }
+        // --- FIM DA NOVA LÓGICA DE LIMPEZA DE STATUS ---
+
         let finalizedChildrenNumbers = [];
         if (status === 'cancelada') {
-            console.log(`[API OPs PUT] OP #${numero} está sendo cancelada. Marcando corte associado como 'excluido'...`);
             await dbClient.query(`UPDATE cortes SET status = 'excluido' WHERE op = $1`, [numero]);
         } else if (status === 'finalizado') {
-            console.log(`[API OPs PUT] OP Mãe #${numero} está sendo finalizada. Verificando por OPs filhas...`);
             const textoBusca = `OP gerada em conjunto com a OP mãe #${numero}`;
             const filhasResult = await dbClient.query(
-                `UPDATE ordens_de_producao 
-                 SET status = 'finalizado', data_final = CURRENT_TIMESTAMP
-                 WHERE observacoes = $1 AND status != 'finalizado'
-                 RETURNING numero`,
+                `UPDATE ordens_de_producao SET status = 'finalizado', data_final = CURRENT_TIMESTAMP WHERE observacoes = $1 AND status != 'finalizado' RETURNING numero`,
                 [textoBusca]
             );
             if (filhasResult.rowCount > 0) {
                 finalizedChildrenNumbers = filhasResult.rows.map(r => r.numero);
-                console.log(`[API OPs PUT] Sucesso! OPs filhas finalizadas: ${finalizedChildrenNumbers.join(', ')}`);
             }
         }
         
-        // Query de atualização principal
         const queryText = `
             UPDATE ordens_de_producao
-             SET numero = $1, 
-                 produto_id = $2,
-                 variante = $3, 
-                 quantidade = $4, 
-                 data_entrega = $5,
-                 observacoes = $6, 
-                 status = $7, 
-                 etapas = $8, 
-                 data_final = $9, 
+             SET numero = $1, produto_id = $2, variante = $3, quantidade = $4, data_entrega = $5,
+                 observacoes = $6, status = $7, etapas = $8, data_final = $9, 
                  data_atualizacao = CURRENT_TIMESTAMP
              WHERE edit_id = $10 RETURNING *`;
         
         const values = [
-            opData.numero, 
-            parseInt(produto_id), 
-            opData.variante || null, 
-            parseInt(opData.quantidade), 
-            opData.data_entrega, 
-            opData.observacoes || '', 
-            status, 
-            JSON.stringify(opData.etapas || []), 
-            opData.data_final || null, 
-            edit_id
+            opData.numero, parseInt(produto_id), opData.variante || null, parseInt(opData.quantidade), 
+            opData.data_entrega, opData.observacoes || '', status, 
+            JSON.stringify(opData.etapas || []), opData.data_final || null, edit_id
         ];
 
         const result = await dbClient.query(queryText, values);
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Ordem de Produção não encontrada para atualização.' });
+            throw new Error('Ordem de Produção não encontrada para atualização.');
         }
 
-        // Adiciona a informação das filhas finalizadas à resposta, se houver
-        const opAtualizada = {
-            ...result.rows[0],
-            finalizedChildren: finalizedChildrenNumbers 
-        };
+        const opAtualizada = { ...result.rows[0], finalizedChildren: finalizedChildrenNumbers };
         
+        await dbClient.query('COMMIT'); // <<< 2. CONFIRMA TUDO NO FINAL
         res.status(200).json(opAtualizada);
 
     } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK'); // <<< 3. DESFAZ TUDO EM CASO DE ERRO
         console.error('[router/ordens-de-producao PUT] Erro:', error);
-        res.status(500).json({ error: 'Erro ao atualizar Ordem de Produção.', details: error.message });
+        // O res.status(403) já é enviado antes, aqui tratamos outros erros.
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Erro ao atualizar Ordem de Produção.', details: error.message });
+        }
     } finally {
         if (dbClient) {
             dbClient.release();

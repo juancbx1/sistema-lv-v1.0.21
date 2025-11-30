@@ -1337,14 +1337,14 @@ async function toggleView() {
                 sortConfigParaLoad.ordem = activeSortTh.dataset.sort || 'desc';
             }
 
-            await loadOPTable(
+            /* await loadOPTable(
                 'todas',
                 document.getElementById('searchOP')?.value || '',
                 sortConfigParaLoad,
                 1,
                 true,
                 null
-            );
+            ); */
             
             aplicarCorAoFiltroAtivo(); 
 
@@ -1355,7 +1355,7 @@ async function toggleView() {
 }
 
 // --- LOAD OPTABLE & ORDENAÇÃO ---
-async function loadOPTable(
+/* async function loadOPTable(
     filterStatus = 'todas',
     search = '',
     sortConfig = { criterio: 'numero', ordem: 'desc' },
@@ -1624,7 +1624,7 @@ async function loadOPTable(
     } finally {
         delete opTableBody.dataset.isLoading;
     }
-}
+} */
 
 function ordenarOPs(ops, criterio, ordem = 'asc') {
   return ops.sort((a, b) => {
@@ -3160,44 +3160,6 @@ if (opForm) {
     const btnLimparFormCorte = document.getElementById('btnLimparFormCorteEstoque');
     if (btnLimparFormCorte) {
         btnLimparFormCorte.addEventListener('click', limparFormularioCorte);
-    }
-
-    if (statusFilterContainer) {        
-        const statusButtons = statusFilterContainer.querySelectorAll('.op-botao-filtro'); 
-
-        statusButtons.forEach(btn => {
-            btn.addEventListener('click', () => {
-                console.log(`[Filtro Status CLIQUE] Botão '${btn.dataset.status}' FOI CLICADO.`);
-
-                statusFilterContainer.querySelectorAll('.op-botao-filtro').forEach(b => {
-                    b.classList.remove('active');
-                    b.style.backgroundColor = ''; 
-                    b.style.color = ''; 
-                    b.style.borderColor = '';
-                });
-
-                btn.classList.add('active');
-                
-                const uiStatus = btn.dataset.status;
-                const searchTerm = document.getElementById('searchOP')?.value || '';
-                const apiStatusParaFiltro = (uiStatus === 'todas') ? null : uiStatus;
-                
-                const activeSortTh = document.querySelector('.tabela-op th[data-sort]:not([data-sort=""])');
-                let currentSortCriterio = 'numero';
-                let currentSortOrdem = 'desc';
-                if (activeSortTh) {
-                    currentSortCriterio = activeSortTh.id.replace('sort', '').toLowerCase();
-                    currentSortOrdem = activeSortTh.dataset.sort || 'desc';
-                }
-
-                console.log(`[Filtro Status CLIQUE] Chamando loadOPTable com: uiStatus=${uiStatus}, apiStatus=${apiStatusParaFiltro}`);
-                
-                loadOPTable(uiStatus, searchTerm, {criterio: currentSortCriterio, ordem: currentSortOrdem}, 1, true, apiStatusParaFiltro);                
-                aplicarCorAoFiltroAtivo();
-            });
-        });
-    } else {
-        if (!statusFilterContainer) console.warn('[DOMContentLoaded] Container de filtro de status #statusFilter não encontrado.');
     }
 
     const searchOPInput = document.getElementById('searchOP');

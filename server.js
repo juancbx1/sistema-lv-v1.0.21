@@ -43,6 +43,7 @@ import configuracoesRouter from './api/configuracoes.js';
 import alertasRouter from './api/alertas.js';
 import radarProducaoRouter from './api/radar-producao.js';
 import demandasRouter from './api/demandas.js';
+import producaoRouter from './api/producao.js';
 
 const app = express();
 console.log('Aplicação Express inicializada.');
@@ -93,7 +94,8 @@ const routers = {
     configuracoesRouter,
     alertasRouter,
     radarProducaoRouter,
-    demandasRouter
+    demandasRouter,
+    producaoRouter 
 
 };
 for (const routerName in routers) {
@@ -140,6 +142,7 @@ app.use('/api/configuracoes', configuracoesRouter);
 app.use('/api/alertas', alertasRouter);
 app.use('/api/radar-producao', radarProducaoRouter);
 app.use('/api/demandas', demandasRouter);
+app.use('/api/producao', producaoRouter);
 
 
 app.get('/api/ping', (req, res) => res.status(200).json({ message: 'pong do server.js' }));

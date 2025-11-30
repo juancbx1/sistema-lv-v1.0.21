@@ -927,6 +927,21 @@ router.post('/sessoes/iniciar', async (req, res) => {
         dbClient = await pool.connect();
         await dbClient.query('BEGIN');
 
+        // --- INÍCIO DA NOVA LÓGICA DE BLOQUEIO DE USUÁRIO ---
+        const userStatusResult = await dbClient.query(
+            'SELECT id_sessao_trabalho_atual FROM usuarios WHERE id = $1 FOR UPDATE',
+            [usuario_tiktik_id]
+        );
+        if (userStatusResult.rows.length === 0) {
+            await dbClient.query('ROLLBACK');
+            return res.status(404).json({ error: `Tiktik com ID ${usuario_tiktik_id} não encontrado.` });
+        }
+        if (userStatusResult.rows[0].id_sessao_trabalho_atual !== null) {
+            await dbClient.query('ROLLBACK');
+            return res.status(409).json({ error: 'Este Tiktik já está ocupado em outra tarefa.' });
+        }
+        // --- FIM DA NOVA LÓGICA DE BLOQUEIO DE USUÁRIO ---
+
         // --- TRAVA DE CONCORRÊNCIA (ESSENCIAL) ---
         const varianteAsNumber = variante ? variante.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) : 0;
         const lockKey = parseInt(produto_id) + varianteAsNumber;
@@ -1002,8 +1017,12 @@ router.post('/sessoes/iniciar', async (req, res) => {
         const sessaoResult = await dbClient.query(sessaoQuery, sessaoParams);
         const novaSessaoId = sessaoResult.rows[0].id;
         
-        await atualizarStatusUsuarioDB(usuario_tiktik_id, 'PRODUZINDO'); 
-        await dbClient.query(`UPDATE usuarios SET id_sessao_trabalho_atual = $1 WHERE id = $2`, [novaSessaoId, usuario_tiktik_id]);
+        // --- INÍCIO DA LÓGICA DE ATUALIZAÇÃO DE STATUS ---
+        await dbClient.query(
+            `UPDATE usuarios SET status_atual = 'PRODUZINDO', id_sessao_trabalho_atual = $1 WHERE id = $2`,
+            [novaSessaoId, usuario_tiktik_id]
+        );
+        // --- FIM DA LÓGICA DE ATUALIZAÇÃO DE STATUS ---
 
         await dbClient.query('COMMIT');
         res.status(201).json({ message: 'Sessão iniciada com sucesso!', sessaoId: novaSessaoId });
@@ -1095,7 +1114,13 @@ router.post('/sessoes/finalizar', async (req, res) => {
         );
 
         if (outraSessaoAtivaResult.rowCount === 0) {
-            await atualizarStatusUsuarioDB(usuarioTiktikId, 'LIVRE');
+            // --- INÍCIO DA NOVA LÓGICA DE LIMPEZA ---
+            // Apenas executa se NÃO houver mais nenhuma outra sessão de arremate ativa para este usuário
+            await dbClient.query(
+                `UPDATE usuarios SET status_atual = 'LIVRE', id_sessao_trabalho_atual = NULL WHERE id = $1`,
+                [usuarioTiktikId]
+            );
+            // --- FIM DA NOVA LÓGICA DE LIMPEZA ---
         }
 
         // --- LÓGICA DE ALERTA DE META BATIDA (VERSÃO CORRIGIDA) ---

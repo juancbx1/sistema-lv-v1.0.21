@@ -122,91 +122,64 @@ router.use(async (req, res, next) => {
 
 // POST /api/producoes/
 router.post('/', async (req, res) => {
-    const { usuarioLogado: requisitante } = req; // Renomeado para clareza
+    const { usuarioLogado: requisitante } = req;
     let dbClient; 
-
     try {
-        console.log('--- INÍCIO: ROTA POST /api/producoes ---');
-        console.log('[1. DADOS RECEBIDOS] Corpo da requisição:', JSON.stringify(req.body, null, 2));
-
         dbClient = await pool.connect();
-        const permissoesRequisitante = await getPermissoesCompletasUsuarioDB(dbClient, requisitante.id);
-        if (!permissoesRequisitante.includes('lancar-producao')) {
-            return res.status(403).json({ error: 'Permissão negada para lançar produção.' });
-        }
+        await dbClient.query('BEGIN');
 
-        const {
-            id, opNumero, etapaIndex, processo, produto_id, variacao,
-            maquina, quantidade, 
-            funcionario, // Nome do funcionário
-            funcionario_id, // <<< NOVO: ID do funcionário
-            data, lancadoPor
-        } = req.body;
+        const { funcionario_id, opNumero, produto_id, variante, processo, quantidade } = req.body;
 
-        console.log(`[2. VALIDAÇÃO] Validando dados... Produto ID: ${produto_id}, Funcionário ID: ${funcionario_id}`);
-        if (!id || !opNumero || etapaIndex === undefined || !processo || !produto_id || !funcionario || !funcionario_id || quantidade === undefined || !data || !lancadoPor) {
-            return res.status(400).json({ error: 'Dados incompletos. Todos os campos são obrigatórios, incluindo funcionario_id.' });
+        // Pega os tipos do usuário que vai receber a tarefa
+        const funcionarioTiposResult = await dbClient.query('SELECT tipos FROM usuarios WHERE id = $1', [funcionario_id]);
+        const funcionarioTipos = funcionarioTiposResult.rows[0]?.tipos || [];
+
+        // Pega o tipo necessário para a tarefa
+        const produtoEtapasResult = await dbClient.query('SELECT etapas FROM produtos WHERE id = $1', [produto_id]);
+        const etapaConfig = produtoEtapasResult.rows[0]?.etapas.find(e => (e.processo || e) === processo);
+        const tipoNecessario = etapaConfig?.feitoPor;
+
+        if (!tipoNecessario || !funcionarioTipos.includes(tipoNecessario)) {
+            throw new Error(`Atribuição inválida. O empregado não tem o perfil "${tipoNecessario}" necessário para esta tarefa.`);
         }
         
-        const parsedProdutoId = parseInt(produto_id);
-        if (isNaN(parsedProdutoId) || parsedProdutoId <= 0) {
-            return res.status(400).json({ error: 'produto_id inválido.' });
+        if (!funcionario_id || !opNumero || !produto_id || !processo || !quantidade) {
+            throw new Error("Dados insuficientes para iniciar a sessão de produção.");
         }
 
-        const parsedQuantidade = parseInt(quantidade, 10);
-        if (isNaN(parsedQuantidade) || parsedQuantidade < 0) {
-            return res.status(400).json({ error: 'Quantidade inválida.' });
+        const userStatusResult = await dbClient.query('SELECT id_sessao_trabalho_atual FROM usuarios WHERE id = $1 FOR UPDATE', [funcionario_id]);
+        if (userStatusResult.rows[0]?.id_sessao_trabalho_atual !== null) {
+            throw new Error('Este empregado já está ocupado em outra tarefa.');
         }
-        console.log('[2. VALIDAÇÃO] Dados básicos validados com sucesso.');
 
-        // ---------------------------------------------------------------------
-        // <<< MUDANÇA AQUI: A LÓGICA ANTIGA FOI SUBSTITUÍDA POR ESTA CHAMADA >>>
-        // ---------------------------------------------------------------------
-        // --- LÓGICA DE PONTOS USANDO A FUNÇÃO REUTILIZÁVEL ---
-        const { pontosGerados, valorPontoAplicado } = await calcularPontosProducao(
-            dbClient,
-            parsedProdutoId,
-            processo,
-            parsedQuantidade,
-            funcionario_id
+        const sessaoQuery = `
+            INSERT INTO sessoes_trabalho_producao 
+                (funcionario_id, op_numero, produto_id, variante, processo, quantidade_atribuida, status)
+            VALUES ($1, $2, $3, $4, $5, $6, 'EM_ANDAMENTO')
+            RETURNING id;
+        `;
+        const sessaoValues = [funcionario_id, opNumero, produto_id, variante || '-', processo, quantidade];
+        const sessaoResult = await dbClient.query(sessaoQuery, sessaoValues);
+        const novaSessaoId = sessaoResult.rows[0].id;
+
+        await dbClient.query(
+            `UPDATE usuarios SET status_atual = 'PRODUZINDO', id_sessao_trabalho_atual = $1 WHERE id = $2`,
+            [novaSessaoId, funcionario_id]
         );
-        // --- FIM DA LÓGICA DE PONTOS ---
-        // ---------------------------------------------------------------------
 
-        const queryText = `
-            INSERT INTO producoes (
-                id, op_numero, etapa_index, processo, produto_id, variacao, maquina,
-                quantidade, funcionario, funcionario_id, data, lancado_por, valor_ponto_aplicado, pontos_gerados
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-            RETURNING *;`;
-        
-        const values = [
-            id, opNumero, etapaIndex, processo, parsedProdutoId, variacao || null, maquina,
-            parsedQuantidade, funcionario, funcionario_id, data, lancadoPor, 
-            valorPontoAplicado, // Já é float
-            pontosGerados     // Já é float
-        ];
-
-        console.log('[4. BANCO DE DADOS] Executando query INSERT com valores:', values);
-        const result = await dbClient.query(queryText, values);
-        console.log('[5. SUCESSO] Inserção no banco de dados bem-sucedida.');
-
-        res.status(201).json(result.rows[0]);
+        await dbClient.query('COMMIT');
+        res.status(201).json({ message: 'Sessão de produção iniciada com sucesso!', sessaoId: novaSessaoId });
 
     } catch (error) {
-        console.error('--- ERRO NA ROTA POST /api/producoes ---');
-        console.error('[ERRO DETALHADO] Mensagem:', error.message, error.stack);
-        if (error.message.includes("violates not-null constraint") && error.message.includes("pontos_gerados")) {
-             console.error("[ERRO ESPECÍFICO] A coluna 'pontos_gerados' ou 'valor_ponto_aplicado' na tabela 'producoes' pode estar configurada como NOT NULL e não está recebendo um valor válido em todos os cenários.");
-        }
-        res.status(500).json({ error: 'Erro interno ao salvar produção.', details: error.message });
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error('[API POST /producoes - SESSAO] Erro:', error);
+        res.status(500).json({ error: 'Erro ao iniciar sessão de produção.', details: error.message });
     } finally {
-        if (dbClient) {
-            dbClient.release();
-            console.log('--- FIM: ROTA POST /api/producoes (conexão liberada) ---');
-        }
+        if (dbClient) dbClient.release();
     }
 });
+
+
 // GET /api/producoes/
 router.get('/', async (req, res) => {
     const { usuarioLogado } = req;
@@ -413,26 +386,45 @@ router.delete('/', async (req, res) => {
     let dbClient;
     try {
         dbClient = await pool.connect();
-        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
-        // console.log(`[API Producoes DELETE] Permissões de ${usuarioLogado.nome || usuarioLogado.nome_usuario}:`, permissoesCompletas);
+        await dbClient.query('BEGIN'); // <<< 1. INICIA A TRANSAÇÃO
 
+        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
         if (!permissoesCompletas.includes('excluir-registro-producao')) {
+            await dbClient.query('ROLLBACK');
             return res.status(403).json({ error: 'Permissão negada para excluir registro de produção.' });
         }
+
         const { id } = req.body;
         if (!id) {
+            await dbClient.query('ROLLBACK');
             return res.status(400).json({ error: 'ID não fornecido.' });
         }
-        const deleteResult = await dbClient.query(
-            'DELETE FROM producoes WHERE id = $1 RETURNING *',
-            [id]
-        );
+
+        const deleteResult = await dbClient.query('DELETE FROM producoes WHERE id = $1 RETURNING *', [id]);
+        
         if (deleteResult.rowCount === 0) {
+            await dbClient.query('ROLLBACK');
             return res.status(404).json({ error: 'Produção não encontrada para exclusão.' });
         }
-        res.status(200).json(deleteResult.rows[0] || { message: 'Registro excluído com sucesso', id });
+
+        const producaoExcluida = deleteResult.rows[0];
+
+        // --- INÍCIO DA NOVA LÓGICA DE LIMPEZA ---
+        await dbClient.query(
+            `UPDATE usuarios 
+             SET status_atual = 'LIVRE', id_sessao_trabalho_atual = NULL 
+             WHERE id = $1 AND id_sessao_trabalho_atual = $2`,
+            [producaoExcluida.funcionario_id, producaoExcluida.id]
+        );
+        // --- FIM DA NOVA LÓGICA DE LIMPEZA ---
+
+        await dbClient.query('COMMIT'); // <<< 2. CONFIRMA AS ALTERAÇÕES
+
+        res.status(200).json(producaoExcluida);
+
     } catch (error) {
-        console.error('[router/producoes DELETE] Erro:', error.message, error.stack ? error.stack.substring(0,500):"");
+        if (dbClient) await dbClient.query('ROLLBACK'); // <<< 3. DESFAZ EM CASO DE ERRO
+        console.error('[router/producoes DELETE] Erro:', error.message);
         res.status(500).json({ error: 'Erro ao excluir produção.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
@@ -501,6 +493,81 @@ router.put('/assinar-tiktik-op', async (req, res) => {
         if (dbClient) await dbClient.query('ROLLBACK');
         console.error('[API /producoes/assinar-tiktik-op PUT] Erro:', error.message);
         res.status(500).json({ error: 'Erro interno ao assinar produção da OP.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// ========= NOVA ROTA PARA FINALIZAR UMA TAREFA DE PRODUÇÃO =========
+router.put('/finalizar', async (req, res) => {
+    const { usuarioLogado } = req;
+    const { id_sessao, quantidade_finalizada } = req.body;
+    let dbClient;
+
+    try {
+        dbClient = await pool.connect();
+        await dbClient.query('BEGIN');
+        
+        const sessaoResult = await dbClient.query('SELECT * FROM sessoes_trabalho_producao WHERE id = $1 FOR UPDATE', [id_sessao]);
+        if (sessaoResult.rows.length === 0) throw new Error('Sessão de trabalho não encontrada.');
+        const sessao = sessaoResult.rows[0];
+        if (sessao.status !== 'EM_ANDAMENTO') throw new Error('Esta tarefa não está mais em andamento.');
+        
+        const funcionarioInfo = await dbClient.query('SELECT nome FROM usuarios WHERE id = $1', [sessao.funcionario_id]);
+        if (funcionarioInfo.rows.length === 0) throw new Error('Funcionário da sessão não encontrado.');
+
+        const produtoResult = await dbClient.query('SELECT etapas FROM produtos WHERE id = $1', [sessao.produto_id]);
+        const etapasConfig = produtoResult.rows[0]?.etapas || [];
+
+        const etapaIndex = etapasConfig.findIndex(e => (e.processo || e) === sessao.processo);
+        if (etapaIndex === -1) {
+            throw new Error(`Configuração da etapa '${sessao.processo}' não encontrada no produto.`);
+        }
+        const maquinaDaEtapa = etapasConfig[etapaIndex]?.maquina || 'Não Definida';
+
+        // --- INÍCIO DA REINTEGRAÇÃO DO CÁLCULO DE PONTOS ---
+        const { pontosGerados, valorPontoAplicado } = await calcularPontosProducao(
+            dbClient,
+            sessao.produto_id,
+            sessao.processo,
+            quantidade_finalizada,
+            sessao.funcionario_id
+        );
+        // --- FIM DA REINTEGRAÇÃO DO CÁLCULO DE PONTOS ---
+        
+        const producaoInsertResult = await dbClient.query(
+            `INSERT INTO producoes (
+                id, op_numero, etapa_index, processo, produto_id, variacao, maquina, 
+                quantidade, funcionario, funcionario_id, data, lancado_por, 
+                valor_ponto_aplicado, pontos_gerados
+             )
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
+            [
+                `prod_${Date.now()}`, sessao.op_numero, etapaIndex, sessao.processo, 
+                sessao.produto_id, sessao.variante, maquinaDaEtapa, quantidade_finalizada, 
+                funcionarioInfo.rows[0].nome, sessao.funcionario_id, sessao.data_inicio, 
+                usuarioLogado.nome, valorPontoAplicado, pontosGerados
+            ]
+        );
+        const novaProducaoId = producaoInsertResult.rows[0].id;
+
+        await dbClient.query(
+            `UPDATE sessoes_trabalho_producao SET status = 'FINALIZADA', data_fim = NOW(), quantidade_finalizada = $1, id_registro_producao = $2 WHERE id = $3`,
+            [quantidade_finalizada, novaProducaoId, id_sessao]
+        );
+
+        await dbClient.query(
+            `UPDATE usuarios SET status_atual = 'LIVRE', id_sessao_trabalho_atual = NULL WHERE id = $1 AND id_sessao_trabalho_atual = $2`,
+            [sessao.funcionario_id, id_sessao]
+        );
+
+        await dbClient.query('COMMIT');
+        res.status(200).json({ message: 'Tarefa finalizada com sucesso!' });
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error('[API PUT /producoes/finalizar - SESSAO] Erro:', error);
+        res.status(500).json({ error: 'Erro ao finalizar tarefa.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }

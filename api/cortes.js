@@ -93,11 +93,12 @@ router.get('/', async (req, res) => {
 
         const { status } = req.query;
 
-        const baseSelect = `
+       const baseSelect = `
             SELECT 
                 c.id, c.pn, c.variante, c.quantidade, c.data, c.cortador,
                 c.status, c.op, c.data_atualizacao, c.produto_id,
-                p.nome AS produto
+                p.nome AS produto,
+                p.imagem AS imagem_produto
             FROM cortes c
             LEFT JOIN produtos p ON c.produto_id = p.id
         `;
@@ -143,7 +144,8 @@ router.post('/', async (req, res) => {
             data,
             status = 'pendente',
             op = null,
-            pn
+            pn,
+            cortador 
         } = req.body;
 
         if (!produto_id || quantidade === undefined || !data || !status || !pn) {
@@ -158,8 +160,8 @@ router.post('/', async (req, res) => {
         const varianteFinal = (variante === undefined || variante === null || String(variante).trim() === '') ? null : String(variante).trim();
         
         const queryText = `
-            INSERT INTO cortes (produto_id, variante, quantidade, data, status, op, pn)
-            VALUES ($1, $2, $3, $4, $5, $6, $7) 
+            INSERT INTO cortes (produto_id, variante, quantidade, data, status, op, pn, cortador)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING *
         `;
         const values = [
@@ -169,7 +171,8 @@ router.post('/', async (req, res) => {
             data,
             status,
             op,
-            pn
+            pn,
+            cortador 
         ];
 
         const result = await dbClient.query(queryText, values);

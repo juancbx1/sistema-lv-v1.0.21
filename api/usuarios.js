@@ -18,6 +18,67 @@ const pool = new Pool({
 
 const SECRET_KEY = process.env.JWT_SECRET;
 
+const STATUS = {
+    PRODUZINDO: 'PRODUZINDO',
+    LIVRE: 'LIVRE',
+    ALMOCO: 'ALMOCO',
+    PAUSA: 'PAUSA',
+    FORA_DO_HORARIO: 'FORA_DO_HORARIO',
+    FALTOU: 'FALTOU',
+    PAUSA_MANUAL: 'PAUSA_MANUAL',
+    ALOCADO_EXTERNO: 'ALOCADO_EXTERNO'
+};
+
+export function determinarStatusFinalServidor(usuario) {
+    let statusFinalBruto;
+
+    // 1. Se estiver PRODUZINDO, ganha de tudo.
+    if (usuario.status_atual === STATUS.PRODUZINDO) {
+        statusFinalBruto = STATUS.PRODUZINDO;
+    } 
+    // 2. Status Manuais Fortes (Faltou, Outro Setor, e agora LIVRE_MANUAL)
+    // Esses status respeitam a data de modificação (valem só por hoje)
+    else if ([STATUS.FALTOU, STATUS.ALOCADO_EXTERNO, 'LIVRE_MANUAL'].includes(usuario.status_atual)) {
+        const hojeSP = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+        
+        const dataModificacao = (typeof usuario.status_data_modificacao === 'string') 
+            ? usuario.status_data_modificacao.substring(0, 10) 
+            : null;
+
+        // Se a liberação manual foi HOJE, respeita ela.
+        if (hojeSP === dataModificacao) {
+            // Se for LIVRE_MANUAL, retornamos LIVRE para o frontend entender
+            if (usuario.status_atual === 'LIVRE_MANUAL') {
+                return STATUS.LIVRE; 
+            }
+            statusFinalBruto = usuario.status_atual;
+        }
+    } 
+    // 3. Pausa Manual
+    else if (usuario.status_atual === STATUS.PAUSA_MANUAL) {
+        statusFinalBruto = STATUS.PAUSA_MANUAL;
+    } 
+    // 4. Cálculo Automático de Horário (Só entra aqui se não caiu nos casos acima)
+    else {
+        const agora = new Date();
+        const horaAtualStr = agora.toLocaleTimeString('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+        const { horario_entrada_1, horario_saida_1, horario_entrada_2, horario_saida_2, horario_entrada_3, horario_saida_3 } = usuario;
+        
+        const saidaFinal = horario_saida_3 || horario_saida_2 || horario_saida_1 || '23:59';
+        const entradaInicial = horario_entrada_1 || '00:00';
+
+        if (horaAtualStr < entradaInicial || horaAtualStr > saidaFinal) {
+            statusFinalBruto = STATUS.FORA_DO_HORARIO;
+        } else if (horario_saida_1 && horario_entrada_2 && horaAtualStr > horario_saida_1 && horaAtualStr < horario_entrada_2) {
+            statusFinalBruto = STATUS.ALMOCO;
+        } else if (horario_saida_2 && horario_entrada_3 && horaAtualStr > horario_saida_2 && horaAtualStr < horario_entrada_3) {
+            statusFinalBruto = STATUS.PAUSA;
+        }
+    }
+    
+    // Retorno final
+    return statusFinalBruto || usuario.status_atual || STATUS.LIVRE;
+}
 
 export async function atualizarStatusUsuarioDB(usuarioId, novoStatus) {
     // ATENÇÃO: Esta função agora ignora o dbClient passado e pega sua própria conexão.
@@ -584,7 +645,7 @@ router.put('/:id/status', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada para alterar status de usuários.' });
         }
 
-        const validStatus = ['LIVRE', 'FALTOU', 'PAUSA_MANUAL', 'ALOCADO_EXTERNO','LIVRE_MANUAL'];
+        const validStatus = ['LIVRE', 'FALTOU', 'PAUSA_MANUAL', 'ALOCADO_EXTERNO', 'LIVRE_MANUAL'];
         if (!novoStatus || !validStatus.includes(novoStatus)) {
             console.error('[BACKEND-VALIDACAO] ERRO: Status inválido!');
             return res.status(400).json({ error: 'Status fornecido é inválido.' });

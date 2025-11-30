@@ -4,332 +4,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ordens de Produção</title>
-    <link rel="stylesheet" href="/css/ordens-de-producao.css">
+    <link rel="stylesheet" href="/css/global-style.css">
     <link rel="stylesheet" href="/css/menu-lateral.css">
+    <link rel="stylesheet" href="/css/ordens-de-producao.css">
     <link rel="stylesheet" href="/css/popups.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
-    <!-- Botão Hambúrguer -->
+    <!-- Botão Hambúrguer (Menu) -->
     <div class="hamburger-menu">
         <i class="fas fa-bars"></i>
         <i class="fas fa-times"></i>
     </div>
 
-    <!-- Em ordens-de-producao.html -->
-<div class="container-op">
-    <section class="op-card-estilizado" id="opListView"> <!-- USA A NOVA CLASSE DE CARD -->
-        <div class="op-cabecalho-pagina"> <!-- CABEÇALHO DA PÁGINA INTEIRA -->
-             <h1>Ordens de Produção</h1>
-        </div>
-
-        <!-- Card para Ações Rápidas e Gestão de Cortes -->
-        <div class="op-card-estilizado" style="margin-bottom: 30px;"> <!-- Card aninhado -->            
-            <div class="op-acoes-container">
-    <!-- Botão de Ação Principal (Incluir OP) -->
-    <div class="op-acao-principal">
-    <button class="op-botao op-botao-destaque-incluir" id="btnIncluirOP">
-        <i class="fa-solid fa-plus"></i>Nova OP
-    </button>
-</div>
-
-    <!-- Grupo de Ações Secundárias -->
-    <div class="op-grupo-acoes">
-        <h4 class="op-grupo-titulo-sutil">Outras Ações:</h4> <!-- Título sutil se necessário -->
-        <div class="op-botoes-wrapper">
-            <button class="op-botao op-botao-secundario-acao" onclick="window.location.href='/admin/gerenciar-producao.html'">
-                <i class="fa-solid fa-pen-to-square"></i> Gerenciar Produção
-            </button>
-            <button class="op-botao op-botao-secundario-acao" onclick="window.location.href='/admin/embalagem-de-produtos.html'">
-                <i class="fa-solid fa-box"></i> Embalar Produto
-            </button>
-            <button class="op-botao op-botao-secundario-acao" onclick="window.location.href='/admin/estoque.html'">
-                <i class="fa-solid fa-boxes-stacked"></i> Estoque
-            </button>
-        </div>
-    </div>
-
-    <!-- Grupo de Ações de Cortes -->
-    <div class="op-grupo-acoes">
-        <h4 class="op-grupo-titulo-sutil">Relacionado a Cortes:</h4> <!-- Título sutil se necessário -->
-        <div class="op-botoes-wrapper">
-            <button class="op-botao op-botao-corte" id="btnCorte" onclick="window.location.hash = '#corte'">
-                <i class="fa-solid fa-scissors"></i> Registrar Corte p/ Estoque
-            </button>
-            <button class="op-botao op-botao-corte" onclick="window.location.hash = '#cortes-pendentes'">
-                <i class="fa-solid fa-clipboard-list"></i> Cortes Pendentes
-            </button>
-            <button class="op-botao op-botao-corte" onclick="window.location.hash = '#cortes-em-estoque'">
-                <i class="fa-solid fa-cubes"></i> Cortes em Estoque
-            </button>
-        </div>
-    </div>
-</div>
-        </div>
-
-        <!-- Card para Filtros e Tabela de OPs -->
-        <div class="op-card-estilizado" id="opListContainer"> <!-- Novo ID para o card da lista -->
-            <h2 class="op-titulo-secao">Lista de Ordens</h2>
-            <div class="op-filtros-container"> <!-- Container para filtros -->
-                <div id="statusFilter" class="op-status-filter-group">
-                    <button class="op-botao-filtro active" data-status="todas">Todas</button>
-                    <button class="op-botao-filtro" data-status="em-aberto">Em Aberto <span class="status-bolinha status-em-aberto"></span></button>                    
-                    <button class="op-botao-filtro" data-status="produzindo">Produzindo <span class="status-bolinha status-produzindo"></span></button>
-                    <button class="op-botao-filtro" data-status="finalizado">Finalizado <span class="status-bolinha status-finalizado"></span></button>
-                    <button class="op-botao-filtro" data-status="cancelada">Cancelada <span class="status-bolinha status-cancelada"></span></button>
-                </div>
-                <input type="text" id="searchOP" class="op-input-busca" placeholder="Buscar por produto, OP, variação...">
-            </div>
-
-            <div class="op-tabela-wrapper"> <!-- Wrapper para a tabela ser responsiva -->
-                <table class="op-tabela-estilizada"> <!-- Nova classe para a tabela -->
-                    <thead>
-                        <tr>
-                            <th id="sortStatus">Status</th>
-                            <th id="sortNumero">OP</th>
-                            <th id="sortProduto">Produto</th>
-                            <th id="sortVariante">Variação</th>
-                            <th id="sortQuantidade">Qtd</th>
-                            <th id="thAcoes">Ações</th> <!-- CABEÇALHO DA COLUNA DE AÇÕES -->
-                        </tr>
-                    </thead>
-                    <tbody id="opTableBody">
-                        <!-- Linhas da tabela carregadas pelo JS -->
-                    </tbody>
-                </table>
-            </div>
-            <div id="paginationContainerOPs" class="op-paginacao-container">
-                <!-- Paginação carregada pelo JS -->
-            </div>
-        </div>
-    </section>
-
-        <!-- Formulário de Inclusão de OP -->
-        <!-- Em ordens-de-producao.html -->
-<section class="op-card-estilizado" id="opFormView" style="display: none;">
-    <button class="botao-fechar" onclick="window.location.hash = ''" title="Fechar">X</button>
-    <h2 class="op-titulo-secao">Incluir Nova Ordem de Produção</h2>
-    
-    <form id="opForm" class="op-form-estilizado">
-        <div class="op-form-linha"> <!-- Nova div para agrupar Produto e Variante -->
-            <div class="op-form-grupo"> <!-- Renomeado de grupo-form-op -->
-                <label for="produtoOP">Produto a Produzir</label>
-        <!-- Adiciona uma nova classe específica, ex: op-input-produto-principal -->
-        <select id="produtoOP" class="op-input op-select op-input-produto-principal" required>
-            <option value="">Selecione um produto</option>
-        </select>
-    </div>
-    <div class="op-form-grupo" id="variantesContainer" style="display: none;">
-        <label>Variação</label>
-        <div class="variantes-selects"> 
-            <!-- O select aqui é gerado por JS. No JS, ao criar o select de variante, 
-                 dê a ele uma classe específica também, ex: class="op-select op-input-variante" -->
-        </div>
-    </div>
-</div>
-
-        <div class="op-form-grupo" id="infoCorteContainer" style="display: none; border: 1px dashed #ddd; padding: 10px; margin: 15px 0; border-radius: 5px;">
-            <!-- Mensagens sobre o corte (estoque ou novo pedido) -->
-        </div>
-
-        <div class="op-form-linha">
-            <div class="op-form-grupo" style="display: none;"> <!-- Inicialmente escondido -->
-                <label for="quantidadeOP">Quantidade</label>
-        <!-- Nova classe: op-input-quantidade-op -->
-        <input type="number" id="quantidadeOP" class="op-input op-input-quantidade-op" min="1" required placeholder="Qtd">
-    </div>
-    <div class="op-form-grupo"> 
-        <label for="numeroOP">Número da OP</label>
-        <!-- Nova classe: op-input-numero-op -->
-        <input type="text" id="numeroOP" class="op-input op-input-numero-op" readonly>
-    </div>
-</div>
-
-<div class="op-form-grupo"> 
-    <label for="dataEntregaOP">Data de Entrega Prevista</label>
-    <!-- Nova classe: op-input-data-op -->
-    <input type="date" id="dataEntregaOP" class="op-input op-input-data-op" required>
-</div>
-
-<div class="op-form-grupo"> 
-    <label for="observacoesOP">Observações</label>
-    <!-- Nova classe: op-textarea-observacoes (se precisar de estilo diferente de outros textareas) -->
-    <textarea id="observacoesOP" class="op-input op-textarea-observacoes" rows="3"></textarea>
-</div>
-
-        <div class="op-form-botoes">
-            <button type="submit" class="op-botao op-botao-principal botao-salvar-op">
-                <i class="fas fa-save"></i> Salvar OP
-            </button>
-            <button type="button" class="op-botao op-botao-secundario" onclick="window.location.hash = ''">
-                <i class="fas fa-times"></i> Cancelar Inclusão
-            </button>
-        </div>
-    </form>
-</section>
-
-        <!-- Edição de OP -->
-        <section class="op-card-estilizado" id="opEditView" style="display: none;">
-    <button class="botao-fechar" id="voltarOPLista" onclick="window.location.hash = ''" title="Voltar para Lista">X</button> 
-    
-    <div class="op-edit-cabecalho"> <!-- Novo container para o título e talvez outras infos -->
-        <h2 class="op-titulo-secao" id="opNumero">OP n°: Carregando...</h2>
-    </div>
-    
-    <div class="op-form-estilizado" id="formEdicaoOP"> <!-- Usando a classe de formulário para consistência -->
-        <div class="op-form-linha"> <!-- Linha para Produto e Variante -->
-    <div class="op-form-grupo" id="grupoEditProdutoOP">
-        <label for="editProdutoOP">Produto</label>
-        <input type="text" id="editProdutoOP" class="op-input" readonly>
-    </div>
-    <div class="op-form-grupo" id="editVarianteContainer" style="display: none;"> <!-- Inicialmente escondido -->
-        <label for="editVarianteOP">Variação</label>
-        <input type="text" id="editVarianteOP" class="op-input" readonly>
-    </div>
-</div>
-
-<div class="op-form-linha"> <!-- Linha para Quantidade e Data -->
-    <div class="op-form-grupo" id="grupoEditQuantidadeOP">
-        <label for="editQuantidadeOP">Quantidade</label>
-        <input type="number" id="editQuantidadeOP" class="op-input" min="1" required readonly>
-    </div>
-    <div class="op-form-grupo" id="grupoEditDataEntregaOP">
-        <label for="editDataEntregaOP">Data de Entrega Prevista</label>
-        <input type="date" id="editDataEntregaOP" class="op-input" required>
-    </div>
-</div>
-
-
-        <div class="op-form-grupo">
-            <h3 class="op-subtitulo-secao">Etapas de Produção</h3> <!-- Subtítulo para etapas -->
-            <div id="etapasContainer" class="op-etapas-container-wrapper">
-                <!-- Etapas carregadas pelo JS -->
-                <div class="spinner">Carregando etapas...</div>
-            </div>
-        </div>
-
- <!-- ========= INÍCIO DA NOVA SEÇÃO OP FILHA (ACCORDION) ========= -->
-<div id="opFilhaAccordion" class="op-accordion" style="display: none;">
-    <!-- CABEÇALHO CLICÁVEL -->
-    <div class="op-accordion-cabecalho">
-        <span class="op-accordion-titulo">
-            <i class="fas fa-sitemap"></i>
-            Produção Conjunta
-        </span>
-        <i class="fas fa-chevron-down op-accordion-icone"></i>
-    </div>
-
-    <!-- CONTEÚDO QUE ABRE E FECHA -->
-    <div class="op-accordion-conteudo">
-        <p style="font-size: 0.9em; margin-bottom: 15px;">
-            Opcional: Crie uma OP para <strong>Scrunchie (Fina)</strong> que será produzida em conjunto com esta.
-        </p>
-        <p style="font-size: 0.95em; margin-bottom: 20px;">
-            A variação utilizada será a mesma da OP atual: <strong id="opFilhaVarianteInfo" style="color: var(--op-cor-azul-claro);">Carregando...</strong>
-        </p>
-
-        <div class="op-form-linha">
-            <div class="op-form-grupo">
-                <label for="quantidadeOpFilha">Quantidade de "Scrunchie (Fina)"</label>
-                <input type="number" id="quantidadeOpFilha" class="op-input" min="1" placeholder="Ex: 20" style="max-width: 200px;">
-            </div>
-            <div class="op-form-botoes" style="align-self: flex-end;">
-                <button id="btnCriarOpFilha" class="op-botao op-botao-principal">
-                    <i class="fas fa-plus-circle"></i> Criar OP Filha
-                </button>
-            </div>
-        </div>
-
-        <!-- ÁREA DE FEEDBACK -->
-        <div id="opFilhaFeedback" class="op-filha-feedback">
-            <!-- Mensagens de sucesso serão inseridas aqui pelo JS -->
-        </div>
-    </div>
-</div>
-<!-- ========= FIM DA NOVA SEÇÃO OP FILHA (ACCORDION) ========= -->
- 
-
-        <div class="op-form-botoes">
-            <button id="finalizarOP" class="op-botao op-botao-sucesso">
-                <i class="fas fa-check-double"></i> Finalizar OP
-            </button>
-        </div>
-    </div>
-</section>
-
-        <!-- Tela de Corte p/ Estoque -->
-       <!-- Em ordens-de-producao.html -->
-<section class="op-card-estilizado" id="corteView" style="display: none;">
-    <button class="botao-fechar op-botao-perigo" onclick="window.location.hash = ''" title="Fechar">X</button>
-    <h2 class="op-titulo-secao">Registrar Corte para Estoque</h2>
-    
-    <form id="formCorteEstoque" class="op-form-estilizado">
-        <div class="op-form-linha">
-            <div class="op-form-grupo">
-                <label for="produtoCorte">Produto</label>
-                <!-- Adiciona classe específica: op-select-produto-corte -->
-                <select id="produtoCorte" class="op-input op-select op-select-produto-corte" required>
-                    <option value="">Selecione um produto</option>
-                </select>
-            </div>
-            <div class="op-form-grupo" id="variantesCorteContainer" style="display: none;">
-                <label>Variação</label>
-                <div class="variantes-selects-corte">
-                    <!-- Select de variantes gerado por JS já deve ter op-input-variante-corteform -->
-                </div>
-            </div>
-        </div>
-
-        <div class="op-form-linha">
-            <div class="op-form-grupo">
-                <label for="dataCorte">Data do Corte</label>
-                <!-- Pode adicionar uma classe específica se precisar, ex: op-input-data-corte -->
-                <input type="date" id="dataCorte" class="op-input op-input-data-corte" required>
-            </div>
-            <div class="op-form-grupo">
-                <label for="cortadorCorte">Realizado por (Cortador)</label>
-                <!-- Adiciona classe específica: op-input-cortador-corte -->
-                <input type="text" id="cortadorCorte" class="op-input op-input-cortador-corte" readonly 
-                       title="Preenchido automaticamente com o usuário logado.">
-            </div>
-        </div>
-
-        <div class="op-form-grupo">
-            <label for="quantidadeCorte">Quantidade Cortada</label>
-            <!-- Adiciona classe específica: op-input-quantidade-corte -->
-            <input type="number" id="quantidadeCorte" class="op-input op-input-quantidade-corte" min="1" required placeholder="Ex: 50">
-        </div>
-
-        
-        
-        <div class="op-form-botoes" style="margin-top: 25px;">
-            <button type="button" class="op-botao op-botao-principal" id="btnCortar"> 
-                <i class="fas fa-save"></i> Salvar Corte
-            </button>
-             <button type="button" class="op-botao op-botao-secundario" id="btnLimparFormCorteEstoque">
-                <i class="fas fa-eraser"></i> Limpar
-            </button>
-        </div>
-    </form>
-</section>
-
-        <section class="filters-card" id="cortesPendentesView" style="display: none;">
-            <!-- O conteúdo HTML (cabeçalho, tabela, botões) será injetado pelo JavaScript -->
-            <!-- Você pode colocar um spinner inicial aqui se quiser -->
-            <div class="spinner" style="padding-top: 50px;">Carregando interface de cortes pendentes...</div>
+    <div class="container-op">
+        <section class="op-card-estilizado" id="opListView"> 
+            <div id="op-react-root"></div>
         </section>
+    </div>
 
-        <!-- Tela de Cortes em Estoque -->
-        <section class="filters-card" id="cortesEmEstoqueView" style="display: none;">
-            <!-- O conteúdo HTML será injetado pelo JavaScript -->
-            <div class="spinner" style="padding-top: 50px;">Carregando interface de cortes em estoque...</div>
-        </section>
-        <!-- >>> FIM DAS NOVAS SEÇÕES PARA CORTES <<< -->
-
-    </div> <!-- Fim do .container-op -->
-
-    <script src="/js/admin-ordens-de-producao.js" type="module"></script>
+    <!-- SCRIPTS -->
+    
+    <!-- 1. Script do Menu Lateral (Mantenha se for global) -->
     <script src="/js/carregar-menu-lateral.js" type="module"></script>
+    
+    <!-- 2. O Script Legado da Página (O VILÃO). VAMOS COMENTAR ELE! -->
+    <!-- <script src="/js/admin-ordens-de-producao.js" type="module"></script> -->
+
     <script src="/js/utils/gerenciador-alertas.js" type="module"></script>
+    <script src="/src/main-op.jsx" type="module"></script>
 </body>
 </html>

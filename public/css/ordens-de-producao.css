@@ -1282,6 +1282,1256 @@ list-style-type: none
     to { opacity: 0; }
 }
 
+/* ==========================================================================
+   # ESTILOS DO NOVO CARD DE ORDEM DE PRODUÇÃO (REACT)
+   ========================================================================== */
+
+.op-cards-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 20px;
+    padding: 20px;
+    background-color: var(--op-cor-fundo-pagina);
+    border-radius: var(--op-raio-borda-card);
+}
+
+.op-card-react {
+    display: grid;
+    grid-template-columns: auto 1fr auto; /* Colunas: Imagem, Info, Quantidade */
+    gap: 0 16px;
+    align-items: center;
+    background-color: var(--op-cor-branco);
+    border-radius: var(--op-raio-borda-card);
+    padding: 16px;
+    box-shadow: var(--op-sombra-card);
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.op-card-react:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.op-card-react .card-borda-charme {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 6px;
+    height: 100%;
+    background-color: var(--op-cor-cinza-borda); /* Cor padrão */
+    transition: background-color 0.3s;
+}
+
+/* Cores da borda baseadas no status da OP */
+.op-card-react .card-borda-charme.status-em-aberto { background-color: var(--op-cor-status-em-aberto); }
+.op-card-react .card-borda-charme.status-produzindo { background-color: var(--op-cor-status-produzindo); }
+.op-card-react .card-borda-charme.status-finalizado { background-color: var(--op-cor-status-finalizado); }
+.op-card-react .card-borda-charme.status-cancelada { background-color: var(--op-cor-status-cancelada); }
+.op-card-react .card-borda-charme.status-pronta-finalizar { 
+    background-color: #ffc107; /* Amarelo/Laranja */
+}
+
+.op-card-react .card-imagem-produto {
+    grid-column: 1 / 2;
+    width: 70px;
+    height: 70px;
+    object-fit: cover;
+    border-radius: 8px;
+    background-color: var(--op-cor-cinza-fundo-input);
+}
+
+.op-card-react .card-info-principal {
+    grid-column: 2 / 3;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow: hidden; /* Evita que textos muito grandes quebrem o layout */
+}
+
+.op-card-react .card-info-principal h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--op-cor-azul-escuro);
+    margin: 0;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.op-card-react .card-info-principal p {
+    font-size: 0.9rem;
+    color: var(--op-cor-cinza-texto);
+    margin: 0;
+}
+
+.op-card-react .card-info-secundaria {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+    font-size: 0.85rem;
+    color: var(--op-cor-cinza-texto);
+}
+
+.op-card-react .card-info-secundaria .info-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.op-card-react .info-item-data {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background-color: #f4f6f8;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+.op-card-react .info-item-data i { color: var(--op-cor-cinza-texto); }
+.op-card-react .info-item-data span strong { font-weight: 700; color: var(--op-cor-texto-principal); }
+
+
+.op-card-react .card-bloco-pendente {
+    grid-column: 3 / 4;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: #f0f8ff;
+    align-self: stretch;
+    padding: 10px 15px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.op-card-react .card-bloco-pendente .label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--op-cor-azul-claro);
+    text-transform: uppercase;
+}
+
+.op-card-react .card-bloco-pendente .valor {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--op-cor-azul-escuro);
+    line-height: 1.1;
+}
+
+
+/* ==========================================================================
+   # CORREÇÃO DE EMPILHAMENTO DO MODAL (V2 - Mais Específica)
+   ========================================================================== */
+
+/* Garante que o container geral do popup funcione como esperado */
+.popup-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000; /* Define uma base alta para o container */
+}
+
+/* O overlay (fundo escuro) */
+.popup-container .popup-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1001; /* Fica logo acima da base */
+}
+
+/* O conteúdo do modal (o card de edição) */
+.popup-container #opEditView {
+    position: relative; /* Necessário para que o z-index funcione */
+    z-index: 1002; /* <<< A CHAVE: Um z-index MAIOR que o overlay */
+    max-height: 90vh; /* Adiciona uma altura máxima e permite rolagem interna */
+    display: flex; /* Melhora a organização interna */
+    padding: 10px;
+}
+
+/* Garante que o corpo do modal (com as etapas) possa rolar se for muito grande */
+.popup-container #opEditView #etapasContainer {
+    overflow-y: auto;
+}
+
+/* ==========================================================================
+   # ESTILOS DO ALTERNADOR DE VISÃO (VIEW SWITCHER)
+   ========================================================================== */
+
+.op-view-switcher {
+  display: flex;
+  background-color: #e9ecef;
+  border-radius: var(--op-raio-borda-botao);
+  padding: 4px;
+}
+
+.op-btn-switch {
+  background-color: transparent;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--op-cor-cinza-texto);
+  transition: all 0.2s ease-in-out;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.op-btn-switch:hover:not(.active) {
+  background-color: #dfe3e6;
+}
+
+.op-btn-switch.active {
+  background-color: var(--op-cor-branco);
+  color: var(--op-cor-azul-claro);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* ==========================================================================
+   # ESTILOS DO PAINEL DE ATIVIDADES (Adaptado de Arremates)
+   ========================================================================== */
+
+.oa-painel-atividades {
+    background-color: var(--op-cor-cinza-fundo-input);
+    border-radius: var(--op-raio-borda-card);
+    padding: 20px;
+    margin-top: 30px;
+    border: 1px solid var(--op-cor-cinza-borda);
+}
+
+.oa-painel-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.oa-card-status-tiktik {
+    background-color: var(--op-cor-branco);
+    border-radius: var(--op-raio-borda-card);
+    box-shadow: var(--op-sombra-card);
+    border-top: 4px solid var(--op-cor-cinza-texto);
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s ease;
+    min-height: 230px;
+}
+
+/* Cores de status */
+.oa-card-status-tiktik.status-livre { border-top-color: var(--op-cor-verde-sucesso); }
+.oa-card-status-tiktik.status-produzindo { border-top-color: var(--op-cor-azul-claro); }
+.oa-card-status-tiktik.status-pausa,
+.oa-card-status-tiktik.status-pausa-manual { border-top-color: var(--op-cor-status-em-aberto); }
+.oa-card-status-tiktik.status-almoco { border-top-color: #fd7e14; } /* Laranja */
+.oa-card-status-tiktik.status-faltou { border-top-color: #6c757d; opacity: 0.7; }
+.oa-card-status-tiktik.status-alocado-externo { border-top-color: #8e44ad; } /* Roxo */
+.oa-card-status-tiktik.status-fora-horario { border-top-color: #adb5bd; opacity: 0.8; }
+
+.card-status-header {
+    display: flex;
+    position: relative;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 15px;
+}
+
+.avatar-tiktik {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--op-cor-cinza-borda);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-color: var(--op-cor-cinza-fundo-input);
+}
+
+.info-empregado { flex-grow: 1; }
+.nome-tiktik { font-weight: 600; color: var(--op-cor-azul-escuro); display: block; }
+
+.status-selo {
+    font-size: 0.7rem; font-weight: 700; padding: 2px 8px;
+    border-radius: 4px; color: var(--op-cor-branco);
+    text-transform: uppercase; display: inline-block;
+}
+
+
+/* Cores dos selos */
+.status-selo.status-livre { background-color: var(--op-cor-verde-sucesso); }
+.status-selo.status-produzindo { background-color: var(--op-cor-azul-claro); }
+.status-selo.status-pausa,
+.status-selo.status-pausa-manual { background-color: var(--op-cor-status-em-aberto); }
+.status-selo.status-almoco { background-color: #fd7e14; }
+.status-selo.status-faltou { background-color: var(--op-cor-vermelho-perigo); }
+.status-selo.status-alocado-externo { background-color: #8e44ad; }
+.status-selo.status-fora-horario { background-color: #adb5bd; }
+
+/* ==========================================================================
+   # ESTILOS COMPLETOS DO CARD DE STATUS (Adaptado de Arremates)
+   ========================================================================== */
+
+/* --- Conteúdo do Card --- */
+.info-tarefa-redesenhada {
+    text-align: center; padding: 15px 10px; flex-grow: 1;
+    display: flex; flex-direction: column; justify-content: center;
+}
+.quantidade-tarefa-destaque {
+    font-size: 2.5rem; font-weight: 700;
+    color: var(--op-cor-azul-escuro); line-height: 1.1;
+}
+.quantidade-tarefa-destaque small {
+    font-size: 1rem; font-weight: 500;
+    color: var(--op-cor-cinza-texto); margin-left: 5px;
+}
+.produto-tarefa-subtitulo {
+    font-size: 0.9rem; font-weight: 500;
+    color: var(--op-cor-texto-principal); margin-top: 5px;
+}
+.metricas-tarefa-container { margin-top: 15px; }
+
+/* --- Cronômetro e Barra de Progresso --- */
+.cronometro-tarefa {
+    font-weight: 500; font-size: 1.1rem;
+    color: var(--op-cor-cinza-texto); margin-top: 8px;
+}
+.barra-progresso-container {
+    background-color: var(--op-cor-cinza-borda);
+    border-radius: 50px; height: 10px;
+    margin: 8px 0; overflow: hidden; cursor: help;
+}
+.barra-progresso {
+    height: 100%; border-radius: 50px;
+    transition: width 0.5s linear;
+}
+/* Cores da barra baseadas no ritmo */
+.barra-progresso.rapido { background-color: #1abc9c; } /* Verde-água */
+.barra-progresso.normal { background-color: var(--op-cor-verde-sucesso); }
+.barra-progresso.atencao { background-color: var(--op-cor-status-em-aberto); } /* Amarelo */
+.barra-progresso.lento { background-color: var(--op-cor-vermelho-perigo); } /* Vermelho */
+.barra-progresso.super-rapido { background-color: #9b59b6; } /* Roxo para ritmo insano */
+
+
+
+/* --- Rodapé e Botões de Ação --- */
+.card-status-footer {
+    margin-top: auto; padding-top: 15px;
+    border-top: 1px dashed var(--op-cor-cinza-borda);
+}
+.oa-card-botoes-acao-container {
+    display: flex; gap: 10px; width: 100%;
+}
+.btn-acao {
+    flex-grow: 1; width: auto; padding: 10px; border: none;
+    border-radius: var(--op-raio-borda-botao); font-size: 0.9rem;
+    font-weight: 600; color: var(--op-cor-branco);
+    cursor: pointer; transition: all 0.2s;
+}
+.btn-acao:disabled {
+    background-color: #bdc3c7; cursor: not-allowed; opacity: 0.7;
+}
+.btn-acao.finalizar { background-color: var(--op-cor-azul-claro); }
+.btn-acao.finalizar:hover:not(:disabled) { background-color: var(--op-cor-azul-hover); }
+
+.btn-acao.cancelar {
+    background-color: var(--gs-texto-secundario); /* Usa a variável de cinza, como no arremates */
+
+    
+}
+.btn-acao.cancelar:hover:not(:disabled) {
+    background-color: var(--op-cor-vermelho-perigo); /* Fica vermelho no hover, indicando perigo */
+    color: var(--op-cor-branco);
+}
+
+
+/* --- Carimbo de Status (Livre, Pausa, etc.) --- */
+.status-carimbo-container {
+    flex-grow: 1; display: flex; align-items: center;
+    justify-content: center; overflow: hidden;
+    position: relative; min-height: 100px;
+}
+.status-carimbo {
+    position: absolute; font-size: 2rem; font-weight: 700;
+    text-transform: uppercase; color: currentColor;
+    border: 4px solid currentColor; border-radius: 10px;
+    padding: 10px 25px; opacity: 0.15;
+    transform: rotate(-15deg); user-select: none; white-space: nowrap;
+}
+/* Cores do carimbo */
+.status-livre .status-carimbo { color: var(--op-cor-verde-sucesso); }
+.status-pausa .status-carimbo,
+.status-pausa-manual .status-carimbo { color: var(--op-cor-status-em-aberto); }
+.status-almoco .status-carimbo { color: #fd7e14; }
+.status-faltou .status-carimbo { color: var(--op-cor-vermelho-perigo); }
+.status-alocado-externo .status-carimbo { color: #8e44ad; }
+.status-fora-horario .status-carimbo { color: #adb5bd; }
+
+
+/* --- Accordion para Inativos --- */
+.oa-accordion-inativos { margin-top: 20px; }
+.oa-accordion-header {
+    background-color: var(--op-cor-branco); border: 1px solid var(--op-cor-cinza-borda);
+    border-radius: var(--op-raio-borda-card); width: 100%;
+    padding: 12px 20px; text-align: left; font-size: 1rem;
+    font-weight: 500; color: var(--op-cor-cinza-texto);
+    cursor: pointer; display: flex; align-items: center;
+    transition: background-color 0.3s;
+}
+.oa-accordion-header:hover { background-color: #fcfdff; }
+.oa-accordion-badge {
+    background-color: var(--op-cor-cinza-texto); color: var(--op-cor-branco);
+    border-radius: 50%; width: 24px; height: 24px; font-size: 0.8rem;
+    line-height: 24px; text-align: center; margin-left: 10px;
+}
+.accordion-icone { margin-left: auto; transition: transform 0.3s ease; }
+.oa-accordion-header.active .accordion-icone { transform: rotate(180deg); }
+.oa-accordion-content {
+    display: none; background-color: var(--op-cor-branco);
+    border: 1px solid var(--op-cor-cinza-borda); border-top: none;
+    border-bottom-left-radius: var(--op-raio-borda-card);
+    border-bottom-right-radius: var(--op-raio-borda-card);
+    padding: 20px;
+}
+/* Lógica de abertura do accordion via JS (adicionando a classe 'active' no header) */
+.oa-accordion-header.active + .oa-accordion-content { display: block; }
+
+
+/* ==========================================================================
+   # ESTILOS DO MENU DE AÇÕES DO CARD DE STATUS
+   ========================================================================== */
+
+.btn-menu-acoes {
+    background: none; border: none; color: var(--op-cor-cinza-texto);
+    cursor: pointer; font-size: 1.2rem; padding: 5px;
+    border-radius: 50%; width: 32px; height: 32px;
+    transition: color 0.2s, background-color 0.2s;
+}
+.btn-menu-acoes:hover {
+    color: var(--op-cor-azul-claro);
+    background-color: #f0f8ff;
+}
+
+.menu-acoes-popup {
+    position: absolute; top: 40px; right: 0; z-index: 10;
+    background-color: var(--op-cor-branco);
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+    width: 220px;
+    display: none; /* A classe 'visivel' controla a exibição */
+    padding: 5px 0;
+    border: 1px solid var(--op-cor-cinza-borda);
+}
+
+.menu-acoes-popup.visivel {
+    display: block;
+}
+
+.menu-acoes-popup button {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; padding: 10px 15px; background: none;
+    border: none; text-align: left; cursor: pointer;
+    font-size: 0.9rem; color: var(--op-cor-texto-principal);
+}
+.menu-acoes-popup button:hover {
+    background-color: var(--op-cor-cinza-fundo-input);
+}
+.menu-acoes-popup button i {
+    width: 20px; text-align: center; color: var(--op-cor-cinza-texto);
+}
+
+/* ==========================================================================
+   # ESTILOS DO MODAL DE ATRIBUIÇÃO DE TAREFAS (V2)
+   ========================================================================== */
+.op-modal-atribuir-v2 {
+    z-index: 1001;
+    position: relative;
+    width: 90%;
+    height: 90vh;
+    background-color: var(--op-cor-fundo-pagina);
+    border-radius: var(--op-raio-borda-card);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+    transition: max-width 0.4s ease-in-out;
+}
+.op-modal-atribuir-v2.modo-lista { max-width: 800px; }
+.op-modal-atribuir-v2.modo-confirmacao { max-width: 500px; }
+
+.op-modal-atribuir-v2 .op-modal-body {
+    padding: 15px;
+    flex-grow: 1;
+    overflow-y: auto;
+}
+
+.op-modal-header {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    padding: 15px 20px;
+    background-color: var(--op-cor-branco);
+    border-bottom: 1px solid var(--op-cor-cinza-borda);
+    flex-shrink: 0;
+}
+
+.btn-voltar-header {
+    display: inline-flex; align-items: center; gap: 6px; background: none;
+    border: 1px solid var(--op-cor-cinza-borda); color: var(--op-cor-texto-principal);
+    font-size: 0.9rem; font-weight: 500; padding: 6px 14px; border-radius: 20px;
+    cursor: pointer; transition: all 0.2s ease;
+}
+.btn-voltar-header:hover {
+    background-color: var(--op-cor-cinza-fundo-input); border-color: var(--op-cor-azul-claro);
+}
+
+.op-modal-titulo {
+    font-size: 1.2rem;
+    color: var(--op-cor-azul-escuro);
+    margin: 0;
+    text-align: center;
+    flex-grow: 1;
+}
+.nome-destaque-modal {
+    color: var(--op-cor-azul-claro);
+    font-weight: 600;
+}
+
+.op-modal-fechar-btn {
+    background-color: var(--op-cor-vermelho-perigo); color: var(--op-cor-branco); border: none;
+    border-radius: 50%; width: 32px; height: 32px; font-size: 1rem; font-weight: bold;
+    line-height: 32px; text-align: center; cursor: pointer; transition: all 0.2s ease;
+}
+.op-modal-fechar-btn:hover {
+    background-color: var(--op-cor-vermelho-hover); transform: scale(1.1);
+}
+
+/* --- ESTILOS DAS TELAS INTERNAS --- */
+.coluna-lista-produtos { width: 100%; }
+.op-cards-container-modal {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 10px;
+    max-height: 65vh; /* Altura máxima para a lista */
+    overflow-y: auto;
+    padding: 5px;
+}
+
+.op-card-arremate-modal {
+    display: flex; align-items: center; gap: 15px;
+    padding: 10px; border: 1px solid var(--op-cor-cinza-borda);
+    border-radius: 8px; cursor: pointer;
+    transition: all 0.2s ease;
+}
+.op-card-arremate-modal:hover {
+    border-color: var(--op-cor-azul-claro);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transform: translateY(-2px);
+}
+
+.op-card-arremate-modal .op-card-img {
+    width: 45px; height: 45px;
+    object-fit: cover; border-radius: 6px;
+    flex-shrink: 0;
+}
+.op-card-arremate-modal .op-card-info { padding: 0; }
+.op-card-arremate-modal .op-card-info h3 { font-size: 0.95rem; margin-bottom: 2px; }
+.op-card-arremate-modal .op-card-info p { font-size: 0.85rem; margin: 0; }
+
+.op-card-dados-modal {
+    margin-left: auto; text-align: right;
+    font-size: 1.2rem; font-weight: 700;
+    color: var(--op-cor-texto-principal);
+}
+
+/* --- TELA DE CONFIRMAÇÃO --- */
+.op-input-tarefas {
+    text-align: center;
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--op-cor-azul-escuro);
+    width: 120px;
+    height: 60px;
+    border: 1px solid var(--op-cor-cinza-borda);
+    border-radius: var(--op-raio-borda-input);
+    padding: 5px;
+}
+
+/* Adicione no final da seção de estilos do card */
+.op-card-react .card-borda-charme.borda-corte {
+    background-color: #8e44ad; /* Roxo para destacar a etapa de corte */
+}
+
+/* ==========================================================================
+   # ESTILOS DA ÁREA DE CORTES (REDESIGN V2)
+   ========================================================================== */
+
+.op-corte-vitrine-container {
+    display: grid;
+    /* Cards um pouco maiores para mais destaque */
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 25px; /* Mais respiro entre os cards */
+    padding: 20px 5px; /* Adiciona padding vertical, remove horizontal */
+}
+
+.op-corte-produto-card {
+    border: 1px solid transparent; /* Começa com borda transparente */
+    border-radius: var(--op-raio-borda-card);
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--op-cor-branco);
+    box-shadow: var(--op-sombra-card); /* Sombra padrão */
+}
+
+.op-corte-produto-card:hover {
+    transform: translateY(-5px);
+    /* Usa a variável de sombra de hover que já temos no arremates.css */
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12); 
+    border-color: var(--op-cor-azul-claro);
+}
+
+.op-corte-produto-imagem-container {
+    width: 100%;
+    padding-top: 100%; 
+    position: relative;
+    background-color: #f8f9fa;
+    /* Adiciona uma borda sutil na parte inferior da imagem */
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.op-corte-produto-imagem-container img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    /* Adiciona uma transição suave na imagem para o hover */
+    transition: transform 0.3s ease;
+}
+
+.op-corte-produto-card:hover .op-corte-produto-imagem-container img {
+    transform: scale(1.05); /* Efeito de zoom sutil na imagem */
+}
+
+
+.op-corte-produto-nome {
+    padding: 12px; /* Mais padding */
+    font-size: 0.95rem; /* Fonte um pouco maior */
+    font-weight: 600;
+    text-align: center;
+    color: var(--op-cor-azul-escuro);
+    background-color: var(--op-cor-branco);
+}
+
+/* --- LAYOUT DO CABEÇALHO E SWITCHER --- */
+
+/* Estilo para Desktop (padrão) */
+.op-cabecalho-pagina {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.op-conteudo-principal {
+    margin-top: 20px;
+}
+
+/* ==========================================================================
+   # ESTILOS DA TELA DE SELEÇÃO DE VARIANTES
+   ========================================================================== */
+
+.op-corte-variante-container {
+    width: 100%;
+}
+
+.op-corte-filtro-wrapper {
+    padding: 0 5px 20px 5px;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.op-corte-variante-card {
+    /* Reutiliza o estilo do card de produto, mas com adições */
+    border: 1px solid var(--op-cor-cinza-borda);
+    border-radius: var(--op-raio-borda-card);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--op-cor-branco);
+    box-shadow: var(--op-sombra-card);
+    position: relative; /* Para o posicionamento dos botões de tamanho */
+}
+
+.op-corte-variante-card .op-corte-produto-imagem-container {
+    cursor: pointer;
+}
+
+.op-corte-tamanhos-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 10px;
+    animation: fadeIn 0.3s;
+}
+
+.op-botao-tamanho {
+    background-color: var(--op-cor-azul-escuro);
+    color: var(--op-cor-branco);
+    border: none;
+    border-radius: var(--op-raio-borda-botao);
+    padding: 8px 0;
+    width: 80%;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.op-botao-tamanho:hover {
+    background-color: var(--op-cor-azul-claro);
+}
+
+/* ==========================================================================
+   # ESTILOS DA TELA DE REGISTRO DE CORTE
+   ========================================================================== */
+
+.op-corte-registro-container {
+    padding: 20px 0;
+}
+
+.op-corte-resumo-card {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background-color: var(--op-cor-cinza-fundo-input);
+    padding: 15px;
+    border-radius: var(--op-raio-borda-card);
+    max-width: 500px;
+    margin: 0 auto 30px auto;
+    border: 1px solid var(--op-cor-cinza-borda);
+}
+
+.op-corte-resumo-card img {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+
+.op-corte-resumo-info h4 {
+    margin: 0 0 5px 0;
+    font-size: 1.2rem;
+    color: var(--op-cor-azul-escuro);
+}
+
+.op-corte-resumo-info p {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--op-cor-cinza-texto);
+}
+
+
+/* ==========================================================================
+   # ESTILOS DO CARD DE CORTE EM ESTOQUE
+   ========================================================================== */
+
+.op-corte-estoque-card {
+    display: grid;
+    grid-template-columns: auto 1fr auto; /* Imagem | Info | Qtd */
+    grid-template-rows: auto auto; /* Linhas para info e para o botão */
+    gap: 10px 15px;
+    align-items: center;
+    padding: 15px;
+    background-color: var(--op-cor-branco);
+    border-radius: var(--op-raio-borda-card);
+    border-left: 5px solid var(--op-cor-azul-claro);
+    box-shadow: var(--op-sombra-card);
+}
+
+.op-corte-estoque-imagem {
+    grid-row: 1 / 3; /* Ocupa as duas linhas */
+    width: 70px;
+    height: 70px;
+}
+.op-corte-estoque-imagem img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.op-corte-estoque-info {
+    grid-column: 2 / 3;
+}
+.op-corte-estoque-info h4 { margin: 0 0 2px 0; font-size: 1.1rem; color: var(--op-cor-azul-escuro); }
+.op-corte-estoque-info p { margin: 0; color: var(--op-cor-cinza-texto); }
+
+.op-corte-estoque-detalhes {
+    display: flex;
+    gap: 15px;
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-top: 8px;
+}
+
+.op-corte-estoque-quantidade {
+    grid-column: 3 / 4;
+    grid-row: 1 / 2;
+    text-align: center;
+}
+.op-corte-estoque-quantidade .valor {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--op-cor-azul-escuro);
+    display: block;
+    line-height: 1;
+}
+.op-corte-estoque-quantidade .label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    color: var(--op-cor-cinza-texto);
+}
+
+.op-corte-estoque-acao {
+    grid-column: 2 / 4; /* Ocupa da segunda à última coluna */
+    grid-row: 2 / 3;
+}
+.op-corte-estoque-acao .op-botao {
+    width: 100%;
+    justify-content: center;
+    padding: 8px;
+}
+
+/* "Estilos para Filtros e Busca" */
+
+
+.op-botao-filtro.active {
+    font-weight: bold;
+    color: var(--op-cor-branco);
+    border-color: transparent;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.op-botao-filtro.active.status-todas { background-color: #0056b3; }
+.op-botao-filtro.active.status-em-aberto { background-color: var(--op-cor-status-em-aberto); }
+.op-botao-filtro.active.status-produzindo { background-color: var(--op-cor-status-produzindo); }
+.op-botao-filtro.active.status-finalizado { background-color: var(--op-cor-status-finalizado); }
+.op-botao-filtro.active.status-cancelada { background-color: var(--op-cor-status-cancelada); }
+
+/* ==========================================================================
+   # ESTILOS DOS FILTROS (REDESIGN V2 - Compacto)
+   ========================================================================== */
+
+.op-filtros-container-redesenhado {
+    display: flex;
+    flex-wrap: wrap; /* Permite quebrar linha em telas menores */
+    gap: 20px;
+    align-items: center;
+    padding: 20px;
+    margin-bottom: 20px;
+    background-color: var(--op-cor-branco);
+    border-radius: var(--op-raio-borda-card);
+    box-shadow: var(--op-sombra-card);
+}
+
+.op-filtro-busca-wrapper {
+    position: relative;
+    flex-grow: 1; /* Faz a busca ocupar o espaço disponível */
+    min-width: 250px; /* Largura mínima antes de quebrar */
+}
+
+.op-filtro-busca-wrapper .fa-search {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--op-cor-cinza-texto);
+}
+
+.op-input-busca-redesenhado {
+    width: 100%;
+    padding: 12px 15px 12px 40px; /* Espaço para o ícone */
+    font-size: 1rem;
+    border: 1px solid var(--op-cor-cinza-borda);
+    border-radius: 50px; /* Bordas totalmente arredondadas */
+    background-color: var(--op-cor-cinza-fundo-input);
+}
+.op-input-busca-redesenhado:focus {
+    background-color: var(--op-cor-branco);
+    border-color: var(--op-cor-azul-claro);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+}
+
+.op-filtro-status-pilulas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.op-botao-pilula {
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: 50px;
+    border: 1px solid var(--op-cor-cinza-borda);
+    background-color: transparent;
+    color: var(--op-cor-cinza-texto);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.op-botao-pilula:hover:not(.active) {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+}
+
+.op-botao-pilula.active {
+    background-color: var(--op-cor-azul-escuro);
+    color: var(--op-cor-branco);
+    border-color: var(--op-cor-azul-escuro);
+}
+
+/* ==========================================================================
+   # ESTILOS PARA O MODAL DE TPP E OUTROS MODAIS
+   ========================================================================== */
+
+.op-modal {
+    background-color: var(--op-cor-branco);
+    border-radius: var(--op-raio-borda-card);
+    box-shadow: var(--op-sombra-card);
+    width: 90%;
+    z-index: 1001;
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh;
+}
+
+.op-modal-footer {
+    padding: 15px;
+    background-color: var(--op-cor-cinza-fundo-input);
+    border-top: 1px solid var(--op-cor-cinza-borda);
+    text-align: right; /* Alinha o botão à direita */
+}
+
+.input-wrapper-com-limpar {
+    position: relative;
+}
+
+.btn-limpar-input {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #999;
+    font-size: 1.3rem;
+    padding: 0 5px;
+    line-height: 1;
+}
+.btn-limpar-input:hover {
+    color: #333;
+}
+
+/* ==========================================================================
+   # LAYOUT DO CABEÇALHO E CONTROLES V3 (Responsivo)
+   ========================================================================== */
+
+/* --- ESTILO PADRÃO (DESKTOP) --- */
+.op-pagina-cabecalho-container {
+    display: flex; /* Faz os filhos (Header e Switcher) ficarem lado a lado */
+    justify-content: space-between; /* Empurra um para cada ponta */
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--op-cor-cinza-borda);
+    gap: 20px; /* Espaço entre o Header e o Switcher */
+}
+
+/* O container do HeaderPagina (que tem o H1) */
+.op-pagina-cabecalho-container .gs-cabecalho-pagina {
+    /* Removemos estilos que não são mais necessários aqui */
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+    /* O HeaderPagina já é flex por padrão, o que é ótimo */
+}
+
+.op-view-switcher {
+    margin-top: 0; /* Remove a margem superior no desktop */
+}
+
+/* Garante que o texto dos botões de ação esteja visível no desktop */
+.op-btn-label-desktop {
+    display: inline;
+}
+
+.op-conteudo-principal {
+    margin-top: 0; /* Não precisa mais de margem */
+}
+
+.quantidade-display-lancado {
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    color: var(--op-cor-cinza-texto);
+    background-color: #f8f9fa;
+    border-radius: var(--op-raio-borda-input);
+    min-width: 90px;
+    text-align: center;
+}
+
+/* ==========================================================================
+   # ESTILOS PARA INFORMAÇÕES DE ETAPA JÁ LANÇADA
+   ========================================================================== */
+
+.etapa-info-lancado {
+    display: flex;
+    align-items: center;
+    gap: 8px; /* Espaço entre o rótulo e o nome */
+    padding: 8px 12px;
+    background-color: #f1f3f5; /* Mesmo cinza dos inputs readonly */
+    border-radius: var(--op-raio-borda-input);
+    font-size: 0.9rem;
+    flex-grow: 3;      /* Ocupa o mesmo espaço que o select ocuparia */
+    flex-basis: 180px;
+    min-width: 160px;
+}
+
+.etapa-info-lancado span {
+    color: var(--op-cor-cinza-texto);
+}
+
+.etapa-info-lancado strong {
+    color: var(--op-cor-texto-principal);
+    font-weight: 600;
+}
+
+/* ==========================================================================
+   # ESTILOS DO MODAL DE CONSULTA DE OP (REDESIGN)
+   ========================================================================== */
+
+.op-etapa-consulta-row {
+    display: grid;
+    grid-template-columns: 50px 1fr auto; /* Status/Num | Info | Qtd */
+    gap: 15px;
+    align-items: center;
+    padding: 12px;
+    border-bottom: 1px solid #f0f2f5;
+    background-color: var(--op-cor-branco);
+    transition: background-color 0.2s;
+}
+.op-etapa-consulta-row:last-child {
+    border-bottom: none;
+}
+
+.etapa-numero-status {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    color: var(--op-cor-branco);
+    transition: background-color 0.3s;
+}
+
+.etapa-info-principal h4 {
+    margin: 0 0 4px 0;
+    font-size: 1rem;
+    color: var(--op-cor-azul-escuro);
+    font-weight: 600;
+}
+.etapa-info-usuario {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: var(--op-cor-cinza-texto);
+}
+
+.etapa-info-quantidade .valor {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--op-cor-azul-escuro);
+    display: block;
+    line-height: 1;
+}
+.etapa-info-quantidade .label {
+    font-size: 0.75rem;
+    color: var(--op-cor-cinza-texto);
+}
+.etapa-info-quantidade .valor-pendente {
+    font-size: 1.5rem;
+    color: #ccc;
+}
+
+/* Cores de status */
+.op-etapa-consulta-row.concluida .etapa-numero-status { background-color: var(--op-cor-azul-claro); }
+.op-etapa-consulta-row.concluida { background-color: #f8f9fa; }
+.op-etapa-consulta-row.concluida h4, 
+.op-etapa-consulta-row.concluida .etapa-info-usuario {
+    color: #999;
+    text-decoration: line-through;
+}
+
+.op-etapa-consulta-row.atual .etapa-numero-status { background-color: var(--op-cor-verde-sucesso); }
+.op-etapa-consulta-row.atual h4 { color: var(--op-cor-verde-sucesso); }
+
+.op-etapa-consulta-row.pendente .etapa-numero-status { background-color: #ccc; }
+.op-etapa-consulta-row.pendente { opacity: 0.7; }
+
+
+/* ==========================================================================
+   # REDESIGN DO MODAL DE CONFIRMAÇÃO DE TAREFA
+   ========================================================================== */
+
+.op-confirmacao-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+}
+
+.op-confirmacao-produto-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--op-cor-cinza-borda);
+}
+
+.op-confirmacao-imagem {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: var(--op-raio-borda-card);
+    flex-shrink: 0;
+}
+
+.op-confirmacao-produto-info h4 {
+    margin: 0 0 5px 0;
+    font-size: 1.3rem;
+    color: var(--op-cor-azul-escuro);
+}
+.op-confirmacao-produto-info p {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--op-cor-cinza-texto);
+}
+
+.op-confirmacao-etapa-destaque {
+    margin: 20px 0;
+    padding: 15px;
+    background-color: #f0f8ff; /* Azul bem claro */
+    border: 1px solid #b8d9f7;
+    border-radius: var(--op-raio-borda-card);
+    text-align: center;
+}
+
+.op-confirmacao-etapa-destaque .label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--op-cor-azul-claro);
+    text-transform: uppercase;
+}
+
+.op-confirmacao-etapa-destaque .processo {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--op-cor-azul-escuro);
+}
+
+/* Reutiliza os estilos do seletor de quantidade criados para o arremate */
+.seletor-quantidade-wrapper { display: flex; flex-direction: column; align-items: center; gap: 15px; width: 100%; max-width: 300px; margin: 20px auto; }
+.seletor-quantidade-wrapper label { font-size: 1rem; font-weight: 500; color: var(--op-cor-cinza-texto); }
+.input-container { display: flex; align-items: center; }
+.ajuste-qtd-btn { width: 50px; height: 60px; font-size: 1.8rem; font-weight: 400; color: var(--op-cor-azul-claro); background-color: var(--op-cor-cinza-fundo-input); border: 1px solid var(--op-cor-cinza-borda); cursor: pointer; transition: background-color 0.2s; line-height: 1; }
+.ajuste-qtd-btn:hover { background-color: #e9ecef; }
+.ajuste-qtd-btn:first-of-type { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
+.ajuste-qtd-btn:last-of-type { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
+.op-input-tarefas { text-align: center; font-size: 2.2rem; font-weight: 700; color: var(--op-cor-azul-escuro); width: 120px; height: 60px; border: 1px solid var(--op-cor-cinza-borda); border-left: none; border-right: none; border-radius: 0; padding: 5px; }
+.atalhos-qtd-container { display: flex; gap: 10px; justify-content: center; width: 100%; }
+.atalho-qtd-btn { flex-grow: 1; padding: 10px; font-size: 0.9rem; font-weight: 500; background-color: transparent; border: 1px solid var(--op-cor-cinza-borda); color: var(--op-cor-texto-principal); border-radius: 6px; cursor: pointer; transition: all 0.2s; }
+.atalho-qtd-btn:hover { background-color: var(--op-cor-cinza-fundo-input); border-color: var(--op-cor-azul-claro); color: var(--op-cor-azul-claro); }
+
+.op-confirmacao-footer {
+    margin-top: auto; /* Empurra o botão para o final do container flex */
+    padding-top: 20px;
+    border-top: 1px solid var(--op-cor-cinza-borda);
+}
+.op-confirmacao-footer .op-botao {
+    width: 100%;
+    padding: 12px;
+    font-size: 1.1rem;
+}
+
+/* Badge de Notificação no Botão do Menu */
+.op-view-switcher .op-btn-switch {
+    position: relative; /* Necessário para posicionar o badge */
+}
+
+.op-badge-notificacao {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background-color: var(--op-cor-vermelho-perigo);
+    color: white;
+    border-radius: 50%;
+    padding: 2px 6px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    min-width: 18px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 10;
+}
+
+@keyframes popIn {
+    0% { transform: scale(0); }
+    100% { transform: scale(1); }
+}
+
+/* Espaçador do Header (Contra-peso do botão Voltar) */
+.op-header-spacer {
+    width: 95px; /* Tamanho aproximado do botão 'Voltar' no Desktop */
+    flex-shrink: 0;
+}
+
+
 /* Ajustes gerais para telas menores TIPO IPAD (aplicado a todos os breakpoints mobile) */
 @media (max-width: 1024px) {
     body {
@@ -1349,11 +2599,47 @@ list-style-type: none
     font-size: 1.2rem;
  }
  
-
 }
 
-/* Breakpoint para Mobile (max-width: 576px) */
-@media (max-width: 576px) {
+/* --- TABLET (até 768px) --- */
+@media (max-width: 768px) {
+    /* No tablet, o cabeçalho e o switcher são empilhados */
+    .op-cabecalho-pagina {
+        flex-direction: column;
+        align-items: center; /* Centraliza o título */
+        margin-bottom: 15px;
+        gap: 15px;
+    }
+
+    .op-view-switcher {
+        width: 100%;
+        justify-content: center; /* Centraliza os botões do switcher */
+    }
+    
+    .op-btn-switch {
+        flex-grow: 1; /* Faz os botões ocuparem o espaço disponível */
+        justify-content: center;
+    }
+
+    .op-pagina-cabecalho-container {
+        flex-direction: column;
+        align-items: stretch; /* Faz os itens ocuparem a largura total */
+        gap: 20px;
+    }
+
+    .op-pagina-cabecalho-container .gs-cabecalho-pagina {
+        justify-content: space-between; /* No tablet, mantém título e botão de ação nas pontas */
+    }
+    
+    .op-view-switcher {
+        justify-content: center; /* Centraliza os botões do switcher */
+        width: 100%;
+    }
+}
+
+
+/* Breakpoint para Mobile */
+@media (max-width: 480px) {
     body {
     margin-left: 0;
     padding: 15px 10px;
@@ -1600,6 +2886,325 @@ list-style-type: none
 
     }
 
+    .op-cabecalho-pagina {
+        /* Título fica à esquerda e switcher vai para baixo */
+        align-items: flex-start;
+    }
+
+    .op-btn-switch {
+        font-size: 0.85rem; /* Fonte menor nos botões */
+        padding: 8px 10px;
+    }
+    
+    /* Reduz o tamanho da vitrine de cortes no mobile */
+    .op-corte-vitrine-container {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 15px;
+    }
+    
+    .op-corte-produto-nome {
+        font-size: 0.8rem;
+        padding: 8px;
+    }
+
+    .op-filtro-status-pilulas {
+        justify-content: center;
+    }
+
+    .op-pagina-cabecalho-container {
+        padding-bottom: 15px;
+        margin-bottom: 15px;
+        gap:15px;
+    }
+
+    /* O HeaderPagina (com título e botão) continua flex, como no desktop */
+    .op-pagina-cabecalho-container .gs-cabecalho-pagina {
+        /* Apenas garantimos que o alinhamento esteja correto */
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    /* Esconde o texto do botão de ação, deixando só o ícone */
+    .op-btn-label-desktop {
+        display: none;
+    }
+    
+    /* Ajusta o botão de ação para parecer um botão de ícone */
+    .gs-cabecalho-pagina .gs-btn-com-icone {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        padding: 0; /* Remove padding para centralizar o ícone */
+    }
+    
+    /* O switcher continua abaixo, mas talvez com menos margem */
+    .op-view-switcher {
+        margin-top: 15px;
+    }
+    .etapa-info-lancado{
+        flex-basis: 10px;
+    }
+}
+/* ==========================================================================
+   # CORREÇÃO DE LAYOUT MOBILE (ANTI-VAZAMENTO)
+   ========================================================================== */
+
+@media (max-width: 480px) {
+    
+    /* 1. Containers: Força 1 coluna única e remove largura mínima */
+    .op-cards-container,
+    .oa-painel-status-grid {
+        grid-template-columns: 1fr !important; /* Uma coluna só */
+        gap: 15px;
+        padding: 5px; 
+    }
+
+    /* 2. Card Genérico (OP e Corte): Layout em 2 Linhas */
+    .op-card-react,
+    .op-corte-estoque-card {
+        display: grid;
+        /* Linha 1: Imagem (Auto) | Texto (Resto) */
+        grid-template-columns: auto 1fr !important; 
+        /* Linha 1: Info | Linha 2: Quantidade */
+        grid-template-rows: auto auto !important;   
+        gap: 12px;
+        padding: 12px;
+        width: 100%; /* Garante que não passe da tela */
+        box-sizing: border-box;
+    }
+
+    /* --- Ajuste da Parte Superior (Imagem e Texto) --- */
+    
+    /* Imagem fica na esquerda, topo */
+    .op-card-react .card-imagem-produto,
+    .op-corte-estoque-card .op-corte-estoque-imagem {
+        grid-column: 1 / 2;
+        grid-row: 1 / 2;
+        width: 60px !important;
+        height: 60px !important;
+    }
+
+    /* Texto fica na direita, topo */
+    .op-card-react .card-info-principal,
+    .op-corte-estoque-card .op-corte-estoque-info {
+        grid-column: 2 / 3;
+        grid-row: 1 / 2;
+        overflow: hidden; /* Corta texto se for muito longo */
+    }
+
+    /* Reduz um pouco a fonte do título para caber */
+    .op-card-react .card-info-principal h3,
+    .op-corte-estoque-card .op-corte-estoque-info h4 {
+        font-size: 1rem;
+        white-space: normal; /* Permite quebrar linha se precisar */
+    }
+
+    /* --- Ajuste da Parte Inferior (Quantidade/Ação) --- */
+
+    /* O bloco de quantidade desce e ocupa a largura total */
+    .op-card-react .card-bloco-pendente,
+    .op-corte-estoque-card .op-corte-estoque-quantidade {
+        grid-column: 1 / -1; /* Ocupa de ponta a ponta */
+        grid-row: 2 / 3;     /* Vai para a linha de baixo */
+        
+        /* Layout Horizontal (Label na esq, Valor na dir) */
+        flex-direction: row !important; 
+        justify-content: space-between;
+        align-items: center;
+        
+        background-color: #f8f9fa;
+        margin-top: 5px;
+        border-radius: 6px;
+        padding: 8px 15px;
+        height: auto; /* Altura flexível */
+        align-self: stretch; /* Estica */
+    }
+
+    /* Ajuste visual dos números no mobile */
+    .op-card-react .card-bloco-pendente .valor,
+    .op-corte-estoque-quantidade .valor {
+        font-size: 1.4rem; /* Um pouco menor que no desktop */
+    }
+    
+    /* Ajuste para o Card de Corte (Aba Cortes) especificamente */
+    .op-corte-estoque-card .op-corte-estoque-acao {
+        grid-column: 1 / -1;
+        grid-row: 3 / 4; /* Se tiver ação, vai pra 3ª linha */
+        margin-top: 0;
+    }
+    
+    /* 3. Ajuste do Painel de Atividades (Card de Funcionário) */
+    .oa-card-status-tiktik {
+        width: 100%; /* Garante que não estoure */
+    }
+    
+    /* Ajuste nos botões de ação do painel para não quebrarem */
+    .oa-card-botoes-acao-container {
+        flex-wrap: wrap; /* Se os botões forem grandes, quebra linha */
+    }
+    
+    /* Aumenta a área de toque dos botões no mobile */
+    .btn-acao {
+        padding: 12px 10px; 
+    }
+
+    .oa-painel-atividades {
+    padding: 10px 5px;
+    }
+
+    .op-header-spacer {
+        display: none;
+    }
+    
+    /* Aproveitamos para garantir que o título não cole no botão voltar (bolinha) */
+    .op-card-estilizado .op-titulo-secao {
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+    }
+
+}
+
+/* ==========================================================================
+   # AJUSTES FINAIS MOBILE (MODAIS E SELEÇÃO)
+   ========================================================================== */
+
+@media (max-width: 480px) {
+
+    /* 1. Modal de Atribuir Tarefa: Remove Grid e Scroll Horizontal */
+    .op-cards-container-modal {
+        display: flex; /* Troca Grid por Flex Coluna */
+        flex-direction: column;
+        grid-template-columns: none !important; /* Desliga o grid */
+        gap: 15px; /* Espaço entre cards */
+        overflow-x: hidden; /* Garante que não tenha scroll lateral */
+    }
+    
+    /* Ajuste para o card dentro desse modal ocupar 100% */
+    .op-cards-container-modal .op-card-react {
+        width: 100%;
+        margin: 0;
+    }
+
+    .op-card-react {
+        overflow: unset;
+    }
+
+
+    /* 2. Modal Detalhes da OP: Header (Resumo Corte) que vazava */
+    .op-corte-resumo-card {
+        flex-direction: column; /* Empilha: Imagem | Texto | Quantidade */
+        align-items: center; /* Centraliza tudo */
+        text-align: center;
+        gap: 10px;
+    }
+
+    .op-corte-resumo-card img {
+        width: 60px; /* Reduz um pouco a imagem */
+        height: 60px;
+        margin-bottom: 5px;
+    }
+
+    .op-corte-resumo-info {
+        width: 100%; /* Ocupa largura total */
+    }
+
+    /* O culpado do vazamento: a caixa de quantidade */
+    .op-corte-estoque-quantidade {
+        width: 100%; /* Força largura total */
+        padding: 10px !important;
+        background-color: #f8f9fa; /* Fundo leve para destacar */
+        border-radius: 8px;
+        margin-top: 5px;
+        
+        /* Layout flexível para os números */
+        display: flex;
+        flex-direction: row !important; /* Coloca Real e Planejado lado a lado */
+        justify-content: space-around; /* Espalha eles */
+        align-items: center !important;
+    }
+    
+    /* Ajuste dos textos dentro da quantidade */
+    .op-corte-estoque-quantidade > div {
+        text-align: center;
+    }
+
+
+    /* 3. Seleção de Cortes (Vitrine de Imagens Gigantes) */
+    .op-corte-vitrine-container {
+        /* Força 2 colunas no mobile (antes estava tentando calcular) */
+        grid-template-columns: repeat(2, 1fr) !important; 
+        gap: 10px;
+    }
+
+    .op-corte-produto-nome {
+        font-size: 0.8rem; /* Fonte menor */
+        padding: 8px 4px; /* Menos padding */
+        white-space: nowrap; /* Tenta não quebrar linha */
+        overflow: hidden;
+        text-overflow: ellipsis; /* ... se for muito longo */
+    }
+    
+    /* Ajuste do card da vitrine */
+    .op-corte-variante-card {
+        width: 100%; /* Ocupa a célula do grid */
+    }
+
+    /* 1. O Container do Header */
+    .op-modal-header {
+        position: relative; /* Necessário para o X absoluto funcionar */
+        /* Aumentamos o padding da DIREITA para o texto não ficar embaixo do X */
+        padding: 15px 50px 15px 15px; 
+        justify-content: flex-start; /* Alinha tudo à esquerda por padrão */
+    }
+
+    /* 2. O Botão "X" (Fechar) - Fixado no canto */
+    .op-modal-fechar-btn {
+        position: absolute;
+        top: 50%;
+        right: 15px;
+        transform: translateY(-50%); /* Centraliza verticalmente exato */
+        min-width: 32px; /* Garante que não amasse */
+        width: 32px;
+        height: 32px;
+        flex-shrink: 0; /* Impede deformação */
+        margin: 0; /* Remove margens que atrapalham */
+    }
+
+    /* 3. O Botão "Voltar" - Modo Compacto (Só Ícone) */
+    .btn-voltar-header {
+        font-size: 0; /* Truque Ninja: Esconde o texto "Voltar" */
+        padding: 0;   /* Remove padding interno */
+        width: 36px;  /* Transforma num botão quadrado */
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0; /* Impede deformação */
+        border-radius: 50%; /* Fica redondinho igual o voltar do Android/iOS */
+    }
+    
+    /* Restaura o tamanho do ícone dentro do botão voltar */
+    .btn-voltar-header i {
+        font-size: 1rem; 
+        margin-right: 0; /* Remove margem do ícone */
+    }
+
+    /* 4. O Título - Ajuste de Fonte */
+    .op-modal-titulo {
+        font-size: 1rem; /* Fonte um pouco menor */
+        line-height: 1.2;
+        text-align: left; /* Alinha a esquerda para aproveitar espaço */
+        margin-left: 10px; /* Dá um respiro do botão voltar */
+        /* Se o botão voltar não existir (tela 1), o flex-grow cuida do espaço */
+    }
+
+    .op-corte-estoque-detalhes {
+        justify-content: center;
+    }
+
+    .op-confirmacao-footer .op-botao {
+        margin-bottom: 10px;
+    }
 }
 
 /* Breakpoint para telas menores (max-width: 414px, como iPhone XR) */
