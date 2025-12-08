@@ -29,5 +29,5 @@ export default function PaginacaoWrapper({ totalPages, currentPage, onPageChange
   }, [totalPages, currentPage, onPageChange]);
 
   // Renderizamos apenas uma div vazia que servirá de container para o JS legado
-  return <div ref={containerRef} className="op-paginacao-container"></div>;
+  return <div ref={containerRef} className="gs-paginacao-container"></div>;
 }

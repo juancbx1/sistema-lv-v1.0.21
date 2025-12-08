@@ -7,33 +7,49 @@ function formatarData(dataISO) {
     return new Date(dataISO).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 }
 
-export default function OPCorteEstoqueCard({ corte, produto, onGerarOP, isGerando }) {
+export default function OPCorteEstoqueCard({ corte, produto, onGerarOP, onExcluir, isGerando }) {
     const getImagemCorreta = () => {
         const placeholder = '/img/placeholder-image.png';
-        if (!produto) return placeholder; // Se o produto não for encontrado, usa placeholder
+        if (!produto) return placeholder;
 
-        // Tenta encontrar a imagem da variante específica na grade do produto
         if (corte.variante && produto.grade && Array.isArray(produto.grade)) {
             const gradeInfo = produto.grade.find(g => g.variacao === corte.variante);
             if (gradeInfo && gradeInfo.imagem) {
-                return gradeInfo.imagem; // Encontrou! Retorna a imagem da variante.
+                return gradeInfo.imagem;
             }
         }
-
-        // Se não encontrou na grade, retorna a imagem principal do produto.
         return produto.imagem || placeholder;
     };
 
     const imagemSrc = getImagemCorreta();
 
     return (
-        <div className="op-corte-estoque-card">
+        <div className="op-corte-estoque-card" style={{position: 'relative'}}>
+            
+            {/* --- BOTÃO DE EXCLUIR (LIXEIRA) --- */}
+            <button 
+                className="btn-excluir-corte"
+                style={{
+                    position: 'absolute', top: '10px', right: '10px',
+                    background: 'none', border: 'none', color: '#ccc', 
+                    cursor: 'pointer', fontSize: '1rem', padding: '5px',
+                    zIndex: 2 // Garante que fique clicável
+                }}
+                onClick={(e) => {
+                    e.stopPropagation(); // Não dispara outros cliques
+                    if (onExcluir) onExcluir(corte);
+                }}
+                title="Excluir Corte do Estoque"
+                onMouseOver={(e) => e.currentTarget.style.color = '#c0392b'}
+                onMouseOut={(e) => e.currentTarget.style.color = '#ccc'}
+            >
+                <i className="fas fa-trash"></i>
+            </button>
+
             <div className="op-corte-estoque-imagem">
-                {/* O nome do produto no 'alt' agora vem do objeto produto, mais confiável */}
                 <img src={imagemSrc} alt={produto?.nome || 'Produto'} />
             </div>
             <div className="op-corte-estoque-info">
-                {/* O nome do produto aqui também vem do objeto produto */}
                 <h4>{produto?.nome || corte.produto}</h4>
                 <p>{corte.variante || 'Padrão'}</p>
                 <div className="op-corte-estoque-detalhes">
@@ -49,7 +65,6 @@ export default function OPCorteEstoqueCard({ corte, produto, onGerarOP, isGerand
                 <button 
                     className="op-botao op-botao-principal" 
                     onClick={() => onGerarOP(corte)}
-                    // Desabilita o botão se este card estiver processando
                     disabled={isGerando}
                 >
                     {isGerando ? <div className="spinner-btn-interno"></div> : <i className="fas fa-arrow-right"></i>}

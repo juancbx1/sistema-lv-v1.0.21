@@ -126,37 +126,16 @@ router.get('/diagnostico-completo', async (req, res) => {
     try {
         dbClient = await pool.connect();
 
-        // 1. Chama a função centralizada que faz todo o trabalho pesado
+        // 1. Chama a função centralizada (Balanço Hídrico)
         const diagnostico = await gerarDiagnosticoCompleto(dbClient);
 
-        // 2. Lógica de auto-conclusão (como planejado)
-        diagnostico.diagnosticoPorDemanda.forEach(demanda => {
-            // ======================= LÓGICA DE AUTO-CONCLUSÃO CORRIGIDA =======================
-            let demandaEstaConcluida = false;
-
-            if (demanda.is_kit) {
-                // Para KITS, a condição é ter os kits prontos em estoque.
-                if (demanda.diagnostico_geral.kits_prontos_estoque >= demanda.quantidade_solicitada) {
-                    demandaEstaConcluida = true;
-                }
-            } else {
-                // Para PRODUTOS SIMPLES, a condição é ter as unidades prontas em estoque.
-                if (demanda.diagnostico_geral.saldoEstoque >= demanda.quantidade_solicitada) {
-                    demandaEstaConcluida = true;
-                }
-            }
-
-            // Apenas atualiza o status se a condição foi atendida E o status atual ainda for 'em_producao' ou 'pendente'.
-            if (demandaEstaConcluida && demanda.status !== 'concluida') {
-                console.log(`[Auto-Conclusão Rígida] Demanda #${demanda.id} foi completada pelo estoque. Atualizando status.`);
-                dbClient.query('UPDATE demandas_producao SET status = $1 WHERE id = $2', ['concluida', demanda.id])
-                    .catch(err => console.error(`Erro ao auto-concluir demanda #${demanda.id}:`, err));
-            }
-            // ===================================================================================
-        });
-
-        // Dispara a limpeza em segundo plano
-        limparAtribuicoesOrfas(dbClient).catch(err => console.error("Erro na rotina de limpeza em segundo plano:", err));
+        // 2. REMOVEMOS A AUTO-CONCLUSÃO AUTOMÁTICA AQUI.
+        // A lógica antiga estava baseada em estoque estático e causava sumiço de demandas.
+        // Agora, o Painel mostra o Balanço. Se o supervisor ver que está tudo verde, ele pode concluir manualmente.
+        
+        // (Opcional) Podemos reativar uma limpeza de orfãs se necessário, 
+        // mas vamos manter simples por enquanto para estabilizar.
+        // limparAtribuicoesOrfas(dbClient).catch(...) 
 
         // 3. Envia a resposta final para o frontend
         res.status(200).json(diagnostico);

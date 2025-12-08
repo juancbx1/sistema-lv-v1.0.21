@@ -8,11 +8,10 @@ import OPPainelAtividades from './components/OPPainelAtividades.jsx';
 import OPGerenciamentoTela from './components/OPGerenciamentoTela.jsx';
 import OPCortesTela from './components/OPCortesTela.jsx';
 import OPModalTempos from './components/OPModalTempos.jsx';
+import BotaoBuscaFunil from './components/BotaoBuscaFunil.jsx';
 
-// IMPORTANTE: Importar a função de autenticação existente
 import { verificarAutenticacao } from '/js/utils/auth.js';
 
-// COMPONENTE ERROR BOUNDARY
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null }; }
   static getDerivedStateFromError(error) { return { hasError: true }; }
@@ -46,25 +45,34 @@ function App() {
   const [modalTppAberto, setModalTppAberto] = useState(false);
   const [qtdOpsPendentes, setQtdOpsPendentes] = useState(0);
   
-  // Estados de Autenticação
   const [estaAutenticado, setEstaAutenticado] = useState(false);
   const [verificandoAuth, setVerificandoAuth] = useState(true);
+  
+  // --- CORREÇÃO: DECLARAÇÃO DO ESTADO DE PERMISSÕES ---
+  const [permissoes, setPermissoes] = useState([]);
 
   const pollingTimeoutRef = useRef(null);
+  
+  const iniciarProcessoDeCorte = (dadosDemanda) => {
+      console.log("[Ponte] Recebido pedido de produção:", dadosDemanda);
+      setDemandaParaProcessar(dadosDemanda);
+      setVisaoAtual('cortes');
+  };
+  
+  // ESTADO PARA A PONTE
+  const [demandaParaProcessar, setDemandaParaProcessar] = useState(null);
 
-  // --- 1. VERIFICAÇÃO DE AUTENTICAÇÃO (MIGRADA DO LEGADO) ---
+
   useEffect(() => {
       async function checkAuth() {
           try {
-              // Verifica se tem permissão para esta página
               const auth = await verificarAutenticacao('ordens-de-producao.html', ['acesso-ordens-de-producao']);
-              
               if (auth) {
                   setEstaAutenticado(true);
-                  // *** A MÁGICA: Torna a tela visível (CSS) ***
+                  // Salva as permissões vindas do auth
+                  setPermissoes(auth.permissoes || []); 
                   document.body.classList.add('autenticado');
               } else {
-                  // A função verificarAutenticacao geralmente redireciona, mas por segurança:
                   document.body.innerHTML = '<p style="text-align:center; padding:20px;">Redirecionando...</p>';
               }
           } catch (error) {
@@ -76,9 +84,8 @@ function App() {
       checkAuth();
   }, []);
 
-  // --- NOVA FUNÇÃO CENTRALIZADA DE VERIFICAÇÃO ---
   const verificarOpsProntas = useCallback(async () => {
-        if (!estaAutenticado) return; // Não roda se não estiver logado
+        if (!estaAutenticado) return; 
 
         try {
             const data = await fetchSimples('/api/ordens-de-producao?status=produzindo&limit=100');
@@ -103,9 +110,8 @@ function App() {
         }
   }, [estaAutenticado]);
 
-  // --- EFEITO DE POLLING ---
   useEffect(() => {
-    if (!estaAutenticado) return; // Só inicia polling se logado
+    if (!estaAutenticado) return; 
 
     const loopVerificacao = async () => {
         if (document.hidden) {
@@ -133,9 +139,7 @@ function App() {
   }, [verificarOpsProntas, estaAutenticado]);
 
 
-   // Se estiver verificando, mostra spinner (ou nada, já que o body está invisível)
    if (verificandoAuth) return null;
-   // Se falhou auth, não renderiza nada (o redirecionamento acontece no useEffect)
    if (!estaAutenticado) return null;
 
    return (
@@ -192,10 +196,22 @@ function App() {
             />
           )}
           
-          {visaoAtual === 'cortes' && <OPCortesTela />}
+          {visaoAtual === 'cortes' && (
+            <OPCortesTela 
+                demandaInicial={demandaParaProcessar} 
+                onLimparDemanda={() => setDemandaParaProcessar(null)}
+            />
+          )}
       </div>
 
       <OPModalTempos isOpen={modalTppAberto} onClose={() => setModalTppAberto(false)} />
+      
+      {/* PASSA A FUNÇÃO E AS PERMISSÕES */}
+      <BotaoBuscaFunil 
+          onIniciarProducao={iniciarProcessoDeCorte} 
+          permissoes={permissoes} 
+      />
+
     </ErrorBoundary>
   );
 }

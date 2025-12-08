@@ -1,16 +1,17 @@
 // public/src/components/OPSelecaoVarianteCorte.jsx
 
 import React, { useState, useMemo } from 'react';
+import BuscaInteligente, { filtrarListaInteligente, normalizarTexto } from './BuscaInteligente.jsx';
+import FeedbackNotFound from './FeedbackNotFound.jsx';
 
 export default function OPSelecaoVarianteCorte({ produto, onVarianteSelect }) {
-  const [filtro, setFiltro] = useState('');
+  const [termoFiltrado, setTermoFiltrado] = useState('');
   const [corSelecionada, setCorSelecionada] = useState(null);
 
   const { temTamanhos, gruposDeVariantes } = useMemo(() => {
     if (!produto?.grade || produto.grade.length === 0) {
       return { temTamanhos: false, gruposDeVariantes: [] };
     }
-
     const _temTamanhos = produto.grade.some(g => g.variacao.includes('|'));
 
     if (!_temTamanhos) {
@@ -20,10 +21,7 @@ export default function OPSelecaoVarianteCorte({ produto, onVarianteSelect }) {
         const partes = item.variacao.split('|').map(p => p.trim());
         const cor = partes[0];
         const tamanho = partes[1] || '';
-
-        if (!acc[cor]) {
-          acc[cor] = { cor: cor, imagem: item.imagem, tamanhos: [] };
-        }
+        if (!acc[cor]) acc[cor] = { cor: cor, imagem: item.imagem, tamanhos: [] };
         acc[cor].tamanhos.push({ nome: tamanho, variacaoCompleta: item.variacao });
         return acc;
       }, {});
@@ -31,45 +29,58 @@ export default function OPSelecaoVarianteCorte({ produto, onVarianteSelect }) {
     }
   }, [produto]);
 
-  const variantesFiltradas = gruposDeVariantes.filter(item =>
-    (item.cor || item.variacao).toLowerCase().includes(filtro.toLowerCase())
-  );
+  // USANDO O HELPER INTELIGENTE
+  const variantesFiltradas = useMemo(() => {
+      if (!termoFiltrado) return gruposDeVariantes;
+
+      const termoLimpo = normalizarTexto(termoFiltrado);
+      
+      return gruposDeVariantes.filter(item => {
+          // 1. Busca no nome principal (Cor ou Variação completa)
+          const textoPrincipal = normalizarTexto(item.cor || item.variacao);
+          if (textoPrincipal.includes(termoLimpo)) return true;
+
+          // 2. NOVO: Busca dentro dos tamanhos (se houver)
+          if (item.tamanhos && Array.isArray(item.tamanhos)) {
+              // Se ALGUM tamanho bater com a busca (ex: 'gg'), retorna true
+              return item.tamanhos.some(t => normalizarTexto(t.nome).includes(termoLimpo));
+          }
+          
+          return false;
+      });
+  }, [gruposDeVariantes, termoFiltrado]);
 
   return (
     <div className="op-corte-variante-container">
       <div className="op-corte-filtro-wrapper">
-        <input
-          type="text"
-          className="op-input-busca-redesenhado"
-          placeholder={`Buscar por ${temTamanhos ? 'cor' : 'variação'}...`}
-          value={filtro}
-          onChange={(e) => setFiltro(e.target.value)}
+        <BuscaInteligente 
+            onSearch={setTermoFiltrado}
+            placeholder={`Buscar por ${temTamanhos ? 'cor' : 'variação'}...`}
+            historicoKey="variantes"
         />
       </div>
 
-      <div className="op-corte-vitrine-container">
-        {variantesFiltradas.map((item, index) => {
-            const isSelected = corSelecionada === item.cor;
-            
-            return (
-              <div 
-                key={index} 
-                className="op-corte-variante-card"
-                style={{ position: 'relative' }} // Garante contexto para o overlay
-              >
-                <div
-                  className="op-corte-produto-imagem-container"
-                  onClick={() => !temTamanhos ? onVarianteSelect(item.variacao) : setCorSelecionada(item.cor)}
-                >
-                  <img src={item.imagem || produto.imagem || '/img/placeholder-image.png'} alt={item.cor || item.variacao} />
-                </div>
-                
-                <div className="op-corte-produto-nome">
-                  {item.cor || item.variacao}
-                </div>
-                
-                {/* --- OVERLAY DE TAMANHOS (Melhorado) --- */}
-                {temTamanhos && isSelected && (
+      {variantesFiltradas.length === 0 ? (
+          <FeedbackNotFound 
+            icon="fa-search" 
+            titulo="Nenhuma Variação Encontrada" 
+            mensagem={`Não encontramos nada com "${termoFiltrado}".`} 
+          />
+      ) : (
+          <div className="op-corte-vitrine-container">
+            {variantesFiltradas.map((item, index) => {
+                const isSelected = corSelecionada === item.cor;
+                return (
+                  <div key={index} className="op-corte-variante-card" style={{ position: 'relative' }}>
+                    <div
+                      className="op-corte-produto-imagem-container"
+                      onClick={() => !temTamanhos ? onVarianteSelect(item.variacao) : setCorSelecionada(item.cor)}
+                    >
+                      <img src={item.imagem || produto.imagem || '/img/placeholder-image.png'} alt={item.cor || item.variacao} />
+                    </div>
+                    <div className="op-corte-produto-nome">{item.cor || item.variacao}</div>
+                    
+                    {temTamanhos && isSelected && (
                   <div 
                     className="op-corte-tamanhos-container"
                     style={{
@@ -88,29 +99,23 @@ export default function OPSelecaoVarianteCorte({ produto, onVarianteSelect }) {
                             background: 'none', border: 'none', fontSize: '1.2rem', color: '#666', cursor: 'pointer'
                         }}
                     >
-                        <i className="fas fa-times"></i>
-                    </button>
-
-                    <h4 style={{marginBottom: '15px', color: '#333'}}>Selecione o Tamanho</h4>
-                    
-                    <div style={{display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center', width: '90%'}}>
-                        {item.tamanhos.map(t => (
-                        <button 
-                            key={t.nome} 
-                            className="op-botao-tamanho"
-                            style={{ width: 'auto', minWidth: '60px', padding: '8px 15px' }}
-                            onClick={() => onVarianteSelect(t.variacaoCompleta)}
-                        >
-                            {t.nome}
+                       <i className="fas fa-times"></i>
                         </button>
-                        ))}
-                    </div>
+                        <h4 style={{marginBottom: '15px', color: '#333'}}>Selecione o Tamanho</h4>
+                        <div style={{display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center', width: '90%'}}>
+                            {item.tamanhos.map(t => (
+                            <button key={t.nome} className="op-botao-tamanho" style={{ width: 'auto', minWidth: '60px', padding: '8px 15px' }} onClick={() => onVarianteSelect(t.variacaoCompleta)}>
+                                {t.nome}
+                            </button>
+                            ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-        })}
-      </div>
+                );
+            })}
+          </div>
+      )}
     </div>
   );
 }

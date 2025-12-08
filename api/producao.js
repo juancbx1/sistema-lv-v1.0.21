@@ -103,66 +103,86 @@ router.get('/fila-de-tarefas', async (req, res) => {
     let dbClient;
     try {
         dbClient = await pool.connect();
-        // ... (verificação de permissão)
-
-        // --- INÍCIO DA ESTRATÉGIA "BULK DATA" ---
-
+        
         // 1. "Pegar as Prateleiras de Dados" - Buscamos tudo em paralelo
         const [opsResult, producoesResult, sessoesResult, produtosResult] = await Promise.all([
-            // Prateleira 1: Todas as OPs ativas
-            dbClient.query(`SELECT numero, produto_id, variante, quantidade, etapas FROM ordens_de_producao WHERE status IN ('em-aberto', 'produzindo')`),
+            // Prateleira 1: Todas as OPs ativas (FIFO: Ordenadas por número para consumir as antigas primeiro)
+            dbClient.query(`SELECT numero, produto_id, variante, quantidade, etapas FROM ordens_de_producao WHERE status IN ('em-aberto', 'produzindo') ORDER BY numero ASC`),
+            
             // Prateleira 2: Todos os lançamentos de produção já feitos
             dbClient.query(`SELECT op_numero, etapa_index, SUM(quantidade) as total_lancado FROM producoes GROUP BY op_numero, etapa_index`),
-            // Prateleira 3: Todas as sessões de produção atualmente EM ANDAMENTO
-            dbClient.query(`SELECT op_numero, processo, SUM(quantidade_atribuida) as total_em_trabalho FROM sessoes_trabalho_producao WHERE status = 'EM_ANDAMENTO' GROUP BY op_numero, processo`),
-            // Prateleira 4: Todos os produtos (para pegar imagens e nomes)
+            
+            // Prateleira 3: Sessões EM ANDAMENTO (Agrupado por Produto/Etapa, IGNORANDO a OP específica)
+            // Isso permite o "Abatimento Global": Se alguém está fazendo 9 peças de Faixa Peach, descontamos do total disponível, não importa a OP.
+            dbClient.query(`
+                SELECT produto_id, variante, processo, SUM(quantidade_atribuida) as total_em_trabalho 
+                FROM sessoes_trabalho_producao 
+                WHERE status = 'EM_ANDAMENTO' 
+                GROUP BY produto_id, variante, processo
+            `),
+            
+            // Prateleira 4: Produtos
             dbClient.query(`SELECT id, nome, imagem FROM produtos`)
         ]);
 
-        // 2. "Preparar os Ingredientes" - Criamos mapas para acesso rápido
+        // 2. Mapas de Acesso Rápido
         const lancamentosMap = new Map(producoesResult.rows.map(r => [`${r.op_numero}-${r.etapa_index}`, parseInt(r.total_lancado, 10)]));
-        const emTrabalhoMap = new Map(sessoesResult.rows.map(r => [`${r.op_numero}-${r.processo}`, parseInt(r.total_em_trabalho, 10)]));
         const produtosMap = new Map(produtosResult.rows.map(p => [p.id, p]));
+        
+        // Mapa de Trabalho Global: Chave "ProdID-Variante-Processo" -> Quantidade Total sendo feita na fábrica
+        const emTrabalhoGlobalMap = new Map();
+        sessoesResult.rows.forEach(r => {
+             const chave = `${r.produto_id}-${r.variante || '-'}-${r.processo}`;
+             emTrabalhoGlobalMap.set(chave, parseInt(r.total_em_trabalho, 10));
+        });
 
-        // 3. "Cozinhar a Receita" - Processamos os dados em JavaScript
+        // 3. Processamento (Cozinha)
         const tarefasDisponiveis = [];
+
         for (const op of opsResult.rows) {
             if (!op.etapas || op.etapas.length === 0) continue;
-
-            let saldoDaEtapaAnterior = op.quantidade; // O saldo inicial é a quantidade original da OP
 
             for (let i = 0; i < op.etapas.length; i++) {
                 const etapaConfig = op.etapas[i];
                 const processo = etapaConfig.processo || etapaConfig;
                 const chaveLancamento = `${op.numero}-${i}`;
 
-                // Quantidade REAL produzida e lançada na etapa anterior
-                // Para a primeira etapa (i=0), consideramos o que foi lançado no corte (se houver)
-                if (i > 0) {
+                // A. Quanto entrou nesta etapa? (Vindo da etapa anterior ou do corte inicial)
+                let saldoEntrada = 0;
+                if (i === 0) {
+                    // Corte: Entra o total da OP
+                    saldoEntrada = parseInt(op.quantidade, 10);
+                } else {
+                    // Outras: Entra o que foi finalizado na etapa anterior
                     const chaveLancamentoAnterior = `${op.numero}-${i - 1}`;
-                    saldoDaEtapaAnterior = lancamentosMap.get(chaveLancamentoAnterior) || 0;
-                } else { // Para a primeira etapa (Corte)
-                     const chaveLancamentoCorte = `${op.numero}-0`;
-                     // Se o corte já foi lançado, seu saldo é sua própria quantidade.
-                     // Se não, o saldo disponível para ele é o total da OP.
-                     if(lancamentosMap.has(chaveLancamentoCorte)){
-                         saldoDaEtapaAnterior = lancamentosMap.get(chaveLancamentoCorte);
-                     } else {
-                         saldoDaEtapaAnterior = op.quantidade;
-                     }
+                    saldoEntrada = lancamentosMap.get(chaveLancamentoAnterior) || 0;
                 }
 
-                // A quantidade que JÁ FOI FEITA nesta etapa
-                const jaLancadoNestaEtapa = lancamentosMap.get(chaveLancamento) || 0;
-                
-                // A quantidade que está AGORA nas mãos de alguém
-                const emTrabalhoNestaEtapa = emTrabalhoMap.get(`${op.numero}-${processo}`) || 0;
+                // B. Quanto já saiu desta etapa? (Já finalizado)
+                const jaProduzidoNestaEtapa = lancamentosMap.get(chaveLancamento) || 0;
 
-                // O saldo disponível REAL é o que veio da etapa anterior, menos o que já foi feito e o que está em andamento.
-                const saldoRealDisponivel = saldoDaEtapaAnterior - jaLancadoNestaEtapa - emTrabalhoNestaEtapa;
+                // C. Saldo Líquido da OP (Disponível fisicamente, sem contar quem está trabalhando nela agora)
+                let saldoLiquidoOP = Math.max(0, saldoEntrada - jaProduzidoNestaEtapa);
+
+                // D. Abatimento Global (Waterfall Virtual)
+                // Verifica se há gente trabalhando nisso na fábrica e desconta desta OP se tiver saldo.
+                const chaveGlobal = `${op.produto_id}-${op.variante || '-'}-${processo}`;
+                let emTrabalhoGlobal = emTrabalhoGlobalMap.get(chaveGlobal) || 0;
+
+                // Se tem gente trabalhando, abate deste saldo
+                const descontoTrabalho = Math.min(saldoLiquidoOP, emTrabalhoGlobal);
                 
+                // O Saldo Real é o que sobra
+                const saldoRealDisponivel = saldoLiquidoOP - descontoTrabalho;
+
+                // Atualiza o "Bolo Global" de trabalho para a próxima OP da fila
+                // (Se descontamos 7 daqui, sobram 2 para descontar da próxima OP)
+                if (descontoTrabalho > 0) {
+                     emTrabalhoGlobalMap.set(chaveGlobal, emTrabalhoGlobal - descontoTrabalho);
+                }
+                
+                // Se sobrou saldo real, adiciona na lista de tarefas
                 if (saldoRealDisponivel > 0) {
-                    // ENCONTRAMOS UMA TAREFA VÁLIDA!
                     const produtoInfo = produtosMap.get(op.produto_id);
                     tarefasDisponiveis.push({
                         produto_id: op.produto_id,
@@ -173,12 +193,11 @@ router.get('/fila-de-tarefas', async (req, res) => {
                         quantidade_disponivel: saldoRealDisponivel,
                         origem_ops: [op.numero]
                     });
-                    break; // Para e vai para a próxima OP
                 }
             }
         }
 
-        // 4. "Servir o Prato" - Agrupamos e enviamos
+        // 4. Agrupamento Final
         const filaAgrupada = tarefasDisponiveis.reduce((acc, tarefa) => {
             const chaveAgrupamento = `${tarefa.produto_id}-${tarefa.variante}-${tarefa.processo}`;
             if (!acc[chaveAgrupamento]) {
@@ -193,7 +212,7 @@ router.get('/fila-de-tarefas', async (req, res) => {
         res.status(200).json(Object.values(filaAgrupada));
 
     } catch (error) {
-        console.error('[API /producao/fila-de-tarefas V2] Erro:', error);
+        console.error('[API /producao/fila-de-tarefas V3] Erro:', error);
         res.status(500).json({ error: 'Erro ao montar a fila de tarefas de produção.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();

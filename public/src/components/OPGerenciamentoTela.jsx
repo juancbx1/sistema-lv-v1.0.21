@@ -21,16 +21,29 @@ export default function OPGerenciamentoTela({ opsPendentesGlobal, onRefreshConta
   // Define limite de itens por página
   const ITENS_POR_PAGINA_OPS = 6; 
 
+  // Ref para guardar a última busca realizada e evitar repetição
+  const lastSearchParamsRef = useRef(null);
+
   const buscarDados = useCallback(async (paginaAtual, filtrosAtuais) => {
+    // Cria uma assinatura única para esta busca
+    const searchSignature = JSON.stringify({ page: paginaAtual, ...filtrosAtuais });
+    
+    // Se for idêntica à última, ABORTA. (Evita a piscada da segunda busca inútil)
+    if (lastSearchParamsRef.current === searchSignature) {
+        return; 
+    }
+    
+    lastSearchParamsRef.current = searchSignature;
     setCarregando(true);
     setErro(null);
+
     try {
       const token = localStorage.getItem('token');
       if (!token) throw new Error("Usuário não autenticado.");
       
       const params = new URLSearchParams({ 
           page: paginaAtual,
-          limit: ITENS_POR_PAGINA_OPS // Limite ajustado para 6
+          limit: ITENS_POR_PAGINA_OPS
       });
       
       if (filtrosAtuais.status && filtrosAtuais.status !== 'todas') {
@@ -84,27 +97,20 @@ export default function OPGerenciamentoTela({ opsPendentesGlobal, onRefreshConta
     } finally {
       setCarregando(false);
     }
-  }, []);
+  }, []); // Sem dependências externas além das constantes
 
+  // UseEffect simplificado
   useEffect(() => {
     buscarDados(pagina, filtros);
   }, [pagina, filtros, buscarDados]);
 
   // --- CORREÇÃO DA DUPLA PISCADA ---
   const handleFiltroChange = useCallback((novosFiltros) => {
-    setFiltros(prevFiltros => {
-        // Compara se o filtro novo é IGUAL ao anterior
-        if (prevFiltros.status === novosFiltros.status && prevFiltros.busca === novosFiltros.busca) {
-            // Se for igual, retorna o MESMO objeto de estado anterior ('prevFiltros').
-            // O React detecta que a referência de memória não mudou e CANCELA a re-renderização.
-            // Isso evita a segunda busca desnecessária (a segunda piscada).
-            return prevFiltros;
-        }
-
-        // Se for diferente, aí sim atualizamos e resetamos a página para 1
-        setPagina(1);
-        return novosFiltros;
-    });
+    setFiltros(prev => ({
+        status: novosFiltros.status !== undefined ? novosFiltros.status : prev.status,
+        busca: novosFiltros.busca !== undefined ? novosFiltros.busca : prev.busca
+    }));
+    setPagina(1);
   }, []);
 
   const handleAbrirModal = (op) => { setOpSelecionada(op); setModalAberto(true); };

@@ -1,6 +1,7 @@
 // public/src/components/OPFiltros.jsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react'; // Adicione useCallback
+import BuscaInteligente from './BuscaInteligente.jsx';
 
 const statusOptions = [
   { id: 'todas', label: 'Todas Ativas' },
@@ -10,33 +11,27 @@ const statusOptions = [
   { id: 'cancelada', label: 'Canceladas' },
 ];
 
-export default function OPFiltros({ onFiltroChange }) {
+// Usamos React.memo para evitar re-renderizações desnecessárias se as props não mudarem
+export default React.memo(function OPFiltros({ onFiltroChange }) {
   const [statusAtivo, setStatusAtivo] = useState('todas');
-  const [termoBusca, setTermoBusca] = useState('');
+  
+  const handleBusca = useCallback((termo) => {
+      onFiltroChange({ status: statusAtivo, busca: termo });
+  }, [onFiltroChange, statusAtivo]);
 
-  const onFiltroChangeCallback = useCallback((status, busca) => {
-      onFiltroChange({ status, busca });
-  }, [onFiltroChange]); 
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      onFiltroChangeCallback(statusAtivo, termoBusca);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [statusAtivo, termoBusca, onFiltroChangeCallback]); // A dependência agora é a função memoizada
-
+  const handleStatusClick = (novoStatus) => {
+      if (novoStatus === statusAtivo) return;
+      setStatusAtivo(novoStatus);
+      onFiltroChange({ status: novoStatus, busca: undefined });
+  };
 
   return (
-    // O container agora é mais simples
     <div className="op-filtros-container-redesenhado">
         <div className="op-filtro-busca-wrapper">
-            <i className="fas fa-search"></i>
-            <input
-                type="text"
-                className="op-input-busca-redesenhado"
-                placeholder="Buscar por produto, OP ou variação..."
-                value={termoBusca}
-                onChange={(e) => setTermoBusca(e.target.value)}
+            <BuscaInteligente 
+                onSearch={handleBusca}
+                placeholder="Buscar OP, Produto ou Variação..."
+                historicoKey="ops"
             />
         </div>
         <div className="op-filtro-status-pilulas">
@@ -44,7 +39,7 @@ export default function OPFiltros({ onFiltroChange }) {
                 <button
                     key={option.id}
                     className={`op-botao-pilula ${statusAtivo === option.id ? 'active' : ''}`}
-                    onClick={() => setStatusAtivo(option.id)}
+                    onClick={() => handleStatusClick(option.id)}
                 >
                     {option.label}
                 </button>
@@ -52,4 +47,4 @@ export default function OPFiltros({ onFiltroChange }) {
         </div>
     </div>
   );
-}
+});

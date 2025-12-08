@@ -410,8 +410,8 @@ body.autenticado {
     justify-content: center;
     align-items: center;
     gap: 10px;
-    margin-top: 25px;
-    padding: 10px 0;
+    margin-top: 15px;
+    padding: 18px 0;
 }
 
 .gs-paginacao-btn {
@@ -2221,7 +2221,7 @@ font-weight: 500;
 .gs-busca-modal-header {
     position: relative; /* Necessário para o posicionamento do botão de fechar */
     display: flex;
-    justify-content: space-between;
+    justify-content: right;
     align-items: center;
 }
 
@@ -2681,7 +2681,7 @@ font-weight: 500;
     display: inline-flex; /* Usa flex para centralização perfeita */
     align-items: center;    /* Alinha o 'i' verticalmente */
     justify-content: center; /* Alinha o 'i' horizontalmente */
-    margin-right: 8px;
+    margin-left: 5px;
     width: 16px;
     height: 16px;
     border-radius: 50%;
@@ -2706,9 +2706,9 @@ font-weight: 500;
     position: absolute;
     z-index: 10;
     
+    
     /* --- MUDANÇA PRINCIPAL: POSICIONAMENTO À ESQUERDA --- */
     top: 50%;
-    right: 150%; /* Posiciona à direita do ícone, mais uma margem */
     transform: translateY(-50%); /* Centraliza verticalmente */
     
     opacity: 0;
@@ -2824,6 +2824,309 @@ font-weight: 500;
     font-size: 0.85rem;
     color: #856404;
     margin: 5px 0 10px 0;
+}
+
+/* ==========================================================================
+   # ESTILOS DO CARD AGREGADO (BALANÇO HÍDRICO)
+   ========================================================================== */
+
+/* Layout interno do corpo do card */
+.agregado-body {
+    padding: 15px;
+    background-color: #fff;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* Destaque do número principal (Necessidade) */
+.necessidade-principal {
+    text-align: center;
+    padding-bottom: 15px;
+    border-bottom: 1px dashed #eee;
+}
+.necessidade-principal span {
+    display: block;
+    font-size: 0.85rem;
+    color: #7f8c8d;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+.necessidade-principal .valor-deficit {
+    font-size: 2.5rem;
+    color: var(--gs-primaria); /* Azul principal */
+    line-height: 1;
+}
+
+/* Container dos Saldos */
+.saldos-disponiveis {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Linha de saldos (para organizar lado a lado) */
+.saldo-linha {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+/* Estilo Base dos Blocos de Saldo */
+.saldo-bloco {
+    flex: 1;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    padding: 8px 5px;
+    text-align: center;
+    border: 1px solid #e9ecef;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.saldo-bloco span {
+    font-size: 0.7rem;
+    color: #95a5a6;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.saldo-bloco strong {
+    font-size: 1.1rem;
+    color: #2c3e50;
+}
+
+/* --- DESTAQUES ESPECÍFICOS --- */
+
+/* Bloco "Em Produção" (OPs) - Destaque Azul Claro */
+.saldo-bloco.producao {
+    background-color: #e8f6fd; /* Azul bem clarinho */
+    border-color: #d6eaf8;
+}
+.saldo-bloco.producao strong {
+    color: #2980b9;
+}
+
+/* Bloco "Demanda Bruta" - Informativo Neutro */
+.saldo-bloco.demanda-total {
+    background-color: #fff;
+    border: 1px dashed #bdc3c7;
+}
+.saldo-bloco.demanda-total strong {
+    color: #7f8c8d;
+}
+
+
+/* ==========================================================================
+   # BOTAO/CARD PIPELINE (NOVO DESIGN)
+   ========================================================================== */
+
+.gs-pipeline-card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    transition: transform 0.2s;
+}
+.gs-pipeline-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    border-color: var(--op-cor-azul-claro);
+}
+
+/* Cabeçalho */
+.pipeline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.pipeline-header .produto-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.pipeline-header img {
+    width: 50px;
+    height: 50px;
+    border-radius: 6px;
+    object-fit: cover;
+    border: 1px solid #eee;
+}
+.pipeline-header h4 {
+    font-size: 1rem;
+    margin: 0;
+    color: #2c3e50;
+}
+.pipeline-header span {
+    font-size: 0.85rem;
+    color: #7f8c8d;
+}
+
+.pipeline-header .total-pedido {
+    text-align: right;
+    background-color: #f8f9fa;
+    padding: 5px 10px;
+    border-radius: 6px;
+}
+.pipeline-header .total-pedido .label {
+    display: block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+}
+.pipeline-header .total-pedido .valor {
+    display: block;
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #2c3e50;
+    line-height: 1;
+}
+
+/* Barra de Pipeline */
+.pipeline-bar-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.pipeline-bar {
+    height: 12px;
+    background-color: #ecf0f1; /* Cor da Fila (Fundo) */
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+}
+.pipeline-bar .segmento {
+    height: 100%;
+}
+.pipeline-bar .segmento.estoque { background-color: #27ae60; } /* Verde */
+.pipeline-bar .segmento.producao { background-color: #3498db; } /* Azul */
+.pipeline-bar .segmento.acabamento { background-color: #9b59b6; } /* Roxo */
+.pipeline-bar .segmento.embalagem { background-color: #e67e22; } /* Laranja */
+
+
+/* Legenda */
+.pipeline-legenda {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: #555;
+}
+.legenda-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot.verde { background-color: #27ae60; }
+.dot.azul { background-color: #3498db; }
+.dot.cinza { background-color: #bdc3c7; }
+.dot.laranja { background-color: #e67e22; }
+.dot.roxo { background-color: #9b59b6; }
+
+/* Rodapé */
+.pipeline-footer {
+    border-top: 1px solid #f0f0f0;
+    padding-top: 15px;
+}
+.gs-btn.full-width {
+    width: 100%;
+    justify-content: center;
+}
+.status-concluido {
+    text-align: center;
+    color: #27ae60;
+    font-weight: 600;
+    padding: 8px;
+    background-color: #eafaf1;
+    border-radius: 6px;
+}
+
+/* ==========================================================================
+   # AJUSTE PIPELINE MOBILE (LEGENDAS)
+   ========================================================================== */
+
+@media (max-width: 480px) {
+    
+    /* 1. Transforma a Legenda Flex em Grid Compacto */
+    .pipeline-legenda {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr; /* Duas colunas iguais */
+        gap: 8px 15px; /* Espaço vertical e horizontal */
+        margin-top: 10px;
+    }
+
+    /* 2. Ajuste dos Itens da Legenda */
+    .legenda-item {
+        justify-content: flex-start; /* Alinha à esquerda */
+        font-size: 0.75rem; /* Fonte levemente menor */
+        white-space: nowrap; /* Evita quebra de texto feia no meio da palavra */
+    }
+
+    /* 3. Força a Barra a ficar contida (caso esteja vazando) */
+    .pipeline-bar-container {
+        width: 100%;
+        overflow: hidden; /* Corta qualquer excesso bizarro */
+    }
+    
+    /* 4. Ajuste do Cabeçalho do Card (caso ainda esteja apertado) */
+    .pipeline-header {
+        align-items: flex-start; /* Alinha itens no topo */
+    }
+    
+    .pipeline-header .total-pedido {
+        /* No mobile, o box de "Meta" pode ficar abaixo do nome se precisar */
+        align-self: flex-end; 
+        margin-top: 5px;
+    }
+}
+
+
+
+@media (max-width: 480px) {
+    .pipeline-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .pipeline-header .total-pedido { width: 100%; display: flex; justify-content: space-between; align-items: center; }
+    .pipeline-header .total-pedido .valor { font-size: 1.2rem; }
+}
+
+/* Ajuste Mobile */
+@media (max-width: 480px) {
+    .saldo-linha {
+        gap: 5px; /* Menos espaço entre blocos no celular */
+    }
+    .saldo-bloco {
+        padding: 6px 2px;
+    }
+    .saldo-bloco strong {
+        font-size: 1rem;
+    }
+
+    /* Tooltip Esquerdo (Ícone está na direita, texto vai pra esquerda) */
+    .tooltip-container.tooltip-left .tooltip-text {
+        left: auto;
+        right: 0; /* Alinha a borda direita com o ícone */
+        transform: translateX(10%); /* Ajuste fino pra não cobrir o ícone */
+    }
+    .tooltip-container.tooltip-left .tooltip-text::after {
+        left: 55%; /* Seta fica na direita da caixa */
+    }
+
+    /* Tooltip Direito (Ícone está na esquerda, texto vai pra direita) */
+    .tooltip-container.tooltip-right .tooltip-text {
+        left: 0; /* Alinha a borda esquerda com o ícone */
+        right: auto;
+        transform: translateX(-30%);
+    }
+    .tooltip-container.tooltip-right .tooltip-text::after {
+        right: 15%; /* Seta fica na esquerda da caixa */
+    }
 }
 
 /* ==========================================================================
@@ -3070,11 +3373,6 @@ font-weight: 500;
     width: 100%; /* Faz o bloco de déficit ocupar toda a largura */
     padding: 15px;
 }
-
- .tooltip-container .tooltip-text {
-        width: 180px; /* Largura menor para telas pequenas */
-        right: 120%; /* Posição um pouco mais próxima */
-    }
 
 }
 

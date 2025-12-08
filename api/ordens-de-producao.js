@@ -131,24 +131,23 @@ router.get('/', async (req, res) => {
     }
 });
 
-// GET /api/ordens-de-producao/:id (Buscar uma ÚNICA OP por edit_id ou numero)
+// GET /api/ordens-de-producao/:id
 router.get('/:id', async (req, res) => {
     const { usuarioLogado } = req;
     const opIdentifier = req.params.id;
     let dbClient; 
 
     try {
-        console.log(`\n--- INÍCIO: GET /ordens-de-producao/${opIdentifier} ---`);
-
         dbClient = await pool.connect();
         const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
         if (!permissoes.includes('acesso-ordens-de-producao')) {
             return res.status(403).json({ error: 'Permissão negada.' });
         }
 
-        // 1. Busca a OP principal (como antes)
+        // 1. Busca a OP principal E as configurações originais do produto
+        // Note o p.etapas as etapas_config
         const opQuery = `
-            SELECT op.*, p.nome as produto
+            SELECT op.*, p.nome as produto, p.etapas as etapas_config
             FROM ordens_de_producao op
             LEFT JOIN produtos p ON op.produto_id = p.id
             WHERE op.edit_id = $1 OR op.numero = $1
@@ -161,50 +160,52 @@ router.get('/:id', async (req, res) => {
         
         let op = opResult.rows[0];
 
-        // --- INÍCIO DA NOVA LÓGICA DE ENRIQUECIMENTO ---
-        // 2. Busca todos os lançamentos de produção para esta OP
+        // 2. Busca lançamentos detalhados
         const lancamentosResult = await dbClient.query(
-            'SELECT etapa_index, quantidade, funcionario, funcionario_id FROM producoes WHERE op_numero = $1',
+            `SELECT id, etapa_index, processo, quantidade, funcionario, funcionario_id, data 
+             FROM producoes 
+             WHERE op_numero = $1 
+             ORDER BY data DESC`,
             [op.numero]
         );
-        console.log(`1. Encontrados ${lancamentosResult.rowCount} registros em 'producoes' para a OP #${op.numero}:`, lancamentosResult.rows);
+        op.lancamentos_detalhados = lancamentosResult.rows;
 
-        // 3. Agrupa os lançamentos por etapa para somar as quantidades
+        // 3. Agrupa e Enriquece as Etapas
         const lancamentosPorEtapa = lancamentosResult.rows.reduce((acc, lancamento) => {
             const index = lancamento.etapa_index;
-            if (!acc[index]) {
-                acc[index] = {
-                    quantidadeTotal: 0,
-                    // Vamos assumir o último funcionário que lançou como o "dono" da etapa
-                    funcionario: lancamento.funcionario,
-                    funcionario_id: lancamento.funcionario_id,
-                };
-            }
+            if (!acc[index]) acc[index] = { quantidadeTotal: 0 };
             acc[index].quantidadeTotal += lancamento.quantidade;
             return acc;
         }, {});
-        console.log("2. Lançamentos agrupados por etapa_index:", lancamentosPorEtapa);
 
-        // 4. Mapeia as etapas da OP, atualizando com os dados dos lançamentos
         if (Array.isArray(op.etapas)) {
             op.etapas = op.etapas.map((etapa, index) => {
-                const lancamentoInfo = lancamentosPorEtapa[index];
-                if (lancamentoInfo) {
-                    return {
-                        ...etapa,
-                        lancado: true,
-                        quantidade: lancamentoInfo.quantidadeTotal,
-                        // O usuário já é o ID, vindo da tabela de produções
-                        usuario: lancamentoInfo.funcionario_id 
-                    };
+                // Tenta achar a configuração original para pegar a máquina
+                // O 'etapa' salvo na OP pode ser string ou objeto simples.
+                const nomeProcesso = etapa.processo || etapa;
+                
+                // Busca no config do produto
+                let configOriginal = null;
+                if (op.etapas_config && Array.isArray(op.etapas_config)) {
+                    configOriginal = op.etapas_config.find(c => (c.processo || c) === nomeProcesso);
                 }
-                return etapa; // Retorna a etapa como está se não houver lançamento
+
+                const lancamentoInfo = lancamentosPorEtapa[index];
+                
+                return {
+                    ...etapa,
+                    processo: nomeProcesso, // Garante nome
+                    maquina: configOriginal?.maquina || 'Não Definida', // <--- AQUI ESTÁ O OURO
+                    feitoPor: configOriginal?.feitoPor || 'indefinido', // <--- Importante para saber se é costureira
+                    lancado: !!lancamentoInfo,
+                    quantidade: lancamentoInfo ? lancamentoInfo.quantidadeTotal : 0
+                };
             });
         }
-        console.log("3. Objeto 'etapas' final enviado para o frontend:", op.etapas);
-        // --- FIM DA NOVA LÓGICA DE ENRIQUECIMENTO ---
 
-        console.log("--- FIM: GET /ordens-de-producao/:id ---");
+        // Removemos etapas_config do retorno final para limpar o JSON
+        delete op.etapas_config;
+
         res.status(200).json(op);
 
     } catch (error) {
@@ -215,14 +216,13 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-
 // POST /api/ordens-de-producao/ (Criar nova OP)
 router.post('/', async (req, res) => {
     const { usuarioLogado } = req;
     let dbClient;
 
     try {
-        console.log("[API POST OP V3] Corpo recebido:", JSON.stringify(req.body, null, 2));
+        console.log("[API POST OP V5] Corpo recebido:", JSON.stringify(req.body, null, 2));
 
         dbClient = await pool.connect();
         await dbClient.query('BEGIN');
@@ -232,11 +232,11 @@ router.post('/', async (req, res) => {
             throw new Error('Permissão negada.');
         }
         
-        // Agora esperamos o 'corte_origem_id'
-        const { numero, data_entrega, observacoes, corte_origem_id } = req.body;
+        // MUDANÇA: Adicionado 'quantidade' na extração
+        const { numero, data_entrega, observacoes, corte_origem_id, demanda_id, quantidade } = req.body;
         
         if (!numero || !data_entrega || !corte_origem_id) {
-            throw new Error('Dados incompletos: Número da OP, data de entrega e ID do corte de origem são obrigatórios.');
+            throw new Error('Dados incompletos.');
         }
         
         // 1. BUSCAR E TRAVAR O CORTE DE ORIGEM
@@ -245,34 +245,97 @@ router.post('/', async (req, res) => {
         const corte = corteResult.rows[0];
         if (corte.op) throw new Error(`Este corte (PC: ${corte.pn}) já foi utilizado na OP #${corte.op}.`);
 
-        // 2. BUSCAR DETALHES DO PRODUTO (ETAPAS)
+        // VALIDAÇÃO DE QUANTIDADE (SPLIT)
+        // Se o frontend mandou quantidade, usa ela. Se não, usa o total do corte.
+        let qtdFinalOP = parseInt(quantidade);
+        if (!qtdFinalOP || isNaN(qtdFinalOP)) {
+            qtdFinalOP = corte.quantidade; // Fallback
+        }
+
+        if (qtdFinalOP > corte.quantidade) {
+            throw new Error(`Quantidade solicitada (${qtdFinalOP}) é maior que a disponível no corte (${corte.quantidade}).`);
+        }
+
+        // 2. DETERMINAR O DEMANDA_ID FINAL (A REDE DE SEGURANÇA)
+        // Se o frontend mandou, usa. Se não, tenta pegar do corte salvo no banco. Se não tiver, é null.
+        const demandaIdFinal = demanda_id || corte.demanda_id || null;
+
+        // 3. BUSCAR DETALHES DO PRODUTO (ETAPAS)
         const produtoResult = await dbClient.query('SELECT etapas FROM produtos WHERE id = $1', [corte.produto_id]);
         if (produtoResult.rows.length === 0) throw new Error('Produto do corte não encontrado.');
         const etapasConfig = produtoResult.rows[0].etapas || [];
 
-        // 3. CRIAR A NOVA OP
+        // 4. CRIAR A NOVA OP
         const opPayload = {
             numero,
             produto_id: corte.produto_id,
             variante: corte.variante,
-            quantidade: corte.quantidade,
+            quantidade: qtdFinalOP,
             data_entrega,
             observacoes,
-            status: 'produzindo', // JÁ NASCE PRODUZINDO
+            status: 'produzindo', 
             edit_id: `${Date.now()}${Math.random().toString(36).substring(2, 7)}`,
-            etapas: etapasConfig.map(e => ({ processo: (e.processo || e), lancado: false, quantidade: 0, usuario: '' }))
+            etapas: etapasConfig.map(e => ({ processo: (e.processo || e), lancado: false, quantidade: 0, usuario: '' })),
+            demanda_id: demandaIdFinal // Usa o ID calculado
         };
+
         const opInsertResult = await dbClient.query(
-            `INSERT INTO ordens_de_producao (numero, produto_id, variante, quantidade, data_entrega, observacoes, status, edit_id, etapas)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-            [opPayload.numero, opPayload.produto_id, opPayload.variante, opPayload.quantidade, opPayload.data_entrega, opPayload.observacoes, opPayload.status, opPayload.edit_id, JSON.stringify(opPayload.etapas)]
+            `INSERT INTO ordens_de_producao (numero, produto_id, variante, quantidade, data_entrega, observacoes, status, edit_id, etapas, demanda_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+            [
+                opPayload.numero, 
+                opPayload.produto_id, 
+                opPayload.variante, 
+                opPayload.quantidade, 
+                opPayload.data_entrega, 
+                opPayload.observacoes, 
+                opPayload.status, 
+                opPayload.edit_id, 
+                JSON.stringify(opPayload.etapas),
+                opPayload.demanda_id
+            ]
         );
         const opCriada = opInsertResult.rows[0];
 
-        // 4. VINCULAR O CORTE À OP CRIADA
-        await dbClient.query('UPDATE cortes SET op = $1, status = \'usado\' WHERE id = $2', [opCriada.numero, corte_origem_id]);
+        // 5. LÓGICA DE FRACIONAMENTO DE CORTE (SPLIT)
+        const qtdUsada = opPayload.quantidade;
+        const qtdOriginalCorte = corte.quantidade;
 
-        // 5. LANÇAR AUTOMATICAMENTE A ETAPA DE CORTE NA TABELA 'producoes'
+        if (qtdUsada < qtdOriginalCorte) {
+            // CENÁRIO: Consumo Parcial (Sobra saldo)
+            const saldoRestante = qtdOriginalCorte - qtdUsada;
+            console.log(`[API OP] Fracionando corte #${corte.id}. Usado: ${qtdUsada}, Restante: ${saldoRestante}`);
+
+            // 5a. Atualiza o corte original (que virou OP)
+            await dbClient.query(
+                `UPDATE cortes SET op = $1, status = 'usado', quantidade = $2 WHERE id = $3`, 
+                [opCriada.numero, qtdUsada, corte_origem_id]
+            );
+
+            // --- INÍCIO DA SUBSTITUIÇÃO (5b) ---
+            
+            // 5b. Cria um NOVO registro de corte com o saldo restante
+            // Lógica de PN Limpo: Mantém a raiz do PN original e adiciona sufixo único
+            const pnRaiz = corte.pn.split('-S')[0]; 
+            const novoPn = `${pnRaiz}-S${Date.now().toString().slice(-5)}`; // Ex: 13935-S59281
+
+            await dbClient.query(
+                `INSERT INTO cortes (produto_id, variante, quantidade, data, status, pn, cortador, demanda_id)
+                 VALUES ($1, $2, $3, $4, 'cortados', $5, $6, NULL)`,
+                [corte.produto_id, corte.variante, saldoRestante, corte.data, novoPn, corte.cortador]
+            );
+            
+            // --- FIM DA SUBSTITUIÇÃO ---
+
+        } else {
+            // CENÁRIO: Consumo Total
+            await dbClient.query(
+                `UPDATE cortes SET op = $1, status = 'usado' WHERE id = $2`, 
+                [opCriada.numero, corte_origem_id]
+            );
+        }
+
+        // 6. LANÇAR AUTOMATICAMENTE A ETAPA DE CORTE NA TABELA 'producoes'
         const etapaCorteIndex = etapasConfig.findIndex(e => (e.processo || e).toLowerCase() === 'corte');
         
         if (etapaCorteIndex !== -1) {
@@ -283,15 +346,16 @@ router.post('/', async (req, res) => {
             
             const idProducaoTexto = `prod_${Date.now()}`;
 
-            // --- INÍCIO DA CORREÇÃO ---
             await dbClient.query(
-                // Removemos a coluna 'data_final' da lista
                 `INSERT INTO producoes (id, op_numero, etapa_index, processo, produto_id, variacao, maquina, quantidade, funcionario, funcionario_id, data, lancado_por)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, // A contagem de parâmetros agora vai até $12
-                // Removemos o 'NOW()' do final da lista de valores
-                [idProducaoTexto, opCriada.numero, etapaCorteIndex, 'Corte', corte.produto_id, corte.variante, maquinaDoCorte, corte.quantidade, corte.cortador, cortadorId, corte.data, usuarioLogado.nome]
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, 
+                [idProducaoTexto, opCriada.numero, etapaCorteIndex, 'Corte', corte.produto_id, corte.variante, maquinaDoCorte, opPayload.quantidade, corte.cortador, cortadorId, corte.data, usuarioLogado.nome]
             );
-            // --- FIM DA CORREÇÃO ---
+        }
+        
+        // 7. ATUALIZAR STATUS DA DEMANDA (Se houver vínculo)
+        if (demandaIdFinal) {
+             await dbClient.query(`UPDATE demandas_producao SET status = 'em_producao' WHERE id = $1`, [demandaIdFinal]);
         }
 
         await dbClient.query('COMMIT');
@@ -299,7 +363,7 @@ router.post('/', async (req, res) => {
 
     } catch (error) {
         if (dbClient) await dbClient.query('ROLLBACK');
-        console.error('[API POST OP V3 - ERRO]', error);
+        console.error('[API POST OP V5 - ERRO]', error);
         res.status(500).json({ error: 'Erro ao criar Ordem de Produção.', details: error.message });
     } finally {
         if (dbClient) dbClient.release();

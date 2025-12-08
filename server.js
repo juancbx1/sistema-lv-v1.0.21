@@ -44,6 +44,8 @@ import alertasRouter from './api/alertas.js';
 import radarProducaoRouter from './api/radar-producao.js';
 import demandasRouter from './api/demandas.js';
 import producaoRouter from './api/producao.js';
+import cronRoutes from './api/cron.js';
+
 
 const app = express();
 console.log('Aplicação Express inicializada.');
@@ -143,6 +145,7 @@ app.use('/api/alertas', alertasRouter);
 app.use('/api/radar-producao', radarProducaoRouter);
 app.use('/api/demandas', demandasRouter);
 app.use('/api/producao', producaoRouter);
+app.use('/api/cron', cronRoutes);
 
 
 app.get('/api/ping', (req, res) => res.status(200).json({ message: 'pong do server.js' }));

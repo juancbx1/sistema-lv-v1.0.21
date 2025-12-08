@@ -47,28 +47,30 @@ router.get('/next-pc-number', async (req, res) => {
     let dbClient;
     try {
         dbClient = await pool.connect();
-        // A query para encontrar o maior número continua a mesma
+        
+        // CORREÇÃO DEFINITIVA COM LIMITADOR:
+        // 1. pn ~ '^[0-9]+$': Pega apenas PNs que são puramente números (sem letras, sem traços).
+        // 2. LENGTH(pn) < 10: FATOR LIMITADOR. Ignora qualquer número absurdo (maior que 999 milhões).
+        // Isso impede que erros ou timestamps entrem na conta.
         const query = `
             SELECT pn FROM cortes 
-            ORDER BY CAST(NULLIF(REGEXP_REPLACE(pn, '[^0-9]', '', 'g'), '') AS INTEGER) DESC
+            WHERE pn ~ '^[0-9]+$' 
+            AND LENGTH(pn) < 10
+            ORDER BY pn::integer DESC
             LIMIT 1;
         `;
         const result = await dbClient.query(query);
 
-        let nextNumber = 10000;
+        let nextNumber = 10000; // Começa em 10.000 se não tiver nada
+        
         if (result.rows.length > 0) {
-            const lastPn = result.rows[0].pn;
-            // Apenas convertemos para número, sem nos preocupar com o prefixo
-            const lastNumber = parseInt(lastPn.replace(/[^0-9]/g, ''), 10);
-            if (!isNaN(lastNumber) && lastNumber >= 10000) {
-                nextNumber = lastNumber + 1;
-            } else if (!isNaN(lastNumber) && lastNumber < 10000) {
-                // Se o último número for antigo (menor que 10000), pulamos para 10000
-                nextNumber = 10000;
+            const lastPn = parseInt(result.rows[0].pn, 10);
+            if (!isNaN(lastPn)) {
+                nextNumber = lastPn + 1;
             }
         }
         
-        // A RESPOSTA AGORA É SÓ O NÚMERO
+        // Retorna como string para manter padrão
         res.status(200).json({ nextPC: nextNumber.toString() });
 
     } catch (error) {
@@ -145,7 +147,8 @@ router.post('/', async (req, res) => {
             status = 'pendente',
             op = null,
             pn,
-            cortador 
+            cortador,
+            demanda_id
         } = req.body;
 
         if (!produto_id || quantidade === undefined || !data || !status || !pn) {
@@ -160,8 +163,8 @@ router.post('/', async (req, res) => {
         const varianteFinal = (variante === undefined || variante === null || String(variante).trim() === '') ? null : String(variante).trim();
         
         const queryText = `
-            INSERT INTO cortes (produto_id, variante, quantidade, data, status, op, pn, cortador)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO cortes (produto_id, variante, quantidade, data, status, op, pn, cortador, demanda_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING *
         `;
         const values = [
@@ -172,7 +175,8 @@ router.post('/', async (req, res) => {
             status,
             op,
             pn,
-            cortador 
+            cortador,
+            demanda_id || null // Salva no banco
         ];
 
         const result = await dbClient.query(queryText, values);
