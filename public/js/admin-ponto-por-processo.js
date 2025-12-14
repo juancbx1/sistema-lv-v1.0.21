@@ -285,11 +285,11 @@ function renderizarCardRegra(regra, editavel) {
             </div>
             <div class="ppp-card-body">
                 <div class="ppp-card-data-point">
-                    <label>Pontos</label>
+                <label>Pontos (Dia)</label> <!-- Mudou aqui -->
                     <input class="ppp-input" name="pontos_meta" type="number" value="${regra.pontos_meta}" step="1" ${!editavel && 'disabled'}>
                 </div>
                 <div class="ppp-card-data-point">
-                    <label>Comissão (R$)</label>
+                    <label>Comissão Dia (R$)</label> <!-- Mudou aqui -->
                     <input class="ppp-input" name="valor_comissao" type="number" value="${parseFloat(regra.valor_comissao).toFixed(2)}" step="0.01" ${!editavel && 'disabled'}>
                 </div>
             </div>
@@ -392,9 +392,9 @@ function renderizarCardRegra(regra, editavel) {
             tr.innerHTML = `
                 <td>${dadosGrupo.tipo_usuario}</td>
                 <td>${dadosGrupo.nivel}</td>
-                <td><input class="ppp-input" name="descricao_meta" placeholder="Ex: Meta Bronze"></td>
-                <td><input class="ppp-input" name="pontos_meta" type="number" placeholder="Ex: 4900"></td>
-                <td><input class="ppp-input" name="valor_comissao" type="number" placeholder="Ex: 110.00"></td>
+                <td><input class="ppp-input" name="descricao_meta" placeholder="Ex: Meta Ouro (Diária)"></td>
+                <td><input class="ppp-input" name="pontos_meta" type="number" placeholder="Ex: 400 (Dia)"></td> <!-- Mudou aqui -->
+                <td><input class="ppp-input" name="valor_comissao" type="number" placeholder="Ex: 20.00 (Dia)"></td> <!-- Mudou aqui -->
                 <td><button class="ppp-botao btn-condicoes">Nenhuma</button></td>
                 <td>
                     <button class="ppp-botao ppp-botao-salvar btn-salvar-nova-regra" title="Salvar"><i class="fas fa-check"></i></button>

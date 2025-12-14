@@ -5,7 +5,6 @@ const { Pool } = pkg;
 import jwt from 'jsonwebtoken';
 import express from 'express';
 import { getPermissoesCompletasUsuarioDB } from './usuarios.js';
-import { ciclos } from '../public/js/utils/ciclos.js'; // Importamos a definição de ciclos
 
 const router = express.Router();
 const pool = new Pool({
@@ -95,125 +94,202 @@ router.use(async (req, res, next) => {
 });
 
 // --- ROTA PRINCIPAL DE CÁLCULO ---
-// GET /api/pagamentos/calcular?usuario_id=123&ciclo_index=4
 router.get('/calcular', async (req, res) => {
-    const { usuario_id, tipo_pagamento, ciclo_index, mes_referencia, data_inicio, data_fim } = req.query;
+    // Agora aceita 'competencia' (Ex: "Janeiro/2026") em vez de ciclo_index
+    const { usuario_id, tipo_pagamento, competencia, data_inicio, data_fim, mes_referencia } = req.query;
 
     if (!usuario_id || !tipo_pagamento) {
-        return res.status(400).json({ error: 'Parâmetros usuario_id e tipo_pagamento são obrigatórios.' });
+        return res.status(400).json({ error: 'Parâmetros obrigatórios ausentes.' });
     }
 
-    // Variáveis para armazenar os resultados dos cálculos
-    let salarioProporcional = 0;
+    // Variáveis de Retorno
     let valorComissao = 0;
-    let valorTotalPassagens = 0;
-    let valorBeneficios = 0; // Para o futuro
-    let descontoVT = 0;
     let totalPontosComissao = 0;
-    let cicloSelecionado = null; // Para guardar os detalhes do ciclo se houver
-    let periodoDetalhe = tipo_pagamento; // Detalhe para o frontend
+    let totalPontosResgatados = 0;
+    let periodoDetalhe = "";
+    let detalhesDias = []; // Substitui detalhesSemanas
+    
+    // Outros tipos (mantidos simples)
+    let salarioProporcional = 0;
+    let valorTotalPassagens = 0;
+    let valorBeneficios = 0;
+    let descontoVT = 0;
 
     let dbClient;
     try {
         dbClient = await pool.connect();
 
-        // 1. Buscar dados base do usuário (sempre necessário)
         const userRes = await dbClient.query('SELECT * FROM usuarios WHERE id = $1', [usuario_id]);
-        if (userRes.rows.length === 0) {
-            return res.status(404).json({ error: 'Empregado não encontrado.' });
-        }
+        if (userRes.rows.length === 0) return res.status(404).json({ error: 'Empregado não encontrado.' });
         const usuario = userRes.rows[0];
 
-        // 2. Lógica de cálculo baseada no tipo de pagamento
         switch (tipo_pagamento) {
-            case 'SALARIO':
-                if (!mes_referencia) return res.status(400).json({ error: 'Mês de referência é obrigatório para cálculo de salário.' });
-                // Para o salário, pagamos o valor fixo mensal. A proporcionalidade pode ser ajustada se necessário.
-                salarioProporcional = usuario.salario_fixo;
-                periodoDetalhe = new Date(mes_referencia + '-02').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+            case 'COMISSAO':
+                if (!competencia) return res.status(400).json({ error: 'Competência (Mês/Ano) é obrigatória.' });
+                periodoDetalhe = competencia; // Ex: "Janeiro/2026"
+
+                // 1. Calcular Início e Fim da Competência (21 a 20)
+                // Competência "Janeiro/2026" vai de 21/Dez/2025 a 20/Jan/2026
+                const [mesNome, anoStr] = competencia.split('/');
+                const anoInt = parseInt(anoStr);
+                const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+                const mesIndex = meses.indexOf(mesNome); // 0 a 11
+                
+                if (mesIndex === -1) throw new Error("Mês inválido.");
+
+                // Data Final: 20 do mês da competência
+                const fimCompetencia = new Date(anoInt, mesIndex, 20, 23, 59, 59, 999);
+                
+                // Data Inicial: 21 do mês anterior
+                // Se mês for Janeiro (0), mês anterior é Dezembro (11) do ano anterior
+                let anoInicio = anoInt;
+                let mesInicio = mesIndex - 1;
+                if (mesInicio < 0) { mesInicio = 11; anoInicio--; }
+                const inicioCompetencia = new Date(anoInicio, mesInicio, 21, 0, 0, 0, 0);
+
+                // *** CORTE LIMPO: Ignora tudo antes de 13/12/2025 ***
+                const dataCorte = new Date('2025-12-13T00:00:00');
+                
+                // Se o fim da competência for antes do corte, nem calcula.
+                if (fimCompetencia < dataCorte) {
+                    valorComissao = 0;
+                    detalhesDias = [];
+                    break;
+                }
+
+                // Ajusta o início se cair antes do corte
+                let cursor = new Date(inicioCompetencia);
+                if (cursor < dataCorte) cursor = new Date(dataCorte);
+
+                // 2. Busca Dados (Produção + Arremates + Resgates)
+                const tipoUsuario = usuario.tipos?.includes('tiktik') ? 'tiktik' : 'costureira';
+                
+                // Busca Metas
+                // Usamos a data de fim da competência para pegar a regra vigente
+                const hojeSP = new Date().toLocaleDateString('en-CA');
+                const versaoQuery = `SELECT id FROM metas_versoes WHERE data_inicio_vigencia <= $1 ORDER BY data_inicio_vigencia DESC LIMIT 1`;
+                const versaoRes = await dbClient.query(versaoQuery, [fimCompetencia.toISOString().substring(0,10)]);
+                
+                let metasDoNivel = [];
+                if (versaoRes.rows.length > 0) {
+                    const regrasRes = await dbClient.query(
+                        `SELECT pontos_meta, valor_comissao, descricao_meta FROM metas_regras WHERE id_versao = $1 AND tipo_usuario = $2 AND nivel = $3 ORDER BY pontos_meta ASC`,
+                        [versaoRes.rows[0].id, tipoUsuario, usuario.nivel]
+                    );
+                    metasDoNivel = regrasRes.rows;
+                }
+
+                // Busca Produção
+                let queryAtiv = `
+                    SELECT data, pontos_gerados FROM producoes WHERE funcionario_id = $1 AND data BETWEEN $2 AND $3
+                `;
+                if (tipoUsuario === 'tiktik') {
+                    queryAtiv += ` UNION ALL SELECT data_lancamento as data, pontos_gerados FROM arremates WHERE usuario_tiktik_id = $1 AND data_lancamento BETWEEN $2 AND $3 AND tipo_lancamento = 'PRODUCAO'`;
+                }
+                const ativRes = await dbClient.query(queryAtiv, [usuario.id, inicioCompetencia, fimCompetencia]);
+
+                // Busca Resgates
+                const resgatesRes = await dbClient.query(
+                    `SELECT data_evento, quantidade FROM banco_pontos_log WHERE usuario_id = $1 AND tipo = 'RESGATE' AND data_evento BETWEEN $2 AND $3`,
+                    [usuario.id, inicioCompetencia, fimCompetencia]
+                );
+
+                // Busca Ganhos (Pontos Extras creditados no Cofre)
+                const ganhosRes = await dbClient.query(
+                    `SELECT data_evento, quantidade FROM banco_pontos_log WHERE usuario_id = $1 AND tipo = 'GANHO' AND data_evento BETWEEN $2 AND $3`,
+                    [usuario.id, inicioCompetencia, fimCompetencia]
+                );
+                
+                // Mapeia por dia (YYYY-MM-DD)
+                const mapaProducao = {};
+                const mapaResgate = {};
+                const mapaGanhos = {}; // >>> ADICIONE ESTA LINHA
+
+                ativRes.rows.forEach(r => {
+                    const d = new Date(r.data).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+                    if (!mapaProducao[d]) mapaProducao[d] = 0;
+                    mapaProducao[d] += parseFloat(r.pontos_gerados);
+                });
+
+                // Para resgates, a query de log pode ter vindo com nome 'quantidade'
+                const resgatesRows = await dbClient.query(
+                    `SELECT data_evento, quantidade FROM banco_pontos_log WHERE usuario_id = $1 AND tipo = 'RESGATE' AND data_evento BETWEEN $2 AND $3`,
+                    [usuario.id, inicioCompetencia, fimCompetencia]
+                );
+                
+                resgatesRows.rows.forEach(r => {
+                    const d = new Date(r.data_evento).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+                    if (!mapaResgate[d]) mapaResgate[d] = 0;
+                    mapaResgate[d] += parseFloat(r.quantidade);
+                });
+
+                ganhosRes.rows.forEach(r => {
+                    const d = new Date(r.data_evento).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+                    if (!mapaGanhos[d]) mapaGanhos[d] = 0;
+                    mapaGanhos[d] += parseFloat(r.quantidade);
+                });
+
+                // 3. Itera Dia a Dia
+                const dataLimiteIteracao = new Date(fimCompetencia);
+                // Garante que o cursor tenha hora zerada para loop limpo
+                cursor.setHours(0,0,0,0);
+                
+                while (cursor <= dataLimiteIteracao) {
+                    const diaStr = cursor.toLocaleDateString('en-CA'); // YYYY-MM-DD
+                    const ptsProd = mapaProducao[diaStr] || 0;
+                    const ptsResg = mapaResgate[diaStr] || 0;
+                    const ptsExtras = mapaGanhos[diaStr] || 0;
+                    const totalDia = ptsProd + ptsResg;
+                    
+                    let valorDia = 0;
+                    let metaNome = '-';
+
+                    if (totalDia > 0) {
+                        // Verifica qual meta bateu
+                        for (let i = metasDoNivel.length - 1; i >= 0; i--) {
+                            if (totalDia >= metasDoNivel[i].pontos_meta) {
+                                valorDia = parseFloat(metasDoNivel[i].valor_comissao);
+                                metaNome = metasDoNivel[i].descricao_meta;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Só adiciona na lista se teve movimento ou ganho
+                    if (totalDia > 0 || valorDia > 0) {
+                        detalhesDias.push({
+                            data: cursor.toLocaleDateString('pt-BR'),
+                            pontosProduzidos: ptsProd,
+                            pontosResgatados: ptsResg,
+                            pontosExtras: ptsExtras, 
+                            totalPontos: totalDia,
+                            meta: metaNome,
+                            valor: valorDia
+                        });
+                        valorComissao += valorDia;
+                        totalPontosComissao += ptsProd;
+                        totalPontosResgatados += ptsResg;
+                    }
+
+                    cursor.setDate(cursor.getDate() + 1);
+                }
+
+                // Armazena dados extras para o frontend
+                res.dadosDetalhados = { 
+                    dias: detalhesDias,
+                    resumo: {
+                        totalProduzido: totalPontosComissao,
+                        totalResgatado: totalPontosResgatados
+                    }
+                };
                 break;
 
-            case 'COMISSAO':
-            if (ciclo_index === undefined) {
-                return res.status(400).json({ error: 'Ciclo é obrigatório para cálculo de comissão.' });
-            }
-            cicloSelecionado = ciclos[parseInt(ciclo_index)];
-            if (!cicloSelecionado) {
-                return res.status(404).json({ error: 'Ciclo não encontrado.' });
-            }
-            
-            periodoDetalhe = cicloSelecionado.nome;
-            let detalhesSemanas = [];
-            const tipoUsuario = usuario.tipos?.includes('costureira') ? 'costureira' : 'tiktik';
-
-            // Itera sobre cada semana do ciclo para calcular individualmente
-            for (const semana of cicloSelecionado.semanas) {
-                const dataFimSemana = new Date(semana.fim + 'T23:59:59');
-
-                // 1. Encontra a versão de metas correta para esta semana específica
-                const versaoQuery = `
-                    SELECT id FROM metas_versoes
-                    WHERE data_inicio_vigencia <= $1
-                    ORDER BY data_inicio_vigencia DESC LIMIT 1;
-                `;
-                const versaoResult = await dbClient.query(versaoQuery, [dataFimSemana]);
-                if (versaoResult.rows.length === 0) {
-                    throw new Error(`Nenhuma configuração de meta encontrada para a semana que termina em ${semana.fim}`);
-                }
-                const idVersaoCorreta = versaoResult.rows[0].id;
-
-                // 2. Busca as regras de meta para essa versão, tipo de usuário e nível
-                const regrasQuery = `
-                    SELECT pontos_meta, valor_comissao, descricao_meta 
-                    FROM metas_regras 
-                    WHERE id_versao = $1 AND tipo_usuario = $2 AND nivel = $3 
-                    ORDER BY pontos_meta ASC;
-                `;
-                const regrasResult = await dbClient.query(regrasQuery, [idVersaoCorreta, tipoUsuario, usuario.nivel]);
-                const metasDaSemana = regrasResult.rows.map(r => ({
-                    pontos_meta: parseInt(r.pontos_meta),
-                    valor: parseFloat(r.valor_comissao),
-                    descricao: r.descricao_meta
-                }));
-
-                // 3. Busca os pontos do usuário para esta semana
-                const producoesQuery = `SELECT COALESCE(SUM(pontos_gerados), 0) as total FROM producoes WHERE funcionario_id = $1 AND data BETWEEN $2 AND $3`;
-                const arrematesQuery = `SELECT COALESCE(SUM(pontos_gerados), 0) as total FROM arremates WHERE usuario_tiktik_id = $1 AND data_lancamento BETWEEN $2 AND $3`;
-                const [prodRes, arrRes] = await Promise.all([
-                    dbClient.query(producoesQuery, [usuario_id, `${semana.inicio} 00:00:00`, `${semana.fim} 23:59:59`]),
-                    dbClient.query(arrematesQuery, [usuario_id, `${semana.inicio} 00:00:00`, `${semana.fim} 23:59:59`])
-                ]);
-                const pontosDaSemana = parseFloat(prodRes.rows[0].total) + parseFloat(arrRes.rows[0].total);
-                totalPontosComissao += pontosDaSemana;
-
-                // 4. Calcula a comissão com as regras corretas (lógica replicada do antigo metas.js)
-                let valorComissaoSemana = 0;
-                let metaAtingida = "Nenhuma";
-                const metasBatidas = metasDaSemana.filter(m => pontosDaSemana >= m.pontos_meta);
-
-                if (metasBatidas.length > 0) {
-                    metasBatidas.sort((a, b) => b.pontos_meta - a.pontos_meta);
-                    const melhorMetaBatida = metasBatidas[0];
-                    valorComissaoSemana = melhorMetaBatida.valor;
-                    metaAtingida = melhorMetaBatida.descricao;
-                } else if (metasDaSemana.length > 0) {
-                    const primeiraMeta = metasDaSemana[0];
-                    const pontosFaltantes = Math.ceil(primeiraMeta.pontos_meta - pontosDaSemana);
-                    metaAtingida = `Faltam ${pontosFaltantes} pts`;
-                }
-                
-                valorComissao += valorComissaoSemana;
-
-                detalhesSemanas.push({
-                    periodo: `${new Date(semana.inicio+'T00:00:00').toLocaleDateString('pt-BR')} a ${new Date(semana.fim+'T00:00:00').toLocaleDateString('pt-BR')}`,
-                    pontos: pontosDaSemana,
-                    valor: valorComissaoSemana,
-                    metaAtingida: metaAtingida
-                });
-            }
-            
-            res.dadosDetalhados = { semanas: detalhesSemanas };
-            break;
+            case 'SALARIO':
+                if (!mes_referencia) return res.status(400).json({ error: 'Mês obrigatório.' });
+                salarioProporcional = usuario.salario_fixo;
+                descontoVT = usuario.salario_fixo * (usuario.desconto_vt_percentual || 0 / 100);
+                periodoDetalhe = mes_referencia;
+                break;
 
             case 'PASSAGENS':
                 if (!data_inicio || !data_fim) return res.status(400).json({ error: 'Data de início e fim são obrigatórias para adiantamento de passagens.' });
@@ -263,7 +339,7 @@ router.get('/calcular', async (req, res) => {
         res.status(200).json({
             detalhes: {
                 funcionario: { id: usuario.id, nome: usuario.nome },
-                ciclo: { nome: periodoDetalhe },
+                ciclo: { nome: periodoDetalhe }, // Agora é a competência (Ex: "Janeiro/2026")
                 tipoPagamento: tipo_pagamento,
             },
             proventos: {
@@ -280,11 +356,7 @@ router.get('/calcular', async (req, res) => {
                 totalDescontos: parseFloat(descontos.toFixed(2)),
                 totalLiquidoAPagar: parseFloat(totalLiquido.toFixed(2))
             },
-            // Este campo pode ser mantido para depuração, mas não é mais a fonte principal
-            dadosBrutos: {
-                totalPontosComissao
-            },
-            detalhesComissao: detalhesComissaoCalculada 
+            dadosDetalhados: res.dadosDetalhados // Envia os dias detalhados
         });
 
     } catch (error) {

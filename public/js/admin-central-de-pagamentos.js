@@ -1,7 +1,6 @@
 // public/js/admin-central-de-pagamentos.js
 
 import { verificarAutenticacao } from '/js/utils/auth.js';
-import { ciclos } from '/js/utils/ciclos.js';
 import { fetchAPI } from '/js/utils/api-utils.js';
 
 
@@ -114,7 +113,9 @@ function preencherFiltrosComissao() {
     filtroEmpregadoEl.disabled = false;
 }
 
-/** Atualiza o filtro de ciclo na aba de COMISSÃO. */
+/** 
+ * Gera e preenche o filtro de competências (Meses)
+ */
 function atualizarFiltroCicloComissao() {
     const filtroCicloEl = document.getElementById('comissao-filtro-ciclo');
     const empregadoIdValue = document.getElementById('comissao-filtro-empregado').value;
@@ -124,69 +125,68 @@ function atualizarFiltroCicloComissao() {
 
     if (empregadoId) {
         filtroCicloEl.disabled = false;
-        
+        filtroCicloEl.innerHTML = '<option value="">Selecione a competência...</option>';
+
         const hoje = new Date();
-        hoje.setHours(0, 0, 0, 0);
+        const diaHoje = hoje.getDate();
+        
+        // CORREÇÃO LÓGICA DE COMPETÊNCIA:
+        // Se hoje é dia <= 20, estamos no fim da competência X. A competência X+1 ainda não começou.
+        // Se hoje é dia >= 21, já estamos no início da competência X+1.
+        
+        // Ex: Hoje 14/Dez. Competência atual: Dezembro (fecha 20/Dez). Janeiro só começa 21/Dez.
+        // Então começamos a lista a partir do mês ATUAL.
+        
+        let cursor = new Date(hoje.getFullYear(), hoje.getMonth(), 1); 
+        
+        // Se já passou do dia 20, o mês "oficial" de trabalho já virou.
+        if (diaHoje >= 21) {
+            cursor.setMonth(cursor.getMonth() + 1);
+        }
 
-        // <<< MUDANÇA: Agora vamos procurar pelo último ciclo fechado, independentemente do status de pagamento >>>
-        let ultimoCicloFechadoIndex = -1;
-        let htmlOptions = '<option value="">Selecione um ciclo...</option>';
+        for (let i = 0; i < 6; i++) {
+            const nomeMes = cursor.toLocaleString('pt-BR', { month: 'long' });
+            const ano = cursor.getFullYear();
+            // Capitaliza (janeiro -> Janeiro)
+            const nomeFormatado = nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1);
+            const valorCompetencia = `${nomeFormatado}/${ano}`; // Ex: "Janeiro/2026"
 
-        ciclos.forEach((ciclo, index) => {
-            const dataFimCicloStr = ciclo.semanas[ciclo.semanas.length - 1].fim;
-            const dataFimCiclo = new Date(dataFimCicloStr + 'T23:59:59');
-            const cicloJaTerminou = dataFimCiclo < hoje;
-
+            // Verifica se já foi pago (usando string da competência)
             const jaFoiPago = historicoComissoesPagas.some(
-                p => p.usuario_id === empregadoId && p.ciclo_nome === ciclo.nome
+                p => p.usuario_id === empregadoId && p.ciclo_nome === valorCompetencia
             );
 
-            let statusTexto = '';
-            let desabilitado = false;
+            // Verifica se o ciclo já fechou
+            // Ciclo Janeiro/2026 fecha em 20/01/2026
+            const dataFechamento = new Date(ano, cursor.getMonth(), 20, 23, 59, 59);
+            const cicloFechado = hoje > dataFechamento;
 
-            if (jaFoiPago) {
-                statusTexto = '[PAGO]';
-            } else if (!cicloJaTerminou) {
-                statusTexto = '(Em andamento)';
-                desabilitado = true;
-            }
+            let textoExtra = '';
+            if (jaFoiPago) textoExtra = ' [PAGO]';
+            else if (!cicloFechado) textoExtra = ' (Em aberto)';
 
-            // <<< MUDANÇA: A lógica de encontrar o índice foi simplificada >>>
-            // Se o ciclo já terminou, ele é um candidato. O último a satisfazer isso será o escolhido.
-            if (cicloJaTerminou) {
-                ultimoCicloFechadoIndex = index;
-            }
-            
-            htmlOptions += `<option value="${index}" ${desabilitado ? 'disabled' : ''}>${ciclo.nome} ${statusTexto}</option>`;
-        });
+            filtroCicloEl.innerHTML += `<option value="${valorCompetencia}">${valorCompetencia}${textoExtra}</option>`;
 
-        filtroCicloEl.innerHTML = htmlOptions;
-
-        // <<< MUDANÇA: Usa a nova variável para pré-selecionar >>>
-        if (ultimoCicloFechadoIndex !== -1) {
-            filtroCicloEl.value = ultimoCicloFechadoIndex;
-            // Dispara o cálculo automaticamente para o ciclo pré-selecionado
-            handleCalcularComissao(); 
+            // Volta 1 mês
+            cursor.setMonth(cursor.getMonth() - 1);
         }
 
     } else {
         filtroCicloEl.disabled = true;
         filtroCicloEl.innerHTML = '<option value="">Selecione o empregado</option>';
-        // Limpa a área de resultados se nenhum empregado for selecionado
-        const resultadoContainer = document.getElementById('comissao-resultado-container');
-        if (resultadoContainer) resultadoContainer.innerHTML = '';
+        document.getElementById('comissao-resultado-container').innerHTML = '';
     }
 }
-
 
 function renderizarResultadoComissao(dados) {
     const container = document.getElementById('comissao-resultado-container');
     if (!container) return;
 
-    const { proventos, totais, detalhesComissao } = dados;
+    const { proventos, totais, dadosDetalhados } = dados;
     const empregadoId = dados.detalhes.funcionario.id;
-    const cicloNome = dados.detalhes.ciclo.nome;
+    const cicloNome = dados.detalhes.ciclo.nome; // Ex: "Janeiro/2026"
 
+    // Verifica se já foi pago no histórico local
     const jaFoiPago = historicoComissoesPagas.some(
         p => p.usuario_id === empregadoId && p.ciclo_nome === cicloNome
     );
@@ -194,18 +194,20 @@ function renderizarResultadoComissao(dados) {
     let htmlAcaoPagamento = '';
 
     if (jaFoiPago) {
-        // Se já foi pago, mostra uma mensagem de status em destaque
+        // Se já foi pago, mostra mensagem de sucesso
         htmlAcaoPagamento = `
             <div class="cpg-card" style="margin-top: 30px; background-color: #e8f5e9; border-left: 5px solid var(--cpg-cor-receita);">
-                <h3 class="cpg-section-title" style="color: var(--cpg-cor-receita);"><i class="fas fa-check-circle"></i> Comissão Paga</h3>
-                <p>O pagamento de comissão para este ciclo e empregado já foi registrado no sistema.</p>
+                <h3 class="cpg-section-title" style="color: var(--cpg-cor-receita); border:none; padding:0; margin:0;">
+                    <i class="fas fa-check-circle"></i> Comissão Paga
+                </h3>
+                <p style="margin-top:10px;">O pagamento referente à competência <strong>${cicloNome}</strong> já foi registrado.</p>
             </div>
         `;
     } else if (proventos.comissao > 0) {
-        // Se não foi pago e há comissão, mostra a área para pagar
+        // Se não foi pago e tem valor, mostra o formulário de pagamento
         htmlAcaoPagamento = `
-            <div id="cpg-area-acao" class="cpg-card" style="margin-top: 30px;">
-                <h3 class="cpg-section-title">Confirmar Pagamento da Comissão</h3>
+            <div id="cpg-area-acao" class="cpg-card" style="margin-top: 30px; background-color: #fcfcfc;">
+                <h3 class="cpg-section-title">Confirmar Pagamento</h3>
                 <div class="cpg-form-row">
                     <div class="cpg-form-group">
                         <label for="comissao-conta-debito">Debitar da Conta Financeira*</label>
@@ -216,49 +218,88 @@ function renderizarResultadoComissao(dados) {
                     </div>
                     <div class="cpg-form-group" style="align-self: flex-end;">
                         <button id="comissao-btn-efetuar-pagamento" class="cpg-btn cpg-btn-primario" style="width: 100%;">
-                            <i class="fas fa-check-circle"></i> Pagar Comissão
+                            <i class="fas fa-money-check-alt"></i> Pagar Comissão
                         </button>
                     </div>
                 </div>
             </div>
         `;
+    } else {
+        // Sem valor a pagar
+        htmlAcaoPagamento = `
+            <div class="cpg-card" style="margin-top: 30px; text-align: center; color: #7f8c8d;">
+                <p>Nenhuma comissão gerada neste período.</p>
+            </div>
+        `;
     }
     
-    const tabelaBodyHtml = detalhesComissao.semanas.map(semana => `
+    // TABELA DIÁRIA COM RESGATES
+    // Verifica se dadosDetalhados e dias existem para evitar erro
+    const dias = (dadosDetalhados && dadosDetalhados.dias) ? dadosDetalhados.dias : [];
+    const resumo = (dadosDetalhados && dadosDetalhados.resumo) ? dadosDetalhados.resumo : { totalProduzido: 0, totalResgatado: 0 };
+    
+    const tabelaBodyHtml = dias.map(dia => {
+        const temResgate = dia.pontosResgatados > 0;
+        const estiloResgate = temResgate ? 'color: var(--cpg-cor-primaria); font-weight:bold;' : 'color: #ccc;';
+        const estiloMeta = dia.valor > 0 ? 'color: var(--cpg-cor-receita); font-weight:600;' : 'color: #999;';
+        const temExtra = dia.pontosExtras > 0;
+
+        return `
         <tr>
-            <td>${semana.periodo}</td>
-            <td style="text-align: center;">${Math.round(semana.pontos)}</td>
-            <td style="text-align: center;">${semana.metaAtingida}</td>
-            <td style="text-align: right;">${formatCurrency(semana.valor)}</td>
+            <td>${dia.data}</td>
+            <td style="text-align: center;">${Math.round(dia.pontosProduzidos)}</td>
+            
+            <!-- Coluna de Extras (Cofre Entrada) -->
+            <td style="text-align: center; color: ${temExtra ? '#27ae60' : '#ccc'}; font-weight: ${temExtra ? 'bold' : 'normal'};">
+                ${temExtra ? `+${Math.round(dia.pontosExtras)}` : '-'}
+            </td>
+
+            <td style="text-align: center; ${estiloResgate}">
+                ${temResgate ? `+${Math.round(dia.pontosResgatados)}` : '-'}
+            </td>
+            <td style="text-align: center; font-weight: bold; background-color: #f9f9f9;">${Math.round(dia.totalPontos)}</td>
+            <td style="text-align: center;">${dia.meta}</td>
+            <td style="text-align: right; ${estiloMeta}">
+                ${formatCurrency(dia.valor)}
+            </td>
         </tr>
-    `).join('');
+    `}).join('');
 
     const htmlCompleto = `
         <div class="cpg-resultado-comissao">
             <div class="cpg-resumo-grid">
                 <div class="cpg-resumo-card">
-                    <p class="label">Total de Pontos no Ciclo</p>
-                    <p class="valor">${Math.round(detalhesComissao.totalPontos)}</p>
+                    <p class="label">Pontos Produzidos</p>
+                    <p class="valor">${Math.round(resumo.totalProduzido)}</p>
                 </div>
                 <div class="cpg-resumo-card">
-                    <p class="label">${jaFoiPago ? 'Comissão Paga' : 'Comissão Total a Pagar'}</p>
+                    <p class="label">Cofre (Resgatados)</p>
+                    <p class="valor" style="color: var(--cpg-cor-primaria)">${Math.round(resumo.totalResgatado)}</p>
+                </div>
+                <div class="cpg-resumo-card">
+                    <p class="label">${jaFoiPago ? 'Valor Pago' : 'Total a Pagar'}</p>
                     <p class="valor ${jaFoiPago ? '' : 'positivo'}">${formatCurrency(proventos.comissao)}</p>
                 </div>
             </div>
             
-            <h3 class="cpg-section-title" style="margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">Detalhes por Semana</h3>
+            <h3 class="cpg-section-title" style="margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
+                Extrato Diário da Competência
+            </h3>
             <div class="cpg-tabela-container">
                 <table class="cpg-tabela-detalhes">
                     <thead>
                         <tr>
-                            <th>Período da Semana</th>
-                            <th style="text-align: center;">Pontos</th>
-                            <th style="text-align: center;">Meta Atingida</th>
-                            <th style="text-align: right;">Valor da Comissão</th>
+                            <th style="width: 15%;">Data</th>
+                            <th style="text-align: center;">Produção</th>
+                            <th style="text-align: center;">Resgate</th>
+                            <th style="text-align: center;">Extras (Cofre)</th> <!-- NOVA COLUNA -->
+                            <th style="text-align: center; background-color: #f0f0f0;">Total Dia</th>
+                            <th style="text-align: center;">Meta Batida</th>
+                            <th style="text-align: right;">Comissão</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${tabelaBodyHtml}
+                        ${dias.length > 0 ? tabelaBodyHtml : '<tr><td colspan="6" style="text-align:center; padding: 30px; color: #999;">Nenhuma atividade registrada neste período.</td></tr>'}
                     </tbody>
                 </table>
             </div>
@@ -283,6 +324,7 @@ function renderizarResultadoComissao(dados) {
 
 async function handleCalcularComissao() {
     const empregadoId = document.getElementById('comissao-filtro-empregado').value;
+    const competencia = document.getElementById('comissao-filtro-ciclo').value; // Agora pega a string "Dezembro/2025"
     const cicloIndex = document.getElementById('comissao-filtro-ciclo').value;
     const resultadoContainer = document.getElementById('comissao-resultado-container');
 
@@ -297,7 +339,7 @@ async function handleCalcularComissao() {
     try {
         const params = new URLSearchParams({
             usuario_id: empregadoId,
-            ciclo_index: cicloIndex,
+            competencia: competencia, // <<< Parametro novo
             tipo_pagamento: 'COMISSAO'
         });
 

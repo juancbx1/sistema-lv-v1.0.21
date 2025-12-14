@@ -42,7 +42,7 @@
     /* Elementos da UI */
     --ds-sombra-padrao: 0 4px 12px rgba(0, 0, 0, 0.08);
     --ds-raio-borda: 12px; /* Raio de borda um pouco maior para um look mais moderno */
-    --ds-fonte-principal: 'Segoe UI', 'Roboto', sans-serif;
+    --ds-fonte-principal: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 
     /* Dimensões e Espaçamentos */
     --ds-padding-card: 24px;
@@ -195,20 +195,28 @@ body.ds-body.autenticado {
     padding: 25px;
 }
 
-/* O novo Painel de Desempenho */
+/* Correção do Layout Principal */
 .ds-painel-desempenho {
     background-color: var(--ds-cor-branco);
     border-radius: var(--ds-raio-borda);
     padding: var(--ds-padding-card);
     box-shadow: var(--ds-sombra-padrao);
     margin-bottom: 25px;
-    display: grid;
-    grid-template-areas:
-        "foco-diario"
-        "resumo-semanal"
-        "metricas-rapidas";
-    gap: 25px;
     border: 1px solid var(--ds-cor-cinza-borda);
+    
+    /* MUDANÇA: Usando Flexbox para organizar os 3 blocos */
+    display: flex;
+    flex-direction: row; /* Lado a lado no desktop */
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 20px;
+    flex-wrap: wrap; /* Quebra linha se faltar espaço */
+}
+
+/* Tamanho dos blocos dentro do painel */
+.ds-painel-desempenho > * {
+    flex: 1; /* Todos tentam ocupar espaço igual */
+    min-width: 300px; /* Largura mínima para não esmagar */
 }
 
 .ds-painel-detalhamento {
@@ -223,16 +231,22 @@ body.ds-body.autenticado {
     margin-top: 5px;
 }
 
-/* Seção 1: Foco Diário */
+/* Ajuste específico para o Foco Diário (Anel) ficar centralizado se sobrar espaço */
 .ds-foco-diario {
-    grid-area: foco-diario;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 15px;
-    padding-bottom: 25px;
-    border-bottom: 1px solid var(--ds-cor-cinza-borda);
+    border-bottom: none; /* Remove borda antiga */
+    border-right: 1px solid var(--ds-cor-cinza-borda); /* Borda lateral */
+    padding-bottom: 0;
+    padding-right: 20px;
 }
+
+/* Remove a borda do último item */
+.ds-painel-desempenho > *:last-child {
+    border-right: none;
+}
+
 .ds-progress-ring-container {
     position: relative;
     display: flex;
@@ -692,7 +706,6 @@ body.ds-body.autenticado {
 /* Controles acima da lista */
 .ds-controles-detalhamento {
     margin-bottom: 15px;
-    display: flex; /* Essencial para alinhar os botões lado a lado */
     gap: 10px;    /* Cria um espaço entre os botões */
 }
 
@@ -1087,6 +1100,23 @@ body.ds-body.autenticado {
     color: var(--ds-cor-texto-botao-claro);
 }
 
+/* Botão de Filtro Ativo (Texto Branco) */
+.ds-btn-filtro-ativo {
+    background-color: var(--ds-cor-primaria) !important;
+    color: #ffffff !important;
+    border-color: var(--ds-cor-primaria) !important;
+}
+
+/* Botão de Filtro Inativo (Outline) */
+.ds-btn-filtro-inativo {
+    background-color: transparent !important;
+    color: var(--ds-cor-primaria) !important;
+    border-color: var(--ds-cor-primaria) !important;
+}
+.ds-btn-filtro-inativo:hover {
+    background-color: rgba(0, 123, 255, 0.1) !important;
+}
+
 /* --- Inputs e Selects --- */
 .ds-input, .ds-select {
     width: 100%;
@@ -1436,11 +1466,8 @@ body.ds-body.autenticado {
     align-items: center;
     gap: 10px;
     margin-top: 20px;
-    visibility: hidden; /* Oculta até que o JS determine se é necessária */
 }
-.ds-paginacao.visivel {
-    visibility: visible;
-}
+
 .ds-paginacao .ds-btn {
     padding: 8px 14px;
 }
@@ -2534,6 +2561,194 @@ body.ds-body.autenticado {
     animation: ds-pulso-atencao 2.5s infinite ease-in-out;
 }
 
+/* ==========================================================================
+   ESTILOS DOS NOVOS BLOCOS SEMANAIS (CARDS)
+   ========================================================================== */
+
+.ds-blocos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.ds-bloco-semana {
+    background-color: var(--ds-cor-cinza-claro-fundo);
+    border: 1px solid var(--ds-cor-cinza-borda);
+    border-radius: var(--ds-raio-borda);
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+/* Destaque para a semana atual */
+.ds-bloco-semana.atual {
+    background-color: #fff;
+    border-color: var(--ds-cor-primaria);
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+    transform: translateY(-2px);
+}
+
+.ds-bloco-header {
+    background-color: rgba(0,0,0,0.03);
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    color: var(--ds-cor-azul-escuro);
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--ds-cor-cinza-borda);
+}
+
+.ds-bloco-header small {
+    font-weight: 400;
+    color: var(--ds-cor-cinza-texto-secundario);
+}
+
+.ds-bloco-corpo {
+    padding: 12px;
+    text-align: center;
+}
+
+.ds-bloco-valor small {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--ds-cor-cinza-texto-secundario);
+    margin-bottom: 2px;
+}
+
+.ds-bloco-valor strong {
+    font-size: 1.1rem;
+    display: block;
+}
+
+.ds-bloco-valor strong.positivo { color: var(--ds-cor-sucesso); }
+.ds-bloco-valor strong.neutro { color: var(--ds-cor-cinza-texto-secundario); }
+
+.ds-bloco-pontos {
+    margin-top: 8px;
+    font-size: 0.85rem;
+    color: var(--ds-cor-primaria);
+    font-weight: 500;
+    background-color: rgba(var(--ds-cor-primaria-rgb), 0.1);
+    padding: 4px 8px;
+    border-radius: 12px;
+    display: inline-block;
+}
+
+/* Botão de Fechar Modal Simples (Cinza, Sem Borda, Dentro do Card) */
+.ds-modal-close-simple {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #999;
+    cursor: pointer;
+    padding: 5px;
+    line-height: 1;
+    transition: color 0.2s;
+    position: absolute; /* Para posicionar no topo direito relativo ao container */
+    top: 15px;
+    right: 15px;
+    z-index: 10;
+}
+
+.ds-modal-close-simple:hover {
+    color: var(--ds-cor-perigo); /* Fica vermelho só ao passar o mouse */
+    transform: scale(1.1);
+}
+
+/* --- BOTÃO DE RESGATE ESPECIAL --- */
+.ds-btn-resgate-especial {
+    background: linear-gradient(45deg, #11998e, #38ef7d); /* Gradiente Verde Vivo/Esmeralda */
+    color: #fff;
+    border: none;
+    font-size: 1.1rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-radius: 50px; /* Bem arredondado */
+    box-shadow: 0 4px 15px rgba(56, 239, 125, 0.4);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+    z-index: 1;
+}
+
+.ds-btn-resgate-especial:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 6px 20px rgba(56, 239, 125, 0.6);
+}
+
+.ds-btn-resgate-especial:active {
+    transform: scale(0.98);
+}
+
+/* Animação de Brilho passando */
+.ds-btn-resgate-especial::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    transition: 0.5s;
+    z-index: -1;
+    animation: ds-brilho-passando 3s infinite;
+}
+
+@keyframes ds-brilho-passando {
+    0% { left: -100%; }
+    20% { left: 100%; }
+    100% { left: 100%; }
+}
+
+/* Animação de Pulso (Batida) */
+.efeito-pulso {
+    animation: ds-botao-pulso 2s infinite;
+}
+
+@keyframes ds-botao-pulso {
+    0% { box-shadow: 0 0 0 0 rgba(56, 239, 125, 0.7); }
+    70% { box-shadow: 0 0 0 15px rgba(56, 239, 125, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(56, 239, 125, 0); }
+}
+
+/* --- OVERLAY DE CONFETE (GIF) --- */
+.ds-confete-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none; /* Permite clicar através dele se precisar */
+    z-index: 9999; /* Fica acima de tudo, até do modal */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s;
+}
+
+.ds-confete-overlay.ativo {
+    opacity: 1;
+    visibility: visible;
+}
+
+.ds-confete-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* Cobre a tela toda */
+}
+
+/* Responsividade para os blocos */
+@media (max-width: 480px) {
+    .ds-blocos-grid {
+        grid-template-columns: 1fr 1fr; /* 2 por linha no mobile */
+    }
+}
+
 
 /* ==========================================================================
    10. Media Queries para Responsividade
@@ -2572,6 +2787,11 @@ body.ds-body.autenticado {
             "foco-diario metricas-rapidas";
         grid-template-columns: 1fr 1.5fr;
         grid-template-rows: auto 1fr;
+    }
+
+    .ds-painel-desempenho {
+        flex-direction: column;
+        align-items: stretch;
     }
 
     .ds-card {
@@ -2625,9 +2845,6 @@ body.ds-body.autenticado {
         grid-template-columns: 1fr; /* Itens da lista viram coluna única */
     }
 
-    .ds-paginacao .ds-btn {
-        display: none; /* Esconde os botões "Anterior/Próximo", deixando só os números */
-    }
 }
 
 /* Layout para Celulares Padrão (Foco total no mobile) */
@@ -2645,7 +2862,7 @@ body.ds-body.autenticado {
     }
 
     .ds-card {
-        padding: 15px;
+        padding: 20px;
     }
 
     .ds-btn{
@@ -2711,6 +2928,6 @@ body.ds-body.autenticado {
 }
 
     .ds-card {
-        padding: 10px;
+        padding: 20px;
 }
 }

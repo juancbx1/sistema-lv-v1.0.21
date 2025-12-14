@@ -134,8 +134,8 @@ router.post('/versoes', async (req, res) => {
 
         // 2. Clona as regras da versão de origem para a nova versão
         const cloneRegrasQuery = `
-            INSERT INTO metas_regras (id_versao, tipo_usuario, nivel, pontos_meta, valor_comissao, descricao_meta, condicoes, data_criacao, data_atualizacao)
-            SELECT $1, tipo_usuario, nivel, pontos_meta, valor_comissao, descricao_meta, condicoes, NOW(), NOW()
+            INSERT INTO metas_regras (id_versao, tipo_usuario, nivel, pontos_meta, valor_comissao, descricao_meta, condicoes)
+            SELECT $1, tipo_usuario, nivel, pontos_meta, valor_comissao, descricao_meta, condicoes
             FROM metas_regras
             WHERE id_versao = $2;
         `;
@@ -229,8 +229,8 @@ router.post('/regras', async (req, res) => {
     try {
         dbClient = await pool.connect();
         const query = `
-            INSERT INTO metas_regras (id_versao, tipo_usuario, nivel, pontos_meta, valor_comissao, descricao_meta, data_criacao, data_atualizacao)
-            VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+            INSERT INTO metas_regras (id_versao, tipo_usuario, nivel, pontos_meta, valor_comissao, descricao_meta)
+            VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING *;
         `;
         const result = await dbClient.query(query, [id_versao, tipo_usuario, nivel, pontos_meta, valor_comissao, descricao_meta]);
@@ -256,8 +256,8 @@ router.delete('/regras/:id_regra', async (req, res) => {
                 pontos_meta = $1, 
                 valor_comissao = $2, 
                 descricao_meta = $3, 
-                condicoes = $4,
-                data_atualizacao = NOW()
+                condicoes = $4
+                -- REMOVIDO: data_atualizacao = NOW()
             WHERE id = $5
             RETURNING *;
         `;
