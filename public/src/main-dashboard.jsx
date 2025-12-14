@@ -78,7 +78,7 @@ export default function MainDashboard() {
                 // Botão do gráfico abre o mesmo modal de detalhes
                 aoAbrirDesempenho={() => setModalDesempenhoAberto(true)}
                 aoAbrirPerfil={() => setModalPerfilAberto(true)}
-                aoSair={() => { localStorage.removeItem('token'); window.location.href = '/login.html'; }}
+                aoSair={() => { localStorage.removeItem('token'); window.location.href = '/index.html'; }}
             />
 
             <main className="ds-container-principal">
