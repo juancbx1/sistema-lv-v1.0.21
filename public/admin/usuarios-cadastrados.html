@@ -15,39 +15,15 @@
         <i class="fas fa-bars"></i>
         <i class="fas fa-times"></i>
     </div>
-    <div class="container uc-container"> <!-- Adicionada classe uc-container para escopo -->
-        <section class="usuarios-cadastrados">
-            <h1>Gerenciar Usuários</h1>
-            <div class="uc-controles-topo">
-                <div class="uc-filtro-tipo">
-                    <label for="filtroTipoUsuario">Filtrar por Tipo:</label>
-                    <select id="filtroTipoUsuario">
-                        <option value="">Todos</option>
-                        <option value="administrador">Administrador</option>
-                        <option value="supervisor">Supervisor</option>
-                        <option value="lider_setor">Líder de Setor</option>
-                        <option value="costureira">Costureira</option>
-                        <option value="tiktik">TikTik</option>
-                        <option value="cortador">Cortador</option>
-                    </select>
-                </div>
-            </div>
+    <!-- Removemos tudo de dentro e deixamos apenas o container com o ID que definimos -->
+    <div id="root-usuarios"></div>
 
-            <div id="loadingSpinner" class="loading-spinner uc-loading-spinner">
-                <i class="fas fa-spinner fa-spin"></i> Carregando...
-            </div>
-            <div id="usuariosLista" class="uc-usuarios-lista">
-                <!-- Os cards dos usuários serão inseridos aqui pelo JS -->
-            </div>
-            <div class="gs-paginacao-container">
-                <button id="prevPage" class="gs-paginacao-btn">Anterior</button>
-                <span id="pageInfo" class="gs-paginacao-info"></span>
-                <button id="nextPage" class="gs-paginacao-btn">Próximo</button>
-            </div>
-        </section>
-    </div>
-
-    <script src="/js/admin-usuarios-cadastrados.js" type="module"></script>
+    <!-- Scripts -->
+    <!-- Mantém o script do menu lateral se ele for separado -->
     <script src="/js/carregar-menu-lateral.js" type="module"></script>
+    
+    <!-- IMPORTANTE: Apontamos para o arquivo JSX novo -->
+    <!-- O type="module" é essencial para o Vite funcionar -->
+    <script type="module" src="/src/index-usuarios.jsx"></script>
 </body>
 </html>

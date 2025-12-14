@@ -53,23 +53,15 @@ router.get('/status-funcionarios', async (req, res) => {
         const result = await dbClient.query(query);
 
         const resultadoFinal = result.rows.map(row => {
-            // 1. Calcula o status baseado no horário (Automático)
-            let statusFinal = determinarStatusFinalServidor(row);
-            
-            // 2. LÓGICA DE PRECEDÊNCIA (A CORREÇÃO):
-            // Se o banco diz que ele está "LIVRE" (liberado manualmente), 
-            // ignoramos o "ALMOÇO" ou "FORA_DO_HORARIO" calculado pelo horário.
-            if (row.status_atual === 'LIVRE') {
-                statusFinal = 'LIVRE';
-            } 
-            // Se o banco diz que ele está em "PAUSA_MANUAL" ou "FALTOU", respeitamos também.
-            else if (['PAUSA_MANUAL', 'FALTOU', 'ALOCADO_EXTERNO'].includes(row.status_atual)) {
-                statusFinal = row.status_atual;
-            }
+            // 1. Calcula o status baseado no horário (Automático: ALMOCO, PAUSA, FORA_DO_HORARIO, etc)
+            let statusCalculado = determinarStatusFinalServidor(row);
 
-            // 3. Se tiver tarefa ativa, ganha de tudo (PRODUZINDO)
+            // 2. LÓGICA DE PRECEDÊNCIA CORRIGIDA:
+
+            // Se o usuário está em uma tarefa (Sessão Ativa), isso ganha de TUDO.
             const tarefaAtiva = row.id_sessao ? {
                 id_sessao: row.id_sessao,
+                // ... (resto dos dados da tarefa)
                 op_numero: row.op_numero,
                 produto_id: row.produto_id,
                 produto_nome: row.produto_nome,
@@ -79,13 +71,39 @@ router.get('/status-funcionarios', async (req, res) => {
                 data_inicio: row.data_inicio,
             } : null;
 
+            let statusFinal = statusCalculado; // Começamos assumindo o cálculo do horário/manual forte
+
+            if (tarefaAtiva) {
+                statusFinal = 'PRODUZINDO';
+            } 
+            // Se não está produzindo, verificamos se o cálculo automático retornou apenas "LIVRE"
+            // Mas o banco diz que é uma exceção manual forte (ex: FALTOU, PAUSA_MANUAL, ALOCADO_EXTERNO)
+            else {
+                // Lista de status manuais que DEVEM prevalecer sobre o horário automático
+                // OBS: 'LIVRE' não entra aqui, pois 'LIVRE' no banco é placeholder.
+                const statusManuaisFortes = ['FALTOU', 'PAUSA_MANUAL', 'ALOCADO_EXTERNO', 'LIVRE_MANUAL'];
+                
+                if (statusManuaisFortes.includes(row.status_atual)) {
+                    // Precisamos verificar se essa definição manual é de HOJE (lógica que já existe no determinarStatusFinal, mas reforçamos)
+                    // Como o determinarStatusFinalServidor já trata data, podemos confiar nele OU no row.status_atual direto.
+                    // Pela sua lógica atual, row.status_atual é o que manda se for manual.
+                    statusFinal = row.status_atual;
+                    
+                    // Ajuste visual: LIVRE_MANUAL deve aparecer como LIVRE para o usuário, mas com prioridade alta
+                    if (statusFinal === 'LIVRE_MANUAL') statusFinal = 'LIVRE'; 
+                }
+                // SE NÃO FOR MANUAL FORTE:
+                // Mantemos o `statusCalculado`. 
+                // Isso significa que se o banco diz "LIVRE", mas o horário diz "ALMOCO", o statusCalculado será "ALMOCO".
+                // Isso corrige o seu bug!
+            }
+
             return {
                 id: row.id,
                 nome: row.nome,
                 avatar_url: row.avatar_url,
                 tipos: row.tipos,
-                // Se tem tarefa, é PRODUZINDO. Senão, usa o status que calculamos acima.
-                status_atual: tarefaAtiva ? 'PRODUZINDO' : statusFinal,
+                status_atual: statusFinal,
                 tarefa_atual: tarefaAtiva
             }
         });

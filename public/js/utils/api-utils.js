@@ -9,12 +9,11 @@
  */
 export async function fetchAPI(endpoint, options = {}) {
     const token = localStorage.getItem('token');
-    if (!token) {
-        // Se não houver token, idealmente redirecionamos para o login.
-        // Lançar um erro aqui é uma boa forma de parar o fluxo.
-        alert("Sessão expirada ou inválida. Por favor, faça login novamente.");
-        window.location.href = '/login.html';
-        throw new Error('Token de autenticação não encontrado.');
+    
+    // Se não tiver token e não for login, redireciona (ajuste conforme sua rota de login)
+    if (!token && !endpoint.includes('login')) {
+        window.location.href = '/login.html'; 
+        throw new Error('Sessão expirada');
     }
 
     const defaultHeaders = {
@@ -33,22 +32,24 @@ export async function fetchAPI(endpoint, options = {}) {
     try {
         const response = await fetch(endpoint, config);
 
+        // Tratamento para 401 (Não autorizado/Token expirado)
+        if (response.status === 401) {
+            localStorage.removeItem('token');
+            window.location.href = '/login.html';
+            throw new Error('Sessão expirada. Faça login novamente.');
+        }
+
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: `Erro HTTP ${response.status}: ${response.statusText}` }));
-            throw new Error(errorData.error || `Erro desconhecido na API.`);
+            const errorData = await response.json().catch(() => ({ error: response.statusText }));
+            throw new Error(errorData.error || `Erro HTTP ${response.status}`);
         }
 
-        // Lida com respostas que não têm corpo (ex: 204 No Content)
-        const contentType = response.headers.get("content-type");
-        if (response.status === 204 || !contentType || !contentType.includes("application/json")) {
-            return null;
-        }
+        // Se for 204 No Content
+        if (response.status === 204) return null;
 
-        return response.json();
-
+        return await response.json();
     } catch (error) {
-        console.error(`Erro na chamada da API para ${endpoint}:`, error);
-        // Re-lança o erro para que a função que chamou possa tratá-lo (ex: mostrar um alerta).
+        console.error(`Erro na API (${endpoint}):`, error);
         throw error;
     }
 }

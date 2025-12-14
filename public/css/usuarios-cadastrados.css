@@ -333,6 +333,210 @@ body.menu-aberto .uc-container {
     text-align: center;
 }
 
+/* UserStyles.css */
+
+/* --- Container e Layout --- */
+.uc-container {
+    width: 100%;
+    padding: 20px;
+}
+
+.uc-usuarios-lista {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 25px;
+    margin-top: 20px;
+}
+
+/* --- Cards --- */
+.usuario-card-custom {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    transition: all 0.3s ease;
+    background-color: var(--gs-branco, #fff);
+    border-radius: var(--gs-raio-borda-card, 8px);
+    box-shadow: var(--gs-sombra-card, 0 2px 5px rgba(0,0,0,0.1));
+    padding: 20px;
+}
+
+/* Status: Ex-Empregado e Ex-Sócio (Opacidade e Fundo) */
+.usuario-card-custom.status-ex-empregado {
+    background-color: #f2f2f2;
+    opacity: 0.9;
+    border: 1px dashed #ccc;
+}
+
+.card-cabecalho {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.card-titulo-nome {
+    font-size: 1.2rem;
+    color: var(--gs-secundaria, #2c3e50);
+    margin: 0;
+}
+
+/* --- Badges de Status (Pílulas) --- */
+.status-selo {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border-radius: 50px;
+    text-transform: uppercase;
+    color: #fff;
+    margin-left: 5px;
+}
+
+.status-selo.empregado { background-color: var(--gs-sucesso, #27ae60); }
+.status-selo.ex-empregado { background-color: #95a5a6; } /* Cinza */
+.status-selo.ferias { background-color: var(--gs-aviso, #f39c12); }
+
+/* NOVO: Estilo para Sócio */
+.status-selo.socio { 
+    background-color: #f1c40f; /* Dourado/Amarelo forte */
+    color: #2c3e50; /* Texto escuro para contraste */
+    border: 1px solid #d4ac0d;
+}
+
+/* --- Conteúdo do Card --- */
+.card-secao {
+    padding-top: 10px;
+    border-top: 1px dashed #eee;
+}
+.card-secao:first-of-type { border-top: none; }
+
+.card-secao-titulo {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--gs-primaria, #3498db);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
+
+.card-secao p {
+    margin: 5px 0;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+}
+
+.card-secao p > span:first-child {
+    font-weight: 600;
+    min-width: 100px;
+    color: #555;
+}
+
+.uc-dado-texto { color: #333; }
+
+/* Jornada Display */
+.jornada-display {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px 10px;
+    font-size: 0.85rem;
+    background: #f9f9f9;
+    padding: 8px;
+    border-radius: 5px;
+}
+
+/* Grid de Edição da Jornada */
+.jornada-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+.jornada-grid label { font-size: 0.75rem; display: block; margin-bottom: 2px;}
+
+/* Inputs */
+.uc-form-group { margin-bottom: 15px; }
+.uc-form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
+.uc-tipos-container { background: #f9f9f9; padding: 10px; border-radius: 5px; }
+
+/* Botões */
+.uc-card-botoes-container {
+    margin-top: auto;
+    padding-top: 15px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    border-top: 1px solid #eee;
+}
+
+/* --- MODAIS (Estilo React) --- */
+.uc-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    animation: fadeIn 0.2s;
+}
+
+.uc-modal-content {
+    background-color: #fff;
+    padding: 25px;
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    width: 90%;
+    max-width: 500px;
+    position: relative;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.uc-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+.uc-modal-header h2 { margin: 0; font-size: 1.4rem; color: #2c3e50; }
+
+.uc-modal-close-btn {
+    background: none;
+    border: none;
+    font-size: 2rem;
+    line-height: 1;
+    cursor: pointer;
+    color: #999;
+}
+.uc-modal-close-btn:hover { color: #e74c3c; }
+
+.uc-form-ferias {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+}
+
+.uc-historico-ferias-lista {
+    list-style: none;
+    padding: 0;
+    margin-top: 10px;
+    border: 1px solid #eee;
+    max-height: 150px;
+    overflow-y: auto;
+}
+.uc-historico-ferias-lista li {
+    padding: 8px 12px;
+    border-bottom: 1px solid #eee;
+    font-size: 0.9rem;
+}
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
 
 /* --- Responsividade --- */
 @media (max-width: 1024px) {

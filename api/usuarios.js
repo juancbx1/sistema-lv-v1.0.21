@@ -321,6 +321,7 @@ router.get('/', async (req, res) => {
                 ) AS esta_de_ferias
             FROM usuarios u
             LEFT JOIN fc_contatos c ON u.id_contato_financeiro = c.id
+            WHERE (u.arquivado IS FALSE OR u.arquivado IS NULL) -- <<< ESCONDE OS ARQUIVADOS
             ORDER BY u.nome ASC;
         `;
     // Passamos a variável de ambiente como um parâmetro para a query
@@ -564,7 +565,7 @@ router.put('/batch', async (req, res) => {
     }
 });
 
-// DELETE /api/usuarios (ID no corpo)
+// DELETE /api/usuarios (Agora faz SOFT DELETE / ARQUIVAMENTO)
 router.delete('/', async (req, res) => {
     const { usuarioLogado, dbCliente } = req;
     try {
@@ -574,16 +575,40 @@ router.delete('/', async (req, res) => {
         }
         const { id } = req.body;
         if (!id) {
-             return res.status(400).json({ error: 'ID do usuário é obrigatório para exclusão.' });
+             return res.status(400).json({ error: 'ID do usuário é obrigatório.' });
         }
-        const result = await dbCliente.query('DELETE FROM usuarios WHERE id = $1 RETURNING id', [id]);
+
+        // --- LÓGICA DE ARQUIVAMENTO (SOFT DELETE) ---
+        // 1. Marca como arquivado
+        // 2. Define data de demissão para hoje (se não tiver)
+        // 3. Altera nome_usuario e email para liberar o uso para futuros cadastros
+        // 4. Limpa status e sessão
+        
+        const timestamp = Date.now();
+        const query = `
+            UPDATE usuarios 
+            SET 
+                arquivado = TRUE,
+                status_atual = 'LIVRE',
+                id_sessao_trabalho_atual = NULL,
+                data_demissao = COALESCE(data_demissao, CURRENT_DATE),
+                nome_usuario = nome_usuario || '_arq_' || $2,
+                email = email || '_arq_' || $2
+            WHERE id = $1 
+            RETURNING id, nome
+        `;
+
+        const result = await dbCliente.query(query, [id, timestamp]);
+
         if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'Usuário não encontrado para exclusão.' });
+            return res.status(404).json({ error: 'Usuário não encontrado para arquivamento.' });
         }
-        res.status(200).json({ message: 'Usuário excluído com sucesso.', id: result.rows[0].id });
+        
+        res.status(200).json({ message: 'Usuário arquivado com sucesso.', id: result.rows[0].id });
+
     } catch (error) {
         console.error('[router/usuarios DELETE] Erro:', error);
-        res.status(500).json({ error: 'Erro ao excluir usuário', details: error.message });
+        res.status(500).json({ error: 'Erro ao arquivar usuário', details: error.message });
     } finally {
         if (dbCliente) dbCliente.release();
     }
