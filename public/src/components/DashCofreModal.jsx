@@ -6,20 +6,40 @@ export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, aoRe
     const [loading, setLoading] = useState(false);
     const [tela, setTela] = useState('resumo'); 
     const [historico, setHistorico] = useState([]);
-    const [celebrando, setCelebrando] = useState(false); // Estado para controlar o confete
 
     if (!dadosCofre) return null;
 
     const saldo = parseFloat(dadosCofre.saldo || 0);
     const usos = dadosCofre.usos || 0;
     const limiteUsos = 5;
+    const resgatesRestantes = Math.max(0, limiteUsos - usos);
     
+    // Cálculos de Regra
     const faltaParaMeta = metaDoDia ? Math.max(0, metaDoDia.pontos_meta - pontosHoje) : 0;
-    const podeResgatar = faltaParaMeta > 0 && saldo >= faltaParaMeta && usos < limiteUsos;
+    const temSaldoSuficiente = saldo >= faltaParaMeta;
+    const temVidas = usos < limiteUsos;
+    const podeResgatar = faltaParaMeta > 0 && temSaldoSuficiente && temVidas;
 
-    // Usando um placeholder transparente por enquanto se não tiver a imagem
-    const gifConfeteUrl = "https://ock3xwuhzid9sows.public.blob.vercel-storage.com/dashboard_empregados/confetti_pop_2.gif"; // Exemplo online
+    // --- LÓGICA VISUAL (Rico vs Pobre) ---
+    // Rico: Se tem saldo suficiente PRA HOJE, ou se já bateu a meta (falta = 0), ou se tem saldo sobrando muito.
+    // Vamos simplificar: Se tem saldo suficiente para o problema de hoje, é RICO.
+    const isRico = temSaldoSuficiente || faltaParaMeta === 0;
+    
+    // Bloqueado: É rico (tem dinheiro), mas não tem vidas.
+    const isBloqueado = isRico && !temVidas && faltaParaMeta > 0;
 
+    // Definição das Imagens (Coloque suas URLs reais aqui)
+    const imgRico = "https://ock3xwuhzid9sows.public.blob.vercel-storage.com/dashboard_empregados/porquinho_rico.png";
+    const imgPobre = "https://ock3xwuhzid9sows.public.blob.vercel-storage.com/dashboard_empregados/porquinho_pobre.png";
+
+    let classeCofre = isRico ? 'ds-cofre-rico' : 'ds-cofre-pobre';
+    let imagemAtual = isRico ? imgRico : imgPobre;
+    
+    if (isBloqueado) {
+        classeCofre = 'ds-cofre-bloqueado'; // Visual específico
+    }
+
+    // --- FUNÇÕES DE AÇÃO ---
     const handleResgatar = async () => {
         const confirmado = await mostrarConfirmacao(`Usar ${faltaParaMeta} pts do cofre para completar o dia?`);
         if (!confirmado) return;
@@ -30,53 +50,14 @@ export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, aoRe
                 method: 'POST',
                 body: JSON.stringify({ quantidade: faltaParaMeta })
             });
-            
-            // --- INÍCIO DA CELEBRAÇÃO ---
-            setLoading(false);
-            setCelebrando(true); // Ativa o GIF
-            
-            // Toca um som se quiser (opcional)
-            // const audio = new Audio('/sounds/success.mp3'); audio.play();
-
-            // Espera 3 segundos curtindo o momento
-            setTimeout(() => {
-                setCelebrando(false);
-                aoResgatarSucesso(); // Atualiza os dados da dashboard
-                onClose(); // Fecha o modal
-                mostrarMensagem('Meta batida com sucesso! Muito bem!!', 'sucesso');
-            }, 3000);
-            
+            mostrarMensagem('Resgate realizado com sucesso!', 'sucesso');
+            aoResgatarSucesso();
+            onClose();
         } catch (error) {
             mostrarMensagem(`Erro: ${error.message}`, 'erro');
+        } finally {
             setLoading(false);
         }
-    };
-
-    // --- RENDERIZAÇÃO DAS VIDAS (MOEDAS) ---
-    const renderVidas = () => {
-        const moedas = [];
-        for (let i = 0; i < limiteUsos; i++) {
-            // Se i < usos, a moeda já foi gasta (Cinza)
-            // Se i >= usos, a moeda está disponível (Dourada)
-            const gasta = i < usos;
-            moedas.push(
-                <i key={i} 
-                   className="fas fa-coins" 
-                   title={gasta ? "Uso gasto" : "Uso disponível"}
-                   style={{
-                       color: gasta ? '#e0e0e0' : '#ffc107', // Cinza vs Dourado
-                       fontSize: '1.2rem',
-                       margin: '0 2px',
-                       filter: gasta ? 'none' : 'drop-shadow(0 2px 2px rgba(0,0,0,0.1))'
-                   }}
-                ></i>
-            );
-        }
-        return (
-            <div style={{marginTop: '5px', display:'flex', justifyContent:'center', gap:'5px'}}>
-                {moedas}
-            </div>
-        );
     };
 
     const carregarExtrato = async () => {
@@ -85,22 +66,98 @@ export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, aoRe
             const dados = await fetchAPI('/api/dashboard/cofre/extrato');
             setHistorico(dados);
             setTela('extrato');
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setLoading(false);
-        }
+        } catch (error) { console.error(error); } finally { setLoading(false); }
     };
 
-    const imgPorquinho = "https://ock3xwuhzid9sows.public.blob.vercel-storage.com/dashboard_empregados/porquinho_dashboard.png"; 
+    const renderVidas = () => {
+        const moedas = [];
+        for (let i = 0; i < limiteUsos; i++) {
+            const gasta = i < usos;
+            moedas.push(
+                <i key={i} className="fas fa-coins" style={{
+                    color: gasta ? '#e0e0e0' : '#ffc107', 
+                    fontSize: '1.2rem', margin: '0 2px', 
+                    filter: gasta ? 'none' : 'drop-shadow(0 2px 2px rgba(0,0,0,0.1))'
+                }}></i>
+            );
+        }
+        return (
+            <div style={{marginTop: '10px'}}>
+                <div style={{display:'flex', justifyContent:'center', gap:'5px'}}>{moedas}</div>
+                <div style={{fontSize: '0.8rem', color: resgatesRestantes > 0 ? 'var(--ds-cor-sucesso)' : 'var(--ds-cor-perigo)', marginTop: '5px', fontWeight: '600'}}>
+                    {resgatesRestantes > 0 
+                        ? `Você ainda tem ${resgatesRestantes} resgates neste ciclo.` 
+                        : `Acabaram seus resgates deste ciclo.`
+                    }
+                </div>
+            </div>
+        );
+    };
 
-    // --- TELA EXTRATO (Sem alterações de lógica, só mantendo) ---
+    // --- RENDERIZAÇÃO RESUMO ---
+    const renderResumo = () => (
+        <>
+            {/* IMAGEM VIVA COM ESTADOS */}
+            <div className={`ds-cofre-container ${classeCofre}`}>
+                <img src={imagemAtual} alt="Estado do Cofre" className="ds-cofre-img" />
+                {isBloqueado && (
+                    <div className="ds-cofre-overlay-icon" title="Bloqueado por limite de usos">
+                        <i className="fas fa-lock"></i>
+                    </div>
+                )}
+            </div>
+            
+            <h2 style={{color: 'var(--ds-cor-azul-escuro)', marginBottom: '5px'}}>Banco de Resgate</h2>
+            <p style={{color: '#666', fontSize: '0.9rem', marginBottom: '20px'}}>
+                Acumule sobras de produção para usar em emergências.
+            </p>
+
+            <div style={{backgroundColor: '#f8f9fa', padding: '15px', borderRadius: '12px', marginBottom: '20px'}}>
+                <div style={{fontSize: '0.9rem', color: '#666', textTransform:'uppercase', letterSpacing:'1px', fontWeight:'600'}}>Saldo do Cofre</div>
+                <div style={{fontSize: '2.5rem', fontWeight: '800', color: isRico ? 'var(--ds-cor-primaria)' : '#666'}}>
+                    {Math.round(saldo)} <span style={{fontSize:'1rem'}}>pts</span>
+                </div>
+                {renderVidas()}
+            </div>
+
+            {faltaParaMeta > 0 ? (
+                <div style={{marginBottom: '20px'}}>
+                    {podeResgatar ? (
+                        <button 
+                            className="ds-btn-resgate-especial efeito-pulso"
+                            disabled={loading}
+                            onClick={handleResgatar}
+                            style={{width: '100%', padding: '18px', display:'flex', justifyContent:'center', alignItems:'center', gap:'10px'}}
+                        >
+                            <i className="fas fa-bolt"></i> USAR RESGATE AGORA
+                        </button>
+                    ) : (
+                        <div style={{backgroundColor: '#fff3cd', borderRadius: '12px', padding: '15px', border: '1px solid #ffeeba', color: '#856404'}}>
+                            {usos >= limiteUsos ? (
+                                <><div style={{fontWeight: 'bold', marginBottom:'5px'}}><i className="fas fa-ban"></i> Limite Atingido</div><div style={{fontSize:'0.85rem'}}>Aguarde o próximo ciclo.</div></>
+                            ) : (
+                                <><div style={{fontWeight: 'bold', marginBottom:'5px'}}><i className="fas fa-piggy-bank"></i> Saldo Insuficiente</div><div style={{fontSize:'0.85rem'}}>Faltam {Math.ceil(faltaParaMeta - saldo)} pts.</div></>
+                            )}
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <div style={{padding: '15px', backgroundColor: '#e6fffa', color: '#2c7a7b', borderRadius: '8px', marginBottom: '20px'}}>
+                    <i className="fas fa-check-circle"></i> Parabéns! A meta de hoje já foi batida.
+                </div>
+            )}
+
+            <button className="ds-btn ds-btn-secundario" style={{width: '100%'}} onClick={carregarExtrato} disabled={loading}>
+                Ver Extrato
+            </button>
+        </>
+    );
+
+    // --- RENDERIZAÇÃO EXTRATO (Inalterado, apenas mantendo) ---
     const renderExtrato = () => (
         <div style={{textAlign: 'left'}}>
             <div style={{display:'flex', alignItems:'center', marginBottom:'20px'}}>
-                <button onClick={() => setTela('resumo')} className="ds-btn-fechar-painel-padrao" style={{position:'static', marginRight:'15px', backgroundColor:'var(--ds-cor-cinza-claro-fundo)', color:'#666', border:'none'}}>
-                    <i className="fas fa-arrow-left"></i>
-                </button>
+                <button onClick={() => setTela('resumo')} className="ds-btn-fechar-painel-padrao" style={{position:'static', marginRight:'15px', backgroundColor:'var(--ds-cor-cinza-claro-fundo)', color:'#666', border:'none'}}><i class="fas fa-arrow-left"></i></button>
                 <h3 style={{margin:0, color:'var(--ds-cor-azul-escuro)'}}>Extrato</h3>
             </div>
             <div style={{maxHeight:'300px', overflowY:'auto', borderTop:'1px solid #eee'}}>
@@ -121,75 +178,12 @@ export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, aoRe
         </div>
     );
 
-   // --- Renderização do Resumo (COM O NOVO BOTÃO) ---
-    const renderResumo = () => (
-        <>
-            <img src={imgPorquinho} alt="Cofre" style={{width:'80px', height:'80px', borderRadius:'50%', margin: '0 auto 10px auto', boxShadow: '0 4px 10px rgba(0,0,0,0.1)'}} />
-            
-            <div style={{backgroundColor: '#f8f9fa', padding: '15px', borderRadius: '12px', marginBottom: '20px'}}>
-                <div style={{fontSize: '0.9rem', color: '#666', textTransform:'uppercase', letterSpacing:'1px', fontWeight:'600'}}>Saldo do Cofre</div>
-                <div style={{fontSize: '2.2rem', fontWeight: '800', color: 'var(--ds-cor-primaria)'}}>
-                    {Math.round(saldo)}
-                </div>
-                {renderVidas()}
-            </div>
-
-            {faltaParaMeta > 0 ? (
-                <div style={{marginBottom: '20px'}}>
-                    {podeResgatar ? (
-                        <div>
-                            <p style={{color: '#666', marginBottom: '15px', fontSize:'0.9rem'}}>
-                                Use seu saldo para cobrir os <strong>{faltaParaMeta} pts</strong> faltantes.
-                            </p>
-                            
-                            {/* O BOTÃO ESPECIAL */}
-                            <button 
-                                className="ds-btn-resgate-especial efeito-pulso"
-                                disabled={loading}
-                                onClick={handleResgatar}
-                                style={{width: '100%', padding: '18px', display:'flex', justifyContent:'center', alignItems:'center', gap:'10px'}}
-                            >
-                                <i className="fas fa-bolt"></i> USAR RESGATE AGORA
-                            </button>
-
-                        </div>
-                    ) : (
-                        <div style={{backgroundColor: '#fff3cd', borderRadius: '12px', padding: '15px', border: '1px solid #ffeeba', color: '#856404'}}>
-                            {usos >= limiteUsos ? (
-                                <><div style={{fontWeight: 'bold', marginBottom:'5px'}}><i className="fas fa-ban"></i> Limite Atingido</div><div style={{fontSize:'0.85rem'}}>Ciclo encerrado.</div></>
-                            ) : (
-                                <><div style={{fontWeight: 'bold', marginBottom:'5px'}}><i className="fas fa-piggy-bank"></i> Saldo Insuficiente</div><div style={{fontSize:'0.85rem'}}>Junte mais pontos!</div></>
-                            )}
-                        </div>
-                    )}
-                </div>
-            ) : (
-                <div style={{padding: '15px', backgroundColor: '#e6fffa', color: '#2c7a7b', borderRadius: '8px', marginBottom: '20px'}}>
-                    <i className="fas fa-check-circle"></i> Meta de hoje já batida!
-                </div>
-            )}
-
-            <button className="ds-btn ds-btn-secundario" style={{width: '100%'}} onClick={carregarExtrato} disabled={loading}>
-                Ver Extrato
-            </button>
-        </>
-    );
-
     return (
-        <>
-            {/* OVERLAY DE CONFETE (Fora do container do modal para cobrir a tela toda) */}
-            <div className={`ds-confete-overlay ${celebrando ? 'ativo' : ''}`}>
-                <img src={gifConfeteUrl} alt="Celebração" className="ds-confete-img" />
+        <div className="ds-popup-overlay ativo" onClick={onClose} style={{zIndex: 1200}}>
+            <div className="ds-modal-assinatura-content" onClick={e => e.stopPropagation()} style={{textAlign: 'center', padding: '30px', position:'relative', maxWidth:'400px'}}>
+                <button className="ds-modal-close-simple" onClick={onClose}><i class="fas fa-times"></i></button>
+                {tela === 'resumo' ? renderResumo() : renderExtrato()}
             </div>
-
-            <div className="ds-popup-overlay ativo" onClick={!celebrando ? onClose : undefined} style={{zIndex: 1200, opacity: celebrando ? 0 : 1, transition: 'opacity 0.5s'}}>
-                <div className="ds-modal-assinatura-content" onClick={e => e.stopPropagation()} style={{textAlign: 'center', padding: '30px', position:'relative', maxWidth:'400px'}}>
-                    <button className="ds-modal-close-simple" onClick={onClose} disabled={celebrando}>
-                        <i className="fas fa-times"></i>
-                    </button>
-                    {tela === 'resumo' ? renderResumo() : renderExtrato()}
-                </div>
-            </div>
-        </>
+        </div>
     );
 }

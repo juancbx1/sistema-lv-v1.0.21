@@ -2742,6 +2742,72 @@ body.ds-body.autenticado {
     object-fit: cover; /* Cobre a tela toda */
 }
 
+/* --- ESTILOS DO COFRE (EMOÇÕES) --- */
+.ds-cofre-container {
+    width: 110px; /* Um pouco maior para caber a borda */
+    height: 110px;
+    margin: 0 auto 15px auto;
+    position: relative; /* Para posicionar o cadeado */
+}
+
+.ds-cofre-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    background-color: #fff;
+}
+
+/* ESTADO: RICO (Tem saldo ou meta batida) */
+.ds-cofre-rico .ds-cofre-img {
+    border: 5px solid #ffc107; /* Dourado */
+    box-shadow: 0 0 20px rgba(255, 193, 7, 0.5);
+    transform: scale(1.05);
+    animation: ds-cofre-feliz 3s infinite ease-in-out;
+}
+
+/* ESTADO: POBRE (Falta saldo) */
+.ds-cofre-pobre .ds-cofre-img {
+    border: 5px solid #dc3545; /* Vermelho */
+    filter: grayscale(0.6) contrast(0.9); /* Aspecto "triste/apagado" */
+    box-shadow: none;
+}
+
+/* ESTADO: BLOQUEADO (Tem saldo, sem vidas) */
+.ds-cofre-bloqueado .ds-cofre-img {
+    border-color: #6c757d; /* Cinza */
+    filter: brightness(0.8);
+}
+
+.ds-cofre-overlay-icon {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    background-color: #dc3545;
+    color: #fff;
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    border: 3px solid #fff;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    animation: ds-pop-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes ds-cofre-feliz {
+    0%, 100% { transform: scale(1.05); }
+    50% { transform: scale(1.1); box-shadow: 0 0 30px rgba(255, 193, 7, 0.8); }
+}
+
+@keyframes ds-pop-in {
+    from { transform: scale(0); }
+    to { transform: scale(1); }
+}
+
 /* Responsividade para os blocos */
 @media (max-width: 480px) {
     .ds-blocos-grid {
