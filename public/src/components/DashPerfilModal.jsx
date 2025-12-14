@@ -99,7 +99,7 @@ export default function DashPerfilModal({ usuarioAtual, onClose, aoAtualizarAvat
                 
                 {/* Avatar Atual Grande */}
                 <div style={{width: '120px', height: '120px', borderRadius: '50%', margin: '0 auto 20px auto', border: '4px solid #fff', boxShadow: '0 4px 10px rgba(0,0,0,0.1)'}}>
-                    <img src={usuarioAtual?.avatar_url || '/img/default-avatar.png'} alt="Atual" style={{width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%'}} />
+                    <img src={usuarioAtual?.avatar_url || './img/default-avatar.png'} alt="Atual" style={{width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%'}} />
                 </div>
 
                 <div style={{marginBottom: '20px'}}>
