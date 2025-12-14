@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { fetchAPI } from '/js/utils/api-utils.js';
 // IMPORTA O GERENCIADOR DE POPUPS
 import { mostrarMensagem, mostrarConfirmacao } from '/js/utils/popups.js';
+import imgDefaultAvatar from '../assets/default-avatar.png';
 
 export default function DashPerfilModal({ usuarioAtual, onClose, aoAtualizarAvatar }) {
     const [avatares, setAvatares] = useState([]);
@@ -98,8 +99,12 @@ export default function DashPerfilModal({ usuarioAtual, onClose, aoAtualizarAvat
                 <h2 style={{color: 'var(--ds-cor-azul-escuro)', marginBottom: '10px'}}>Meu Perfil</h2>
                 
                 {/* Avatar Atual Grande */}
-                <div style={{width: '120px', height: '120px', borderRadius: '50%', margin: '0 auto 20px auto', border: '4px solid #fff', boxShadow: '0 4px 10px rgba(0,0,0,0.1)'}}>
-                    <img src={usuarioAtual?.avatar_url || './img/default-avatar.png'} alt="Atual" style={{width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%'}} />
+                 <div style={{width: '120px', height: '120px', borderRadius: '50%', margin: '0 auto 20px auto', border: '4px solid #fff', boxShadow: '0 4px 10px rgba(0,0,0,0.1)'}}>
+                    <img 
+                        src={usuarioAtual?.avatar_url || imgDefaultAvatar} 
+                        alt="Atual" 
+                        style={{width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%'}} 
+                    />
                 </div>
 
                 <div style={{marginBottom: '20px'}}>
@@ -119,7 +124,6 @@ export default function DashPerfilModal({ usuarioAtual, onClose, aoAtualizarAvat
                     </button>
                 </div>
 
-                {/* Grid da Galeria */}
                 <div className="ds-galeria-avatar-grid" style={{display:'flex', justifyContent:'center', gap:'15px', flexWrap:'wrap'}}>
                     {loading && avatares.length === 0 ? <div className="ds-spinner"></div> : 
                         avatares.map(avatar => (
