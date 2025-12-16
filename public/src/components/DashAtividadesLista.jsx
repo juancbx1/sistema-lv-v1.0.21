@@ -151,7 +151,9 @@ export default function DashAtividadesLista({ atividades, aoAtualizar }) {
                     ) : (
                         itensPagina.map((item, index) => {
                             const key = item.id_original || index;
-                            const tituloTipo = item.tipo_origem === 'OP' ? `OP ${item.op_numero}` : `Arremate ${item.op_numero}`;
+                            // PADRONIZAÇÃO: Sempre mostra "OP {numero}"
+                            // Independente se veio de produção ou arremate, o número de referência é a OP.
+                            const tituloTipo = `OP ${item.op_numero}`;
                             const variacao = item.variacao || '';
 
                             return (

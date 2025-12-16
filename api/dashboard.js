@@ -25,11 +25,11 @@ router.use(async (req, res, next) => {
     }
 });
 
-// --- FUNÇÃO DE AUDITORIA DO COFRE (COM LOGS DE DEBUG) ---
+// --- FUNÇÃO DE AUDITORIA DO COFRE (LÓGICA PROGRESSIVA POR ÍNDICE) ---
 async function auditarCofrePontos(dbClient, usuarioId, historicoDias, metasConfiguradas, periodoInicio) {
-    console.log(`\n[COFRE] --- Iniciando Auditoria para Usuário ID: ${usuarioId} ---`);
+    console.log(`\n[COFRE] --- Iniciando Auditoria Progressiva ID: ${usuarioId} ---`);
     
-    // 1. Busca ou Cria o Saldo
+    // 1. Busca Saldo
     let saldoRes = await dbClient.query('SELECT * FROM banco_pontos_saldo WHERE usuario_id = $1', [usuarioId]);
     if (saldoRes.rows.length === 0) {
         saldoRes = await dbClient.query('INSERT INTO banco_pontos_saldo (usuario_id) VALUES ($1) RETURNING *', [usuarioId]);
@@ -37,58 +37,69 @@ async function auditarCofrePontos(dbClient, usuarioId, historicoDias, metasConfi
     const saldoAtual = saldoRes.rows[0];
     let novoSaldo = parseFloat(saldoAtual.saldo_atual);
 
-    // 2. Define a Meta Máxima
-    const metaMaxima = metasConfiguradas[metasConfiguradas.length - 1];
-    if (!metaMaxima) {
-        console.log(`[COFRE] Nenhuma meta configurada. Auditoria cancelada.`);
+    // Validação: Precisa ter pelo menos 2 metas para existir o conceito de "meta superior"
+    if (!metasConfiguradas || metasConfiguradas.length < 2) {
+        console.log(`[COFRE] Menos de 2 metas configuradas. Auditoria cancelada.`);
         return { saldo: novoSaldo, usos: saldoAtual.usos_neste_ciclo };
     }
 
-    const pontosMetaMaxima = metaMaxima.pontos_meta;
-    console.log(`[COFRE] Meta Máxima (Teto para sobras): ${pontosMetaMaxima} pts`);
+    // Ordena metas por pontos (garantia extra)
+    // Ex: [620, 816, 976]
+    const metasOrdenadas = [...metasConfiguradas].sort((a, b) => a.pontos_meta - b.pontos_meta);
 
-    // 3. Varredura
     const hojeStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
     let houveAtualizacao = false;
 
-    console.log(`[COFRE] Analisando histórico de dias...`);
-
     for (const dia of historicoDias) {
-        // Ignora dias futuros ou hoje
+        // Filtros de Data (Hoje, Futuro, Antes do Ciclo, Antes do Corte)
         if (dia.data >= hojeStr) continue;
-        
-        // Ignora dias antes do ciclo
         const dataDia = new Date(dia.data);
         if (dataDia < periodoInicio) continue;
-
-        // *** CORREÇÃO: DATA DE CORTE DA NOVA REGRA ***
-        // Ignora qualquer dia antes de 14/12/2025, pois usavam regras antigas
-        if (dia.data < '2025-12-12') continue; 
-        // ---------------------------------------------
+        if (dia.data < '2025-12-14') continue; 
 
         const pontosFeitos = parseFloat(dia.pontos);
+        
+        // --- NOVA LÓGICA DE DETECÇÃO DE SOBRA ---
+        // Encontra a MAIOR meta que foi batida neste dia
+        let indiceMetaBatida = -1;
+        
+        // Percorre de trás pra frente (da maior para a menor)
+        for (let i = metasOrdenadas.length - 1; i >= 0; i--) {
+            if (pontosFeitos >= metasOrdenadas[i].pontos_meta) {
+                indiceMetaBatida = i;
+                break; // Achou a maior batida
+            }
+        }
 
-        if (pontosFeitos > pontosMetaMaxima) {
-            console.log(`[COFRE] ACHADO! Dia ${dia.data} fez ${pontosFeitos} pts (Acima da meta de ${pontosMetaMaxima}).`);
+        // Regra: Só gera sobra se bateu pelo menos a Meta de Índice 1 (A segunda meta)
+        // Índice 0 (Primeira/Bronze) não gera sobra.
+        if (indiceMetaBatida >= 1) {
+            const metaBatida = metasOrdenadas[indiceMetaBatida];
             
-            // Verifica se já foi pago
-            const logRes = await dbClient.query(
-                `SELECT 1 FROM banco_pontos_log WHERE usuario_id = $1 AND tipo = 'GANHO' AND descricao LIKE $2`,
-                [usuarioId, `%${dia.data}%`]
-            );
+            // O cálculo da sobra é: Pontos Feitos - Pontos da Meta Batida
+            // Ex: Fez 878. Bateu Prata (816). Sobra = 62.
+            const sobra = pontosFeitos - metaBatida.pontos_meta;
 
-            if (logRes.rowCount === 0) {
-                const sobra = pontosFeitos - pontosMetaMaxima;
-                console.log(`[COFRE] >>> CREDITANDO: ${sobra} pts no cofre!`);
-                
-                await dbClient.query(
-                    `INSERT INTO banco_pontos_log (usuario_id, tipo, quantidade, descricao) VALUES ($1, 'GANHO', $2, $3)`,
-                    [usuarioId, sobra, `Sobra do dia ${dia.data}`]
+            if (sobra > 0) {
+                console.log(`[COFRE] Dia ${dia.data}: Fez ${pontosFeitos}. Bateu meta índice ${indiceMetaBatida} (${metaBatida.pontos_meta}). Sobra potencial: ${sobra}`);
+
+                // Verifica se já foi pago
+                const logRes = await dbClient.query(
+                    `SELECT 1 FROM banco_pontos_log WHERE usuario_id = $1 AND tipo = 'GANHO' AND descricao LIKE $2`,
+                    [usuarioId, `%${dia.data}%`]
                 );
-                novoSaldo += sobra;
-                houveAtualizacao = true;
-            } else {
-                console.log(`[COFRE] Ignorado: Dia ${dia.data} já foi creditado anteriormente.`);
+
+                if (logRes.rowCount === 0) {
+                    console.log(`[COFRE] >>> CREDITANDO: ${sobra} pts!`);
+                    await dbClient.query(
+                        `INSERT INTO banco_pontos_log (usuario_id, tipo, quantidade, descricao) VALUES ($1, 'GANHO', $2, $3)`,
+                        [usuarioId, sobra, `Sobra do dia ${dia.data} (${metaBatida.descricao_meta})`]
+                    );
+                    novoSaldo += sobra;
+                    houveAtualizacao = true;
+                } else {
+                    console.log(`[COFRE] Já creditado.`);
+                }
             }
         }
     }
@@ -98,15 +109,10 @@ async function auditarCofrePontos(dbClient, usuarioId, historicoDias, metasConfi
             `UPDATE banco_pontos_saldo SET saldo_atual = $1, ultimo_calculo = NOW() WHERE usuario_id = $2`,
             [novoSaldo, usuarioId]
         );
-        console.log(`[COFRE] Saldo atualizado para: ${novoSaldo}`);
-    } else {
-        console.log(`[COFRE] Nenhuma nova sobra encontrada.`);
     }
-    console.log(`[COFRE] --- Fim da Auditoria ---\n`);
 
     return { saldo: novoSaldo, usos: saldoAtual.usos_neste_ciclo };
 }
-
 
 router.get('/desempenho', async (req, res) => {
     const { id: usuarioId } = req.usuarioLogado;

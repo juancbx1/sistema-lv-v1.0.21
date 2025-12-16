@@ -1083,6 +1083,22 @@ router.post('/sessoes/finalizar', async (req, res) => {
             }
 
             if (qtdFinalizadaNestaSessao > 0) {
+                
+                // --- NOVA LÓGICA DE CÁLCULO DE PONTOS ---
+                let valorPontoAplicado = 1.00; // Valor padrão
+                
+                // Busca a configuração de pontos para este produto específico
+                const configPontosResult = await dbClient.query(
+                    `SELECT pontos_padrao FROM configuracoes_pontos_processos
+                     WHERE produto_id = $1 AND tipo_atividade = 'arremate_tiktik' AND ativo = TRUE LIMIT 1`,
+                    [sessaoCorrespondente.produto_id]
+                );
+
+                if (configPontosResult.rows.length > 0 && configPontosResult.rows[0].pontos_padrao !== null) {
+                    valorPontoAplicado = parseFloat(configPontosResult.rows[0].pontos_padrao);
+                }
+                // ----------------------------------------
+
                 let quantidadeRestanteParaLancar = qtdFinalizadaNestaSessao;
                 const opsDeOrigem = (sessaoCorrespondente.dados_ops || []);
                 
@@ -1091,10 +1107,26 @@ router.post('/sessoes/finalizar', async (req, res) => {
                     const qtdParaEstaOP = Math.min(quantidadeRestanteParaLancar, op.saldo_op);
                     
                     if (qtdParaEstaOP > 0) {
+                        // Calcula os pontos proporcionais para esta fração da OP
+                        const pontosGerados = qtdParaEstaOP * valorPontoAplicado;
+
+                        // CORREÇÃO: ADICIONADO valor_ponto_aplicado E pontos_gerados NO INSERT
                         await dbClient.query(
-                            `INSERT INTO arremates (op_numero, op_edit_id, produto_id, variante, quantidade_arrematada, usuario_tiktik_id, usuario_tiktik, lancado_por, tipo_lancamento, id_sessao_origem)
-                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PRODUCAO', $9)`,
-                            [op.numero, op.edit_id, sessaoCorrespondente.produto_id, sessaoCorrespondente.variante, qtdParaEstaOP, usuarioTiktikId, nomeTiktik, nomeLancador, sessaoCorrespondente.id]
+                            `INSERT INTO arremates (op_numero, op_edit_id, produto_id, variante, quantidade_arrematada, usuario_tiktik_id, usuario_tiktik, lancado_por, tipo_lancamento, id_sessao_origem, valor_ponto_aplicado, pontos_gerados)
+                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PRODUCAO', $9, $10, $11)`,
+                            [
+                                op.numero, 
+                                op.edit_id, 
+                                sessaoCorrespondente.produto_id, 
+                                sessaoCorrespondente.variante, 
+                                qtdParaEstaOP, 
+                                usuarioTiktikId, 
+                                nomeTiktik, 
+                                nomeLancador, 
+                                sessaoCorrespondente.id,
+                                valorPontoAplicado, // $10
+                                pontosGerados       // $11
+                            ]
                         );
                         quantidadeRestanteParaLancar -= qtdParaEstaOP;
                     }
@@ -1114,13 +1146,10 @@ router.post('/sessoes/finalizar', async (req, res) => {
         );
 
         if (outraSessaoAtivaResult.rowCount === 0) {
-            // --- INÍCIO DA NOVA LÓGICA DE LIMPEZA ---
-            // Apenas executa se NÃO houver mais nenhuma outra sessão de arremate ativa para este usuário
             await dbClient.query(
                 `UPDATE usuarios SET status_atual = 'LIVRE', id_sessao_trabalho_atual = NULL WHERE id = $1`,
                 [usuarioTiktikId]
             );
-            // --- FIM DA NOVA LÓGICA DE LIMPEZA ---
         }
 
         // --- LÓGICA DE ALERTA DE META BATIDA (VERSÃO CORRIGIDA) ---
@@ -1133,7 +1162,6 @@ router.post('/sessoes/finalizar', async (req, res) => {
                     const tpeResult = await dbClient.query("SELECT tempo_segundos_por_peca FROM tempos_padrao_arremate WHERE produto_id = $1", [sessao.produto_id]);
                     const tpe = tpeResult.rows[0]?.tempo_segundos_por_peca;
                     
-                    // AQUI ESTÁ A CORREÇÃO PRINCIPAL
                     const detalheDaSessao = detalhes_finalizacao.find(d => d.id_sessao === sessao.id);
                     const quantidadeRealFinalizada = detalheDaSessao ? detalheDaSessao.quantidade_finalizada : 0;
                     
@@ -1142,7 +1170,6 @@ router.post('/sessoes/finalizar', async (req, res) => {
                         const tempoDecorridoSegundos = (dataFim - new Date(sessao.data_inicio)) / 1000 - tempoPausaSegundos;
                         const tempoRealPorPeca = tempoDecorridoSegundos / quantidadeRealFinalizada;
                         const eficiencia = (parseFloat(tpe) / tempoRealPorPeca);
-
 
                         if (eficiencia >= 1.25) {
                             const mensagem = `🚀 Excelente Performance! ${nomeTiktik} concluiu a tarefa de ${sessao.produto_nome || 'produto'} com ${Math.round(eficiencia * 100)}% de eficiência!`;

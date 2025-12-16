@@ -20,13 +20,13 @@ export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, aoRe
     const temVidas = usos < limiteUsos;
     const podeResgatar = faltaParaMeta > 0 && temSaldoSuficiente && temVidas;
 
-    // --- LÓGICA VISUAL (Rico vs Pobre) ---
-    // Rico: Se tem saldo suficiente PRA HOJE, ou se já bateu a meta (falta = 0), ou se tem saldo sobrando muito.
-    // Vamos simplificar: Se tem saldo suficiente para o problema de hoje, é RICO.
-    const isRico = temSaldoSuficiente || faltaParaMeta === 0;
+    // --- LÓGICA VISUAL DO PORQUINHO ---
+    // A felicidade do porquinho depende exclusivamente do SALDO ACUMULADO.
+    // Se tiver saldo para ajudar (mesmo que pouco), ele está feliz.
+    const isRico = saldo > 10; // Ex: Consideramos "Rico" se tiver mais de 10 pts guardados
     
-    // Bloqueado: É rico (tem dinheiro), mas não tem vidas.
-    const isBloqueado = isRico && !temVidas && faltaParaMeta > 0;
+    // Bloqueado: É rico, mas não tem vidas.
+    const isBloqueado = isRico && !temVidas;
 
     // Definição das Imagens (Coloque suas URLs reais aqui)
     const imgRico = "https://ock3xwuhzid9sows.public.blob.vercel-storage.com/dashboard_empregados/porquinho_rico.png";
@@ -107,7 +107,21 @@ export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, aoRe
                 )}
             </div>
             
-            <h2 style={{color: 'var(--ds-cor-azul-escuro)', marginBottom: '5px'}}>Banco de Resgate</h2>
+             <div style={{display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', marginBottom:'5px'}}>
+                <h2 style={{color: 'var(--ds-cor-azul-escuro)', margin:0}}>Banco de Resgate</h2>
+                <button 
+                    onClick={() => mostrarMensagem(`
+                        <p><strong>Como ganhar pontos para o cofre?</strong></p>
+                        <p>Sempre que você bater a <strong>Segunda Meta (Prata)</strong> ou superior, os pontos que sobrarem acima dela serão guardados aqui.</p>
+                        <p>Exemplo: Meta Prata é 800. Você fez 850. Você ganha 50 pts no cofre!</p>
+                        <p><em>*A Meta Bronze (mínima) não gera sobra.</em></p>
+                    `, 'info')}
+                    style={{background:'none', border:'none', color:'var(--ds-cor-primaria)', cursor:'pointer', fontSize:'1.2rem'}}
+                >
+                    <i className="fas fa-info-circle"></i>
+                </button>
+            </div>
+            
             <p style={{color: '#666', fontSize: '0.9rem', marginBottom: '20px'}}>
                 Acumule sobras de produção para usar em emergências.
             </p>
