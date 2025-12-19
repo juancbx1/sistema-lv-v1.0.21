@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { fetchAPI } from '/js/utils/api-utils.js';
 import { mostrarMensagem, mostrarConfirmacao } from '/js/utils/popups.js';
 
-export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, aoResgatarSucesso, onClose }) {
+// ADICIONADA A PROP 'metaMinima' NA ASSINATURA DA FUNÇÃO
+export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, metaMinima, aoResgatarSucesso, onClose }) {
     const [loading, setLoading] = useState(false);
     const [tela, setTela] = useState('resumo'); 
     const [historico, setHistorico] = useState([]);
@@ -14,21 +15,29 @@ export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, aoRe
     const limiteUsos = 5;
     const resgatesRestantes = Math.max(0, limiteUsos - usos);
     
-    // Cálculos de Regra
+    // --- CÁLCULOS DE REGRA ---
+    
+    // 1. Quanto falta?
     const faltaParaMeta = metaDoDia ? Math.max(0, metaDoDia.pontos_meta - pontosHoje) : 0;
+    
+    // 2. Tem Saldo?
     const temSaldoSuficiente = saldo >= faltaParaMeta;
+    
+    // 3. Tem Vidas?
     const temVidas = usos < limiteUsos;
-    const podeResgatar = faltaParaMeta > 0 && temSaldoSuficiente && temVidas;
+
+    // 4. Anti-Fraude: Produção Mínima (50% da Meta Bronze/Mínima)
+    const pontosMinimosNecessarios = metaMinima ? Math.round(metaMinima.pontos_meta * 0.5) : 0;
+    const temProducaoMinima = pontosHoje >= pontosMinimosNecessarios;
+
+    // CONDIÇÃO FINAL PARA O BOTÃO
+    const podeResgatar = faltaParaMeta > 0 && temSaldoSuficiente && temVidas && temProducaoMinima;
+
 
     // --- LÓGICA VISUAL DO PORQUINHO ---
-    // A felicidade do porquinho depende exclusivamente do SALDO ACUMULADO.
-    // Se tiver saldo para ajudar (mesmo que pouco), ele está feliz.
-    const isRico = saldo > 10; // Ex: Consideramos "Rico" se tiver mais de 10 pts guardados
-    
-    // Bloqueado: É rico, mas não tem vidas.
-    const isBloqueado = isRico && !temVidas;
+    const isRico = saldo > 10; 
+    const isBloqueado = isRico && (!temVidas || !temProducaoMinima); // Bloqueado se rico mas sem vida ou sem produção mínima
 
-    // Definição das Imagens (Coloque suas URLs reais aqui)
     const imgRico = "https://ock3xwuhzid9sows.public.blob.vercel-storage.com/dashboard_empregados/porquinho_rico.png";
     const imgPobre = "https://ock3xwuhzid9sows.public.blob.vercel-storage.com/dashboard_empregados/porquinho_pobre.png";
 
@@ -36,10 +45,10 @@ export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, aoRe
     let imagemAtual = isRico ? imgRico : imgPobre;
     
     if (isBloqueado) {
-        classeCofre = 'ds-cofre-bloqueado'; // Visual específico
+        classeCofre = 'ds-cofre-bloqueado';
     }
 
-    // --- FUNÇÕES DE AÇÃO ---
+    // --- AÇÕES ---
     const handleResgatar = async () => {
         const confirmado = await mostrarConfirmacao(`Usar ${faltaParaMeta} pts do cofre para completar o dia?`);
         if (!confirmado) return;
@@ -69,6 +78,8 @@ export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, aoRe
         } catch (error) { console.error(error); } finally { setLoading(false); }
     };
 
+    // --- RENDERIZADORES ---
+
     const renderVidas = () => {
         const moedas = [];
         for (let i = 0; i < limiteUsos; i++) {
@@ -94,19 +105,19 @@ export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, aoRe
         );
     };
 
-    // --- RENDERIZAÇÃO RESUMO ---
     const renderResumo = () => (
         <>
             {/* IMAGEM VIVA COM ESTADOS */}
             <div className={`ds-cofre-container ${classeCofre}`}>
                 <img src={imagemAtual} alt="Estado do Cofre" className="ds-cofre-img" />
                 {isBloqueado && (
-                    <div className="ds-cofre-overlay-icon" title="Bloqueado por limite de usos">
+                    <div className="ds-cofre-overlay-icon" title="Bloqueado">
                         <i className="fas fa-lock"></i>
                     </div>
                 )}
             </div>
             
+            {/* TÍTULO COM TOOLTIP */}
              <div style={{display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', marginBottom:'5px'}}>
                 <h2 style={{color: 'var(--ds-cor-azul-escuro)', margin:0}}>Banco de Resgate</h2>
                 <button 
@@ -134,10 +145,13 @@ export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, aoRe
                 {renderVidas()}
             </div>
 
+            {/* ÁREA DE AÇÃO / FEEDBACK */}
             {faltaParaMeta > 0 ? (
                 <div style={{marginBottom: '20px'}}>
+                    
                     {podeResgatar ? (
-                        <button 
+                        // CENÁRIO 1: TUDO CERTO PARA RESGATAR
+                         <button 
                             className="ds-btn-resgate-especial efeito-pulso"
                             disabled={loading}
                             onClick={handleResgatar}
@@ -146,16 +160,45 @@ export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, aoRe
                             <i className="fas fa-bolt"></i> USAR RESGATE AGORA
                         </button>
                     ) : (
-                        <div style={{backgroundColor: '#fff3cd', borderRadius: '12px', padding: '15px', border: '1px solid #ffeeba', color: '#856404'}}>
-                            {usos >= limiteUsos ? (
-                                <><div style={{fontWeight: 'bold', marginBottom:'5px'}}><i className="fas fa-ban"></i> Limite Atingido</div><div style={{fontSize:'0.85rem'}}>Aguarde o próximo ciclo.</div></>
+                        // CENÁRIO 2: BLOQUEADO (MENSAGENS ESPECÍFICAS SEM REPETIÇÃO)
+                        <div style={{
+                            backgroundColor: '#fff3cd', 
+                            borderRadius: '12px', 
+                            padding: '15px', 
+                            border: '1px solid #ffeeba',
+                            color: '#856404',
+                            textAlign: 'left'
+                        }}>
+                            {!temProducaoMinima ? (
+                                // A. BLOQUEIO ANTI-FRAUDE
+                                <>
+                                    <div style={{fontWeight: 'bold', marginBottom:'5px', color:'#d35400'}}>
+                                        <i className="fas fa-lock"></i> Produção Mínima Necessária
+                                    </div>
+                                    <div style={{fontSize:'0.85rem'}}>
+                                        Para usar o cofre, você precisa produzir pelo menos <strong>{pontosMinimosNecessarios} pts</strong> hoje (50% da Meta Bronze).
+                                    </div>
+                                </>
+                            ) : usos >= limiteUsos ? (
+                                // B. BLOQUEIO DE VIDAS
+                                <>
+                                    <div style={{fontWeight: 'bold', marginBottom:'5px'}}><i className="fas fa-ban"></i> Limite Atingido</div>
+                                    <div style={{fontSize:'0.85rem'}}>Você já usou seus 5 resgates neste ciclo.</div>
+                                </>
                             ) : (
-                                <><div style={{fontWeight: 'bold', marginBottom:'5px'}}><i className="fas fa-piggy-bank"></i> Saldo Insuficiente</div><div style={{fontSize:'0.85rem'}}>Faltam {Math.ceil(faltaParaMeta - saldo)} pts.</div></>
+                                // C. BLOQUEIO DE SALDO (Sem repetir números)
+                                <>
+                                    <div style={{fontWeight: 'bold', marginBottom:'5px'}}><i className="fas fa-piggy-bank"></i> Saldo Insuficiente</div>
+                                    <div style={{fontSize:'0.85rem'}}>
+                                        Seu saldo atual não cobre a falta de hoje. Tente produzir um pouco mais!
+                                    </div>
+                                </>
                             )}
                         </div>
                     )}
                 </div>
             ) : (
+                // CENÁRIO 3: META JÁ BATIDA
                 <div style={{padding: '15px', backgroundColor: '#e6fffa', color: '#2c7a7b', borderRadius: '8px', marginBottom: '20px'}}>
                     <i className="fas fa-check-circle"></i> Parabéns! A meta de hoje já foi batida.
                 </div>
@@ -167,11 +210,12 @@ export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, aoRe
         </>
     );
 
-    // --- RENDERIZAÇÃO EXTRATO (Inalterado, apenas mantendo) ---
     const renderExtrato = () => (
         <div style={{textAlign: 'left'}}>
             <div style={{display:'flex', alignItems:'center', marginBottom:'20px'}}>
-                <button onClick={() => setTela('resumo')} className="ds-btn-fechar-painel-padrao" style={{position:'static', marginRight:'15px', backgroundColor:'var(--ds-cor-cinza-claro-fundo)', color:'#666', border:'none'}}><i class="fas fa-arrow-left"></i></button>
+                <button onClick={() => setTela('resumo')} className="ds-modal-close-simple" style={{position:'static', marginRight:'10px', fontSize:'1.2rem', color:'#666'}}>
+                    <i className="fas fa-arrow-left"></i>
+                </button>
                 <h3 style={{margin:0, color:'var(--ds-cor-azul-escuro)'}}>Extrato</h3>
             </div>
             <div style={{maxHeight:'300px', overflowY:'auto', borderTop:'1px solid #eee'}}>

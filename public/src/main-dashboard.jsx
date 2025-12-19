@@ -142,6 +142,8 @@ export default function MainDashboard() {
                     dadosCofre={dados.cofre}
                     metaDoDia={metaDoUsuario}
                     pontosHoje={dados.hoje.pontos}
+                    // NOVA PROP: Envia a primeira meta (Bronze) para cálculo da trava
+                    metaMinima={dados.metasPossiveis ? dados.metasPossiveis[0] : null}
                     aoResgatarSucesso={carregar}
                     onClose={() => setModalCofreAberto(false)}
                 />
