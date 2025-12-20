@@ -873,6 +873,26 @@ function configurarEventListeners() {
     // Listeners das abas de Ranking/Metas
     document.getElementById('btn-tab-ranking').addEventListener('click', () => alternarAbas('ranking'));
     document.getElementById('btn-tab-metas').addEventListener('click', () => alternarAbas('metas'));
+    // Listener Inteligente de Visibilidade
+    document.addEventListener('visibilitychange', () => {
+        // Se o usuário ACABOU de voltar para a aba
+        if (!document.hidden) {
+            console.log("Usuário voltou para a aba. Forçando atualização...");
+            // Reseta o contador visual para dar feedback imediato
+            const indicador = document.getElementById('indicador-ultima-att');
+            if (indicador) indicador.textContent = 'Atualizando...';
+            
+            // Chama a atualização
+            carregarErenderizarDados().then(() => {
+                // Se a auto-atualização estiver rodando, reseta o timer dela também
+                // para não atualizar de novo logo em seguida
+                if (autoAtualizacaoInterval) {
+                     // Reinicia a função para zerar o contador interno
+                     iniciarAutoAtualizacaoSeHoje();
+                }
+            });
+        }
+    });
 }
 
 
@@ -911,21 +931,28 @@ function iniciarAutoAtualizacaoSeHoje() {
 
         autoAtualizacaoInterval = setInterval(() => {
             segundosDesdeAtualizacao += 1;
+            
+            // Atualiza apenas o texto do contador visualmente
             if (segundosDesdeAtualizacao < 60) {
                 indicador.textContent = `Atualizado há ${segundosDesdeAtualizacao}s`;
             } else {
                 indicador.textContent = `Atualizado há ${Math.floor(segundosDesdeAtualizacao / 60)}min`;
             }
 
-            // A cada 60 segundos, busca novos dados
+            // A cada 60 segundos, tenta buscar novos dados
             if (segundosDesdeAtualizacao % 60 === 0) {
-                console.log('Atualizando dados automaticamente...');
-                // Passo 3b: Torna a função interna 'async' e usa 'await'
-                (async () => {
-                    await carregarErenderizarDados();
-                    segundosDesdeAtualizacao = 0; // Reseta o contador
-                    indicador.textContent = 'Atualizado agora';
-                })();
+                // *** A CORREÇÃO MÁGICA ***
+                // Só chama a API se a aba estiver VISÍVEL
+                if (!document.hidden) {
+                    console.log('Aba visível: Atualizando dados...');
+                    (async () => {
+                        await carregarErenderizarDados();
+                        segundosDesdeAtualizacao = 0;
+                        indicador.textContent = 'Atualizado agora';
+                    })();
+                } else {
+                    console.log('Aba oculta: Pulando atualização para economizar recursos.');
+                }
             }
         }, 1000); 
     } else {
