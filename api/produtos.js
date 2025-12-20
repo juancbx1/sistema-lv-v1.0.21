@@ -38,7 +38,6 @@ const verificarTokenOriginal = (reqOriginal) => {
 
     try {
         const decoded = jwt.verify(token, SECRET_KEY);
-        // console.log('[api/produtos - verificarTokenOriginal] Token decodificado:', decoded);
         return decoded;
     } catch (err) {
         // Se for GET e o token for inválido, não lança erro aqui, req.usuarioLogado será null
@@ -56,7 +55,6 @@ const verificarTokenOriginal = (reqOriginal) => {
 // Middleware para este router: Apenas autentica o token (se presente).
 router.use(async (req, res, next) => {
     try {
-        // console.log(`[router/produtos MID] Recebida ${req.method} em ${req.originalUrl}`);
         req.usuarioLogado = verificarTokenOriginal(req); // Define req.usuarioLogado (pode ser null para GETs)
         next();
     } catch (error) { // Erro vindo de verificarTokenOriginal para métodos não-GET que exigem token

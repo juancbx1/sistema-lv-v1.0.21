@@ -60,10 +60,7 @@ router.get('/:produtoRefId/composicao-mp', async (req, res) => {
             WHERE pcm.produto_ref_id = $1  -- Usa o produtoRefId (SKU da variação)
             ORDER BY mp.nome ASC;
         `;
-        // Adicione logs aqui para ver o produtoRefId que a API recebe
-        console.log(`[API GET /composicao-mp] Buscando para produto_ref_id: '${produtoRefId}'`);
         const result = await dbClient.query(query, [produtoRefId]);
-        console.log(`[API GET /composicao-mp] Encontrados ${result.rows.length} itens de composição.`);
         res.status(200).json(result.rows);
     } catch (error) {
         console.error('[API/precificacao-config GET composicao-mp] Erro:', error);

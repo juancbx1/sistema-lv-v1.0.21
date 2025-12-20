@@ -73,9 +73,6 @@ router.use(async (req, res, next) => {
         dbClient = await pool.connect();
         req.permissoesUsuario = await getPermissoesCompletasUsuarioDB(dbClient, req.usuarioLogado.id);
         
-        // --- LOG DE SUCESSO DO MIDDLEWARE ---
-        console.log(`[PAGAMENTOS MIDDLEWARE] Permissões carregadas para o usuário ID ${req.usuarioLogado.id}.`);
-
         next(); // Passa para a rota específica (ex: /efetuar, /registros-dias)
 
     } catch (error) {
@@ -600,10 +597,6 @@ router.post('/registrar-falta', async (req, res) => {
     const { usuario_id, datas } = req.body;
     const { id: id_usuario_logado, nome: nome_usuario_logado } = req.usuarioLogado;
 
-    // --- LOGS E VALIDAÇÕES INICIAIS ---
-    console.log('--- [API /registrar-falta] INICIANDO REGISTRO DE FALTAS ---');
-    console.log(`Payload recebido: usuario_id=${usuario_id}, datas=${JSON.stringify(datas)}`);
-
     if (!usuario_id || !Array.isArray(datas) || datas.length === 0) {
         return res.status(400).json({ error: 'Parâmetros usuario_id e datas (array) são obrigatórios.' });
     }
@@ -612,8 +605,6 @@ router.post('/registrar-falta', async (req, res) => {
     try {
         dbClient = await pool.connect();
         await dbClient.query('BEGIN');
-        console.log('[API /registrar-falta] Transação BEGIN executada.');
-
         for (const data of datas) {
             // Verifica se já existe um registro para esse dia, para evitar duplicatas
             const checkQuery = `SELECT id FROM registro_dias_trabalhados WHERE usuario_id = $1 AND data = $2`;
@@ -622,7 +613,6 @@ router.post('/registrar-falta', async (req, res) => {
             if (checkResult.rowCount > 0) {
                 // Se já existe, apenas pulamos para o próximo, sem dar erro.
                 // Isso torna a operação "idempotente": rodá-la várias vezes com os mesmos dados tem o mesmo resultado.
-                console.log(`  - Dia ${data} já possui registro. Pulando.`);
                 continue; 
             }
 
@@ -635,12 +625,9 @@ router.post('/registrar-falta', async (req, res) => {
             
             // Adicionamos o valor 0 como quarto parâmetro para o valor_referencia
             await dbClient.query(insertQuery, [usuario_id, data, 0, observacao]);
-            console.log(`  - Falta registrada para o dia ${data}.`);
         }
 
         await dbClient.query('COMMIT');
-        console.log('[API /registrar-falta] Transação COMMIT executada. Operação finalizada.');
-
         res.status(201).json({ message: 'Faltas registradas com sucesso!' });
 
     } catch (error) {
@@ -709,8 +696,7 @@ router.post('/estornar-vt', async (req, res) => {
 
     const { recarga_id } = req.body; // Recebe o ID do registro do histórico
 
-    // --- LOGS E VALIDAÇÕES ---
-    console.log(`--- [API /estornar-vt] INICIANDO ESTORNO PARA HISTÓRICO ID: ${recarga_id} ---`);
+    // --- VALIDAÇÕES ---
     if (!recarga_id) {
         return res.status(400).json({ error: 'O parâmetro recarga_id é obrigatório.' });
     }
@@ -719,7 +705,6 @@ router.post('/estornar-vt', async (req, res) => {
     try {
         dbClient = await pool.connect();
         await dbClient.query('BEGIN');
-        console.log('[API /estornar-vt] Transação BEGIN executada.');
 
         // 1. Busca o registro do histórico para obter os detalhes do pagamento original
         const historicoQuery = `
@@ -734,8 +719,6 @@ router.post('/estornar-vt', async (req, res) => {
         }
         
         const recarga = historicoResult.rows[0];
-        console.log('[API /estornar-vt] [DEBUG] Registro do histórico encontrado:', recarga);
-
         if (recarga.estornado_em) {
             throw new Error(`Este pagamento já foi estornado em ${new Date(recarga.estornado_em).toLocaleString('pt-BR')}.`);
         }
@@ -751,24 +734,18 @@ router.post('/estornar-vt', async (req, res) => {
         } else {
             detalhes = recarga.detalhes_pagamento; // Já é um objeto
         }
-        
-        console.log('[API /estornar-vt] [DEBUG] Detalhes do pagamento extraídos:', detalhes);
-        
+                
         const datasPagas = detalhes?.datas_pagas;
         if (!datasPagas || !Array.isArray(datasPagas) || datasPagas.length === 0) {
             throw new Error('Não foi possível encontrar a lista de dias pagos nos detalhes deste registro. Não é possível estornar.');
         }
-        console.log(`[API /estornar-vt] Encontradas ${datasPagas.length} datas para estornar:`, datasPagas);
-        console.log(`[API /estornar-vt] ID do usuário para deleção: ${recarga.usuario_id}`);
 
         // 3. Deleta os registros de dias da tabela de controle
         const deleteQuery = `
             DELETE FROM registro_dias_trabalhados 
             WHERE usuario_id = $1 AND data = ANY($2::date[]) AND status = 'PAGO'
         `;
-        console.log('[API /estornar-vt] [DEBUG] Executando query de DELEÇÃO...');
         const deleteResult = await dbClient.query(deleteQuery, [recarga.usuario_id, datasPagas]);
-        console.log(`[API /estornar-vt] ${deleteResult.rowCount} dias foram removidos da tabela 'registro_dias_trabalhados'.`);
 
         // 4. Marca o registro do histórico como estornado
         const updateHistoricoQuery = `
@@ -776,12 +753,9 @@ router.post('/estornar-vt', async (req, res) => {
             SET estornado_em = NOW() 
             WHERE id = $1
         `;
-        console.log('[API /estornar-vt] [DEBUG] Executando query de ATUALIZAÇÃO do histórico...');
         await dbClient.query(updateHistoricoQuery, [recarga_id]);
-        console.log(`[API /estornar-vt] Registro de histórico ID ${recarga_id} marcado como estornado.`);
         
         await dbClient.query('COMMIT');
-        console.log('[API /estornar-vt] Transação COMMIT executada. Estorno finalizado com sucesso!');
 
         res.status(200).json({ message: 'Recarga estornada e dias liberados com sucesso!' });
 

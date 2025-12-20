@@ -160,13 +160,6 @@ router.post('/', async (req, res) => {
 
 // GET /api/arremates/
 router.get('/', async (req, res) => {
-
-     // ========================================================================
-    // ▼▼▼ ADICIONE ESTE LOG DE VERIFICAÇÃO AQUI ▼▼▼
-    console.log('[VERIFICAÇÃO 2.1] Rota GET /arremates chamada com os seguintes parâmetros:', req.query);
-    // ▲▲▲ FIM DO LOG ▲▲▲
-    // ========================================================================
-
     const { 
         produto_id, 
         variante,

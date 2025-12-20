@@ -122,8 +122,6 @@ router.post('/iniciar', async (req, res) => {
         }
 
         await dbClient.query('COMMIT'); // Confirma todas as operações
-
-        console.log(`[API POST /inventario/iniciar] Nova sessão de inventário #${novaSessao.id} criada com ${itensEmEstoque.length} itens.`);
         
         // Retorna a sessão criada para o frontend poder trabalhar com ela
         res.status(201).json({

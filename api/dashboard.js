@@ -26,9 +26,7 @@ router.use(async (req, res, next) => {
 });
 
 // --- FUNÇÃO DE AUDITORIA DO COFRE (LÓGICA PROGRESSIVA POR ÍNDICE) ---
-async function auditarCofrePontos(dbClient, usuarioId, historicoDias, metasConfiguradas, periodoInicio) {
-    console.log(`\n[COFRE] --- Iniciando Auditoria Progressiva ID: ${usuarioId} ---`);
-    
+async function auditarCofrePontos(dbClient, usuarioId, historicoDias, metasConfiguradas, periodoInicio) {    
     // 1. Busca Saldo
     let saldoRes = await dbClient.query('SELECT * FROM banco_pontos_saldo WHERE usuario_id = $1', [usuarioId]);
     if (saldoRes.rows.length === 0) {
@@ -39,7 +37,6 @@ async function auditarCofrePontos(dbClient, usuarioId, historicoDias, metasConfi
 
     // Validação: Precisa ter pelo menos 2 metas para existir o conceito de "meta superior"
     if (!metasConfiguradas || metasConfiguradas.length < 2) {
-        console.log(`[COFRE] Menos de 2 metas configuradas. Auditoria cancelada.`);
         return { saldo: novoSaldo, usos: saldoAtual.usos_neste_ciclo };
     }
 
@@ -81,7 +78,6 @@ async function auditarCofrePontos(dbClient, usuarioId, historicoDias, metasConfi
             const sobra = pontosFeitos - metaBatida.pontos_meta;
 
             if (sobra > 0) {
-                console.log(`[COFRE] Dia ${dia.data}: Fez ${pontosFeitos}. Bateu meta índice ${indiceMetaBatida} (${metaBatida.pontos_meta}). Sobra potencial: ${sobra}`);
 
                 // Verifica se já foi pago
                 const logRes = await dbClient.query(
@@ -90,15 +86,12 @@ async function auditarCofrePontos(dbClient, usuarioId, historicoDias, metasConfi
                 );
 
                 if (logRes.rowCount === 0) {
-                    console.log(`[COFRE] >>> CREDITANDO: ${sobra} pts!`);
                     await dbClient.query(
                         `INSERT INTO banco_pontos_log (usuario_id, tipo, quantidade, descricao) VALUES ($1, 'GANHO', $2, $3)`,
                         [usuarioId, sobra, `Sobra do dia ${dia.data} (${metaBatida.descricao_meta})`]
                     );
                     novoSaldo += sobra;
                     houveAtualizacao = true;
-                } else {
-                    console.log(`[COFRE] Já creditado.`);
                 }
             }
         }

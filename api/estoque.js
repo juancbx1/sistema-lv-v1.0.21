@@ -58,9 +58,7 @@ const verificarTokenInterna = (reqOriginal) => {
 router.use(async (req, res, next) => {
     // Apenas autentica o token. Permissões específicas são checadas nas rotas.
     try {
-        // console.log(`[router/estoque MID] Recebida ${req.method} em ${req.originalUrl}`);
         req.usuarioLogado = verificarTokenInterna(req);
-        // console.log(`[router/estoque MID] Usuário autenticado: ${req.usuarioLogado.nome || req.usuarioLogado.nome_usuario}`);
         next();
     } catch (error) {
         console.error('[router/estoque MID] Erro no middleware:', error.message);
@@ -134,8 +132,6 @@ router.post('/arquivar-item', async (req, res) => {
     const { usuarioLogado } = req;
     const { produto_ref_id } = req.body;
 
-    console.log(`[API /arquivar-item] Recebida requisição para arquivar SKU: ${produto_ref_id}`);
-
     if (!produto_ref_id) {
         console.warn("[API /arquivar-item] Requisição inválida: produto_ref_id não foi fornecido.");
         return res.status(400).json({ error: 'O ID de referência do produto (produto_ref_id) é obrigatório.' });
@@ -157,7 +153,6 @@ router.post('/arquivar-item', async (req, res) => {
             ON CONFLICT (produto_ref_id) DO NOTHING;
         `;
         
-        console.log(`[API /arquivar-item] Executando query: INSERT INTO estoque_itens_arquivados com SKU: ${produto_ref_id} e user_id: ${usuarioLogado.id}`);
         const result = await dbClient.query(query, [produto_ref_id, usuarioLogado.id]);
 
         if (result.rowCount > 0) {
@@ -168,10 +163,8 @@ router.post('/arquivar-item', async (req, res) => {
             entidade_id: produto_ref_id
         });
 
-        console.log(`[API /arquivar-item] SUCESSO: SKU ${produto_ref_id} inserido...`);
         res.status(200).json({ message: `Item com SKU ${produto_ref_id} foi arquivado...` });
         } else {
-            console.log(`[API /arquivar-item] INFO: SKU ${produto_ref_id} já estava arquivado (ON CONFLICT DO NOTHING).`);
             res.status(200).json({ message: `Item com SKU ${produto_ref_id} já se encontra arquivado.` });
         }
 
@@ -454,7 +447,6 @@ router.post('/movimento-manual', async (req, res) => {
         });
         // --- FIM DO REGISTRO ---
 
-        console.log(`[API /estoque/movimento-manual] Movimento (${tipoMovimentoDB}) registrado:`, movimentoRegistrado);
         res.status(201).json({
             message: `Movimento de '${tipo_operacao}' registrado com sucesso.`,
             movimentoRegistrado: movimentoRegistrado
@@ -697,8 +689,6 @@ router.delete('/arquivados/:produto_ref_id', async (req, res) => {
     const { usuarioLogado } = req;
     const { produto_ref_id } = req.params; // Pega o SKU da URL
 
-    console.log(`[API /estoque/arquivados DELETE] Recebida requisição para restaurar SKU: ${produto_ref_id}`);
-
     if (!produto_ref_id) {
         return res.status(400).json({ error: "O SKU do item a ser restaurado é obrigatório." });
     }
@@ -720,7 +710,6 @@ router.delete('/arquivados/:produto_ref_id', async (req, res) => {
             return res.status(404).json({ error: 'Item não encontrado na lista de arquivados.' });
         }
 
-        console.log(`[API /estoque/arquivados DELETE] SUCESSO: SKU ${produto_ref_id} restaurado (removido da tabela).`);
         res.status(200).json({ message: 'Item restaurado para o estoque com sucesso!' });
 
     } catch (error) {

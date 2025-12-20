@@ -37,8 +37,6 @@ import metasRouter from './metas.js';
 import realProducaoRouter from './real-producao.js';
 
 const app = express();
-console.log('Aplicação Express inicializada.');
-
 
 // Middlewares essenciais para a API
 app.use(express.json());

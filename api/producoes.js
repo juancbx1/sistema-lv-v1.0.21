@@ -26,8 +26,6 @@ const SECRET_KEY = process.env.JWT_SECRET;
  * @returns {Promise<object>} Uma promessa que resolve para um objeto { pontosGerados, valorPontoAplicado }.
  */
 async function calcularPontosProducao(dbClient, produto_id, processo, quantidade, funcionario_id) {
-    console.log(`[calcularPontosProducao] Iniciando cálculo para Produto ID: ${produto_id}, Processo: "${processo}", Qtd: ${quantidade}, Func. ID: ${funcionario_id}`);
-
     // Validação de segurança
     if (!produto_id || !processo || quantidade < 0 || !funcionario_id) {
         console.warn('[calcularPontosProducao] Dados de entrada inválidos. Retornando 0 pontos.');
@@ -49,8 +47,6 @@ async function calcularPontosProducao(dbClient, produto_id, processo, quantidade
         }
     }
 
-    console.log(`[calcularPontosProducao] Tipo de Atividade inferido: "${tipoAtividadeParaConfigPontos}"`);
-
     let valorPontoAplicado = 1.00;
     if (quantidade > 0 && tipoAtividadeParaConfigPontos) {
         const configPontosResult = await dbClient.query(
@@ -61,10 +57,7 @@ async function calcularPontosProducao(dbClient, produto_id, processo, quantidade
 
         if (configPontosResult.rows.length > 0 && configPontosResult.rows[0].pontos_padrao !== null) {
             valorPontoAplicado = parseFloat(configPontosResult.rows[0].pontos_padrao);
-            console.log(`[calcularPontosProducao] Configuração de pontos encontrada. Valor do ponto: ${valorPontoAplicado}`);
-        } else {
-            console.log(`[calcularPontosProducao] Nenhuma configuração de pontos encontrada. Usando valor de ponto padrão: ${valorPontoAplicado}`);
-        }
+        } 
     } else if (quantidade === 0) {
         valorPontoAplicado = 0;
     }
@@ -94,7 +87,6 @@ const verificarToken = (reqOriginal) => {
     } 
     try {
         const decoded = jwt.verify(token, SECRET_KEY);
-        // console.log('[api/producoes - verificarToken] Token decodificado:', decoded);
         return decoded;
     } catch (err) {
         const error = new Error('Token inválido ou expirado');
@@ -107,7 +99,6 @@ const verificarToken = (reqOriginal) => {
 // Middleware para este router: Apenas autentica o token.
 router.use(async (req, res, next) => {
     try {
-        // console.log(`[router/producoes MID] Recebida ${req.method} em ${req.originalUrl}`);
         req.usuarioLogado = verificarToken(req);
         next();
     } catch (error) {
@@ -343,7 +334,6 @@ router.put('/', async (req, res) => {
                 updateValues.push(pontosGerados);
                 updateFields.push(`valor_ponto_aplicado = $${paramIndex++}`);
                 updateValues.push(valorPontoAplicado);
-                console.log(`[PUT /api/producoes] Pontos recalculados para Produção ID ${id}. Novos pontos: ${pontosGerados}`);
             }
 
             // O resto da lógica de assinatura continua igual
@@ -495,7 +485,7 @@ router.put('/assinar-tiktik-op', async (req, res) => {
     }
 });
 
-// ========= NOVA ROTA PARA FINALIZAR UMA TAREFA DE PRODUÇÃO =========
+// ========= NOVA ROTA PARA FINALIZAR UMA TAREFA DE PRODUÇÃO (OTIMIZADA) =========
 router.put('/finalizar', async (req, res) => {
     const { usuarioLogado } = req;
     const { id_sessao, quantidade_finalizada } = req.body;
@@ -505,32 +495,33 @@ router.put('/finalizar', async (req, res) => {
         dbClient = await pool.connect();
         await dbClient.query('BEGIN');
         
-        // Busca a sessão
+        // 1. Busca a sessão e trava
         const sessaoResult = await dbClient.query('SELECT * FROM sessoes_trabalho_producao WHERE id = $1 FOR UPDATE', [id_sessao]);
         if (sessaoResult.rows.length === 0) throw new Error('Sessão não encontrada.');
         const sessao = sessaoResult.rows[0];
         if (sessao.status !== 'EM_ANDAMENTO') throw new Error('Tarefa já finalizada.');
 
-        // Busca nome do funcionário
-        const funcRes = await dbClient.query('SELECT nome FROM usuarios WHERE id = $1', [sessao.funcionario_id]);
-        const nomeFuncionario = funcRes.rows[0]?.nome || 'Desconhecido';
+        // 2. Busca dados do funcionário (UMA VEZ SÓ)
+        const funcRes = await dbClient.query('SELECT nome, tipos FROM usuarios WHERE id = $1', [sessao.funcionario_id]);
+        const dadosFuncionario = funcRes.rows[0] || { nome: 'Desconhecido', tipos: [] };
+        const nomeFuncionario = dadosFuncionario.nome;
 
-        // --- BUSCA MÁQUINA CORRETA DO PRODUTO ---
+        // 3. Define Configuração de Pontos (Inferência de Tipo)
+        let tipoAtividadeParaConfig = null;
+        if (dadosFuncionario.tipos.includes('costureira')) typeAtividadeParaConfig = 'costura_op_costureira';
+        else if (dadosFuncionario.tipos.includes('tiktik')) typeAtividadeParaConfig = 'processo_op_tiktik';
+
+        // 4. Busca Máquina Correta
         const produtoResult = await dbClient.query('SELECT etapas FROM produtos WHERE id = $1', [sessao.produto_id]);
         const etapasDoProduto = produtoResult.rows[0]?.etapas || [];
-        
-        // Encontra a configuração da etapa que tem o mesmo nome do processo da sessão
         const etapaConfigProduto = etapasDoProduto.find(e => (e.processo || e) === sessao.processo);
-        
-        // Define a máquina (ou 'Não Definida' se não achar)
         const maquinaCorreta = (etapaConfigProduto && typeof etapaConfigProduto === 'object') ? (etapaConfigProduto.maquina || 'Não Definida') : 'Não Definida';
-        // ----------------------------------------
 
-        console.log(`[FINALIZAR] Distribuindo ${quantidade_finalizada} peças do produto ${sessao.produto_id}...`);
+        // console.log(`[FINALIZAR] Distribuindo ${quantidade_finalizada} peças...`); // Log opcional, pode tirar se quiser limpar
         
         let quantidadeRestante = parseInt(quantidade_finalizada);
         
-        // 1. Busca OPs candidatas
+        // 5. Busca OPs candidatas
         const opsDisponiveisResult = await dbClient.query(`
             SELECT numero, etapas, quantidade 
             FROM ordens_de_producao 
@@ -542,24 +533,27 @@ router.put('/finalizar', async (req, res) => {
         
         const opsCandidatas = opsDisponiveisResult.rows;
 
-        // 2. Mapeia saldos anteriores
+        // 6. Mapeia saldos
         const numerosOps = opsCandidatas.map(op => op.numero);
-        const lancamentosAnt = await dbClient.query(`
-            SELECT op_numero, etapa_index, SUM(quantidade) as total
-            FROM producoes WHERE op_numero = ANY($1::text[]) GROUP BY op_numero, etapa_index
-        `, [numerosOps]);
-        const mapaSaldo = new Map();
-        lancamentosAnt.rows.forEach(r => mapaSaldo.set(`${r.op_numero}-${r.etapa_index}`, parseInt(r.total)));
+        let mapaSaldo = new Map();
+        
+        if (numerosOps.length > 0) {
+            const lancamentosAnt = await dbClient.query(`
+                SELECT op_numero, etapa_index, SUM(quantidade) as total
+                FROM producoes WHERE op_numero = ANY($1::text[]) GROUP BY op_numero, etapa_index
+            `, [numerosOps]);
+            lancamentosAnt.rows.forEach(r => mapaSaldo.set(`${r.op_numero}-${r.etapa_index}`, parseInt(r.total)));
+        }
 
-        // 3. Distribui
+        // --- ARRAY PARA AUDITORIA INTERNA (Sem query extra) ---
+        const logAuditoria = []; 
+
+        // 7. Distribuição
         for (const op of opsCandidatas) {
             if (quantidadeRestante <= 0) break;
 
             const etapaIndex = op.etapas.findIndex(e => (e.processo || e) === sessao.processo);
             if (etapaIndex === -1) continue;
-
-            // RESTAURAÇÃO: Pega a máquina correta da configuração da etapa na OP
-            const etapaConfig = op.etapas[etapaIndex];
 
             // Saldo Entrada
             let entrada = (etapaIndex === 0) ? parseInt(op.quantidade) : (mapaSaldo.get(`${op.numero}-${etapaIndex - 1}`) || 0);
@@ -571,7 +565,11 @@ router.put('/finalizar', async (req, res) => {
             if (disponivel > 0) {
                 const qtdLancar = Math.min(quantidadeRestante, disponivel);
                 
-                // RESTAURAÇÃO: Calcula Pontos
+                // OTIMIZAÇÃO: Calculamos pontos aqui diretamente ou usamos a função auxiliar
+                // Como já temos os dados do usuário, podemos passar para a função se ela aceitar, 
+                // ou mantemos a chamada original (que faz query extra, mas é seguro). 
+                // Para não quebrar a lógica de cálculo complexa, vamos manter a chamada original, 
+                // mas saiba que ela faz 1 SELECT por iteração. É aceitável para poucas OPs.
                 const { pontosGerados, valorPontoAplicado } = await calcularPontosProducao(
                     dbClient,
                     sessao.produto_id,
@@ -590,7 +588,7 @@ router.put('/finalizar', async (req, res) => {
                         sessao.processo, 
                         sessao.produto_id, 
                         sessao.variante, 
-                        maquinaCorreta, // <--- AQUI (Era 'maquinaCorreta' local ou string fixa antes)
+                        maquinaCorreta, 
                         qtdLancar, 
                         nomeFuncionario, 
                         sessao.funcionario_id, 
@@ -600,21 +598,21 @@ router.put('/finalizar', async (req, res) => {
                     ]
                 );
 
+                // Adiciona ao log local
+                logAuditoria.push(`OP #${op.numero}: ${qtdLancar} pçs (${pontosGerados.toFixed(2)} pts)`);
+
                 quantidadeRestante -= qtdLancar;
                 mapaSaldo.set(`${op.numero}-${etapaIndex}`, saida + qtdLancar);
             }
         }
 
-        // Se sobrou (Estouro), força na OP original
+        // 8. Sobra (Estouro)
         if (quantidadeRestante > 0) {
-             console.warn(`[FINALIZAR] Sobra de ${quantidadeRestante} forçada na OP ${sessao.op_numero}`);
              const opOriginal = opsCandidatas.find(o => o.numero === sessao.op_numero) || opsCandidatas[0];
              
              if(opOriginal) {
                 const idx = opOriginal.etapas.findIndex(e => (e.processo || e) === sessao.processo);
-                // Não redefina maquinaCorreta. Use a variável do escopo superior que veio do produto!
 
-                // Calcula Pontos para o estouro também
                 const { pontosGerados, valorPontoAplicado } = await calcularPontosProducao(
                     dbClient, sessao.produto_id, sessao.processo, quantidadeRestante, sessao.funcionario_id
                 );
@@ -624,10 +622,12 @@ router.put('/finalizar', async (req, res) => {
                      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11, $12, $13)`,
                     [`prod_force_${Date.now()}`, opOriginal.numero, idx, sessao.processo, sessao.produto_id, sessao.variante, maquinaCorreta, quantidadeRestante, nomeFuncionario, sessao.funcionario_id, usuarioLogado.nome, valorPontoAplicado, pontosGerados]
                 );
+                
+                logAuditoria.push(`FORÇADO OP #${opOriginal.numero}: ${quantidadeRestante} pçs (${pontosGerados.toFixed(2)} pts)`);
              }
         }
 
-        // Finaliza sessão e libera usuário
+        // 9. Finaliza sessão e libera usuário
         await dbClient.query(
             `UPDATE sessoes_trabalho_producao SET status = 'FINALIZADA', data_fim = NOW(), quantidade_finalizada = $1 WHERE id = $2`,
             [quantidade_finalizada, id_sessao]
@@ -638,24 +638,12 @@ router.put('/finalizar', async (req, res) => {
         );
 
         await dbClient.query('COMMIT');
-        res.status(200).json({ message: 'Tarefa finalizada e distribuída com pontos calculados!' });
+        
+        // Log leve apenas no console do servidor (sem query extra)
+        // console.log(`[FINALIZAR] Sucesso para ${nomeFuncionario}. Detalhes:`, logAuditoria.join(' | '));
 
-        // --- LOG DE AUDITORIA FINAL ---
-        console.log(`=== AUDITORIA DE FINALIZAÇÃO (Sessão ${id_sessao}) ===`);
-        console.log(`Usuário: ${nomeFuncionario} | Qtd Total: ${quantidade_finalizada}`);
-        
-        // Consulta o que acabamos de inserir para ter certeza absoluta
-        const auditoriaResult = await dbClient.query(
-            `SELECT op_numero, processo, quantidade, maquina, pontos_gerados 
-             FROM producoes 
-             WHERE funcionario_id = $1 AND created_at > NOW() - INTERVAL '5 seconds'`,
-            [sessao.funcionario_id]
-        );
-        
-        auditoriaResult.rows.forEach(r => {
-            console.log(`✅ Lançado: OP #${r.op_numero} | ${r.processo} | ${r.quantidade} pçs | Máq: ${r.maquina} | Pontos: ${r.pontos_gerados}`);
-        });
-        console.log(`=======================================================`);
+        // A RESPOSTA VEM POR ÚLTIMO
+        res.status(200).json({ message: 'Tarefa finalizada e distribuída com pontos calculados!' });
 
     } catch (error) {
         if (dbClient) await dbClient.query('ROLLBACK');

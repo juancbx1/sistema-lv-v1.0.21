@@ -23,7 +23,6 @@ const verificarToken = (req) => {
     if (!token) throw new Error('Token mal formatado');
     try {
         const decoded = jwt.verify(token, SECRET_KEY);
-        // console.log('[api/comissoes-pagas - verificarToken] Token decodificado:', decoded);
         return decoded;
     } catch (err) {
         const error = new Error('Token inválido ou expirado');
@@ -36,7 +35,6 @@ const verificarToken = (req) => {
 // Middleware para este router: Apenas autentica o token.
 router.use(async (req, res, next) => {
     try {
-        // console.log(`[API /comissoes-pagas MID] Recebida ${req.method} em ${req.originalUrl}`);
         req.usuarioLogado = verificarToken(req);
         next();
     } catch (error) {
@@ -55,8 +53,6 @@ router.get('/', async (req, res) => {
     try {
         dbCliente = await pool.connect();
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbCliente, usuarioLogado.id);
-        // console.log(`[API Comissoes GET /] Permissões de ${usuarioLogado.nome || usuarioLogado.nome_usuario}:`, permissoesCompletas);
-
         if (!permissoesCompletas.includes('acesso-relatorio-de-comissao')) {
             return res.status(403).json({ error: 'Permissão negada para acessar relatório de comissões.' });
         }
@@ -85,7 +81,6 @@ router.get('/', async (req, res) => {
         }
         queryText += ' ORDER BY data_pagamento_efetivo DESC, created_at DESC';
 
-        // console.log(`[API GET /comissoes-pagas] Query: ${queryText}`, queryParams);
         const result = await dbCliente.query(queryText, queryParams);
         res.status(200).json(result.rows);
 
@@ -104,7 +99,6 @@ router.post('/', async (req, res) => {
     try {
         dbCliente = await pool.connect();
         const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbCliente, usuarioLogado.id);
-        // console.log(`[API Comissoes POST /] Permissões de ${usuarioLogado.nome || usuarioLogado.nome_usuario}:`, permissoesCompletas);
 
         if (!permissoesCompletas.includes('confirmar-pagamento-comissao')) {
             return res.status(403).json({ error: 'Permissão negada para confirmar pagamento de comissão.' });
@@ -140,7 +134,6 @@ router.post('/', async (req, res) => {
             observacoes || null
         ];
 
-        // console.log(`[API POST /comissoes-pagas] Inserindo:`, values);
         const result = await dbCliente.query(queryText, values);
         res.status(201).json(result.rows[0]);
 

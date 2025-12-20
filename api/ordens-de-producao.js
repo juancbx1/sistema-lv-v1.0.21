@@ -222,8 +222,6 @@ router.post('/', async (req, res) => {
     let dbClient;
 
     try {
-        console.log("[API POST OP V5] Corpo recebido:", JSON.stringify(req.body, null, 2));
-
         dbClient = await pool.connect();
         await dbClient.query('BEGIN');
 
@@ -304,8 +302,6 @@ router.post('/', async (req, res) => {
         if (qtdUsada < qtdOriginalCorte) {
             // CENÁRIO: Consumo Parcial (Sobra saldo)
             const saldoRestante = qtdOriginalCorte - qtdUsada;
-            console.log(`[API OP] Fracionando corte #${corte.id}. Usado: ${qtdUsada}, Restante: ${saldoRestante}`);
-
             // 5a. Atualiza o corte original (que virou OP)
             await dbClient.query(
                 `UPDATE cortes SET op = $1, status = 'usado', quantidade = $2 WHERE id = $3`, 
@@ -440,9 +436,7 @@ router.put('/', async (req, res) => {
         }
         
         // --- INÍCIO DA NOVA LÓGICA DE LIMPEZA DE STATUS ---
-        if (status === 'finalizado' || status === 'cancelada') {
-            console.log(`[API OP PUT] Iniciando limpeza para OP #${numero} (Status: ${status})`);
-            
+        if (status === 'finalizado' || status === 'cancelada') {            
             // 1. Buscamos SESSÕES de trabalho ativas (Inteiros), não produções passadas (Texto).
             // Isso corrige o erro de tipo "integer = text".
             const sessoesAtivasResult = await dbClient.query(
@@ -451,12 +445,8 @@ router.put('/', async (req, res) => {
                 [numero]
             );
             
-            console.log(`[API OP PUT] Encontradas ${sessoesAtivasResult.rowCount} sessões ativas presas nesta OP.`);
-
             if (sessoesAtivasResult.rows.length > 0) {
                 const idsSessoes = sessoesAtivasResult.rows.map(r => r.id);
-                console.log(`[API OP PUT] IDs das sessões (Inteiros) para liberar:`, idsSessoes);
-
                 // 2. Agora podemos usar ::int[] com segurança, pois estamos comparando
                 // id_sessao_trabalho_atual (Inteiro) com idsSessoes (Inteiros).
                 const updateUserResult = await dbClient.query(
@@ -475,9 +465,6 @@ router.put('/', async (req, res) => {
                     [idsSessoes]
                 );
 
-                console.log(`[API OP PUT] SUCESSO: ${updateUserResult.rowCount} usuários foram liberados e suas sessões encerradas.`);
-            } else {
-                console.log(`[API OP PUT] Nenhum usuário estava preso nesta OP. Nenhuma ação necessária.`);
             }
         }
         // --- FIM DA NOVA LÓGICA DE LIMPEZA DE STATUS ---

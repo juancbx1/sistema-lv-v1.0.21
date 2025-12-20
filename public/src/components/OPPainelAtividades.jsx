@@ -45,27 +45,21 @@ export default function OPPainelAtividades() {
         }
     }, []);
 
-    // --- 2. POLLING INTELIGENTE ---
+    // --- 2. POLLING OTIMIZADO (SEM LOOP INFINITO) ---
     useEffect(() => {
-        const POLLING_INTERVAL = 20000; 
-        const executarPolling = async () => {
-            if (!document.hidden) {
-                await buscarDadosPainel();
-            }
-            pollingTimeoutRef.current = setTimeout(executarPolling, POLLING_INTERVAL);
-        };
-        executarPolling();
+        // Busca inicial
+        buscarDadosPainel();
 
-        const handleVisibilityChange = () => {
-            if (!document.hidden) {
-                clearTimeout(pollingTimeoutRef.current);
-                executarPolling();
-            }
+        // Configura atualização ao voltar para a aba
+        const handleFocus = () => {
+            // console.log("Foco na aba Painel: Atualizando...");
+            buscarDadosPainel();
         };
-        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        window.addEventListener('focus', handleFocus);
+
         return () => {
-            clearTimeout(pollingTimeoutRef.current);
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('focus', handleFocus);
         };
     }, [buscarDadosPainel]);
 

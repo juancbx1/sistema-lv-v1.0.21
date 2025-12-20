@@ -29,7 +29,6 @@ router.get('/arquivar-concluidas', async (req, res) => {
               AND data_conclusao::date < (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
         `);
         
-        console.log(`[CRON] Limpeza executada. ${result.rowCount} demandas arquivadas.`);
         res.status(200).json({ success: true, archived_count: result.rowCount });
 
     } catch (error) {

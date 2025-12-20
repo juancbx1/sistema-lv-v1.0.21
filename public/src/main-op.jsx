@@ -48,19 +48,16 @@ function App() {
   const [estaAutenticado, setEstaAutenticado] = useState(false);
   const [verificandoAuth, setVerificandoAuth] = useState(true);
   
-  // --- CORREÇÃO: DECLARAÇÃO DO ESTADO DE PERMISSÕES ---
+  // --- CORREÇÃO: Declare o estado AQUI, junto com os outros states ---
   const [permissoes, setPermissoes] = useState([]);
-
-  const pollingTimeoutRef = useRef(null);
+  const [demandaParaProcessar, setDemandaParaProcessar] = useState(null); // <--- MOVIDO PARA CIMA
   
+  // Agora a função pode usar o setDemandaParaProcessar tranquilamente
   const iniciarProcessoDeCorte = (dadosDemanda) => {
       console.log("[Ponte] Recebido pedido de produção:", dadosDemanda);
       setDemandaParaProcessar(dadosDemanda);
       setVisaoAtual('cortes');
   };
-  
-  // ESTADO PARA A PONTE
-  const [demandaParaProcessar, setDemandaParaProcessar] = useState(null);
 
 
   useEffect(() => {
@@ -113,31 +110,23 @@ function App() {
   useEffect(() => {
     if (!estaAutenticado) return; 
 
-    const loopVerificacao = async () => {
-        if (document.hidden) {
-            pollingTimeoutRef.current = setTimeout(loopVerificacao, 5000); 
-            return;
-        }
-        await verificarOpsProntas(); 
-        pollingTimeoutRef.current = setTimeout(loopVerificacao, 15000);
+    // 1. Executa a busca imediatamente ao carregar a página
+    verificarOpsProntas();
+
+    // 2. Cria um gatilho: Se o usuário saiu da aba e voltou, busca de novo
+    const handleFocus = () => {
+        verificarOpsProntas();
     };
 
-    loopVerificacao();
+    window.addEventListener('focus', handleFocus);
 
-    const handleVisibilityChange = () => {
-        if (!document.hidden) {
-            clearTimeout(pollingTimeoutRef.current);
-            loopVerificacao();
-        }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    // Limpeza ao sair da tela
     return () => {
-        clearTimeout(pollingTimeoutRef.current);
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('focus', handleFocus);
     };
-  }, [verificarOpsProntas, estaAutenticado]);
 
+    // Removemos qualquer dependência de função, deixando apenas a autenticação
+  }, [estaAutenticado]);
 
    if (verificandoAuth) return null;
    if (!estaAutenticado) return null;

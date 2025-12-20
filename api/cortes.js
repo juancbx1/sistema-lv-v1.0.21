@@ -33,7 +33,6 @@ const verificarTokenOriginal = (reqOriginal) => {
 // Middleware para este router: Apenas autentica o token.
 router.use(async (req, res, next) => {
     try {
-        // console.log(`[router/cortes MID] Recebida ${req.method} em ${req.originalUrl}`);
         req.usuarioLogado = verificarTokenOriginal(req);
         next();
     } catch (error) {
@@ -264,30 +263,21 @@ router.delete('/', async (req, res) => {
 
         if (result.rowCount === 0) return res.status(404).json({ error: 'Corte não encontrado.' });
 
-        const corteExcluido = result.rows[0];
-        console.log(`[API Cortes DELETE] Corte ID ${corteExcluido.id} (PC: ${corteExcluido.pn}) marcado como 'excluido'.`);
-        
+        const corteExcluido = result.rows[0];        
         // 2. LÓGICA DE CASCATA
         const opNumeroParaCancelar = corteExcluido.op;
 
-        // LOG DE DEPURAÇÃO CRUCIAL:
-        console.log(`[API Cortes DELETE] Verificando cascata. OP associada: ${opNumeroParaCancelar} (Tipo: ${typeof opNumeroParaCancelar})`);
-
-        if (opNumeroParaCancelar) {
-            console.log(`[API Cortes DELETE] OP associada encontrada. Cancelando OP #${opNumeroParaCancelar}...`);
-            
+        if (opNumeroParaCancelar) {            
             const opCancelResult = await dbClient.query(
                 `UPDATE ordens_de_producao SET status = 'cancelada' WHERE numero = $1 AND status NOT IN ('finalizado', 'cancelada')`,
                 [String(opNumeroParaCancelar)] // Força para string por segurança
             );
 
             if (opCancelResult.rowCount > 0) {
-                console.log(`[API Cortes DELETE] SUCESSO! A OP #${opNumeroParaCancelar} foi cancelada.`);
             } else {
                 console.warn(`[API Cortes DELETE] AVISO: A OP #${opNumeroParaCancelar} não foi encontrada ou já estava finalizada/cancelada.`);
             }
         } else {
-            console.log(`[API Cortes DELETE] Nenhuma OP associada. Cascata não necessária.`);
         }
 
         res.status(200).json({ message: 'Corte marcado como excluído.', corte: corteExcluido });
@@ -306,9 +296,7 @@ router.delete('/', async (req, res) => {
     let dbClient;
 
     try {
-        dbClient = await pool.connect();
-        // ... (sua lógica de permissão continua a mesma)
-        
+        dbClient = await pool.connect();        
         if (!id) {
             return res.status(400).json({ error: 'ID do corte é obrigatório.' });
         }
@@ -324,16 +312,13 @@ router.delete('/', async (req, res) => {
         }
 
         const corteExcluido = result.rows[0];
-        console.log(`[API Cortes DELETE] Corte ID ${corteExcluido.id} (PC: ${corteExcluido.pn}) marcado como 'excluido'.`);
-        
+
         // 2. LÓGICA DE CASCATA REFORÇADA
         // A OP associada está no campo `corteExcluido.op`.
         // Vamos verificar se ele existe e não é uma string vazia ou nula.
         const opNumeroParaCancelar = corteExcluido.op;
 
-        if (opNumeroParaCancelar) {
-            console.log(`[API Cortes DELETE] Este corte estava associado à OP #${opNumeroParaCancelar}. Iniciando processo de cancelamento da OP...`);
-            
+        if (opNumeroParaCancelar) {            
             // Query para cancelar a OP associada.
             // A condição `status NOT IN ('finalizado', 'cancelada')` é CRUCIAL para não
             // reabrir ou alterar uma OP que já foi concluída ou cancelada por outro motivo.
@@ -345,12 +330,10 @@ router.delete('/', async (req, res) => {
             );
 
             if(opCancelResult.rowCount > 0) {
-                console.log(`[API Cortes DELETE] SUCESSO! A OP #${opNumeroParaCancelar} foi cancelada em cascata.`);
             } else {
                 console.warn(`[API Cortes DELETE] AVISO: A OP #${opNumeroParaCancelar} associada não foi encontrada para cancelamento ou seu status já era 'finalizado' ou 'cancelada'.`);
             }
         } else {
-            console.log(`[API Cortes DELETE] Este corte não tinha uma OP associada. Nenhuma ação em cascata necessária.`);
         }
 
         // 3. Responde ao frontend com sucesso.

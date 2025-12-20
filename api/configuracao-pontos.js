@@ -23,7 +23,6 @@ const verificarToken = (req) => {
     if (!token) throw new Error('Token mal formatado');
     try {
         const decoded = jwt.verify(token, SECRET_KEY);
-        // console.log('[api/config-pontos - verificarToken] Token decodificado:', decoded);
         return decoded;
     } catch (err) {
         const error = new Error('Token inválido ou expirado');
@@ -36,7 +35,6 @@ const verificarToken = (req) => {
 // Middleware para este router: Apenas autentica o token.
 router.use(async (req, res, next) => {
     try {
-        // console.log(`[router/configuracao-pontos MID] Recebida ${req.method} em ${req.originalUrl}`);
         req.usuarioLogado = verificarToken(req);
         next();
     } catch (error) {

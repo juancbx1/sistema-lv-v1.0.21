@@ -47,8 +47,6 @@ router.get('/diaria', async (req, res) => {
         ontem.setDate(ontem.getDate() - 1);
         const ontemFiltroSQL = ontem.toISOString().split('T')[0];
 
-        console.log(`[API /real-producao/diaria] Buscando dados para HOJE (${dataFiltroSQL}) e ONTEM (${ontemFiltroSQL})`);
-
         dbClient = await pool.connect();
 
         // --- ETAPA 1: BUSCAR ATIVIDADES DO DIA ATUAL ---
