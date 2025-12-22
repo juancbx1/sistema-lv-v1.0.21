@@ -38,9 +38,6 @@ export function getDataPagamentoEstimada(fimDoCiclo) {
  * DEBUG ATIVADO: Verifique o terminal do servidor.
  */
 export function gerarBlocosSemanais(inicioPeriodo, fimPeriodo) {
-    console.log(`--- [DEBUG BLOCOS] Iniciando Geração ---`);
-    console.log(`Período Total: ${new Date(inicioPeriodo).toLocaleDateString()} a ${new Date(fimPeriodo).toLocaleDateString()}`);
-
     const blocos = [];
     
     // Clona as datas para garantir que não alteramos as referências originais
@@ -74,10 +71,6 @@ export function gerarBlocosSemanais(inicioPeriodo, fimPeriodo) {
         // Data FINAL deste bloco (ajustada para fim do dia para queries)
         let fimBlocoFinal = new Date(fimBlocoTemp);
         fimBlocoFinal.setHours(23, 59, 59, 999);
-
-        // LOG DO BLOCO GERADO
-        console.log(`Bloco #${contadorSemana}: ${inicioBloco.toLocaleDateString()} até ${fimBlocoFinal.toLocaleDateString()}`);
-
         blocos.push({
             numero: contadorSemana++,
             inicio: inicioBloco,
@@ -94,7 +87,5 @@ export function gerarBlocosSemanais(inicioPeriodo, fimPeriodo) {
         // Break de segurança
         if (contadorSemana > 10) break;
     }
-    console.log(`--- [DEBUG BLOCOS] Fim ---`);
-
     return blocos;
 }

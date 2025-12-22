@@ -7,6 +7,8 @@ export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, meta
     const [loading, setLoading] = useState(false);
     const [tela, setTela] = useState('resumo'); 
     const [historico, setHistorico] = useState([]);
+    const [paginaExtrato, setPaginaExtrato] = useState(1);
+    const [temMaisExtrato, setTemMaisExtrato] = useState(false);
 
     if (!dadosCofre) return null;
 
@@ -69,14 +71,62 @@ export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, meta
         }
     };
 
-    const carregarExtrato = async () => {
+     // Função para carregar (ou carregar mais)
+    const carregarExtrato = async (reset = true) => {
         setLoading(true);
         try {
-            const dados = await fetchAPI('/api/dashboard/cofre/extrato');
-            setHistorico(dados);
-            setTela('extrato');
-        } catch (error) { console.error(error); } finally { setLoading(false); }
+            const pg = reset ? 1 : paginaExtrato + 1;
+            const dados = await fetchAPI(`/api/dashboard/cofre/extrato?page=${pg}&limit=8`);
+            
+            if (reset) {
+                setHistorico(dados.rows);
+            } else {
+                setHistorico(prev => [...prev, ...dados.rows]);
+            }
+            
+            setPaginaExtrato(pg);
+            setTemMaisExtrato(pg < dados.pagination.totalPages);
+            
+            if (reset) setTela('extrato'); // Só muda de tela se for a primeira carga
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
     };
+
+    // Função auxiliar para calcular o saldo histórico reverso
+    // Função auxiliar para calcular o saldo histórico reverso
+    const itensComSaldo = (() => {
+        let saldoVolatil = saldo; // Saldo ATUAL do usuário (do banco)
+        let encontrouReset = false;
+
+        return historico.map(item => {
+            // Se já passamos por um reset (estamos no passado profundo), paramos de calcular saldo
+            if (encontrouReset) {
+                return { ...item, saldoApos: null }; // Null indica para não exibir
+            }
+
+            const qtd = parseFloat(item.quantidade);
+            const isGanho = item.tipo === 'GANHO';
+            const isReset = item.tipo === 'RESET';
+            
+            if (isReset) {
+                encontrouReset = true; // Marca que achamos a barreira do ciclo
+                return { ...item, saldoApos: 0 }; // No momento do reset, o saldo era 0
+            }
+
+            // O saldo DEPOIS dessa operação (linha atual) é o saldoVolatil atual
+            const saldoMomento = saldoVolatil;
+            
+            // Prepara para a próxima linha (passado)
+            // Desfazemos a operação para descobrir quanto tinha ANTES
+            if (isGanho) saldoVolatil -= qtd;
+            else if (item.tipo === 'RESGATE') saldoVolatil += qtd;
+            
+            return { ...item, saldoApos: saldoMomento };
+        });
+    })();
 
     // --- RENDERIZADORES ---
 
@@ -133,11 +183,11 @@ export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, meta
                 </button>
             </div>
             
-            <p style={{color: '#666', fontSize: '0.9rem', marginBottom: '20px'}}>
-                Acumule sobras de produção para usar em emergências.
+            <p style={{color: '#666', fontSize: '0.7rem', marginBottom: '10px'}}>
+                Acumule pontos excedentes de produção para usar em dias que sua produção foi menor.
             </p>
 
-            <div style={{backgroundColor: '#f8f9fa', padding: '15px', borderRadius: '12px', marginBottom: '20px'}}>
+            <div style={{backgroundColor: '#f8f9fa', padding: '15px', borderRadius: '12px', marginBottom: '10px'}}>
                 <div style={{fontSize: '0.9rem', color: '#666', textTransform:'uppercase', letterSpacing:'1px', fontWeight:'600'}}>Saldo do Cofre</div>
                 <div style={{fontSize: '2.5rem', fontWeight: '800', color: isRico ? 'var(--ds-cor-primaria)' : '#666'}}>
                     {Math.round(saldo)} <span style={{fontSize:'1rem'}}>pts</span>
@@ -213,25 +263,86 @@ export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, meta
     const renderExtrato = () => (
         <div style={{textAlign: 'left'}}>
             <div style={{display:'flex', alignItems:'center', marginBottom:'20px'}}>
-                <button onClick={() => setTela('resumo')} className="ds-modal-close-simple" style={{position:'static', marginRight:'10px', fontSize:'1.2rem', color:'#666'}}>
-                    <i className="fas fa-arrow-left"></i>
-                </button>
+                <button onClick={() => setTela('resumo')} className="ds-btn-fechar-painel-padrao" style={{position:'static', marginRight:'15px', backgroundColor:'var(--ds-cor-cinza-claro-fundo)', color:'#666', border:'none'}}><i class="fas fa-arrow-left"></i></button>
                 <h3 style={{margin:0, color:'var(--ds-cor-azul-escuro)'}}>Extrato</h3>
             </div>
-            <div style={{maxHeight:'300px', overflowY:'auto', borderTop:'1px solid #eee'}}>
-                {historico.length === 0 ? <p style={{padding:'20px', textAlign:'center', color:'#999'}}>Vazio.</p> : 
-                    historico.map((item, idx) => (
-                        <div key={idx} style={{padding: '12px 0', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between'}}>
-                            <div>
-                                <div style={{fontWeight:'600', fontSize:'0.9rem'}}>{item.descricao}</div>
-                                <div style={{fontSize:'0.75rem', color:'#999'}}>{new Date(item.data_evento).toLocaleDateString('pt-BR')}</div>
+            
+            <div style={{maxHeight:'400px', overflowY:'auto', borderTop:'1px solid #eee', paddingRight:'5px'}}>
+                {itensComSaldo.length === 0 ? <p style={{padding:'20px', textAlign:'center', color:'#999'}}>Vazio.</p> : 
+                    itensComSaldo.map((item, idx) => {
+                        const isGanho = item.tipo === 'GANHO';
+                        const isReset = item.tipo === 'RESET';
+                        
+                        if (isReset) {
+                            return (
+                                <div key={idx} style={{
+                                    backgroundColor: '#e3f2fd', 
+                                    padding: '15px', 
+                                    borderRadius: '8px', 
+                                    margin: '10px 0', 
+                                    textAlign: 'center',
+                                    color: '#0d47a1',
+                                    fontSize: '0.9rem',
+                                    border: '1px solid #bbdefb'
+                                }}>
+                                    <i className="fas fa-calendar-check" style={{fontSize:'1.2rem', marginBottom:'5px', display:'block'}}></i>
+                                    <strong>Novo Ciclo</strong>
+                                    <div style={{fontSize:'0.8rem', marginTop:'3px'}}>Saldo Zerado: Novo ciclo iniciado!</div>
+                                    <div style={{fontSize:'0.7rem', opacity: 0.7, marginTop:'5px'}}>{new Date(item.data_evento).toLocaleDateString('pt-BR')}</div>
+                                </div>
+                            );
+                        }
+
+                        return (
+                            <div key={idx} style={{padding: '15px 0', borderBottom: '1px solid #eee'}}>
+                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
+                                    <div>
+                                        <div style={{fontWeight:'600', fontSize:'0.9rem', color:'#333', marginBottom:'4px'}}>{item.descricao}</div>
+                                        <div style={{fontSize:'0.75rem', color:'#999'}}>
+                                            {new Date(item.data_evento).toLocaleDateString('pt-BR')} às {new Date(item.data_evento).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}
+                                        </div>
+                                    </div>
+                                    <div style={{
+                                        fontWeight:'700', 
+                                        color: isGanho ? 'var(--ds-cor-sucesso)' : 'var(--ds-cor-perigo)',
+                                        textAlign: 'right'
+                                    }}>
+                                        <div>{isGanho ? '+' : '-'}{Math.round(item.quantidade)}</div>
+                                    </div>
+                                </div>
+                                
+                                {/* LINHA DE SALDO APÓS A OPERAÇÃO */}
+                                {/* Só mostra se saldoApos não for null */}
+                                {item.saldoApos !== null && (
+                                    <div style={{
+                                        marginTop: '8px', 
+                                        paddingTop: '8px', 
+                                        borderTop: '1px dashed #eee', 
+                                        display: 'flex', 
+                                        justifyContent: 'space-between',
+                                        color: '#666',
+                                        fontSize: '0.8rem'
+                                    }}>
+                                        <span>Saldo Disponível:</span>
+                                        <strong>{Math.round(item.saldoApos)} pts</strong>
+                                    </div>
+                                )}
                             </div>
-                            <div style={{fontWeight:'700', color: item.tipo === 'GANHO' ? 'var(--ds-cor-sucesso)' : 'var(--ds-cor-perigo)'}}>
-                                {item.tipo === 'GANHO' ? '+' : '-'}{Math.round(item.quantidade)}
-                            </div>
-                        </div>
-                    ))
+                        );
+                    })
                 }
+                
+                {/* BOTÃO CARREGAR MAIS */}
+                {temMaisExtrato && (
+                    <button 
+                        onClick={() => carregarExtrato(false)} 
+                        className="ds-btn ds-btn-secundario" 
+                        style={{width: '100%', marginTop: '15px'}}
+                        disabled={loading}
+                    >
+                        {loading ? 'Carregando...' : 'Carregar Mais Antigos'}
+                    </button>
+                )}
             </div>
         </div>
     );

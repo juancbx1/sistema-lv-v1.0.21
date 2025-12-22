@@ -1,7 +1,7 @@
 import React from 'react';
 import imgDefaultAvatar from '../assets/default-avatar.png'; 
 
-export default function DashHeader({ usuario, saldoCofre, aoAbrirDesempenho, aoAbrirCofre, aoAbrirPerfil, aoSair }) {
+export default function DashHeader({ usuario, saldoCofre, aoAbrirDesempenho, aoAbrirCofre, aoAbrirPagamentos, aoAbrirPerfil, aoSair }) {
     // Tratamento de segurança para dados opcionais
     // Agora usamos a imagem importada como fallback
     const avatarUrl = usuario?.avatar_url || imgDefaultAvatar;
@@ -25,6 +25,11 @@ export default function DashHeader({ usuario, saldoCofre, aoAbrirDesempenho, aoA
             </div>
 
             <div className="ds-actions-bloco">
+                {/* Botão Pagamentos (NOVO) */}
+                <button className="ds-action-btn" title="Meus Pagamentos" onClick={aoAbrirPagamentos}>
+                    <i className="fas fa-wallet"></i>
+                </button>
+                
                 {/* Botão Cofre (Porquinho) */}
                 <button 
                     className="ds-action-btn" 

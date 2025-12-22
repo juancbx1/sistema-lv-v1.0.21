@@ -11,6 +11,7 @@ import DashSaldoCard from './components/DashSaldoCard';
 import { getDataPagamentoEstimada } from '/js/utils/periodos-fiscais.js';
 import DashCofreModal from './components/DashCofreModal';
 import DashPerfilModal from './components/DashPerfilModal';
+import DashPagamentosModal from './components/DashPagamentosModal'
 
 export default function MainDashboard() {
     const [loading, setLoading] = useState(true);
@@ -19,6 +20,7 @@ export default function MainDashboard() {
     const [modalDesempenhoAberto, setModalDesempenhoAberto] = useState(false);
     const [modalCofreAberto, setModalCofreAberto] = useState(false);
     const [modalPerfilAberto, setModalPerfilAberto] = useState(false);
+    const [modalPagamentosAberto, setModalPagamentosAberto] = useState(false);
 
     const carregar = async () => {
         const auth = await verificarAutenticacao('dashboard/dashboard.html', ['acesso-dashboard']);
@@ -78,6 +80,7 @@ export default function MainDashboard() {
                 // Botão do gráfico abre o mesmo modal de detalhes
                 aoAbrirDesempenho={() => setModalDesempenhoAberto(true)}
                 aoAbrirPerfil={() => setModalPerfilAberto(true)}
+                aoAbrirPagamentos={() => setModalPagamentosAberto(true)}
                 aoSair={() => { localStorage.removeItem('token'); window.location.href = '/index.html'; }}
             />
 
@@ -155,6 +158,13 @@ export default function MainDashboard() {
                     usuarioAtual={dados.usuario}
                     onClose={() => setModalPerfilAberto(false)}
                     aoAtualizarAvatar={carregar} // Recarrega os dados do usuário para atualizar o header
+                />
+            )}
+
+            {modalPagamentosAberto && (
+                <DashPagamentosModal 
+                    pagamentoPendente={dados.pagamentoPendente} // NOVA PROP
+                    onClose={() => setModalPagamentosAberto(false)}
                 />
             )}
 
