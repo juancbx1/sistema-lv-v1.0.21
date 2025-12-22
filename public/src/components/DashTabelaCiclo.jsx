@@ -1,20 +1,29 @@
 import React from 'react';
 
 export default function DashTabelaCiclo({ blocos }) {
-    const fmt = (d) => new Date(d).toLocaleDateString('pt-BR');
-    
     // DATA DE CORTE: 14/12/2025
-    // Tudo que terminou antes disso será ignorado para não confundir o usuário
     const dataCorte = new Date('2025-12-14T00:00:00');
 
-    // Filtra os blocos válidos
+    // Filtra os blocos válidos (mesma lógica do resumo)
     const blocosVisiveis = blocos.filter(bloco => {
         const fimBloco = new Date(bloco.fim);
         return fimBloco >= dataCorte;
     });
 
+    // --- CORREÇÃO DA DATA (FUSO HORÁRIO) ---
+    // Usamos getUTCDate para garantir que a data mostrada é a mesma que o servidor mandou,
+    // ignorando se o usuário está no Brasil (GMT-3) ou na China.
+    const fmt = (dataISO) => {
+        if (!dataISO) return '--/--/----';
+        const d = new Date(dataISO);
+        const dia = d.getUTCDate().toString().padStart(2, '0');
+        const mes = (d.getUTCMonth() + 1).toString().padStart(2, '0');
+        const ano = d.getUTCFullYear();
+        return `${dia}/${mes}/${ano}`;
+    };
+
     if (blocosVisiveis.length === 0) {
-        return <div style={{padding: '20px', textAlign: 'center', color: '#666'}}>Nenhum dado disponível para o novo modelo de metas (a partir de 14/12).</div>;
+        return <div style={{padding: '20px', textAlign: 'center', color: '#666'}}>Nenhum dado disponível para o período.</div>;
     }
 
     return (
