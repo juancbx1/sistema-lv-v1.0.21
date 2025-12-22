@@ -1,21 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { fetchAPI } from '/js/utils/api-utils';
 
 export default function DashAtividadesLista({ aoAtualizar }) {
     const [filtroPeriodo, setFiltroPeriodo] = useState('hoje');
     const [dataEspecifica, setDataEspecifica] = useState(''); 
-    
-    // Estados de Busca
-    const [termoInput, setTermoInput] = useState(''); // Valor visual do input
-    const [termoBusca, setTermoBusca] = useState(''); // Valor efetivo para API
-    
+    const [termoInput, setTermoInput] = useState(''); // Visual
+    const [termoBusca, setTermoBusca] = useState(''); // API
     const [paginaAtual, setPaginaAtual] = useState(1);
     
-    // Dados da API
     const [listaAtividades, setListaAtividades] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [totalPaginas, setTotalPaginas] = useState(1);
-    const [totalizadores, setTotalizadores] = useState({ qtd: 0, pontos: 0 });
     
     const ITENS_POR_PAGINA = 8;
 
@@ -26,7 +20,6 @@ export default function DashAtividadesLista({ aoAtualizar }) {
         return `${ano}-${mes}-${dia}`;
     };
 
-    // Inicialização
     useEffect(() => {
         setDataEspecifica(getDataLocalISO());
     }, []);
@@ -39,13 +32,12 @@ export default function DashAtividadesLista({ aoAtualizar }) {
         return () => clearTimeout(timer);
     }, [termoInput]);
 
-    // --- FUNÇÃO DE BUSCA NA API (COMBINADA) ---
+    // 2. FUNÇÃO DE BUSCA NA API
     const buscarAtividades = useCallback(async () => {
         setLoading(true);
         try {
             let dataParam = '';
             
-            // 1. Define a data baseada no botão selecionado
             if (filtroPeriodo === 'hoje') {
                 dataParam = getDataLocalISO(new Date());
             } else if (filtroPeriodo === 'ontem') {
@@ -56,8 +48,11 @@ export default function DashAtividadesLista({ aoAtualizar }) {
                 dataParam = dataEspecifica;
             }
 
-            // REMOVIDO: O bloco que limpava dataParam.
-            // Agora a API receberá 'data' E 'busca' ao mesmo tempo.
+            if (termoBusca.trim().length > 0) {
+                // Se tiver busca texto, MANTÉM a data também para filtrar dentro do dia/período
+                // Se quiser buscar em TODO o histórico ao digitar, descomente a linha abaixo:
+                // dataParam = ''; 
+            }
 
             const query = new URLSearchParams({
                 data: dataParam,
@@ -66,22 +61,9 @@ export default function DashAtividadesLista({ aoAtualizar }) {
 
             const resultado = await fetchAPI(`/api/dashboard/atividades?${query.toString()}`);
             
+            // Salva a lista completa retornada
             setListaAtividades(resultado.rows || []);
-            // O backend não manda totalPages na raiz, manda pagination.totalPages.
-            // Mas aqui estamos recebendo tudo (segundo a última alteração do fetchAll).
-            // Ajuste conforme o retorno da sua API atual (se é paginada no back ou no front).
-            
-            // Se a API retorna tudo (sem paginação no backend):
-            const listaCompleta = resultado.rows || [];
-            setListaAtividades(listaCompleta);
-            
-            // Cálculos
-            const qtd = listaCompleta.reduce((acc, i) => acc + (Number(i.quantidade)||0), 0);
-            const pts = listaCompleta.reduce((acc, i) => acc + (Number(i.pontos_gerados)||0), 0);
-            setTotalizadores({ qtd, pontos: pts });
-            
-            // Resetamos a página local
-            setPaginaAtual(1);
+            setPaginaAtual(1); // Reseta paginação ao buscar novos dados
 
         } catch (error) {
             console.error(error);
@@ -90,18 +72,27 @@ export default function DashAtividadesLista({ aoAtualizar }) {
         }
     }, [filtroPeriodo, dataEspecifica, termoBusca]);
 
-    // 3. Efeito Gatilho (Chama a busca quando filtros mudam)
+    // Dispara busca quando filtros mudam
     useEffect(() => {
-        setPaginaAtual(1); // Reseta página ao filtrar
         buscarAtividades();
-    }, [buscarAtividades]); 
+    }, [buscarAtividades]);
 
-    // --- Renderização da Lista Paginada ---
+
+    // --- CÁLCULOS NO FRONTEND (Reativos) ---
+    
+    // 1. Total de Páginas (Calculado na hora)
+    const totalPaginasCalculado = Math.ceil(listaAtividades.length / ITENS_POR_PAGINA) || 1;
+
+    // 2. Fatiamento da Lista (Paginação)
     const indiceInicial = (paginaAtual - 1) * ITENS_POR_PAGINA;
     const itensParaExibir = listaAtividades.slice(indiceInicial, indiceInicial + ITENS_POR_PAGINA);
 
-    // Controles
-    const selecionarHoje = () => { setFiltroPeriodo('hoje'); setDataEspecifica(getDataLocalISO()); setTermoInput(''); };
+    // 3. Totalizadores (Baseado na lista completa filtrada)
+    const totalQtd = useMemo(() => listaAtividades.reduce((acc, i) => acc + (Number(i.quantidade)||0), 0), [listaAtividades]);
+    const totalPontos = useMemo(() => listaAtividades.reduce((acc, i) => acc + (Number(i.pontos_gerados)||0), 0), [listaAtividades]);
+
+    // Controles e Formatadores
+    const selecionarHoje = () => { setFiltroPeriodo('hoje'); setDataEspecifica(getDataLocalISO(new Date())); setTermoInput(''); };
     const selecionarOntem = () => { setFiltroPeriodo('ontem'); const d=new Date(); d.setDate(d.getDate()-1); setDataEspecifica(getDataLocalISO(d)); setTermoInput(''); };
     const selecionarEspecifico = (e) => { setDataEspecifica(e.target.value); setFiltroPeriodo('especifico'); setTermoInput(''); };
     const fmtData = (iso) => new Date(iso).toLocaleDateString('pt-BR');
@@ -117,7 +108,7 @@ export default function DashAtividadesLista({ aoAtualizar }) {
                         type="text" 
                         className="ds-input" 
                         placeholder="Buscar OP ou Produto..." 
-                        value={termoInput} // Liga ao estado visual
+                        value={termoInput}
                         onChange={(e) => setTermoInput(e.target.value)}
                         style={{flexGrow:1}}
                     />
@@ -127,8 +118,8 @@ export default function DashAtividadesLista({ aoAtualizar }) {
                 </div>
                  <div className="ds-filtros-ativos-container" style={{display:'flex', gap:'10px', alignItems:'center', flexWrap:'wrap'}}>
                     <span style={{fontWeight:'600', fontSize:'0.9rem', color:'#666'}}>Período:</span>
-                    <button className={`ds-btn ds-btn-pequeno ${filtroPeriodo === 'hoje' ? 'ds-btn-primario' : 'ds-btn-outline-primario'}`} onClick={selecionarHoje}>Hoje</button>
-                    <button className={`ds-btn ds-btn-pequeno ${filtroPeriodo === 'ontem' ? 'ds-btn-primario' : 'ds-btn-outline-primario'}`} onClick={selecionarOntem}>Ontem</button>
+                    <button className={`ds-btn ds-btn-pequeno ${filtroPeriodo === 'hoje' ? 'ds-btn-filtro-ativo' : 'ds-btn-filtro-inativo'}`} onClick={selecionarHoje}>Hoje</button>
+                    <button className={`ds-btn ds-btn-pequeno ${filtroPeriodo === 'ontem' ? 'ds-btn-filtro-ativo' : 'ds-btn-filtro-inativo'}`} onClick={selecionarOntem}>Ontem</button>
                     <input type="date" className="ds-input" style={{width:'auto', padding:'5px'}} value={dataEspecifica} onChange={selecionarEspecifico}/>
                 </div>
             </div>
@@ -136,11 +127,11 @@ export default function DashAtividadesLista({ aoAtualizar }) {
             <div className="ds-totalizadores-container" style={{display:'flex', justifyContent:'space-around', backgroundColor:'#f8f9fa', padding:'15px', borderRadius:'12px', marginBottom:'20px', border:'1px solid #dee2e6'}}>
                 <div style={{textAlign:'center'}}>
                     <span style={{display:'block', fontSize:'0.85rem', color:'#666', fontWeight:'600'}}>Total Processos</span>
-                    <strong style={{fontSize:'1.4rem', color:'var(--ds-cor-primaria)'}}>{totalizadores.qtd}</strong>
+                    <strong style={{fontSize:'1.4rem', color:'var(--ds-cor-primaria)'}}>{totalQtd}</strong>
                 </div>
                 <div style={{textAlign:'center'}}>
                     <span style={{display:'block', fontSize:'0.85rem', color:'#666', fontWeight:'600'}}>Total Pontos</span>
-                    <strong style={{fontSize:'1.4rem', color:'var(--ds-cor-sucesso)'}}>{Math.round(totalizadores.pontos)}</strong>
+                    <strong style={{fontSize:'1.4rem', color:'var(--ds-cor-sucesso)'}}>{Math.round(totalPontos)}</strong>
                 </div>
             </div>
 
@@ -154,7 +145,7 @@ export default function DashAtividadesLista({ aoAtualizar }) {
                         ) : (
                             itensParaExibir.map((item, index) => {
                                 const key = item.id_original || index;
-                                const tituloTipo = `OP ${item.op_numero}`; // Padronizado
+                                const tituloTipo = `OP ${item.op_numero}`;
                                 const variacao = item.variacao || '';
 
                                 return (
@@ -188,11 +179,28 @@ export default function DashAtividadesLista({ aoAtualizar }) {
                 )}
             </div>
 
-            {totalPaginas > 1 && (
+            {/* Paginação */}
+            {totalPaginasCalculado > 1 && (
                 <div className="ds-paginacao" style={{display:'flex', justifyContent:'center', alignItems:'center', gap:'15px', marginTop:'20px'}}>
-                    <button className="ds-btn ds-btn-outline-primario" disabled={paginaAtual === 1} onClick={() => setPaginaAtual(p => p - 1)}>Anterior</button>
-                    <span style={{fontWeight:'bold', color:'var(--ds-cor-primaria)'}}>Pág. {paginaAtual} de {totalPaginas}</span>
-                    <button className="ds-btn ds-btn-outline-primario" disabled={paginaAtual === totalPaginas} onClick={() => setPaginaAtual(p => p + 1)}>Próximo</button>
+                    <button 
+                        className="ds-btn ds-btn-outline-primario" 
+                        disabled={paginaAtual === 1} 
+                        onClick={() => setPaginaAtual(p => Math.max(1, p - 1))}
+                    >
+                        Anterior
+                    </button>
+                    
+                    <span style={{fontWeight:'bold', color:'var(--ds-cor-primaria)'}}>
+                        Pág. {paginaAtual} de {totalPaginasCalculado}
+                    </span>
+                    
+                    <button 
+                        className="ds-btn ds-btn-outline-primario" 
+                        disabled={paginaAtual === totalPaginasCalculado} 
+                        onClick={() => setPaginaAtual(p => Math.min(totalPaginasCalculado, p + 1))}
+                    >
+                        Próximo
+                    </button>
                 </div>
             )}
         </section>
