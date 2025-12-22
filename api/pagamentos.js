@@ -808,4 +808,159 @@ router.post('/remover-registro-dia', async (req, res) => {
     }
 });
 
+// --- MÓDULO DE RECIBOS E CONFERÊNCIA ---
+
+// GET /api/pagamentos/recibos/dados
+// Busca os dados detalhados para o recibo (Intervalo Livre)
+router.get('/recibos/dados', async (req, res) => {
+    const { usuario_id, data_inicio, data_fim } = req.query;
+
+    if (!usuario_id || !data_inicio || !data_fim) {
+        return res.status(400).json({ error: 'Parâmetros obrigatórios ausentes.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+
+        // 1. Busca Usuário e Metas
+        // Precisamos das metas para calcular o valor financeiro do dia
+        const userRes = await dbClient.query('SELECT tipos, nivel FROM usuarios WHERE id = $1', [usuario_id]);
+        const usuario = userRes.rows[0];
+        const tipoUsuario = usuario.tipos?.[0] || 'costureira';
+        const nivelUsuario = usuario.nivel || 1;
+
+        // Busca a versão da meta vigente na DATA FIM do recibo
+        const versaoMetaRes = await dbClient.query(
+            `SELECT id FROM metas_versoes WHERE data_inicio_vigencia <= $1 ORDER BY data_inicio_vigencia DESC LIMIT 1`, 
+            [data_fim]
+        );
+        
+        let metasConfiguradas = [];
+        if (versaoMetaRes.rows.length > 0) {
+            const regrasRes = await dbClient.query(
+                `SELECT pontos_meta, valor_comissao, descricao_meta FROM metas_regras WHERE id_versao = $1 AND tipo_usuario = $2 AND nivel = $3 ORDER BY pontos_meta ASC`,
+                [versaoMetaRes.rows[0].id, tipoUsuario, nivelUsuario]
+            );
+            metasConfiguradas = regrasRes.rows;
+        }
+
+        // 2. Busca Produção + Arremates
+        let queryText = `
+            SELECT data, pontos_gerados FROM producoes WHERE funcionario_id = $1 AND data BETWEEN $2 AND $3
+        `;
+        if (tipoUsuario === 'tiktik') {
+            queryText += ` UNION ALL SELECT data_lancamento as data, pontos_gerados FROM arremates WHERE usuario_tiktik_id = $1 AND data_lancamento BETWEEN $2 AND $3 AND tipo_lancamento = 'PRODUCAO'`;
+        }
+        
+        const producaoRes = await dbClient.query(queryText, [usuario_id, data_inicio + ' 00:00:00', data_fim + ' 23:59:59']);
+
+        // 3. Busca Resgates e Ganhos (Cofre)
+        const cofreRes = await dbClient.query(
+            `SELECT data_evento, quantidade, tipo FROM banco_pontos_log WHERE usuario_id = $1 AND tipo IN ('RESGATE', 'GANHO') AND data_evento BETWEEN $2 AND $3`,
+            [usuario_id, data_inicio + ' 00:00:00', data_fim + ' 23:59:59']
+        );
+
+        // 4. Compila Dia a Dia
+        const mapaDias = {};
+
+        // Helper para inicializar dia
+        const getDia = (dataStr) => {
+            if (!mapaDias[dataStr]) mapaDias[dataStr] = { pontos: 0, resgate: 0, ganhoCofre: 0, data: dataStr };
+            return mapaDias[dataStr];
+        };
+
+        producaoRes.rows.forEach(r => {
+            const d = new Date(r.data).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+            getDia(d).pontos += parseFloat(r.pontos_gerados);
+        });
+
+        cofreRes.rows.forEach(r => {
+            const d = new Date(r.data_evento).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+            const qtd = parseFloat(r.quantidade);
+            if (r.tipo === 'RESGATE') getDia(d).resgate += qtd;
+            if (r.tipo === 'GANHO') getDia(d).ganhoCofre += qtd;
+        });
+
+        // 5. Calcula Valores Finais
+        const relatorio = Object.values(mapaDias).sort((a, b) => a.data.localeCompare(b.data)).map(dia => {
+            const totalDia = dia.pontos + dia.resgate; // GanhoCofre não soma para meta do dia, é sobra
+            let valor = 0;
+            let metaNome = '-';
+
+            // Verifica Meta
+            for (let i = metasConfiguradas.length - 1; i >= 0; i--) {
+                if (totalDia >= metasConfiguradas[i].pontos_meta) {
+                    valor = parseFloat(metasConfiguradas[i].valor_comissao);
+                    metaNome = metasConfiguradas[i].descricao_meta;
+                    break;
+                }
+            }
+
+            return { ...dia, totalDia, valor, metaNome };
+        });
+
+        res.status(200).json(relatorio);
+
+    } catch (error) {
+        console.error('[API Recibos Dados] Erro:', error);
+        res.status(500).json({ error: 'Erro ao gerar dados.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// POST /api/pagamentos/recibos/registrar
+// Marca que um recibo foi gerado
+router.post('/recibos/registrar', async (req, res) => {
+    const { usuario_id, data_inicio, data_fim } = req.body;
+    const adminId = req.usuarioLogado.id;
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        
+        await dbClient.query(
+            `INSERT INTO recibos_conferencia (usuario_id, data_inicio, data_fim, gerado_por) VALUES ($1, $2, $3, $4)`,
+            [usuario_id, data_inicio, data_fim, adminId]
+        );
+
+        res.status(201).json({ message: 'Recibo registrado.' });
+    } catch (error) {
+        console.error('[API Recibos Registrar] Erro:', error);
+        res.status(500).json({ error: 'Erro ao registrar.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// GET /api/pagamentos/recibos/verificar
+// Verifica se já existe recibo para o período (ou sobreposição)
+router.get('/recibos/verificar', async (req, res) => {
+    const { usuario_id, data_inicio, data_fim } = req.query;
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+
+        // Procura intersecção de datas
+        const result = await dbClient.query(`
+            SELECT data_inicio, data_fim, data_geracao 
+            FROM recibos_conferencia 
+            WHERE usuario_id = $1 
+              AND (data_inicio <= $3 AND data_fim >= $2)
+        `, [usuario_id, data_inicio, data_fim]);
+
+        res.status(200).json({ 
+            jaExiste: result.rowCount > 0,
+            conflitos: result.rows 
+        });
+
+    } catch (error) {
+        console.error('[API Recibos Verificar] Erro:', error);
+        res.status(500).json({ error: 'Erro ao verificar.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
 export default router;

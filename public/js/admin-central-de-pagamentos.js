@@ -1058,6 +1058,297 @@ function verificarPermissaoEConfigurarBotao(idBotao, permissaoNecessaria, mensag
     }
 }
 
+// --- LÓGICA DA ABA DE RECIBOS ---
+
+let dadosReciboCache = [];
+
+function preencherFiltroRecibo() {
+    const el = document.getElementById('recibo-filtro-empregado');
+    if(!el) return;
+    el.innerHTML = '<option value="">Selecione...</option>';
+    cachedUsuarios.filter(u => u.elegivel_pagamento).forEach(u => {
+        el.innerHTML += `<option value="${u.id}">${u.nome}</option>`;
+    });
+}
+
+async function verificarConflitoRecibo() {
+    const uid = document.getElementById('recibo-filtro-empregado').value;
+    const inicio = document.getElementById('recibo-data-inicio').value;
+    const fim = document.getElementById('recibo-data-fim').value;
+    const alerta = document.getElementById('recibo-alerta-conflito');
+    
+    if(!uid || !inicio || !fim) return;
+
+    const res = await fetchAPI(`/api/pagamentos/recibos/verificar?usuario_id=${uid}&data_inicio=${inicio}&data_fim=${fim}`);
+    
+    if (res.jaExiste) {
+        alerta.style.display = 'block';
+        alerta.innerHTML = `<i class="fas fa-exclamation-triangle"></i> <strong>Atenção:</strong> Já existem recibos gerados dentro deste período.`;
+    } else {
+        alerta.style.display = 'none';
+    }
+}
+
+async function visualizarDadosRecibo() {
+    const uid = document.getElementById('recibo-filtro-empregado').value;
+    const inicio = document.getElementById('recibo-data-inicio').value;
+    const fim = document.getElementById('recibo-data-fim').value;
+
+    if(!uid || !inicio || !fim) {
+        mostrarPopupPagamentos('Preencha todos os campos.', 'aviso');
+        return;
+    }
+
+    const btn = document.getElementById('recibo-btn-visualizar');
+    const tbodyPrincipal = document.querySelector('#tabela-recibo-preview tbody');
+    const tbodyCofre = document.querySelector('#tabela-recibo-cofre tbody');
+    const containerPrincipal = document.getElementById('recibo-preview-container');
+    const containerCofre = document.getElementById('recibo-cofre-container');
+
+    if (!tbodyPrincipal || !containerPrincipal) {
+        console.error("Elementos da tabela de recibo não encontrados no HTML.");
+        mostrarPopupPagamentos('Erro de estrutura HTML. Recarregue a página.', 'erro');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando...';
+
+    try {
+        const dados = await fetchAPI(`/api/pagamentos/recibos/dados?usuario_id=${uid}&data_inicio=${inicio}&data_fim=${fim}`);
+        dadosReciboCache = dados;
+
+        // --- 1. RENDERIZAÇÃO DA TABELA PRINCIPAL (PAGAMENTO) ---
+        // 1. Primeiro filtramos os dados para remover dias vazios
+        const dadosFiltrados = dados.filter(d => d.totalDia > 0 || d.valor > 0);
+
+        if (dadosFiltrados.length === 0) {
+            tbodyPrincipal.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">Nenhum dia produtivo encontrado neste período.</td></tr>';
+        } else {
+            // 2. Depois mapeamos apenas os dados filtrados
+            tbodyPrincipal.innerHTML = dadosFiltrados.map(d => {
+                const dataObj = new Date(d.data);
+                const dataStr = `${dataObj.getUTCDate().toString().padStart(2, '0')}/${(dataObj.getUTCMonth()+1).toString().padStart(2, '0')}/${dataObj.getUTCFullYear()}`;
+                
+                let colunaResgate = '-';
+                let estiloResgate = 'color: #ccc;';
+                if (d.resgate > 0) {
+                    colunaResgate = `+${Math.round(d.resgate)}`;
+                    estiloResgate = 'color: #e67e22; font-weight: bold;';
+                }
+
+                const estiloValor = d.valor > 0 ? 'color: var(--cpg-cor-receita); font-weight: bold;' : 'color: #999;';
+
+                return `
+                <tr>
+                    <td>${dataStr}</td>
+                    <td style="text-align: center;">${Math.round(d.pontos)}</td>
+                    <td style="text-align: center; ${estiloResgate}">${colunaResgate}</td>
+                    <td style="text-align: center; font-weight: bold;">${Math.round(d.totalDia)}</td>
+                    <td style="text-align: center;">${d.metaNome}</td>
+                    
+                </tr>
+                `;
+            }).join('');
+        }
+
+        const total = dados.reduce((acc, d) => acc + d.valor, 0);
+        document.getElementById('recibo-total-valor').textContent = formatCurrency(total);
+        
+        
+        // --- 2. RENDERIZAÇÃO DA TABELA DE COFRE (AUDITORIA) ---
+        if (tbodyCofre && containerCofre) {
+            const movimentosCofre = dados.filter(d => d.ganhoCofre > 0 || d.resgate > 0);
+            
+            if (movimentosCofre.length > 0) {
+                tbodyCofre.innerHTML = movimentosCofre.map(d => {
+                    const dataObj = new Date(d.data);
+                    const dataStr = `${dataObj.getUTCDate().toString().padStart(2, '0')}/${(dataObj.getUTCMonth()+1).toString().padStart(2, '0')}/${dataObj.getUTCFullYear()}`;
+
+                    let descricao = '';
+                    let valor = '';
+                    let cor = '';
+
+                    if (d.ganhoCofre > 0) {
+                        const dataRef = new Date(d.data);
+                        dataRef.setDate(dataRef.getDate() - 1);
+                        const dataRefStr = `${dataRef.getUTCDate().toString().padStart(2, '0')}/${(dataRef.getUTCMonth()+1).toString().padStart(2, '0')}`;
+                        descricao = `Sobra de Produção (Ref. ${dataRefStr})`;
+                        valor = `+${Math.round(d.ganhoCofre)}`;
+                        cor = 'var(--cpg-cor-receita)';
+                    } else {
+                        descricao = 'Resgate Utilizado para Meta';
+                        valor = `-${Math.round(d.resgate)}`;
+                        cor = '#e67e22';
+                    }
+
+                    return `
+                        <tr>
+                            <td>${dataStr}</td>
+                            <td>${descricao}</td>
+                            <td style="text-align: right; color: ${cor}; font-weight: bold;">${valor}</td>
+                        </tr>
+                    `;
+                }).join('');
+                
+                containerCofre.style.display = 'block';
+            } else {
+                containerCofre.style.display = 'none';
+            }
+        }
+
+        // --- FINALIZAÇÃO ---
+        containerPrincipal.style.display = 'block';
+        document.getElementById('recibo-btn-gerar').disabled = false;
+
+        verificarConflitoRecibo(); 
+
+    } catch (error) {
+        mostrarPopupPagamentos(error.message, 'erro');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-eye"></i> Visualizar Dados';
+    }
+}
+
+async function gerarPDFRecibo() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    const uid = document.getElementById('recibo-filtro-empregado').value;
+    const nomeEmpregado = document.getElementById('recibo-filtro-empregado').options[document.getElementById('recibo-filtro-empregado').selectedIndex].text;
+    const inicio = document.getElementById('recibo-data-inicio').value;
+    const fim = document.getElementById('recibo-data-fim').value;
+    
+    // --- CABEÇALHO ---
+    doc.setFontSize(18);
+    doc.text("Recibo de Conferência de Produção", 105, 20, null, null, "center");
+    
+    const inicioObj = new Date(inicio);
+    const fimObj = new Date(fim);
+    const emissaoObj = new Date();
+    const inicioStr = `${inicioObj.getUTCDate()}/${inicioObj.getUTCMonth()+1}/${inicioObj.getUTCFullYear()}`;
+    const fimStr = `${fimObj.getUTCDate()}/${fimObj.getUTCMonth()+1}/${fimObj.getUTCFullYear()}`;
+    const emissaoStr = emissaoObj.toLocaleDateString('pt-BR');
+
+    doc.setFontSize(10);
+    doc.text(`Empregado: ${nomeEmpregado}`, 14, 30);
+    doc.text(`Período: ${inicioStr} a ${fimStr}`, 14, 36);
+    doc.text(`Data de Emissão: ${emissaoStr}`, 14, 42);
+
+    // --- TABELA 1: PRODUÇÃO (CÁLCULO FINANCEIRO) ---
+    // Adicione o .filter() antes do .map()
+    const tableData1 = dadosReciboCache
+        .filter(d => d.totalDia > 0 || d.valor > 0) // <<< FILTRO NOVO
+        .map(d => {
+        const dataObj = new Date(d.data);
+        const dataStr = `${dataObj.getUTCDate().toString().padStart(2, '0')}/${(dataObj.getUTCMonth()+1).toString().padStart(2, '0')}/${dataObj.getUTCFullYear()}`;
+        
+        let infoResgate = '-';
+        if (d.resgate > 0) infoResgate = `+${Math.round(d.resgate)}`;
+
+        return [
+            dataStr,
+            Math.round(d.pontos),
+            infoResgate,
+            Math.round(d.totalDia),
+            d.metaNome
+        ];
+    });
+
+    const total = dadosReciboCache.reduce((acc, d) => acc + d.valor, 0);
+
+    doc.autoTable({
+        startY: 50,
+        head: [['Data', 'Prod.', 'Resgate', 'Total Dia', 'Meta']],
+        body: tableData1,
+        theme: 'grid',
+        foot: [['', '', '', 'TOTAL:', formatCurrency(total)]],
+        headStyles: { fillColor: [41, 128, 185] },
+        footStyles: { fillColor: [240, 240, 240], textColor: [0,0,0], fontStyle: 'bold', halign: 'right' }, // Alinha total à direita
+        styles: { fontSize: 9, cellPadding: 3 },
+        columnStyles: { 
+            4: { halign: 'right', fontStyle: 'bold' } // A coluna 4 agora é a última (Meta/Total)
+        }
+    });
+
+    let finalY = doc.lastAutoTable.finalY + 15;
+
+    // --- TABELA 2: MOVIMENTAÇÕES DO COFRE (AUDITORIA) ---
+    const movimentosCofre = dadosReciboCache.filter(d => d.ganhoCofre > 0 || d.resgate > 0);
+
+    if (movimentosCofre.length > 0) {
+        doc.setFontSize(11);
+        doc.text("Auditoria do Banco de Resgate (Cofre)", 14, finalY);
+        finalY += 5;
+
+        const tableData2 = movimentosCofre.map(d => {
+            const dataObj = new Date(d.data);
+            const dataStr = `${dataObj.getUTCDate().toString().padStart(2, '0')}/${(dataObj.getUTCMonth()+1).toString().padStart(2, '0')}/${dataObj.getUTCFullYear()}`;
+
+            let descricao = '';
+            let valor = '';
+
+            if (d.ganhoCofre > 0) {
+                const dataRef = new Date(d.data);
+                dataRef.setDate(dataRef.getDate() - 1);
+                const dataRefStr = `${dataRef.getUTCDate().toString().padStart(2, '0')}/${(dataRef.getUTCMonth()+1).toString().padStart(2, '0')}`;
+                descricao = `Sobra de Produção (Ref. ${dataRefStr})`;
+                valor = `+${Math.round(d.ganhoCofre)}`;
+            } else {
+                descricao = 'Resgate Utilizado para Meta';
+                valor = `-${Math.round(d.resgate)}`;
+            }
+
+            return [dataStr, descricao, valor];
+        });
+
+        doc.autoTable({
+            startY: finalY,
+            head: [['Data', 'Descrição', 'Pontos']],
+            body: tableData2,
+            theme: 'striped',
+            headStyles: { fillColor: [108, 117, 125] }, // Cinza
+            styles: { fontSize: 8, cellPadding: 2 },
+            columnStyles: { 2: { halign: 'right', fontStyle: 'bold' } }
+        });
+
+        finalY = doc.lastAutoTable.finalY + 15;
+    } else {
+        finalY += 10;
+    }
+
+    // --- RODAPÉ DE ASSINATURA ---
+    finalY += 15; // Espaço extra
+
+    // Verifica se cabe na página, senão cria nova
+    if (finalY > 250) {
+        doc.addPage();
+        finalY = 40;
+    }
+    
+    doc.setLineWidth(0.5);
+    doc.line(14, finalY, 90, finalY);
+    doc.line(110, finalY, 196, finalY);
+
+    doc.setFontSize(8);
+    doc.text("Assinatura do Empregado", 14, finalY + 5);
+    doc.text("Visto do Supervisor", 110, finalY + 5);
+
+    doc.text("Declaro que conferi os dados acima e estou de acordo com TODOS os valores apresentados.", 105, finalY + 20, null, null, "center");
+
+    // Salva e Registra
+    doc.save(`Recibo_${nomeEmpregado.replace(/\s+/g, '_')}_${inicio}.pdf`);
+
+    await fetchAPI('/api/pagamentos/recibos/registrar', {
+        method: 'POST',
+        body: JSON.stringify({ usuario_id: uid, data_inicio: inicio, data_fim: fim })
+    });
+    
+    mostrarPopupPagamentos('Recibo gerado e registrado com sucesso!', 'sucesso');
+    verificarConflitoRecibo();
+}
+
 // --- Inicialização da Página ---
 document.addEventListener('DOMContentLoaded', async () => {
     // Esconde o conteúdo principal e mostra o spinner global
@@ -1123,7 +1414,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     }
-    
+
+    // aba filtros recibo!
+    preencherFiltroRecibo();
+
+    document.getElementById('recibo-btn-visualizar').addEventListener('click', visualizarDadosRecibo);
+    document.getElementById('recibo-btn-gerar').addEventListener('click', gerarPDFRecibo);
+        
     // Listeners da aba COMISSÃO
     const filtroEmpregadoComissao = document.getElementById('comissao-filtro-empregado');
     const filtroCicloComissao = document.getElementById('comissao-filtro-ciclo');

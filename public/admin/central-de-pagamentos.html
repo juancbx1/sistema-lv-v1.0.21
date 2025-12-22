@@ -10,6 +10,10 @@
     <link rel="stylesheet" href="/css/central-de-pagamentos.css"> 
     <link rel="stylesheet" href="/css/menu-lateral.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    <!-- jsPDF para geração de documentos -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
 </head>
 <body>
 
@@ -70,6 +74,10 @@
             <button class="cpg-tab-btn" data-tab="beneficios">
                 <i class="fas fa-gift"></i>
                 <span class="cpg-tab-text">Benefícios</span>
+            </button>
+            <button class="cpg-tab-btn" data-tab="recibos">
+                <i class="fas fa-file-contract"></i>
+                <span class="cpg-tab-text">Recibos</span>
             </button>
         </div>
 
@@ -232,6 +240,90 @@
                             <p>Em breve!</p>
                         </div>
                     </div>
+
+                    <!-- NOVO PAINEL: RECIBOS E DOCUMENTOS -->
+            <div id="tab-recibos" class="cpg-tab-panel">
+                <div class="cpg-card">
+                    <h2 class="cpg-section-title">Gerador de Recibo de Conferência</h2>
+                    
+                    <div class="cpg-form-row">
+                        <div class="cpg-form-group">
+                            <label>Empregado</label>
+                            <select id="recibo-filtro-empregado" class="cpg-select">
+                                <option value="">Carregando...</option>
+                            </select>
+                        </div>
+                        <div class="cpg-form-group">
+                            <label>Data Início</label>
+                            <input type="date" id="recibo-data-inicio" class="cpg-input">
+                        </div>
+                        <div class="cpg-form-group">
+                            <label>Data Fim</label>
+                            <input type="date" id="recibo-data-fim" class="cpg-input">
+                        </div>
+                    </div>
+
+                    <div id="recibo-alerta-conflito" style="display:none; background:#fff3cd; color:#856404; padding:15px; border-radius:8px; margin-bottom:20px; border:1px solid #ffeeba;">
+                        <i class="fas fa-exclamation-triangle"></i> <strong>Atenção:</strong> Já existem recibos gerados para este período (ou parte dele).
+                    </div>
+
+                    <div style="display:flex; gap:10px; justify-content: flex-end;">
+                        <button id="recibo-btn-visualizar" class="cpg-btn cpg-btn-secundario">
+                            <i class="fas fa-eye"></i> Visualizar Dados
+                        </button>
+                        <button id="recibo-btn-gerar" class="cpg-btn cpg-btn-primario" disabled>
+                            <i class="fas fa-print"></i> Gerar PDF e Salvar
+                        </button>
+                    </div>
+
+                    <!-- Tabela de Pré-visualização -->
+                    <div id="recibo-preview-container" style="margin-top:30px; display:none;">
+                        
+                        <!-- TABELA 1: EXTRATO DE PRODUÇÃO E PAGAMENTO -->
+                        <h3 class="cpg-section-title" style="font-size:1rem;">Extrato de Produção (Cálculo Financeiro)</h3>
+                        <div class="cpg-tabela-container">
+                            <table class="cpg-tabela-detalhes" id="tabela-recibo-preview">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Produção</th>
+                                        <th>Resgate (+)</th> <!-- Mudamos o título da coluna -->
+                                        <th>Total Dia</th>
+                                        <th>Meta</th>
+                                    
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                                <tfoot>
+                                    <tr style="background:#f8f9fa; font-weight:bold;">
+                                        <td colspan="4" style="text-align:right;">TOTAL PERÍODO:</td>
+                                        <td id="recibo-total-valor">R$ 0,00</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+
+                        <!-- TABELA 2: EXTRATO DO COFRE (NOVA) -->
+                        <div id="recibo-cofre-container" style="margin-top: 30px; display: none;">
+                            <h3 class="cpg-section-title" style="font-size:1rem; color: #666;">Movimentações do Cofre (Auditoria)</h3>
+                            <div class="cpg-tabela-container">
+                                <table class="cpg-tabela-detalhes" id="tabela-recibo-cofre">
+                                    <thead>
+                                        <tr>
+                                            <th>Data do Registro</th>
+                                            <th>Descrição</th>
+                                            <th style="text-align: right;">Pontos</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+            </div>
 
                 </div>
             </section>

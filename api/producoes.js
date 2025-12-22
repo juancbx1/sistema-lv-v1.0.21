@@ -508,8 +508,8 @@ router.put('/finalizar', async (req, res) => {
 
         // 3. Define Configuração de Pontos (Inferência de Tipo)
         let tipoAtividadeParaConfig = null;
-        if (dadosFuncionario.tipos.includes('costureira')) typeAtividadeParaConfig = 'costura_op_costureira';
-        else if (dadosFuncionario.tipos.includes('tiktik')) typeAtividadeParaConfig = 'processo_op_tiktik';
+        if (dadosFuncionario.tipos.includes('costureira')) tipoAtividadeParaConfig = 'costura_op_costureira';
+        else if (dadosFuncionario.tipos.includes('tiktik')) tipoAtividadeParaConfig = 'processo_op_tiktik';
 
         // 4. Busca Máquina Correta
         const produtoResult = await dbClient.query('SELECT etapas FROM produtos WHERE id = $1', [sessao.produto_id]);
@@ -533,6 +533,14 @@ router.put('/finalizar', async (req, res) => {
         
         const opsCandidatas = opsDisponiveisResult.rows;
 
+        // SE NÃO TIVER OP DISPONÍVEL, TEMOS QUE LANÇAR SEM OP OU NA OP ORIGINAL MESMO QUE FECHADA
+        // Para evitar erro 500, vamos buscar a OP original se ela não veio na lista de abertas
+        let opOriginalFallback = null;
+        if (opsCandidatas.length === 0) {
+             const opOrigRes = await dbClient.query('SELECT numero, etapas FROM ordens_de_producao WHERE numero = $1', [sessao.op_numero]);
+             if (opOrigRes.rows.length > 0) opOriginalFallback = opOrigRes.rows[0];
+        }
+
         // 6. Mapeia saldos
         const numerosOps = opsCandidatas.map(op => op.numero);
         let mapaSaldo = new Map();
@@ -545,62 +553,30 @@ router.put('/finalizar', async (req, res) => {
             lancamentosAnt.rows.forEach(r => mapaSaldo.set(`${r.op_numero}-${r.etapa_index}`, parseInt(r.total)));
         }
 
-        // --- ARRAY PARA AUDITORIA INTERNA (Sem query extra) ---
         const logAuditoria = []; 
 
-        // 7. Distribuição
+        // 7. Distribuição (Só roda se tiver OPs ativas)
         for (const op of opsCandidatas) {
             if (quantidadeRestante <= 0) break;
 
             const etapaIndex = op.etapas.findIndex(e => (e.processo || e) === sessao.processo);
             if (etapaIndex === -1) continue;
 
-            // Saldo Entrada
             let entrada = (etapaIndex === 0) ? parseInt(op.quantidade) : (mapaSaldo.get(`${op.numero}-${etapaIndex - 1}`) || 0);
-            // Saldo Saída
             let saida = mapaSaldo.get(`${op.numero}-${etapaIndex}`) || 0;
             
             const disponivel = Math.max(0, entrada - saida);
 
             if (disponivel > 0) {
                 const qtdLancar = Math.min(quantidadeRestante, disponivel);
-                
-                // OTIMIZAÇÃO: Calculamos pontos aqui diretamente ou usamos a função auxiliar
-                // Como já temos os dados do usuário, podemos passar para a função se ela aceitar, 
-                // ou mantemos a chamada original (que faz query extra, mas é seguro). 
-                // Para não quebrar a lógica de cálculo complexa, vamos manter a chamada original, 
-                // mas saiba que ela faz 1 SELECT por iteração. É aceitável para poucas OPs.
-                const { pontosGerados, valorPontoAplicado } = await calcularPontosProducao(
-                    dbClient,
-                    sessao.produto_id,
-                    sessao.processo,
-                    qtdLancar,
-                    sessao.funcionario_id
-                );
+                const { pontosGerados, valorPontoAplicado } = await calcularPontosProducao(dbClient, sessao.produto_id, sessao.processo, qtdLancar, sessao.funcionario_id);
 
                 await dbClient.query(
                     `INSERT INTO producoes (id, op_numero, etapa_index, processo, produto_id, variacao, maquina, quantidade, funcionario, funcionario_id, data, lancado_por, valor_ponto_aplicado, pontos_gerados)
                      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11, $12, $13)`,
-                    [
-                        `prod_${Date.now()}_${Math.random().toString(36).substr(2,4)}`, 
-                        op.numero, 
-                        etapaIndex, 
-                        sessao.processo, 
-                        sessao.produto_id, 
-                        sessao.variante, 
-                        maquinaCorreta, 
-                        qtdLancar, 
-                        nomeFuncionario, 
-                        sessao.funcionario_id, 
-                        usuarioLogado.nome,
-                        valorPontoAplicado, 
-                        pontosGerados       
-                    ]
+                    [`prod_${Date.now()}_${Math.random().toString(36).substr(2,4)}`, op.numero, etapaIndex, sessao.processo, sessao.produto_id, sessao.variante, maquinaCorreta, qtdLancar, nomeFuncionario, sessao.funcionario_id, usuarioLogado.nome, valorPontoAplicado, pontosGerados]
                 );
-
-                // Adiciona ao log local
-                logAuditoria.push(`OP #${op.numero}: ${qtdLancar} pçs (${pontosGerados.toFixed(2)} pts)`);
-
+                logAuditoria.push(`OP #${op.numero}: ${qtdLancar}`);
                 quantidadeRestante -= qtdLancar;
                 mapaSaldo.set(`${op.numero}-${etapaIndex}`, saida + qtdLancar);
             }
@@ -608,10 +584,11 @@ router.put('/finalizar', async (req, res) => {
 
         // 8. Sobra (Estouro)
         if (quantidadeRestante > 0) {
-             const opOriginal = opsCandidatas.find(o => o.numero === sessao.op_numero) || opsCandidatas[0];
+             // Tenta achar a OP original nas candidatas, ou usa o fallback (mesmo que fechada)
+             const opAlvo = opsCandidatas.find(o => o.numero === sessao.op_numero) || opsCandidatas[0] || opOriginalFallback;
              
-             if(opOriginal) {
-                const idx = opOriginal.etapas.findIndex(e => (e.processo || e) === sessao.processo);
+             if (opAlvo) { // <--- VERIFICAÇÃO DE SEGURANÇA
+                const idx = opAlvo.etapas.findIndex(e => (e.processo || e) === sessao.processo);
 
                 const { pontosGerados, valorPontoAplicado } = await calcularPontosProducao(
                     dbClient, sessao.produto_id, sessao.processo, quantidadeRestante, sessao.funcionario_id
@@ -620,10 +597,21 @@ router.put('/finalizar', async (req, res) => {
                 await dbClient.query(
                     `INSERT INTO producoes (id, op_numero, etapa_index, processo, produto_id, variacao, maquina, quantidade, funcionario, funcionario_id, data, lancado_por, valor_ponto_aplicado, pontos_gerados)
                      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11, $12, $13)`,
-                    [`prod_force_${Date.now()}`, opOriginal.numero, idx, sessao.processo, sessao.produto_id, sessao.variante, maquinaCorreta, quantidadeRestante, nomeFuncionario, sessao.funcionario_id, usuarioLogado.nome, valorPontoAplicado, pontosGerados]
+                    [`prod_force_${Date.now()}`, opAlvo.numero, idx, sessao.processo, sessao.produto_id, sessao.variante, maquinaCorreta, quantidadeRestante, nomeFuncionario, sessao.funcionario_id, usuarioLogado.nome, valorPontoAplicado, pontosGerados]
                 );
                 
-                logAuditoria.push(`FORÇADO OP #${opOriginal.numero}: ${quantidadeRestante} pçs (${pontosGerados.toFixed(2)} pts)`);
+                logAuditoria.push(`FORÇADO OP #${opAlvo.numero}: ${quantidadeRestante}`);
+             } else {
+                 // Caso extremo: Não achou NENHUMA OP (nem a original existe mais?).
+                 // Lança sem OP ou dá erro? Vamos lançar com OP '0000' para não perder a produção.
+                 console.warn("Nenhuma OP encontrada para lançar a sobra. Usando OP de contingência.");
+                 const { pontosGerados, valorPontoAplicado } = await calcularPontosProducao(dbClient, sessao.produto_id, sessao.processo, quantidadeRestante, sessao.funcionario_id);
+                 
+                 await dbClient.query(
+                    `INSERT INTO producoes (id, op_numero, etapa_index, processo, produto_id, variacao, maquina, quantidade, funcionario, funcionario_id, data, lancado_por, valor_ponto_aplicado, pontos_gerados)
+                     VALUES ($1, '0000', -1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9, $10, $11)`,
+                    [`prod_orphan_${Date.now()}`, sessao.processo, sessao.produto_id, sessao.variante, maquinaCorreta, quantidadeRestante, nomeFuncionario, sessao.funcionario_id, usuarioLogado.nome, valorPontoAplicado, pontosGerados]
+                );
              }
         }
 
