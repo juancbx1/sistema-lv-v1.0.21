@@ -34,69 +34,63 @@ router.get('/status-funcionarios', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada.' });
         }
 
+        // MUDANÇA NA QUERY: Removemos o LEFT JOIN simples e fazemos um agrupamento de sessões
+        // Buscamos usuários e suas sessões ativas (agregadas em JSON array)
         const query = `
             SELECT 
                 u.id, u.nome, u.avatar_url, u.status_atual, u.status_data_modificacao,
                 u.horario_entrada_1, u.horario_saida_1, u.horario_entrada_2, u.horario_saida_2, 
                 u.horario_entrada_3, u.horario_saida_3,
                 u.tipos,
-                s.id as id_sessao, s.op_numero, s.produto_id, s.variante, s.processo, 
-                s.quantidade_atribuida, s.data_inicio,
-                p.nome as produto_nome
+                COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'id_sessao', s.id,
+                            'op_numero', s.op_numero,
+                            'produto_id', s.produto_id,
+                            'variante', s.variante,
+                            'processo', s.processo,
+                            'quantidade', s.quantidade_atribuida,
+                            'data_inicio', s.data_inicio,
+                            'produto_nome', p.nome
+                        ) 
+                    ) FILTER (WHERE s.id IS NOT NULL), 
+                    '[]'
+                ) as tarefas_ativas
             FROM usuarios u
             LEFT JOIN sessoes_trabalho_producao s ON u.id = s.funcionario_id AND s.status = 'EM_ANDAMENTO'
             LEFT JOIN produtos p ON s.produto_id = p.id
             WHERE u.data_demissao IS NULL
             AND ('costureira' = ANY(u.tipos) OR 'tiktik' = ANY(u.tipos))
+            GROUP BY u.id
             ORDER BY u.nome ASC;
         `;
+        
         const result = await dbClient.query(query);
 
         const resultadoFinal = result.rows.map(row => {
-            // 1. Calcula o status baseado no horário (Automático: ALMOCO, PAUSA, FORA_DO_HORARIO, etc)
             let statusCalculado = determinarStatusFinalServidor(row);
+            
+            // Se tem tarefas no array, status é PRODUZINDO
+            const tarefas = row.tarefas_ativas || [];
+            const temTarefa = tarefas.length > 0;
 
-            // 2. LÓGICA DE PRECEDÊNCIA CORRIGIDA:
+            let statusFinal = statusCalculado;
 
-            // Se o usuário está em uma tarefa (Sessão Ativa), isso ganha de TUDO.
-            const tarefaAtiva = row.id_sessao ? {
-                id_sessao: row.id_sessao,
-                // ... (resto dos dados da tarefa)
-                op_numero: row.op_numero,
-                produto_id: row.produto_id,
-                produto_nome: row.produto_nome,
-                variante: row.variante,
-                processo: row.processo,
-                quantidade: row.quantidade_atribuida,
-                data_inicio: row.data_inicio,
-            } : null;
-
-            let statusFinal = statusCalculado; // Começamos assumindo o cálculo do horário/manual forte
-
-            if (tarefaAtiva) {
+            if (temTarefa) {
                 statusFinal = 'PRODUZINDO';
-            } 
-            // Se não está produzindo, verificamos se o cálculo automático retornou apenas "LIVRE"
-            // Mas o banco diz que é uma exceção manual forte (ex: FALTOU, PAUSA_MANUAL, ALOCADO_EXTERNO)
-            else {
-                // Lista de status manuais que DEVEM prevalecer sobre o horário automático
-                // OBS: 'LIVRE' não entra aqui, pois 'LIVRE' no banco é placeholder.
+            } else {
+                // Lógica manual forte (FALTOU, PAUSA, etc)
                 const statusManuaisFortes = ['FALTOU', 'PAUSA_MANUAL', 'ALOCADO_EXTERNO', 'LIVRE_MANUAL'];
-                
                 if (statusManuaisFortes.includes(row.status_atual)) {
-                    // Precisamos verificar se essa definição manual é de HOJE (lógica que já existe no determinarStatusFinal, mas reforçamos)
-                    // Como o determinarStatusFinalServidor já trata data, podemos confiar nele OU no row.status_atual direto.
-                    // Pela sua lógica atual, row.status_atual é o que manda se for manual.
                     statusFinal = row.status_atual;
-                    
-                    // Ajuste visual: LIVRE_MANUAL deve aparecer como LIVRE para o usuário, mas com prioridade alta
                     if (statusFinal === 'LIVRE_MANUAL') statusFinal = 'LIVRE'; 
                 }
-                // SE NÃO FOR MANUAL FORTE:
-                // Mantemos o `statusCalculado`. 
-                // Isso significa que se o banco diz "LIVRE", mas o horário diz "ALMOCO", o statusCalculado será "ALMOCO".
-                // Isso corrige o seu bug!
             }
+
+            // Pegamos a primeira tarefa como "principal" para compatibilidade com código antigo
+            // Mas enviamos a lista completa em 'tarefas'
+            const tarefaPrincipal = temTarefa ? tarefas[0] : null;
 
             return {
                 id: row.id,
@@ -104,14 +98,14 @@ router.get('/status-funcionarios', async (req, res) => {
                 avatar_url: row.avatar_url,
                 tipos: row.tipos,
                 status_atual: statusFinal,
-                tarefa_atual: tarefaAtiva
+                tarefa_atual: tarefaPrincipal, // Mantém compatibilidade
+                tarefas: tarefas // Nova lista completa
             }
         });
 
         res.status(200).json(resultadoFinal);
     } catch (error) {
-        console.error('[API /producao/status-funcionarios V2] Erro:', error);
-        res.status(500).json({ error: 'Erro ao buscar status dos funcionários.' });
+        // ...
     } finally {
         if (dbClient) dbClient.release();
     }

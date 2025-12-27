@@ -72,15 +72,17 @@ router.get('/', async (req, res) => {
         const limit = parseInt(query.limit) || 10;
         const offset = (page - 1) * limit;
 
+        // 1. QUERY PRINCIPAL (MANTIDA)
         const queryTextBase = `
-        SELECT 
-            op.id, op.numero, op.variante, op.quantidade, op.data_entrega, 
-            op.observacoes, op.status, op.edit_id, op.etapas, op.data_final,
-            op.produto_id, -- INCLUINDO O ID
-            p.nome AS produto
-        FROM ordens_de_producao op
-        LEFT JOIN produtos p ON op.produto_id = p.id
-    `;
+            SELECT 
+                op.id, op.numero, op.variante, op.quantidade, op.data_entrega, 
+                op.observacoes, op.status, op.edit_id, op.etapas, op.data_final,
+                op.produto_id, 
+                p.nome AS produto,
+                p.imagem AS imagem_produto -- Já trazemos a imagem aqui se possível
+            FROM ordens_de_producao op
+            LEFT JOIN produtos p ON op.produto_id = p.id
+        `;
         
         let whereClauses = [];
         let params = [];
@@ -115,15 +117,60 @@ router.get('/', async (req, res) => {
         const totalResult = await dbClient.query(countQuery, countParams);
         const total = parseInt(totalResult.rows[0].count);
         const result = await dbClient.query(dataQuery, params);
+        
+        let ops = result.rows;
+
+        // --- OTIMIZAÇÃO VERCEL (N+1 KILLER) ---
+        // Se houver OPs na lista, buscamos o progresso delas em UMA única consulta agregada.
+        if (ops.length > 0) {
+            const numerosOps = ops.map(o => o.numero);
+            
+            // Busca quanto foi produzido em cada etapa para essas OPs
+            const progressoResult = await dbClient.query(`
+                SELECT op_numero, etapa_index, SUM(quantidade) as total_feito
+                FROM producoes 
+                WHERE op_numero = ANY($1::text[])
+                GROUP BY op_numero, etapa_index
+            `, [numerosOps]);
+
+            // Cria um mapa para acesso rápido: "NumeroOP-IndexEtapa" -> Quantidade
+            const mapaProgresso = new Map();
+            progressoResult.rows.forEach(row => {
+                mapaProgresso.set(`${row.op_numero}-${row.etapa_index}`, parseInt(row.total_feito || 0));
+            });
+
+            // Enriquece as OPs com a info se estão prontas
+            ops = ops.map(op => {
+                if (!op.etapas || !Array.isArray(op.etapas)) return op;
+
+                const etapasEnriquecidas = op.etapas.map((etapa, index) => {
+                    const totalFeito = mapaProgresso.get(`${op.numero}-${index}`) || 0;
+                    // Consideramos "lançado" se o total feito for >= quantidade da OP (ou lógica de negócio específica)
+                    // Mas para o card "Amarelo", o importante é saber se a etapa existe.
+                    return {
+                        ...etapa,
+                        lancado: totalFeito > 0, // Simplificação para o card: se tem produção, teve movimento
+                        quantidade_feita: totalFeito
+                    };
+                });
+
+                return {
+                    ...op,
+                    etapas: etapasEnriquecidas
+                };
+            });
+        }
+        // ---------------------------------------
 
         res.status(200).json({
-            rows: result.rows,
+            rows: ops, // Retorna a lista enriquecida
             total: total,
             page: page,
             pages: Math.ceil(total / limit) || 1,
         });
 
     } catch (error) {
+        // ... (catch mantido)
         console.error('[router/ordens-de-producao GET /] Erro:', error);
         res.status(500).json({ error: 'Erro ao buscar ordens de produção.', details: error.message });
     } finally {

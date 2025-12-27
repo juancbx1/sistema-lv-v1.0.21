@@ -8,7 +8,7 @@ export async function gerarDiagnosticoCompleto(dbClient) {
         arrematesResult, 
         produtosResult
     ] = await Promise.all([
-        dbClient.query(`SELECT * FROM demandas_producao WHERE status IN ('pendente', 'em_producao') ORDER BY prioridade ASC, data_solicitacao ASC`),
+        dbClient.query(`SELECT * FROM demandas_producao WHERE status IN ('pendente', 'em_producao', 'concluida') ORDER BY prioridade ASC, data_solicitacao ASC`),
         dbClient.query(`SELECT id, numero, demanda_id, produto_id, variante, quantidade, status, etapas FROM ordens_de_producao WHERE demanda_id IS NOT NULL`),
         dbClient.query(`SELECT op_numero, quantidade_arrematada, quantidade_ja_embalada FROM arremates JOIN ordens_de_producao op ON arremates.op_numero = op.numero WHERE op.demanda_id IS NOT NULL AND arremates.tipo_lancamento = 'PRODUCAO'`),
         dbClient.query("SELECT id, nome, sku, is_kit, grade, imagem FROM produtos")

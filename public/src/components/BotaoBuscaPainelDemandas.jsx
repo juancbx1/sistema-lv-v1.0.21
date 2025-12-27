@@ -1,25 +1,32 @@
 // public/src/components/BotaoBuscaPainelDemandas.jsx
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { mostrarMensagem } from '/js/utils/popups.js';
 import FeedbackNotFound from './FeedbackNotFound.jsx';
 import BotaoBuscaModalAddDemanda from './BotaoBuscaModalAddDemanda.jsx';
 import CardPipelineProducao from './BotaoBuscaPipelineProducao.jsx';
 import OPPaginacaoWrapper from './OPPaginacaoWrapper.jsx';
 
+// Função auxiliar para remover acentos (Normalização)
+const normalizarTexto = (texto) => {
+    return texto ? texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
+};
+
 export default function PainelDemandas({ onIniciarProducao, permissoes = [] }) {
     const [demandasAgregadas, setDemandasAgregadas] = useState([]);
     const [carregando, setCarregando] = useState(true);
     const [modalAddAberto, setModalAddAberto] = useState(false);
     
+    // --- NOVOS ESTADOS DE FILTRO ---
+    const [termoBusca, setTermoBusca] = useState('');
+    const [filtroNaoIniciado, setFiltroNaoIniciado] = useState(false); // Checkbox "Ainda não mexi"
+
     const [showConcluidos, setShowConcluidos] = useState(false);
     const [showDivergencias, setShowDivergencias] = useState(true);
     
     const ITENS_POR_PAGINA = 6;
     const [paginaAtual, setPaginaAtual] = useState(1);
     
-    // Função auxiliar para gerar chave única (CORREÇÃO FUNDAMENTAL)
-    // Usa Demanda + Produto + Variante para suportar Kits
     const gerarKeyUnica = (item) => {
         const varianteLimpa = item.variante || 'padrao';
         return `${item.demanda_id}-${item.produto_id}-${varianteLimpa}`;
@@ -34,7 +41,6 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [] }) {
             });
             if (!response.ok) throw new Error('Falha ao buscar diagnóstico.');
             const data = await response.json();
-            
             setDemandasAgregadas(data.diagnosticoAgregado || []);
         } catch (error) {
             console.error("Erro painel:", error);
@@ -46,17 +52,13 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [] }) {
 
     useEffect(() => { fetchDiagnostico(); }, [fetchDiagnostico]);
 
-    // --- LÓGICA DE SEPARAÇÃO E FILTRAGEM ---
-    const { pendentes, concluidas, divergencias } = useMemo(() => {
+    // --- 1. LÓGICA DE FILTRAGEM E SEPARAÇÃO ---
+    const { pendentesFiltrados, concluidas, divergencias } = useMemo(() => {
         const p = [], c = [], d = [];
-        
-        // 1. DEDUPLICAÇÃO INTELIGENTE
-        // Criamos um Set para armazenar chaves únicas compostas.
-        // Se vierem linhas duplicadas EXATAS do banco, isso resolve.
-        // Mas permite que uma mesma demanda tenha vários cards (Kits/Componentes)
         const chavesVistas = new Set();
         const listaUnica = [];
 
+        // Deduplicação
         demandasAgregadas.forEach(item => {
             const chave = gerarKeyUnica(item);
             if (!chavesVistas.has(chave)) {
@@ -65,61 +67,108 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [] }) {
             }
         });
 
-        // 2. ORDENAÇÃO
+        // Ordenação (Prioridade > Data)
         const listaOrdenada = listaUnica.sort((a, b) => {
             if (a.prioridade !== b.prioridade) return a.prioridade - b.prioridade;
             return a.demanda_id - b.demanda_id; 
         });
 
-        // 3. CLASSIFICAÇÃO (Pendente / Concluído / Divergência)
+        // Normaliza o termo de busca uma vez só
+        const termoLimpo = normalizarTexto(termoBusca);
+
         listaOrdenada.forEach(item => {
+            // Cálculos de Status
             const emProcessoAtivo = (item.saldo_em_producao || 0) + 
                                     (item.saldo_disponivel_arremate || 0) + 
                                     (item.saldo_disponivel_embalagem || 0);
-
+            
             const totalConsumido = emProcessoAtivo + (item.saldo_disponivel_estoque || 0) + (item.saldo_perda || 0);
             const fila = Math.max(0, item.demanda_total - totalConsumido);
+            
             const tevePerda = (item.saldo_perda || 0) > 0;
             const estoqueCheio = (item.saldo_disponivel_estoque || 0) >= item.demanda_total;
+            
+            // Definição de Concluído: Estoque Cheio E Nada mais rodando na fábrica
+            const estaConcluido = estoqueCheio && emProcessoAtivo === 0;
 
-            if (fila > 0 || emProcessoAtivo > 0) {
-                p.push(item); 
-            } 
-            else if (tevePerda && !estoqueCheio) {
-                d.push(item); 
-            } 
-            else {
-                c.push(item); 
+            const naoIniciado = emProcessoAtivo === 0 && fila > 0;
+
+            // --- MUDANÇA DE LÓGICA AQUI ---
+            // Se está concluído, MAS a data de conclusão é de HOJE (ou nula/recente), mantemos na lista principal.
+            // Assumindo que o Cron limpa as velhas, tudo que vem da API é "recente".
+            // Então, vamos tratar "Concluído com Sucesso" como um item visível, apenas no final da fila.
+
+            let tipoLista = 'pendente';
+
+            if (estaConcluido) {
+                // Se quiser separar visualmente, podemos usar uma flag, mas vamos jogar na lista principal
+                tipoLista = 'pendente'; 
+            } else if (tevePerda && !estoqueCheio && fila === 0 && emProcessoAtivo === 0) {
+                tipoLista = 'divergencia';
+            } else {
+                tipoLista = 'pendente';
             }
-        });
-        return { pendentes: p, concluidas: c, divergencias: d };
-    }, [demandasAgregadas]);
 
-    // --- PAGINAÇÃO SEGURA ---
-    const totalPaginas = Math.ceil(pendentes.length / ITENS_POR_PAGINA);
+            if (tipoLista === 'pendente') {
+                // Aplica Filtros de Texto
+                let passouFiltroTexto = true;
+                if (termoLimpo) {
+                    const nomeNorm = normalizarTexto(item.produto_nome);
+                    const varNorm = normalizarTexto(item.variante);
+                    if (!nomeNorm.includes(termoLimpo) && !varNorm.includes(termoLimpo)) {
+                        passouFiltroTexto = false;
+                    }
+                }
+
+                // Aplica Filtro "Não Iniciado"
+                let passouFiltroStatus = true;
+                if (filtroNaoIniciado && !naoIniciado) {
+                    passouFiltroStatus = false;
+                }
+                
+                // Se for concluído e o filtro "Não iniciado" estiver ativo, esconde o concluído
+                if (estaConcluido && filtroNaoIniciado) {
+                    passouFiltroStatus = false;
+                }
+
+                if (passouFiltroTexto && passouFiltroStatus) {
+                    p.push({ ...item, _isConcluido: estaConcluido }); // Marcamos para ordenar
+                }
+            } 
+            else if (tipoLista === 'divergencia') {
+                d.push(item);
+            } 
+            // Removemos o 'c.push' pois agora concluídos vão para 'p'
+        });
+        
+        // REORDENAÇÃO FINAL DA LISTA PENDENTE
+        // Coloca os concluídos no final da lista para não atrapalhar
+        p.sort((a, b) => {
+            if (a._isConcluido && !b._isConcluido) return 1;
+            if (!a._isConcluido && b._isConcluido) return -1;
+            return 0; // Mantém a ordem de prioridade original
+        });
+        
+        return { pendentesFiltrados: p, concluidas: c, divergencias: d };
+    }, [demandasAgregadas, termoBusca, filtroNaoIniciado]);
+
+    // --- 2. PAGINAÇÃO SEGURA (Baseada nos Filtrados) ---
+    const totalPaginas = Math.ceil(pendentesFiltrados.length / ITENS_POR_PAGINA);
     
-    // Efeito de segurança: Se a página atual for maior que o total (ex: deletou itens), volta.
-    useEffect(() => {
-        if (paginaAtual > totalPaginas && totalPaginas > 0) {
-            setPaginaAtual(totalPaginas);
-        } else if (paginaAtual === 0 && totalPaginas > 0) {
-            setPaginaAtual(1);
-        }
-    }, [totalPaginas, paginaAtual]);
+    // Reseta página se filtro mudar
+    useEffect(() => { setPaginaAtual(1); }, [termoBusca, filtroNaoIniciado]);
 
     const itensPaginados = useMemo(() => {
         const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
         const fim = inicio + ITENS_POR_PAGINA;
-        return pendentes.slice(Math.max(0, inicio), fim);
-    }, [pendentes, paginaAtual, ITENS_POR_PAGINA]); // Adicionado deps para garantir reatividade
+        return pendentesFiltrados.slice(Math.max(0, inicio), fim);
+    }, [pendentesFiltrados, paginaAtual]);
 
+    // ... (handleDeleteDemanda e handlePlanejarProducao mantidos iguais) ...
     const handleDeleteDemanda = async (demandaId) => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`/api/demandas/${demandaId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await fetch(`/api/demandas/${demandaId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
             if (!response.ok) throw new Error('Falha ao deletar.');
             mostrarMensagem('Demanda apagada.', 'sucesso');
             fetchDiagnostico();
@@ -143,35 +192,59 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [] }) {
                     <h2 style={{fontSize: '1.2rem'}}>Painel de Produção & Demandas</h2>
                     <div>
                         <button className="gs-btn gs-btn-secundario" onClick={fetchDiagnostico} disabled={carregando}>
-                            <i className={`fas fa-sync-alt ${carregando ? 'gs-spin' : ''}`}></i> Atualizar
+                            <i className={`fas fa-sync-alt ${carregando ? 'gs-spin' : ''}`}></i>
                         </button>
                         <button className="gs-btn gs-btn-primario" style={{ marginLeft: '10px' }} onClick={() => setModalAddAberto(true)}>
-                            <i className="fas fa-plus"></i> Nova Demanda
+                            <i className="fas fa-plus"></i> Nova
                         </button>
+                    </div>
+                </div>
+
+                {/* --- BARRA DE FILTROS --- */}
+                <div className="gs-filtros-bar-container">
+                    <input 
+                        type="text" 
+                        className="gs-input-busca-filtro" 
+                        placeholder="Filtrar por nome ou cor..."
+                        value={termoBusca}
+                        onChange={(e) => setTermoBusca(e.target.value)}
+                    />
+                    
+                    <div 
+                        className={`gs-toggle-filtro ${filtroNaoIniciado ? 'ativo' : ''}`}
+                        onClick={() => setFiltroNaoIniciado(!filtroNaoIniciado)}
+                    >
+                        <div className="gs-checkbox-visual">
+                            {filtroNaoIniciado && <i className="fas fa-check" style={{fontSize: '0.7rem'}}></i>}
+                        </div>
+                        <span>Apenas Não Iniciados</span>
                     </div>
                 </div>
 
                 <div className="gs-painel-demandas-body">
                     {carregando ? (
-                        <div className="spinner">Calculando...</div>
-                    ) : demandasAgregadas.length === 0 ? (
-                        <FeedbackNotFound icon="fa-check-circle" titulo="Tudo em Dia!" mensagem="Sem demandas pendentes." />
+                        <div className="spinner">Calculando prioridades...</div>
                     ) : (
                         <div className="gs-agregado-lista">
                             
-                            {/* PENDENTES */}
-                            {itensPaginados.map(item => (
-                                <CardPipelineProducao
-                                    /* AQUI ESTAVA O PROBLEMA DE VISUALIZAÇÃO/PAGINAÇÃO:
-                                       Usamos a chave composta. Isso evita que o React confunda
-                                       o Top com a Calcinha do mesmo kit. */
-                                    key={gerarKeyUnica(item)}
-                                    item={item}
-                                    onPlanejar={() => handlePlanejarProducao(item)}
-                                    onDelete={() => handleDeleteDemanda(item.demanda_id)}
-                                    permissoes={permissoes}
+                            {/* LISTA UNIFICADA (PENDENTES + CONCLUÍDOS NO FINAL) */}
+                            {itensPaginados.length > 0 ? (
+                                itensPaginados.map(item => (
+                                    <CardPipelineProducao
+                                        key={gerarKeyUnica(item)}
+                                        item={item}
+                                        onPlanejar={() => handlePlanejarProducao(item)}
+                                        onDelete={() => handleDeleteDemanda(item.demanda_id)}
+                                        permissoes={permissoes}
+                                    />
+                                ))
+                            ) : (
+                                <FeedbackNotFound 
+                                    icon="fa-search" 
+                                    titulo="Nenhuma demanda encontrada" 
+                                    mensagem={termoBusca || filtroNaoIniciado ? "Tente ajustar os filtros." : "Tudo em dia!"} 
                                 />
-                            ))}
+                            )}
                             
                             {totalPaginas > 1 && (
                                 <OPPaginacaoWrapper 
@@ -181,7 +254,7 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [] }) {
                                 />
                             )}
 
-                            {/* DIVERGÊNCIAS */}
+                            {/* DIVERGÊNCIAS (Mantemos separado pois é problema grave) */}
                             {divergencias.length > 0 && (
                                 <div style={{ marginTop: '30px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
                                     <button 
@@ -199,49 +272,15 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [] }) {
                                     {showDivergencias && (
                                         <div style={{ marginTop: '15px', display: 'flex', flexDirection: 'column', gap: '15px', paddingLeft: '10px', borderLeft: '3px solid #c0392b' }}>
                                             {divergencias.map(item => (
-                                                <CardPipelineProducao
-                                                    key={gerarKeyUnica(item)}
-                                                    item={item}
-                                                    onPlanejar={() => {}} 
-                                                    onDelete={() => handleDeleteDemanda(item.demanda_id)}
-                                                    permissoes={permissoes}
-                                                />
+                                                <CardPipelineProducao key={gerarKeyUnica(item)} item={item} onPlanejar={() => {}} onDelete={() => handleDeleteDemanda(item.demanda_id)} permissoes={permissoes} />
                                             ))}
                                         </div>
                                     )}
                                 </div>
                             )}
+                            
+                            {/* SEÇÃO CONCLUÍDOS REMOVIDA (Eles agora aparecem na lista principal) */}
 
-                            {/* CONCLUÍDOS */}
-                            {concluidas.length > 0 && (
-                                <div style={{ marginTop: '20px' }}>
-                                    <button 
-                                        className="gs-btn-switch" 
-                                        style={{ width: '100%', justifyContent: 'space-between', backgroundColor: '#f8f9fa', padding: '15px', borderRadius: '8px', border: '1px solid #eee', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                                        onClick={() => setShowConcluidos(!showConcluidos)}
-                                    >
-                                        <span style={{fontWeight: 'bold', color: '#27ae60'}}>
-                                            <i className="fas fa-check-circle" style={{marginRight: '8px'}}></i>
-                                            Concluídas com Sucesso ({concluidas.length})
-                                        </span>
-                                        <i className={`fas fa-chevron-${showConcluidos ? 'up' : 'down'}`} style={{color: '#aaa'}}></i>
-                                    </button>
-                                    
-                                    {showConcluidos && (
-                                        <div style={{ marginTop: '15px', display: 'flex', flexDirection: 'column', gap: '15px', paddingLeft: '10px', borderLeft: '3px solid #27ae60' }}>
-                                            {concluidas.map(item => (
-                                                <CardPipelineProducao
-                                                    key={gerarKeyUnica(item)}
-                                                    item={item}
-                                                    onPlanejar={() => {}}
-                                                    onDelete={() => handleDeleteDemanda(item.demanda_id)}
-                                                    permissoes={permissoes}
-                                                />
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
                         </div>
                     )}
                 </div>

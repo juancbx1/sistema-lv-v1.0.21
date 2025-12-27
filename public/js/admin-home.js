@@ -5,7 +5,6 @@ import { obterUsuarios } from '/js/utils/storage.js';
 // Lista de páginas disponíveis com suas permissões necessárias
 const paginasDisponiveis = [
     { href: "ordens-de-producao.html", texto: "Ordens de Produção", permissao: "acesso-ordens-de-producao" },
-    { href: "relatorio-de-comissao.html", texto: "Ver Relatório de Comissão", permissao: "acesso-relatorio-de-comissao" },
     { href: "producao-diaria.html", texto: "Ver Produção Diária", permissao: "acesso-producao-diaria" },
     { href: "embalagem-de-produtos.html", texto: "Embalagem de Produtos", permissao: "acesso-embalagem-de-produtos" },
     { href: "gerenciar-producao.html", texto: "Gerenciar Produção", permissao: "acesso-gerenciar-producao" }

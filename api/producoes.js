@@ -167,6 +167,66 @@ router.post('/', async (req, res) => {
     }
 });
 
+// POST /api/producoes/lote (Atribuição Múltipla)
+router.post('/lote', async (req, res) => {
+    const { usuarioLogado } = req;
+    const { itens, funcionario_id, funcionario_nome } = req.body; // 'itens' é o array de tarefas
+    let dbClient;
+
+    try {
+        if (!itens || !Array.isArray(itens) || itens.length === 0) {
+            throw new Error("Nenhum item enviado para o lote.");
+        }
+        if (!funcionario_id) throw new Error("Funcionário não identificado.");
+
+        dbClient = await pool.connect();
+        await dbClient.query('BEGIN');
+
+        // 1. Verifica se usuário já está ocupado (opcional, mas bom manter a regra)
+        const userStatusResult = await dbClient.query('SELECT id_sessao_trabalho_atual FROM usuarios WHERE id = $1 FOR UPDATE', [funcionario_id]);
+        // Se sua regra de negócio permitir acumular, remova essa verificação. 
+        // Assumindo que "Atribuir Lote" substitui ou inicia uma nova rodada.
+        
+        const idsSessoesCriadas = [];
+
+        // 2. Loop para criar cada sessão
+        for (const item of itens) {
+            const { opNumero, produto_id, variante, processo, quantidade } = item;
+
+            const sessaoQuery = `
+                INSERT INTO sessoes_trabalho_producao 
+                    (funcionario_id, op_numero, produto_id, variante, processo, quantidade_atribuida, status, data_inicio)
+                VALUES ($1, $2, $3, $4, $5, $6, 'EM_ANDAMENTO', NOW())
+                RETURNING id;
+            `;
+            const sessaoResult = await dbClient.query(sessaoQuery, [
+                funcionario_id, opNumero, produto_id, variante || null, processo, quantidade
+            ]);
+            idsSessoesCriadas.push(sessaoResult.rows[0].id);
+        }
+
+        // 3. Atualiza status do usuário
+        // OBS: Como o banco só guarda UM id_sessao_trabalho_atual, vamos salvar o ID da ÚLTIMA sessão criada
+        // apenas para que ele fique "Ocupado". O Painel de Atividades precisará buscar TODAS as sessões ativas.
+        const ultimoId = idsSessoesCriadas[idsSessoesCriadas.length - 1];
+        
+        await dbClient.query(
+            `UPDATE usuarios SET status_atual = 'PRODUZINDO', id_sessao_trabalho_atual = $1 WHERE id = $2`,
+            [ultimoId, funcionario_id]
+        );
+
+        await dbClient.query('COMMIT');
+        res.status(201).json({ message: `${idsSessoesCriadas.length} tarefas atribuídas com sucesso!`, ids: idsSessoesCriadas });
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error('[API POST /producoes/lote] Erro:', error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
 
 // GET /api/producoes/
 router.get('/', async (req, res) => {

@@ -3,13 +3,9 @@
 import React, { useState } from 'react';
 import { mostrarMensagem } from '/js/utils/popups.js';
 
-// Recebe quantidadeInicial e demandaId
 export default function OPRegistroCorte({ produto, variante, usuario, onCorteRegistrado, quantidadeInicial, demandaId }) {
-  console.log("[DEBUG 05] OPRegistroCorte: Props Recebidas - QtdInicial:", quantidadeInicial);
-  // Inicializa o estado com a quantidade da demanda (se houver)
+  // Inicializa o estado com a quantidade da demanda (se houver) ou string vazia
   const [quantidade, setQuantidade] = useState(quantidadeInicial || '');
-  console.log("[DEBUG 06] OPRegistroCorte: State Quantidade:", quantidade)
-  
   const [dataCorte, setDataCorte] = useState(new Date().toISOString().split('T')[0]); 
   const [carregando, setCarregando] = useState(false);
 
@@ -19,6 +15,23 @@ export default function OPRegistroCorte({ produto, variante, usuario, onCorteReg
     ? produto.grade.find(g => g.variacao === variante)?.imagem 
     : produto.imagem;
   const imagemFinal = imagemSrc || '/img/placeholder-image.png';
+
+  // --- LÓGICA DO SELETOR INTELIGENTE ---
+  const handleQuantidadeChange = (e) => {
+      const val = e.target.value;
+      // Permite limpar o campo ou digitar números positivos
+      if (val === '' || parseInt(val) >= 0) {
+          setQuantidade(val);
+      }
+  };
+
+  const ajustarQuantidade = (delta) => {
+      setQuantidade(prev => {
+          const atual = parseInt(prev) || 0;
+          const novo = Math.max(0, atual + delta); // Não deixa ficar negativo
+          return novo.toString();
+      });
+  };
 
   const handleRegistrar = async () => {
      if (!quantidade || parseInt(quantidade) <= 0) {
@@ -60,12 +73,8 @@ export default function OPRegistroCorte({ produto, variante, usuario, onCorteReg
         throw new Error(errData.error || 'Erro ao registrar corte.');
       }
       
-      // Capturamos o corte criado que o backend retorna
       const corteCriado = await response.json();
-
       mostrarMensagem(`Corte (PC: ${pcData.nextPC}) registrado com sucesso!`, 'sucesso');
-      
-      // Passamos o objeto completo para o pai, permitindo o redirecionamento automático
       onCorteRegistrado(corteCriado);
 
     } catch (err) {
@@ -78,6 +87,8 @@ export default function OPRegistroCorte({ produto, variante, usuario, onCorteReg
 
   return (
     <div className="op-corte-registro-container">
+        
+        {/* CABEÇALHO RESUMO */}
         <div className="op-corte-resumo-card">
             <img src={imagemFinal} alt={produto.nome} />
             <div className="op-corte-resumo-info">
@@ -86,43 +97,60 @@ export default function OPRegistroCorte({ produto, variante, usuario, onCorteReg
             </div>
         </div>
 
-        <div className="op-form-estilizado" style={{ maxWidth: '400px', margin: '20px auto' }}>
-            <div className="op-form-grupo">
-                <label htmlFor="quantidadeCorte">Quantidade Cortada</label>
-                <div style={{position: 'relative'}}>
-                    <input
-                        type="number"
-                        id="quantidadeCorte"
-                        className="op-input op-input-quantidade-corte"
+        <div className="op-form-estilizado" style={{ maxWidth: '400px', margin: '0 auto' }}>
+            
+            {/* --- NOVO SELETOR DE QUANTIDADE (MOBILE FRIENDLY) --- */}
+            <div className="item-controles-qtd" style={{ border: 'none', padding: '0 0 20px 0' }}>
+                <label style={{ fontWeight: '600', color: '#555', marginBottom: '5px' }}>Quantidade Cortada</label>
+                
+                <div className="qtd-display-linha">
+                    <button className="btn-ajuste mini" onClick={() => ajustarQuantidade(-1)}>-</button>
+                    <input 
+                        type="number" 
                         value={quantidade}
-                        onChange={(e) => setQuantidade(e.target.value)}
-                        placeholder="Ex: 50"
-                        min="1"
-                        style={{width: '100%'}}
+                        onChange={handleQuantidadeChange}
+                        placeholder="0"
+                        style={{ width: '100px', fontSize: '1.6rem' }} // Input maior
                     />
-                    {/* AVISO VISUAL SE VIER DE UMA DEMANDA */}
-                    {quantidadeInicial && (
-                        <div style={{
-                            fontSize: '0.8rem', 
-                            color: '#27ae60', 
-                            marginTop: '5px', 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: '5px'
-                        }}>
-                            <i className="fas fa-check-circle"></i> Sugerido pela Demanda ({quantidadeInicial} pçs)
-                        </div>
-                    )}
+                    <button className="btn-ajuste mini" onClick={() => ajustarQuantidade(1)}>+</button>
                 </div>
+
+                <div className="qtd-atalhos-linha" style={{ marginTop: '10px' }}>
+                    <button onClick={() => ajustarQuantidade(10)}>+10</button>
+                    <button onClick={() => ajustarQuantidade(50)}>+50</button>
+                    <button onClick={() => ajustarQuantidade(100)}>+100</button>
+                </div>
+
+                {quantidadeInicial && (
+                    <div style={{ fontSize: '0.8rem', color: '#27ae60', marginTop: '8px' }}>
+                        <i className="fas fa-check-circle"></i> Sugerido: {quantidadeInicial} pçs
+                    </div>
+                )}
             </div>
+
+            {/* INPUT DE DATA (Mantido simples) */}
              <div className="op-form-grupo">
                 <label htmlFor="dataCorte">Data do Corte</label>
-                <input type="date" id="dataCorte" className="op-input" value={dataCorte} onChange={(e) => setDataCorte(e.target.value)} />
+                <input 
+                    type="date" 
+                    id="dataCorte" 
+                    className="op-input" 
+                    style={{ textAlign: 'center', fontSize: '1.1rem', padding: '10px' }}
+                    value={dataCorte} 
+                    onChange={(e) => setDataCorte(e.target.value)} 
+                />
             </div>
+
+            {/* BOTÃO DE AÇÃO MELHORADO */}
             <div className="op-form-botoes" style={{ justifyContent: 'center', marginTop: '30px' }}>
-                <button className="op-botao op-botao-principal" onClick={handleRegistrar} disabled={carregando}>
-                    {carregando ? <div className="spinner-btn-interno"></div> : <i className="fas fa-save"></i>}
-                    {carregando ? 'Registrando...' : 'Registrar no Estoque de Cortes'}
+                <button 
+                    className="op-botao op-botao-sucesso" 
+                    onClick={handleRegistrar} 
+                    disabled={carregando}
+                    style={{ width: '100%', padding: '15px', fontSize: '1.1rem' }} // Botão grande
+                >
+                    {carregando ? <div className="spinner-btn-interno"></div> : <i className="fas fa-check"></i>}
+                    {carregando ? 'Salvando...' : 'Confirmar Corte'}
                 </button>
             </div>
         </div>

@@ -100,7 +100,7 @@ router.get('/', async (req, res) => {
         // 2. Se duas demandas tiverem a mesma prioridade, a mais antiga (data_solicitacao) aparece primeiro.
         const selectQuery = `
             SELECT * FROM demandas_producao
-            WHERE status IN ('pendente', 'em_atendimento')
+            WHERE status IN ('pendente', 'em_atendimento', 'concluida')
             ORDER BY prioridade ASC, data_solicitacao ASC;
         `;
 

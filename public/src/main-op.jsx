@@ -89,18 +89,17 @@ function App() {
             if (!data.rows || data.rows.length === 0) {
                 setQtdOpsPendentes(0);
             } else {
-                const detalhesPromises = data.rows.map(op => 
-                    fetchSimples(`/api/ordens-de-producao/${op.edit_id || op.numero}`).catch(() => null)
-                );
-                const detalhesReais = await Promise.all(detalhesPromises);
-                
-                const contagem = detalhesReais.reduce((acc, op) => {
+                // --- NOVO CÓDIGO OTIMIZADO ---
+                // Não fazemos mais fetch extra. Usamos data.rows direto.
+                const contagem = data.rows.reduce((acc, op) => {
                     if (!op) return acc;
+                    // O backend agora já entrega 'etapas' com a flag 'lancado' correta na lista principal
                     const etapasOk = op.etapas && Array.isArray(op.etapas) && op.etapas.length > 0 && op.etapas.every(e => e.lancado);
                     return etapasOk ? acc + 1 : acc;
                 }, 0);
 
                 setQtdOpsPendentes(contagem);
+                // -----------------------------
             }
         } catch (error) {
             console.error("[Monitor OP] Erro:", error);

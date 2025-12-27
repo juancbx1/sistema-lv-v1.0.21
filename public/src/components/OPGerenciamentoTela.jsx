@@ -60,33 +60,23 @@ export default function OPGerenciamentoTela({ opsPendentesGlobal, onRefreshConta
 
       if (dataOps.error) throw new Error(dataOps.error);
 
-      // Enriquecimento apenas para as OPs da página atual que estão 'produzindo'
-      // para garantir que o botão 'Finalizar' dentro do card (se houvesse) funcionasse,
-      // mas principalmente para exibir dados corretos.
-      const opsParaEnriquecer = dataOps.rows.filter(op => op.status === 'produzindo');
-
-      const detalhesPromises = opsParaEnriquecer.map(op => 
-          fetch(`/api/ordens-de-producao/${op.edit_id || op.numero}`, { headers: { 'Authorization': `Bearer ${token}` } })
-            .then(res => res.ok ? res.json() : null)
-            .catch(() => null)
-      );
-
-      const detalhesReais = await Promise.all(detalhesPromises);
-
+      // --- NOVO CÓDIGO OTIMIZADO ---
+      // Como o Backend já manda os detalhes na lista, só precisamos colocar a imagem correta.
       const opsFinais = dataOps.rows.map(op => {
-          const detalheFresco = detalhesReais.find(d => d && d.id === op.id);
-          const opDadosFinais = detalheFresco || op;
-
-          const produtoCompleto = todosProdutos.find(p => p.id === opDadosFinais.produto_id);
+          const produtoCompleto = todosProdutos.find(p => p.id === op.produto_id);
+          
           let imagemDaVariante = produtoCompleto?.imagem || null;
-          if (produtoCompleto && opDadosFinais.variante && produtoCompleto.grade) {
-              const infoGrade = produtoCompleto.grade.find(g => g.variacao === opDadosFinais.variante);
+          if (produtoCompleto && op.variante && produtoCompleto.grade) {
+              const infoGrade = produtoCompleto.grade.find(g => g.variacao === op.variante);
               if (infoGrade && infoGrade.imagem) {
                   imagemDaVariante = infoGrade.imagem;
               }
           }
-          return { ...opDadosFinais, imagem_produto: imagemDaVariante };
+          
+          // O objeto 'op' já tem as etapas e status atualizados pelo backend
+          return { ...op, imagem_produto: imagemDaVariante };
       });
+      // -----------------------------
 
       setOps(opsFinais);
       setTotalPaginas(dataOps.pages || 1);
@@ -115,7 +105,16 @@ export default function OPGerenciamentoTela({ opsPendentesGlobal, onRefreshConta
 
   const handleAbrirModal = (op) => { setOpSelecionada(op); setModalAberto(true); };
   const handleFecharModal = () => { setModalAberto(false); setOpSelecionada(null); };
-  const handleUpdateOP = () => { buscarDados(pagina, filtros); };
+  const handleUpdateOP = () => { 
+      // 1. Limpa a "memória" da última busca para forçar o React a buscar de novo
+      lastSearchParamsRef.current = null; 
+      
+      // 2. Busca os dados atualizados da lista
+      buscarDados(pagina, filtros);
+      
+      // 3. Pede para o pai (main-op) atualizar o contador do badge vermelho
+      if (onRefreshContadores) onRefreshContadores();
+  };
 
   return (
     <>

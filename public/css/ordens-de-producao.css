@@ -1807,13 +1807,29 @@ list-style-type: none
     font-weight: 600;
 }
 
+/* --- BOTÃO FECHAR MODAL (MINIMALISTA) --- */
 .op-modal-fechar-btn {
-    background-color: var(--op-cor-vermelho-perigo); color: var(--op-cor-branco); border: none;
-    border-radius: 50%; width: 32px; height: 32px; font-size: 1rem; font-weight: bold;
-    line-height: 32px; text-align: center; cursor: pointer; transition: all 0.2s ease;
+    background: transparent; /* Sem fundo */
+    border: none;            /* Sem borda */
+    color: #aaa;             /* Cinza suave */
+    font-size: 2rem;         /* Tamanho bom para o dedo */
+    font-weight: 300;        /* Traço fino */
+    line-height: 1;
+    cursor: pointer;
+    padding: 10px;           /* Área de toque maior */
+    transition: color 0.2s ease;
+    
+    /* Posicionamento absoluto para garantir que fique no canto */
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 10;
 }
+
 .op-modal-fechar-btn:hover {
-    background-color: var(--op-cor-vermelho-hover); transform: scale(1.1);
+    color: #333;             /* Escurece no hover */
+    background: transparent; /* Garante que não fique vermelho */
+    transform: none;         /* Remove efeito de zoom se tiver */
 }
 
 /* --- ESTILOS DAS TELAS INTERNAS --- */
@@ -2526,6 +2542,251 @@ list-style-type: none
     flex-shrink: 0;
 }
 
+/* --- BARRA FLUTUANTE DE AÇÃO (LOTE) --- */
+.op-fab-container {
+    position: sticky; /* Cola na tela */
+    bottom: 10px;     /* Fica 10px do fundo */
+    left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: 0 20px;
+    pointer-events: none; /* Deixa clicar através da área transparente */
+    z-index: 100;
+    margin-top: 20px; /* Garante espaço se rolar até o fim */
+}
+
+.op-btn-flutuante {
+    pointer-events: auto; /* Reativa o clique no botão */
+    background-color: var(--op-cor-azul-escuro);
+    color: var(--op-cor-branco);
+    border: none;
+    border-radius: 50px; /* Formato de pílula arredondada */
+    padding: 12px 30px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    box-shadow: 0 6px 20px rgba(44, 62, 80, 0.4); /* Sombra forte para destacar */
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: slideUpFade 0.3s ease-out; /* Animação de entrada */
+}
+
+.op-btn-flutuante:hover {
+    background-color: var(--op-cor-azul-claro);
+    transform: translateY(-3px); /* Levanta um pouco no hover */
+    box-shadow: 0 8px 25px rgba(52, 152, 219, 0.5);
+}
+
+.op-btn-flutuante i {
+    font-size: 1.2rem;
+}
+
+@keyframes slideUpFade {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================================
+   # ESTILOS DA CONFIRMAÇÃO EM LOTE (MOBILE FRIENDLY)
+   ========================================================================== */
+
+.op-item-confirmacao-card {
+    display: flex;
+    flex-direction: column; /* Empilha verticalmente para mobile */
+    align-items: center;
+    background-color: var(--op-cor-branco);
+    border: 1px solid var(--op-cor-cinza-borda);
+    border-radius: var(--op-raio-borda-card);
+    padding: 15px;
+    margin-bottom: 15px;
+    gap: 15px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+}
+
+/* Info Visual (Imagem + Texto) */
+.item-info-visual {
+    display: flex;
+    flex-direction: column; /* Imagem em cima, texto embaixo */
+    align-items: center;
+    text-align: center;
+    width: 100%;
+}
+
+.item-info-visual img {
+    width: 70px; /* Imagem maior */
+    height: 70px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #eee;
+    margin-bottom: 8px;
+}
+
+.item-info-visual h4 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--op-cor-azul-escuro);
+    line-height: 1.2;
+}
+.item-info-visual .variante {
+    margin: 2px 0;
+    font-size: 0.95rem;
+    color: #555;
+    font-weight: 500;
+}
+.item-info-visual .processo {
+    margin: 4px 0 0 0;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--op-cor-azul-claro);
+    text-transform: uppercase;
+    background-color: #f0f8ff;
+    padding: 2px 8px;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+/* Controles de Quantidade (Centralizados e Grandes) */
+.item-controles-qtd {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+    width: 100%;
+    padding-top: 10px;
+    border-top: 1px dashed #eee;
+}
+
+.qtd-display-linha {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px; /* Mais espaço entre botões e input */
+}
+
+.qtd-display-linha input {
+    width: 80px; /* Input mais largo */
+    height: 48px; /* Altura touch */
+    text-align: center;
+    font-weight: 800;
+    font-size: 1.4rem;
+    padding: 5px;
+    border: 1px solid var(--op-cor-cinza-borda);
+    border-radius: 8px;
+    background-color: #f9f9f9;
+}
+
+/* Botões Gigantes para o Dedo */
+.btn-ajuste.mini {
+    width: 50px;
+    height: 50px;
+    font-size: 1.5rem;
+    line-height: 1;
+    background-color: var(--op-cor-branco);
+    border: 2px solid #ddd;
+    border-radius: 12px; /* Borda mais suave */
+    cursor: pointer;
+    color: var(--op-cor-azul-claro);
+    transition: all 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.btn-ajuste.mini:active { 
+    background-color: var(--op-cor-azul-claro); 
+    color: white;
+    transform: scale(0.95);
+}
+
+/* Atalhos Maiores */
+.qtd-atalhos-linha {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    justify-content: center;
+}
+.qtd-atalhos-linha button {
+    font-size: 0.9rem;
+    padding: 8px 16px; /* Área de toque maior */
+    background: #f1f3f5;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #666;
+    font-weight: 600;
+}
+.qtd-atalhos-linha button.btn-max {
+    background-color: #eafaf1;
+    border-color: #27ae60;
+    color: #27ae60;
+    flex-grow: 1; /* O botão MAX cresce para preencher */
+    max-width: 120px;
+}
+
+/* ==========================================================================
+   # ESTILOS DA FILA DE ESPERA (COM VARIAÇÃO)
+   ========================================================================== */
+
+.fila-espera-container {
+    margin-top: 15px;
+    padding-top: 12px;
+    border-top: 2px dashed #eee;
+    width: 100%;
+}
+
+.fila-titulo {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #95a5a6;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    justify-content: center;
+}
+
+.fila-lista {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    text-align: left;
+}
+
+.fila-lista li {
+    display: grid;
+    grid-template-columns: auto 1fr; /* Coluna da Qtd | Coluna do Texto */
+    gap: 10px;
+    align-items: center;
+    font-size: 0.85rem;
+    padding: 6px 0;
+    border-bottom: 1px solid #f0f0f0;
+    color: #555;
+}
+.fila-lista li:last-child { border-bottom: none; }
+
+.fila-qtd {
+    font-weight: 800;
+    color: var(--op-cor-azul-escuro);
+    background-color: #f0f2f5;
+    padding: 6px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    min-width: 45px;
+    text-align: center;
+    align-self: flex-start; /* Alinha no topo se o texto for longo */
+}
+
+.fila-desc {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.3;
+}
+.fila-desc .nome-prod { font-weight: 600; color: #333; }
+.fila-desc .var-prod { font-size: 0.85rem; color: #7f8c8d; } /* Estilo da variante */
+.fila-desc .proc-prod { font-size: 0.75rem; color: var(--op-cor-azul-claro); text-transform: uppercase; font-weight: 700; }
 
 /* Ajustes gerais para telas menores TIPO IPAD (aplicado a todos os breakpoints mobile) */
 @media (max-width: 1024px) {
@@ -3089,12 +3350,6 @@ list-style-type: none
         gap: 10px;
     }
 
-    .op-corte-resumo-card img {
-        width: 60px; /* Reduz um pouco a imagem */
-        height: 60px;
-        margin-bottom: 5px;
-    }
-
     .op-corte-resumo-info {
         width: 100%; /* Ocupa largura total */
     }
@@ -3151,8 +3406,6 @@ list-style-type: none
     /* 2. O Botão "X" (Fechar) - Fixado no canto */
     .op-modal-fechar-btn {
         position: absolute;
-        top: 50%;
-        right: 15px;
         transform: translateY(-50%); /* Centraliza verticalmente exato */
         min-width: 32px; /* Garante que não amasse */
         width: 32px;

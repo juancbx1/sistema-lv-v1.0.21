@@ -410,7 +410,6 @@ body.autenticado {
     justify-content: center;
     align-items: center;
     gap: 10px;
-    margin-top: 15px;
     padding: 18px 0;
 }
 
@@ -3050,6 +3049,244 @@ font-weight: 500;
 }
 
 /* ==========================================================================
+   # NOVOS ESTILOS: CENTRAL DE DEMANDAS 2.0
+   ========================================================================== */
+
+/* --- Barra de Filtros Inteligente --- */
+.gs-filtros-bar-container {
+    background-color: var(--gs-branco);
+    padding: 15px;
+    border-radius: var(--gs-raio-borda-card);
+    border: 1px solid var(--gs-borda);
+    margin-bottom: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    align-items: center;
+    box-shadow: var(--gs-sombra-padrao);
+}
+
+.gs-input-busca-filtro {
+    flex-grow: 1;
+    min-width: 200px;
+    padding: 10px 15px;
+    border-radius: 50px; /* Redondo */
+    border: 1px solid var(--gs-borda);
+    background-color: var(--gs-fundo-input);
+    font-size: 0.8rem;
+    transition: all 0.2s;
+}
+.gs-input-busca-filtro:focus {
+    background-color: #fff;
+    border-color: var(--gs-primaria);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.gs-toggle-filtro {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+    padding: 8px 12px;
+    border-radius: 50px;
+    transition: background 0.2s;
+    border: 1px solid transparent;
+}
+.gs-toggle-filtro:hover {
+    background-color: var(--gs-fundo-alternativo);
+}
+.gs-toggle-filtro.ativo {
+    background-color: #e8f6fd; /* Azul bem claro */
+    border-color: #d6eaf8;
+    color: var(--gs-primaria);
+    font-weight: 600;
+}
+
+/* Checkbox visual customizado */
+.gs-checkbox-visual {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--gs-terciaria);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+.gs-toggle-filtro.ativo .gs-checkbox-visual {
+    background-color: var(--gs-primaria);
+    border-color: var(--gs-primaria);
+    color: #fff;
+}
+
+/* --- Ajustes no Card Pipeline (Accordion) --- */
+.gs-pipeline-card {
+    /* Mantém o estilo base, mas adiciona transição de altura */
+    transition: all 0.3s ease;
+    overflow: hidden; /* Importante para o accordion */
+    border-left-width: 6px; /* Borda lateral mais grossa para status */
+}
+
+.pipeline-expand-btn {
+    background: none;
+    border: none;
+    width: 100%;
+    padding: 5px;
+    margin-top: 10px;
+    color: var(--gs-terciaria);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    font-size: 0.9rem;
+    transition: color 0.2s;
+}
+.pipeline-expand-btn:hover {
+    color: var(--gs-secundaria);
+}
+.pipeline-expand-btn i {
+    transition: transform 0.3s ease;
+}
+.pipeline-expand-btn.aberto i {
+    transform: rotate(180deg);
+}
+
+.pipeline-conteudo-extra {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.pipeline-conteudo-extra.visivel {
+    max-height: 500px; /* Altura suficiente */
+    opacity: 1;
+    margin-top: 15px; /* Espaço quando abre */
+}
+
+/* ==========================================================================
+   # HEADER 3.0 - COM BOTÃO DE AÇÃO RÁPIDA
+   ========================================================================== */
+
+.pipeline-header-novo {
+    display: grid;
+    /* 4 Colunas: Imagem | Info | Meta | Ação */
+    /* 60px (Img) | Flex (Texto) | 50px (Qtd) | 50px (Botão) */
+    grid-template-columns: 60px 1fr 50px 50px; 
+    gap: 10px;
+    align-items: center;
+    width: 100%;
+}
+
+/* 1. Imagem */
+.ph-imagem img {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+}
+
+/* 2. Info Central */
+.ph-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.ph-info h4 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--gs-secundaria);
+    white-space: normal; /* Quebra linha */
+    line-height: 1.2;
+}
+
+.ph-variante {
+    font-size: 0.85rem;
+    color: #555;
+    margin-top: 2px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.ph-status-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    margin-top: 4px;
+    align-self: flex-start;
+}
+
+/* 3. Bloco de Meta (Quantidade) */
+.ph-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    height: 50px; /* Quadrado */
+}
+
+.ph-meta .valor {
+    font-size: 1.3rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.ph-meta .label {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    color: #999;
+    font-weight: 700;
+}
+
+/* 4. Ação Rápida (Botão Turbo) */
+.ph-acao {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+
+.gs-btn-turbo-acao {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px; /* Quadrado arredondado moderno */
+    background: linear-gradient(135deg, var(--gs-primaria), #2980b9);
+    border: none;
+    color: #fff;
+    font-size: 1.2rem;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(52, 152, 219, 0.3);
+    transition: transform 0.1s, box-shadow 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.gs-btn-turbo-acao:active {
+    transform: scale(0.95);
+    box-shadow: 0 2px 5px rgba(52, 152, 219, 0.3);
+}
+
+.gs-icon-concluido {
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.8;
+}
+
+/* ==========================================================================
    # AJUSTE PIPELINE MOBILE (LEGENDAS)
    ========================================================================== */
 
@@ -3434,6 +3671,14 @@ font-weight: 500;
     .gs-agregado-lista {
         grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
     }
+
+    .pipeline-header-novo {
+        grid-template-columns: 50px 1fr 45px 45px;
+        gap: 8px;
+    }
+    .ph-imagem img { width: 50px; height: 50px; }
+    .gs-btn-turbo-acao { width: 42px; height: 42px; font-size: 1rem; }
+    .ph-meta .valor { font-size: 1.1rem; }
 
 
 }

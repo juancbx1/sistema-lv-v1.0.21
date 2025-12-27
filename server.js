@@ -13,24 +13,15 @@ import producoesRouter from './api/producoes.js';
 import configuracaoPontosRouter from './api/configuracao-pontos.js';
 import produtosRouter from './api/produtos.js';
 import ordensDeProducaoRouter from './api/ordens-de-producao.js';
-import comissoesPagasRouter from './api/comissoes-pagas.js';
 import arrematesRouter from './api/arremates.js';
 import opsParaEmbalagemRouter from './api/ops-para-embalagem.js';
 import estoqueRouter from './api/estoque.js';
 import kitsRouter from './api/kits.js';
-import materiasPrimasRouter from './api/materias-primas.js';
-import tiposMaoDeObraRouter from './api/tipos-mao-de-obra.js';
-import despesasOperacionaisRouter from './api/despesas-operacionais.js';
-import canaisVendaRouter from './api/canais-venda.js';
-import precificacaoConfigRouter from './api/precificacao-config.js';
 import niveisEstoqueRouter from './api/niveis-estoque.js'; 
 import uploadRouter from './api/upload.js';
 import promessasRouter from './api/producao-promessas.js';
 import embalagensRouter from './api/embalagens.js';
 import dashboardRouter from './api/dashboard.js';
-import auditoriaRouter from './api/auditoria.js';
-import comunicacoesRouter from './api/comunicacoes.js';
-import ticketsRouter from './api/tickets.js';
 import inventarioRouter from './api/inventario.js';
 import financeiroRouter from './api/financeiro.js';
 import pagamentosRouter from './api/pagamentos.js';
@@ -69,22 +60,13 @@ const routers = {
     configuracaoPontosRouter,
     produtosRouter,
     ordensDeProducaoRouter,
-    comissoesPagasRouter,
     arrematesRouter,
     opsParaEmbalagemRouter,
     estoqueRouter,
     kitsRouter,
-    materiasPrimasRouter,
-    tiposMaoDeObraRouter,
-    despesasOperacionaisRouter,
-    canaisVendaRouter,
-    precificacaoConfigRouter,
     niveisEstoqueRouter,
     embalagensRouter,
     dashboardRouter,
-    auditoriaRouter,
-    comunicacoesRouter,
-    ticketsRouter,
     inventarioRouter,
     financeiroRouter,
     pagamentosRouter,
@@ -114,24 +96,15 @@ app.use('/api/producoes', producoesRouter);
 app.use('/api/configuracao-pontos', configuracaoPontosRouter);
 app.use('/api/produtos', produtosRouter);
 app.use('/api/ordens-de-producao', ordensDeProducaoRouter);
-app.use('/api/comissoes-pagas', comissoesPagasRouter);
 app.use('/api/arremates', arrematesRouter);
 app.use('/api/ops-para-embalagem', opsParaEmbalagemRouter);
 app.use('/api/estoque', estoqueRouter);
 app.use('/api/kits', kitsRouter);
-app.use('/api/materias-primas', materiasPrimasRouter);
-app.use('/api/tipos-mao-de-obra', tiposMaoDeObraRouter);
-app.use('/api/despesas-operacionais', despesasOperacionaisRouter);
-app.use('/api/canais-venda', canaisVendaRouter);
-app.use('/api/precificacao-config', precificacaoConfigRouter);
 app.use('/api/niveis-estoque', niveisEstoqueRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/producao-promessas', promessasRouter);
 app.use('/api/embalagens', embalagensRouter);
 app.use('/api/dashboard', dashboardRouter);
-app.use('/api/auditoria', auditoriaRouter);
-app.use('/api/comunicacoes', comunicacoesRouter);
-app.use('/api/tickets', ticketsRouter);
 app.use('/api/inventario', inventarioRouter)
 app.use('/api/financeiro', financeiroRouter);
 app.use('/api/pagamentos', pagamentosRouter);

@@ -7,38 +7,40 @@ import OPPaginacaoWrapper from './OPPaginacaoWrapper.jsx';
 import BuscaInteligente, { filtrarListaInteligente } from './BuscaInteligente.jsx'; // <--- IMPORT
 
 // Agora o Card recebe a imagem já calculada como prop
-function OPEtapaCard({ etapa, onSelect, stepLabel, isFinal, imagemUrl }) {
+function OPEtapaCard({ etapa, onToggle, stepLabel, isFinal, imagemUrl, selecionado }) {
     const bordaClasse = etapa.processo.toLowerCase() === 'corte' ? 'borda-corte' : '';
     
     // Lógica de exibição das OPs de origem
     const ops = etapa.origem_ops || [];
-    let opsLabel = 'Nenhuma OP';
-    
-    if (ops.length > 0) {
-        // Mostra até 4 OPs, depois coloca "..."
-        const opsVisiveis = ops.slice(0, 4).join(', #');
-        const resto = ops.length - 4;
-        
-        opsLabel = `Origem: OP #${opsVisiveis}`;
-        if (resto > 0) {
-            opsLabel += ` (+${resto})`;
-        }
-    }
+    let opsLabel = ops.length > 0 ? `Origem: OP #${ops.slice(0, 4).join(', #')}` : 'Nenhuma OP';
+    if (ops.length > 4) opsLabel += ` (+${ops.length - 4})`;
 
     return (
-        <div className="op-card-react" onClick={() => onSelect(etapa)}>
+        <div 
+            className={`op-card-react ${selecionado ? 'selecionado-lote' : ''}`} 
+            onClick={() => onToggle(etapa)}
+            style={{ 
+                cursor: 'pointer', 
+                border: selecionado ? '2px solid var(--op-cor-azul-claro)' : '1px solid transparent',
+                backgroundColor: selecionado ? '#f0f8ff' : '#fff'
+            }}
+        >
             <div className={`card-borda-charme ${bordaClasse}`}></div>
+            
+            {/* Checkbox visual para indicar seleção */}
+            <div style={{ position: 'absolute', top: '10px', right: '10px', zIndex: 2 }}>
+                <i className={`far ${selecionado ? 'fa-check-square' : 'fa-square'}`} 
+                   style={{ fontSize: '1.2rem', color: selecionado ? 'var(--op-cor-azul-claro)' : '#ccc' }}></i>
+            </div>
+
             <img src={imagemUrl || '/img/placeholder-image.png'} alt={etapa.produto_nome} className="card-imagem-produto" />
             
-            <div className="card-info-principal" style={{display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
-                {/* Label da Etapa (Topo) */}
-                <div style={{fontSize: '0.75rem', fontWeight: '700', color: isFinal ? '#e74c3c' : '#3498db', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px'}}>
+            <div className="card-info-principal">
+                <div style={{fontSize: '0.75rem', fontWeight: '700', color: isFinal ? '#e74c3c' : '#3498db', marginBottom: '4px', textTransform: 'uppercase'}}>
                     {stepLabel}
                 </div>
-
                 <h3>{etapa.produto_nome}</h3>
                 <p>{etapa.variante || 'Padrão'}</p>
-                
                 <div className="card-info-secundaria" style={{marginTop: '6px'}}>
                     <span className="info-item"><strong>{etapa.processo}</strong></span>
                 </div>
@@ -48,34 +50,23 @@ function OPEtapaCard({ etapa, onSelect, stepLabel, isFinal, imagemUrl }) {
                 <span className="label">DISPONÍVEL</span>
                 <span className="valor">{etapa.quantidade_disponivel}</span>
             </div>
-
-            {/* Rodapé Discreto com a Origem */}
-            <div style={{
-                gridColumn: '1 / -1', 
-                borderTop: '1px solid #f0f0f0', 
-                marginTop: '10px', 
-                paddingTop: '8px', 
-                fontSize: '0.75rem', 
-                color: '#95a5a6',
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '5px'
-            }}>
+            
+            <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #f0f0f0', marginTop: '10px', paddingTop: '8px', fontSize: '0.75rem', color: '#95a5a6' }}>
                 <i className="fas fa-link"></i> {opsLabel}
             </div>
         </div>
     );
 }
 
-export default function OPTelaSelecaoEtapa({ onEtapaSelect, funcionario }) {
+export default function OPTelaSelecaoEtapa({ onEtapaSelect, onLoteConfirm, funcionario }) {
     const [filaDeTarefas, setFilaDeTarefas] = useState([]);
     const [todosProdutos, setTodosProdutos] = useState([]);
     const [carregando, setCarregando] = useState(true);
     const [erro, setErro] = useState(null);
     const [pagina, setPagina] = useState(1);
     
-    // NOVO ESTADO
     const [termoFiltro, setTermoFiltro] = useState('');
+    const [selecionados, setSelecionados] = useState([]);
     const ITENS_POR_PAGINA = 6;
 
     useEffect(() => {
@@ -83,33 +74,11 @@ export default function OPTelaSelecaoEtapa({ onEtapaSelect, funcionario }) {
             setCarregando(true);
             try {
                 const token = localStorage.getItem('token');
-                console.log('[DEBUG ATRIBUIR] Iniciando busca de tarefas...');
-
                 const [dataFila, dataProdutos] = await Promise.all([
                     fetch('/api/producao/fila-de-tarefas', { headers: { 'Authorization': `Bearer ${token}` } }).then(res => res.json()),
                     obterProdutosDoStorage()
                 ]);
                 
-                // --- LOGS DE DEBUG ---
-                console.group('🔍 [DEBUG ATRIBUIR] Dados Recebidos');
-                console.log('1. Fila Bruta (API):', dataFila);
-                console.log('2. Total de Produtos no Cache:', dataProdutos.length);
-                
-                // Verifica se veio vazio
-                if (dataFila.length === 0) {
-                    console.warn('⚠️ A fila veio vazia. Verifique se há OPs com saldo disponível no backend.');
-                } else {
-                    // Loga os primeiros itens para conferência
-                    console.table(dataFila.slice(0, 5).map(i => ({
-                        ProdID: i.produto_id,
-                        Nome: i.produto_nome,
-                        Proc: i.processo,
-                        Qtd: i.quantidade_disponivel,
-                        OPs: i.origem_ops
-                    })));
-                }
-                console.groupEnd();
-                // ---------------------
 
                 setFilaDeTarefas(dataFila);
                 setTodosProdutos(dataProdutos);
@@ -155,6 +124,33 @@ export default function OPTelaSelecaoEtapa({ onEtapaSelect, funcionario }) {
         return { label, isFinal, imagemUrl };
     };
 
+    const handleToggleSelect = (etapa) => {
+        // Cria um ID único para identificar a tarefa na lista
+        const etapaId = `${etapa.produto_id}-${etapa.variante}-${etapa.processo}`;
+        
+        setSelecionados(prev => {
+            const jaSelecionado = prev.find(i => `${i.produto_id}-${i.variante}-${i.processo}` === etapaId);
+            
+            if (jaSelecionado) {
+                return prev.filter(i => `${i.produto_id}-${i.variante}-${i.processo}` !== etapaId);
+            } else {
+                if (prev.length >= 6) {
+                    // Opcional: Mostrar mensagem que atingiu limite
+                    return prev;
+                }
+                return [...prev, etapa];
+            }
+        });
+    };
+
+    const handleAvancarLote = () => {
+        if (selecionados.length > 0) {
+            // Chama a prop passada pelo pai (OPAtribuicaoModal) para mudar de tela
+            // Note que estamos passando uma lista, então o modal precisa saber lidar
+            onEtapaSelect(selecionados); 
+        }
+    };
+
     // Paginação (Usa a lista final filtrada)
     const totalPaginas = Math.ceil(listaFinalFiltrada.length / ITENS_POR_PAGINA);
     const tarefasPaginadas = listaFinalFiltrada.slice(
@@ -169,39 +165,48 @@ export default function OPTelaSelecaoEtapa({ onEtapaSelect, funcionario }) {
     if (erro) return <p style={{ color: 'red', textAlign: 'center' }}>{erro}</p>;
 
     return (
-        <div className="coluna-lista-produtos">
+        <div className="coluna-lista-produtos" style={{ position: 'relative', paddingBottom: '80px' }}> 
             
-            {/* COMPONENTE DE BUSCA NO TOPO */}
             <div style={{marginBottom: '15px'}}>
-                <BuscaInteligente 
-                    onSearch={setTermoFiltro}
-                    placeholder="Buscar tarefa por nome, cor ou etapa..."
-                />
+                <BuscaInteligente onSearch={setTermoFiltro} placeholder="Buscar tarefa..." />
             </div>
 
             <div className="op-cards-container-modal">
                 {tarefasPaginadas.length > 0 ? (
                     tarefasPaginadas.map((etapa) => {
-                        const { label, isFinal, imagemUrl } = getEtapaInfo(etapa);
+                        const { label, isFinal, imagemUrl } = getEtapaInfo(etapa); // Função helper existente
+                        const etapaId = `${etapa.produto_id}-${etapa.variante}-${etapa.processo}`;
+                        const isSelected = selecionados.some(i => `${i.produto_id}-${i.variante}-${i.processo}` === etapaId);
+
                         return (
                             <OPEtapaCard 
-                                key={`${etapa.produto_id}-${etapa.variante}-${etapa.processo}`} 
-                                etapa={etapa} stepLabel={label} isFinal={isFinal} imagemUrl={imagemUrl}
-                                onSelect={onEtapaSelect}
+                                key={etapaId} 
+                                etapa={etapa} 
+                                stepLabel={label} 
+                                isFinal={isFinal} 
+                                imagemUrl={imagemUrl}
+                                selecionado={isSelected}
+                                onToggle={handleToggleSelect}
                             />
                         );
                     })
                 ) : (
-                    <FeedbackNotFound
-                        icon="fa-check-square"
-                        titulo="Nenhuma Tarefa"
-                        mensagem={termoFiltro ? `Nada encontrado para "${termoFiltro}".` : `Não há tarefas pendentes compatíveis com ${funcionario.nome}.`}
-                    />
+                    <FeedbackNotFound icon="fa-check-square" titulo="Nenhuma Tarefa" mensagem="..." />
                 )}
             </div>
 
             {totalPaginas > 1 && (
                 <OPPaginacaoWrapper totalPages={totalPaginas} currentPage={pagina} onPageChange={setPagina} />
+            )}
+
+            {/* NOVA BARRA FLUTUANTE (FAB) */}
+            {selecionados.length > 0 && (
+                <div className="op-fab-container">
+                    <button className="op-btn-flutuante" onClick={handleAvancarLote}>
+                        <i className="fas fa-check-double"></i>
+                        <span>Atribuir {selecionados.length} Tarefa(s)</span>
+                    </button>
+                </div>
             )}
         </div>
     );

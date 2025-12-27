@@ -4,91 +4,112 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { mostrarMensagem } from '/js/utils/popups.js';
 import { obterProdutos as obterProdutosDoStorage } from '/js/utils/storage.js';
 
-async function fetchDetalhesOPs(ids) {
-    const token = localStorage.getItem('token');
-    const promises = ids.map(id => 
-        fetch(`/api/ordens-de-producao/${id}`, { headers: { 'Authorization': `Bearer ${token}` } })
-            .then(res => res.json())
-            .catch(() => null)
-    );
-    return await Promise.all(promises);
-}
-
 export default function OPTelaConfirmacaoQtd({ etapa, funcionario, onClose }) {
-    const [quantidade, setQuantidade] = useState(etapa.quantidade_disponivel);
+    const itensLote = Array.isArray(etapa) ? etapa : [etapa];
+    
+    const [quantidades, setQuantidades] = useState({});
     const [carregando, setCarregando] = useState(false);
-    const [produtoCompleto, setProdutoCompleto] = useState(null);
-    const [opsDetalhadas, setOpsDetalhadas] = useState([]);
-    const [carregandoOps, setCarregandoOps] = useState(true);
+    
+    // Novo: Estado para guardar as imagens carregadas
+    const [mapaImagens, setMapaImagens] = useState({});
 
+    // 1. Carregar Imagens dos Produtos ao Iniciar
     useEffect(() => {
-        async function carregarTudo() {
-            setCarregandoOps(true);
+        async function carregarImagens() {
             try {
                 const todosProdutos = await obterProdutosDoStorage();
-                const produtoEncontrado = todosProdutos.find(p => p.id === etapa.produto_id);
-                setProdutoCompleto(produtoEncontrado);
+                const novoMapa = {};
 
-                if (etapa.origem_ops && etapa.origem_ops.length > 0) {
-                    const ops = await fetchDetalhesOPs(etapa.origem_ops);
-                    setOpsDetalhadas(ops.filter(op => op));
-                }
-            } catch (err) {
-                console.error("Erro ao carregar detalhes:", err);
-            } finally {
-                setCarregandoOps(false);
+                itensLote.forEach(item => {
+                    const produto = todosProdutos.find(p => p.id === item.produto_id);
+                    let img = '/img/placeholder-image.png'; // Fallback
+
+                    if (produto) {
+                        img = produto.imagem; // Imagem padrão
+                        // Tenta achar a variante específica
+                        if (item.variante && produto.grade) {
+                            const varObj = produto.grade.find(g => g.variacao === item.variante);
+                            if (varObj && varObj.imagem) img = varObj.imagem;
+                        }
+                    }
+                    // Chave única para o mapa
+                    novoMapa[`${item.produto_id}-${item.variante}`] = img;
+                });
+                setMapaImagens(novoMapa);
+            } catch (error) {
+                console.error("Erro ao carregar imagens:", error);
             }
         }
-        carregarTudo();
+        carregarImagens();
+    }, [etapa]); // Roda quando a prop 'etapa' muda
+
+    // 2. Inicializar Quantidades (igual antes)
+    useEffect(() => {
+        const inits = {};
+        itensLote.forEach(item => {
+            const key = `${item.produto_id}-${item.variante}-${item.processo}`;
+            inits[key] = item.quantidade_disponivel;
+        });
+        setQuantidades(inits);
     }, [etapa]);
 
-    const imagemSrc = useMemo(() => {
-        if (!produtoCompleto) return '/img/placeholder-image.png';
-        const gradeInfo = produtoCompleto.grade?.find(g => g.variacao === etapa.variante);
-        return gradeInfo?.imagem || produtoCompleto.imagem || '/img/placeholder-image.png';
-    }, [produtoCompleto, etapa.variante]);
-
-    const handleQuantidadeChange = (e) => {
-        const valor = e.target.value;
-        const valorNum = valor === '' ? 0 : parseInt(valor, 10);
-        if (valor === '' || (!isNaN(valorNum) && valorNum >= 0 && valorNum <= etapa.quantidade_disponivel)) {
-            setQuantidade(valor);
+    // 3. Funções de Ajuste (Manual e Botões)
+    const handleQtdChange = (key, valor, max) => {
+        const num = parseInt(valor);
+        if (valor === '' || (!isNaN(num) && num >= 0 && num <= max)) {
+            setQuantidades(prev => ({ ...prev, [key]: valor }));
         }
     };
 
-    const ajustarQuantidade = (ajuste) => {
-        const atual = Number(quantidade) || 0;
-        const novoValor = Math.max(0, Math.min(etapa.quantidade_disponivel, atual + ajuste));
-        setQuantidade(novoValor);
+    const ajustarQuantidade = (key, delta, max) => {
+        setQuantidades(prev => {
+            const atual = parseInt(prev[key]) || 0;
+            const novo = Math.max(0, Math.min(max, atual + delta));
+            return { ...prev, [key]: novo };
+        });
+    };
+
+    const definirMaximo = (key, max) => {
+        setQuantidades(prev => ({ ...prev, [key]: max }));
     };
 
     const handleConfirmar = async () => {
-        if (!produtoCompleto || !quantidade || Number(quantidade) <= 0) return;
-
         setCarregando(true);
         try {
             const token = localStorage.getItem('token');
-            const payload = {
-                opNumero: etapa.origem_ops[0], 
-                produto_id: etapa.produto_id,
-                variante: etapa.variante || '-',
-                processo: etapa.processo, 
-                quantidade: Number(quantidade),
-                funcionario_id: funcionario.id,
-            };
+            
+            const payloadItens = itensLote.map(item => {
+                const key = `${item.produto_id}-${item.variante}-${item.processo}`;
+                const qtd = parseInt(quantidades[key]);
+                if (!qtd || qtd <= 0) return null;
 
-            const response = await fetch('/api/producoes', {
+                return {
+                    opNumero: item.origem_ops[0],
+                    produto_id: item.produto_id,
+                    variante: item.variante || '-',
+                    processo: item.processo,
+                    quantidade: qtd
+                };
+            }).filter(i => i !== null);
+
+            if (payloadItens.length === 0) throw new Error("Defina pelo menos uma quantidade válida.");
+
+            const response = await fetch('/api/producoes/lote', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({
+                    itens: payloadItens,
+                    funcionario_id: funcionario.id,
+                    funcionario_nome: funcionario.nome
+                })
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || "Erro ao atribuir.");
+                const err = await response.json();
+                throw new Error(err.error || "Erro ao atribuir lote.");
             }
-            
-            mostrarMensagem('Tarefa atribuída!', 'sucesso');
+
+            mostrarMensagem(`Sucesso! ${payloadItens.length} tarefas atribuídas.`, 'sucesso');
             onClose();
 
         } catch (err) {
@@ -99,64 +120,63 @@ export default function OPTelaConfirmacaoQtd({ etapa, funcionario, onClose }) {
     };
 
     return (
-        <div className="op-confirmacao-container">
-            <div className="op-confirmacao-produto-header">
-                <img src={imagemSrc} alt={etapa.produto_nome} className="op-confirmacao-imagem" />
-                <div className="op-confirmacao-produto-info">
-                    <h4>{etapa.produto_nome}</h4>
-                    <p>{etapa.variante || 'Padrão'}</p>
-                </div>
-            </div>
-
-            <div className="op-confirmacao-etapa-destaque">
-                <span className="label">Etapa a ser produzida</span>
-                <span className="processo">{etapa.processo}</span>
-            </div>
-
-            <div className="seletor-quantidade-wrapper" style={{ boxShadow: 'none', border: 'none'}}>
-                <label>Definir Quantidade</label>
-                <div className="input-container">
-                    <button type="button" className="ajuste-qtd-btn" onClick={() => ajustarQuantidade(-1)}>-</button>
-                    <input 
-                        type="number" className="op-input-tarefas"
-                        value={quantidade} onChange={handleQuantidadeChange}
-                        max={etapa.quantidade_disponivel}
-                    />
-                    <button type="button" className="ajuste-qtd-btn" onClick={() => ajustarQuantidade(1)}>+</button>
-                </div>
-                <div className="atalhos-qtd-container">
-                    <button type="button" className="atalho-qtd-btn" onClick={() => ajustarQuantidade(10)}>+10</button>
-                    <button type="button" className="atalho-qtd-btn" onClick={() => ajustarQuantidade(50)}>+50</button>
-                    <button type="button" className="atalho-qtd-btn" onClick={() => setQuantidade(etapa.quantidade_disponivel)}>Máx.</button>
-                </div>
-                <small style={{marginTop: '10px', color: '#7f8c8d'}}>
-                    Disponível na fila: <strong>{etapa.quantidade_disponivel}</strong> pçs
-                </small>
-            </div>
-
-            {/* Extrato de OPs */}
-            {opsDetalhadas.length > 0 && (
-                <div style={{borderTop: '1px solid #eee'}}>
-                    <h5 style={{margin: '0 0 10px 0', fontSize: '0.9rem', color: '#555'}}>Origem do Saldo (OPs):</h5>
-                    <div style={{maxHeight: '100px', overflowY: 'auto', fontSize: '0.85rem'}}>
-                        {opsDetalhadas.map((op, idx) => (
-                            <div key={op.id} style={{display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px dotted #f0f0f0'}}>
-                                <span><i className="fas fa-hashtag"></i> {op.numero}</span>
-                                <span style={{color: '#27ae60', fontWeight: 'bold'}}>Disponível</span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+        <div className="op-confirmacao-container" style={{ padding: '10px 5px', display: 'flex', flexDirection: 'column', height: '100%' }}>
             
-            <div className="op-confirmacao-footer">
+            <h3 className="op-titulo-secao" style={{ textAlign: 'center', fontSize: '1.2rem', padding: '0 0 15px 0' }}>
+                Confirmar Lote para <span style={{color: 'var(--op-cor-azul-claro)'}}>{funcionario.nome}</span>
+            </h3>
+
+            {/* LISTA DE CARDS COM SCROLL */}
+            <div style={{ flexGrow: 1, overflowY: 'auto', paddingRight: '5px' }}>
+                {itensLote.map((item, idx) => {
+                    const key = `${item.produto_id}-${item.variante}-${item.processo}`;
+                    const qtd = quantidades[key] !== undefined ? quantidades[key] : item.quantidade_disponivel;
+                    const imgUrl = mapaImagens[`${item.produto_id}-${item.variante}`] || '/img/placeholder-image.png';
+
+                    return (
+                        <div key={idx} className="op-item-confirmacao-card">
+                            {/* LADO ESQUERDO: IMAGEM E INFO */}
+                            <div className="item-info-visual">
+                                <img src={imgUrl} alt={item.produto_nome} />
+                                <div>
+                                    <h4>{item.produto_nome}</h4>
+                                    <p className="variante">{item.variante}</p>
+                                    <p className="processo">{item.processo}</p>
+                                </div>
+                            </div>
+
+                            {/* LADO DIREITO: CONTROLES DE QUANTIDADE */}
+                            <div className="item-controles-qtd">
+                                <div className="qtd-display-linha">
+                                    <button className="btn-ajuste mini" onClick={() => ajustarQuantidade(key, -1, item.quantidade_disponivel)}>-</button>
+                                    <input 
+                                        type="number" 
+                                        value={qtd}
+                                        onChange={(e) => handleQtdChange(key, e.target.value, item.quantidade_disponivel)}
+                                    />
+                                    <button className="btn-ajuste mini" onClick={() => ajustarQuantidade(key, 1, item.quantidade_disponivel)}>+</button>
+                                </div>
+                                <div className="qtd-atalhos-linha">
+                                    <button onClick={() => ajustarQuantidade(key, 10, item.quantidade_disponivel)}>+10</button>
+                                    <button className="btn-max" onClick={() => definirMaximo(key, item.quantidade_disponivel)}>
+                                        Max ({item.quantidade_disponivel})
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            <div className="op-confirmacao-footer" style={{ marginTop: '15px' }}>
                 <button 
                     className="op-botao op-botao-sucesso"
                     onClick={handleConfirmar}
-                    disabled={carregando || !produtoCompleto || !quantidade || Number(quantidade) <= 0}
+                    disabled={carregando}
+                    style={{ width: '100%', padding: '15px', fontSize: '1.1rem' }}
                 >
-                    {carregando ? <div className="spinner-btn-interno"></div> : <i className="fas fa-check"></i>}
-                    {carregando ? 'Atribuindo...' : `Atribuir a ${funcionario.nome}`}
+                    {carregando ? <div className="spinner-btn-interno"></div> : <i className="fas fa-check-double"></i>}
+                    {carregando ? 'Processando...' : `Confirmar Tudo (${itensLote.length} itens)`}
                 </button>
             </div>
         </div>

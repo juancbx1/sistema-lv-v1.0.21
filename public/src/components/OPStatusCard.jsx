@@ -68,18 +68,25 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
     const menuItems = getMenuItems();
 
     const renderConteudoCard = () => {
-        if (status_atual === 'PRODUZINDO' && tarefa_atual) {
+        // Verifica se tem fila (tarefas além da primeira)
+        // O backend manda 'tarefas' (array completo). 'tarefa_atual' é só a primeira (para compatibilidade).
+        const todasTarefas = funcionario.tarefas || (tarefa_atual ? [tarefa_atual] : []);
+        const tarefaPrincipal = todasTarefas[0];
+        const filaDeEspera = todasTarefas.slice(1); // Pega do índice 1 em diante
+
+        if (status_atual === 'PRODUZINDO' && tarefaPrincipal) {
             return (
                 <>
                     <div className="info-tarefa-redesenhada">
+                        {/* TAREFA PRINCIPAL (EM ANDAMENTO) */}
                         <div className="quantidade-tarefa-destaque">
-                            {tarefaSegura.quantidade}<small>pçs</small>
+                            {tarefaPrincipal.quantidade}<small>pçs</small>
                         </div>
                         <div className="produto-tarefa-subtitulo">
-                            {tarefaSegura.produto_nome} ({tarefaSegura.variante || 'Padrão'})
+                            {tarefaPrincipal.produto_nome} ({tarefaPrincipal.variante || 'Padrão'})
                         </div>
                         <strong style={{marginTop: '5px', color: 'var(--op-cor-azul-claro)'}}>
-                            {tarefaSegura.processo}
+                            {tarefaPrincipal.processo}
                         </strong>
                         
                         <div className="metricas-tarefa-container">
@@ -89,7 +96,30 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
                                 <div className="barra-progresso" style={{ width: '0%' }}></div>
                             </div>
                         </div>
+
+                        {/* --- NOVA ÁREA: FILA DE ESPERA --- */}
+                        {filaDeEspera.length > 0 && (
+                            <div className="fila-espera-container">
+                                <div className="fila-titulo">
+                                    <i className="fas fa-layer-group"></i> Na Fila ({filaDeEspera.length})
+                                </div>
+                                <ul className="fila-lista">
+                                    {filaDeEspera.map((t, idx) => (
+                                        <li key={t.id_sessao || idx}>
+                                            <span className="fila-qtd">{t.quantidade}</span>
+                                            <div className="fila-desc">
+                                                <span className="nome-prod">{t.produto_nome}</span>
+                                                {/* Mostra variante se existir, senão mostra traço */}
+                                                <span className="var-prod">{t.variante || '-'}</span>
+                                                <span className="proc-prod">{t.processo}</span>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
                     </div>
+
                     <div className="card-status-footer">
                         <div className="oa-card-botoes-acao-container">
                             <button className="btn-acao cancelar" onClick={() => onCancelarTarefa(funcionario)}>
