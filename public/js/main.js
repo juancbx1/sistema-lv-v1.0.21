@@ -14,7 +14,6 @@ document.addEventListener('DOMContentLoaded', () => {
         '/admin/cadastrar-produto.html': '/js/pages/admin-cadastrar-produto.js',
         '/admin/gerenciar-producao.html': '/js/pages/admin-gerenciar-producao.js',
         '/admin/producao-diaria.html': '/js/pages/admin-producao-diaria.js',
-        '/admin/home.html': '/js/pages/admin-home.js',
         '/costureira/dashboard.html': '/js/pages/costureira-dashboard.js',
         '/admin/embalagem-de-produtos.html': '/js/pages/admin-embalagem-de-produtos.js', // Ajustado para o caminho correto
         '/admin/ponto-por-processo.html': '/js/pages/admin-ponto-por-processo.js', // Mantido como está

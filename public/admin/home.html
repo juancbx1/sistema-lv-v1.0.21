@@ -3,40 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema Lojas Variara</title>
+    <title>Dashboard - Lojas Variara</title>
+    <!-- CSS Global e da Home -->
+    <link rel="stylesheet" href="/css/global-style.css">
     <link rel="stylesheet" href="/css/home.css">
     <link rel="stylesheet" href="/css/menu-lateral.css">
     <link rel="stylesheet" href="/css/popups.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
+    <!-- Container do Menu Lateral (Carregado via JS legado ou React futuramente) -->
     <div class="hamburger-menu">
         <i class="fas fa-bars"></i>
-        <i class="fas fa-times"></i>
     </div> 
-    <div class="container">
-        <section class="home-admin">
-            <div class="linha-superior">
-                <div class="cards-identificacao">
-                    <div class="card card-apresentacao">
-                        <p>Esse é o painel de gerenciamento da <b>Lojas Variara</b>!</p>
-                    </div>
-                    <div class="card card-teaser">
-                        <h3>Segredos a Caminho...</h3>
-                        <p>Um mistério se aproxima. Novidades incríveis estão sendo costuradas para você. Fique de olho!</p>
-                    </div>
-                </div>
-                <div class="card card-acoes">
-                    <h2>O que deseja fazer?</h2>
-                    <div class="acoes-menu" id="acoesMenu"></div>
-                </div>
-            </div>
-        </section>
-    </div>
+    
+    <!-- ONDE O REACT VAI MONTAR A PÁGINA -->
+    <div id="home-react-root" class="container-dashboard"></div>
 
-     <!-- CARREGA A BIBLIOTECA DE COMPRESSÃO -->
-    <script src="/js/admin-home.js" type="module"></script>
+    <!-- Scripts -->
     <script src="/js/carregar-menu-lateral.js" type="module"></script>
-    <script src="/js/libs/browser-image-compression.js" type="module"></script>
+    <!-- Ponto de entrada do React -->
+    <script src="/src/main-home.jsx" type="module"></script>
 </body>
 </html>
