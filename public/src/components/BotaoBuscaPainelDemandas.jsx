@@ -26,6 +26,7 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [] }) {
     
     const ITENS_POR_PAGINA = 6;
     const [paginaAtual, setPaginaAtual] = useState(1);
+    const [filtroPrioridade, setFiltroPrioridade] = useState(false);
     
     const gerarKeyUnica = (item) => {
         const varianteLimpa = item.variante || 'padrao';
@@ -110,32 +111,43 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [] }) {
             }
 
             if (tipoLista === 'pendente') {
-                // Aplica Filtros de Texto
-                let passouFiltroTexto = true;
+                let deveMostrar = true;
+
+                // 1. Filtro de Texto (Nome/Variante)
                 if (termoLimpo) {
                     const nomeNorm = normalizarTexto(item.produto_nome);
                     const varNorm = normalizarTexto(item.variante);
+                    // Se não achar nem no nome nem na variante, esconde
                     if (!nomeNorm.includes(termoLimpo) && !varNorm.includes(termoLimpo)) {
-                        passouFiltroTexto = false;
+                        deveMostrar = false;
                     }
                 }
 
-                // Aplica Filtro "Não Iniciado"
-                let passouFiltroStatus = true;
+                // 2. Filtro de "Não Iniciado"
                 if (filtroNaoIniciado && !naoIniciado) {
-                    passouFiltroStatus = false;
+                    deveMostrar = false;
                 }
                 
-                // Se for concluído e o filtro "Não iniciado" estiver ativo, esconde o concluído
-                if (estaConcluido && filtroNaoIniciado) {
-                    passouFiltroStatus = false;
+                // 3. Filtro de Prioridade (BLINDADO)
+                // Usamos parseInt para garantir que "1" (string) seja igual a 1 (number)
+                if (filtroPrioridade) {
+                    const prioridadeItem = parseInt(item.prioridade);
+                    if (prioridadeItem !== 1) {
+                        deveMostrar = false;
+                    }
                 }
 
-                if (passouFiltroTexto && passouFiltroStatus) {
-                    p.push({ ...item, _isConcluido: estaConcluido }); // Marcamos para ordenar
+                // Se for concluído e o filtro "Não iniciado" estiver ativo, esconde o concluído
+                // (Pois concluído tecnicamente não é "não iniciado", é "finalizado")
+                if (estaConcluido && filtroNaoIniciado) {
+                    deveMostrar = false;
                 }
-            } 
-            else if (tipoLista === 'divergencia') {
+
+                // Se passou em TODOS os testes, adiciona
+                if (deveMostrar) {
+                    p.push({ ...item, _isConcluido: estaConcluido }); 
+                }
+            } else if (tipoLista === 'divergencia') {
                 d.push(item);
             } 
             // Removemos o 'c.push' pois agora concluídos vão para 'p'
@@ -150,13 +162,13 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [] }) {
         });
         
         return { pendentesFiltrados: p, concluidas: c, divergencias: d };
-    }, [demandasAgregadas, termoBusca, filtroNaoIniciado]);
+    }, [demandasAgregadas, termoBusca, filtroNaoIniciado, filtroPrioridade]);
 
     // --- 2. PAGINAÇÃO SEGURA (Baseada nos Filtrados) ---
     const totalPaginas = Math.ceil(pendentesFiltrados.length / ITENS_POR_PAGINA);
     
     // Reseta página se filtro mudar
-    useEffect(() => { setPaginaAtual(1); }, [termoBusca, filtroNaoIniciado]);
+    useEffect(() => { setPaginaAtual(1); }, [termoBusca, filtroNaoIniciado, filtroPrioridade]);
 
     const itensPaginados = useMemo(() => {
         const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
@@ -200,24 +212,42 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [] }) {
                     </div>
                 </div>
 
-                {/* --- BARRA DE FILTROS --- */}
+                {/* --- BARRA DE FILTROS OTIMIZADA --- */}
                 <div className="gs-filtros-bar-container">
                     <input 
                         type="text" 
                         className="gs-input-busca-filtro" 
-                        placeholder="Filtrar por nome ou cor..."
+                        placeholder="Filtrar..."
                         value={termoBusca}
                         onChange={(e) => setTermoBusca(e.target.value)}
                     />
                     
-                    <div 
-                        className={`gs-toggle-filtro ${filtroNaoIniciado ? 'ativo' : ''}`}
-                        onClick={() => setFiltroNaoIniciado(!filtroNaoIniciado)}
-                    >
-                        <div className="gs-checkbox-visual">
-                            {filtroNaoIniciado && <i className="fas fa-check" style={{fontSize: '0.7rem'}}></i>}
+                    {/* Container Flex para os botões ficarem juntos */}
+                    <div className="gs-filtros-wrapper">
+                        
+                        {/* Botão Não Iniciados */}
+                        <div 
+                            className={`gs-toggle-filtro ${filtroNaoIniciado ? 'ativo' : ''}`}
+                            onClick={() => setFiltroNaoIniciado(!filtroNaoIniciado)}
+                        >
+                            <div className="gs-checkbox-visual">
+                                {filtroNaoIniciado && <i className="fas fa-check" style={{fontSize: '0.7rem'}}></i>}
+                            </div>
+                            <span className="filtro-texto">Não Iniciados</span>
                         </div>
-                        <span>Apenas Não Iniciados</span>
+
+                        {/* Botão Prioridade */}
+                        <div 
+                            className={`gs-toggle-filtro ${filtroPrioridade ? 'ativo' : ''}`}
+                            onClick={() => setFiltroPrioridade(!filtroPrioridade)}
+                            style={filtroPrioridade ? { backgroundColor: '#fff9db', borderColor: '#ffe066', color: '#856404' } : {}}
+                        >
+                            <div className="gs-checkbox-visual" style={filtroPrioridade ? { borderColor: '#856404', backgroundColor: '#856404' } : {}}>
+                                {filtroPrioridade && <i className="fas fa-check" style={{fontSize: '0.7rem', color: '#fff'}}></i>}
+                            </div>
+                            <span className="filtro-texto"><i className="fas fa-star" style={{marginRight: '4px'}}></i> Prioridades</span>
+                        </div>
+
                     </div>
                 </div>
 

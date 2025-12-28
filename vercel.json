@@ -27,7 +27,7 @@
   "crons": [
     {
       "path": "/api/cron/arquivar-concluidas",
-      "schedule": "0 3 * * *"  
+      "schedule": "48 2 * * *" 
     }
   ]
 }

@@ -114,7 +114,7 @@ export default function CardPipelineProducao({ item, onPlanejar, onDelete, permi
             {permissoes.includes('deletar-demanda') && (
                 <button onClick={handleDeleteClick}
                     style={{
-                        position: 'absolute', top: '2px', left: '2px', // Mudei para esquerda/topo discreto
+                        position: 'absolute', top: '5px', right: '5px', zIndex: 10,
                         background: 'rgba(255,255,255,0.8)', border: 'none', color: '#ccc',
                         cursor: 'pointer', fontSize: '1rem', padding: '5px', zIndex: 5, borderRadius: '50%'
                     }}
@@ -123,44 +123,65 @@ export default function CardPipelineProducao({ item, onPlanejar, onDelete, permi
                 </button>
             )}
 
-            {/* --- CABEÇALHO 3.0 (GRID COM AÇÃO RÁPIDA) --- */}
-            <div className="pipeline-header-novo">
+            {/* --- CABEÇALHO 4.0 (LAYOUT DE 3 LINHAS) --- */}
+            <div className="pipeline-header-mobile">
                 
-                {/* 1. IMAGEM */}
-                <div className="ph-imagem">
-                    <img src={item.imagem || '/img/placeholder-image.png'} alt={item.produto_nome} />
+                {/* LINHA 1: TÍTULO */}
+                <div className="ph-linha-titulo">
+                    <h4 title={tituloLimpo} className={parseInt(item.prioridade) === 1 ? 'titulo-prioridade' : ''}>
+                        {/* NOVA ESTRELA DE LUXO ANIMADA */}
+                        {parseInt(item.prioridade) === 1 && (
+                            <span className="gs-badge-prioridade animado">
+                                <i className="fas fa-star" style={{fontSize: '0.8rem'}}></i>
+                            </span>
+                        )}
+                        {tituloLimpo}
+                    </h4>
                 </div>
 
-                {/* 2. INFORMAÇÕES (COM TÍTULO LIMPO) */}
-                <div className="ph-info">
-                    <h4 title={tituloLimpo}>{tituloLimpo}</h4>
-                    {nomeVariante && <div className="ph-variante">{nomeVariante}</div>}
+                {/* LINHA 2: VARIANTE + BADGE (LADO A LADO) */}
+                <div className="ph-linha-detalhes">
+                    <div className="ph-variante">
+                        {nomeVariante || <span style={{opacity:0.5}}>Sem variação</span>}
+                    </div>
                     <div className="ph-status-badge" style={{ backgroundColor: statusInfo.cor + '20', color: statusInfo.cor }}>
                         {statusInfo.nome}
                     </div>
                 </div>
 
-                {/* 3. META/QUANTIDADE */}
-                <div className="ph-meta">
-                    <span className="valor" style={{ color: pendenteFila > 0 ? '#c0392b' : '#2c3e50' }}>
-                        {pendenteFila > 0 ? pendenteFila : totalPedido}
-                    </span>
-                    <span className="label">
-                        {pendenteFila > 0 ? 'Falta' : 'Total'}
-                    </span>
-                </div>
+                {/* LINHA 3: IMAGEM + META + AÇÃO (O CORAÇÃO DO CARD) */}
+                <div className="ph-linha-principal">
+                    
+                    {/* Imagem */}
+                    <div className="ph-imagem-wrapper">
+                        <img src={item.imagem || '/img/placeholder-image.png'} alt={item.produto_nome} />
+                    </div>
 
-                {/* 4. AÇÃO RÁPIDA (BOTAO TESOURA) */}
-                <div className="ph-acao">
-                    {pendenteFila > 0 ? (
-                        <button className="gs-btn-turbo-acao" onClick={handleActionClick} title="Produzir Agora">
-                            <i className="fas fa-cut"></i>
-                        </button>
-                    ) : (
-                        <div className="gs-icon-concluido">
-                            <i className={`fas ${statusInfo.icone}`} style={{color: statusInfo.cor}}></i>
+                    {/* Meta (Quantidade) - Centralizado */}
+                    <div className="ph-meta-wrapper">
+                        <div className="ph-meta-box">
+                            <span className="valor" style={{ color: pendenteFila > 0 ? '#c0392b' : '#2c3e50' }}>
+                                {pendenteFila > 0 ? pendenteFila : totalPedido}
+                            </span>
+                            <span className="label">
+                                {pendenteFila > 0 ? 'Faltam' : 'Total'}
+                            </span>
                         </div>
-                    )}
+                    </div>
+
+                    {/* Ação (Botão na Direita) */}
+                    <div className="ph-acao-wrapper">
+                        {pendenteFila > 0 ? (
+                            <button className="gs-btn-turbo-acao" onClick={handleActionClick}>
+                                <i className="fas fa-cut"></i>
+                            </button>
+                        ) : (
+                            <div className="gs-icon-concluido">
+                                <i className={`fas ${statusInfo.icone}`} style={{color: statusInfo.cor}}></i>
+                            </div>
+                        )}
+                    </div>
+
                 </div>
             </div>
 

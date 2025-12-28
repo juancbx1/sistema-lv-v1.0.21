@@ -102,6 +102,15 @@ export async function gerarDiagnosticoCompleto(dbClient) {
 
         const gradeInfo = produtoInfo.grade?.find(g => g.variacao === (variante === '-' ? null : variante));
 
+        // LÓGICA DE NORMALIZAÇÃO DE PRIORIDADE:
+        // O banco pode ter 1, 2, 99 ou null.
+        // Queremos entregar pro frontend apenas:
+        // 1 = Urgente
+        // 2 = Normal (inclui o antigo 99 e nulls)
+        
+        let prioridadeBruta = parseInt(demandaOriginal.prioridade);
+        let prioridadeFinal = (prioridadeBruta === 1) ? 1 : 2;
+
         agregadosMap.set(chaveUnica, {
             // Rastreio
             demanda_id: demandaOriginal.id,
@@ -111,7 +120,9 @@ export async function gerarDiagnosticoCompleto(dbClient) {
             // Visual
             produto_nome: gradeInfo ? `${produtoInfo.nome} (${gradeInfo.variacao})` : produtoInfo.nome,
             imagem: gradeInfo?.imagem || produtoInfo.imagem,
-            prioridade: demandaOriginal.prioridade,
+            
+            // AQUI ESTÁ A MÁGICA:
+            prioridade: prioridadeFinal,
             
             // Números do Pipeline
             demanda_total: quantidadeNecessaria,

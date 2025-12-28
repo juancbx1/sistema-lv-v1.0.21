@@ -37,53 +37,44 @@ router.use((req, res, next) => {
 
 // POST /api/demandas/
 router.post('/', async (req, res) => {
-    // Pega as informações do usuário logado que vieram do token
     const { usuarioLogado } = req;
     let dbClient;
 
     try {
-        // Pega uma conexão do pool para usar no banco
         dbClient = await pool.connect();
+        const { produto_sku, quantidade_solicitada, observacoes, prioridade } = req.body;
 
-        // Extrai os dados que o frontend vai enviar no corpo da requisição
-        const { produto_sku, quantidade_solicitada, observacoes } = req.body;
-
-        // --- Validação dos Dados de Entrada ---
+        // Validação
         if (!produto_sku || !quantidade_solicitada) {
-            return res.status(400).json({ error: 'SKU do produto e quantidade são obrigatórios.' });
+            return res.status(400).json({ error: 'SKU e quantidade são obrigatórios.' });
         }
-        const quantidade = parseInt(quantidade_solicitada);
-        if (isNaN(quantidade) || quantidade <= 0) {
-            return res.status(400).json({ error: 'A quantidade solicitada deve ser um número positivo.' });
-        }
-
-        // --- Inserção no Banco de Dados ---
+        
+        // Conversão forçada para garantir
+        const prioridadeFinal = (parseInt(prioridade) === 1) ? 1 : 2; 
+        
         const insertQuery = `
             INSERT INTO demandas_producao
-                (produto_sku, quantidade_solicitada, solicitado_por, observacoes)
+                (produto_sku, quantidade_solicitada, solicitado_por, observacoes, prioridade)
             VALUES
-                ($1, $2, $3, $4)
-            RETURNING *; -- 'RETURNING *' faz com que o banco retorne a linha que acabou de ser inserida
+                ($1, $2, $3, $4, $5)
+            RETURNING *;
         `;
 
         const result = await dbClient.query(insertQuery, [
             produto_sku,
-            quantidade,
-            usuarioLogado.nome, // Pega o nome do usuário do token
-            observacoes || null // Se não houver observação, insere NULL
+            parseInt(quantidade_solicitada),
+            usuarioLogado.nome,
+            observacoes || null,
+            prioridadeFinal // Agora vai salvar 1 ou 2 corretamente
         ]);
 
-        // Retorna o status 201 (Created) e os dados da nova demanda criada
         res.status(201).json(result.rows[0]);
 
     } catch (error) {
-        console.error('[API /demandas POST] Erro ao criar demanda:', error);
-        res.status(500).json({ error: 'Erro interno ao criar a demanda.', details: error.message });
+        console.error('[API /demandas POST] Erro:', error);
+        res.status(500).json({ error: 'Erro interno.', details: error.message });
     } finally {
-        // ESSENCIAL: Libera a conexão de volta para o pool, ocorrendo erro ou não.
-        if (dbClient) {
-            dbClient.release();
-        }
+        if (dbClient) dbClient.release();
     }
 });
 

@@ -3167,123 +3167,198 @@ font-weight: 500;
 }
 
 /* ==========================================================================
-   # HEADER 3.0 - COM BOTÃO DE AÇÃO RÁPIDA
+   # HEADER 4.0 - LAYOUT HIERÁRQUICO (MOBILE FOCUS)
    ========================================================================== */
 
-.pipeline-header-novo {
-    display: grid;
-    /* 4 Colunas: Imagem | Info | Meta | Ação */
-    /* 60px (Img) | Flex (Texto) | 50px (Qtd) | 50px (Botão) */
-    grid-template-columns: 60px 1fr 50px 50px; 
-    gap: 10px;
-    align-items: center;
+.pipeline-header-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     width: 100%;
 }
 
-/* 1. Imagem */
-.ph-imagem img {
-    width: 60px;
-    height: 60px;
-    object-fit: cover;
-    border-radius: 8px;
-    border: 1px solid #e0e0e0;
-}
-
-/* 2. Info Central */
-.ph-info {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    overflow: hidden;
-}
-
-.ph-info h4 {
+/* Linha 1: Título */
+.ph-linha-titulo h4 {
     margin: 0;
-    font-size: 0.95rem;
+    font-size: 1.1rem;
     font-weight: 700;
     color: var(--gs-secundaria);
-    white-space: normal; /* Quebra linha */
-    line-height: 1.2;
+    line-height: 1.3;
+}
+
+/* Linha 2: Detalhes */
+.ph-linha-detalhes {
+    display: flex;
+    align-items: center;
+    justify-content: space-between; /* Espalha variante e badge */
+    gap: 10px;
+    border-bottom: 1px solid #f0f0f0;
+    padding-bottom: 8px;
+    margin-bottom: 4px;
 }
 
 .ph-variante {
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     color: #555;
-    margin-top: 2px;
-    font-weight: 600;
-    line-height: 1.2;
+    font-weight: 500;
+    white-space: normal; /* Permite quebra */
+    flex-grow: 1;
 }
 
 .ph-status-badge {
-    display: inline-block;
-    padding: 2px 6px;
+    padding: 4px 8px;
     border-radius: 4px;
-    font-size: 0.65rem;
+    font-size: 0.7rem;
     font-weight: 800;
     text-transform: uppercase;
-    margin-top: 4px;
-    align-self: flex-start;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
-/* 3. Bloco de Meta (Quantidade) */
-.ph-meta {
+/* Linha 3: Principal (Img | Meta | Btn) */
+.ph-linha-principal {
+    display: grid;
+    /* Imagem (Fixa) | Meta (Flex) | Ação (Fixa) */
+    grid-template-columns: 70px 1fr 60px; 
+    gap: 15px;
+    align-items: center;
+}
+
+.ph-imagem-wrapper img {
+    width: 70px;
+    height: 70px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    display: block;
+}
+
+.ph-meta-wrapper {
+    display: flex;
+    justify-content: center; /* Centraliza o box de meta */
+}
+
+.ph-meta-box {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     background-color: #f8f9fa;
-    border-radius: 6px;
-    height: 50px; /* Quadrado */
+    border: 1px solid #eee;
+    border-radius: 8px;
+    padding: 5px 15px;
+    min-width: 80px;
 }
 
-.ph-meta .valor {
-    font-size: 1.3rem;
+.ph-meta-box .valor {
+    font-size: 1.6rem;
     font-weight: 800;
     line-height: 1;
 }
 
-.ph-meta .label {
-    font-size: 0.6rem;
+.ph-meta-box .label {
+    font-size: 0.7rem;
     text-transform: uppercase;
     color: #999;
     font-weight: 700;
 }
 
-/* 4. Ação Rápida (Botão Turbo) */
-.ph-acao {
+.ph-acao-wrapper {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
+    justify-content: flex-end; /* Alinha à direita */
 }
 
+/* Ajuste do botão turbo para esse layout */
 .gs-btn-turbo-acao {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px; /* Quadrado arredondado moderno */
-    background: linear-gradient(135deg, var(--gs-primaria), #2980b9);
-    border: none;
-    color: #fff;
-    font-size: 1.2rem;
-    cursor: pointer;
-    box-shadow: 0 4px 10px rgba(52, 152, 219, 0.3);
-    transition: transform 0.1s, box-shadow 0.1s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+    font-size: 1.3rem;
 }
 
-.gs-btn-turbo-acao:active {
-    transform: scale(0.95);
-    box-shadow: 0 2px 5px rgba(52, 152, 219, 0.3);
+
+/* Container interno para botões de filtro */
+.gs-filtros-wrapper {
+    display: flex;
+    gap: 10px;
+    flex-wrap: nowrap; /* Força ficar na mesma linha */
+    overflow-x: auto; /* Permite scroll horizontal se tela for minúscula */
 }
 
-.gs-icon-concluido {
-    font-size: 1.5rem;
-    display: flex;
+/* Texto do filtro responsivo */
+.filtro-texto {
+    white-space: nowrap;
+    font-size: 0.9rem;
+}
+
+
+/* ESTRELA DE PRIORIDADE (BADGE DE LUXO) */
+.gs-badge-prioridade {
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    opacity: 0.8;
+    width: 24px;
+    height: 24px;
+    background-color: #fff;
+    color: #f1c40f;
+    border: 1px solid #f1c40f;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+/* ANIMAÇÃO DE PULSAR */
+@keyframes gs-pulsar-suave {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(241, 196, 15, 0.4); }
+    70% { transform: scale(1.1); box-shadow: 0 0 0 6px rgba(241, 196, 15, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(241, 196, 15, 0); }
+}
+
+.gs-badge-prioridade.animado {
+    animation: gs-pulsar-suave 0.6s infinite;
+
+}
+
+/* DESTAQUE DE PRIORIDADE NO TÍTULO */
+.titulo-prioridade {
+    color: #b7950b; /* Dourado escuro para leitura */
+    position: relative;
+    display: inline-block;
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255, 235, 59, 0.2) 50%, rgba(255,255,255,0) 100%);
+    background-size: 200% 100%;
+    animation: gs-brilho-passante 3s infinite linear;
+}
+
+@keyframes gs-brilho-passante {
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+}
+
+@media (max-width: 480px) {
+    .gs-filtros-bar-container {
+        flex-direction: column; /* Input em cima, botões embaixo */
+        align-items: stretch;
+        gap: 10px;
+        padding: 10px;
+    }
+    
+    .gs-filtros-wrapper {
+        width: 100%;
+        justify-content: space-between; /* Espalha os botões */
+    }
+
+    .gs-toggle-filtro {
+        flex: 1; /* Divide o espaço igualmente */
+        justify-content: center;
+        padding: 8px 5px; /* Menos padding lateral */
+    }
+
+    .filtro-texto {
+        font-size: 0.75rem; /* Texto menor no mobile */
+    }
 }
 
 /* ==========================================================================

@@ -38,6 +38,7 @@ const ListaResultadosBusca = ({ resultados, onSelecionar, paginacaoInfo, onPageC
 const FormularioConfirmacao = ({ item, onConfirmar, onCancelar, carregando }) => {
     const [quantidade, setQuantidade] = useState('');
     const [observacoes, setObservacoes] = useState('');
+    const [isPrioridade, setIsPrioridade] = useState(false);
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -45,7 +46,8 @@ const FormularioConfirmacao = ({ item, onConfirmar, onCancelar, carregando }) =>
             onConfirmar({
                 produto_sku: item.sku,
                 quantidade_solicitada: parseInt(quantidade),
-                observacoes: observacoes
+                observacoes: observacoes,
+                prioridade: isPrioridade ? 1 : 2 //ESSENCIAL
             });
         }
     };
@@ -82,6 +84,20 @@ const FormularioConfirmacao = ({ item, onConfirmar, onCancelar, carregando }) =>
                 onChange={(e) => setObservacoes(e.target.value)}
                 placeholder="Ex: Pedido urgente para a Shopee, cliente XPTO."
             ></textarea>
+
+            {/* CHECKBOX DE PRIORIDADE */}
+            <div style={{ marginTop: '20px', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', backgroundColor: '#fff9db', borderRadius: '6px', border: '1px solid #ffe066' }}>
+                <input 
+                    type="checkbox" 
+                    id="chk_prioridade" 
+                    style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                    checked={isPrioridade}
+                    onChange={(e) => setIsPrioridade(e.target.checked)}
+                />
+                <label htmlFor="chk_prioridade" style={{ cursor: 'pointer', color: '#856404', fontWeight: 'bold' }}>
+                    Marcar como PRIORIDADE (Fura-Fila)
+                </label>
+            </div>
             
             <div className="gs-form-acoes" style={{marginTop: '25px', textAlign: 'right'}}>
                 <button type="button" className="gs-btn gs-btn-secundario" onClick={onCancelar}>Cancelar</button>
