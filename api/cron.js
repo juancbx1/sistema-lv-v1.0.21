@@ -21,16 +21,16 @@ router.get('/arquivar-concluidas', async (req, res) => {
     try {
         dbClient = await pool.connect();
         
-        // Ajuste: Arquiva tudo que foi concluído ANTES de hoje (ontem para trás)
-        // E garante que não arquiva o que acabou de ser feito.
+        // Query Blindada com Fuso Horário do Brasil
+        // Tradução: "Arquive onde data_conclusao é MENOR que o Início do Dia de Hoje em São Paulo"
         const result = await dbClient.query(`
             UPDATE demandas_producao 
             SET status = 'arquivada' 
             WHERE status = 'concluida' 
-              AND data_conclusao < CURRENT_DATE
+              AND data_conclusao::date < (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
         `);
         
-        console.log(`[CRON] Demandas arquivadas: ${result.rowCount}`);
+        console.log(`[CRON] Sucesso! Demandas arquivadas: ${result.rowCount}`);
         
         res.status(200).json({ success: true, archived_count: result.rowCount });
 

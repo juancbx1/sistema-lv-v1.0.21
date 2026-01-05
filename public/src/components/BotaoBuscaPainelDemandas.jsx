@@ -6,6 +6,7 @@ import FeedbackNotFound from './FeedbackNotFound.jsx';
 import BotaoBuscaModalAddDemanda from './BotaoBuscaModalAddDemanda.jsx';
 import CardPipelineProducao from './BotaoBuscaPipelineProducao.jsx';
 import OPPaginacaoWrapper from './OPPaginacaoWrapper.jsx';
+import BotaoBuscaModalConcluidas from './BotaoBuscaModalConcluidas.jsx'; // <--- Importe aqui
 
 // Função auxiliar para remover acentos (Normalização)
 const normalizarTexto = (texto) => {
@@ -16,6 +17,7 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [] }) {
     const [demandasAgregadas, setDemandasAgregadas] = useState([]);
     const [carregando, setCarregando] = useState(true);
     const [modalAddAberto, setModalAddAberto] = useState(false);
+    const [modalHistoricoAberto, setModalHistoricoAberto] = useState(false);
     
     // --- NOVOS ESTADOS DE FILTRO ---
     const [termoBusca, setTermoBusca] = useState('');
@@ -113,23 +115,22 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [] }) {
             if (tipoLista === 'pendente') {
                 let deveMostrar = true;
 
-                // 1. Filtro de Texto (Nome/Variante)
+                // 1. Filtro de Texto
                 if (termoLimpo) {
                     const nomeNorm = normalizarTexto(item.produto_nome);
                     const varNorm = normalizarTexto(item.variante);
-                    // Se não achar nem no nome nem na variante, esconde
                     if (!nomeNorm.includes(termoLimpo) && !varNorm.includes(termoLimpo)) {
                         deveMostrar = false;
                     }
                 }
 
                 // 2. Filtro de "Não Iniciado"
-                if (filtroNaoIniciado && !naoIniciado) {
+                // Se o item está concluído, ele tecnicamente não é "não iniciado", então esse filtro oculta ele
+                if (filtroNaoIniciado && (estaConcluido || !naoIniciado)) {
                     deveMostrar = false;
                 }
                 
-                // 3. Filtro de Prioridade (BLINDADO)
-                // Usamos parseInt para garantir que "1" (string) seja igual a 1 (number)
+                // 3. Filtro de Prioridade
                 if (filtroPrioridade) {
                     const prioridadeItem = parseInt(item.prioridade);
                     if (prioridadeItem !== 1) {
@@ -137,20 +138,15 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [] }) {
                     }
                 }
 
-                // Se for concluído e o filtro "Não iniciado" estiver ativo, esconde o concluído
-                // (Pois concluído tecnicamente não é "não iniciado", é "finalizado")
-                if (estaConcluido && filtroNaoIniciado) {
-                    deveMostrar = false;
-                }
-
-                // Se passou em TODOS os testes, adiciona
                 if (deveMostrar) {
-                    p.push({ ...item, _isConcluido: estaConcluido }); 
+                    // --- MUDANÇA AQUI: SEPARAÇÃO REAL ---
+                    if (estaConcluido) {
+                        c.push(item); // Vai para lista de Concluídos
+                    } else {
+                        p.push(item); // Vai para lista de Pendentes (Principal)
+                    }
                 }
-            } else if (tipoLista === 'divergencia') {
-                d.push(item);
             } 
-            // Removemos o 'c.push' pois agora concluídos vão para 'p'
         });
         
         // REORDENAÇÃO FINAL DA LISTA PENDENTE
@@ -202,11 +198,27 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [] }) {
             <div className="gs-painel-demandas-container">
                 <div className="gs-painel-demandas-header">
                     <h2 style={{fontSize: '1.2rem'}}>Painel de Produção & Demandas</h2>
-                    <div>
+                    <div style={{display: 'flex', gap: '8px'}}> {/* Adicionei flex/gap para organizar */}
+                        
+                        {/* BOTÃO HISTÓRICO (NOVO) */}
+                        <button 
+                            className="gs-btn" // Classe base genérica
+                            onClick={() => setModalHistoricoAberto(true)}
+                            title="Ver Concluídos"
+                            // Estilo inline para garantir destaque único
+                            style={{ 
+                                backgroundColor: '#27ae60', // Um roxo bonito e diferente
+                                color: '#fff', 
+                                border: 'none'
+                            }}
+                        >
+                            <i className="fas fa-history"></i>
+                        </button>
+
                         <button className="gs-btn gs-btn-secundario" onClick={fetchDiagnostico} disabled={carregando}>
                             <i className={`fas fa-sync-alt ${carregando ? 'gs-spin' : ''}`}></i>
                         </button>
-                        <button className="gs-btn gs-btn-primario" style={{ marginLeft: '10px' }} onClick={() => setModalAddAberto(true)}>
+                        <button className="gs-btn gs-btn-primario" onClick={() => setModalAddAberto(true)}>
                             <i className="fas fa-plus"></i> Nova
                         </button>
                     </div>
@@ -322,6 +334,13 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [] }) {
                     onDemandaCriada={fetchDiagnostico}
                 />
             )}
+
+            {/* MODAL DE HISTÓRICO AQUI */}
+            <BotaoBuscaModalConcluidas 
+                isOpen={modalHistoricoAberto}
+                onClose={() => setModalHistoricoAberto(false)}
+            />
+
         </>
     );
 }
