@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Select from 'react-select';
 import { formatarDataParaInput, formatarHora } from '/js/utils/formataDtHr.js';
 
 const TIPOS_DISPONIVEIS = [
@@ -11,7 +12,10 @@ const TIPOS_DISPONIVEIS = [
     { id: 'cortador', label: 'Cortador' }
 ];
 
-export default function UserCardEdicao({ usuario, onSalvar, onCancelar, salvando }) {
+export default function UserCardEdicao({ usuario, onSalvar, onCancelar, salvando, concessionarias }) {
+    console.log("Dados do Usuário na Edição:", usuario);
+    console.log("IDs de Concessionária:", usuario.concessionarias_vt);
+    
     // Estado local com os dados do formulário
     const [formData, setFormData] = useState({
         id: usuario.id,
@@ -22,6 +26,7 @@ export default function UserCardEdicao({ usuario, onSalvar, onCancelar, salvando
         data_demissao: formatarDataParaInput(usuario.data_demissao),
         tipos: usuario.tipos || [],
         nivel: usuario.nivel || '',
+        
         
         // Jornada
         horario_entrada_1: formatarHora(usuario.horario_entrada_1) || '07:30',
@@ -35,8 +40,18 @@ export default function UserCardEdicao({ usuario, onSalvar, onCancelar, salvando
         salario_fixo: usuario.salario_fixo || 0,
         valor_passagem_diaria: usuario.valor_passagem_diaria || 0,
         elegivel_pagamento: usuario.elegivel_pagamento || false,
-        id_contato_financeiro: usuario.id_contato_financeiro // Mantém o ID hidden
+        id_contato_financeiro: usuario.id_contato_financeiro, // Mantém o ID hidden
+        desconto_inss_percentual: usuario.desconto_inss_percentual || 9.0,
+        desconto_vt_percentual: usuario.desconto_vt_percentual || 6.0,
+        concessionaria_ids: usuario.concessionarias_vt || [] 
     });
+
+    // Opções React Select
+    const concessOptions = concessionarias ? concessionarias.map(c => ({ value: c.id, label: c.nome })) : [];
+    // Valor Atual para React Select (Com conversão segura)
+    const concessValue = concessOptions.filter(opt => 
+        formData.concessionaria_ids.some(idSalvo => parseInt(idSalvo) === parseInt(opt.value))
+    );
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -162,6 +177,29 @@ export default function UserCardEdicao({ usuario, onSalvar, onCancelar, salvando
                         <input type="number" name="valor_passagem_diaria" className="gs-input" step="0.01" value={formData.valor_passagem_diaria} onChange={handleChange} />
                     </div>
                 </div>
+
+                {/* NOVOS CAMPOS */}
+                <div style={{ marginBottom: '10px' }}>
+                    <label>Concessionárias VT</label>
+                    <Select
+                        isMulti
+                        options={concessOptions}
+                        value={concessValue}
+                        onChange={(opts) => setFormData(prev => ({ ...prev, concessionaria_ids: opts.map(o => o.value) }))}
+                    />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div>
+                        <label>% Desc. INSS</label>
+                        <input type="number" name="desconto_inss_percentual" className="gs-input" step="0.1" value={formData.desconto_inss_percentual} onChange={handleChange} />
+                    </div>
+                    <div>
+                        <label>% Desc. VT</label>
+                        <input type="number" name="desconto_vt_percentual" className="gs-input" step="0.1" value={formData.desconto_vt_percentual} onChange={handleChange} />
+                    </div>
+                </div>    
+
                 <div style={{ marginTop: '10px' }}>
                     <label>
                         <input type="checkbox" name="elegivel_pagamento" checked={formData.elegivel_pagamento} onChange={handleChange} />

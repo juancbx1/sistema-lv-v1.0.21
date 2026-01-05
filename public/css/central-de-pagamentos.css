@@ -22,7 +22,6 @@ body {
     font-family: var(--cpg-font-principal);
     background-color: var(--cpg-cor-fundo-pagina);
     color: var(--cpg-cor-texto-principal);
-    margin-left: 250px;
     transition: margin-left 0.3s ease;
 }
 
@@ -38,11 +37,6 @@ body {
 /* ==========================================================================
    2. LAYOUT PRINCIPAL E CONTAINER
    ========================================================================== */
-.cpg-main-container {
-    padding: 10px;
-    max-width: 1600px;
-    margin: 10px;
-}
 
 .cpg-content-wrapper {
     background-color: var(--cpg-cor-fundo-card);
@@ -308,8 +302,19 @@ body {
 
 /* modais */
 
-.cpg-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); z-index: 1000; display: flex; justify-content: center; align-items: center; padding: 20px; }
-.cpg-modal-content { background-color: #fff; padding: 25px; border-radius: 8px; width: 100%; max-width: 800px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); max-height: 90vh; display: flex; flex-direction: column; }
+.cpg-modal-overlay { 
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%; 
+    background-color: rgba(0,0,0,0.6); 
+    z-index: 99999; /* Z-Index atômico para garantir que fique acima de tudo */
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    padding: 20px; 
+}.cpg-modal-content { background-color: #fff; padding: 25px; border-radius: 8px; width: 100%; max-width: 800px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); max-height: 90vh; display: flex; flex-direction: column; }
 .cpg-modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--cpg-cor-borda); padding-bottom: 15px; margin-bottom: 20px; }
 .cpg-modal-header h2 { margin: 0; font-size: 1.2rem; }
 .cpg-modal-close-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #aaa; }
@@ -488,13 +493,171 @@ body {
 }
 
 /* ==========================================================================
-   7. RESPONSIVIDADE (MOBILE FIRST APPROACH)
+   # LAYOUT DO CABEÇALHO E CONTROLES (Estilo "HeaderPagina + Tabs")
    ========================================================================== */
 
-/* --------------------------------------------------------------------------
-   Breakpoint para Tablets (Paisagem) e Desktops Menores
-   - O layout da aba Passagem vira uma coluna única.
-   -------------------------------------------------------------------------- */
+/* Container Flex que segura o Título (esq) e as Abas (dir) */
+.cpg-pagina-cabecalho-container {
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--cpg-cor-borda);
+    gap: 20px;
+}
+
+/* Ajuste fino para o HeaderPagina dentro deste layout */
+.cpg-pagina-cabecalho-container .cpg-header {
+    border-bottom: none; /* O container pai já tem a borda */
+    padding: 0;
+    margin: 0;
+    flex-grow: 1; /* Ocupa o espaço disponível à esquerda */
+}
+
+/* Container dos botões de aba (Switcher) */
+.cpg-view-switcher {
+    display: flex;
+    gap: 10px;
+    background-color: #f8f9fa;
+    padding: 5px;
+    border-radius: 8px;
+    border: 1px solid var(--cpg-cor-borda);
+}
+
+/* Estilo dos botões de aba dentro do switcher */
+.cpg-btn-switch {
+    background: none;
+    border: none;
+    padding: 8px 16px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--cpg-cor-texto-secundario);
+    cursor: pointer;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+}
+
+.cpg-btn-switch:hover {
+    background-color: #e9ecef;
+    color: var(--cpg-cor-primaria);
+}
+
+.cpg-btn-switch.active {
+    background-color: #fff;
+    color: var(--cpg-cor-primaria);
+    font-weight: 600;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+/* ==========================================================================
+   2. LAYOUT PRINCIPAL E CONTAINER (Atualizado)
+   ========================================================================== */
+.cpg-main-container {
+    padding: 30px;
+    max-width: 1600px;
+    transition: margin-left 0.3s ease; /* Suavidade caso o menu recolha no futuro */
+}
+
+/* ==========================================================================
+   8. ESTILOS DO MONEY PAD (PAINEL DE BÔNUS)
+   ========================================================================== */
+.cpg-bonus-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+.cpg-money-card {
+    background: #fff;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    padding: 25px;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+}
+
+.cpg-money-display {
+    margin: 20px 0;
+    position: relative;
+}
+
+.cpg-money-input-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.cpg-money-input {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--cpg-cor-receita); /* Verde */
+    border: none;
+    border-bottom: 2px solid #e9ecef;
+    width: 200px;
+    text-align: center;
+    background: transparent;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.cpg-money-input:focus {
+    border-bottom-color: var(--cpg-cor-receita);
+}
+
+.cpg-money-shortcuts {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr); /* 3 botões por linha */
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.cpg-btn-shortcut {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    color: #495057;
+    padding: 10px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.cpg-btn-shortcut:hover {
+    background-color: #e2e6ea;
+    transform: translateY(-2px);
+}
+
+.cpg-btn-shortcut.plus { color: var(--cpg-cor-receita); }
+.cpg-btn-shortcut.minus { color: var(--cpg-cor-despesa); }
+
+.cpg-btn-icon-small {
+    background: transparent;
+    border: none;
+    color: var(--cpg-cor-texto-secundario);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 5px;
+    border-radius: 50%;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+}
+
+.cpg-btn-icon-small:hover {
+    background-color: #e9ecef;
+    color: var(--cpg-cor-primaria);
+}
+
+
 @media (max-width: 1024px) {
     .cpg-passagem-layout {
         /* O grid de 2 colunas (calendário | ações) se torna um grid de 1 coluna. */
@@ -509,12 +672,14 @@ body {
    - Ajusta o cabeçalho e as abas.
    -------------------------------------------------------------------------- */
 @media (max-width: 768px) {
-    body {
-        /* Remove a margem fixa do menu lateral.
-           Isso assume que seu JS de menu-lateral.js vai controlar a visibilidade do menu. */
-        margin-left: 0;
+    .cpg-main-container {
+        margin-left: 0; /* Remove a margem pois o menu vira overlay */
+        padding: 15px;  /* Reduz padding para telas menores */
     }
 
+    .cpg-bonus-container {
+        grid-template-columns: 1fr; /* Uma coluna no mobile */
+    }
 
     .cpg-tabs-container {
         /* Permite que as abas rolem horizontalmente em vez de quebrar a linha. */
@@ -545,6 +710,20 @@ body {
     .cpg-dashboard-grid { 
         grid-template-columns: 1fr; 
     }
+    .cpg-pagina-cabecalho-container {
+        flex-direction: column; /* Empilha em telas menores */
+        align-items: stretch;
+        gap: 15px;
+    }
+    
+    .cpg-view-switcher {
+        overflow-x: auto; /* Permite rolagem horizontal das abas */
+        justify-content: flex-start;
+    }
+    
+    .cpg-btn-switch {
+        white-space: nowrap; /* Não quebra o texto do botão */
+    }
 }
 
 
@@ -553,11 +732,6 @@ body {
    - Ajusta fontes, espaçamentos e modais para telas pequenas.
    -------------------------------------------------------------------------- */
 @media (max-width: 480px) {
-    .cpg-main-container {
-        /* Reduz o padding geral em telas pequenas. */
-        padding: 5px;
-    }
-
     .cpg-card,
     .cpg-tabs-content {
         /* Reduz o padding interno dos cards e do conteúdo das abas. */

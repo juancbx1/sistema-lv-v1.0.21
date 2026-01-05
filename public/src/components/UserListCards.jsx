@@ -1,7 +1,7 @@
 import React from 'react';
 import UserCard from './UserCard';
 
-export default function UserListCards({ usuarios, permissoesLogado, aoAtualizarLista, aoAbrirFerias, aoAbrirVinculo }) {
+export default function UserListCards({ usuarios, permissoesLogado, aoAtualizarLista, aoAbrirFerias, aoAbrirVinculo, concessionarias }) {
     if (!usuarios || usuarios.length === 0) {
         return <p className="uc-sem-resultados">Nenhum usuário encontrado com os filtros aplicados.</p>;
     }
@@ -16,6 +16,7 @@ export default function UserListCards({ usuarios, permissoesLogado, aoAtualizarL
                     aoAtualizarLista={aoAtualizarLista}
                     aoAbrirFerias={aoAbrirFerias}
                     aoAbrirVinculo={aoAbrirVinculo}
+                    concessionarias={concessionarias}
                 />
             ))}
         </div>

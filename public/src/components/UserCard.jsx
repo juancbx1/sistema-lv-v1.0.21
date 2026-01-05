@@ -5,7 +5,7 @@ import { fetchAPI } from '/js/utils/api-utils.js';
 import { mostrarMensagem, mostrarConfirmacao } from '/js/utils/popups.js';
 
 
-export default function UserCard({ usuario, permissoesLogado, aoAtualizarLista, aoAbrirFerias, aoAbrirVinculo }) {
+export default function UserCard({ usuario, permissoesLogado, aoAtualizarLista, aoAbrirFerias, aoAbrirVinculo, concessionarias  }) {
     const [modoEdicao, setModoEdicao] = useState(false);
     const [salvando, setSalvando] = useState(false);
 
@@ -52,6 +52,7 @@ export default function UserCard({ usuario, permissoesLogado, aoAtualizarLista, 
                 onSalvar={handleSalvar} 
                 onCancelar={() => setModoEdicao(false)} 
                 salvando={salvando}
+                concessionarias={concessionarias}
             />
         );
     }

@@ -299,7 +299,9 @@ router.get('/', async (req, res) => {
             SELECT 
                 u.id, u.nome, u.nome_completo,
                 u.nome_usuario, u.email, u.tipos, u.nivel, u.permissoes,
-                u.salario_fixo, u.valor_passagem_diaria, u.elegivel_pagamento, 
+                u.salario_fixo, u.valor_passagem_diaria, u.elegivel_pagamento,
+                u.desconto_inss_percentual, 
+                u.desconto_vt_percentual,
                 u.id_contato_financeiro, u.data_admissao,
                 u.data_demissao,
                 u.horario_entrada_1, u.horario_saida_1,
@@ -346,12 +348,17 @@ router.post('/', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada para criar usuários' });
         }
         
-        const { nome, nomeUsuario, email, senha, tipos, nivel, salario_fixo, valor_passagem_diaria } = req.body;
+        const { 
+            nome, nomeUsuario, email, senha, tipos, nivel, 
+            salario_fixo, valor_passagem_diaria, 
+            desconto_inss_percentual, desconto_vt_percentual, // Novos campos
+            concessionaria_ids // Array de IDs de concessionárias
+        } = req.body;
+
         if (!nome || !nomeUsuario || !email || !senha || !tipos) {
-            return res.status(400).json({ error: "Campos nome, nomeUsuario, email, senha e tipos são obrigatórios." });
+            return res.status(400).json({ error: "Campos obrigatórios ausentes." });
         }
         
-        // Inicia a transação
         await dbCliente.query('BEGIN');
 
         // 1. Cria o usuário principal
@@ -359,31 +366,36 @@ router.post('/', async (req, res) => {
         const userResult = await dbCliente.query(
             `INSERT INTO usuarios (
                 nome, nome_usuario, email, senha, 
-                tipos, nivel, salario_fixo, valor_passagem_diaria, permissoes
-             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+                tipos, nivel, salario_fixo, valor_passagem_diaria, permissoes,
+                desconto_inss_percentual, desconto_vt_percentual
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
             [
                 nome, nomeUsuario, email, senhaHash, 
-                tipos, nivel, salario_fixo, valor_passagem_diaria, []
+                tipos, nivel, salario_fixo || 0, valor_passagem_diaria || 0, [],
+                desconto_inss_percentual || 9.00, desconto_vt_percentual || 6.00
             ] 
         );
         const novoUsuarioId = userResult.rows[0].id;
 
-        // 2. Lida com o contato financeiro, se for um empregado
-        const ehEmpregado = tipos.includes('costureira') || tipos.includes('tiktik');
+        // 2. Vínculo com Concessionárias de VT
+        if (concessionaria_ids && Array.isArray(concessionaria_ids) && concessionaria_ids.length > 0) {
+            const valuesClauses = concessionaria_ids.map((_, i) => `($1, $${i + 2})`).join(', ');
+            const insertVinculosQuery = `INSERT INTO usuario_concessionaria_vt (usuario_id, concessionaria_id) VALUES ${valuesClauses}`;
+            await dbCliente.query(insertVinculosQuery, [novoUsuarioId, ...concessionaria_ids]);
+        }
+
+        // 3. Cria Contato Financeiro (Lógica existente mantida)
+        const ehEmpregado = tipos.includes('costureira') || tipos.includes('tiktik') || tipos.includes('cortador') || tipos.includes('supervisor');
         if (ehEmpregado) {
             let contatoId;
-
-            // 2a. Tenta encontrar um contato existente com o mesmo nome e tipo
             const existingContactRes = await dbCliente.query(
                 "SELECT id FROM fc_contatos WHERE nome = $1 AND tipo = 'EMPREGADO' LIMIT 1",
                 [nome]
             );
 
             if (existingContactRes.rows.length > 0) {
-                // Se encontrou, usa o ID existente
                 contatoId = existingContactRes.rows[0].id;
             } else {
-                // Se não encontrou, cria um novo contato
                 const newContactRes = await dbCliente.query(
                     "INSERT INTO fc_contatos (nome, tipo, ativo) VALUES ($1, 'EMPREGADO', TRUE) RETURNING id",
                     [nome]
@@ -391,7 +403,6 @@ router.post('/', async (req, res) => {
                 contatoId = newContactRes.rows[0].id;
             }
 
-            // 2b. Vincula o ID do contato (existente ou novo) ao usuário
             await dbCliente.query(
                 "UPDATE usuarios SET id_contato_financeiro = $1 WHERE id = $2",
                 [contatoId, novoUsuarioId]
@@ -462,9 +473,15 @@ router.put('/', async (req, res) => {
         if (email !== undefined) { fieldsToUpdate.push(`email = $${paramIndex++}`); values.push(email); }
         if (tipos !== undefined) { fieldsToUpdate.push(`tipos = $${paramIndex++}`); values.push(tipos); }
         if (nivel !== undefined) { fieldsToUpdate.push(`nivel = $${paramIndex++}`); values.push(nivel); }
+        
         if (salario_fixo !== undefined) { fieldsToUpdate.push(`salario_fixo = $${paramIndex++}`); values.push(salario_fixo); }
         if (valor_passagem_diaria !== undefined) { fieldsToUpdate.push(`valor_passagem_diaria = $${paramIndex++}`); values.push(valor_passagem_diaria); }
+        
+        if (req.body.desconto_inss_percentual !== undefined) { fieldsToUpdate.push(`desconto_inss_percentual = $${paramIndex++}`); values.push(req.body.desconto_inss_percentual); }
+        if (req.body.desconto_vt_percentual !== undefined) { fieldsToUpdate.push(`desconto_vt_percentual = $${paramIndex++}`); values.push(req.body.desconto_vt_percentual); }
+        
         if (elegivel_pagamento !== undefined) { fieldsToUpdate.push(`elegivel_pagamento = $${paramIndex++}`); values.push(elegivel_pagamento); }
+        
         if (id_contato_financeiro !== undefined) { fieldsToUpdate.push(`id_contato_financeiro = $${paramIndex++}`); values.push(id_contato_financeiro); }
         if (permissoesIndividuais !== undefined) {
             const permissoesValidas = permissoesIndividuais.filter(p => backendPermissoesValidas.has(p));

@@ -5,6 +5,7 @@ import UserFiltros from './components/UserFiltros';
 import UserListCards from './components/UserListCards';
 import UserFeriasModal from './components/UserFeriasModal';
 import UserFinanceiroModal from './components/UserFinanceiroModal';
+import UserCreateModal from './components/UserCreateModal';
 
 export default function MainUsuarios() {
     const [usuarios, setUsuarios] = useState([]);
@@ -12,6 +13,7 @@ export default function MainUsuarios() {
     const [loading, setLoading] = useState(true);
     const [filtroTipo, setFiltroTipo] = useState('');
     const [permissoes, setPermissoes] = useState([]);
+    const [concessionarias, setConcessionarias] = useState([]);
     
     // Paginação
     const [paginaAtual, setPaginaAtual] = useState(1);
@@ -20,6 +22,8 @@ export default function MainUsuarios() {
     // Estados dos Modais
     const [modalFeriasUser, setModalFeriasUser] = useState(null); // Se não null, modal aberto
     const [modalVinculoUser, setModalVinculoUser] = useState(null); // Se não null, modal aberto
+    const [modalCriarUser, setModalCriarUser] = useState(false);
+
 
     useEffect(() => {
         // Autenticação e Carregamento Inicial
@@ -36,11 +40,13 @@ export default function MainUsuarios() {
     const carregarUsuarios = async () => {
         setLoading(true);
         try {
-            // Busca usuários e concessionárias (mantendo compatibilidade com backend)
-            // Obs: A rota GET /api/usuarios já traz o avatar e contatos
-            const dadosUsuarios = await fetchAPI('/api/usuarios');
+            // Busca usuários e concessionárias em paralelo
+            const [dadosUsuarios, dadosConcess] = await Promise.all([
+                fetchAPI('/api/usuarios'),
+                fetchAPI('/api/financeiro/concessionarias-vt')
+            ]);
             
-            // Ordena por nome
+            setConcessionarias(dadosConcess); // Salva para passar aos modais
             const ordenados = dadosUsuarios.sort((a, b) => a.nome.localeCompare(b.nome));
             setUsuarios(ordenados);
         } catch (error) {
@@ -78,7 +84,14 @@ export default function MainUsuarios() {
     return (
         <div className="container uc-container">
             <section className="usuarios-cadastrados">
-                <h1>Gerenciar Usuários</h1>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                    <h1>Gerenciar Usuários</h1>
+                    {permissoes.includes('acesso-cadastrar-usuarios') && (
+                        <button className="gs-btn gs-btn-primario" onClick={() => setModalCriarUser(true)}>
+                            <i className="fas fa-plus"></i> Novo Usuário
+                        </button>
+                    )}
+                </div>
                 
                 <UserFiltros 
                     filtroAtual={filtroTipo} 
@@ -97,6 +110,7 @@ export default function MainUsuarios() {
                             aoAtualizarLista={carregarUsuarios}
                             aoAbrirFerias={setModalFeriasUser}
                             aoAbrirVinculo={setModalVinculoUser}
+                            concessionarias={concessionarias} 
                         />
 
                         {/* Controles de Paginação */}
@@ -139,6 +153,14 @@ export default function MainUsuarios() {
                     usuario={modalVinculoUser} 
                     onClose={handleFecharVinculo} 
                     aoSalvar={handleSalvarModal} 
+                />
+            )}
+
+            {modalCriarUser && (
+                <UserCreateModal 
+                    onClose={() => setModalCriarUser(false)} 
+                    aoSalvar={() => { setModalCriarUser(false); carregarUsuarios(); }}
+                    concessionarias={concessionarias}
                 />
             )}
         </div>

@@ -15,42 +15,16 @@ const SECRET_KEY = process.env.JWT_SECRET;
 
 // Objeto para mapear nomes lógicos para IDs de categoria
 const CATEGORIA_MAP = {
-    COMISSAO: null,        // Singular
-    SALARIO: null,
-    VALE_TRANSPORTE: null,
-    BONUS_PREMIACOES: null, // Nome mais descritivo
-    BENEFICIOS_DIVERSOS: null
+    SALARIO: 13,
+    BONUS_PREMIACOES: 15,
+    VALE_TRANSPORTE: 37,
+    COMISSAO: 52,
+    BENEFICIOS_DIVERSOS: 89
 };
 
-// Função que inicializa o mapeamento ao iniciar o servidor
+// Função de inicialização simplificada (Apenas loga sucesso, já que os IDs são hardcoded)
 async function inicializarMapeamentoCategorias() {
-    let dbClient;
-    try {
-        dbClient = await pool.connect();
-        const categoriasNomes = [
-            'Comissão',
-            'Salário',
-            'Vale Transporte',
-            'Bônus e Premiações',
-            'Benefícios Diversos'
-        ];
-        
-        const query = "SELECT id, nome FROM fc_categorias WHERE nome = ANY($1::text[])";
-        const result = await dbClient.query(query, [categoriasNomes]);
-
-        result.rows.forEach(cat => {
-            if (cat.nome === 'Comissão') CATEGORIA_MAP.COMISSAO = cat.id;
-            if (cat.nome === 'Salário') CATEGORIA_MAP.SALARIO = cat.id;
-            if (cat.nome === 'Vale Transporte') CATEGORIA_MAP.VALE_TRANSPORTE = cat.id;
-            if (cat.nome === 'Bônus e Premiações') CATEGORIA_MAP.BONUS_PREMIACOES = cat.id;
-            if (cat.nome === 'Benefícios Diversos') CATEGORIA_MAP.BENEFICIOS_DIVERSOS = cat.id;
-        });
-        
-    } catch (error) {
-        console.error('[API Pagamentos] ERRO CRÍTICO ao mapear categorias. Pagamentos podem falhar.', error);
-    } finally {
-        if (dbClient) dbClient.release();
-    }
+    console.log('[API Pagamentos] Mapeamento de categorias inicializado com IDs fixos.');
 }
 
 // Chama a função de inicialização uma vez quando o servidor sobe
@@ -376,7 +350,9 @@ router.post('/efetuar', async (req, res) => {
     const permissoesNecessarias = {
         COMISSAO: 'permitir-pagar-comissao',
         BONUS: 'permitir-conceder-bonus',
-        VALE_TRANSPORTE: 'permitir-pagar-passagens'
+        VALE_TRANSPORTE: 'permitir-pagar-passagens',
+        SALARIO: 'permitir-pagar-salarios',
+        BENEFICIOS: 'permitir-pagar-beneficios'
     };
     const permissaoRequerida = permissoesNecessarias[tipoPagamento];
 
@@ -438,6 +414,24 @@ router.post('/efetuar', async (req, res) => {
         } else if (tipoPagamento === 'BONUS') {
             const { proventos } = calculo;
             await fazerLancamento(CATEGORIA_MAP.BONUS_PREMIACOES, proventos.beneficios, `Bônus/Premiação: ${nomeCicloOuMotivo}`, id_contato_financeiro);
+        
+        } else if (tipoPagamento === 'SALARIO') {
+            // Lançamento Financeiro Simples
+            // O valor total já vem calculado do frontend em totais.totalLiquidoAPagar
+            await fazerLancamento(
+                CATEGORIA_MAP.SALARIO, // Usa o ID 13 fixo
+                totais.totalLiquidoAPagar, 
+                `Pagamento de Salário (${nomeCicloOuMotivo}) para ${nome_funcionario}`, 
+                id_contato_financeiro
+            );
+
+        } else if (tipoPagamento === 'BENEFICIOS') {
+            await fazerLancamento(
+                CATEGORIA_MAP.BENEFICIOS_DIVERSOS, 
+                totais.totalLiquidoAPagar, 
+                `Pagamento de (${nomeCicloOuMotivo})`, 
+                id_contato_financeiro
+            );    
         
         } else if (tipoPagamento === 'VALE_TRANSPORTE') {
             if (!datas_pagas || !Array.isArray(datas_pagas) || datas_pagas.length === 0) {
@@ -958,6 +952,245 @@ router.get('/recibos/verificar', async (req, res) => {
     } catch (error) {
         console.error('[API Recibos Verificar] Erro:', error);
         res.status(500).json({ error: 'Erro ao verificar.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// --- ROTA DE PAGAMENTO EM LOTE DE VT (NOVA) ---
+router.post('/lote-vt', async (req, res) => {
+    // 1. Permissão
+    if (!req.permissoesUsuario.includes('permitir-pagar-passagens')) {
+        return res.status(403).json({ error: 'Permissão negada para pagar passagens.' });
+    }
+
+    const { 
+        id_conta_debito, 
+        id_concessionaria,
+        id_contato_concessionaria,
+        nome_concessionaria,
+        data_referencia_inicio,
+        data_referencia_fim,
+        valor_total_vt, // Soma dos VTs dos empregados
+        valor_total_taxa, // Valor da taxa (separado)
+        itens // Array de { usuario_id, dias_pagos (int), valor_total (float), datas_lista (array de strings) }
+    } = req.body;
+
+    // 2. Validações Básicas
+    if (!id_conta_debito || !id_concessionaria || !itens || itens.length === 0) {
+        return res.status(400).json({ error: 'Dados incompletos para o lote.' });
+    }
+
+    // ID da Categoria "Taxas de VT" (Conforme você criou no banco)
+    const ID_CATEGORIA_TAXA_VT = 88; 
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        await dbClient.query('BEGIN');
+
+        const idUsuarioPagador = req.usuarioLogado.id;
+        const dataHoje = new Date();
+
+        // --- PASSO A: Lançamento Financeiro do MONTANTE DE VT (DETALHADO) ---
+        // Cria o registro PAI (tipo_rateio = 'DETALHADO')
+        if (valor_total_vt > 0) {
+            const resPai = await dbClient.query(
+                `INSERT INTO fc_lancamentos 
+                 (id_conta_bancaria, id_categoria, tipo, tipo_rateio, valor, data_transacao, descricao, id_usuario_lancamento) 
+                 VALUES ($1, $2, 'DESPESA', 'DETALHADO', $3, NOW(), $4, $5)
+                 RETURNING id`,
+                [
+                    id_conta_debito, 
+                    CATEGORIA_MAP.VALE_TRANSPORTE, 
+                    valor_total_vt, 
+                    `Recarga VT (${nome_concessionaria}) - ${itens.length} funcionários`, 
+                    idUsuarioPagador
+                ]
+            );
+            
+            const idPai = resPai.rows[0].id;
+
+            // Cria os registros FILHOS (Itens do Rateio) para cada funcionário
+            for (const item of itens) {
+                // Se o funcionário não tiver contato financeiro, salvamos null (mas idealmente todos devem ter)
+                // A descrição do item ajuda na auditoria visual rápida
+                const descItem = `VT: ${item.nome_funcionario} (${item.dias_qtd} dias)`;
+                
+                await dbClient.query(
+                    `INSERT INTO fc_lancamento_itens 
+                     (id_lancamento_pai, id_categoria, id_contato_item, descricao_item, valor_total_item) 
+                     VALUES ($1, $2, $3, $4, $5)`,
+                    [
+                        idPai,
+                        CATEGORIA_MAP.VALE_TRANSPORTE, // O item herda a categoria de VT
+                        item.id_contato_financeiro || null, // Vínculo com o empregado no financeiro
+                        descItem,
+                        item.valor_total
+                    ]
+                );
+            }
+        }
+
+        // --- PASSO B: Lançamento Financeiro da TAXA (SEPARADO) ---
+        if (valor_total_taxa > 0) {
+            await dbClient.query(
+                `INSERT INTO fc_lancamentos (id_conta_bancaria, id_categoria, tipo, valor, data_transacao, descricao, id_usuario_lancamento, id_contato) 
+                 VALUES ($1, $2, 'DESPESA', $3, NOW(), $4, $5, $6)`,
+                [
+                    id_conta_debito, 
+                    ID_CATEGORIA_TAXA_VT, 
+                    valor_total_taxa, 
+                    `Taxa Adm. VT (${nome_concessionaria})`, 
+                    idUsuarioPagador,
+                    id_contato_concessionaria || null // <--- USA O ID RECEBIDO
+                ]
+            );
+        }
+
+        // --- PASSO C: Registrar Histórico Individual e Bloquear Dias ---
+        for (const item of itens) {
+            const { usuario_id, dias_qtd, valor_total, datas_lista, nome_funcionario } = item;
+
+            // 1. Salva no histórico do funcionário (Para ele ver no holerite/recibo)
+            // Criamos um objeto "detalhes" simulado para manter compatibilidade com o sistema antigo
+            const detalhesSimulados = {
+                tipoPagamento: 'VALE_TRANSPORTE',
+                detalhes: { ciclo: { nome: `${nome_concessionaria} (${dias_qtd} dias)` } },
+                datas_pagas: datas_lista
+            };
+
+            await dbClient.query(
+                `INSERT INTO historico_pagamentos_funcionarios 
+                (usuario_id, descricao, valor_liquido_pago, id_usuario_pagador, detalhes_pagamento, id_conta_debito, data_pagamento) 
+                VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+                [
+                    usuario_id, 
+                    `Recarga VT (${nome_concessionaria})`, 
+                    valor_total, 
+                    idUsuarioPagador, 
+                    JSON.stringify(detalhesSimulados), 
+                    id_conta_debito
+                ]
+            );
+
+            // 2. Marca os dias como PAGOS na tabela de controle (evita pagamento duplicado)
+            if (datas_lista && datas_lista.length > 0) {
+                for (const dataStr of datas_lista) {
+                    // Verifica se já existe registro (idempotência simples)
+                    const check = await dbClient.query("SELECT id FROM registro_dias_trabalhados WHERE usuario_id = $1 AND data = $2", [usuario_id, dataStr]);
+                    if (check.rowCount === 0) {
+                        await dbClient.query(
+                            `INSERT INTO registro_dias_trabalhados (usuario_id, data, status, valor_referencia, observacao) 
+                             VALUES ($1, $2, 'PAGO', $3, $4)`,
+                            [usuario_id, dataStr, (valor_total / dias_qtd) || 0, `Lote VT ${nome_concessionaria}`]
+                        );
+                    }
+                }
+            }
+        }
+
+        await dbClient.query('COMMIT');
+        res.status(201).json({ message: 'Lote de VT processado com sucesso!', total_funcionarios: itens.length });
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error('[API /lote-vt] Erro:', error);
+        res.status(500).json({ error: 'Erro ao processar lote.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// GET /api/pagamentos/lotes-vt-agrupados
+// Busca histórico agrupado por data e descrição para simular "Lotes"
+router.get('/lotes-vt-agrupados', async (req, res) => {
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        // Agrupa por timestamp exato e descrição. 
+        // Se created_at for igual, é do mesmo lote.
+        const query = `
+            SELECT 
+                data_pagamento,
+                descricao,
+                COUNT(*) as qtd_funcionarios,
+                SUM(valor_liquido_pago) as valor_total,
+                -- Se pelo menos um registro do lote foi impresso, consideramos impresso
+                BOOL_OR(recibo_impresso_em IS NOT NULL) as ja_impresso,
+                json_agg(json_build_object(
+                    'id', id,
+                    'usuario_id', usuario_id,
+                    'nome_funcionario', (SELECT nome FROM usuarios WHERE id = historico_pagamentos_funcionarios.usuario_id),
+                    'valor', valor_liquido_pago,
+                    'detalhes', detalhes_pagamento
+                )) as itens
+            FROM historico_pagamentos_funcionarios
+            WHERE detalhes_pagamento::text LIKE '%VALE_TRANSPORTE%'
+            GROUP BY data_pagamento, descricao
+            ORDER BY data_pagamento DESC
+            LIMIT 50;
+        `;
+        const result = await dbClient.query(query);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        console.error('[API GET /lotes-vt-agrupados] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar lotes.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// POST /api/pagamentos/marcar-lote-impresso
+router.post('/marcar-lote-impresso', async (req, res) => {
+    const { ids } = req.body; // Agora esperamos um array de IDs: [10, 11, 12]
+    
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: 'Lista de IDs inválida.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        // Atualiza baseado nos IDs exatos. Infalível.
+        await dbClient.query(
+            `UPDATE historico_pagamentos_funcionarios 
+             SET recibo_impresso_em = NOW() 
+             WHERE id = ANY($1::int[])`,
+            [ids]
+        );
+        res.status(200).json({ message: 'Lote marcado como impresso.' });
+    } catch (error) {
+        console.error('[API /marcar-lote-impresso] Erro:', error);
+        res.status(500).json({ error: 'Erro ao marcar lote.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// GET /api/pagamentos/recibos/historico-periodos
+// Retorna lista de dias já cobertos por recibos para um usuário
+router.get('/recibos/historico-periodos', async (req, res) => {
+    const { usuario_id, ano } = req.query; // Filtro por ano para não pesar
+    if (!usuario_id) return res.status(400).json({ error: 'Usuario ID obrigatório' });
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        // Busca data_inicio e data_fim de todos os recibos do usuário
+        const query = `
+            SELECT data_inicio, data_fim 
+            FROM recibos_conferencia 
+            WHERE usuario_id = $1 
+            AND EXTRACT(YEAR FROM data_inicio) = $2
+        `;
+        const result = await dbClient.query(query, [usuario_id, ano || new Date().getFullYear()]);
+        
+        // Vamos expandir os intervalos no backend ou frontend? 
+        // Frontend é mais leve pro banco. Retornamos os intervalos.
+        res.status(200).json(result.rows);
+    } catch (error) {
+        res.status(500).json({ error: 'Erro ao buscar histórico.' });
     } finally {
         if (dbClient) dbClient.release();
     }

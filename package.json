@@ -9,6 +9,9 @@
     "vercel-build": "vite build"
   },
   "dependencies": {
+    "@fullcalendar/daygrid": "^6.1.20",
+    "@fullcalendar/interaction": "^6.1.20",
+    "@fullcalendar/react": "^6.1.20",
     "@neondatabase/serverless": "^1.0.0",
     "@vercel/blob": "^1.1.1",
     "@vercel/node": "^2.3.0",
@@ -19,10 +22,13 @@
     "etag": "^1.8.1",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
+    "jspdf": "^3.0.4",
+    "jspdf-autotable": "^5.0.2",
     "multer": "^2.0.2",
     "pg": "^8.14.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-select": "^5.10.2",
     "react-tooltip": "^5.29.1",
     "recharts": "^3.1.2"
   },
