@@ -3,7 +3,7 @@ import { formatarMoeda } from '/js/utils/formataDtHr.js';
 import { mostrarToast } from '/js/utils/popups.js';
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
-import Paginacao from './Paginacao';
+import UIPaginacao from './UIPaginacao';
 
 export default function CPAGGerenciadorRecibosVT({ isOpen, onClose }) {
     const [lotes, setLotes] = useState([]);
@@ -228,7 +228,7 @@ export default function CPAGGerenciadorRecibosVT({ isOpen, onClose }) {
                         )
                     )}
                     {/*  COMPONENTE DE PAGINAÇÃO */}
-                            <Paginacao 
+                            <UIPaginacao 
                                 paginaAtual={paginaAtual} 
                                 totalPaginas={totalPaginas} 
                                 onPageChange={setPaginaAtual} 

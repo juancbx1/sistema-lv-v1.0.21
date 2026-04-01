@@ -7,8 +7,8 @@ import EmbalagemPainelFiltros from './components/EmbalagemPainelFiltros.jsx';
 import { obterProdutos } from '/js/utils/storage.js';
 import { normalizeText } from '/src/utils/EmbalagemSearchHelpers.js';
 import { renderizarPaginacao } from '/js/utils/Paginacao.js';
-import HeaderPagina from './components/HeaderPagina.jsx'; 
-import FeedbackNotFound from './components/FeedbackNotFound.jsx';
+import UIHeaderPagina from './components/UIHeaderPagina.jsx'; 
+import UIFeedbackNotFound from './components/UIFeedbackNotFound.jsx';
 import RadarDeAlertas from './components/RadarDeAlertas.jsx';
 import BotaoBuscaFunil from './components/BotaoBuscaFunil.jsx';
 import { mostrarMensagem } from '/js/utils/popups.js';
@@ -317,7 +317,7 @@ function PainelEmbalagem() {
                                 />
                             ))
                         ) : (
-                            <FeedbackNotFound
+                            <UIFeedbackNotFound
                                 icon="fa-search"
                                 titulo="Nenhum Resultado Encontrado"
                                 mensagem="Tente ajustar os termos da sua busca ou limpar os filtros para ver mais produtos."
@@ -348,12 +348,12 @@ const headerRootElement = document.getElementById('header-root');
 if (headerRootElement) {
     const headerRoot = ReactDOM.createRoot(headerRootElement);
     headerRoot.render(
-        <HeaderPagina titulo="Embalagem">
+        <UIHeaderPagina titulo="Embalagem">
             <button id="btnAbrirHistoricoGeral" className="gs-btn gs-btn-secundario gs-btn-com-icone">
                 <i className="fas fa-history"></i>
                 <span>Histórico Geral</span>
             </button>
-        </HeaderPagina>
+        </UIHeaderPagina>
     );
 }
 

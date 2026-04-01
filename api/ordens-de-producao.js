@@ -162,8 +162,63 @@ router.get('/', async (req, res) => {
         }
         // ---------------------------------------
 
+        // --- RADAR DE TEMPO (Bulk Data) ---
+        // Busca histórico de OPs finalizadas desde 01/01/2026 para calcular médias por produto
+        const radarResult = await dbClient.query(`
+            SELECT produto_id, data_entrega, data_final
+            FROM ordens_de_producao
+            WHERE status = 'finalizado'
+              AND data_final IS NOT NULL
+              AND data_entrega IS NOT NULL
+              AND data_final >= '2026-01-01'
+        `);
+
+        // Agrupa por produto_id somando horas e contando OPs
+        const somaHorasPorProduto = new Map();
+        const contagemPorProduto = new Map();
+        radarResult.rows.forEach(row => {
+            const horas = (new Date(row.data_final) - new Date(row.data_entrega)) / 3600000;
+            if (horas > 0) {
+                somaHorasPorProduto.set(row.produto_id, (somaHorasPorProduto.get(row.produto_id) || 0) + horas);
+                contagemPorProduto.set(row.produto_id, (contagemPorProduto.get(row.produto_id) || 0) + 1);
+            }
+        });
+
+        // Calcula médias (mínimo 5 OPs para ter amostra válida)
+        const mediasRadar = new Map();
+        somaHorasPorProduto.forEach((soma, produtoId) => {
+            const contagem = contagemPorProduto.get(produtoId);
+            if (contagem >= 5) mediasRadar.set(produtoId, soma / contagem);
+        });
+
+        // Enriquece cada OP com dados do radar
+        const agora = new Date();
+        ops = ops.map(op => {
+            if (op.status === 'cancelada') return { ...op, radar: null };
+            const mediaHoras = mediasRadar.get(op.produto_id);
+            if (!mediaHoras) return { ...op, radar: null };
+
+            const horasAbertas = (agora - new Date(op.data_entrega)) / 3600000;
+            const multiplo = horasAbertas / mediaHoras;
+
+            let faixa = 'normal';
+            if (multiplo >= 3) faixa = 'critico';
+            else if (multiplo >= 1.5) faixa = 'atencao';
+
+            return {
+                ...op,
+                radar: {
+                    horas_abertas: Math.round(horasAbertas),
+                    media_horas: Math.round(mediaHoras),
+                    multiplo: parseFloat(multiplo.toFixed(1)),
+                    faixa
+                }
+            };
+        });
+        // ----------------------------------
+
         res.status(200).json({
-            rows: ops, // Retorna a lista enriquecida
+            rows: ops,
             total: total,
             page: page,
             pages: Math.ceil(total / limit) || 1,
@@ -515,6 +570,30 @@ router.put('/', async (req, res) => {
             }
         }
         // --- FIM DA NOVA LÓGICA DE LIMPEZA DE STATUS ---
+
+        // --- RECALCULO DE ETAPAS NA FINALIZAÇÃO ---
+        // Quando finaliza, sempre recalcula as quantidades das etapas direto das 'producoes'.
+        // Isso garante que o saldo de arremate fique correto independente do que o frontend mandou.
+        if (status === 'finalizado') {
+            const etapasDBResult = await dbClient.query(
+                `SELECT etapas FROM ordens_de_producao WHERE edit_id = $1`, [edit_id]
+            );
+            const etapasBase = etapasDBResult.rows[0]?.etapas || opData.etapas || [];
+
+            const lancsResult = await dbClient.query(
+                `SELECT etapa_index, SUM(quantidade) as total FROM producoes WHERE op_numero = $1 GROUP BY etapa_index`,
+                [numero]
+            );
+            const lancsMap = new Map();
+            lancsResult.rows.forEach(r => lancsMap.set(parseInt(r.etapa_index), parseInt(r.total)));
+
+            opData.etapas = etapasBase.map((etapa, index) => ({
+                ...etapa,
+                lancado: lancsMap.has(index),
+                quantidade: lancsMap.get(index) || 0
+            }));
+        }
+        // ------------------------------------------
 
         let finalizedChildrenNumbers = [];
         if (status === 'cancelada') {

@@ -1,8 +1,8 @@
-// public/src/components/FiltrosAtivos.jsx
+// public/src/components/UIFiltrosAtivos.jsx
 import React from 'react';
 
 // Este componente recebe os filtros ativos e as funções para removê-los
-function FiltrosAtivos({ filtros, onRemoverFiltro, onLimparTudo }) {
+function UIFiltrosAtivos({ filtros, onRemoverFiltro, onLimparTudo }) {
   const { produtos = [], cores = [], tamanhos = [] } = filtros;
   const totalFiltros = produtos.length + cores.length + tamanhos.length;
 
@@ -45,4 +45,4 @@ function FiltrosAtivos({ filtros, onRemoverFiltro, onLimparTudo }) {
   );
 }
 
-export default FiltrosAtivos;
+export default UIFiltrosAtivos;

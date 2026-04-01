@@ -551,3 +551,62 @@ body.menu-aberto .uc-container {
     .uc-usuarios-lista { grid-template-columns: 1fr; }
     .uc-controles-topo { flex-direction: column; align-items: stretch; }
 }
+
+/* --- Foto Oficial (admissão) --- */
+.uc-cabecalho-com-foto {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+}
+
+.uc-foto-card-view {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background-color: var(--gs-borda-suave, #ddd);
+    background-size: cover;
+    background-position: center;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #aaa;
+    font-size: 1.2rem;
+}
+
+/* Seção de edição da foto */
+.uc-foto-oficial-container {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.uc-foto-oficial-preview {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background-color: var(--gs-borda-suave, #ddd);
+    background-size: cover;
+    background-position: center;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #aaa;
+    font-size: 1.8rem;
+    border: 2px solid var(--gs-borda-suave, #ccc);
+}
+
+.uc-foto-oficial-acoes {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.uc-foto-oficial-descricao {
+    font-size: 0.78rem;
+    color: #888;
+    margin: 0 0 4px 0;
+    line-height: 1.4;
+}

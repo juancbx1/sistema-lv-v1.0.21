@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import LancamentoFinanceiroCard from './LancamentoFinanceiroCard.jsx';
 import FiltrosLancamentos from './FiltrosLancamentos.jsx';
 import { renderizarPaginacao } from '/js/utils/Paginacao.js';
-import NaoEncontradoBusca from './NaoEncontradoBusca.jsx';
+import UINaoEncontradoBusca from './UINaoEncontradoBusca.jsx';
 
 // Funções auxiliares
 const getLocalDateString = () => {
@@ -222,7 +222,7 @@ const LancamentosView = () => {
                             />
                         ))
                     ) : (
-                        <NaoEncontradoBusca 
+                        <UINaoEncontradoBusca 
                             icon="fa-search"
                             title="Nenhum Lançamento Encontrado"
                             message="Tente ajustar os filtros de busca ou o período selecionado para encontrar o que você procura."

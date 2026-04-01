@@ -1,4 +1,4 @@
-// public/src/components/LogItem.jsx
+// public/src/components/UILogItem.jsx
 
 import React from 'react';
 
@@ -43,7 +43,7 @@ const logConfig = {
     REJEICAO_SOLICITACAO: { icon: 'fa-times-circle', color: '#a32316' },
 };
 
-export default function LogItem({ log }) {
+export default function UILogItem({ log }) {
     // Pega a configuração (ícone e cor) para a ação atual, ou usa o padrão se não encontrar
     const config = logConfig[log.acao] || logConfig.default;
 

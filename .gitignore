@@ -10,3 +10,6 @@ dist
 build
 .env.development.local
 *.bak
+
+# Planejamento local — não commitar
+_planejamento/

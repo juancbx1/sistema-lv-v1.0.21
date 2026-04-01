@@ -1,4 +1,4 @@
-// public/src/components/AutocompleteAPI.jsx
+// public/src/components/UIAutocompleteAPI.jsx
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
@@ -16,7 +16,7 @@ function useDebounce(value, delay) {
     return debouncedValue;
 }
 
-export default function AutocompleteAPI({
+export default function UIAutocompleteAPI({
     apiEndpoint,      // Ex: '/api/financeiro/contatos'
     placeholder,
     onSelectionChange, // Retorna o objeto selecionado completo {id, nome, tipo} ou null

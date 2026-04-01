@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import LogItem from './LogItem.jsx';
+import UILogItem from './UILogItem.jsx';
 
 //FEED - historico de atividades do financeiro
 
@@ -79,7 +79,7 @@ export default function FeedAtividades() {
     return (
         <div className="feed-atividades-container">
             {logs.length > 0 ? (
-                logs.map(log => <LogItem key={log.id} log={log} />)
+                logs.map(log => <UILogItem key={log.id} log={log} />)
             ) : (
                 <p style={{ textAlign: 'center', padding: '20px' }}>Nenhuma atividade registrada.</p>
             )}

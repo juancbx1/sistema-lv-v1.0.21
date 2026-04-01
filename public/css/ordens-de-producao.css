@@ -57,12 +57,6 @@ body.autenticado {
 }
 
 /* Container principal da página de OPs */
-.container-op {
-    padding: 10px;
-    /* max-width: 1300px; /* Opcional: limitar largura em telas grandes */
-    /* margin: 0 auto; /* Centraliza se max-width for usado e menu não estiver fixo */
-}
-
 /* Estilo de Card Genérico (para seções) */
 .op-card-estilizado { /* Nova classe genérica para aplicar o estilo de card */
     background-color: var(--op-cor-fundo-card);
@@ -73,20 +67,6 @@ body.autenticado {
 }
 
 /* Cabeçalhos de Página e Seção */
-.op-cabecalho-pagina h1 { /* Para o <h1> principal da página */
-    font-size: 2rem;
-    color: var(--op-cor-azul-escuro);
-    margin-bottom: 25px;
-    padding-bottom: 15px;
-    border-bottom: 2px solid var(--op-cor-azul-claro);
-    font-weight: 600;
-}
-
-.remover-bullets{
-list-style-type: none
-
-}
-
 .op-titulo-secao { /* Para <h2> ou <h3> dentro dos cards */
     font-size: 1.5rem;
     color: var(--op-cor-azul-escuro);
@@ -97,13 +77,6 @@ list-style-type: none
 }
 
 /* Estilos para Botões Genéricos de Ação da Página de OP */
-.op-botoes-grupo {
-    display: flex;
-    flex-wrap: wrap; /* Para quebrar em telas menores */
-    gap: 10px; /* Espaço entre botões */
-    margin-bottom: 20px; /* Espaço abaixo do grupo de botões */
-}
-
 .op-botao {
     padding: 10px 18px;
     font-size: 0.9rem;
@@ -137,14 +110,6 @@ list-style-type: none
     background-color: var(--op-cor-azul-hover);
 }
 
-.op-botao-info { /* Ex: Gerenciar, Embalar, Estoque */
-    background-color: #5bc0de; /* Um azul ciano */
-    color: var(--op-cor-branco);
-}
-.op-botao-info:hover:not(:disabled) {
-    background-color: #31b0d5;
-}
-
 .op-botao-sucesso { /* Ex: Corte p/ Estoque, Ações de Cortes */
     background-color: var(--op-cor-verde-sucesso);
 }
@@ -160,18 +125,7 @@ list-style-type: none
 }
 
 /* Container geral para os botões de ação no topo */
-.op-acoes-container {
-    display: flex;
-    flex-direction: column; /* Empilha os grupos de ação por padrão */
-    gap: 25px; /* Espaço entre o botão principal e os grupos */
-    margin-bottom: 30px; /* Espaço antes da área de filtros/tabela */
-}
-
 /* Botão de Ação Principal (Incluir OP) */
-.op-acao-principal {
-    display: flex; /* Para centralizar ou alinhar o botão se necessário */
-    justify-content: center; /* Centraliza o botão de incluir OP */
-}
 .op-botao-destaque-incluir {
     /* Herda de .op-botao, mas com mais destaque */
     padding: 12px 25px; /* Maior */
@@ -192,82 +146,13 @@ list-style-type: none
 
 
 
-.op-grupo-titulo-sutil {
-    font-size: 0.95rem;
-    color: var(--op-cor-cinza-texto);
-    margin-bottom: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    font-weight: 500;
-    /* border-bottom: 1px dashed #e0e0e0; */
-    /* padding-bottom: 5px; */
-}
-
-.op-botoes-wrapper {
-    display: flex;
-    flex-wrap: wrap; /* Permite que os botões quebrem linha */
-    gap: 10px;       /* Espaço entre os botões no wrapper */
-}
-
 /* Estilo para botões secundários de ação */
-.op-botao-secundario-acao {
-    /* Herda de .op-botao */
-    background-color: #2b4f73; /* Azul mais claro para ações secundárias */
-    /* Ou outra cor, ex: #6c757d (cinza Bootstrap secondary) */
-    font-size: 0.85rem;
-    padding: 8px 15px;
-}
-.op-botao-secundario-acao:hover:not(:disabled) {
-    background-color: var(--op-cor-azul-hover);
-}
-.op-botao-secundario-acao i {
-    font-size: 0.9em;
-}
-
-
 /* Estilo para botões de corte */
-.op-botao-corte {
-    /* Herda de .op-botao */
-    background-color: #73a1bf; /* Um verde um pouco diferente para cortes */
-    /* Ou outra cor temática, ex: um laranja ou marrom claro */
-    font-size: 0.85rem;
-    padding: 8px 15px;
-}
-.op-botao-corte:hover:not(:disabled) {
-    background-color: #4cae4c;
-}
-.op-botao-corte i {
-    font-size: 0.9em;
-}
-
 /* Estilos para a Coluna de Ações e Botões de Ação na Tabela */
 .op-tabela-estilizada td.op-coluna-acoes {
     text-align: center; /* Centraliza o ícone/botão na célula */
     padding: 6px 8px;   /* Padding menor para botões de ícone */
     min-width: 60px; /* Largura mínima para a coluna de ações */
-}
-
-.op-botao-acao-tabela {
-    background-color: transparent;
-    border: none;
-    padding: 6px 8px; /* Padding ao redor do ícone */
-    cursor: pointer;
-    border-radius: var(--op-raio-borda-botao); /* Raio suave */
-    font-size: 1rem; /* Tamanho base do ícone */
-    line-height: 1; /* Para alinhar bem o ícone */
-    transition: background-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
-}
-.op-botao-acao-tabela:hover {
-    background-color: #f0f0f0; /* Fundo sutil no hover */
-    transform: scale(1.1);
-}
-
-.op-botao-cancelar-lista { /* Estilo específico para o botão de cancelar na lista */
-    color: var(--op-cor-vermelho-perigo); /* Cor do ícone vermelho */
-}
-.op-botao-cancelar-lista:hover {
-    color: var(--op-cor-vermelho-hover); /* Cor mais escura no hover */
-    background-color: rgba(220, 53, 69, 0.1); /* Fundo vermelho bem claro no hover */
 }
 
 .op-botao-cancelar-lista .spinner-btn-interno {
@@ -278,45 +163,7 @@ list-style-type: none
     border-top-color: var(--op-cor-vermelho-perigo); /* Spinner vermelho */
 }
 
-.op-acao-placeholder { /* Para o '-' quando não há ações */
-    color: #aaa;
-    font-style: italic;
-}
-
-
 /* Estilos para Filtros e Busca */
-.op-filtros-container {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 15px;
-    margin-bottom: 20px;
-    padding: 15px;
-    background-color: #fdfdfd; /* Fundo sutil para a área de filtros */
-    border-radius: var(--op-raio-borda-input);
-    border: 1px solid #e8e8e8;
-}
-
-.op-status-filter-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.op-botao-filtro {
-    padding: 8px 15px;
-    font-size: 0.85rem;
-    border: 1px solid var(--op-cor-botao-filtro-padrao-borda);
-    background-color: var(--op-cor-botao-filtro-padrao-fundo);
-    color: var(--op-cor-botao-filtro-padrao-texto);
-    border-radius: var(--op-raio-borda-botao);
-    cursor: pointer;
-    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-    display: inline-flex; /* Para alinhar bolinha e texto */
-    align-items: center;
-    gap: 6px; /* Espaço entre texto e bolinha */
-}
 .op-botao-filtro:hover:not(.active) { /* Hover para botões não ativos */
     border-color: #adb5bd;
     background-color: #e9ecef;
@@ -336,21 +183,6 @@ list-style-type: none
     width: 8px;
     height: 8px;
     /* margin-left: 6px; /* Removido, pois o gap do flex no botão cuida disso */
-}
-
-.op-input-busca {
-    padding: 9px 12px; /* Altura similar aos botões de filtro */
-    border: 1px solid var(--op-cor-cinza-borda);
-    border-radius: var(--op-raio-borda-input);
-    font-size: 0.9rem;
-    min-width: 250px; /* Largura mínima */
-    flex-grow: 0; /* Ocupa espaço disponível */
-    max-width: 400px; /* Limita a largura */
-}
-.op-input-busca:focus {
-    outline: none;
-    border-color: var(--op-cor-azul-claro);
-    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
 }
 
 /* Estilos para a Tabela de OPs */
@@ -421,49 +253,6 @@ list-style-type: none
 
 
 /* Estilos para Paginação */
-.pagination-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 8px; /* Espaço entre os botões e o texto */
-    margin-top: 25px; /* Espaço acima da paginação */
-    padding: 10px 0;
-}
-
-.pagination-btn {
-    padding: 8px 16px; /* Tamanho bom para clique */
-    font-size: 0.9rem;
-    font-weight: 500;
-    border-radius: var(--op-raio-borda-botao);
-    border: 1px solid var(--op-cor-cinza-borda); /* Borda sutil */
-    background-color: var(--op-cor-branco);
-    color: var(--op-cor-azul-claro); /* Texto do botão azul */
-    cursor: pointer;
-    transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.pagination-btn:hover:not(:disabled) {
-    background-color: var(--op-cor-azul-claro);
-    color: var(--op-cor-branco);
-    border-color: var(--op-cor-azul-claro);
-    box-shadow: 0 2px 5px rgba(52, 152, 219, 0.2);
-}
-
-.pagination-btn:disabled {
-    background-color: #e9ecef; /* Cinza claro para desabilitado */
-    color: #adb5bd;         /* Texto cinza para desabilitado */
-    border-color: #dee2e6;
-    cursor: not-allowed;
-    opacity: 0.7;
-}
-
-.pagination-current { /* Texto "Pág. X de Y" */
-    font-size: 0.9rem;
-    color: var(--op-cor-texto-principal);
-    padding: 8px 12px;
-    font-weight: 500;
-}
-
 /* Status Bolinha (você já tem, apenas garanta que está no CSS) */
 .status-bolinha { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
 .status-em-aberto { background-color: #ffc107; } /* Amarelo */
@@ -474,9 +263,6 @@ list-style-type: none
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
 /* Link corte pendente na tabela */
-.link-corte-pendente { color: var(--op-cor-azul-claro); text-decoration: none; font-size:0.9em; }
-.link-corte-pendente:hover { text-decoration: underline; }
-
 /* Estilos para Formulários (Inclusão e Edição de OP, Corte p/ Estoque) */
 .op-form-estilizado .op-form-linha {
     display: flex;
@@ -585,18 +371,7 @@ list-style-type: none
     justify-content: flex-start; /* Alinha botões à esquerda por padrão */
 }
 /* Botão secundário (Cancelar Inclusão) */
-.op-botao-secundario {
-    background-color: var(--op-cor-cinza-texto);
-    color: var(--op-cor-branco);
-}
-.op-botao-secundario:hover:not(:disabled) {
-    background-color: #495057; /* Cinza mais escuro */
-}
-
 /* Estilos para Tela de Edição de OP */
-.op-edit-cabecalho {
-    margin-bottom: 25px;
-}
 .op-edit-cabecalho #opNumero.op-titulo-secao { /* Estilo para o h2 que mostra o número da OP */
     border-bottom: none; /* Pode não precisar de borda aqui */
     margin-bottom: 0;
@@ -728,85 +503,12 @@ list-style-type: none
     flex-grow: 0;
 }
 
-/* ==========================================================================
-   # ESTILOS PARA O ACCORDION DE PRODUÇÃO CONJUNTA
-   ========================================================================== */
-.op-accordion {
-    border: 1px solid #e0e0e0;
-    border-radius: var(--op-raio-borda-card);
-    margin-top: 25px;
-    background-color: #fcfcfc;
-    overflow: hidden; /* Importante para o efeito de abrir/fechar */
-    transition: all 0.3s ease-in-out;
-}
-
-.op-accordion-cabecalho {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 15px 20px;
-    cursor: pointer;
-    background-color: #f5f7fa;
-    transition: background-color 0.2s ease;
-}
-
-.op-accordion-cabecalho:hover {
-    background-color: #e9eef3;
-}
-
-.op-accordion-titulo {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--op-cor-azul-escuro);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.op-accordion-icone {
-    font-size: 1rem;
-    transition: transform 0.3s ease-in-out;
-}
-
-/* Rotação do ícone quando o accordion está ativo */
-.op-accordion.active .op-accordion-icone {
-    transform: rotate(180deg);
-}
-
-.op-accordion-conteudo {
-    max-height: 0; /* Começa fechado */
-    overflow: hidden;
-    transition: max-height 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), padding 0.3s ease; /* Efeito de "bounce" */
-    padding: 0 20px; /* Padding será aplicado quando abrir */
-}
-
-/* Quando o accordion está ativo, o conteúdo se expande */
-.op-accordion.active .op-accordion-conteudo {
-    max-height: 500px; /* Um valor alto o suficiente para caber o conteúdo */
-    padding: 20px;
-}
-
 /* Área de feedback dentro do accordion */
-.op-filha-feedback {
-    margin-top: 20px;
-    padding: 15px;
-    border-radius: var(--op-raio-borda-input);
-    font-size: 0.9rem;
-    display: none; /* Começa escondido */
-}
 .op-filha-feedback.sucesso {
     background-color: #d4edda;
     border: 1px solid #c3e6cb;
     color: #155724;
 }
-.op-filha-feedback p {
-    margin: 0;
-    line-height: 1.5;
-}
-.op-filha-feedback strong {
-    font-weight: 600;
-}
-
 /* ==========================================================================
    Estilos para a Seção de Etapas na Tela de Edição de OP (#opEditView)
    ========================================================================== */
@@ -826,21 +528,6 @@ list-style-type: none
     border-radius: var(--op-raio-borda-input); /* Raio consistente */
     background-color: var(--op-cor-branco); /* Fundo branco para as etapas */
     /* padding: 10px; /* Opcional: um padding geral se as rows não tiverem borda superior/inferior */
-}
-
-.etapa-row {
-    display: flex;
-    align-items: center; /* Alinhamento vertical padrão */
-    gap: 10px;
-    padding: 10px 12px; /* Padding interno da linha */
-    border-bottom: 1px solid #f0f0f0; /* Divisória entre etapas */
-    flex-wrap: nowrap; /* Tenta manter em uma linha, scroll horizontal se necessário em telas muito pequenas */
-                     /* Se preferir quebrar, use 'wrap' e ajuste os flex-basis/min-width */
-    transition: background-color 0.2s ease-in-out, border-left-color 0.2s ease-in-out;
-}
-
-.etapa-row:last-child {
-    border-bottom: none;
 }
 
 /* Destaques de estado da linha da etapa (aplicados via JS) */
@@ -864,126 +551,11 @@ list-style-type: none
 
 
 /* Elementos dentro da linha da etapa */
-.etapa-numero {
-    /* Seus estilos de círculo colorido (etapa-azul, etapa-verde, etapa-cinza) */
-    flex-shrink: 0; /* Não encolhe */
-    margin-right: 8px; /* Espaço à direita do número */
-    width: 28px; /* Aumentar um pouco o tamanho se o número do texto for grande */
-    height: 28px;
-    font-size: 0.9rem;
-    line-height: 28px; /* Centraliza o texto verticalmente */
-}
-
-.etapa-processo { /* Input readonly com nome do processo */
-    padding: 8px 10px;
-    font-size: 0.9rem;
-    border: 1px solid transparent; /* Sem borda para parecer texto normal */
-    border-radius: var(--op-raio-borda-input);
-    background-color: transparent; /* Sem fundo para parecer texto normal */
-    color: var(--op-cor-texto-principal);
-    font-weight: 500; /* Leve destaque */
-    flex-grow: 2;      /* Permite crescer mais */
-    flex-basis: 150px; /* Base */
-    min-width: 120px;  /* Mínimo */
-    margin-right: 5px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.etapa-processo[readonly] { /* Para garantir que não pareça um input editável */
-    cursor: default;
-    user-select: none; /* Impede seleção de texto se não desejado */
-}
-
-
-.select-usuario {
-    padding: 8px 10px;
-    font-size: 0.9rem;
-    border: 1px solid var(--op-cor-cinza-borda);
-    border-radius: var(--op-raio-borda-input);
-    background-color: var(--op-cor-branco); /* Fundo branco para se destacar */
-    flex-grow: 3;      /* Mais espaço para o select */
-    flex-basis: 180px;
-    min-width: 160px;
-    margin-right: 5px;
-    height: 38px; /* Para alinhar com outros inputs/botões */
-}
-.select-usuario:disabled {
-    background-color: var(--op-cor-cinza-fundo-input);
-    opacity: 0.7;
-}
-
-
 /* Para a etapa de Corte (inputs readonly de status e nome do cortador) */
 .etapa-usuario-status,
-.etapa-usuario-nome {
-    padding: 8px 10px;
-    font-size: 0.85rem; /* Um pouco menor */
-    border: 1px solid transparent;
-    border-radius: var(--op-raio-borda-input);
-    background-color: #f1f3f5; /* Um cinza diferente para diferenciar de inputs normais */
-    color: var(--op-cor-cinza-texto);
-    flex-grow: 1;
-    flex-basis: 130px;
-    min-width: 100px;
-    margin-right: 5px;
-    text-align: center;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.etapa-usuario-status + .etapa-usuario-nome {
-    margin-right: 0; /* Remove margem do último */
-}
-
-
 /* Container para Quantidade e Botão Lançar */
-.quantidade-lancar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-left: auto;  /* EMPURRA PARA A DIREITA DA LINHA DA ETAPA */
-    flex-shrink: 0;    /* Não deixa este grupo encolher */
-}
-
-.quantidade-input {
-    width: 65px; /* Largura menor */
-    padding: 8px;
-    text-align: center;
-    font-size: 0.9rem;
-    border: 1px solid var(--op-cor-cinza-borda);
-    border-radius: var(--op-raio-borda-input);
-    background-color: var(--op-cor-branco);
-    height: 38px; /* Para alinhar com select e botão */
-}
 .quantidade-input::-webkit-outer-spin-button,
-.quantidade-input::-webkit-inner-spin-button { /* Remove setas no Chrome/Safari/Edge */
-  -webkit-appearance: none;
-  margin: 0;
-}
-.quantidade-input:disabled {
-    background-color: var(--op-cor-cinza-fundo-input);
-    opacity: 0.7;
-}
-
-
 /* Botão Lançar/Lançado */
-.botao-lancar {
-    /* Herda de .op-botao se tiver essa classe no JS */
-    /* Estilos específicos se não herdar: */
-    padding: 8px 12px;
-    font-size: 0.85rem;
-    font-weight: 500;
-    border-radius: var(--op-raio-borda-botao);
-    border: none;
-    cursor: pointer;
-    transition: background-color 0.2s ease, opacity 0.2s ease;
-    color: var(--op-cor-branco);
-    height: 38px; /* Para alinhar com input e select */
-    min-width: 90px; /* Largura mínima para o texto */
-    text-align: center;
-}
-
 .botao-lancar:not(:disabled):not(.lancado) { /* Habilitado para lançar */
     background-color: var(--op-cor-verde-sucesso);
 }
@@ -1020,69 +592,8 @@ list-style-type: none
 }
 
 /* Garante que o contêiner do link na etapa de corte se alinhe bem */
-.etapa-row > div[style*="margin-left: auto"] {
-    display: flex;
-    align-items: center;
-}
-
-.botao-fechar {
-    position: absolute;
-    top: 15px;  /* Distância do topo do card pai */
-    right: 15px; /* Distância da direita do card pai */
-    width: 30px;
-    height: 30px;
-    border-radius: 50%; /* Para ser redondo */
-    background-color: var(--op-cor-vermelho-perigo);
-    color: var(--op-cor-branco);
-    border: none;
-    font-size: 1rem; /* Tamanho do 'X' */
-    font-weight: bold;
-    line-height: 30px; /* Centraliza o 'X' verticalmente */
-    text-align: center;
-    cursor: pointer;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    transition: background-color 0.2s ease, transform 0.2s ease;
-}
-.botao-fechar:hover {
-    background-color: var(--op-cor-vermelho-hover);
-    transform: scale(1.1);
-}
-
 /* Container para quantidade e botão lançar */
-.quantidade-lancar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0; /* Não encolhe */
-}
-.quantidade-input { /* Input de quantidade na etapa */
-    width: 70px; /* Largura fixa pequena */
-    padding: 8px;
-    text-align: center;
-    font-size: 0.9rem;
-    border: 1px solid var(--op-cor-cinza-borda);
-    border-radius: var(--op-raio-borda-input);
-}
-
 /* Botão Lançar/Lançado dentro das etapas */
-.etapa-row .botao-lancar {
-    padding: 8px 15px;
-    font-size: 0.85rem;
-    font-weight: 500;
-    border-radius: var(--op-raio-borda-botao); /* <<< USA A VARIÁVEL DE RAIO */
-    border: none;
-    cursor: pointer;
-    transition: background-color 0.2s ease, opacity 0.2s ease;
-    color: var(--op-cor-branco); /* Texto branco por padrão */
-}
-
-.etapa-row .botao-lancar:not(:disabled) { /* Quando está habilitado para lançar */
-        background-color: #173087;
-}
-.etapa-row .botao-lancar:not(:disabled):hover {
-    background-color: var(--op-cor-verde-hover);
-}
-
 .etapa-row .botao-lancar.lancado {
     background-color: #6c757d; /* Cinza escuro para "Lançado" */
     color: var(--op-cor-branco);
@@ -1108,16 +619,6 @@ list-style-type: none
 }
 
 /* Link para ver corte pendente (dentro da etapa de corte) */
-#etapasContainer .etapa-row a { /* Target específico */
-    color: var(--op-cor-azul-claro);
-    text-decoration: none;
-    font-size: 0.85rem;
-    margin-left: 10px;
-}
-#etapasContainer .etapa-row a:hover {
-    text-decoration: underline;
-}
-
 .spinner {
     display: flex; /* Garante que seja visível se o conteúdo for apenas o texto */
     justify-content: center;
@@ -1177,26 +678,6 @@ list-style-type: none
    ========================================================================== */
 
 /* Contêiner principal do popup */
-.popup-mensagem {
-    position: fixed;
-    top: 50%; /* Centraliza verticalmente */
-    left: 50%; /* Centraliza horizontalmente */
-    transform: translate(-50%, -50%); /* Ajusta para o centro exato do elemento */
-    padding: 25px 30px; /* Padding interno */
-    border-radius: var(--op-raio-borda-card); /* Usa a variável de raio de borda de card */
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25); /* Sombra customizada para popups */
-    z-index: 10000; /* Z-index alto para ficar acima de tudo */
-    max-width: 450px; /* Largura máxima para legibilidade */
-    width: 90%; /* Responsivo */
-    text-align: center;
-    font-family: var(--op-fonte-principal); /* Usa a variável de fonte */
-    animation: fadeIn 0.3s ease-out; /* Animação de entrada */
-    display: flex; /* Para centralizar conteúdo e botão */
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-}
-
 /* Animação de entrada */
 @keyframes fadeIn {
     from { opacity: 0; transform: translate(-50%, -60%); }
@@ -1210,14 +691,6 @@ list-style-type: none
 }
 
 /* Estilos para o texto da mensagem */
-.popup-mensagem p {
-    font-size: 1rem;
-    line-height: 1.5;
-    margin-bottom: 15px; /* Espaço antes do botão OK */
-    font-weight: 500;
-    color: var(--op-cor-texto-principal); /* Usa a variável de cor de texto principal */
-}
-
 /* Tipos de mensagem: sucesso, erro, aviso (usando suas variáveis de cor) */
 .popup-mensagem.popup-sucesso {
     background-color: #d4edda; /* Verde claro - mantenho o valor direto, pois não há var para cor de fundo de popup específico */
@@ -1238,23 +711,6 @@ list-style-type: none
 }
 
 /* Estilo do botão OK dentro do popup (usando suas variáveis de botão) */
-.popup-mensagem button {
-    padding: 10px 25px;
-    margin-top: 10px;
-    background-color: var(--op-cor-cinza-texto); /* Usa seu cinza de texto para o botão OK */
-    color: var(--op-cor-branco);
-    border: none;
-    border-radius: var(--op-raio-borda-botao); /* Usa a variável de raio de borda de botão */
-    cursor: pointer;
-    font-size: 0.95rem;
-    font-weight: 600;
-    transition: background-color 0.2s ease;
-}
-
-.popup-mensagem button:hover {
-    background-color: #495057; /* Um cinza um pouco mais escuro no hover */
-}
-
 /* Overlay de fundo para bloquear interação com a página */
 .popup-overlay {
     position: fixed;
@@ -1463,28 +919,6 @@ list-style-type: none
    # ESTILOS DO ALTERNADOR DE VISÃO (VIEW SWITCHER)
    ========================================================================== */
 
-.op-view-switcher {
-  display: flex;
-  background-color: #e9ecef;
-  border-radius: var(--op-raio-borda-botao);
-  padding: 4px;
-}
-
-.op-btn-switch {
-  background-color: transparent;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: var(--op-cor-cinza-texto);
-  transition: all 0.2s ease-in-out;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .op-btn-switch:hover:not(.active) {
   background-color: #dfe3e6;
 }
@@ -1514,50 +948,6 @@ list-style-type: none
     margin-top: 20px;
 }
 
-.oa-card-status-tiktik {
-    background-color: var(--op-cor-branco);
-    border-radius: var(--op-raio-borda-card);
-    box-shadow: var(--op-sombra-card);
-    border-top: 4px solid var(--op-cor-cinza-texto);
-    padding: 15px;
-    display: flex;
-    flex-direction: column;
-    transition: all 0.3s ease;
-    min-height: 230px;
-}
-
-/* Cores de status */
-.oa-card-status-tiktik.status-livre { border-top-color: var(--op-cor-verde-sucesso); }
-.oa-card-status-tiktik.status-produzindo { border-top-color: var(--op-cor-azul-claro); }
-.oa-card-status-tiktik.status-pausa,
-.oa-card-status-tiktik.status-pausa-manual { border-top-color: var(--op-cor-status-em-aberto); }
-.oa-card-status-tiktik.status-almoco { border-top-color: #fd7e14; } /* Laranja */
-.oa-card-status-tiktik.status-faltou { border-top-color: #6c757d; opacity: 0.7; }
-.oa-card-status-tiktik.status-alocado-externo { border-top-color: #8e44ad; } /* Roxo */
-.oa-card-status-tiktik.status-fora-horario { border-top-color: #adb5bd; opacity: 0.8; }
-
-.card-status-header {
-    display: flex;
-    position: relative;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 15px;
-}
-
-.avatar-tiktik {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 2px solid var(--op-cor-cinza-borda);
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    background-color: var(--op-cor-cinza-fundo-input);
-}
-
-.info-empregado { flex-grow: 1; }
-.nome-tiktik { font-weight: 600; color: var(--op-cor-azul-escuro); display: block; }
 
 .status-selo {
     font-size: 0.7rem; font-weight: 700; padding: 2px 8px;
@@ -1581,38 +971,7 @@ list-style-type: none
    ========================================================================== */
 
 /* --- Conteúdo do Card --- */
-.info-tarefa-redesenhada {
-    text-align: center; padding: 15px 10px; flex-grow: 1;
-    display: flex; flex-direction: column; justify-content: center;
-}
-.quantidade-tarefa-destaque {
-    font-size: 2.5rem; font-weight: 700;
-    color: var(--op-cor-azul-escuro); line-height: 1.1;
-}
-.quantidade-tarefa-destaque small {
-    font-size: 1rem; font-weight: 500;
-    color: var(--op-cor-cinza-texto); margin-left: 5px;
-}
-.produto-tarefa-subtitulo {
-    font-size: 0.9rem; font-weight: 500;
-    color: var(--op-cor-texto-principal); margin-top: 5px;
-}
-.metricas-tarefa-container { margin-top: 15px; }
-
 /* --- Cronômetro e Barra de Progresso --- */
-.cronometro-tarefa {
-    font-weight: 500; font-size: 1.1rem;
-    color: var(--op-cor-cinza-texto); margin-top: 8px;
-}
-.barra-progresso-container {
-    background-color: var(--op-cor-cinza-borda);
-    border-radius: 50px; height: 10px;
-    margin: 8px 0; overflow: hidden; cursor: help;
-}
-.barra-progresso {
-    height: 100%; border-radius: 50px;
-    transition: width 0.5s linear;
-}
 /* Cores da barra baseadas no ritmo */
 .barra-progresso.rapido { background-color: #1abc9c; } /* Verde-água */
 .barra-progresso.normal { background-color: var(--op-cor-verde-sucesso); }
@@ -1623,22 +982,6 @@ list-style-type: none
 
 
 /* --- Rodapé e Botões de Ação --- */
-.card-status-footer {
-    margin-top: auto; padding-top: 15px;
-    border-top: 1px dashed var(--op-cor-cinza-borda);
-}
-.oa-card-botoes-acao-container {
-    display: flex; gap: 10px; width: 100%;
-}
-.btn-acao {
-    flex-grow: 1; width: auto; padding: 10px; border: none;
-    border-radius: var(--op-raio-borda-botao); font-size: 0.9rem;
-    font-weight: 600; color: var(--op-cor-branco);
-    cursor: pointer; transition: all 0.2s;
-}
-.btn-acao:disabled {
-    background-color: #bdc3c7; cursor: not-allowed; opacity: 0.7;
-}
 .btn-acao.finalizar { background-color: var(--op-cor-azul-claro); }
 .btn-acao.finalizar:hover:not(:disabled) { background-color: var(--op-cor-azul-hover); }
 
@@ -1709,43 +1052,8 @@ list-style-type: none
    # ESTILOS DO MENU DE AÇÕES DO CARD DE STATUS
    ========================================================================== */
 
-.btn-menu-acoes {
-    background: none; border: none; color: var(--op-cor-cinza-texto);
-    cursor: pointer; font-size: 1.2rem; padding: 5px;
-    border-radius: 50%; width: 32px; height: 32px;
-    transition: color 0.2s, background-color 0.2s;
-}
-.btn-menu-acoes:hover {
-    color: var(--op-cor-azul-claro);
-    background-color: #f0f8ff;
-}
-
-.menu-acoes-popup {
-    position: absolute; top: 40px; right: 0; z-index: 10;
-    background-color: var(--op-cor-branco);
-    border-radius: 8px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.15);
-    width: 220px;
-    display: none; /* A classe 'visivel' controla a exibição */
-    padding: 5px 0;
-    border: 1px solid var(--op-cor-cinza-borda);
-}
-
 .menu-acoes-popup.visivel {
     display: block;
-}
-
-.menu-acoes-popup button {
-    display: flex; align-items: center; gap: 10px;
-    width: 100%; padding: 10px 15px; background: none;
-    border: none; text-align: left; cursor: pointer;
-    font-size: 0.9rem; color: var(--op-cor-texto-principal);
-}
-.menu-acoes-popup button:hover {
-    background-color: var(--op-cor-cinza-fundo-input);
-}
-.menu-acoes-popup button i {
-    width: 20px; text-align: center; color: var(--op-cor-cinza-texto);
 }
 
 /* ==========================================================================
@@ -1773,63 +1081,105 @@ list-style-type: none
 }
 
 .op-modal-header {
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    gap: 15px;
-    padding: 15px 20px;
-    background-color: var(--op-cor-branco);
+    gap: 12px;
+    padding: 14px 20px;
+    background: #fff;
     border-bottom: 1px solid var(--op-cor-cinza-borda);
     flex-shrink: 0;
-    border-radius: var(--op-raio-borda-card);
+    border-radius: var(--op-raio-borda-card) var(--op-raio-borda-card) 0 0;
 }
+
+.op-modal-header-esquerda {
+    display: flex;
+    align-items: center;
+    min-width: 90px;
+}
+
+.op-modal-header-centro {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    text-align: center;
+}
+
+.op-modal-header-direita {
+    display: flex;
+    justify-content: flex-end;
+    min-width: 90px;
+}
+
+.op-modal-header-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.op-modal-header-para {
+    font-size: 0.8rem;
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.op-modal-role-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 9px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.op-modal-role-badge.badge-costureira { background: rgba(59,130,246,0.1); color: #3b82f6; }
+.op-modal-role-badge.badge-tiktik     { background: rgba(245,158,11,0.1); color: #d97706; }
+.op-modal-role-badge.badge-cortador   { background: rgba(16,185,129,0.1); color: #059669; }
 
 .btn-voltar-header {
     display: inline-flex; align-items: center; gap: 6px; background: none;
     border: 1px solid var(--op-cor-cinza-borda); color: var(--op-cor-texto-principal);
-    font-size: 0.9rem; font-weight: 500; padding: 6px 14px; border-radius: 20px;
-    cursor: pointer; transition: all 0.2s ease;
+    font-size: 0.85rem; font-weight: 500; padding: 6px 14px; border-radius: 20px;
+    cursor: pointer; transition: all 0.2s ease; white-space: nowrap;
 }
 .btn-voltar-header:hover {
     background-color: var(--op-cor-cinza-fundo-input); border-color: var(--op-cor-azul-claro);
 }
 
 .op-modal-titulo {
-    font-size: 1.2rem;
+    font-size: 1.05rem;
     color: var(--op-cor-azul-escuro);
     margin: 0;
-    text-align: center;
-    flex-grow: 1;
+    font-weight: 600;
 }
 .nome-destaque-modal {
     color: var(--op-cor-azul-claro);
-    font-weight: 600;
+    font-weight: 700;
 }
 
-/* --- BOTÃO FECHAR MODAL (MINIMALISTA) --- */
 .op-modal-fechar-btn {
-    background: transparent; /* Sem fundo */
-    border: none;            /* Sem borda */
-    color: #aaa;             /* Cinza suave */
-    font-size: 2rem;         /* Tamanho bom para o dedo */
-    font-weight: 300;        /* Traço fino */
-    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: #f1f5f9;
+    border: none;
+    border-radius: 50%;
+    color: #64748b;
+    font-size: 0.9rem;
     cursor: pointer;
-    padding: 10px;           /* Área de toque maior */
-    transition: color 0.2s ease;
-    
-    /* Posicionamento absoluto para garantir que fique no canto */
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    z-index: 10;
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
 }
-
 .op-modal-fechar-btn:hover {
-    color: #333;             /* Escurece no hover */
-    background: transparent; /* Garante que não fique vermelho */
-    transform: none;         /* Remove efeito de zoom se tiver */
+    background: #e2e8f0;
+    color: #1e293b;
 }
 
 /* --- ESTILOS DAS TELAS INTERNAS --- */
@@ -1842,18 +1192,6 @@ list-style-type: none
     padding: 5px;
 }
 
-.op-card-arremate-modal {
-    display: flex; align-items: center; gap: 15px;
-    padding: 10px; border: 1px solid var(--op-cor-cinza-borda);
-    border-radius: 8px; cursor: pointer;
-    transition: all 0.2s ease;
-}
-.op-card-arremate-modal:hover {
-    border-color: var(--op-cor-azul-claro);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    transform: translateY(-2px);
-}
-
 .op-card-arremate-modal .op-card-img {
     width: 45px; height: 45px;
     object-fit: cover; border-radius: 6px;
@@ -1862,12 +1200,6 @@ list-style-type: none
 .op-card-arremate-modal .op-card-info { padding: 0; }
 .op-card-arremate-modal .op-card-info h3 { font-size: 0.95rem; margin-bottom: 2px; }
 .op-card-arremate-modal .op-card-info p { font-size: 0.85rem; margin: 0; }
-
-.op-card-dados-modal {
-    margin-left: auto; text-align: right;
-    font-size: 1.2rem; font-weight: 700;
-    color: var(--op-cor-texto-principal);
-}
 
 /* --- TELA DE CONFIRMAÇÃO --- */
 .op-input-tarefas {
@@ -1882,10 +1214,50 @@ list-style-type: none
     padding: 5px;
 }
 
-/* Adicione no final da seção de estilos do card */
-.op-card-react .card-borda-charme.borda-corte {
-    background-color: #8e44ad; /* Roxo para destacar a etapa de corte */
+.op-card-react .card-borda-charme.borda-corte   { background-color: #8e44ad; }
+.op-card-react .card-borda-charme.borda-etapa-final  { background-color: #e74c3c; }
+.op-card-react .card-borda-charme.borda-etapa-normal { background-color: #3498db; }
+
+/* Checkbox circular de seleção */
+.op-card-checkbox {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid #d1d5db;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    z-index: 2;
+    pointer-events: none;
 }
+.op-card-checkbox.marcado {
+    background: var(--op-cor-azul-claro);
+    border-color: var(--op-cor-azul-claro);
+    transform: scale(1.1);
+}
+.op-card-checkbox.marcado::after {
+    content: '';
+    width: 5px;
+    height: 9px;
+    border: 2px solid #fff;
+    border-top: none;
+    border-left: none;
+    transform: rotate(45deg) translateY(-1px);
+    display: block;
+}
+
+/* Contador de busca */
+.op-busca-meta {
+    font-size: 0.78rem;
+    color: #94a3b8;
+    padding: 4px 2px 10px;
+}
+.op-busca-meta strong { color: #64748b; font-weight: 600; }
 
 /* ==========================================================================
    # ESTILOS DA ÁREA DE CORTES (REDESIGN V2)
@@ -1955,17 +1327,6 @@ list-style-type: none
 /* --- LAYOUT DO CABEÇALHO E SWITCHER --- */
 
 /* Estilo para Desktop (padrão) */
-.op-cabecalho-pagina {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
-
-.op-conteudo-principal {
-    margin-top: 20px;
-}
-
 /* ==========================================================================
    # ESTILOS DA TELA DE SELEÇÃO DE VARIANTES
    ========================================================================== */
@@ -2187,47 +1548,34 @@ list-style-type: none
     color: var(--op-cor-cinza-texto);
 }
 
-.op-input-busca-redesenhado {
-    width: 100%;
-    padding: 12px 15px 12px 40px; /* Espaço para o ícone */
-    font-size: 1rem;
-    border: 1px solid var(--op-cor-cinza-borda);
-    border-radius: 50px; /* Bordas totalmente arredondadas */
-    background-color: var(--op-cor-cinza-fundo-input);
-}
-.op-input-busca-redesenhado:focus {
-    background-color: var(--op-cor-branco);
-    border-color: var(--op-cor-azul-claro);
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
-}
-
 .op-filtro-status-pilulas {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 8px;
 }
 
 .op-botao-pilula {
-    padding: 8px 16px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    border-radius: 50px;
-    border: 1px solid var(--op-cor-cinza-borda);
-    background-color: transparent;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: 1.5px solid var(--op-cor-cinza-borda);
+    border-radius: 20px;
+    background: #fff;
     color: var(--op-cor-cinza-texto);
+    font-size: 0.85rem;
+    font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-
 .op-botao-pilula:hover:not(.active) {
-    background-color: #e9ecef;
-    border-color: #adb5bd;
+    background-color: #f1f5f9;
+    border-color: #94a3b8;
+    color: var(--op-cor-texto-principal);
 }
-
 .op-botao-pilula.active {
     background-color: var(--op-cor-azul-escuro);
-    color: var(--op-cor-branco);
+    color: #fff;
     border-color: var(--op-cor-azul-escuro);
 }
 
@@ -2279,16 +1627,6 @@ list-style-type: none
    ========================================================================== */
 
 /* --- ESTILO PADRÃO (DESKTOP) --- */
-.op-pagina-cabecalho-container {
-    display: flex; /* Faz os filhos (Header e Switcher) ficarem lado a lado */
-    justify-content: space-between; /* Empurra um para cada ponta */
-    align-items: center;
-    margin-bottom: 20px;
-    padding-bottom: 15px;
-    border-bottom: 1px solid var(--op-cor-cinza-borda);
-    gap: 20px; /* Espaço entre o Header e o Switcher */
-}
-
 /* O container do HeaderPagina (que tem o H1) */
 .op-pagina-cabecalho-container .gs-cabecalho-pagina {
     /* Removemos estilos que não são mais necessários aqui */
@@ -2298,54 +1636,10 @@ list-style-type: none
     /* O HeaderPagina já é flex por padrão, o que é ótimo */
 }
 
-.op-view-switcher {
-    margin-top: 0; /* Remove a margem superior no desktop */
-}
-
 /* Garante que o texto dos botões de ação esteja visível no desktop */
-.op-btn-label-desktop {
-    display: inline;
-}
-
-.op-conteudo-principal {
-    margin-top: 0; /* Não precisa mais de margem */
-}
-
-.quantidade-display-lancado {
-    padding: 8px 12px;
-    font-size: 0.9rem;
-    color: var(--op-cor-cinza-texto);
-    background-color: #f8f9fa;
-    border-radius: var(--op-raio-borda-input);
-    min-width: 90px;
-    text-align: center;
-}
-
 /* ==========================================================================
    # ESTILOS PARA INFORMAÇÕES DE ETAPA JÁ LANÇADA
    ========================================================================== */
-
-.etapa-info-lancado {
-    display: flex;
-    align-items: center;
-    gap: 8px; /* Espaço entre o rótulo e o nome */
-    padding: 8px 12px;
-    background-color: #f1f3f5; /* Mesmo cinza dos inputs readonly */
-    border-radius: var(--op-raio-borda-input);
-    font-size: 0.9rem;
-    flex-grow: 3;      /* Ocupa o mesmo espaço que o select ocuparia */
-    flex-basis: 180px;
-    min-width: 160px;
-}
-
-.etapa-info-lancado span {
-    color: var(--op-cor-cinza-texto);
-}
-
-.etapa-info-lancado strong {
-    color: var(--op-cor-texto-principal);
-    font-weight: 600;
-}
 
 /* ==========================================================================
    # ESTILOS DO MODAL DE CONSULTA DE OP (REDESIGN)
@@ -2435,42 +1729,6 @@ list-style-type: none
     padding: 20px;
 }
 
-.op-confirmacao-produto-header {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    padding-bottom: 20px;
-    border-bottom: 1px solid var(--op-cor-cinza-borda);
-}
-
-.op-confirmacao-imagem {
-    width: 80px;
-    height: 80px;
-    object-fit: cover;
-    border-radius: var(--op-raio-borda-card);
-    flex-shrink: 0;
-}
-
-.op-confirmacao-produto-info h4 {
-    margin: 0 0 5px 0;
-    font-size: 1.3rem;
-    color: var(--op-cor-azul-escuro);
-}
-.op-confirmacao-produto-info p {
-    margin: 0;
-    font-size: 1rem;
-    color: var(--op-cor-cinza-texto);
-}
-
-.op-confirmacao-etapa-destaque {
-    margin: 20px 0 0;
-    padding: 15px;
-    background-color: #f0f8ff; /* Azul bem claro */
-    border: 1px solid #b8d9f7;
-    border-radius: var(--op-raio-borda-card);
-    text-align: center;
-}
-
 .op-confirmacao-etapa-destaque .label {
     display: block;
     font-size: 0.8rem;
@@ -2510,27 +1768,6 @@ list-style-type: none
 }
 
 /* Badge de Notificação no Botão do Menu */
-.op-view-switcher .op-btn-switch {
-    position: relative; /* Necessário para posicionar o badge */
-}
-
-.op-badge-notificacao {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    background-color: var(--op-cor-vermelho-perigo);
-    color: white;
-    border-radius: 50%;
-    padding: 2px 6px;
-    font-size: 0.75rem;
-    font-weight: bold;
-    min-width: 18px;
-    text-align: center;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    z-index: 10;
-}
-
 @keyframes popIn {
     0% { transform: scale(0); }
     100% { transform: scale(1); }
@@ -2542,46 +1779,55 @@ list-style-type: none
     flex-shrink: 0;
 }
 
-/* --- BARRA FLUTUANTE DE AÇÃO (LOTE) --- */
-.op-fab-container {
-    position: sticky; /* Cola na tela */
-    bottom: 10px;     /* Fica 10px do fundo */
-    left: 0;
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    padding: 0 20px;
-    pointer-events: none; /* Deixa clicar através da área transparente */
-    z-index: 100;
-    margin-top: 20px; /* Garante espaço se rolar até o fim */
-}
-
-.op-btn-flutuante {
-    pointer-events: auto; /* Reativa o clique no botão */
-    background-color: var(--op-cor-azul-escuro);
-    color: var(--op-cor-branco);
-    border: none;
-    border-radius: 50px; /* Formato de pílula arredondada */
-    padding: 12px 30px;
-    font-size: 1.1rem;
-    font-weight: 600;
-    box-shadow: 0 6px 20px rgba(44, 62, 80, 0.4); /* Sombra forte para destacar */
-    cursor: pointer;
-    transition: all 0.2s ease;
+/* --- BARRA DE AÇÃO DE SELEÇÃO (substitui FAB) --- */
+.op-selecao-barra {
+    position: sticky;
+    bottom: 0;
     display: flex;
     align-items: center;
-    gap: 10px;
-    animation: slideUpFade 0.3s ease-out; /* Animação de entrada */
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 20px;
+    background: #fff;
+    border-top: 2px solid var(--op-cor-azul-claro);
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+    margin: 16px -15px -15px;
+    border-radius: 0 0 var(--op-raio-borda-card) var(--op-raio-borda-card);
+    animation: barra-sobe 0.22s ease;
+    z-index: 10;
 }
-
-.op-btn-flutuante:hover {
-    background-color: var(--op-cor-azul-claro);
-    transform: translateY(-3px); /* Levanta um pouco no hover */
-    box-shadow: 0 8px 25px rgba(52, 152, 219, 0.5);
+@keyframes barra-sobe {
+    from { transform: translateY(100%); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
 }
-
-.op-btn-flutuante i {
-    font-size: 1.2rem;
+.op-selecao-barra-count {
+    font-size: 0.88rem;
+    color: #64748b;
+    font-weight: 500;
+}
+.op-selecao-barra-count strong {
+    color: var(--op-cor-azul-claro);
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+.op-selecao-barra-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 22px;
+    background: var(--op-cor-azul-escuro);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    white-space: nowrap;
+}
+.op-selecao-barra-btn:hover {
+    background: var(--op-cor-azul-claro);
+    transform: translateY(-1px);
 }
 
 @keyframes slideUpFade {
@@ -2593,14 +1839,41 @@ list-style-type: none
    # ESTILOS DA CONFIRMAÇÃO EM LOTE (MOBILE FRIENDLY)
    ========================================================================== */
 
-.op-item-confirmacao-card {
+.op-item-confirmacao-card .card-borda-charme {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 5px;
+    transition: background-color 0.3s;
+}
+.op-item-confirmacao-card .card-borda-charme.borda-corte        { background-color: #8e44ad; }
+.op-item-confirmacao-card .card-borda-charme.borda-etapa-final  { background-color: #e74c3c; }
+.op-item-confirmacao-card .card-borda-charme.borda-etapa-normal { background-color: #3498db; }
+
+.op-confirmacao-container {
     display: flex;
-    flex-direction: column; /* Empilha verticalmente para mobile */
+    flex-direction: column;
+    height: 100%;
+}
+
+.op-confirmacao-lista {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 10px 5px;
+    padding-bottom: 4px;
+}
+
+.op-item-confirmacao-card {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
     align-items: center;
     background-color: var(--op-cor-branco);
     border: 1px solid var(--op-cor-cinza-borda);
     border-radius: var(--op-raio-borda-card);
-    padding: 15px;
+    padding: 15px 15px 15px 20px;
     margin-bottom: 15px;
     gap: 15px;
     box-shadow: 0 4px 6px rgba(0,0,0,0.05);
@@ -2729,44 +2002,6 @@ list-style-type: none
    # ESTILOS DA FILA DE ESPERA (COM VARIAÇÃO)
    ========================================================================== */
 
-.fila-espera-container {
-    margin-top: 15px;
-    padding-top: 12px;
-    border-top: 2px dashed #eee;
-    width: 100%;
-}
-
-.fila-titulo {
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: #95a5a6;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    justify-content: center;
-}
-
-.fila-lista {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    text-align: left;
-}
-
-.fila-lista li {
-    display: grid;
-    grid-template-columns: auto 1fr; /* Coluna da Qtd | Coluna do Texto */
-    gap: 10px;
-    align-items: center;
-    font-size: 0.85rem;
-    padding: 6px 0;
-    border-bottom: 1px solid #f0f0f0;
-    color: #555;
-}
-.fila-lista li:last-child { border-bottom: none; }
-
 .fila-qtd {
     font-weight: 800;
     color: var(--op-cor-azul-escuro);
@@ -2779,11 +2014,6 @@ list-style-type: none
     align-self: flex-start; /* Alinha no topo se o texto for longo */
 }
 
-.fila-desc {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.3;
-}
 .fila-desc .nome-prod { font-weight: 600; color: #333; }
 .fila-desc .var-prod { font-size: 0.85rem; color: #7f8c8d; } /* Estilo da variante */
 .fila-desc .proc-prod { font-size: 0.75rem; color: var(--op-cor-azul-claro); text-transform: uppercase; font-weight: 700; }
@@ -2794,56 +2024,14 @@ list-style-type: none
     margin-left: 0;
     padding: 40px 40px 10px 40px;
     }
-    .op-botao-filtro{
-       font-size: 1.2rem;
-    }
-
-    .op-botao-secundario-acao  {
-    font-size: 1.2rem;
- }
-
- .op-botao-corte{
-    font-size: 1.2rem;
- }
-
  .op-botao-destaque-incluir{
     font-size: 1.2rem;
  }
- .op-grupo-titulo-sutil {
-    font-size: 1.2rem;
- }
-
-    .op-filtros-container {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    .op-input-busca {
-        min-width: 100%;
-        font-size: 1.2rem;
-    }
-    .op-botoes-grupo {
-        justify-content: center; /* Centraliza botões em telas menores */
-    }
     .op-botao {
         flex-grow: 0; /* Faz botões ocuparem mais espaço se necessário */
         justify-content: center;
         font-size: 1.2rem;
 
-    }
-
-    .popup-mensagem {
-        max-width: 60%; /* Pode ser um pouco maior em tablets */
-        padding: 25px 30px; /* Mantém o padding normal */
-        font-size: 0.95rem; /* Fonte um pouco menor */
-    }
-
-    .popup-mensagem p {
-        font-size: 0.95rem;
-    }
-
-    .popup-mensagem button {
-        padding: 10px 20px;
-        font-size: 0.9rem;
     }
 
     .op-titulo-secao {
@@ -2860,37 +2048,10 @@ list-style-type: none
 /* --- TABLET (até 768px) --- */
 @media (max-width: 768px) {
     /* No tablet, o cabeçalho e o switcher são empilhados */
-    .op-cabecalho-pagina {
-        flex-direction: column;
-        align-items: center; /* Centraliza o título */
-        margin-bottom: 15px;
-        gap: 15px;
-    }
-
-    .op-view-switcher {
-        width: 100%;
-        justify-content: center; /* Centraliza os botões do switcher */
-    }
-    
-    .op-btn-switch {
-        flex-grow: 1; /* Faz os botões ocuparem o espaço disponível */
-        justify-content: center;
-    }
-
-    .op-pagina-cabecalho-container {
-        flex-direction: column;
-        align-items: stretch; /* Faz os itens ocuparem a largura total */
-        gap: 20px;
-    }
-
     .op-pagina-cabecalho-container .gs-cabecalho-pagina {
         justify-content: space-between; /* No tablet, mantém título e botão de ação nas pontas */
     }
     
-    .op-view-switcher {
-        justify-content: center; /* Centraliza os botões do switcher */
-        width: 100%;
-    }
 }
 
 
@@ -2900,20 +2061,6 @@ list-style-type: none
     margin-left: 0;
     padding: 15px 10px;
     }
-    .op-filtros-container{
-        padding: 5px;
-    } 
-
-    .op-botao-filtro{
-    padding: 8px 10px;
-    font-size: 0.8rem;
- }
-
-    .op-cabecalho-pagina h1 {
-        font-size: 1.8rem;
-        padding: 0 0 10px 20px;
-    }
-
     .op-form-estilizado .op-form-linha{
         display: flex;
         gap: 20px;
@@ -2930,10 +2077,6 @@ list-style-type: none
     font-size: 0.8rem;
  }
 
-    .op-input-busca {
-        font-size: 0.8rem;
-    }
-    
     .op-botao-secundario-acao .op-botao-corte 
  .op-grupo-titulo-sutil .op-botao-destaque-incluir {
     font-size: 0.8rem;
@@ -2972,52 +2115,11 @@ list-style-type: none
         /* box-shadow: inset 3px 0 0 var(--op-cor-azul-claro); */
     }
 
-    .etapa-row .etapa-numero {
-        display: none; /* Opcional: Esconder o número para economizar espaço, o índice visual já existe */
-                       /* Ou alinhar à esquerda: align-self: flex-start; margin-bottom: 5px; */
-    }
-
     .etapa-row .etapa-processo,
     .etapa-row .select-usuario,
     .etapa-row .etapa-usuario-status,
-    .etapa-row .etapa-usuario-nome {
-        width: 100%;        /* Ocupa a largura total */
-        flex-basis: auto;   /* Reseta flex-basis */
-        margin-right: 0;    /* Remove margens laterais */
-        margin-bottom: 8px; /* Espaço abaixo de cada um */
-        text-align: left;   /* Garante alinhamento à esquerda para status/nome */
-    }
-    .etapa-row .etapa-processo {
-        font-size: 1rem; /* Pode aumentar um pouco o nome do processo */
-        font-weight: 600;
-    }
-
-
-    .etapa-row .quantidade-lancar {
-        width: 100%;         /* Ocupa a largura total */
-        margin-left: 0;      /* Remove o margin-left: auto */
-        justify-content: space-between; /* Distribui Qtd e Lançar nas extremidades */
-        margin-top: 5px;     /* Pequeno espaço acima */
-    }
-
-    .etapa-row .quantidade-input {
-        width: 80px; /* Pode manter um tamanho fixo razoável ou usar flex-grow */
-        /* flex-grow: 1; */ /* Se quiser que o input de qtd cresça */
-    }
-
-    .etapa-row .botao-lancar {
-        min-width: 100px; /* Garante que o botão tenha um bom tamanho */
-        /* flex-grow: 1; */ /* Se quiser que o botão cresça com o input de qtd */
-    }
-
     /* Link para "Ver Detalhes Corte" na etapa de corte */
     #opEditView .etapa-row .link-corte-pendente-etapa,
-    .etapa-row > div[style*="margin-left: auto"] { /* Target do container do link */
-        width: 100%;
-        margin-left: 0;
-        text-align: left; /* Alinha à esquerda no mobile */
-        margin-top: 5px;
-    }
     .op-form-estilizado .op-form-grupo {
     flex: 1 1 auto;
     min-width: 100px;
@@ -3058,12 +2160,6 @@ list-style-type: none
     }
 
     /* Garante que o input de nome do processo "Corte" ocupe a largura total no mobile */
-    .etapa-row .etapa-processo {
-        width: 100%;
-        margin-bottom: 0; /* O gap da .etapa-row já dá espaço */
-        /* Seus outros estilos para .etapa-processo (fonte, etc.) permanecem */
-    }
-
     /* Garante que o container do link (se existir) ocupe a largura total no mobile */
     .etapa-row .etapa-corte-link-container {
         width: 100%;
@@ -3088,10 +2184,6 @@ list-style-type: none
         padding: 15px 15px;
         font-size: 1.2rem;
     }
-    .op-grupo-titulo-sutil {
-        text-align: center; /* Centraliza os títulos sutil */
-    }
-
    #corteView .op-input-data-corte {
     width: 150px !important;
     
@@ -3123,35 +2215,11 @@ list-style-type: none
     text-align: center;
 }
 
-.popup-mensagem {
-        max-width: 90%; /* Ocupa mais espaço em telas pequenas */
-        padding: 20px 25px; /* Padding um pouco menor */
-        font-size: 0.9rem; /* Fonte ainda menor */
-    }
-
-    .popup-mensagem p {
-        font-size: 0.9rem;
-    }
-
-    .popup-mensagem button {
-        padding: 8px 18px;
-        font-size: 0.85rem;
-    }
     .op-botao {
         font-size: 0.9rem;
 
     }
 
-    .op-cabecalho-pagina {
-        /* Título fica à esquerda e switcher vai para baixo */
-        align-items: flex-start;
-    }
-
-    .op-btn-switch {
-        font-size: 0.85rem; /* Fonte menor nos botões */
-        padding: 8px 10px;
-    }
-    
     /* Reduz o tamanho da vitrine de cortes no mobile */
     .op-corte-vitrine-container {
         grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
@@ -3167,12 +2235,6 @@ list-style-type: none
         justify-content: center;
     }
 
-    .op-pagina-cabecalho-container {
-        padding-bottom: 15px;
-        margin-bottom: 15px;
-        gap:15px;
-    }
-
     /* O HeaderPagina (com título e botão) continua flex, como no desktop */
     .op-pagina-cabecalho-container .gs-cabecalho-pagina {
         /* Apenas garantimos que o alinhamento esteja correto */
@@ -3181,10 +2243,6 @@ list-style-type: none
     }
     
     /* Esconde o texto do botão de ação, deixando só o ícone */
-    .op-btn-label-desktop {
-        display: none;
-    }
-    
     /* Ajusta o botão de ação para parecer um botão de ícone */
     .gs-cabecalho-pagina .gs-btn-com-icone {
         width: 44px;
@@ -3194,12 +2252,6 @@ list-style-type: none
     }
     
     /* O switcher continua abaixo, mas talvez com menos margem */
-    .op-view-switcher {
-        margin-top: 15px;
-    }
-    .etapa-info-lancado{
-        flex-basis: 10px;
-    }
 }
 /* ==========================================================================
    # CORREÇÃO DE LAYOUT MOBILE (ANTI-VAZAMENTO)
@@ -3290,20 +2342,8 @@ list-style-type: none
     }
     
     /* 3. Ajuste do Painel de Atividades (Card de Funcionário) */
-    .oa-card-status-tiktik {
-        width: 100%; /* Garante que não estoure */
-    }
-    
     /* Ajuste nos botões de ação do painel para não quebrarem */
-    .oa-card-botoes-acao-container {
-        flex-wrap: wrap; /* Se os botões forem grandes, quebra linha */
-    }
-    
     /* Aumenta a área de toque dos botões no mobile */
-    .btn-acao {
-        padding: 12px 10px; 
-    }
-
     .oa-painel-atividades {
     padding: 10px 5px;
     }
@@ -3496,52 +2536,11 @@ list-style-type: none
 
     }
 
-    .etapa-row .etapa-numero {
-        display: none; /* Opcional: Esconder o número para economizar espaço, o índice visual já existe */
-                       /* Ou alinhar à esquerda: align-self: flex-start; margin-bottom: 5px; */
-    }
-
     .etapa-row .etapa-processo,
     .etapa-row .select-usuario,
     .etapa-row .etapa-usuario-status,
-    .etapa-row .etapa-usuario-nome {
-        width: 100%;        /* Ocupa a largura total */
-        flex-basis: auto;   /* Reseta flex-basis */
-        margin-right: 0;    /* Remove margens laterais */
-        margin-bottom: 8px; /* Espaço abaixo de cada um */
-        text-align: left;   /* Garante alinhamento à esquerda para status/nome */
-    }
-    .etapa-row .etapa-processo {
-        font-size: 1rem; /* Pode aumentar um pouco o nome do processo */
-        font-weight: 600;
-    }
-
-
-    .etapa-row .quantidade-lancar {
-        width: 100%;         /* Ocupa a largura total */
-        margin-left: 0;      /* Remove o margin-left: auto */
-        justify-content: space-between; /* Distribui Qtd e Lançar nas extremidades */
-        margin-top: 5px;     /* Pequeno espaço acima */
-    }
-
-    .etapa-row .quantidade-input {
-        width: 80px; /* Pode manter um tamanho fixo razoável ou usar flex-grow */
-        /* flex-grow: 1; */ /* Se quiser que o input de qtd cresça */
-    }
-
-    .etapa-row .botao-lancar {
-        min-width: 100px; /* Garante que o botão tenha um bom tamanho */
-        /* flex-grow: 1; */ /* Se quiser que o botão cresça com o input de qtd */
-    }
-
     /* Link para "Ver Detalhes Corte" na etapa de corte */
     #opEditView .etapa-row .link-corte-pendente-etapa,
-    .etapa-row > div[style*="margin-left: auto"] { /* Target do container do link */
-        width: 100%;
-        margin-left: 0;
-        text-align: left; /* Alinha à esquerda no mobile */
-        margin-top: 5px;
-    }
     .op-form-estilizado .op-form-grupo {
     flex: 1 1 auto;
     min-width: 100px;
@@ -3551,20 +2550,1517 @@ list-style-type: none
     max-width: 80px;
 }
 
-.popup-mensagem {
-        max-width: 95%; /* Quase total para telas bem pequenas */
-        padding: 15px 20px; /* Padding mínimo */
-        font-size: 0.85rem; /* Fonte mínima para caber */
-    }
-
-    .popup-mensagem p {
-        font-size: 0.85rem;
-        margin-bottom: 10px; /* Menos espaço antes do botão */
-    }
-
-    .popup-mensagem button {
-        padding: 7px 15px;
-        font-size: 0.8rem;
-    }
-
 }
+
+/* =====================================================
+   CRACHÁ VIRTUAL — OPStatusCard
+   ===================================================== */
+
+.oa-painel-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+}
+
+/* --- Card base --- */
+.cracha-card {
+    background: #fff;
+    border-radius: 16px;
+    overflow: visible;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.15s, box-shadow 0.15s;
+    position: relative;
+}
+.cracha-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+
+/* --- Cores por função --- */
+.cracha-costureira { --cracha-cor: #3b82f6; --cracha-gradiente: linear-gradient(135deg, #3b82f6, #2563eb); }
+.cracha-tiktik     { --cracha-cor: #f59e0b; --cracha-gradiente: linear-gradient(135deg, #f59e0b, #d97706); }
+.cracha-cortador   { --cracha-cor: #10b981; --cracha-gradiente: linear-gradient(135deg, #10b981, #059669); }
+
+/* --- Banda superior colorida --- */
+.cracha-banda {
+    height: 52px;
+    background: var(--cracha-gradiente);
+    background-size: 8px 8px;
+    border-radius: 16px 16px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    /* Listras diagonais sutis — o "toque especial" */
+    background-image: var(--cracha-gradiente),
+        repeating-linear-gradient(
+            45deg,
+            transparent,
+            transparent 6px,
+            rgba(255,255,255,0.04) 6px,
+            rgba(255,255,255,0.04) 12px
+        );
+}
+
+.cracha-role-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: rgba(255,255,255,0.92);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.cracha-banda-acoes { display: flex; align-items: center; }
+
+.cracha-menu-btn {
+    background: rgba(255,255,255,0.18);
+    border: none;
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    transition: background 0.15s;
+}
+.cracha-menu-btn:hover { background: rgba(255,255,255,0.32); }
+
+/* =====================================================
+   BOTTOM SHEET — Menu de ações do crachá
+   Tablet-first: botões grandes, fáceis de tocar
+   ===================================================== */
+
+.bs-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 200;
+    animation: bs-fade-in 0.2s ease;
+}
+
+.bs-sheet {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translateX(-50%) translateY(-50%);
+    width: calc(100% - 32px);
+    max-width: 360px;
+    background: #fff;
+    border-radius: 20px;
+    z-index: 201;
+    padding: 0 0 8px;
+    animation: bs-pop-in 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes bs-fade-in  { from { opacity: 0 } to { opacity: 1 } }
+@keyframes bs-pop-in   {
+    from { opacity: 0; transform: translateX(-50%) translateY(-44%); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(-50%); }
+}
+
+.bs-handle {
+    width: 40px;
+    height: 4px;
+    background: #e2e8f0;
+    border-radius: 2px;
+    margin: 12px auto 0;
+}
+
+.bs-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.bs-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background-size: cover;
+    background-position: center;
+    background-color: #e2e8f0;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.bs-avatar-vazio {
+    background-color: #cbd5e1;
+    color: #fff;
+    font-size: 1.2rem;
+}
+
+.bs-nome {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #1e293b;
+}
+.bs-role {
+    font-size: 0.78rem;
+    color: #94a3b8;
+    margin-top: 2px;
+}
+
+.bs-acoes {
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.bs-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+    padding: 14px 12px;
+    background: none;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    text-align: left;
+    font-size: 1rem;
+    color: #1e293b;
+    font-weight: 500;
+    transition: background 0.12s;
+    min-height: 56px; /* toque fácil em tablet */
+}
+.bs-item:hover,
+.bs-item:active { background: #f8fafc; }
+
+.bs-item-icone {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    color: #475569;
+    flex-shrink: 0;
+}
+
+.bs-cancelar {
+    display: block;
+    width: calc(100% - 24px);
+    margin: 4px 12px 16px;
+    padding: 16px;
+    background: #f1f5f9;
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    min-height: 56px;
+    transition: background 0.12s;
+}
+.bs-cancelar:hover { background: #e2e8f0; }
+
+/* --- Identidade (foto, nome, nível) --- */
+.cracha-identidade {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 16px 12px;
+    margin-top: -32px;
+    pointer-events: none;
+}
+
+.cracha-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background-size: cover;
+    background-position: center;
+    background-color: #e2e8f0;
+    border: 3px solid #fff;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.cracha-avatar-vazio {
+    background-color: var(--cracha-cor);
+    opacity: 0.85;
+    color: #fff;
+    font-size: 1.8rem;
+}
+
+.cracha-nome {
+    font-weight: 700;
+    font-size: 0.88rem;
+    color: #1e293b;
+    margin-top: 8px;
+    text-align: center;
+    line-height: 1.2;
+}
+
+.cracha-nivel {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    margin-top: 3px;
+    font-weight: 500;
+}
+
+/* --- Divisor --- */
+.cracha-divider {
+    height: 1px;
+    background: #f1f5f9;
+    margin: 0 12px;
+}
+
+/* --- Status idle (Livre, Pausa, etc.) --- */
+.cracha-status-idle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 18px 12px 8px;
+    gap: 6px;
+}
+.cracha-status-idle i {
+    font-size: 1.8rem;
+}
+.cracha-status-idle-texto {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #64748b;
+}
+
+/* --- Tarefa em andamento --- */
+.cracha-tarefa {
+    padding: 10px 14px 4px;
+}
+.cracha-tarefa-processo {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--cracha-cor);
+    margin-bottom: 2px;
+}
+.cracha-tarefa-produto {
+    font-size: 0.8rem;
+    color: #334155;
+    font-weight: 600;
+    line-height: 1.3;
+}
+.cracha-tarefa-variante {
+    color: #94a3b8;
+    font-weight: 400;
+}
+.cracha-tarefa-qtd {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #1e293b;
+    margin: 4px 0;
+    line-height: 1;
+}
+.cracha-tarefa-qtd small {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: #94a3b8;
+    margin-left: 2px;
+}
+
+/* Métricas (cronômetro + ritmo) */
+.cracha-metricas {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 6px 0 4px;
+    flex-wrap: wrap;
+}
+.cracha-cronometro {
+    font-size: 0.78rem;
+    color: #64748b;
+    font-variant-numeric: tabular-nums;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.cracha-ritmo {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #475569;
+}
+.cracha-ritmo.ritmo-lento    { background: #fee2e2; color: #dc2626; }
+.cracha-ritmo.ritmo-atencao  { background: #fef3c7; color: #d97706; }
+.cracha-ritmo.ritmo-normal   { background: #dcfce7; color: #16a34a; }
+.cracha-ritmo.ritmo-rapido   { background: #d1fae5; color: #059669; }
+.cracha-ritmo.ritmo-super    { background: #e0f2fe; color: #0284c7; }
+
+/* Barra de progresso */
+.cracha-barra-container {
+    height: 4px;
+    background: #f1f5f9;
+    border-radius: 2px;
+    overflow: hidden;
+    margin: 6px 0;
+}
+.cracha-barra {
+    height: 100%;
+    background: var(--cracha-cor);
+    border-radius: 2px;
+    transition: width 1s linear;
+}
+.cracha-barra.ritmo-lento   { background: #ef4444; }
+.cracha-barra.ritmo-atencao { background: #f59e0b; }
+.cracha-barra.ritmo-super   { background: #0ea5e9; }
+
+/* Fila de espera */
+.cracha-fila {
+    margin-top: 8px;
+    background: #f8fafc;
+    border-radius: 8px;
+    padding: 6px 8px;
+}
+.cracha-fila-titulo {
+    font-size: 0.68rem;
+    color: #94a3b8;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+.cracha-fila ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 3px; }
+.cracha-fila li { display: flex; gap: 6px; font-size: 0.72rem; color: #475569; align-items: center; }
+.cracha-fila .fila-qtd  { font-weight: 700; color: #1e293b; min-width: 24px; }
+.cracha-fila .fila-nome { font-weight: 500; }
+.cracha-fila .fila-var  { color: #94a3b8; }
+.cracha-fila .fila-proc { color: var(--cracha-cor); font-weight: 600; margin-left: auto; }
+
+/* --- Rodapé (botões) --- */
+.cracha-footer {
+    display: flex;
+    gap: 8px;
+    padding: 8px 12px 12px;
+}
+.cracha-btn {
+    flex: 1;
+    padding: 7px 10px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    transition: opacity 0.15s, transform 0.1s;
+}
+.cracha-btn:hover  { opacity: 0.88; transform: translateY(-1px); }
+.cracha-btn:active { transform: translateY(0); }
+.cracha-btn.cancelar  { background: #fee2e2; color: #dc2626; }
+.cracha-btn.finalizar { background: var(--cracha-cor); color: #fff; }
+.cracha-btn.full-width { flex: 1; }
+
+/* ==========================================================================
+   # INPUT DE BUSCA (UIBuscaInteligente)
+   ========================================================================== */
+
+.op-input-busca-redesenhado {
+    width: 100%;
+    padding: 10px 12px 10px 36px;
+    border: 1px solid var(--op-cor-cinza-borda);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    background: #fff;
+    color: var(--op-cor-texto-principal);
+    transition: border-color 0.2s, box-shadow 0.2s;
+    outline: none;
+}
+.op-input-busca-redesenhado:focus {
+    border-color: var(--op-cor-azul-claro);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.12);
+}
+.op-input-busca-redesenhado::placeholder { color: #aaa; }
+
+/* ==========================================================================
+   # BORDA LATERAL DOS OP CARDS (padrão de identidade visual)
+   ========================================================================== */
+
+.op-card-react .card-borda-charme {
+    width: 5px; /* era 6px, um toque mais refinado */
+}
+.op-card-react .card-borda-charme.status-pronta-finalizar {
+    background: linear-gradient(180deg, #ffc107, #ff9800);
+    animation: borda-alerta-pulse 1.8s ease-in-out infinite;
+}
+@keyframes borda-alerta-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* ==========================================================================
+   # CRACHÁ — PRODUZINDO: pulso de atividade
+   ========================================================================== */
+
+.cracha-em-producao {
+    animation: cracha-producao-pulse 2.5s ease-in-out infinite;
+}
+@keyframes cracha-producao-pulse {
+    0%   { box-shadow: 0 4px 16px rgba(0,0,0,0.08), 0 0 0 0 rgba(34,197,94,0.45); }
+    70%  { box-shadow: 0 4px 16px rgba(0,0,0,0.08), 0 0 0 9px rgba(34,197,94,0); }
+    100% { box-shadow: 0 4px 16px rgba(0,0,0,0.08), 0 0 0 0 rgba(34,197,94,0); }
+}
+
+/* ==========================================================================
+   # PAINEL DE ATIVIDADES — Header com KPI e Ao Vivo
+   ========================================================================== */
+
+.oa-secao-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.oa-header-esquerda {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.oa-ao-vivo {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #22c55e;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    background: rgba(34,197,94,0.08);
+    padding: 3px 8px;
+    border-radius: 20px;
+}
+.oa-ao-vivo-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #22c55e;
+    animation: oa-dot-pulse 1.4s ease-in-out infinite;
+}
+@keyframes oa-dot-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.4; transform: scale(0.65); }
+}
+
+.oa-kpi-strip {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.oa-kpi-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.82rem;
+    color: #94a3b8;
+    font-weight: 500;
+}
+.oa-kpi-item.produzindo { color: #22c55e; }
+.oa-kpi-item.disponivel { color: #22c55e; }
+
+/* ==========================================================================
+   # PAINEL — Empty State
+   ========================================================================== */
+
+.oa-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    gap: 12px;
+    text-align: center;
+}
+.oa-empty-state-icon {
+    font-size: 4.5rem;
+    color: #e2e8f0;
+    animation: oa-idle-float 3.5s ease-in-out infinite;
+}
+.oa-empty-state-titulo {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #94a3b8;
+    margin: 0;
+}
+.oa-empty-state-subtitulo {
+    font-size: 0.85rem;
+    color: #cbd5e1;
+    margin: 0;
+}
+@keyframes oa-idle-float {
+    0%, 100% { transform: translateY(0) rotate(-4deg); opacity: 0.7; }
+    50%       { transform: translateY(-12px) rotate(4deg); opacity: 1; }
+}
+
+/* ==========================================================================
+   # PAINEL — Faixa de Inativos (substituiu o accordion)
+   ========================================================================== */
+
+.oa-inativos-strip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px dashed #e2e8f0;
+}
+.oa-inativos-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-right: 4px;
+    white-space: nowrap;
+}
+.oa-inativo-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 11px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    color: #64748b;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.oa-inativo-chip:hover {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    color: #2563eb;
+}
+.oa-inativo-chip:hover i { color: #2563eb; }
+.oa-inativo-chip i { font-size: 0.72rem; color: #94a3b8; transition: color 0.15s; }
+
+
+/* ==========================================================================
+   # MODAL DE DETALHES V2 — Redesign Completo
+   ========================================================================== */
+
+.op-modal-v2-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(4px);
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    animation: op-overlay-in 0.2s ease;
+}
+
+@keyframes op-overlay-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+.op-modal-v2 {
+    position: relative;
+    background: #fff;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 640px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+    animation: op-modal-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    overflow: hidden;
+}
+
+@keyframes op-modal-in {
+    from { opacity: 0; transform: scale(0.94) translateY(10px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Borda-charme no modal */
+.op-modal-v2::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 6px;
+    height: 100%;
+    border-radius: 16px 0 0 16px;
+    background: var(--op-cor-cinza-borda);
+    z-index: 1;
+}
+.op-modal-v2.status-em-aberto::before    { background: var(--op-cor-status-em-aberto); }
+.op-modal-v2.status-produzindo::before   { background: var(--op-cor-status-produzindo); }
+.op-modal-v2.status-finalizado::before   { background: var(--op-cor-status-finalizado); }
+.op-modal-v2.status-cancelada::before    { background: var(--op-cor-status-cancelada); }
+.op-modal-v2.status-pronta-finalizar::before { background: #f59e0b; }
+
+/* Header do modal V2 */
+.op-modal-v2-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 20px 16px 28px;
+    border-bottom: 1px solid #f1f5f9;
+    flex-shrink: 0;
+}
+
+.op-modal-v2-imagem {
+    width: 72px;
+    height: 72px;
+    object-fit: cover;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    flex-shrink: 0;
+}
+
+.op-modal-v2-header-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.op-modal-v2-numero {
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: var(--op-cor-azul-claro);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 2px;
+}
+
+.op-modal-v2-produto {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--op-cor-azul-escuro);
+    line-height: 1.25;
+    margin: 0 0 3px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.op-modal-v2-variante {
+    font-size: 0.85rem;
+    color: #64748b;
+    margin: 0;
+}
+
+.op-modal-v2-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 10px 16px;
+    text-align: center;
+    flex-shrink: 0;
+}
+.op-modal-v2-meta .meta-valor {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--op-cor-azul-escuro);
+    line-height: 1;
+}
+.op-modal-v2-meta .meta-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+}
+
+.op-modal-v2-fechar {
+    background: #f1f5f9;
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    font-size: 1.1rem;
+    color: #64748b;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s, color 0.15s;
+    align-self: flex-start;
+}
+.op-modal-v2-fechar:hover { background: #e2e8f0; color: #1e293b; }
+
+/* Barra de progresso geral */
+.op-modal-v2-progresso {
+    padding: 12px 20px 12px 28px;
+    border-bottom: 1px solid #f1f5f9;
+    flex-shrink: 0;
+}
+
+.op-modal-v2-progresso-topo {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 6px;
+}
+
+.op-modal-v2-progresso-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.op-modal-v2-progresso-pct {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--op-cor-azul-escuro);
+}
+
+.op-modal-v2-barra-track {
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 99px;
+    overflow: hidden;
+}
+
+.op-modal-v2-barra-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, #3b82f6, #06b6d4);
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.op-modal-v2-barra-fill.completo  { background: linear-gradient(90deg, #10b981, #34d399); }
+.op-modal-v2-barra-fill.parcial   { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+.op-modal-v2-barra-fill.zerado    { background: #cbd5e1; }
+
+/* Corpo do modal — area de scroll */
+.op-modal-v2-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px 16px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Bloco de etapa (sem accordion) */
+.op-etapa-bloco {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+}
+
+.op-etapa-bloco-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: #f8fafc;
+}
+
+.op-etapa-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #fff;
+    background: #cbd5e1;
+    flex-shrink: 0;
+}
+.op-etapa-num.concluida  { background: #10b981; }
+.op-etapa-num.andamento  { background: #3b82f6; }
+.op-etapa-num.aguardando { background: #cbd5e1; }
+
+.op-etapa-bloco-nome {
+    flex: 1;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--op-cor-azul-escuro);
+}
+
+.op-etapa-status-tag {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 99px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.op-etapa-status-tag.concluida  { background: #d1fae5; color: #065f46; }
+.op-etapa-status-tag.andamento  { background: #dbeafe; color: #1e40af; }
+.op-etapa-status-tag.aguardando { background: #f1f5f9; color: #64748b; }
+
+.op-etapa-bloco-body {
+    padding: 10px 14px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.op-etapa-vazio {
+    font-size: 0.85rem;
+    color: #94a3b8;
+    font-style: italic;
+    text-align: center;
+    padding: 4px 0;
+}
+
+/* Linha de lancamento dentro da etapa */
+.op-lanc-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px dashed #f1f5f9;
+}
+.op-lanc-row:last-child { border-bottom: none; }
+
+.op-lanc-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #e2e8f0;
+    flex-shrink: 0;
+}
+
+.op-lanc-nome {
+    flex: 1;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: #334155;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.op-lanc-qtd {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--op-cor-azul-escuro);
+    white-space: nowrap;
+}
+
+.op-lanc-data {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    white-space: nowrap;
+}
+
+/* Alerta de encerramento parcial no modal */
+.op-modal-v2-alerta-parcial {
+    margin: 0 20px 0 28px;
+    padding: 12px 14px;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 8px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    flex-shrink: 0;
+}
+.op-modal-v2-alerta-parcial i { color: #f97316; font-size: 1rem; margin-top: 1px; flex-shrink: 0; }
+.op-modal-v2-alerta-parcial p { font-size: 0.85rem; color: #9a3412; margin: 0; line-height: 1.4; }
+
+/* Rodape com botoes */
+.op-modal-v2-footer {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding: 14px 20px 16px 28px;
+    border-top: 1px solid #f1f5f9;
+    flex-shrink: 0;
+}
+
+.op-modal-v2-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 9px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+    min-height: 44px;
+}
+.op-modal-v2-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+.op-modal-v2-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.op-modal-v2-btn.confirmar {
+    background: #10b981;
+    color: #fff;
+}
+.op-modal-v2-btn.confirmar:hover:not(:disabled) { background: #059669; }
+
+.op-modal-v2-btn.parcial {
+    background: #f97316;
+    color: #fff;
+}
+.op-modal-v2-btn.parcial:hover:not(:disabled) { background: #ea580c; }
+
+.op-modal-v2-btn.encerrada {
+    background: #e2e8f0;
+    color: #64748b;
+    cursor: not-allowed;
+}
+
+.op-modal-v2-btn.aguardando-btn {
+    background: #e2e8f0;
+    color: #94a3b8;
+    cursor: not-allowed;
+}
+
+.op-spinner-btn {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+}
+
+
+/* ==========================================================================
+   # BADGE RADAR DE TEMPO (no OPCard)
+   ========================================================================== */
+
+.op-radar-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 5px;
+    padding: 4px 9px;
+    border-radius: 8px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.3;
+    white-space: normal;
+}
+.op-radar-badge.atencao {
+    background: #fff7ed;
+    color: #c2410c;
+    border: 1px solid #fed7aa;
+}
+.op-radar-badge.critico {
+    background: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+.op-radar-badge i { font-size: 0.7rem; }
+
+
+/* ==========================================================================
+   # MODO SELECAO — OPCard checkbox e overlay
+   ========================================================================== */
+
+.op-card-react.modo-selecao {
+    cursor: default;
+    user-select: none;
+}
+
+.op-card-react.modo-selecao.elegivel { cursor: pointer; }
+
+.op-card-react.modo-selecao.inelegivel {
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+.op-card-react .op-selecao-check {
+    display: none;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2px solid #cbd5e1;
+    background: #fff;
+    z-index: 5;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.15s, background 0.15s;
+    flex-shrink: 0;
+}
+
+.op-card-react.modo-selecao.elegivel .op-selecao-check {
+    display: flex;
+}
+
+.op-card-react.selecionado .op-selecao-check {
+    background: var(--op-cor-azul-claro);
+    border-color: var(--op-cor-azul-claro);
+}
+
+.op-card-react.selecionado .op-selecao-check i {
+    color: #fff;
+    font-size: 0.7rem;
+}
+
+.op-card-react.selecionado {
+    outline: 2px solid var(--op-cor-azul-claro);
+    outline-offset: 2px;
+}
+
+
+/* ==========================================================================
+   # BARRA DE MODO SELECAO (Toolbar no topo da lista)
+   ========================================================================== */
+
+.op-selecao-barra {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    margin: 0 0 16px 0;
+    flex-wrap: wrap;
+}
+
+.op-selecao-barra-info {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #1e40af;
+    flex: 1;
+    min-width: 120px;
+}
+
+.op-selecao-barra-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: 1.5px solid transparent;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    min-height: 36px;
+}
+.op-selecao-barra-btn.todas {
+    background: #dbeafe;
+    color: #1d4ed8;
+    border-color: #93c5fd;
+}
+.op-selecao-barra-btn.todas:hover { background: #bfdbfe; }
+.op-selecao-barra-btn.cancelar {
+    background: #fff;
+    color: #64748b;
+    border-color: #cbd5e1;
+}
+.op-selecao-barra-btn.cancelar:hover { background: #f8fafc; }
+
+
+/* ==========================================================================
+   # TOOLBAR SUPERIOR — Botao Selecionar ao lado dos filtros
+   ========================================================================== */
+
+.op-toolbar-selecionar {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 16px;
+    border-radius: 8px;
+    border: 1.5px solid #cbd5e1;
+    background: #fff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    min-height: 44px;
+}
+.op-toolbar-selecionar:hover { background: #f8fafc; border-color: #94a3b8; }
+.op-toolbar-selecionar.ativo {
+    background: #eff6ff;
+    border-color: var(--op-cor-azul-claro);
+    color: var(--op-cor-azul-claro);
+}
+
+
+/* ==========================================================================
+   # FAB — Botao Flutuante "Finalizar Selecionadas"
+   ========================================================================== */
+
+.op-fab-finalizar {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 900;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 28px;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #fff;
+    border: none;
+    border-radius: 99px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.45);
+    transition: transform 0.2s, box-shadow 0.2s;
+    min-height: 56px;
+    white-space: nowrap;
+    animation: op-fab-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes op-fab-in {
+    from { opacity: 0; transform: translateX(-50%) scale(0.7) translateY(20px); }
+    to   { opacity: 1; transform: translateX(-50%) scale(1) translateY(0); }
+}
+.op-fab-finalizar:hover {
+    transform: translateX(-50%) translateY(-3px);
+    box-shadow: 0 12px 32px rgba(16, 185, 129, 0.55);
+}
+.op-fab-finalizar i { font-size: 1.1rem; }
+
+
+/* ==========================================================================
+   # BLOCO "ANALISE DO DIA" — substitui o box amarelo
+   ========================================================================== */
+
+.op-analise-dia {
+    border-radius: 12px;
+    margin-bottom: 20px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+}
+
+.op-analise-dia-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+}
+
+.op-analise-dia-header.tem-critico {
+    background: #fef2f2;
+    border-bottom: 1px solid #fecaca;
+}
+.op-analise-dia-header.tem-atencao {
+    background: #fff7ed;
+    border-bottom: 1px solid #fed7aa;
+}
+.op-analise-dia-header.apenas-pendentes {
+    background: #fffbeb;
+    border-bottom: 1px solid #fde68a;
+}
+
+.op-analise-dia-icone {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+.tem-critico .op-analise-dia-icone        { color: #dc2626; }
+.tem-atencao .op-analise-dia-icone        { color: #f97316; }
+.apenas-pendentes .op-analise-dia-icone   { color: #d97706; }
+
+.op-analise-dia-titulo {
+    flex: 1;
+    font-size: 0.92rem;
+    font-weight: 700;
+}
+.tem-critico .op-analise-dia-titulo        { color: #991b1b; }
+.tem-atencao .op-analise-dia-titulo        { color: #9a3412; }
+.apenas-pendentes .op-analise-dia-titulo   { color: #92400e; }
+
+.op-analise-dia-chevron {
+    color: #94a3b8;
+    transition: transform 0.25s;
+    font-size: 0.85rem;
+}
+.op-analise-dia-chevron.aberto { transform: rotate(180deg); }
+
+.op-analise-dia-body {
+    background: #fff;
+    padding: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+}
+.op-analise-dia-body.aberto {
+    max-height: 600px;
+    padding: 12px 16px;
+}
+
+.op-analise-linha {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.12s;
+    border-bottom: 1px solid #f8fafc;
+}
+.op-analise-linha:last-child { border-bottom: none; }
+.op-analise-linha:hover { background: #f8fafc; }
+
+.op-analise-linha-img {
+    width: 38px;
+    height: 38px;
+    border-radius: 7px;
+    object-fit: cover;
+    border: 1px solid #e2e8f0;
+    flex-shrink: 0;
+    background: #f8fafc;
+}
+
+.op-analise-linha-num {
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: var(--op-cor-azul-claro);
+    white-space: nowrap;
+}
+
+.op-analise-linha-produto {
+    flex: 1;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #334155;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.op-analise-linha-detalhe {
+    font-size: 0.78rem;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+.op-analise-linha-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 99px;
+    white-space: nowrap;
+}
+.op-analise-linha-badge.critico  { background: #fef2f2; color: #991b1b; }
+.op-analise-linha-badge.atencao  { background: #fff7ed; color: #c2410c; }
+.op-analise-linha-badge.pendente { background: #fffbeb; color: #92400e; }
+
+.op-analise-divisor {
+    height: 1px;
+    background: #f1f5f9;
+    margin: 6px 0;
+}
+
+
+/* ==========================================================================
+   # MODAL LOTE — Confirmacao de Finalizacao em Lote
+   ========================================================================== */
+
+.op-lote-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(4px);
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    animation: op-overlay-in 0.2s ease;
+}
+
+.op-lote-modal {
+    background: #fff;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 560px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+    animation: op-modal-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    overflow: hidden;
+}
+
+.op-lote-modal-header {
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid #f1f5f9;
+    flex-shrink: 0;
+}
+
+.op-lote-modal-titulo {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--op-cor-azul-escuro);
+    margin: 0 0 4px 0;
+}
+
+.op-lote-modal-subtitulo {
+    font-size: 0.85rem;
+    color: #64748b;
+    margin: 0;
+}
+
+.op-lote-modal-lista {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.op-lote-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+
+.op-lote-item-num {
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: var(--op-cor-azul-claro);
+    white-space: nowrap;
+}
+
+.op-lote-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.op-lote-item-produto {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.op-lote-item-variante {
+    font-size: 0.78rem;
+    color: #64748b;
+}
+
+.op-lote-item-qtd {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #334155;
+    white-space: nowrap;
+}
+
+.op-lote-item-badge-parcial {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 99px;
+    background: #fff7ed;
+    color: #c2410c;
+    border: 1px solid #fed7aa;
+    white-space: nowrap;
+}
+
+.op-lote-modal-aviso {
+    margin: 0 20px;
+    padding: 10px 13px;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 8px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    flex-shrink: 0;
+}
+.op-lote-modal-aviso i { color: #f97316; font-size: 0.9rem; margin-top: 1px; flex-shrink: 0; }
+.op-lote-modal-aviso p { font-size: 0.82rem; color: #9a3412; margin: 0; line-height: 1.4; }
+
+.op-lote-modal-footer {
+    padding: 14px 20px 16px;
+    border-top: 1px solid #f1f5f9;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    flex-shrink: 0;
+}
+
+.op-lote-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 11px 22px;
+    border: none;
+    border-radius: 9px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+    min-height: 44px;
+}
+.op-lote-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+.op-lote-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.op-lote-btn.confirmar { background: #10b981; color: #fff; }
+.op-lote-btn.confirmar:hover:not(:disabled) { background: #059669; }
+.op-lote-btn.cancelar  { background: #f1f5f9; color: #475569; }
+.op-lote-btn.cancelar:hover:not(:disabled)  { background: #e2e8f0; }
+
+.op-lote-resultado {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    text-align: center;
+}
+.op-lote-resultado-icone  { font-size: 2.5rem; }
+.op-lote-resultado-titulo { font-size: 1rem; font-weight: 700; color: #1e293b; margin: 0; }
+.op-lote-resultado-detalhe { font-size: 0.85rem; color: #64748b; margin: 0; }

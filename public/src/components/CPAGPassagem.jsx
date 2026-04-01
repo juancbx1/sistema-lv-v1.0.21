@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Select, { components } from 'react-select';
 import { formatarMoeda } from '/js/utils/formataDtHr.js';
 import { mostrarConfirmacao, mostrarToast } from '/js/utils/popups.js';
-import FeedbackNotFound from './FeedbackNotFound';
+import UIFeedbackNotFound from './UIFeedbackNotFound';
 import CPAGMultiDatePicker from './CPAGMultiDatePicker';
 import CPAGModalHistoricoVT from './CPAGModalHistoricoVT';
 import CPAGGerenciadorRecibosVT from './CPAGGerenciadorRecibosVT';
@@ -10,7 +10,7 @@ import CPAGGerenciadorRecibosVT from './CPAGGerenciadorRecibosVT';
 const CustomNoOptions = (props) => (
     <components.NoOptionsMessage {...props}>
         <div style={{ padding: '10px' }}>
-            <FeedbackNotFound icon="fa-search" titulo="Sem resultados" mensagem="Nenhum registro encontrado." />
+            <UIFeedbackNotFound icon="fa-search" titulo="Sem resultados" mensagem="Nenhum registro encontrado." />
         </div>
     </components.NoOptionsMessage>
 );

@@ -1,118 +1,91 @@
 // public/src/components/OPEtapasModal.jsx
+// Redesign V2 — modal aberto, sem accordion, borda-charme, design moderno
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { obterProdutos as obterProdutosDoStorage } from '/js/utils/storage.js';
-import { mostrarMensagem, mostrarConfirmacao } from '/js/utils/popups.js'; 
+import { mostrarMensagem, mostrarConfirmacao } from '/js/utils/popups.js';
 
 async function fetchAPI(url, options = {}) {
-  const token = localStorage.getItem('token');
-  const response = await fetch(url, {
-    ...options,
-    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...options.headers }
-  });
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: `Erro HTTP ${response.status}` }));
-    throw new Error(errorData.error);
-  }
-  return response.json();
+    const token = localStorage.getItem('token');
+    const response = await fetch(url, {
+        ...options,
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            ...options.headers
+        }
+    });
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: `Erro HTTP ${response.status}` }));
+        throw new Error(errorData.error);
+    }
+    return response.json();
 }
 
-// --- SUBCOMPONENTE: Linha de Detalhe da Etapa ---
-const EtapaAccordion = ({ etapa, index, op, lancamentos, usuariosMap }) => {
-    const [expandido, setExpandido] = useState(false);
+function formatarData(dataISO) {
+    if (!dataISO) return '';
+    try {
+        return new Date(dataISO).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' });
+    } catch {
+        return '';
+    }
+}
 
-    const lancamentosDaEtapa = lancamentos.filter(l => l.etapa_index === index);
-    const totalProduzido = lancamentosDaEtapa.reduce((sum, l) => sum + l.quantidade, 0);
-    const metaTotal = op.quantidade;
-    const progresso = Math.min(100, Math.round((totalProduzido / metaTotal) * 100));
+// --- Sub-componente: bloco de uma etapa ---
+function EtapaBloco({ etapa, index, lancamentos, meta, usuariosMap }) {
+    const lancsDaEtapa = lancamentos.filter(l => l.etapa_index === index);
+    const totalProduzido = lancsDaEtapa.reduce((s, l) => s + l.quantidade, 0);
 
-    let corBarra = '#3498db'; // Azul
-    if (progresso >= 100) corBarra = '#27ae60'; // Verde
-    else if (totalProduzido === 0) corBarra = '#ecf0f1'; // Cinza
+    let estadoClasse = 'aguardando';
+    let estadoLabel = 'Aguardando';
+    if (totalProduzido >= meta && meta > 0) {
+        estadoClasse = 'concluida';
+        estadoLabel = 'Concluída';
+    } else if (totalProduzido > 0) {
+        estadoClasse = 'andamento';
+        estadoLabel = 'Em andamento';
+    }
 
     return (
-        <div className="op-etapa-accordion" style={{marginBottom: '10px', border: '1px solid #eee', borderRadius: '8px', overflow: 'hidden'}}>
-            <div 
-                className="etapa-header" 
-                onClick={() => setExpandido(!expandido)}
-                style={{
-                    padding: '12px 15px', backgroundColor: '#f8f9fa', cursor: 'pointer',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                }}
-            >
-                <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
-                    <div style={{
-                        width: '24px', height: '24px', borderRadius: '50%', 
-                        backgroundColor: corBarra, color: '#fff', fontSize: '0.8rem',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold'
-                    }}>
-                        {index + 1}
-                    </div>
-                    <div>
-                        <strong style={{fontSize: '0.95rem', color: '#2c3e50'}}>{etapa.processo}</strong>
-                        <div style={{fontSize: '0.8rem', color: '#7f8c8d'}}>
-                            {totalProduzido} de {metaTotal} peças ({progresso}%)
-                        </div>
-                    </div>
-                </div>
-                <i className={`fas fa-chevron-${expandido ? 'up' : 'down'}`} style={{color: '#ccc'}}></i>
+        <div className="op-etapa-bloco">
+            <div className="op-etapa-bloco-header">
+                <div className={`op-etapa-num ${estadoClasse}`}>{index + 1}</div>
+                <span className="op-etapa-bloco-nome">{etapa.processo || `Etapa ${index + 1}`}</span>
+                <span className={`op-etapa-status-tag ${estadoClasse}`}>{estadoLabel}</span>
             </div>
 
-            <div style={{height: '4px', width: '100%', backgroundColor: '#eee'}}>
-                <div style={{height: '100%', width: `${progresso}%`, backgroundColor: corBarra, transition: 'width 0.3s'}}></div>
+            <div className="op-etapa-bloco-body">
+                {lancsDaEtapa.length === 0 ? (
+                    <p className="op-etapa-vazio">Nenhum lançamento ainda.</p>
+                ) : (
+                    lancsDaEtapa.map(lanc => {
+                        const user = usuariosMap.get(lanc.funcionario);
+                        const avatar = user?.avatar_url || '/img/placeholder-image.png';
+                        return (
+                            <div key={lanc.id} className="op-lanc-row">
+                                <img src={avatar} alt={lanc.funcionario} className="op-lanc-avatar" />
+                                <span className="op-lanc-nome">{lanc.funcionario}</span>
+                                <span className="op-lanc-qtd">{lanc.quantidade} pçs</span>
+                                <span className="op-lanc-data">{formatarData(lanc.data)}</span>
+                            </div>
+                        );
+                    })
+                )}
             </div>
-
-            {expandido && (
-                <div className="etapa-body" style={{padding: '15px'}}>
-                    {lancamentosDaEtapa.length > 0 ? (
-                        <ul style={{listStyle: 'none', padding: 0, margin: 0}}>
-                            {lancamentosDaEtapa.map(lanc => {
-                                // Busca o avatar no mapa usando o nome (ou ID se disponível)
-                                const user = usuariosMap.get(lanc.funcionario);
-                                const avatarUrl = user?.avatar_url || '/img/placeholder-image.png'; // Avatar padrão se não achar
-                                
-                                return (
-                                    <li key={lanc.id} style={{
-                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0',
-                                        borderBottom: '1px dashed #eee', fontSize: '0.9rem'
-                                    }}>
-                                        <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
-                                            <img 
-                                                src={avatarUrl} 
-                                                alt={lanc.funcionario} 
-                                                style={{width: '30px', height: '30px', borderRadius: '50%', objectFit: 'cover', border: '1px solid #ddd'}}
-                                            />
-                                            <span style={{fontWeight: '500', color: '#555'}}>{lanc.funcionario}</span>
-                                        </div>
-                                        <div style={{textAlign: 'right'}}>
-                                            <strong style={{color: '#2c3e50'}}>{lanc.quantidade} pçs</strong>
-                                            <div style={{fontSize: '0.75rem', color: '#aaa'}}>
-                                                {new Date(lanc.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
-                                            </div>
-                                        </div>
-                                    </li>
-                                );
-                            })}
-                        </ul>
-                    ) : (
-                        <p style={{color: '#aaa', fontStyle: 'italic', fontSize: '0.9rem', textAlign: 'center', margin: '10px 0'}}>Nenhum lançamento ainda.</p>
-                    )}
-                </div>
-            )}
         </div>
     );
-};
+}
 
-
+// --- Componente principal ---
 export default function OPEtapasModal({ op, isOpen, onClose, onUpdateOP, onUpdateGlobal }) {
     const [opDetalhada, setOpDetalhada] = useState(null);
-    const [usuariosMap, setUsuariosMap] = useState(new Map()); // Mapa para busca rápida
+    const [usuariosMap, setUsuariosMap] = useState(new Map());
     const [produtoCompleto, setProdutoCompleto] = useState(null);
     const [carregando, setCarregando] = useState(true);
     const [erro, setErro] = useState(null);
     const [finalizando, setFinalizando] = useState(false);
 
-    const buscarDadosDetalhados = useCallback(async () => {
+    const buscarDados = useCallback(async () => {
         if (!op?.edit_id) return;
         setCarregando(true);
         setErro(null);
@@ -123,18 +96,14 @@ export default function OPEtapasModal({ op, isOpen, onClose, onUpdateOP, onUpdat
                 obterProdutosDoStorage()
             ]);
             setOpDetalhada(opData);
-            
-            // Cria um mapa: Nome -> Dados do Usuário (para buscar avatar fácil)
             const mapUsers = new Map();
             if (Array.isArray(usuariosData)) {
                 usuariosData.forEach(u => mapUsers.set(u.nome, u));
             }
             setUsuariosMap(mapUsers);
-
             setProdutoCompleto(todosProdutos.find(p => p.id === opData.produto_id));
         } catch (err) {
             setErro(err.message);
-            mostrarMensagem(`Erro: ${err.message}`, 'erro');
         } finally {
             setCarregando(false);
         }
@@ -144,193 +113,199 @@ export default function OPEtapasModal({ op, isOpen, onClose, onUpdateOP, onUpdat
         if (isOpen) {
             setFinalizando(false);
             setOpDetalhada(null);
-            buscarDadosDetalhados();
+            buscarDados();
         }
-    }, [isOpen, buscarDadosDetalhados]);
+    }, [isOpen, buscarDados]);
 
-    const handleFinalizarOP = async () => {
+    const handleFinalizar = async () => {
         if (!opDetalhada) return;
-        
-        const lancamentosDetalhados = opDetalhada.lancamentos_detalhados || [];
-        const ultimoIndex = opDetalhada.etapas.length - 1;
-        const totalFinalizado = lancamentosDetalhados
-            .filter(l => l.etapa_index === ultimoIndex)
-            .reduce((sum, l) => sum + l.quantidade, 0);
-        
-        const meta = opDetalhada.quantidade;
-        const incompleto = totalFinalizado < meta;
-        
-        let mensagem = `Tem certeza que deseja finalizar a OP #${opDetalhada.numero}?`;
-        let tipoAlerta = 'aviso';
-        let textoConfirmar = 'Sim, Finalizar';
 
-        if (incompleto) {
-            mensagem = `ATENÇÃO: A meta era ${meta}, mas apenas ${totalFinalizado} foram finalizadas. O saldo de ${meta - totalFinalizado} será considerado PERDA/QUEBRA. Deseja encerrar com divergência?`;
-            tipoAlerta = 'perigo';
-            textoConfirmar = 'Sim, Encerrar com Perda';
-        }
+        const lancs = opDetalhada.lancamentos_detalhados || [];
+        const ultimoIndex = opDetalhada.etapas.length - 1;
+        const totalUltimaEtapa = lancs
+            .filter(l => l.etapa_index === ultimoIndex)
+            .reduce((s, l) => s + l.quantidade, 0);
+        const meta = opDetalhada.quantidade;
+
+        const isParcial = totalUltimaEtapa < meta;
 
         const confirmado = await mostrarConfirmacao(
-            mensagem,
-            { tipo: tipoAlerta, textoConfirmar, textoCancelar: 'Cancelar' }
+            isParcial
+                ? `ATENÇÃO: A meta era ${meta} pçs, mas apenas ${totalUltimaEtapa} foram lançadas na última etapa. O saldo de ${meta - totalUltimaEtapa} pçs será considerado PERDA/QUEBRA. Deseja encerrar com divergência?`
+                : `Tem certeza que deseja finalizar a OP #${opDetalhada.numero}?`,
+            {
+                tipo: isParcial ? 'perigo' : 'aviso',
+                textoConfirmar: isParcial ? 'Sim, Encerrar com Perda' : 'Sim, Finalizar',
+                textoCancelar: 'Cancelar'
+            }
         );
-        
+
         if (!confirmado) return;
 
         setFinalizando(true);
-
         try {
-            const opParaFinalizar = {
-                ...opDetalhada,
-                status: 'finalizado',
-                data_final: new Date().toISOString()
-            };
-
-            await fetchAPI('/api/ordens-de-producao', { method: 'PUT', body: JSON.stringify(opParaFinalizar) });
-
-            mostrarMensagem(`OP #${opDetalhada.numero} encerrada com sucesso!`, 'sucesso');
-            onClose(); 
-            if (onUpdateOP) onUpdateOP(); 
+            await fetchAPI('/api/ordens-de-producao', {
+                method: 'PUT',
+                body: JSON.stringify({
+                    ...opDetalhada,
+                    status: 'finalizado',
+                    data_final: new Date().toISOString()
+                })
+            });
+            mostrarMensagem(`OP #${opDetalhada.numero} finalizada com sucesso!`, 'sucesso');
+            onClose();
+            if (onUpdateOP) onUpdateOP();
             if (onUpdateGlobal) onUpdateGlobal();
-
         } catch (err) {
-            console.error('Erro ao finalizar:', err);
             mostrarMensagem(`Erro: ${err.message}`, 'erro');
             setFinalizando(false);
         }
     };
 
     if (!isOpen) return null;
-    
-    // Lógica Inteligente para o Botão Finalizar
-    let classeBotao = 'op-botao-sucesso';
-    let textoBotao = 'Finalizar OP';
-    let botaoHabilitado = false; // Começa travado
 
-    const lancamentosDetalhados = opDetalhada?.lancamentos_detalhados || [];
+    // ---- Cálculo do estado do botão ----
+    const lancs = opDetalhada?.lancamentos_detalhados || [];
     const ultimoIndex = opDetalhada?.etapas ? opDetalhada.etapas.length - 1 : -1;
-    
-    // Calcula o total produzido na ÚLTIMA etapa
-    const totalFinalizadoNaUltimaEtapa = lancamentosDetalhados
+    const totalUltimaEtapa = lancs
         .filter(l => l.etapa_index === ultimoIndex)
-        .reduce((sum, l) => sum + l.quantidade, 0);
-    
+        .reduce((s, l) => s + l.quantidade, 0);
     const meta = opDetalhada?.quantidade || 0;
+    const jaFinalizado = opDetalhada?.status === 'finalizado';
+    const podeAtuar = totalUltimaEtapa > 0 && !jaFinalizado;
+    const isParcial = podeAtuar && totalUltimaEtapa < meta;
 
-    // REGRA DE OURO: Só permite ação se a última etapa teve movimento
-    if (opDetalhada?.status === 'finalizado') {
-        textoBotao = 'OP Encerrada';
-        classeBotao = 'op-finalizada-btn-estilo';
-        botaoHabilitado = false;
-    } else if (totalFinalizadoNaUltimaEtapa > 0) {
-        // Se já tem produção na última etapa, pode finalizar
-        botaoHabilitado = true;
-        
-        if (totalFinalizadoNaUltimaEtapa < meta) {
-            // Se for parcial, muda para laranja
-            classeBotao = 'op-botao-laranja';
-            textoBotao = 'Encerrar (Parcial)';
-        } else {
-            // Se for total ou maior, verde
-            classeBotao = 'op-botao-sucesso';
-            textoBotao = 'Finalizar OP';
-        }
-    } else {
-        // Se a última etapa está zerada, não pode finalizar ainda
-        botaoHabilitado = false;
-        textoBotao = 'Aguardando Produção Final';
-        classeBotao = 'op-botao-disabled'; // (Estilo cinza padrão do disabled)
-    }
+    // ---- Progresso geral (baseado na última etapa) ----
+    const progresso = meta > 0 ? Math.min(100, Math.round((totalUltimaEtapa / meta) * 100)) : 0;
+    const classeProgresso = progresso >= 100 ? 'completo' : progresso > 0 ? 'parcial' : 'zerado';
 
+    // ---- Imagem ----
     let imagemSrc = '/img/placeholder-image.png';
     if (produtoCompleto && opDetalhada) {
         const gradeInfo = produtoCompleto.grade?.find(g => g.variacao === opDetalhada.variante);
         imagemSrc = gradeInfo?.imagem || produtoCompleto.imagem || imagemSrc;
     }
 
+    // ---- Classe de status (para borda-charme) ----
+    let statusClass = `status-${opDetalhada?.status || 'em-aberto'}`;
+    if (opDetalhada && opDetalhada.status !== 'finalizado' && opDetalhada.status !== 'cancelada') {
+        const todasProntas = (opDetalhada.etapas || []).every((_, i) => {
+            const feito = lancs.filter(l => l.etapa_index === i).reduce((s, l) => s + l.quantidade, 0);
+            return feito > 0;
+        });
+        if (todasProntas) statusClass = 'status-pronta-finalizar';
+    }
+
     return (
-        <div className="op-modal-wrapper-react" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, pointerEvents: 'auto' }}>
-            <div className="popup-overlay" onClick={onClose} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0, 0, 0, 0.5)', zIndex: 1001 }}></div>
-            <div className="op-modal" id="opEditView" style={{ display: 'block', maxWidth: '700px', zIndex: 1002, position: 'relative', maxHeight: '90vh', overflowY: 'auto', padding: '10px' }}>
-                
-                <div className="op-modal-header">
-                    <h3 className="op-modal-titulo">Detalhes da OP #{opDetalhada?.numero}</h3>
-                    <button className="op-modal-fechar-btn" onClick={onClose}>×</button>
+        <div className="op-modal-v2-overlay" onClick={onClose}>
+            <div
+                className={`op-modal-v2 ${statusClass}`}
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Header */}
+                <div className="op-modal-v2-header">
+                    {opDetalhada && (
+                        <img src={imagemSrc} alt={opDetalhada.produto} className="op-modal-v2-imagem" />
+                    )}
+                    <div className="op-modal-v2-header-info">
+                        {opDetalhada && (
+                            <>
+                                <div className="op-modal-v2-numero">OP #{opDetalhada.numero}</div>
+                                <p className="op-modal-v2-produto">{opDetalhada.produto || 'Produto'}</p>
+                                <p className="op-modal-v2-variante">{opDetalhada.variante || 'Padrão'}</p>
+                            </>
+                        )}
+                        {carregando && <p className="op-modal-v2-variante">Carregando...</p>}
+                        {erro && <p style={{ color: 'red', fontSize: '0.85rem' }}>{erro}</p>}
+                    </div>
+                    {opDetalhada && (
+                        <div className="op-modal-v2-meta">
+                            <span className="meta-valor">{opDetalhada.quantidade}</span>
+                            <span className="meta-label">A Produzir</span>
+                        </div>
+                    )}
+                    <button className="op-modal-v2-fechar" onClick={onClose} title="Fechar">
+                        <i className="fas fa-times"></i>
+                    </button>
                 </div>
 
-                <div className="op-modal-body">
-                    {carregando && <div className="spinner">Carregando histórico...</div>}
-                    {erro && <p style={{ color: 'red', textAlign: 'center' }}>{erro}</p>}
+                {/* Barra de progresso */}
+                {opDetalhada && !carregando && (
+                    <div className="op-modal-v2-progresso">
+                        <div className="op-modal-v2-progresso-topo">
+                            <span className="op-modal-v2-progresso-label">Progresso Geral</span>
+                            <span className="op-modal-v2-progresso-pct">
+                                {totalUltimaEtapa} / {meta} pçs ({progresso}%)
+                            </span>
+                        </div>
+                        <div className="op-modal-v2-barra-track">
+                            <div
+                                className={`op-modal-v2-barra-fill ${classeProgresso}`}
+                                style={{ width: `${progresso}%` }}
+                            />
+                        </div>
+                    </div>
+                )}
 
+                {/* Corpo — etapas */}
+                <div className="op-modal-v2-body">
+                    {carregando && (
+                        <div className="spinner" style={{ margin: '20px 0' }}>Carregando histórico...</div>
+                    )}
                     {opDetalhada && !carregando && (
                         <>
-                            <div className="op-corte-resumo-card" style={{maxWidth: '100%', marginBottom: '25px'}}>
-                                <img src={imagemSrc} alt={opDetalhada.produto} />
-                                <div className="op-corte-resumo-info">
-                                    <h4>{opDetalhada.produto}</h4>
-                                    <p>{opDetalhada.variante || 'Padrão'}</p>
-                                </div>
-                                <div className="op-corte-estoque-quantidade" style={{padding: '0 15px', alignItems: 'flex-end'}}>
-                                    <span className="valor">{opDetalhada.quantidade}</span>
-                                    <span className="label">Meta</span>
-                                </div>
-                            </div>
-                            
-                            <h3 className="op-subtitulo-secao">Histórico de Produção</h3>
-                            <div className="op-etapas-container-wrapper" style={{border: 'none'}}>
-                                {opDetalhada.etapas.map((etapa, index) => (
-                                    <EtapaAccordion
-                                        key={index}
-                                        index={index}
-                                        etapa={etapa}
-                                        op={opDetalhada}
-                                        lancamentos={opDetalhada.lancamentos_detalhados || []}
-                                        usuariosMap={usuariosMap}
-                                    />
-                                ))}
-                            </div>
-                            
-                            {/* --- ALERTA AGRESSIVO DE PERDA --- */}
-                            {opDetalhada.status !== 'finalizado' && classeBotao === 'op-botao-laranja' && (
-                                <div style={{
-                                    margin: '0 25px',
-                                    padding: '15px',
-                                    backgroundColor: '#fff5f5',
-                                    border: '1px solid #feb2b2',
-                                    borderRadius: '6px',
-                                    color: '#c53030',
-                                    fontSize: '0.9rem',
-                                    display: 'flex',
-                                    alignItems: 'flex-start',
-                                    gap: '10px'
-                                }}>
-                                    <i className="fas fa-exclamation-triangle" style={{fontSize: '1.2rem', marginTop: '2px'}}></i>
-                                    <div>
-                                        <strong>Atenção: Encerramento Parcial Detectado</strong>
-                                        <p style={{margin: '5px 0 0 0', lineHeight: '1.4'}}>
-                                            A meta não foi atingida. Ao encerrar agora, o saldo restante será considerado <strong>PERDA</strong> e a OP (e suas etapas) sairão da fila de produção imediatamente.
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="op-form-botoes" style={{ margin: '25px', justifyContent: 'flex-end' }}>
-                                {/* Botão Finalizar Inteligente */}
-                                <button
-                                    id="finalizarOP"
-                                    className={`op-botao ${classeBotao}`}
-                                    onClick={handleFinalizarOP}
-                                    style={classeBotao === 'op-botao-laranja' ? {backgroundColor: '#e67e22'} : {}}
-                                    disabled={finalizando || !botaoHabilitado}
-                                    title={!botaoHabilitado && opDetalhada?.status !== 'finalizado' ? "Complete a última etapa para finalizar." : ""}
-                                >
-                                    {finalizando ? <div className="spinner-btn-interno"></div> : <i className="fas fa-check-double"></i>}
-                                    {textoBotao}
-                                </button>
-                            </div>
+                            {opDetalhada.etapas.map((etapa, index) => (
+                                <EtapaBloco
+                                    key={index}
+                                    index={index}
+                                    etapa={etapa}
+                                    lancamentos={opDetalhada.lancamentos_detalhados || []}
+                                    meta={meta}
+                                    usuariosMap={usuariosMap}
+                                />
+                            ))}
                         </>
                     )}
                 </div>
+
+                {/* Alerta parcial */}
+                {opDetalhada && !carregando && isParcial && (
+                    <div className="op-modal-v2-alerta-parcial">
+                        <i className="fas fa-exclamation-triangle"></i>
+                        <p>
+                            <strong>Encerramento parcial:</strong> a meta não foi atingida. Ao finalizar,
+                            o saldo restante ({meta - totalUltimaEtapa} pçs) será registrado como perda.
+                        </p>
+                    </div>
+                )}
+
+                {/* Footer com botões */}
+                {opDetalhada && !carregando && (
+                    <div className="op-modal-v2-footer">
+                        {jaFinalizado ? (
+                            <button className="op-modal-v2-btn encerrada" disabled>
+                                <i className="fas fa-check-double"></i> OP Encerrada
+                            </button>
+                        ) : podeAtuar ? (
+                            <button
+                                className={`op-modal-v2-btn ${isParcial ? 'parcial' : 'confirmar'}`}
+                                onClick={handleFinalizar}
+                                disabled={finalizando}
+                            >
+                                {finalizando
+                                    ? <><div className="op-spinner-btn"></div> Finalizando...</>
+                                    : isParcial
+                                        ? <><i className="fas fa-exclamation-circle"></i> Encerrar (Parcial)</>
+                                        : <><i className="fas fa-check-double"></i> Finalizar OP</>
+                                }
+                            </button>
+                        ) : (
+                            <button className="op-modal-v2-btn aguardando-btn" disabled>
+                                <i className="fas fa-hourglass-half"></i> Aguardando Produção Final
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

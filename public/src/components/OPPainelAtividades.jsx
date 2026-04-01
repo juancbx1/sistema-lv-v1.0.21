@@ -14,11 +14,7 @@ export default function OPPainelAtividades() {
     const [modalAberto, setModalAberto] = useState(false);
     const [funcionarioSelecionado, setFuncionarioSelecionado] = useState(null);
 
-    // --- NOVO ESTADO PARA O ACCORDION (SUBSTITUI O JS MANUAL) ---
-    const [accordionAberto, setAccordionAberto] = useState(false);
-
     const pollingTimeoutRef = useRef(null);
-    const cronometroIntervalRef = useRef(null);
 
     // --- 1. BUSCA DE DADOS ---
     const buscarDadosPainel = useCallback(async () => {
@@ -63,71 +59,7 @@ export default function OPPainelAtividades() {
         };
     }, [buscarDadosPainel]);
 
-    // --- 3. CRONÔMETRO ---
-    useEffect(() => {
-        const atualizarCronometros = () => {
-            const cards = document.querySelectorAll('.oa-card-status-tiktik.status-produzindo');
-            
-            cards.forEach(card => {
-                const inicioISO = card.dataset.inicio;
-                if (!inicioISO) return;
-                
-                const inicio = new Date(inicioISO).getTime();
-                if (isNaN(inicio)) return;
-
-                const agora = Date.now();
-                const diferencaEmMilissegundos = Math.max(0, agora - inicio);
-                
-                const tempoFormatado = new Date(diferencaEmMilissegundos).toISOString().substr(11, 8);
-                
-                const cronometroEl = card.querySelector('.cronometro-tarefa');
-                if (cronometroEl) {
-                    cronometroEl.innerHTML = `<i class="fas fa-clock"></i> ${tempoFormatado}`;
-                }
-
-                const tpp = parseFloat(card.dataset.tpp);
-                const quantidade = parseInt(card.dataset.quantidade, 10);
-                const barraEl = card.querySelector('.barra-progresso');
-                const indicadorRitmoEl = card.querySelector('.indicador-ritmo-tarefa');
-                
-                if (barraEl && !isNaN(tpp) && tpp > 0 && !isNaN(quantidade) && quantidade > 0) {
-                    const tempoTotalEstimadoMs = tpp * quantidade * 1000;
-                    if (tempoTotalEstimadoMs > 0) {
-                        const progressoReal = (diferencaEmMilissegundos / tempoTotalEstimadoMs) * 100;
-                        const progressoVisual = Math.min(100, progressoReal);
-                        
-                        barraEl.style.width = `${progressoVisual}%`;
-                        
-                        let ritmoTexto = '...';
-                        let ritmoIcone = '👍';
-                        let corClasse = 'normal';
-
-                        if (progressoReal >= 120) {
-                            ritmoTexto = 'Lento'; ritmoIcone = '🐢'; corClasse = 'lento';
-                        } else if (progressoReal >= 100) {
-                            ritmoTexto = 'Atenção'; ritmoIcone = '⚠️'; corClasse = 'atencao';
-                        } else if (progressoReal >= 60) {
-                            ritmoTexto = 'No Ritmo'; ritmoIcone = '👍'; corClasse = 'normal';
-                        } else if (progressoReal >= 30) {
-                            ritmoTexto = 'Rápido'; ritmoIcone = '✅'; corClasse = 'rapido';
-                        } else {
-                            ritmoTexto = 'Super Rápido'; ritmoIcone = '🚀'; corClasse = 'super-rapido';
-                        }
-
-                        barraEl.classList.remove('normal', 'lento', 'atencao', 'rapido', 'super-rapido');
-                        barraEl.classList.add(corClasse);
-
-                        if (indicadorRitmoEl) {
-                            indicadorRitmoEl.innerHTML = `${ritmoIcone} ${ritmoTexto}`;
-                        }
-                    }
-                }
-            });
-        };
-
-        cronometroIntervalRef.current = setInterval(atualizarCronometros, 1000);
-        return () => clearInterval(cronometroIntervalRef.current);
-    }, []); 
+ 
 
 
     const handleAtribuirTarefa = (funcionario) => {
@@ -141,8 +73,9 @@ export default function OPPainelAtividades() {
         buscarDadosPainel();
     };
 
-    const handleAcaoManual = async (funcionario, acao) => {
-         const confirmado = await mostrarConfirmacao(`Confirmar ação?`, 'aviso');
+    const handleAcaoManual = async (funcionario, acao, mensagem) => {
+         const textoConfirmacao = mensagem || `Confirmar ação para ${funcionario.nome}?`;
+         const confirmado = await mostrarConfirmacao(textoConfirmacao, 'aviso');
          if(!confirmado) return;
          try {
              const token = localStorage.getItem('token');
@@ -205,64 +138,91 @@ export default function OPPainelAtividades() {
     const funcionariosPrincipais = funcionarios.filter(f => statusPrincipais.includes(f.status_atual));
     const funcionariosInativos = funcionarios.filter(f => !statusPrincipais.includes(f.status_atual));
 
+    const qtdProduzindo = funcionarios.filter(f => f.status_atual === 'PRODUZINDO').length;
+    const qtdDisponivel = funcionarios.filter(f => ['LIVRE', 'LIVRE_MANUAL'].includes(f.status_atual)).length;
+    const temAlguemProduzindo = qtdProduzindo > 0;
+
+    const getIconeInativo = (status) => {
+        const map = {
+            PAUSA: 'fa-coffee', PAUSA_MANUAL: 'fa-coffee',
+            ALMOCO: 'fa-utensils', FORA_DO_HORARIO: 'fa-moon',
+            FALTOU: 'fa-user-times', ALOCADO_EXTERNO: 'fa-shipping-fast',
+        };
+        return map[status] || 'fa-question-circle';
+    };
+
     return (
         <>
             <div className="oa-main-content-card">
                 <section className="oa-painel-atividades">
+
                     <div className="oa-secao-header">
-                        <h2 className="oa-titulo-secao">Painel de Atividades - Produção</h2>
+                        <div className="oa-header-esquerda">
+                            <h2 className="oa-titulo-secao">Painel de Atividades</h2>
+                            {temAlguemProduzindo && (
+                                <span className="oa-ao-vivo">
+                                    <span className="oa-ao-vivo-dot"></span>
+                                    AO VIVO
+                                </span>
+                            )}
+                        </div>
+                        <div className="oa-kpi-strip">
+                            <span className={`oa-kpi-item${qtdProduzindo > 0 ? ' produzindo' : ''}`}>
+                                <i className="fas fa-bolt"></i> {qtdProduzindo} produzindo
+                            </span>
+                            <span className={`oa-kpi-item${qtdDisponivel > 0 ? ' disponivel' : ''}`}>
+                                <i className="fas fa-check-circle"></i> {qtdDisponivel} disponível
+                            </span>
+                            {funcionariosInativos.length > 0 && (
+                                <span className="oa-kpi-item">
+                                    <i className="fas fa-pause-circle"></i> {funcionariosInativos.length} em pausa
+                                </span>
+                            )}
+                        </div>
                     </div>
 
-                    <div className="oa-painel-status-grid">
-                        {funcionariosPrincipais.map(func => {
-                            const tppDaTarefa = temposPadraoProducao[`${func.tarefa_atual?.produto_id}-${func.tarefa_atual?.processo}`];
-                            return (
-                                <OPStatusCard 
-                                    key={func.id} 
-                                    funcionario={func} 
-                                    tpp={tppDaTarefa}
-                                    onAtribuirTarefa={handleAtribuirTarefa} 
-                                    onAcaoManual={handleAcaoManual}
-                                    onFinalizarTarefa={handleFinalizarTarefa}
-                                    onCancelarTarefa={handleCancelarTarefa}
-                                />
-                            );
-                        })}
-                    </div>
-
-                    {/* --- ACCORDION CONTROLADO PELO REACT --- */}
-                    {funcionariosInativos.length > 0 && (
-                        <div className="oa-accordion-inativos" style={{marginTop: '20px'}}>
-                            <button 
-                                className={`oa-accordion-header ${accordionAberto ? 'active' : ''}`}
-                                onClick={() => setAccordionAberto(!accordionAberto)}
-                            >
-                                <span>Em Pausa / Inativos</span>
-                                <span className="oa-accordion-badge">{funcionariosInativos.length}</span>
-                                <i className="fas fa-chevron-down accordion-icone"></i>
-                            </button>
-                            
-                            {/* Controlamos a exibição aqui diretamente */}
-                            <div className="oa-accordion-content" style={{ display: accordionAberto ? 'block' : 'none' }}>
-                                <div className="oa-painel-status-grid">
-                                    {funcionariosInativos.map(func => {
-                                        const tppDaTarefa = temposPadraoProducao[`${func.tarefa_atual?.produto_id}-${func.tarefa_atual?.processo}`];
-                                        return (
-                                            <OPStatusCard 
-                                                key={func.id} 
-                                                funcionario={func} 
-                                                tpp={tppDaTarefa}
-                                                onAtribuirTarefa={handleAtribuirTarefa} 
-                                                onAcaoManual={handleAcaoManual}
-                                                onFinalizarTarefa={handleFinalizarTarefa}
-                                                onCancelarTarefa={handleCancelarTarefa}
-                                            />
-                                        );
-                                    })}
-                                </div>
-                            </div>
+                    {funcionariosPrincipais.length === 0 ? (
+                        <div className="oa-empty-state">
+                            <i className="fas fa-tshirt oa-empty-state-icon"></i>
+                            <p className="oa-empty-state-titulo">Nenhum colaborador em atividade</p>
+                            <p className="oa-empty-state-subtitulo">Aguardando início das atividades ou verifique as escalas</p>
+                        </div>
+                    ) : (
+                        <div className="oa-painel-status-grid">
+                            {funcionariosPrincipais.map(func => {
+                                const tppDaTarefa = temposPadraoProducao[`${func.tarefa_atual?.produto_id}-${func.tarefa_atual?.processo}`];
+                                return (
+                                    <OPStatusCard
+                                        key={func.id}
+                                        funcionario={func}
+                                        tpp={tppDaTarefa}
+                                        onAtribuirTarefa={handleAtribuirTarefa}
+                                        onAcaoManual={handleAcaoManual}
+                                        onFinalizarTarefa={handleFinalizarTarefa}
+                                        onCancelarTarefa={handleCancelarTarefa}
+                                    />
+                                );
+                            })}
                         </div>
                     )}
+
+                    {funcionariosInativos.length > 0 && (
+                        <div className="oa-inativos-strip">
+                            <span className="oa-inativos-label">Em pausa / inativos</span>
+                            {funcionariosInativos.map(func => (
+                                <button
+                                    key={func.id}
+                                    className="oa-inativo-chip"
+                                    title={`${func.nome} — clique para liberar`}
+                                    onClick={() => handleAcaoManual(func, 'LIVRE_MANUAL', `Liberar ${func.nome.split(' ')[0]} para o trabalho?`)}
+                                >
+                                    <i className={`fas ${getIconeInativo(func.status_atual)}`}></i>
+                                    {func.nome.split(' ')[0]}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
                 </section>
             </div>
 

@@ -3757,3 +3757,93 @@ font-weight: 500;
 
 
 }
+
+/* ==========================================================================
+   # TAB NAVIGATION — Padrão global para páginas com múltiplas visões
+   ========================================================================== */
+
+.gs-tab-nav {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    padding: 0 25px;
+    border-bottom: 2px solid var(--gs-borda);
+    background: #fff;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.gs-tab-nav::-webkit-scrollbar { display: none; }
+
+.gs-tab-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 11px 18px;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    color: #64748b;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    white-space: nowrap;
+    border-radius: 6px 6px 0 0;
+}
+.gs-tab-btn:hover {
+    color: var(--gs-primaria);
+    background: rgba(59, 130, 246, 0.05);
+}
+.gs-tab-btn.ativo {
+    color: var(--gs-primaria);
+    border-bottom-color: var(--gs-primaria);
+    font-weight: 600;
+}
+
+.gs-tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    border-radius: 9px;
+    line-height: 1;
+}
+
+/* Wrapper do conteúdo principal após o tab nav */
+.gs-conteudo-pagina {
+    padding: 24px 25px;
+}
+
+/* Botão limpar busca (X) dentro de gs-filtro-busca-wrapper */
+.gs-filtro-busca-limpar {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #aaa;
+    cursor: pointer;
+    padding: 4px 6px;
+    line-height: 1;
+    border-radius: 50%;
+    transition: color 0.15s, background 0.15s;
+}
+.gs-filtro-busca-limpar:hover {
+    color: #64748b;
+    background: #f1f5f9;
+}
+
+@media (max-width: 768px) {
+    .gs-tab-nav { padding: 0 12px; }
+    .gs-tab-btn { padding: 10px 14px; font-size: 0.85rem; }
+    .gs-conteudo-pagina { padding: 16px 12px; }
+}

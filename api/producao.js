@@ -38,8 +38,8 @@ router.get('/status-funcionarios', async (req, res) => {
         // Buscamos usuários e suas sessões ativas (agregadas em JSON array)
         const query = `
             SELECT 
-                u.id, u.nome, u.avatar_url, u.status_atual, u.status_data_modificacao,
-                u.horario_entrada_1, u.horario_saida_1, u.horario_entrada_2, u.horario_saida_2, 
+                u.id, u.nome, u.avatar_url, u.foto_oficial, u.nivel, u.status_atual, u.status_data_modificacao,
+                u.horario_entrada_1, u.horario_saida_1, u.horario_entrada_2, u.horario_saida_2,
                 u.horario_entrada_3, u.horario_saida_3,
                 u.tipos,
                 COALESCE(
@@ -95,11 +95,13 @@ router.get('/status-funcionarios', async (req, res) => {
             return {
                 id: row.id,
                 nome: row.nome,
-                avatar_url: row.avatar_url,
+                avatar_url: row.avatar_url && !row.avatar_url.includes('image.jfif') ? row.avatar_url : null,
+                foto_oficial: row.foto_oficial,
+                nivel: row.nivel,
                 tipos: row.tipos,
                 status_atual: statusFinal,
-                tarefa_atual: tarefaPrincipal, // Mantém compatibilidade
-                tarefas: tarefas // Nova lista completa
+                tarefa_atual: tarefaPrincipal,
+                tarefas: tarefas
             }
         });
 

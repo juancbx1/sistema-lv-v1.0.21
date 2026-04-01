@@ -1,7 +1,7 @@
 // public/src/components/OPFiltros.jsx
 
 import React, { useState, useCallback } from 'react'; // Adicione useCallback
-import BuscaInteligente from './BuscaInteligente.jsx';
+import UIBuscaInteligente from './UIBuscaInteligente.jsx';
 
 const statusOptions = [
   { id: 'todas', label: 'Todas Ativas' },
@@ -28,7 +28,7 @@ export default React.memo(function OPFiltros({ onFiltroChange }) {
   return (
     <div className="op-filtros-container-redesenhado">
         <div className="op-filtro-busca-wrapper">
-            <BuscaInteligente 
+            <UIBuscaInteligente 
                 onSearch={handleBusca}
                 placeholder="Buscar OP, Produto ou Variação..."
                 historicoKey="ops"

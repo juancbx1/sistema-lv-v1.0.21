@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom/client';
 
-import HeaderPagina from './components/HeaderPagina.jsx';
+import UIHeaderPagina from './components/UIHeaderPagina.jsx';
 import OPPainelAtividades from './components/OPPainelAtividades.jsx';
 import OPGerenciamentoTela from './components/OPGerenciamentoTela.jsx';
 import OPCortesTela from './components/OPCortesTela.jsx';
@@ -132,61 +132,57 @@ function App() {
 
    return (
     <ErrorBoundary>
-      <div className="op-pagina-cabecalho-container">
-        <HeaderPagina titulo="Ordens de Produção">
-          <button
-            className="gs-btn gs-btn-secundario gs-btn-com-icone"
-            title="Configurar Tempo Padrão de Produção"
-            onClick={() => setModalTppAberto(true)}
-          >
-              <i className="fas fa-clock"></i>
-              <span className="op-btn-label-desktop">Tempos Padrão</span>
-          </button>
-        </HeaderPagina>
+      <UIHeaderPagina titulo="Ordens de Produção">
+        <button
+          className="gs-btn gs-btn-secundario"
+          title="Configurações da página"
+          onClick={() => setModalTppAberto(true)}
+        >
+            <i className="fas fa-cog"></i>
+        </button>
+      </UIHeaderPagina>
 
-        <div className="op-view-switcher">
-          <button
-            className={`op-btn-switch ${visaoAtual === 'painel' ? 'active' : ''}`}
-            onClick={() => setVisaoAtual('painel')}
-          >
-            <i className="fas fa-users"></i> Painel
-          </button>
-          
-          <button
-            className={`op-btn-switch ${visaoAtual === 'gerenciamento' ? 'active' : ''}`}
-            onClick={() => setVisaoAtual('gerenciamento')}
-            style={{ position: 'relative' }}
-          >
-            <i className="fas fa-list-alt"></i> OPs
-            {qtdOpsPendentes > 0 && (
-                <span className="op-badge-notificacao" title={`${qtdOpsPendentes} OP(s) prontas para finalizar`}>
-                    {qtdOpsPendentes}
-                </span>
-            )}
-          </button>
+      <nav className="gs-tab-nav">
+        <button
+          className={`gs-tab-btn ${visaoAtual === 'painel' ? 'ativo' : ''}`}
+          onClick={() => setVisaoAtual('painel')}
+        >
+          <i className="fas fa-users"></i> Painel
+        </button>
 
-          <button
-            className={`op-btn-switch ${visaoAtual === 'cortes' ? 'active' : ''}`}
-            onClick={() => setVisaoAtual('cortes')}
-          >
-            <i className="fas fa-cut"></i> Cortes
-          </button>
-        </div>
-      </div>
+        <button
+          className={`gs-tab-btn ${visaoAtual === 'gerenciamento' ? 'ativo' : ''}`}
+          onClick={() => setVisaoAtual('gerenciamento')}
+        >
+          <i className="fas fa-list-alt"></i> OPs
+          {qtdOpsPendentes > 0 && (
+              <span className="gs-tab-badge" title={`${qtdOpsPendentes} OP(s) prontas para finalizar`}>
+                  {qtdOpsPendentes}
+              </span>
+          )}
+        </button>
 
-      <div className="op-conteudo-principal">
+        <button
+          className={`gs-tab-btn ${visaoAtual === 'cortes' ? 'ativo' : ''}`}
+          onClick={() => setVisaoAtual('cortes')}
+        >
+          <i className="fas fa-cut"></i> Cortes
+        </button>
+      </nav>
+
+      <div className="gs-conteudo-pagina">
           {visaoAtual === 'painel' && <OPPainelAtividades />}
-          
+
           {visaoAtual === 'gerenciamento' && (
-            <OPGerenciamentoTela 
-                opsPendentesGlobal={qtdOpsPendentes} 
-                onRefreshContadores={verificarOpsProntas} 
+            <OPGerenciamentoTela
+                opsPendentesGlobal={qtdOpsPendentes}
+                onRefreshContadores={verificarOpsProntas}
             />
           )}
-          
+
           {visaoAtual === 'cortes' && (
-            <OPCortesTela 
-                demandaInicial={demandaParaProcessar} 
+            <OPCortesTela
+                demandaInicial={demandaParaProcessar}
                 onLimparDemanda={() => setDemandaParaProcessar(null)}
             />
           )}

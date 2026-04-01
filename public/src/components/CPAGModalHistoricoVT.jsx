@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { formatarMoeda } from '/js/utils/formataDtHr.js';
 import { mostrarConfirmacao, mostrarToast } from '/js/utils/popups.js';
-import Paginacao from './Paginacao';
+import UIPaginacao from './UIPaginacao';
 
 export default function CPAGModalHistoricoVT({ isOpen, onClose, usuarioId }) {
     const [historico, setHistorico] = useState([]);
@@ -118,7 +118,7 @@ export default function CPAGModalHistoricoVT({ isOpen, onClose, usuarioId }) {
                         
                     )}
                     {/* SEU COMPONENTE DE PAGINAÇÃO */}
-                    <Paginacao 
+                    <UIPaginacao 
                         paginaAtual={paginaAtual} 
                         totalPaginas={totalPaginas} 
                         onPageChange={setPaginaAtual} 

@@ -1,6 +1,6 @@
 // public/src/components/RadarDeAlertas.jsx
 import React, { useState, useEffect, useMemo, useRef, useCallback  } from 'react';
-import FeedbackNotFound from './FeedbackNotFound.jsx';
+import UIFeedbackNotFound from './UIFeedbackNotFound.jsx';
 import RadarBuscaLocal from './RadarBuscaLocal.jsx';
 import { renderizarPaginacao } from '/js/utils/Paginacao.js';
 import { normalizeText } from '/src/utils/searchHelpers.js';
@@ -255,7 +255,7 @@ export default function RadarDeAlertas({ onConsultarFunil }) {
                                 ))}
                             </div>
                         ) : (
-                            <FeedbackNotFound icon="fa-search" titulo="Nenhum Item Encontrado" mensagem="Nenhum item na lista de alertas corresponde ao seu filtro."/>
+                            <UIFeedbackNotFound icon="fa-search" titulo="Nenhum Item Encontrado" mensagem="Nenhum item na lista de alertas corresponde ao seu filtro."/>
                         )}
                         
                         <div ref={paginacaoRef} className="gs-paginacao-container" style={{marginTop: '20px'}}></div>

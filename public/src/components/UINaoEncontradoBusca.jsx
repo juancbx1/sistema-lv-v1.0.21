@@ -1,7 +1,7 @@
-// public/src/components/NaoEncontradoBusca.jsx
+// public/src/components/UINaoEncontradoBusca.jsx
 import React from 'react';
 
-const NaoEncontradoBusca = ({ icon, title, message }) => {
+const UINaoEncontradoBusca = ({ icon, title, message }) => {
     return (
         <div className="fc-nao-encontrado-container">
             <div className="nao-encontrado-icone">
@@ -13,4 +13,4 @@ const NaoEncontradoBusca = ({ icon, title, message }) => {
     );
 };
 
-export default NaoEncontradoBusca;
+export default UINaoEncontradoBusca;

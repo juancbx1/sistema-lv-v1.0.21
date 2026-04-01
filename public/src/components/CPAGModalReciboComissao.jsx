@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import Select, { components } from 'react-select';
 import { formatarMoeda } from '/js/utils/formataDtHr.js';
 import { mostrarToast, mostrarConfirmacao } from '/js/utils/popups.js';
-import FeedbackNotFound from './FeedbackNotFound';
+import UIFeedbackNotFound from './UIFeedbackNotFound';
 import CPAGMultiDatePicker from './CPAGMultiDatePicker';
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
 
 const CustomNoOptions = (props) => (
     <components.NoOptionsMessage {...props}>
-        <div style={{ padding: '10px' }}><FeedbackNotFound icon="fa-search" titulo="Sem resultados" mensagem="Nenhum registro." /></div>
+        <div style={{ padding: '10px' }}><UIFeedbackNotFound icon="fa-search" titulo="Sem resultados" mensagem="Nenhum registro." /></div>
     </components.NoOptionsMessage>
 );
 

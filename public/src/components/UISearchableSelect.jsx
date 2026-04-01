@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { normalizeText } from '../utils/searchHelpers.js'; // << IMPORTANDO A FUNÇÃO
 
-export default function SearchableSelect({
+export default function UISearchableSelect({
     options,          
     placeholder,      
     onChange,         

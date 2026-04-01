@@ -1,4 +1,4 @@
-// public/src/components/FeedbackNotFound.jsx
+// public/src/components/UIFeedbackNotFound.jsx
 import React from 'react';
 
 /**
@@ -9,7 +9,7 @@ import React from 'react';
  * @param {string} props.mensagem - A mensagem de texto de apoio.
  * @param {React.ReactNode} [props.children] - Opcional: Para adicionar botões ou outros elementos.
  */
-function FeedbackNotFound({ icon, titulo, mensagem, children }) {
+function UIFeedbackNotFound({ icon, titulo, mensagem, children }) {
     return (
         <div className="gs-feedback-not-found-container">
             <div className="gs-feedback-not-found-icone">
@@ -26,4 +26,4 @@ function FeedbackNotFound({ icon, titulo, mensagem, children }) {
     );
 };
 
-export default FeedbackNotFound;
+export default UIFeedbackNotFound;

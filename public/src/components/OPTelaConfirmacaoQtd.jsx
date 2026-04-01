@@ -1,49 +1,63 @@
 // public/src/components/OPTelaConfirmacaoQtd.jsx
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { mostrarMensagem } from '/js/utils/popups.js';
 import { obterProdutos as obterProdutosDoStorage } from '/js/utils/storage.js';
 
 export default function OPTelaConfirmacaoQtd({ etapa, funcionario, onClose }) {
     const itensLote = Array.isArray(etapa) ? etapa : [etapa];
-    
+
     const [quantidades, setQuantidades] = useState({});
     const [carregando, setCarregando] = useState(false);
-    
-    // Novo: Estado para guardar as imagens carregadas
     const [mapaImagens, setMapaImagens] = useState({});
+    const [mapaEtapas, setMapaEtapas] = useState({});
 
-    // 1. Carregar Imagens dos Produtos ao Iniciar
     useEffect(() => {
-        async function carregarImagens() {
+        async function carregarDados() {
             try {
                 const todosProdutos = await obterProdutosDoStorage();
-                const novoMapa = {};
+                const novoMapaImagens = {};
+                const novoMapaEtapas = {};
 
                 itensLote.forEach(item => {
+                    const chave = `${item.produto_id}-${item.variante}`;
                     const produto = todosProdutos.find(p => p.id === item.produto_id);
-                    let img = '/img/placeholder-image.png'; // Fallback
 
+                    let img = '/img/placeholder-image.png';
                     if (produto) {
-                        img = produto.imagem; // Imagem padrão
-                        // Tenta achar a variante específica
+                        img = produto.imagem;
                         if (item.variante && produto.grade) {
                             const varObj = produto.grade.find(g => g.variacao === item.variante);
                             if (varObj && varObj.imagem) img = varObj.imagem;
                         }
                     }
-                    // Chave única para o mapa
-                    novoMapa[`${item.produto_id}-${item.variante}`] = img;
+                    novoMapaImagens[chave] = img;
+
+                    // Detectar se é etapa final
+                    const processoLower = item.processo.toLowerCase();
+                    if (processoLower === 'corte') {
+                        novoMapaEtapas[chave] = { bordaClasse: 'borda-corte', isFinal: false };
+                    } else if (produto?.etapas) {
+                        const index = produto.etapas.findIndex(e => (e.processo || e) === item.processo);
+                        const isFinal = index === produto.etapas.length - 1;
+                        novoMapaEtapas[chave] = {
+                            bordaClasse: isFinal ? 'borda-etapa-final' : 'borda-etapa-normal',
+                            isFinal
+                        };
+                    } else {
+                        novoMapaEtapas[chave] = { bordaClasse: 'borda-etapa-normal', isFinal: false };
+                    }
                 });
-                setMapaImagens(novoMapa);
+
+                setMapaImagens(novoMapaImagens);
+                setMapaEtapas(novoMapaEtapas);
             } catch (error) {
-                console.error("Erro ao carregar imagens:", error);
+                console.error("Erro ao carregar dados de confirmação:", error);
             }
         }
-        carregarImagens();
-    }, [etapa]); // Roda quando a prop 'etapa' muda
+        carregarDados();
+    }, [etapa]);
 
-    // 2. Inicializar Quantidades (igual antes)
     useEffect(() => {
         const inits = {};
         itensLote.forEach(item => {
@@ -53,7 +67,6 @@ export default function OPTelaConfirmacaoQtd({ etapa, funcionario, onClose }) {
         setQuantidades(inits);
     }, [etapa]);
 
-    // 3. Funções de Ajuste (Manual e Botões)
     const handleQtdChange = (key, valor, max) => {
         const num = parseInt(valor);
         if (valor === '' || (!isNaN(num) && num >= 0 && num <= max)) {
@@ -77,12 +90,11 @@ export default function OPTelaConfirmacaoQtd({ etapa, funcionario, onClose }) {
         setCarregando(true);
         try {
             const token = localStorage.getItem('token');
-            
+
             const payloadItens = itensLote.map(item => {
                 const key = `${item.produto_id}-${item.variante}-${item.processo}`;
                 const qtd = parseInt(quantidades[key]);
                 if (!qtd || qtd <= 0) return null;
-
                 return {
                     opNumero: item.origem_ops[0],
                     produto_id: item.produto_id,
@@ -109,9 +121,8 @@ export default function OPTelaConfirmacaoQtd({ etapa, funcionario, onClose }) {
                 throw new Error(err.error || "Erro ao atribuir lote.");
             }
 
-            mostrarMensagem(`Sucesso! ${payloadItens.length} tarefas atribuídas.`, 'sucesso');
+            mostrarMensagem(`Sucesso! ${payloadItens.length} tarefa${payloadItens.length !== 1 ? 's' : ''} atribuída${payloadItens.length !== 1 ? 's' : ''}.`, 'sucesso');
             onClose();
-
         } catch (err) {
             mostrarMensagem(err.message, 'erro');
         } finally {
@@ -119,23 +130,25 @@ export default function OPTelaConfirmacaoQtd({ etapa, funcionario, onClose }) {
         }
     };
 
-    return (
-        <div className="op-confirmacao-container" style={{ padding: '10px 5px', display: 'flex', flexDirection: 'column', height: '100%' }}>
-            
-            <h3 className="op-titulo-secao" style={{ textAlign: 'center', fontSize: '1.2rem', padding: '0 0 15px 0' }}>
-                Confirmar Lote para <span style={{color: 'var(--op-cor-azul-claro)'}}>{funcionario.nome}</span>
-            </h3>
+    const textoBotao = itensLote.length === 1
+        ? 'Confirmar 1 Tarefa'
+        : `Confirmar ${itensLote.length} Tarefas`;
 
-            {/* LISTA DE CARDS COM SCROLL */}
-            <div style={{ flexGrow: 1, overflowY: 'auto', paddingRight: '5px' }}>
+    return (
+        <div className="op-confirmacao-container">
+
+            <div className="op-confirmacao-lista">
                 {itensLote.map((item, idx) => {
                     const key = `${item.produto_id}-${item.variante}-${item.processo}`;
+                    const chaveImagem = `${item.produto_id}-${item.variante}`;
                     const qtd = quantidades[key] !== undefined ? quantidades[key] : item.quantidade_disponivel;
-                    const imgUrl = mapaImagens[`${item.produto_id}-${item.variante}`] || '/img/placeholder-image.png';
+                    const imgUrl = mapaImagens[chaveImagem] || '/img/placeholder-image.png';
+                    const etapaInfo = mapaEtapas[chaveImagem] || { bordaClasse: 'borda-etapa-normal' };
 
                     return (
                         <div key={idx} className="op-item-confirmacao-card">
-                            {/* LADO ESQUERDO: IMAGEM E INFO */}
+                            <div className={`card-borda-charme ${etapaInfo.bordaClasse}`}></div>
+
                             <div className="item-info-visual">
                                 <img src={imgUrl} alt={item.produto_nome} />
                                 <div>
@@ -145,12 +158,11 @@ export default function OPTelaConfirmacaoQtd({ etapa, funcionario, onClose }) {
                                 </div>
                             </div>
 
-                            {/* LADO DIREITO: CONTROLES DE QUANTIDADE */}
                             <div className="item-controles-qtd">
                                 <div className="qtd-display-linha">
                                     <button className="btn-ajuste mini" onClick={() => ajustarQuantidade(key, -1, item.quantidade_disponivel)}>-</button>
-                                    <input 
-                                        type="number" 
+                                    <input
+                                        type="number"
                                         value={qtd}
                                         onChange={(e) => handleQtdChange(key, e.target.value, item.quantidade_disponivel)}
                                     />
@@ -168,17 +180,22 @@ export default function OPTelaConfirmacaoQtd({ etapa, funcionario, onClose }) {
                 })}
             </div>
 
-            <div className="op-confirmacao-footer" style={{ marginTop: '15px' }}>
-                <button 
-                    className="op-botao op-botao-sucesso"
+            <div className="op-selecao-barra">
+                <span className="op-selecao-barra-count">
+                    <i className="fas fa-layer-group"></i> {itensLote.length} {itensLote.length !== 1 ? 'itens' : 'item'} no lote
+                </span>
+                <button
+                    className="op-selecao-barra-btn"
                     onClick={handleConfirmar}
                     disabled={carregando}
-                    style={{ width: '100%', padding: '15px', fontSize: '1.1rem' }}
                 >
-                    {carregando ? <div className="spinner-btn-interno"></div> : <i className="fas fa-check-double"></i>}
-                    {carregando ? 'Processando...' : `Confirmar Tudo (${itensLote.length} itens)`}
+                    {carregando
+                        ? <><div className="spinner-btn-interno"></div> Processando...</>
+                        : <><i className="fas fa-check-double"></i> {textoBotao}</>
+                    }
                 </button>
             </div>
+
         </div>
     );
 }

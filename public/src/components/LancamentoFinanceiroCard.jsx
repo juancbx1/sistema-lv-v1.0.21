@@ -1,6 +1,6 @@
 // public/src/components/LancamentoFinanceiroCard.jsx
 import React from 'react';
-import Badge from './Badge.jsx';
+import UIBadge from './UIBadge.jsx';
 import LancamentoDetalhes from './LancamentoDetalhes.jsx';
 
 // Funções de formatação
@@ -42,12 +42,12 @@ const LancamentoFinanceiroCard = ({ lancamento, onEdit, onDelete, onEstorno, onR
 
     // Função para renderizar as "pílulas" (badges)
     const renderBadge = () => {
-        if (isPendente) return <Badge text="Pendente" color="orange" icon="fa-clock" />;
-        if (isEstornado) return <Badge text="Estornado" color="gray" />;
-        if (isEstorno) return <Badge text="Estorno Recebido" color="green" icon="fa-undo-alt" />;
-        if (isTransferencia) return <Badge text="Transferência" color="gray" />;
-        if (lancamento.tipo_rateio === 'COMPRA') return <Badge text="Compra Detalhada" color="blue" />;
-        if (lancamento.tipo_rateio === 'DETALHADO') return <Badge text="Rateio" color="purple" />;
+        if (isPendente) return <UIBadge text="Pendente" color="orange" icon="fa-clock" />;
+        if (isEstornado) return <UIBadge text="Estornado" color="gray" />;
+        if (isEstorno) return <UIBadge text="Estorno Recebido" color="green" icon="fa-undo-alt" />;
+        if (isTransferencia) return <UIBadge text="Transferência" color="gray" />;
+        if (lancamento.tipo_rateio === 'COMPRA') return <UIBadge text="Compra Detalhada" color="blue" />;
+        if (lancamento.tipo_rateio === 'DETALHADO') return <UIBadge text="Rateio" color="purple" />;
         return null;
     };
 

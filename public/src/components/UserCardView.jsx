@@ -49,10 +49,20 @@ export default function UserCardView({ usuario, permissoesLogado, onEditar, onEx
         <div className={`gs-card usuario-card-custom ${classeCard}`}>
             {/* CABEÇALHO */}
             <div className="card-cabecalho">
-                <h3 className="card-titulo-nome">{usuario.nome}</h3>
-                <div>
-                    {usuario.esta_de_ferias && <span className="status-selo ferias">DE FÉRIAS</span>}
-                    <span className={`status-selo ${classeStatus}`}>{labelStatus}</span>
+                <div className="uc-cabecalho-com-foto">
+                    <div
+                        className="uc-foto-card-view"
+                        style={{ backgroundImage: usuario.foto_oficial ? `url('${usuario.foto_oficial}')` : 'none' }}
+                    >
+                        {!usuario.foto_oficial && <i className="fas fa-user"></i>}
+                    </div>
+                    <div>
+                        <h3 className="card-titulo-nome">{usuario.nome}</h3>
+                        <div>
+                            {usuario.esta_de_ferias && <span className="status-selo ferias">DE FÉRIAS</span>}
+                            <span className={`status-selo ${classeStatus}`}>{labelStatus}</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 

@@ -1,4 +1,4 @@
-// public/src/components/BuscaInteligente.jsx
+// public/src/components/UIBuscaInteligente.jsx
 
 import React, { useState, useEffect, useRef } from 'react';
 
@@ -27,7 +27,7 @@ export const filtrarListaInteligente = (lista, termoBusca, campos) => {
     });
 };
 
-export default function BuscaInteligente({ 
+export default function UIBuscaInteligente({ 
     onSearch,           // Função chamada ao buscar (recebe o valor limpo ou bruto)
     placeholder = "Buscar...", 
     historicoKey = null, // Chave para salvar no localStorage (se null, não usa histórico)
@@ -129,8 +129,8 @@ export default function BuscaInteligente({
             
             <input
                 type="text"
-                className="op-input-busca-redesenhado" // Reutilizando sua classe existente
-                style={{width: '100%', paddingLeft: '40px'}}
+                className="op-input-busca-redesenhado"
+                style={{width: '100%', paddingLeft: '40px', paddingRight: termo ? '36px' : '12px'}}
                 placeholder={placeholder}
                 value={termo}
                 onChange={(e) => setTermo(e.target.value)}
@@ -142,6 +142,16 @@ export default function BuscaInteligente({
                     }
                 }}
             />
+
+            {termo && (
+                <button
+                    className="gs-filtro-busca-limpar"
+                    onClick={() => { setTermo(''); if (onSearch) onSearch(''); }}
+                    title="Limpar busca"
+                >
+                    <i className="fas fa-times"></i>
+                </button>
+            )}
 
             {/* CAIXA DE HISTÓRICO */}
             {focado && historico.length > 0 && (

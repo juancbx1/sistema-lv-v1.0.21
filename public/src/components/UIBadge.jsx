@@ -1,7 +1,7 @@
-// public/src/components/Badge.jsx
+// public/src/components/UIBadge.jsx
 import React from 'react';
 
-const Badge = ({ text, color, icon }) => {
+const UIBadge = ({ text, color, icon }) => {
     // Mapeia nomes de cores para classes CSS que vamos criar
     const colorClasses = {
         blue: 'badge-blue',
@@ -21,4 +21,4 @@ const Badge = ({ text, color, icon }) => {
     );
 };
 
-export default Badge;
+export default UIBadge;

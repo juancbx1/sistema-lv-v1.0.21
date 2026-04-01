@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 
 // Importando TODOS os componentes de seus arquivos separados
-import HeaderPagina from './components/HeaderPagina.jsx';
+import UIHeaderPagina from './components/UIHeaderPagina.jsx';
 import AtribuicaoModal from './components/ArremateAtribuicaoModal.jsx';
 
 import PerdaModal from './components/ArrematePerdaModal.jsx';
@@ -45,7 +45,7 @@ function App() {
         // Usamos React.Fragment <> para agrupar múltiplos componentes
         <>
             {/* 1. COMPONENTES VISÍVEIS NO FLUXO NORMAL DA PÁGINA */}
-            <HeaderPagina titulo="Arremates">
+            <UIHeaderPagina titulo="Arremates">
                 <button 
                     className="gs-btn gs-btn-secundario gs-btn-com-icone"
                     onClick={() => setModalTemposAberto(true)}
@@ -72,7 +72,7 @@ function App() {
                     <i className="fas fa-clipboard-list"></i>
                     <span>Histórico</span>
                 </button>
-            </HeaderPagina>
+            </UIHeaderPagina>
 
             {/* O RadarDeAlertas agora recebe a prop corretamente */}
             <RadarDeAlertas onConsultarFunil={handleConsultarFunilDesdeAlerta} />

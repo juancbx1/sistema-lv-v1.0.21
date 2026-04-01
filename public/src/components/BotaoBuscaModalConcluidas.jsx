@@ -1,7 +1,7 @@
 // public/src/components/BotaoBuscaModalConcluidas.jsx
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import FeedbackNotFound from './FeedbackNotFound.jsx';
+import UIFeedbackNotFound from './UIFeedbackNotFound.jsx';
 import OPPaginacaoWrapper from './OPPaginacaoWrapper.jsx';
 import CardPipelineProducao from './BotaoBuscaPipelineProducao.jsx';
 import { mostrarMensagem } from '/js/utils/popups.js';
@@ -85,7 +85,7 @@ export default function BotaoBuscaModalConcluidas({ isOpen, onClose }) {
                     {carregando ? (
                         <div className="spinner">Carregando histórico...</div>
                     ) : listaConcluida.length === 0 ? (
-                        <FeedbackNotFound 
+                        <UIFeedbackNotFound 
                             icon="fa-history" 
                             titulo="Nada por aqui" 
                             mensagem="Nenhuma demanda foi concluída hoje (ainda)." 

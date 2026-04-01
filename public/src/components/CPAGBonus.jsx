@@ -3,13 +3,13 @@ import Select, { components } from 'react-select';
 
 import { formatarMoeda } from '/js/utils/formataDtHr.js';
 import { mostrarConfirmacao, mostrarToast } from '/js/utils/popups.js';
-import FeedbackNotFound from './FeedbackNotFound';
+import UIFeedbackNotFound from './UIFeedbackNotFound';
 
 const CustomNoOptions = (props) => {
     return (
         <components.NoOptionsMessage {...props}>
             <div style={{ padding: '10px' }}>
-                <FeedbackNotFound 
+                <UIFeedbackNotFound 
                     icon="fa-search" 
                     titulo="Sem resultados" 
                     mensagem="Tente buscar por outro termo." 

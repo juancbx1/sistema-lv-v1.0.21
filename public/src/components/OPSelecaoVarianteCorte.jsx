@@ -1,8 +1,8 @@
 // public/src/components/OPSelecaoVarianteCorte.jsx
 
 import React, { useState, useMemo } from 'react';
-import BuscaInteligente, { filtrarListaInteligente, normalizarTexto } from './BuscaInteligente.jsx';
-import FeedbackNotFound from './FeedbackNotFound.jsx';
+import UIBuscaInteligente, { filtrarListaInteligente, normalizarTexto } from './UIBuscaInteligente.jsx';
+import UIFeedbackNotFound from './UIFeedbackNotFound.jsx';
 
 export default function OPSelecaoVarianteCorte({ produto, onVarianteSelect }) {
   const [termoFiltrado, setTermoFiltrado] = useState('');
@@ -53,7 +53,7 @@ export default function OPSelecaoVarianteCorte({ produto, onVarianteSelect }) {
   return (
     <div className="op-corte-variante-container">
       <div className="op-corte-filtro-wrapper">
-        <BuscaInteligente 
+        <UIBuscaInteligente 
             onSearch={setTermoFiltrado}
             placeholder={`Buscar por ${temTamanhos ? 'cor' : 'variação'}...`}
             historicoKey="variantes"
@@ -61,7 +61,7 @@ export default function OPSelecaoVarianteCorte({ produto, onVarianteSelect }) {
       </div>
 
       {variantesFiltradas.length === 0 ? (
-          <FeedbackNotFound 
+          <UIFeedbackNotFound 
             icon="fa-search" 
             titulo="Nenhuma Variação Encontrada" 
             mensagem={`Não encontramos nada com "${termoFiltrado}".`} 

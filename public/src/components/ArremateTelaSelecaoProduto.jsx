@@ -4,10 +4,10 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Toast from './ArremateToast.jsx';
 import PainelFiltros from './ArrematePainelFiltros.jsx';
 import { ArremateCard } from './ArremateCard.jsx';
-import Paginacao from './Paginacao.jsx';
+import UIPaginacao from './UIPaginacao.jsx';
 import ArremateAcoesLote from './ArremateAcoesLote.jsx';
 import { mostrarMensagem } from '/js/utils/popups.js';
-import FeedbackNotFound from './FeedbackNotFound.jsx';
+import UIFeedbackNotFound from './UIFeedbackNotFound.jsx';
 
 // Função auxiliar para extrair as opções para os menus de filtro
 function extrairOpcoesDeFiltro(itensDaFila) {
@@ -293,7 +293,7 @@ export default function TelaSelecaoProduto({ onItemSelect, isBatchMode, tiktikCo
                         </div>
                     ) : (
                         
-                        <FeedbackNotFound 
+                        <UIFeedbackNotFound 
                             icon="fa-cut" // Ícone de tesoura, temático para Arremate
                             titulo="Nenhum Produto na Fila"
                             mensagem="Não há produtos aguardando arremate ou os filtros aplicados não encontraram resultados."
@@ -302,7 +302,7 @@ export default function TelaSelecaoProduto({ onItemSelect, isBatchMode, tiktikCo
                 </div>
 
                 {totalPaginas > 1 && (
-                    <Paginacao
+                    <UIPaginacao
                         paginaAtual={paginaAtual}
                         totalPaginas={totalPaginas}
                         onPageChange={setPaginaAtual}

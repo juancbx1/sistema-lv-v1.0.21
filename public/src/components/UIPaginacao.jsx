@@ -1,10 +1,10 @@
-// src/components/Paginacao.jsx
+// src/components/UIPaginacao.jsx
 
 import React, { useEffect, useRef } from 'react';
 
 // Este componente React não renderiza nada diretamente.
 // Sua única função é chamar a sua função de paginação do JS puro.
-function Paginacao({ paginaAtual, totalPaginas, onPageChange }) {
+function UIPaginacao({ paginaAtual, totalPaginas, onPageChange }) {
     const containerRef = useRef(null); // Cria uma referência para o div
 
     useEffect(() => {
@@ -24,4 +24,4 @@ function Paginacao({ paginaAtual, totalPaginas, onPageChange }) {
     return <div ref={containerRef} className="gs-paginacao-container"></div>;
 }
 
-export default Paginacao;
+export default UIPaginacao;

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import Select from 'react-select';
 import { formatarDataParaInput, formatarHora } from '/js/utils/formataDtHr.js';
+import { mostrarMensagem } from '/js/utils/popups.js';
 
 const TIPOS_DISPONIVEIS = [
     { id: 'administrador', label: 'Administrador' },
@@ -13,9 +14,9 @@ const TIPOS_DISPONIVEIS = [
 ];
 
 export default function UserCardEdicao({ usuario, onSalvar, onCancelar, salvando, concessionarias }) {
-    console.log("Dados do Usuário na Edição:", usuario);
-    console.log("IDs de Concessionária:", usuario.concessionarias_vt);
-    
+    const [uploadandoFoto, setUploadandoFoto] = useState(false);
+    const inputFotoRef = useRef(null);
+
     // Estado local com os dados do formulário
     const [formData, setFormData] = useState({
         id: usuario.id,
@@ -43,7 +44,8 @@ export default function UserCardEdicao({ usuario, onSalvar, onCancelar, salvando
         id_contato_financeiro: usuario.id_contato_financeiro, // Mantém o ID hidden
         desconto_inss_percentual: usuario.desconto_inss_percentual || 9.0,
         desconto_vt_percentual: usuario.desconto_vt_percentual || 6.0,
-        concessionaria_ids: usuario.concessionarias_vt || [] 
+        concessionaria_ids: usuario.concessionarias_vt || [],
+        foto_oficial: usuario.foto_oficial || ''
     });
 
     // Opções React Select
@@ -70,6 +72,34 @@ export default function UserCardEdicao({ usuario, onSalvar, onCancelar, salvando
         });
     };
 
+    const handleUploadFotoOficial = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setUploadandoFoto(true);
+        try {
+            const token = localStorage.getItem('token');
+            const body = new FormData();
+            body.append('foto', file);
+
+            const res = await fetch(`/api/usuarios/${usuario.id}/foto-oficial`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Falha no upload');
+
+            setFormData(prev => ({ ...prev, foto_oficial: data.url }));
+            mostrarMensagem('Foto atualizada!', 'sucesso');
+        } catch (err) {
+            mostrarMensagem(`Erro: ${err.message}`, 'erro');
+        } finally {
+            setUploadandoFoto(false);
+            e.target.value = '';
+        }
+    };
+
     const handleSubmit = () => {
         // Formata os dados numéricos antes de enviar
         const payload = {
@@ -91,6 +121,52 @@ export default function UserCardEdicao({ usuario, onSalvar, onCancelar, salvando
         <div className="gs-card usuario-card-custom edit-mode-active">
             <div className="card-cabecalho">
                 <h3 className="card-titulo-nome">Editando: {usuario.nome}</h3>
+            </div>
+
+            {/* FOTO OFICIAL */}
+            <div className="card-secao">
+                <h4 className="card-secao-titulo">Foto de Admissão</h4>
+                <div className="uc-foto-oficial-container">
+                    <div
+                        className="uc-foto-oficial-preview"
+                        style={{ backgroundImage: formData.foto_oficial ? `url('${formData.foto_oficial}')` : 'none' }}
+                    >
+                        {!formData.foto_oficial && <i className="fas fa-user"></i>}
+                    </div>
+                    <div className="uc-foto-oficial-acoes">
+                        <p className="uc-foto-oficial-descricao">
+                            Esta é a foto padrão exibida no painel de atividades.<br/>
+                            O empregado pode substituí-la pelo avatar personalizado da dashboard.
+                        </p>
+                        <button
+                            type="button"
+                            className="gs-btn gs-btn-secundario"
+                            onClick={() => inputFotoRef.current?.click()}
+                            disabled={uploadandoFoto}
+                        >
+                            <i className={`fas ${uploadandoFoto ? 'fa-spinner fa-spin' : 'fa-camera'}`}></i>
+                            {uploadandoFoto ? ' Enviando...' : ' Alterar Foto'}
+                        </button>
+                        {formData.foto_oficial && (
+                            <button
+                                type="button"
+                                className="gs-btn gs-btn-perigo"
+                                onClick={() => setFormData(prev => ({ ...prev, foto_oficial: '' }))}
+                                disabled={uploadandoFoto}
+                                style={{ marginLeft: '8px' }}
+                            >
+                                <i className="fas fa-trash"></i>
+                            </button>
+                        )}
+                        <input
+                            ref={inputFotoRef}
+                            type="file"
+                            accept="image/*"
+                            style={{ display: 'none' }}
+                            onChange={handleUploadFotoOficial}
+                        />
+                    </div>
+                </div>
             </div>
 
             {/* DADOS PESSOAIS */}

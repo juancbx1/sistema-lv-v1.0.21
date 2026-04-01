@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { mostrarMensagem } from '/js/utils/popups.js';
-import FeedbackNotFound from './FeedbackNotFound.jsx';
+import UIFeedbackNotFound from './UIFeedbackNotFound.jsx';
 import BotaoBuscaModalAddDemanda from './BotaoBuscaModalAddDemanda.jsx';
 import CardPipelineProducao from './BotaoBuscaPipelineProducao.jsx';
 import OPPaginacaoWrapper from './OPPaginacaoWrapper.jsx';
@@ -281,7 +281,7 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [] }) {
                                     />
                                 ))
                             ) : (
-                                <FeedbackNotFound 
+                                <UIFeedbackNotFound 
                                     icon="fa-search" 
                                     titulo="Nenhuma demanda encontrada" 
                                     mensagem={termoBusca || filtroNaoIniciado ? "Tente ajustar os filtros." : "Tudo em dia!"} 

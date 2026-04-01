@@ -1,7 +1,7 @@
-// public/src/components/HeaderPagina.jsx
+// public/src/components/UIHeaderPagina.jsx
 import React from 'react';
 
-function HeaderPagina({ titulo, children }) {
+function UIHeaderPagina({ titulo, children }) {
   return (
     <div className="gs-cabecalho-pagina">
       <h1>{titulo}</h1>
@@ -13,4 +13,4 @@ function HeaderPagina({ titulo, children }) {
   );
 }
 
-export default HeaderPagina;
+export default UIHeaderPagina;

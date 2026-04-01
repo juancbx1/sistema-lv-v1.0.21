@@ -5,15 +5,19 @@ const { Pool, types } = pg; // Modificado
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import express from 'express';
+import multer from 'multer';
+import { put } from '@vercel/blob';
 import { permissoesDisponiveis as frontendPermissoesDisponiveis, permissoesPorTipo as frontendPermissoesPorTipo } from '../public/js/utils/permissoes.js';
 
 types.setTypeParser(1114, str => str);
 // --- FIM DA CORREÇÃO ---
 
-const router = express.Router(); 
+const router = express.Router();
 const pool = new Pool({
     connectionString: process.env.POSTGRES_URL,
 });
+
+const uploadMulter = multer({ storage: multer.memoryStorage() });
 
 
 const SECRET_KEY = process.env.JWT_SECRET;
@@ -308,6 +312,7 @@ router.get('/', async (req, res) => {
                 u.horario_entrada_2, u.horario_saida_2, 
                 u.horario_entrada_3, u.horario_saida_3, 
                 COALESCE(u.avatar_url, $1) as avatar_url,
+                u.foto_oficial,
                 c.nome AS nome_contato_financeiro,
                 COALESCE(
                     (SELECT array_agg(ucv.concessionaria_id) 
@@ -437,10 +442,10 @@ router.put('/', async (req, res) => {
         }
         
         // Recebemos todos os campos do corpo da requisição
-        const { 
-            id, nome, nomeUsuario, email, tipos, nivel, 
+        const {
+            id, nome, nomeUsuario, email, tipos, nivel,
             nome_completo,
-            salario_fixo, valor_passagem_diaria, 
+            salario_fixo, valor_passagem_diaria,
             elegivel_pagamento, id_contato_financeiro, concessionaria_ids,
             permissoes: permissoesIndividuais,
             data_admissao,
@@ -448,9 +453,10 @@ router.put('/', async (req, res) => {
             horario_entrada_1,
             horario_saida_1,
             horario_entrada_2,
-            horario_saida_2, 
+            horario_saida_2,
             horario_entrada_3,
-            horario_saida_3
+            horario_saida_3,
+            foto_oficial
         } = req.body;
 
         if (!id) {
@@ -499,6 +505,7 @@ router.put('/', async (req, res) => {
         if (horario_saida_2 !== undefined) { fieldsToUpdate.push(`horario_saida_2 = $${paramIndex++}`); values.push(horario_saida_2 || null); }
         if (horario_entrada_3 !== undefined) { fieldsToUpdate.push(`horario_entrada_3 = $${paramIndex++}`); values.push(horario_entrada_3 || null); }
         if (horario_saida_3 !== undefined) { fieldsToUpdate.push(`horario_saida_3 = $${paramIndex++}`); values.push(horario_saida_3 || null); }
+        if (foto_oficial !== undefined) { fieldsToUpdate.push(`foto_oficial = $${paramIndex++}`); values.push(foto_oficial || null); }
 
         if (fieldsToUpdate.length > 0) {
             values.push(id);
@@ -773,6 +780,42 @@ router.post('/:id/ferias', async (req, res) => {
         res.status(500).json({ error: 'Erro ao registrar férias.' });
     } finally {
         if (dbCliente) dbCliente.release();
+    }
+});
+
+// POST /api/usuarios/:id/foto-oficial — upload da foto de admissão pelo admin
+router.post('/:id/foto-oficial', uploadMulter.single('foto'), async (req, res) => {
+    const { usuarioLogado } = req;
+    const { id: idAlvo } = req.params;
+
+    if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo recebido.' });
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+
+        const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
+        if (!permissoes.includes('editar-usuarios')) {
+            return res.status(403).json({ error: 'Permissão negada.' });
+        }
+
+        const blob = await put(
+            `fotos-oficiais/usuario-${idAlvo}-${req.file.originalname}`,
+            req.file.buffer,
+            { access: 'public', addRandomSuffix: true, token: process.env.BLOB_READ_WRITE_TOKEN }
+        );
+
+        await dbClient.query(
+            'UPDATE usuarios SET foto_oficial = $1 WHERE id = $2',
+            [blob.url, idAlvo]
+        );
+
+        res.status(200).json({ url: blob.url });
+    } catch (error) {
+        console.error('[foto-oficial] Erro:', error);
+        res.status(500).json({ error: 'Falha no upload da foto.' });
+    } finally {
+        if (dbClient) dbClient.release();
     }
 });
 

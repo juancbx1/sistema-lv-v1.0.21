@@ -1705,27 +1705,26 @@
    # FASE 2: ESTILOS DO NOVO CARD DE ARREMATE (REACT)
    ========================================================================== */
 
+/* --- Card base --- */
 .oa-card-arremate-react {
-    display: grid;
-    grid-template-columns: auto 1fr auto; /* Colunas: Imagem, Info, Pendente */
-    grid-template-rows: auto;
-    gap: 0 16px;
-    align-items: center;
+    display: flex;
+    flex-direction: column;
     background-color: var(--gs-branco);
     border-radius: var(--gs-raio-borda-card);
-    padding: 16px;
     box-shadow: var(--gs-sombra-padrao);
     cursor: pointer;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     position: relative;
     overflow: hidden;
+    min-height: 92px;
 }
 
 .oa-card-arremate-react:hover {
-    transform: translateY(-4px);
+    transform: translateY(-3px);
     box-shadow: var(--gs-sombra-hover);
 }
 
+/* Borda-charme — identidade visual da empresa */
 .card-borda-charme {
     position: absolute;
     left: 0;
@@ -1733,78 +1732,132 @@
     width: 6px;
     height: 100%;
     background-color: var(--gs-primaria);
+    border-radius: 8px 0 0 8px;
 }
 
-.card-imagem-produto {
-    grid-column: 1 / 2;
-    width: 70px;
-    height: 70px;
+/* Corpo: imagem + info em linha */
+.arremate-card-corpo {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 88px 14px 22px; /* right: espaço para o badge */
+    flex: 1;
+}
+
+.arremate-card-img {
+    width: 64px;
+    height: 64px;
     object-fit: cover;
     border-radius: 8px;
     background-color: var(--gs-fundo-input);
+    flex-shrink: 0;
 }
 
-.card-info-principal {
-    grid-column: 2 / 3;
+.arremate-card-info {
+    flex: 1;
+    min-width: 0; /* permite truncar texto em flex */
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
 
-.card-info-principal h3 {
-    font-size: 1.1rem;
+.arremate-card-nome {
+    font-size: 1rem;
     font-weight: 600;
     color: var(--gs-secundaria);
     margin: 0;
     line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.card-info-principal p {
-    font-size: 0.9rem;
-    color: var(--gs-texto-secundario);
-    margin: 0;
-}
-
-.card-info-secundaria {
-    display: flex;
-    gap: 16px;
-    margin-top: 8px;
+.arremate-card-variante {
     font-size: 0.85rem;
     color: var(--gs-texto-secundario);
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.card-info-secundaria .info-item {
+.arremate-card-meta {
+    display: flex;
+    gap: 14px;
+    margin-top: 6px;
+    font-size: 0.8rem;
+    color: var(--gs-texto-secundario);
+}
+
+.arremate-card-meta span {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
 }
 
-.card-bloco-pendente {
-    grid-column: 3 / 4;
+/* Badge de saldo — absoluto, nunca comprime o layout */
+.arremate-saldo-badge {
+    position: absolute;
+    top: 50%;
+    right: 14px;
+    transform: translateY(-50%);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background-color: #f0f8ff; /* Azul bem claro */
-    align-self: stretch; /* Ocupa a altura toda */
-    padding: 10px 15px;
-    border-radius: 8px;
+    background-color: #eef6ff;
+    border: 1.5px solid #b8d9f7;
+    border-radius: 10px;
+    padding: 6px 10px;
     text-align: center;
+    min-width: 52px;
 }
 
-.card-bloco-pendente .label {
-    font-size: 0.7rem;
-    font-weight: 700;
-    color: var(--gs-primaria);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.card-bloco-pendente .valor {
-    font-size: 2rem;
+.arremate-saldo-badge .saldo-valor {
+    font-size: 1.4rem;
     font-weight: 700;
     color: var(--gs-secundaria);
     line-height: 1.1;
+}
+
+.arremate-saldo-badge .saldo-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--gs-primaria);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+/* Ícone de check — no lugar do badge quando selecionado */
+.arremate-check-icone {
+    position: absolute;
+    top: 50%;
+    right: 14px;
+    transform: translateY(-50%);
+    width: 38px;
+    height: 38px;
+    background-color: var(--gs-primaria);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 1.1rem;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+}
+
+/* Banner "Em andamento" — na base do card */
+.arremate-em-trabalho-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    background-color: var(--gs-aviso);
+    color: #5d470d;
+    padding: 5px 14px;
+    font-size: 0.8rem;
+    font-weight: 600;
 }
 
 /* Estilos do Tooltip */
@@ -2175,14 +2228,12 @@
        # FEEDBACK DE TAREFA EM ANDAMENTO
        ========================================================================== */
     
-    /* Estilo para quando HÁ uma tarefa ativa (apenas visual, não bloqueia) */
+    /* Card em trabalho — levemente transparente */
     .oa-card-arremate-react.em-trabalho {
-        opacity: 0.7; /* Um pouco menos opaco para indicar que ainda pode ser clicável */
-        padding-top: 48px; 
+        opacity: 0.75;
     }
 
-
-    /* Estilo para quando o card está REALMENTE desabilitado (sem saldo) */
+    /* Card desabilitado (sem saldo) */
     .oa-card-arremate-react.desabilitado {
         cursor: not-allowed;
         box-shadow: none;
@@ -2194,54 +2245,10 @@
         transform: none;
     }
 
-    /* O selo continua igual */
-    .feedback-em-trabalho {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        background-color: var(--gs-aviso);
-        color: #5d470d;
-        padding: 5px;
-        font-size: 0.8rem;
-        font-weight: 600;
-        text-align: center;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        z-index: 2;
-    }
-    
-    .card-bloco-pendente .label {
-        font-size: 0.7rem;
-        font-weight: 700;
-        color: var(--gs-texto-secundario); /* Mudança para uma cor mais neutra */
-        text-transform: uppercase;
-    }
-
+    /* Card selecionado */
     .oa-card-arremate-react.selecionado {
-        background-color: #eaf5ff; /* Um azul MUITO claro, quase branco */
-        transform: translateY(-2px); /* Mantém o leve efeito de elevação */
-    }
-
-    /*  Ícone de 'check' que aparecerá no card selecionado */
-    .card-selecao-icone {
-        position: absolute;
-        top: 12px;
-        right: 12px;
-        font-size: 1.5rem;
-        color: var(--gs-primaria);
-        background-color: var(--gs-branco);
-        border-radius: 50%;
-        width: 30px;
-        height: 30px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-        z-index: 3; /* Garante que fique acima de outros elementos */
-        animation: gs-fadeIn 0.2s ease-out; /* Efeito de fade-in suave */
+        background-color: #eaf5ff;
+        transform: translateY(-2px);
     }
 
  /* ==========================================================================
@@ -2867,38 +2874,31 @@
         align-items: flex-start;
     }
 
-    .oa-card-arremate-react {
-        grid-template-columns: auto 1fr; /* Imagem e o resto */
-        grid-template-rows: auto auto; /* Linha 1: info, Linha 2: pendente */
-        padding: 12px;
-        gap: 4px 12px;
+    /* Ajustes mobile do card de arremate */
+    .arremate-card-corpo {
+        padding: 12px 70px 12px 18px;
+        gap: 10px;
     }
-    .card-imagem-produto {
-        grid-row: 1 / 3; /* Imagem ocupa as duas linhas */
-        width: 60px;
-        height: 60px;
+    .arremate-card-img {
+        width: 52px;
+        height: 52px;
     }
-    .card-info-principal {
-        grid-column: 2 / 3;
-        grid-row: 1 / 2;
+    .arremate-card-nome {
+        font-size: 0.95rem;
     }
-    .card-info-principal h3 {
+    .arremate-saldo-badge {
+        right: 10px;
+        min-width: 44px;
+        padding: 5px 8px;
+    }
+    .arremate-saldo-badge .saldo-valor {
+        font-size: 1.2rem;
+    }
+    .arremate-check-icone {
+        right: 10px;
+        width: 34px;
+        height: 34px;
         font-size: 1rem;
-    }
-    .card-bloco-pendente {
-        grid-column: 2 / 3; /* Bloco pendente vai para a segunda linha */
-        grid-row: 2 / 3;
-        flex-direction: row;
-        justify-content: space-between;
-        width: 100%;
-        padding: 8px 12px;
-        margin-top: 8px;
-        background-color: transparent;
-        border-top: 1px solid var(--gs-borda);
-        border-radius: 0;
-    }
-    .card-bloco-pendente .valor {
-        font-size: 1.5rem;
     }
 
     .coluna-conteudo-principal {
