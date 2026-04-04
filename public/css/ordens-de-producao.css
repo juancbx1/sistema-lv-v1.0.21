@@ -872,6 +872,48 @@ body.autenticado {
     line-height: 1.1;
 }
 
+/* Botão de cancelar OP — canto superior direito do card */
+.op-card-btn-cancelar {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 0 var(--op-raio-borda-card) 0 10px; /* acompanha o canto do card */
+    color: var(--op-cor-cinza-texto);
+    font-size: 0.85rem;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease, background-color 0.15s ease, color 0.15s ease;
+    z-index: 3;
+}
+
+.op-card-react:hover .op-card-btn-cancelar {
+    opacity: 1;
+}
+
+.op-card-btn-cancelar:hover {
+    background-color: #fdecea;
+    color: #e74c3c;
+}
+
+/* Em tablets (touch), o botão fica sempre visível — touch não tem hover */
+@media (hover: none) {
+    .op-card-btn-cancelar {
+        opacity: 0.45;
+    }
+    .op-card-btn-cancelar:active {
+        opacity: 1;
+        background-color: #fdecea;
+        color: #e74c3c;
+    }
+}
+
 
 /* ==========================================================================
    # CORREÇÃO DE EMPILHAMENTO DO MODAL (V2 - Mais Específica)

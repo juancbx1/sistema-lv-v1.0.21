@@ -25,7 +25,7 @@ function RadarBadge({ radar }) {
     );
 }
 
-export function OPCard({ op, onClick, modoSelecao, selecionado, onToggleSelecao }) {
+export function OPCard({ op, onClick, modoSelecao, selecionado, onToggleSelecao, onCancelar }) {
     if (!op) return null;
 
     const imagemSrc = op.imagem_produto || '/img/placeholder-image.png';
@@ -45,12 +45,23 @@ export function OPCard({ op, onClick, modoSelecao, selecionado, onToggleSelecao 
     // No modo seleção: apenas cards status-pronta-finalizar são elegíveis
     const elegivel = statusClass === 'status-pronta-finalizar';
 
+    // Botão de cancelar: só aparece se a OP ainda está ativa e o usuário tem permissão
+    const podeCancelar = onCancelar &&
+        !modoSelecao &&
+        op.status !== 'cancelada' &&
+        op.status !== 'finalizado';
+
     const handleClick = () => {
         if (modoSelecao) {
             if (elegivel && onToggleSelecao) onToggleSelecao(op);
         } else {
             if (onClick) onClick(op);
         }
+    };
+
+    const handleCancelarClick = (e) => {
+        e.stopPropagation(); // não abrir o modal de detalhes
+        onCancelar(op);
     };
 
     // Classes dinâmicas
@@ -70,6 +81,18 @@ export function OPCard({ op, onClick, modoSelecao, selecionado, onToggleSelecao 
             <div className="op-selecao-check">
                 {selecionado && <i className="fas fa-check"></i>}
             </div>
+
+            {/* Botão cancelar — canto superior direito */}
+            {podeCancelar && (
+                <button
+                    className="op-card-btn-cancelar"
+                    onClick={handleCancelarClick}
+                    title="Cancelar OP"
+                    aria-label="Cancelar OP"
+                >
+                    <i className="fas fa-trash-alt"></i>
+                </button>
+            )}
 
             <img src={imagemSrc} alt={op.produto || 'Produto'} className="card-imagem-produto" />
 

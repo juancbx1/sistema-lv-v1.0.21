@@ -177,6 +177,7 @@ function App() {
             <OPGerenciamentoTela
                 opsPendentesGlobal={qtdOpsPendentes}
                 onRefreshContadores={verificarOpsProntas}
+                permissoes={permissoes}
             />
           )}
 

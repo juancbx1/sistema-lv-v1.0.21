@@ -7,8 +7,9 @@ import OPModalLote from './OPModalLote.jsx';
 import OPFiltros from './OPFiltros.jsx';
 import OPPaginacaoWrapper from './OPPaginacaoWrapper.jsx';
 import { obterProdutos as obterProdutosDoStorage } from '/js/utils/storage.js';
+import { mostrarConfirmacao, mostrarToast } from '/js/utils/popups.js';
 
-export default function OPGerenciamentoTela({ opsPendentesGlobal, onRefreshContadores }) {
+export default function OPGerenciamentoTela({ opsPendentesGlobal, onRefreshContadores, permissoes = [] }) {
     const [ops, setOps] = useState([]);
     const [carregando, setCarregando] = useState(true);
     const [erro, setErro] = useState(null);
@@ -105,6 +106,35 @@ export default function OPGerenciamentoTela({ opsPendentesGlobal, onRefreshConta
         buscarDados(pagina, filtros);
         if (onRefreshContadores) onRefreshContadores();
     };
+
+    // --- Cancelar OP ---
+    const handleCancelarOP = useCallback(async (op) => {
+        const confirmado = await mostrarConfirmacao(
+            `Cancelar a OP <strong>#${op.numero} — ${op.produto}</strong>?<br><br>Esta ação não pode ser desfeita.`,
+            { tipo: 'perigo', textoConfirmar: 'Cancelar OP', textoCancelar: 'Voltar' }
+        );
+        if (!confirmado) return;
+
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch('/api/ordens-de-producao', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ ...op, status: 'cancelada' })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Erro ao cancelar OP.');
+            mostrarToast('OP cancelada com sucesso.', 'sucesso');
+            lastSearchParamsRef.current = null;
+            buscarDados(pagina, filtros);
+            if (onRefreshContadores) onRefreshContadores();
+        } catch (err) {
+            mostrarToast(err.message || 'Erro ao cancelar OP.', 'erro');
+        }
+    }, [pagina, filtros, buscarDados, onRefreshContadores]);
 
     // --- Handlers modo seleção ---
     const opsElegiveis = ops.filter(op => {
@@ -356,6 +386,7 @@ export default function OPGerenciamentoTela({ opsPendentesGlobal, onRefreshConta
                                     modoSelecao={modoSelecao}
                                     selecionado={opsSelecionadas.has(op.edit_id || op.id)}
                                     onToggleSelecao={handleToggleSelecao}
+                                    onCancelar={permissoes.includes('cancelar-op') ? handleCancelarOP : null}
                                 />
                             ))
                         ) : (

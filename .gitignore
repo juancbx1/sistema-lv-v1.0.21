@@ -10,6 +10,8 @@ dist
 build
 .env.development.local
 *.bak
+regra de negocio das OP.txt
 
 # Planejamento local — não commitar
 _planejamento/
+
