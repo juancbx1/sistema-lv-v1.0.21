@@ -67,7 +67,22 @@ function App() {
               if (auth) {
                   setEstaAutenticado(true);
                   // Salva as permissões vindas do auth
-                  setPermissoes(auth.permissoes || []); 
+                  setPermissoes(auth.permissoes || []);
+
+                  // Verifica se veio redirecionado do Painel de Demandas via "Iniciar Corte"
+                  const params = new URLSearchParams(window.location.search);
+                  const demandaId = params.get('demanda_id');
+                  if (demandaId) {
+                      setDemandaParaProcessar({
+                          demanda_id: parseInt(demandaId),
+                          produto_id: parseInt(params.get('produto_id')),
+                          variante: params.get('variante') || null,
+                          quantidade: parseInt(params.get('quantidade')) || 0,
+                      });
+                      setVisaoAtual('cortes');
+                      // Limpa a URL para evitar re-disparo ao recarregar a página
+                      window.history.replaceState({}, '', window.location.pathname);
+                  } 
                   document.body.classList.add('autenticado');
               } else {
                   document.body.innerHTML = '<p style="text-align:center; padding:20px;">Redirecionando...</p>';

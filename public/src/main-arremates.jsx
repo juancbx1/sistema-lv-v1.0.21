@@ -10,29 +10,26 @@ import AtribuicaoModal from './components/ArremateAtribuicaoModal.jsx';
 import PerdaModal from './components/ArrematePerdaModal.jsx';
 
 import ArremateModalTempos from './components/ArremateModalTempos.jsx';
-import RadarDeAlertas from './components/RadarDeAlertas.jsx';
 import BotaoBuscaFunil from './components/BotaoBuscaFunil.jsx';
-
-const handleConsultarFunilDesdeAlerta = (item) => {
-    if (!item || !item.sku) {
-        console.error("Tentativa de consultar funil sem um item ou SKU válido.", item);
-        mostrarMensagem("Não foi possível obter o SKU deste item para a consulta.", "erro");
-        return;
-    }
-    const event = new CustomEvent('radar:consultarFunil', { detail: { sku: item.sku } });
-    window.dispatchEvent(event);
-};
+import { verificarAutenticacao } from '/js/utils/auth.js';
 
 // O componente raiz da aplicação React nesta página.
 function App() {
-     const [modalAberto, setModalAberto] = useState(false);
+    const [modalAberto, setModalAberto] = useState(false);
     const [tiktikSelecionado, setTiktikSelecionado] = useState(null);
     const [isBatchMode, setIsBatchMode] = useState(false);
     const [perdaModalAberto, setPerdaModalAberto] = useState(false);
     const [modalTemposAberto, setModalTemposAberto] = useState(false);
-    
+    const [permissoes, setPermissoes] = useState([]);
+
+    useEffect(() => {
+        verificarAutenticacao('admin/arremates.html', ['acesso-ordens-de-arremates']).then(auth => {
+            if (auth) setPermissoes(auth.permissoes || []);
+        });
+    }, []);
+
     // Efeito para criar a "ponte" de comunicação do JS puro para o React
-     useEffect(() => {
+    useEffect(() => {
         window.abrirModalAtribuicao = (tiktik, batchMode) => {
             setTiktikSelecionado(tiktik);
             setIsBatchMode(batchMode);
@@ -74,9 +71,6 @@ function App() {
                 </button>
             </UIHeaderPagina>
 
-            {/* O RadarDeAlertas agora recebe a prop corretamente */}
-            <RadarDeAlertas onConsultarFunil={handleConsultarFunilDesdeAlerta} />
-            
             {/* 2. COMPONENTES FLUTUANTES (MODAIS E FAB) */}
             
             {/* Modais são renderizados aqui, mas só aparecem quando seus estados 'isOpen' são verdadeiros */}
@@ -85,7 +79,7 @@ function App() {
             <ArremateModalTempos isOpen={modalTemposAberto} onClose={() => setModalTemposAberto(false)} />
 
             {/* O Botão FAB é renderizado aqui e se posicionará corretamente via CSS */}
-            <BotaoBuscaFunil />
+            <BotaoBuscaFunil permissoes={permissoes} />
         </>
     );
 }

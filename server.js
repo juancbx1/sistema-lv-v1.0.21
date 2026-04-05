@@ -32,7 +32,6 @@ import metasRouter from './api/metas.js';
 import realProducaoRouter from './api/real-producao.js';
 import configuracoesRouter from './api/configuracoes.js';
 import alertasRouter from './api/alertas.js';
-import radarProducaoRouter from './api/radar-producao.js';
 import demandasRouter from './api/demandas.js';
 import producaoRouter from './api/producao.js';
 import cronRoutes from './api/cron.js';
@@ -77,7 +76,6 @@ const routers = {
     realProducaoRouter,
     configuracoesRouter,
     alertasRouter,
-    radarProducaoRouter,
     demandasRouter,
     producaoRouter 
 
@@ -115,7 +113,6 @@ app.use('/api/metas', metasRouter);
 app.use('/api/real-producao', realProducaoRouter);
 app.use('/api/configuracoes', configuracoesRouter);
 app.use('/api/alertas', alertasRouter);
-app.use('/api/radar-producao', radarProducaoRouter);
 app.use('/api/demandas', demandasRouter);
 app.use('/api/producao', producaoRouter);
 app.use('/api/cron', cronRoutes);

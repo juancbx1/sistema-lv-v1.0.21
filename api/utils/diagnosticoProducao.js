@@ -8,7 +8,7 @@ export async function gerarDiagnosticoCompleto(dbClient) {
         arrematesResult, 
         produtosResult
     ] = await Promise.all([
-        dbClient.query(`SELECT * FROM demandas_producao WHERE status IN ('pendente', 'em_producao', 'concluida') ORDER BY prioridade ASC, data_solicitacao ASC`),
+        dbClient.query(`SELECT * FROM demandas_producao WHERE status NOT IN ('concluida', 'cancelada') AND arquivada_em IS NULL ORDER BY prioridade ASC, data_solicitacao ASC`),
         dbClient.query(`SELECT id, numero, demanda_id, produto_id, variante, quantidade, status, etapas FROM ordens_de_producao WHERE demanda_id IS NOT NULL`),
         dbClient.query(`SELECT op_numero, quantidade_arrematada, quantidade_ja_embalada FROM arremates JOIN ordens_de_producao op ON arremates.op_numero = op.numero WHERE op.demanda_id IS NOT NULL AND arremates.tipo_lancamento = 'PRODUCAO'`),
         dbClient.query("SELECT id, nome, sku, is_kit, grade, imagem FROM produtos")
@@ -115,15 +115,20 @@ export async function gerarDiagnosticoCompleto(dbClient) {
             // Rastreio
             demanda_id: demandaOriginal.id,
             produto_id: produtoId,
+            produto_sku: demandaOriginal.produto_sku,
             variante: variante === '-' ? null : variante,
-            
+
             // Visual
             produto_nome: gradeInfo ? `${produtoInfo.nome} (${gradeInfo.variacao})` : produtoInfo.nome,
             imagem: gradeInfo?.imagem || produtoInfo.imagem,
-            
-            // AQUI ESTÁ A MÁGICA:
+
             prioridade: prioridadeFinal,
-            
+
+            // Metadados da demanda original
+            data_solicitacao: demandaOriginal.data_solicitacao,
+            solicitado_por: demandaOriginal.solicitado_por,
+            observacoes: demandaOriginal.observacoes,
+
             // Números do Pipeline
             demanda_total: quantidadeNecessaria,
             saldo_em_fila: saldoFila,
@@ -132,7 +137,7 @@ export async function gerarDiagnosticoCompleto(dbClient) {
             saldo_disponivel_embalagem: prog.embalagem,
             saldo_disponivel_estoque: prog.estoque,
             saldo_perda: prog.perda,
-            
+
             credito_total: totalProcessado + saldoFila,
             demandas_dependentes_ids: [demandaOriginal.id]
         });

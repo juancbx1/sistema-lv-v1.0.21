@@ -1,34 +1,56 @@
 // public/src/components/BotaoBuscaPainelDemandas.jsx
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { mostrarMensagem } from '/js/utils/popups.js';
 import UIFeedbackNotFound from './UIFeedbackNotFound.jsx';
 import BotaoBuscaModalAddDemanda from './BotaoBuscaModalAddDemanda.jsx';
 import CardPipelineProducao from './BotaoBuscaPipelineProducao.jsx';
 import OPPaginacaoWrapper from './OPPaginacaoWrapper.jsx';
-import BotaoBuscaModalConcluidas from './BotaoBuscaModalConcluidas.jsx'; // <--- Importe aqui
+import BotaoBuscaModalConcluidas from './BotaoBuscaModalConcluidas.jsx';
+import { calcularStatusDemanda, STATUS_META } from '/src/utils/demandaStatus.js';
 
-// Função auxiliar para remover acentos (Normalização)
-const normalizarTexto = (texto) => {
-    return texto ? texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
-};
+const normalizarTexto = (texto) =>
+    texto ? texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
 
-export default function PainelDemandas({ onIniciarProducao, permissoes = [] }) {
+// Chips de filtro de status (seleção exclusiva — null = todos)
+const CHIPS_STATUS = [
+    { id: 'AGUARDANDO', ...STATUS_META.AGUARDANDO },
+    { id: 'COSTURA',    ...STATUS_META.COSTURA    },
+    { id: 'ARREMATE',   ...STATUS_META.ARREMATE   },
+    { id: 'EMBALAGEM',  ...STATUS_META.EMBALAGEM  },
+];
+
+export default function PainelDemandas({ onIniciarProducao, permissoes = [], onClose }) {
     const [demandasAgregadas, setDemandasAgregadas] = useState([]);
     const [carregando, setCarregando] = useState(true);
     const [modalAddAberto, setModalAddAberto] = useState(false);
     const [modalHistoricoAberto, setModalHistoricoAberto] = useState(false);
     
-    // --- NOVOS ESTADOS DE FILTRO ---
     const [termoBusca, setTermoBusca] = useState('');
-    const [filtroNaoIniciado, setFiltroNaoIniciado] = useState(false); // Checkbox "Ainda não mexi"
+    const [filtroStatus, setFiltroStatus] = useState(null); // null = todos | 'AGUARDANDO' | 'COSTURA' | etc.
+    const [filtroPrioridade, setFiltroPrioridade] = useState(false);
 
-    const [showConcluidos, setShowConcluidos] = useState(false);
-    const [showDivergencias, setShowDivergencias] = useState(true);
-    
+
     const ITENS_POR_PAGINA = 6;
     const [paginaAtual, setPaginaAtual] = useState(1);
-    const [filtroPrioridade, setFiltroPrioridade] = useState(false);
+
+    const [showConcluidos, setShowConcluidos] = useState(false);
+    const [itemParaRepetir, setItemParaRepetir] = useState(null);
+
+    const [popoverAberto, setPopoverAberto] = useState(false);
+    const badgeRef = useRef(null);
+
+    // Fecha popover ao clicar fora
+    useEffect(() => {
+        if (!popoverAberto) return;
+        const handler = (e) => {
+            if (badgeRef.current && !badgeRef.current.contains(e.target)) {
+                setPopoverAberto(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [popoverAberto]);
     
     const gerarKeyUnica = (item) => {
         const varianteLimpa = item.variante || 'padrao';
@@ -70,107 +92,75 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [] }) {
             }
         });
 
-        // Ordenação (Prioridade > Data)
-        const listaOrdenada = listaUnica.sort((a, b) => {
+        // Ordenação: prioridade=1 primeiro, depois por id (mais antigo primeiro)
+        listaUnica.sort((a, b) => {
             if (a.prioridade !== b.prioridade) return a.prioridade - b.prioridade;
-            return a.demanda_id - b.demanda_id; 
+            return a.demanda_id - b.demanda_id;
         });
 
-        // Normaliza o termo de busca uma vez só
         const termoLimpo = normalizarTexto(termoBusca);
 
-        listaOrdenada.forEach(item => {
-            // Cálculos de Status
-            const emProcessoAtivo = (item.saldo_em_producao || 0) + 
-                                    (item.saldo_disponivel_arremate || 0) + 
-                                    (item.saldo_disponivel_embalagem || 0);
-            
-            const totalConsumido = emProcessoAtivo + (item.saldo_disponivel_estoque || 0) + (item.saldo_perda || 0);
-            const fila = Math.max(0, item.demanda_total - totalConsumido);
-            
-            const tevePerda = (item.saldo_perda || 0) > 0;
-            const estoqueCheio = (item.saldo_disponivel_estoque || 0) >= item.demanda_total;
-            
-            // Definição de Concluído: Estoque Cheio E Nada mais rodando na fábrica
-            const estaConcluido = estoqueCheio && emProcessoAtivo === 0;
+        listaUnica.forEach(item => {
+            const statusItem = calcularStatusDemanda(item);
 
-            const naoIniciado = emProcessoAtivo === 0 && fila > 0;
+            // Concluídos e divergências vão para listas separadas, fora da paginação principal
+            if (statusItem === 'CONCLUIDO') { c.push(item); return; }
+            if (statusItem === 'DIVERGENCIA') { d.push(item); return; }
 
-            // --- MUDANÇA DE LÓGICA AQUI ---
-            // Se está concluído, MAS a data de conclusão é de HOJE (ou nula/recente), mantemos na lista principal.
-            // Assumindo que o Cron limpa as velhas, tudo que vem da API é "recente".
-            // Então, vamos tratar "Concluído com Sucesso" como um item visível, apenas no final da fila.
+            // A partir daqui: apenas pendentes (AGUARDANDO / COSTURA / ARREMATE / EMBALAGEM)
+            let deveMostrar = true;
 
-            let tipoLista = 'pendente';
-
-            if (estaConcluido) {
-                // Se quiser separar visualmente, podemos usar uma flag, mas vamos jogar na lista principal
-                tipoLista = 'pendente'; 
-            } else if (tevePerda && !estoqueCheio && fila === 0 && emProcessoAtivo === 0) {
-                tipoLista = 'divergencia';
-            } else {
-                tipoLista = 'pendente';
-            }
-
-            if (tipoLista === 'pendente') {
-                let deveMostrar = true;
-
-                // 1. Filtro de Texto
-                if (termoLimpo) {
-                    const nomeNorm = normalizarTexto(item.produto_nome);
-                    const varNorm = normalizarTexto(item.variante);
-                    if (!nomeNorm.includes(termoLimpo) && !varNorm.includes(termoLimpo)) {
-                        deveMostrar = false;
-                    }
-                }
-
-                // 2. Filtro de "Não Iniciado"
-                // Se o item está concluído, ele tecnicamente não é "não iniciado", então esse filtro oculta ele
-                if (filtroNaoIniciado && (estaConcluido || !naoIniciado)) {
+            // Filtro de texto
+            if (termoLimpo) {
+                const nomeNorm = normalizarTexto(item.produto_nome);
+                const varNorm  = normalizarTexto(item.variante);
+                if (!nomeNorm.includes(termoLimpo) && !varNorm.includes(termoLimpo)) {
                     deveMostrar = false;
                 }
-                
-                // 3. Filtro de Prioridade
-                if (filtroPrioridade) {
-                    const prioridadeItem = parseInt(item.prioridade);
-                    if (prioridadeItem !== 1) {
-                        deveMostrar = false;
-                    }
-                }
+            }
 
-                if (deveMostrar) {
-                    // --- MUDANÇA AQUI: SEPARAÇÃO REAL ---
-                    if (estaConcluido) {
-                        c.push(item); // Vai para lista de Concluídos
-                    } else {
-                        p.push(item); // Vai para lista de Pendentes (Principal)
-                    }
-                }
-            } 
+            // Filtro de status (chip de etapa)
+            if (filtroStatus && statusItem !== filtroStatus) {
+                deveMostrar = false;
+            }
+
+            // Filtro de prioridade (independente do status)
+            if (filtroPrioridade && parseInt(item.prioridade) !== 1) {
+                deveMostrar = false;
+            }
+
+            if (deveMostrar) p.push(item);
         });
-        
-        // REORDENAÇÃO FINAL DA LISTA PENDENTE
-        // Coloca os concluídos no final da lista para não atrapalhar
-        p.sort((a, b) => {
-            if (a._isConcluido && !b._isConcluido) return 1;
-            if (!a._isConcluido && b._isConcluido) return -1;
-            return 0; // Mantém a ordem de prioridade original
-        });
-        
+
         return { pendentesFiltrados: p, concluidas: c, divergencias: d };
-    }, [demandasAgregadas, termoBusca, filtroNaoIniciado, filtroPrioridade]);
+    }, [demandasAgregadas, termoBusca, filtroStatus, filtroPrioridade]);
 
     // --- 2. PAGINAÇÃO SEGURA (Baseada nos Filtrados) ---
     const totalPaginas = Math.ceil(pendentesFiltrados.length / ITENS_POR_PAGINA);
     
-    // Reseta página se filtro mudar
-    useEffect(() => { setPaginaAtual(1); }, [termoBusca, filtroNaoIniciado, filtroPrioridade]);
+    // Reseta página ao mudar qualquer filtro
+    useEffect(() => { setPaginaAtual(1); }, [termoBusca, filtroStatus, filtroPrioridade]);
 
     const itensPaginados = useMemo(() => {
         const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
         const fim = inicio + ITENS_POR_PAGINA;
         return pendentesFiltrados.slice(Math.max(0, inicio), fim);
     }, [pendentesFiltrados, paginaAtual]);
+
+    // Breakdown do badge — conta quantos pendentes estão em cada etapa
+    const { breakdownCounts, badgeEstado } = useMemo(() => {
+        const counts = { AGUARDANDO: 0, COSTURA: 0, ARREMATE: 0, EMBALAGEM: 0 };
+        let temUrgenteAguardando = false;
+        pendentesFiltrados.forEach(item => {
+            const s = calcularStatusDemanda(item);
+            if (counts[s] !== undefined) counts[s]++;
+            if (s === 'AGUARDANDO' && parseInt(item.prioridade) === 1) temUrgenteAguardando = true;
+        });
+        const estado = counts.AGUARDANDO > 0
+            ? (temUrgenteAguardando ? 'urgente' : 'atencao')
+            : 'normal';
+        return { breakdownCounts: counts, badgeEstado: estado };
+    }, [pendentesFiltrados]);
 
     // ... (handleDeleteDemanda e handlePlanejarProducao mantidos iguais) ...
     const handleDeleteDemanda = async (demandaId) => {
@@ -183,164 +173,249 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [] }) {
         } catch (error) { mostrarMensagem(error.message, "erro"); }
     };
 
+    const handleRepetirDemanda = (item) => {
+        const itemFormatado = {
+            sku: item.produto_sku,
+            nome: item.produto_nome,
+            variante: item.variante,
+            imagem: item.imagem
+        };
+        setItemParaRepetir(itemFormatado);
+        setModalAddAberto(true);
+    };
+
     const handlePlanejarProducao = (item) => {
-        if (!onIniciarProducao) return mostrarMensagem("Erro nav.", "erro");
-        onIniciarProducao({
+        const dadosDemanda = {
             produto_id: item.produto_id,
             variante: item.variante === '-' ? null : item.variante,
-            quantidade: item.saldo_em_fila, 
-            demanda_id: item.demanda_id 
-        });
+            quantidade: item.saldo_em_fila,
+            demanda_id: item.demanda_id
+        };
+
+        if (onIniciarProducao) {
+            // Já está na página de OPs — dispara o fluxo direto
+            onIniciarProducao(dadosDemanda);
+        } else {
+            // Em outra página — redireciona para OPs com os dados na URL
+            const params = new URLSearchParams({
+                demanda_id: item.demanda_id,
+                produto_id: item.produto_id,
+                quantidade: item.saldo_em_fila,
+            });
+            if (item.variante && item.variante !== '-') {
+                params.set('variante', item.variante);
+            }
+            window.location.href = `/admin/ordens-de-producao.html?${params.toString()}`;
+        }
     };
 
     return (
         <>
-            <div className="gs-painel-demandas-container">
-                <div className="gs-painel-demandas-header">
-                    <h2 style={{fontSize: '1.2rem'}}>Painel de Produção & Demandas</h2>
-                    <div style={{display: 'flex', gap: '8px'}}> {/* Adicionei flex/gap para organizar */}
-                        
-                        {/* BOTÃO HISTÓRICO (NOVO) */}
-                        <button 
-                            className="gs-btn" // Classe base genérica
+            {/* ===== HEADER DO DRAWER — 2 LINHAS ===== */}
+            <div className="gs-drawer-header">
+                {/* Linha 1: ícone + título + botão histórico + fechar */}
+                <div className="gs-drawer-header-topo">
+                    <div className="gs-drawer-titulo">
+                        <i className="fas fa-tasks"></i>
+                        <span>Painel de Demandas</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <button
+                            className="gs-drawer-fechar"
                             onClick={() => setModalHistoricoAberto(true)}
                             title="Ver Concluídos"
-                            // Estilo inline para garantir destaque único
-                            style={{ 
-                                backgroundColor: '#27ae60', // Um roxo bonito e diferente
-                                color: '#fff', 
-                                border: 'none'
-                            }}
+                            style={{ fontSize: '1rem', color: '#27ae60' }}
                         >
                             <i className="fas fa-history"></i>
                         </button>
-
-                        <button className="gs-btn gs-btn-secundario" onClick={fetchDiagnostico} disabled={carregando}>
-                            <i className={`fas fa-sync-alt ${carregando ? 'gs-spin' : ''}`}></i>
-                        </button>
-                        <button className="gs-btn gs-btn-primario" onClick={() => setModalAddAberto(true)}>
-                            <i className="fas fa-plus"></i> Nova
+                        <button className="gs-drawer-fechar" onClick={onClose} title="Fechar">
+                            <i className="fas fa-times"></i>
                         </button>
                     </div>
                 </div>
 
-                {/* --- BARRA DE FILTROS OTIMIZADA --- */}
-                <div className="gs-filtros-bar-container">
-                    <input 
-                        type="text" 
-                        className="gs-input-busca-filtro" 
-                        placeholder="Filtrar..."
-                        value={termoBusca}
-                        onChange={(e) => setTermoBusca(e.target.value)}
-                    />
-                    
-                    {/* Container Flex para os botões ficarem juntos */}
-                    <div className="gs-filtros-wrapper">
-                        
-                        {/* Botão Não Iniciados */}
-                        <div 
-                            className={`gs-toggle-filtro ${filtroNaoIniciado ? 'ativo' : ''}`}
-                            onClick={() => setFiltroNaoIniciado(!filtroNaoIniciado)}
+                {/* Linha 2: atualizar + contador + nova demanda */}
+                <div className="gs-drawer-header-acoes">
+                    <button
+                        className="gs-btn-refresh"
+                        onClick={fetchDiagnostico}
+                        disabled={carregando}
+                        title="Atualizar dados"
+                    >
+                        <i className={`fas fa-sync-alt ${carregando ? 'gs-spin' : ''}`}></i>
+                    </button>
+
+                    <div className="gs-badge-wrapper" ref={badgeRef}>
+                        <button
+                            className={`gs-badge-contador-demandas gs-badge-estado-${badgeEstado}`}
+                            onClick={() => setPopoverAberto(p => !p)}
                         >
-                            <div className="gs-checkbox-visual">
-                                {filtroNaoIniciado && <i className="fas fa-check" style={{fontSize: '0.7rem'}}></i>}
-                            </div>
-                            <span className="filtro-texto">Não Iniciados</span>
-                        </div>
-
-                        {/* Botão Prioridade */}
-                        <div 
-                            className={`gs-toggle-filtro ${filtroPrioridade ? 'ativo' : ''}`}
-                            onClick={() => setFiltroPrioridade(!filtroPrioridade)}
-                            style={filtroPrioridade ? { backgroundColor: '#fff9db', borderColor: '#ffe066', color: '#856404' } : {}}
-                        >
-                            <div className="gs-checkbox-visual" style={filtroPrioridade ? { borderColor: '#856404', backgroundColor: '#856404' } : {}}>
-                                {filtroPrioridade && <i className="fas fa-check" style={{fontSize: '0.7rem', color: '#fff'}}></i>}
-                            </div>
-                            <span className="filtro-texto"><i className="fas fa-star" style={{marginRight: '4px'}}></i> Prioridades</span>
-                        </div>
-
-                    </div>
-                </div>
-
-                <div className="gs-painel-demandas-body">
-                    {carregando ? (
-                        <div className="spinner">Calculando prioridades...</div>
-                    ) : (
-                        <div className="gs-agregado-lista">
-                            
-                            {/* LISTA UNIFICADA (PENDENTES + CONCLUÍDOS NO FINAL) */}
-                            {itensPaginados.length > 0 ? (
-                                itensPaginados.map(item => (
-                                    <CardPipelineProducao
-                                        key={gerarKeyUnica(item)}
-                                        item={item}
-                                        onPlanejar={() => handlePlanejarProducao(item)}
-                                        onDelete={() => handleDeleteDemanda(item.demanda_id)}
-                                        permissoes={permissoes}
-                                    />
-                                ))
-                            ) : (
-                                <UIFeedbackNotFound 
-                                    icon="fa-search" 
-                                    titulo="Nenhuma demanda encontrada" 
-                                    mensagem={termoBusca || filtroNaoIniciado ? "Tente ajustar os filtros." : "Tudo em dia!"} 
-                                />
+                            {pendentesFiltrados.length} pendente{pendentesFiltrados.length !== 1 ? 's' : ''}
+                            {badgeEstado !== 'normal' && (
+                                <span className="gs-badge-alerta-inline">
+                                    · {breakdownCounts.AGUARDANDO} aguardando
+                                </span>
                             )}
-                            
-                            {totalPaginas > 1 && (
-                                <OPPaginacaoWrapper 
-                                    totalPages={totalPaginas} 
-                                    currentPage={paginaAtual} 
-                                    onPageChange={setPaginaAtual} 
-                                />
-                            )}
+                            <i className="fas fa-chevron-down gs-badge-chevron"></i>
+                        </button>
 
-                            {/* DIVERGÊNCIAS (Mantemos separado pois é problema grave) */}
-                            {divergencias.length > 0 && (
-                                <div style={{ marginTop: '30px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
-                                    <button 
-                                        className="gs-btn-switch" 
-                                        style={{ width: '100%', justifyContent: 'space-between', backgroundColor: '#fff5f5', padding: '15px', borderRadius: '8px', border: '1px solid #feb2b2', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                                        onClick={() => setShowDivergencias(!showDivergencias)}
+                        {popoverAberto && pendentesFiltrados.length > 0 && (
+                            <div className="gs-badge-popover">
+                                <div className="gs-badge-popover-titulo">Por etapa</div>
+                                {[
+                                    { key: 'AGUARDANDO', ...STATUS_META.AGUARDANDO },
+                                    { key: 'COSTURA',    ...STATUS_META.COSTURA    },
+                                    { key: 'ARREMATE',   ...STATUS_META.ARREMATE   },
+                                    { key: 'EMBALAGEM',  ...STATUS_META.EMBALAGEM  },
+                                ].filter(s => breakdownCounts[s.key] > 0).map(s => (
+                                    <div
+                                        key={s.key}
+                                        className="gs-badge-popover-linha"
+                                        onClick={() => { setFiltroStatus(s.key); setPopoverAberto(false); }}
                                     >
-                                        <span style={{fontWeight: 'bold', color: '#c0392b'}}>
-                                            <i className="fas fa-exclamation-triangle" style={{marginRight: '8px'}}></i>
-                                            Encerrados com Divergência ({divergencias.length})
-                                        </span>
-                                        <i className={`fas fa-chevron-${showDivergencias ? 'up' : 'down'}`} style={{color: '#c0392b'}}></i>
-                                    </button>
-                                    
-                                    {showDivergencias && (
-                                        <div style={{ marginTop: '15px', display: 'flex', flexDirection: 'column', gap: '15px', paddingLeft: '10px', borderLeft: '3px solid #c0392b' }}>
-                                            {divergencias.map(item => (
-                                                <CardPipelineProducao key={gerarKeyUnica(item)} item={item} onPlanejar={() => {}} onDelete={() => handleDeleteDemanda(item.demanda_id)} permissoes={permissoes} />
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                            
-                            {/* SEÇÃO CONCLUÍDOS REMOVIDA (Eles agora aparecem na lista principal) */}
+                                        <span className="gs-badge-popover-dot" style={{ backgroundColor: s.cor }}></span>
+                                        <span className="gs-badge-popover-label">{s.label}</span>
+                                        <span className="gs-badge-popover-qtd">{breakdownCounts[s.key]}</span>
+                                    </div>
+                                ))}
+                                <div className="gs-badge-popover-hint">Toque para filtrar</div>
+                            </div>
+                        )}
+                    </div>
 
-                        </div>
-                    )}
+                    <button
+                        className="gs-btn gs-btn-primario gs-btn-nova-demanda"
+                        onClick={() => setModalAddAberto(true)}
+                    >
+                        <i className="fas fa-plus"></i> Nova
+                    </button>
                 </div>
             </div>
 
+            {/* ===== CORPO SCROLLÁVEL DO DRAWER ===== */}
+            <div className="gs-drawer-body">
+                <div className="gs-painel-demandas-wrapper">
+
+                    {/* Barra de filtros */}
+                    <div className="gs-filtros-bar-container">
+                        <input
+                            type="text"
+                            className="gs-input-busca-filtro"
+                            placeholder="Buscar produto..."
+                            value={termoBusca}
+                            onChange={(e) => setTermoBusca(e.target.value)}
+                        />
+
+                        {/* Chips de status — seleção exclusiva (clica no mesmo para desativar) */}
+                        <div className="gs-chips-filtro-wrapper">
+                            {CHIPS_STATUS.map(chip => (
+                                <button
+                                    key={chip.id}
+                                    className={`gs-chip-status${filtroStatus === chip.id ? ' ativo' : ''}`}
+                                    style={filtroStatus === chip.id ? { '--chip-cor': chip.cor } : {}}
+                                    onClick={() => setFiltroStatus(filtroStatus === chip.id ? null : chip.id)}
+                                >
+                                    <i className={`fas ${chip.icone}`}></i>
+                                    {chip.label}
+                                </button>
+                            ))}
+
+                            {/* Chip de prioridade — independente do status */}
+                            <button
+                                className={`gs-chip-status gs-chip-prioridade${filtroPrioridade ? ' ativo' : ''}`}
+                                onClick={() => setFiltroPrioridade(!filtroPrioridade)}
+                            >
+                                <i className="fas fa-star"></i>
+                                Prioridade
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Lista de demandas */}
+                    <div className="gs-painel-demandas-body">
+                        {carregando ? (
+                            <div className="spinner">Calculando prioridades...</div>
+                        ) : (
+                            <div className="gs-agregado-lista">
+                                {itensPaginados.length > 0 ? (
+                                    itensPaginados.map(item => (
+                                        <CardPipelineProducao
+                                            key={gerarKeyUnica(item)}
+                                            item={item}
+                                            onPlanejar={() => handlePlanejarProducao(item)}
+                                            onDelete={() => handleDeleteDemanda(item.demanda_id)}
+                                            permissoes={permissoes}
+                                            onRefresh={fetchDiagnostico}
+                                        />
+                                    ))
+                                ) : (
+                                    <UIFeedbackNotFound
+                                        icon="fa-search"
+                                        titulo="Nenhuma demanda encontrada"
+                                        mensagem={termoBusca || filtroStatus || filtroPrioridade ? "Tente ajustar os filtros." : "Tudo em dia!"}
+                                    />
+                                )}
+
+                                {totalPaginas > 1 && (
+                                    <OPPaginacaoWrapper
+                                        totalPages={totalPaginas}
+                                        currentPage={paginaAtual}
+                                        onPageChange={setPaginaAtual}
+                                    />
+                                )}
+
+                                {/* Seção colapsável de concluídas */}
+                                {concluidas.length > 0 && (
+                                    <div className="gs-secao-concluidas">
+                                        <button
+                                            className="gs-secao-toggle"
+                                            onClick={() => setShowConcluidos(v => !v)}
+                                        >
+                                            <span>
+                                                <i className="fas fa-check-circle"></i>
+                                                Concluídas ({concluidas.length})
+                                            </span>
+                                            <i className={`fas fa-chevron-${showConcluidos ? 'up' : 'down'}`}></i>
+                                        </button>
+
+                                        {showConcluidos && (
+                                            <div className="gs-secao-concluidas-lista">
+                                                {concluidas.map(item => (
+                                                    <CardPipelineProducao
+                                                        key={gerarKeyUnica(item)}
+                                                        item={item}
+                                                        onPlanejar={() => {}}
+                                                        onDelete={() => handleDeleteDemanda(item.demanda_id)}
+                                                        permissoes={permissoes}
+                                                        onRefresh={fetchDiagnostico}
+                                                        onRepetir={handleRepetirDemanda}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                            </div>
+                        )}
+                    </div>
+
+                </div>
+            </div>
+
+            {/* Modais */}
             {modalAddAberto && (
-                <BotaoBuscaModalAddDemanda 
-                    onClose={() => setModalAddAberto(false)}
+                <BotaoBuscaModalAddDemanda
+                    onClose={() => { setModalAddAberto(false); setItemParaRepetir(null); }}
                     onDemandaCriada={fetchDiagnostico}
+                    itemPreSelecionado={itemParaRepetir}
                 />
             )}
 
-            {/* MODAL DE HISTÓRICO AQUI */}
-            <BotaoBuscaModalConcluidas 
+            <BotaoBuscaModalConcluidas
                 isOpen={modalHistoricoAberto}
                 onClose={() => setModalHistoricoAberto(false)}
             />
-
         </>
     );
 }

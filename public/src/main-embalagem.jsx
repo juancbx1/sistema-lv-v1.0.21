@@ -9,24 +9,11 @@ import { normalizeText } from '/src/utils/EmbalagemSearchHelpers.js';
 import { renderizarPaginacao } from '/js/utils/Paginacao.js';
 import UIHeaderPagina from './components/UIHeaderPagina.jsx'; 
 import UIFeedbackNotFound from './components/UIFeedbackNotFound.jsx';
-import RadarDeAlertas from './components/RadarDeAlertas.jsx';
 import BotaoBuscaFunil from './components/BotaoBuscaFunil.jsx';
 import { mostrarMensagem } from '/js/utils/popups.js';
+import { verificarAutenticacao } from '/js/utils/auth.js';
 
-const ITENS_POR_PAGINA = 6; // Defina quantos cards quer por página
-
-const handleConsultarFunilDesdeAlerta = (item) => {
-        if (!item || !item.sku) {
-            console.error("Tentativa de consultar funil sem um item ou SKU válido.", item);
-            mostrarMensagem("Não foi possível obter o SKU deste item para a consulta.", "erro");
-            return;
-        }
-        
-        // Cria um novo evento customizado com o SKU do item nos detalhes
-        const event = new CustomEvent('radar:consultarFunil', { detail: { sku: item.sku } });
-        // Dispara o evento globalmente
-        window.dispatchEvent(event);
-    };
+const ITENS_POR_PAGINA = 6;
 
 // Componente principal que irá controlar a página
 function PainelEmbalagem() {
@@ -357,22 +344,25 @@ if (headerRootElement) {
     );
 }
 
-// --- Ponto de Entrada 2: O Radar de Alertas ---
-const radarRootElement = document.getElementById('radar-root');
-if (radarRootElement) {
-    const radarRoot = ReactDOM.createRoot(radarRootElement);
-    // A prop onConsultarFunil será usada no futuro para conectar os dois componentes
-    radarRoot.render(<RadarDeAlertas onConsultarFunil={handleConsultarFunilDesdeAlerta} />);
+// Wrapper para o FAB ter acesso ao state de permissões
+function PainelComFab() {
+    const [permissoes, setPermissoes] = useState([]);
+    useEffect(() => {
+        verificarAutenticacao('admin/embalagem-de-produtos.html', ['acesso-embalagem-de-produtos']).then(auth => {
+            if (auth) setPermissoes(auth.permissoes || []);
+        });
+    }, []);
+    return (
+        <React.Fragment>
+            <PainelEmbalagem />
+            <BotaoBuscaFunil permissoes={permissoes} />
+        </React.Fragment>
+    );
 }
 
-// --- Ponto de Entrada 3: O Conteúdo Principal (Cards, Filtros e Botão Flutuante) ---
+// --- Ponto de Entrada 2: O Conteúdo Principal (Cards, Filtros e Botão Flutuante) ---
 const painelRootElement = document.getElementById('painel-principal-root');
 if (painelRootElement) {
     const painelRoot = ReactDOM.createRoot(painelRootElement);
-    painelRoot.render(
-        <React.Fragment>
-            <PainelEmbalagem />
-            <BotaoBuscaFunil />
-        </React.Fragment>
-    );
+    painelRoot.render(<PainelComFab />);
 }

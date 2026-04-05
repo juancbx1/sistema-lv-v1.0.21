@@ -1,46 +1,42 @@
 // public/src/components/BotaoBuscaPipelineProducao.jsx
 
 import React, { useState } from 'react';
-import { mostrarConfirmacao } from '/js/utils/popups.js';
+import { mostrarConfirmacao, mostrarMensagem } from '/js/utils/popups.js';
+import { calcularStatusDemanda, STATUS_META } from '/src/utils/demandaStatus.js';
 
-export default function CardPipelineProducao({ item, onPlanejar, onDelete, permissoes }) {
+export default function CardPipelineProducao({ item, onPlanejar, onDelete, permissoes, onRefresh, onRepetir }) {
     const [expandido, setExpandido] = useState(false);
 
-    const totalPedido = item.demanda_total || 0;
-    
-    // --- LÓGICA DE DADOS ---
-    const emProducao = item.saldo_em_producao || 0;
-    const emArremate = item.saldo_disponivel_arremate || 0;
-    const emEmbalagem = item.saldo_disponivel_embalagem || 0;
-    const emEstoque = item.saldo_disponivel_estoque || 0;
-    const emPerda = item.saldo_perda || 0;
-    
+    // --- DADOS DO PIPELINE ---
+    const totalPedido    = item.demanda_total               || 0;
+    const emProducao     = item.saldo_em_producao           || 0;
+    const emArremate     = item.saldo_disponivel_arremate   || 0;
+    const emEmbalagem    = item.saldo_disponivel_embalagem  || 0;
+    const emEstoque      = item.saldo_disponivel_estoque    || 0;
+    const emPerda        = item.saldo_perda                 || 0;
+
     const totalConsumido = emProducao + emArremate + emEmbalagem + emEstoque + emPerda;
-    const pendenteFila = Math.max(0, totalPedido - totalConsumido);
+    const pendenteFila   = Math.max(0, totalPedido - totalConsumido);
 
-    const pctEstoque = Math.min(100, (emEstoque / totalPedido) * 100);
-    const pctEmbalagem = Math.min(100, (emEmbalagem / totalPedido) * 100);
-    const pctArremate = Math.min(100, (emArremate / totalPedido) * 100);
-    const pctProducao = Math.min(100, (emProducao / totalPedido) * 100);
-    const pctPerda = Math.min(100, (emPerda / totalPedido) * 100);
+    const pct = (v) => totalPedido > 0 ? Math.min(100, (v / totalPedido) * 100) : 0;
 
-    const nomeVariante = (item.variante && item.variante !== '-') ? item.variante : (item.variacao && item.variacao !== '-' ? item.variacao : '');
+    // --- STATUS E IDENTIDADE VISUAL ---
+    const statusCalculado = calcularStatusDemanda(item);
+    const meta            = STATUS_META[statusCalculado] || STATUS_META.AGUARDANDO;
+    const eUrgente        = parseInt(item.prioridade) === 1;
 
-    // --- FUNÇÃO PARA LIMPAR O TÍTULO ---
-    const getTituloLimpo = () => {
-        let titulo = item.produto_nome;
-        if (nomeVariante) {
-            // Remove a variante se ela estiver entre parenteses no titulo
-            // Ex: "Produto (Azul)" -> remove "(Azul)"
-            titulo = titulo.replace(`(${nomeVariante})`, '').trim();
-            // Remove parenteses vazios que podem ter sobrado "Produto ()"
-            titulo = titulo.replace('()', '').trim();
-        }
-        return titulo;
-    };
+    // --- NOME LIMPO (sem variante entre parênteses duplicada) ---
+    const nomeVariante = (item.variante && item.variante !== '-') ? item.variante : '';
+    const tituloLimpo = nomeVariante
+        ? (item.produto_nome || '').replace(`(${nomeVariante})`, '').replace('()', '').trim()
+        : (item.produto_nome || '');
 
-    const tituloLimpo = getTituloLimpo();
+    // --- DATA FORMATADA ---
+    const dataFormatada = item.data_solicitacao
+        ? new Date(item.data_solicitacao).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+        : null;
 
+    // --- HANDLERS ---
     const handleDeleteClick = async (e) => {
         e.stopPropagation();
         const confirmado = await mostrarConfirmacao(
@@ -50,163 +46,170 @@ export default function CardPipelineProducao({ item, onPlanejar, onDelete, permi
         if (confirmado && onDelete) onDelete(item.demanda_id);
     };
 
-    // Ação Principal: Clicar na tesoura
     const handleActionClick = (e) => {
-        e.stopPropagation(); // Não abre o accordion
-        if (pendenteFila > 0) {
-            onPlanejar(item, pendenteFila);
-        }
+        e.stopPropagation();
+        if (pendenteFila > 0) onPlanejar(item, pendenteFila);
     };
 
-    // Inteligência de Status 2.0 (Baseada em Volume/Dominância)
-    const getFeedbackStatus = () => {
-        // Verifica se ainda tem algo rodando na fábrica (excluindo estoque e perda)
-        const algoEmAndamento = (emProducao > 0 || emArremate > 0 || emEmbalagem > 0);
-
-        // 1. Concluído REAL (Estoque atingiu meta E fábrica parou)
-        // Se a meta era 6, mas cortou 10, ele só dá concluído quando os 10 chegarem no estoque e sair do arremate.
-        if (emEstoque >= totalPedido && !algoEmAndamento) {
-            return { cor: "#27ae60", nome: "CONCLUÍDO", corFundo: "#eafaf1", icone: "fa-check-circle" };
+    const handleConcluirManual = async (e) => {
+        e.stopPropagation();
+        const ok = await mostrarConfirmacao(
+            `Marcar demanda de "${tituloLimpo}" como concluída manualmente?`,
+            { tipo: 'aviso', textoConfirmar: 'Sim, concluir', textoCancelar: 'Cancelar' }
+        );
+        if (!ok) return;
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`/api/demandas/${item.demanda_id}/concluir`, {
+                method: 'PATCH',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!res.ok) throw new Error('Falha ao concluir demanda.');
+            mostrarMensagem('Demanda marcada como concluída!', 'sucesso');
+            if (onRefresh) onRefresh();
+        } catch(err) {
+            mostrarMensagem(err.message, 'erro');
         }
-
-        // 2. Divergência (Perda impede conclusão)
-        if (pendenteFila === 0 && emPerda > 0 && totalConsumido < totalPedido && !algoEmAndamento) {
-            return { cor: "#c0392b", nome: "DIVERGÊNCIA", corFundo: "#fff5f5", icone: "fa-exclamation-triangle" };
-        }
-
-        // 3. Fase de Acabamento (Costura Zerada)
-        if (emProducao === 0 && (emArremate > 0 || emEmbalagem > 0)) {
-            if (emEmbalagem > emArremate) {
-                return { cor: "#e67e22", nome: "EMBALAGEM", corFundo: "#fff5e6", icone: "fa-box-open" };
-            } else {
-                return { cor: "#8e44ad", nome: "ARREMATE", corFundo: "#f4ecf7", icone: "fa-clipboard-check" };
-            }
-        }
-
-        // 4. Fase de Produção
-        if (emProducao > 0) {
-            return { cor: "#3498db", nome: "COSTURA", corFundo: "#ebf5fb", icone: "fa-cut" };
-        }
-        
-        // 5. Estoque Parcial (Tem estoque, mas ainda tem gente trabalhando ou fila)
-        // Isso resolve o caso: "6 no estoque, mas 4 no arremate". 
-        // Ele vai cair nas regras acima (3 ou 4) ou aqui.
-        if (emEstoque > 0 && emEstoque < totalPedido) {
-             return { cor: "#2980b9", nome: "ANDAMENTO", corFundo: "#ebf5fb", icone: "fa-spinner" };
-        }
-
-        // 6. Fila
-        return { cor: "#95a5a6", nome: "AGUARDANDO", corFundo: "#f8f9fa", icone: "fa-clock" };
     };
-    
-    const statusInfo = getFeedbackStatus();
 
     return (
-        <div 
-            className="gs-pipeline-card" 
-            style={{ 
-                position: 'relative', 
-                borderLeftColor: statusInfo.cor, 
-                cursor: 'pointer' 
-            }}
+        <div
+            className={`gs-demanda-card${expandido ? ' expandido' : ''}`}
             onClick={() => setExpandido(!expandido)}
         >
-            {permissoes.includes('deletar-demanda') && (
-                <button onClick={handleDeleteClick}
-                    style={{
-                        position: 'absolute', top: '5px', right: '5px', zIndex: 10,
-                        background: 'rgba(255,255,255,0.8)', border: 'none', color: '#ccc',
-                        cursor: 'pointer', fontSize: '1rem', padding: '5px', zIndex: 5, borderRadius: '50%'
-                    }}
-                >
-                    <i className="fas fa-trash"></i>
-                </button>
-            )}
+            {/* Borda-charme: vermelha pulsante se urgente, cor do status caso contrário */}
+            <div
+                className={`card-borda-charme${eUrgente ? ' gs-borda-urgente' : ''}`}
+                style={!eUrgente ? { backgroundColor: meta.cor } : {}}
+            ></div>
 
-            {/* --- CABEÇALHO 4.0 (LAYOUT DE 3 LINHAS) --- */}
-            <div className="pipeline-header-mobile">
-                
-                {/* LINHA 1: TÍTULO */}
-                <div className="ph-linha-titulo">
-                    <h4 title={tituloLimpo} className={parseInt(item.prioridade) === 1 ? 'titulo-prioridade' : ''}>
-                        {/* NOVA ESTRELA DE LUXO ANIMADA */}
-                        {parseInt(item.prioridade) === 1 && (
-                            <span className="gs-badge-prioridade animado">
-                                <i className="fas fa-star" style={{fontSize: '0.8rem'}}></i>
+            {/* ===== TOPO: imagem + info + badge + delete ===== */}
+            <div className="gs-demanda-card-topo">
+                <img
+                    src={item.imagem || '/img/placeholder-image.png'}
+                    alt={tituloLimpo}
+                    className="gs-demanda-card-img"
+                />
+
+                <div className="gs-demanda-card-info">
+                    <span className="gs-demanda-card-nome">
+                        {eUrgente && (
+                            <span className="gs-demanda-urgente-pill">
+                                <i className="fas fa-star"></i> Prioridade
                             </span>
                         )}
                         {tituloLimpo}
-                    </h4>
+                    </span>
+                    {nomeVariante && (
+                        <span className="gs-demanda-card-variante">{nomeVariante}</span>
+                    )}
+                    {(dataFormatada || item.solicitado_por) && (
+                        <span className="gs-demanda-card-origem">
+                            {dataFormatada && <><i className="fas fa-calendar-alt"></i> {dataFormatada}</>}
+                            {dataFormatada && item.solicitado_por && ' · '}
+                            {item.solicitado_por && <>Criado por: <strong>{item.solicitado_por}</strong></>}
+                        </span>
+                    )}
                 </div>
 
-                {/* LINHA 2: VARIANTE + BADGE (LADO A LADO) */}
-                <div className="ph-linha-detalhes">
-                    <div className="ph-variante">
-                        {nomeVariante || <span style={{opacity:0.5}}>Sem variação</span>}
-                    </div>
-                    <div className="ph-status-badge" style={{ backgroundColor: statusInfo.cor + '20', color: statusInfo.cor }}>
-                        {statusInfo.nome}
-                    </div>
+                <div className="gs-demanda-card-direita">
+                    <span className="gs-demanda-status-badge" style={{ color: meta.cor, borderColor: meta.cor }}>
+                        <i className={`fas ${meta.icone}`}></i>
+                        {meta.label}
+                    </span>
+                    {permissoes.includes('deletar-demanda') && (
+                        <button className="gs-demanda-del-btn" onClick={handleDeleteClick} title="Apagar demanda">
+                            <i className="fas fa-trash"></i>
+                        </button>
+                    )}
                 </div>
+            </div>
 
-                {/* LINHA 3: IMAGEM + META + AÇÃO (O CORAÇÃO DO CARD) */}
-                <div className="ph-linha-principal">
-                    
-                    {/* Imagem */}
-                    <div className="ph-imagem-wrapper">
-                        <img src={item.imagem || '/img/placeholder-image.png'} alt={item.produto_nome} />
-                    </div>
+            {/* ===== PIPELINE BAR ===== */}
+            <div className="gs-demanda-pipeline-bar">
+                <div className="segmento estoque"   style={{ width: `${pct(emEstoque)}%` }}></div>
+                <div className="segmento embalagem" style={{ width: `${pct(emEmbalagem)}%` }}></div>
+                <div className="segmento acabamento" style={{ width: `${pct(emArremate)}%` }}></div>
+                <div className="segmento producao"  style={{ width: `${pct(emProducao)}%` }}></div>
+                <div className="segmento perda"     style={{ width: `${pct(emPerda)}%`, backgroundColor: '#e74c3c' }}></div>
+            </div>
 
-                    {/* Meta (Quantidade) - Centralizado */}
-                    <div className="ph-meta-wrapper">
-                        <div className="ph-meta-box">
-                            <span className="valor" style={{ color: pendenteFila > 0 ? '#c0392b' : '#2c3e50' }}>
-                                {pendenteFila > 0 ? pendenteFila : totalPedido}
-                            </span>
-                            <span className="label">
-                                {pendenteFila > 0 ? 'Faltam' : 'Total'}
-                            </span>
+            {/* ===== RODAPÉ: progresso numérico + CTA ===== */}
+            <div className="gs-demanda-card-rodape" onClick={e => e.stopPropagation()}>
+                <span className="gs-demanda-progresso">
+                    Meta: <strong>{totalPedido}</strong> pçs
+                </span>
+
+                {pendenteFila > 0 && (
+                    <button className="gs-btn-ir-cortes" onClick={handleActionClick}>
+                        <i className="fas fa-cut"></i>
+                        <span>Iniciar Corte</span>
+                        <span className="gs-btn-ir-cortes-qtd">{pendenteFila} pçs</span>
+                    </button>
+                )}
+            </div>
+
+            {/* ===== ACCORDION: breakdown + observações ===== */}
+            {expandido && (
+                <div className="gs-demanda-accordion" onClick={e => e.stopPropagation()}>
+                    {item.observacoes && (
+                        <div className="gs-demanda-obs">
+                            <i className="fas fa-comment-alt"></i>
+                            <span>{item.observacoes}</span>
                         </div>
-                    </div>
-
-                    {/* Ação (Botão na Direita) */}
-                    <div className="ph-acao-wrapper">
-                        {pendenteFila > 0 ? (
-                            <button className="gs-btn-turbo-acao" onClick={handleActionClick}>
-                                <i className="fas fa-cut"></i>
-                            </button>
-                        ) : (
-                            <div className="gs-icon-concluido">
-                                <i className={`fas ${statusInfo.icone}`} style={{color: statusInfo.cor}}></i>
+                    )}
+                    <div className="gs-demanda-breakdown">
+                        <div className="gs-demanda-breakdown-item">
+                            <span className="dot" style={{ backgroundColor: '#ecf0f1', border: '1px solid #bdc3c7' }}></span>
+                            <span>Fila</span>
+                            <strong>{pendenteFila}</strong>
+                        </div>
+                        <div className="gs-demanda-breakdown-item">
+                            <span className="dot" style={{ backgroundColor: '#3498db' }}></span>
+                            <span>Costura</span>
+                            <strong>{emProducao}</strong>
+                        </div>
+                        <div className="gs-demanda-breakdown-item">
+                            <span className="dot" style={{ backgroundColor: '#9b59b6' }}></span>
+                            <span>Arremate</span>
+                            <strong>{emArremate}</strong>
+                        </div>
+                        <div className="gs-demanda-breakdown-item">
+                            <span className="dot" style={{ backgroundColor: '#e67e22' }}></span>
+                            <span>Embalagem</span>
+                            <strong>{emEmbalagem}</strong>
+                        </div>
+                        <div className="gs-demanda-breakdown-item">
+                            <span className="dot" style={{ backgroundColor: '#27ae60' }}></span>
+                            <span>Estoque</span>
+                            <strong>{emEstoque}</strong>
+                        </div>
+                        {emPerda > 0 && (
+                            <div className="gs-demanda-breakdown-item">
+                                <span className="dot" style={{ backgroundColor: '#e74c3c' }}></span>
+                                <span>Perda</span>
+                                <strong>{emPerda}</strong>
                             </div>
                         )}
                     </div>
 
-                </div>
-            </div>
+                    {permissoes.includes('concluir-demanda-manual') && statusCalculado !== 'CONCLUIDO' && (
+                        <button className="gs-btn-concluir-manual" onClick={handleConcluirManual}>
+                            <i className="fas fa-check-double"></i>
+                            Marcar como Concluída
+                        </button>
+                    )}
 
-            {/* --- BARRA PIPELINE --- */}
-            <div className="pipeline-bar-container" style={{marginTop: '12px'}}>
-                <div className="pipeline-bar">
-                    <div className="segmento estoque" style={{width: `${pctEstoque}%`}}></div>
-                    <div className="segmento embalagem" style={{width: `${pctEmbalagem}%`}}></div>
-                    <div className="segmento acabamento" style={{width: `${pctArremate}%`}}></div>
-                    <div className="segmento producao" style={{width: `${pctProducao}%`}}></div>
-                    <div className="segmento perda" style={{width: `${pctPerda}%`, backgroundColor: '#e74c3c'}}></div>
+                    {statusCalculado === 'CONCLUIDO' && onRepetir && (
+                        <button
+                            className="gs-btn-repetir-demanda"
+                            onClick={(e) => { e.stopPropagation(); onRepetir(item); }}
+                        >
+                            <i className="fas fa-redo"></i> Repetir Demanda
+                        </button>
+                    )}
                 </div>
-            </div>
-
-            {/* --- ACCORDION SIMPLIFICADO --- */}
-            <div className={`pipeline-conteudo-extra ${expandido ? 'visivel' : ''}`} onClick={(e) => e.stopPropagation()}>
-                <div className="pipeline-legenda">
-                    <div className="legenda-item"><span className="dot verde"></span> <span>Estoque: <strong>{emEstoque}</strong></span></div>
-                    <div className="legenda-item"><span className="dot laranja"></span> <span>Embalagem: <strong>{emEmbalagem}</strong></span></div>
-                    <div className="legenda-item"><span className="dot roxo"></span> <span>Arremate: <strong>{emArremate}</strong></span></div>
-                    <div className="legenda-item"><span className="dot azul"></span> <span>Costura: <strong>{emProducao}</strong></span></div>
-                    {emPerda > 0 && <div className="legenda-item"><span className="dot" style={{backgroundColor: '#e74c3c'}}></span> <span>Perda: <strong>{emPerda}</strong></span></div>}
-                    <div className="legenda-item"><span className="dot cinza"></span> <span>Fila: <strong>{pendenteFila}</strong></span></div>
-                </div>
-            </div>
+            )}
         </div>
     );
 }

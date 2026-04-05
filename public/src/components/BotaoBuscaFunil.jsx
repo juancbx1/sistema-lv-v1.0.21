@@ -1,78 +1,116 @@
 // public/src/components/BotaoBuscaFunil.jsx
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import PainelDemandas from './BotaoBuscaPainelDemandas.jsx';
+
+const POLLING_INTERVAL = 3 * 60 * 1000; // 3 minutos
 
 export default function BotaoBuscaFunil({ onIniciarProducao, permissoes }) {
     const [modalAberto, setModalAberto] = useState(false);
-    const [temPrioridade, setTemPrioridade] = useState(false);
+    const [totalUrgentes, setTotalUrgentes] = useState(0); // prioridade=1 E pendente → alerta vermelho
+    const [totalAtivas, setTotalAtivas]    = useState(0); // qualquer demanda não concluída → badge azul
+    const refreshTimerRef = useRef(null);
 
-    // Função de verificação extraída para reutilização
     const checkPrioridades = async () => {
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch('/api/demandas', { headers: { 'Authorization': `Bearer ${token}` } });
-            if(res.ok) {
-                const dados = await res.json();
-                // Verifica se tem prioridade=1 E não está concluída
-                // Conversão para inteiro garante que '1' vire 1
-                const temUrgente = dados.some(d => parseInt(d.prioridade) === 1 && d.status !== 'concluida');
-                setTemPrioridade(temUrgente);
+            const res = await fetch('/api/demandas/tem-prioridade', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setTotalUrgentes(data.totalUrgentes ?? 0);
+                setTotalAtivas(data.totalAtivas ?? 0);
             }
-        } catch (e) { console.error("Erro check prioridade:", e); }
+        } catch (e) {
+            console.error('[FAB] Erro check prioridade:', e);
+        }
     };
 
-    // Roda APENAS UMA VEZ ao carregar a página.
-    React.useEffect(() => {
-        checkPrioridades();
+    useEffect(() => {
+        checkPrioridades(); // Checa imediatamente ao montar
+
+        const agendarProxima = () => {
+            refreshTimerRef.current = setTimeout(() => {
+                if (!document.hidden) checkPrioridades();
+                agendarProxima();
+            }, POLLING_INTERVAL);
+        };
+        agendarProxima();
+
+        const handleVisibility = () => {
+            if (!document.hidden) checkPrioridades();
+        };
+        document.addEventListener('visibilitychange', handleVisibility);
+
+        return () => {
+            clearTimeout(refreshTimerRef.current);
+            document.removeEventListener('visibilitychange', handleVisibility);
+        };
     }, []);
 
-    // Quando fecha o modal, verifica de novo (pois pode ter criado/deletado algo)
     const handleClose = () => {
         setModalAberto(false);
         checkPrioridades();
     };
 
-    if (!modalAberto) {
-        return (
-            <button 
-                className="gs-fab-busca" 
-                onClick={() => setModalAberto(true)}
-                style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 9999 }}
-            >
-                <i className="fas fa-tasks"></i>
-                
-                {/* DEBUG VISUAL: Se tem prioridade, isso DEVE aparecer */}
-                {temPrioridade && (
-                    <span style={{
-                        position: 'absolute', top: '-5px', right: '-5px',
-                        backgroundColor: '#fff', color: '#f1c40f',
-                        borderRadius: '50%', width: '24px', height: '24px',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        boxShadow: '0 2px 5px rgba(0,0,0,0.3)', border: '2px solid #f1c40f',
-                        zIndex: 10000
-                    }}>
-                        <i className="fas fa-star" style={{ fontSize: '0.9rem' }}></i>
-                    </span>
-                )}
-            </button>
-        );
-    }
+    // --- 3 estados visuais do FAB ---
+    // 1. temUrgente: prioridade=1 E pendente → vermelho pulsante
+    // 2. totalAtivas > 0 (mas sem urgentes pendentes) → azul + badge discreto
+    // 3. sem ativos → azul limpo
+    const temUrgente = totalUrgentes > 0;
 
     return (
-        <div className="gs-busca-modal-overlay" onClick={handleClose}> {/* Usa handleClose */}
-            <div className="gs-busca-modal-conteudo" onClick={(e) => e.stopPropagation()}>
-                <div className="gs-busca-modal-header">
-                    <h3>Painel de Prioridades</h3>
-                    <button onClick={handleClose} className="gs-busca-modal-fechar">&times;</button>
-                </div>
-                <div className="gs-busca-modal-body">
-                    <PainelDemandas 
-                        onIniciarProducao={(dados) => { setModalAberto(false); onIniciarProducao(dados); }} 
-                        permissoes={permissoes}
-                    />
-                </div>
-            </div>
-        </div>
+        <>
+            {/* FAB — sempre visível */}
+            <button
+                className={`gs-fab-busca${temUrgente ? ' tem-prioridade' : ''}`}
+                onClick={() => setModalAberto(true)}
+                title={
+                    temUrgente
+                        ? `${totalUrgentes} demanda(s) urgente(s) aguardando!`
+                        : totalAtivas > 0
+                            ? `${totalAtivas} demanda(s) em andamento`
+                            : 'Painel de Demandas'
+                }
+            >
+                <i className={`fas ${temUrgente ? 'fa-exclamation-triangle' : 'fa-tasks'}`}></i>
+
+                {/* Badge vermelho — urgentes pendentes */}
+                {temUrgente && (
+                    <span className="gs-fab-badge-prioridade">{totalUrgentes}</span>
+                )}
+
+                {/* Badge azul — pipeline em andamento (sem urgência) */}
+                {!temUrgente && totalAtivas > 0 && (
+                    <span className="gs-fab-badge-ativo">{totalAtivas}</span>
+                )}
+            </button>
+
+            {/* Drawer — só monta quando aberto */}
+            {modalAberto && (
+                <>
+                    <div className="gs-drawer-overlay" onClick={handleClose} />
+                    <div className="gs-drawer-container">
+                        <PainelDemandas
+                            onIniciarProducao={(dados) => {
+                                setModalAberto(false);
+                                if (onIniciarProducao) {
+                                    // Já está na página de OPs — dispara o fluxo direto
+                                    onIniciarProducao(dados);
+                                } else {
+                                    // Em outra página — redireciona para OPs com os dados na URL
+                                    const params = new URLSearchParams({ demanda_id: dados.demanda_id, produto_id: dados.produto_id, quantidade: dados.quantidade });
+                                    if (dados.variante) params.set('variante', dados.variante);
+                                    window.location.href = `/admin/ordens-de-producao.html?${params.toString()}`;
+                                }
+                            }}
+                            permissoes={permissoes}
+                            onClose={handleClose}
+                        />
+                    </div>
+                </>
+            )}
+        </>
     );
 }

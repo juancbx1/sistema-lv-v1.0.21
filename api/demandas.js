@@ -301,4 +301,343 @@ router.put('/atualizar-meta-componente', async (req, res) => {
     }
 });
 
+// GET /api/demandas/tem-prioridade
+// Endpoint leve para o FAB (polling a cada 3 min).
+// - totalUrgentes: prioridade=1 E status='pendente' (ninguém começou ainda → alerta escandaloso)
+// - totalAtivas: todas as demandas não concluídas/canceladas (pipeline rodando → badge discreto)
+router.get('/tem-prioridade', async (req, res) => {
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const result = await dbClient.query(`
+            SELECT
+                COUNT(*) FILTER (
+                    WHERE prioridade = 1 AND status = 'pendente'
+                )::int AS total_urgentes,
+                COUNT(*) FILTER (
+                    WHERE status NOT IN ('concluida', 'cancelada')
+                )::int AS total_ativas
+            FROM demandas_producao
+        `);
+        const { total_urgentes, total_ativas } = result.rows[0];
+        res.status(200).json({
+            totalUrgentes: total_urgentes,
+            totalAtivas: total_ativas
+        });
+    } catch (error) {
+        console.error('[GET /demandas/tem-prioridade] Erro:', error);
+        res.status(500).json({ error: 'Erro interno.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// PATCH /api/demandas/arquivar-lote
+// Arquiva uma lista de demandas (concluídas ou com divergência) ao final do dia.
+// Body: { itens: [{ id: number, status_final: 'CONCLUIDO' | 'DIVERGENCIA' }] }
+router.patch('/arquivar-lote', async (req, res) => {
+    const { itens } = req.body;
+    if (!Array.isArray(itens) || itens.length === 0) {
+        return res.status(400).json({ error: 'Nenhum item para arquivar.' });
+    }
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        await dbClient.query('BEGIN');
+        for (const item of itens) {
+            await dbClient.query(
+                `UPDATE demandas_producao
+                 SET arquivada_em = NOW(), status_final = $1
+                 WHERE id = $2 AND arquivada_em IS NULL`,
+                [item.status_final, item.id]
+            );
+        }
+        await dbClient.query('COMMIT');
+        res.status(200).json({ message: `${itens.length} demanda(s) arquivada(s).` });
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error('[PATCH /demandas/arquivar-lote] Erro:', error);
+        res.status(500).json({ error: 'Erro ao arquivar demandas.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// GET /api/demandas/historico-arquivado
+// Retorna demandas já arquivadas com info básica do produto, ordenadas por data de arquivamento.
+router.get('/historico-arquivado', async (req, res) => {
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const result = await dbClient.query(`
+            SELECT
+                d.id,
+                d.produto_sku,
+                d.quantidade_solicitada,
+                d.solicitado_por,
+                d.data_solicitacao,
+                d.arquivada_em,
+                d.status_final,
+                d.observacoes,
+                p.nome AS produto_nome,
+                COALESCE(
+                    (SELECT g->>'imagem' FROM jsonb_array_elements(p.grade) g WHERE g->>'sku' = d.produto_sku LIMIT 1),
+                    p.imagem
+                ) AS imagem,
+                (SELECT g->>'variacao' FROM jsonb_array_elements(p.grade) g WHERE g->>'sku' = d.produto_sku LIMIT 1) AS variante
+            FROM demandas_producao d
+            LEFT JOIN produtos p ON p.sku = d.produto_sku
+                OR EXISTS (
+                    SELECT 1 FROM jsonb_array_elements(p.grade) g WHERE g->>'sku' = d.produto_sku
+                )
+            WHERE d.arquivada_em IS NOT NULL
+            ORDER BY d.arquivada_em DESC
+            LIMIT 200
+        `);
+        res.status(200).json({ itens: result.rows });
+    } catch (error) {
+        console.error('[GET /demandas/historico-arquivado] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar histórico.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// GET /api/demandas/buscar-produto?termo=...
+// Migrado de api/radar-producao.js (GET /buscar) — usado no modal de criação de demandas
+router.get('/buscar-produto', async (req, res) => {
+    const { termo, page = 1, limit = 5 } = req.query;
+    if (!termo) {
+        return res.status(400).json({
+            rows: [],
+            pagination: { currentPage: 1, totalPages: 1, totalItems: 0 }
+        });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+
+        const termoPrincipal = `%${termo.replace(/\s+/g, '%')}%`;
+        let termoAlternativo = null;
+
+        if (termo.toLowerCase().includes('sortido')) {
+            termoAlternativo = `%${termo.toLowerCase().replace('sortido', 'sortida').replace(/\s+/g, '%')}%`;
+        } else if (termo.toLowerCase().includes('sortida')) {
+            termoAlternativo = `%${termo.toLowerCase().replace('sortida', 'sortido').replace(/\s+/g, '%')}%`;
+        }
+
+        const limitNum = parseInt(limit);
+        const offset = (parseInt(page) - 1) * limitNum;
+
+        const baseQuery = `
+            FROM produtos p
+            INNER JOIN (
+                SELECT DISTINCT produto_id, variante FROM arremates
+                UNION
+                SELECT DISTINCT produto_embalado_id as produto_id, variante_embalada_nome as variante FROM embalagens_realizadas
+                UNION
+                SELECT DISTINCT produto_id, variante_nome as variante FROM estoque_movimentos
+            ) AS ativos ON p.id = ativos.produto_id
+            LEFT JOIN jsonb_to_recordset(p.grade) AS g(sku TEXT, variacao TEXT, imagem TEXT)
+                ON (g.variacao = ativos.variante OR (g.variacao IS NULL AND ativos.variante IS NULL))
+            WHERE
+                g.sku NOT IN (SELECT produto_ref_id FROM estoque_itens_arquivados)
+                AND (
+                    (
+                        unaccent(g.variacao) ILIKE unaccent($1)
+                        OR unaccent(p.nome || ' ' || g.variacao) ILIKE unaccent($1)
+                        OR unaccent(g.sku) ILIKE unaccent($1)
+                    )
+                    ${termoAlternativo ? `
+                    OR (
+                        unaccent(g.variacao) ILIKE unaccent($2)
+                        OR unaccent(p.nome || ' ' || g.variacao) ILIKE unaccent($2)
+                        OR unaccent(g.sku) ILIKE unaccent($2)
+                    )
+                    ` : ''}
+                )
+        `;
+
+        const params = [termoPrincipal];
+        if (termoAlternativo) params.push(termoAlternativo);
+
+        const countQuery = `SELECT COUNT(*) ${baseQuery}`;
+        const countResult = await dbClient.query(countQuery, params);
+        const totalItems = parseInt(countResult.rows[0].count, 10);
+        const totalPages = Math.ceil(totalItems / limitNum) || 1;
+
+        const dataParams = [...params, limitNum, offset];
+        const limitPlaceholder = `$${params.length + 1}`;
+        const offsetPlaceholder = `$${params.length + 2}`;
+
+        const dataQuery = `
+            SELECT p.id as produto_id, p.nome, g.variacao as variante, g.sku, COALESCE(g.imagem, p.imagem) as imagem
+            ${baseQuery}
+            ORDER BY p.nome, g.variacao
+            LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder};
+        `;
+        const dataResult = await dbClient.query(dataQuery, dataParams);
+
+        res.status(200).json({
+            rows: dataResult.rows,
+            pagination: {
+                currentPage: parseInt(page),
+                totalPages,
+                totalItems
+            }
+        });
+
+    } catch (error) {
+        console.error('[GET /demandas/buscar-produto] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar produtos.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// POST /api/demandas/lote
+// Cria múltiplas demandas de uma vez (Demanda Express).
+// Usa Promise.allSettled por item — uma falha não cancela as outras.
+router.post('/lote', async (req, res) => {
+    const { usuarioLogado } = req;
+    const { itens } = req.body;
+    if (!Array.isArray(itens) || itens.length === 0) {
+        return res.status(400).json({ error: 'Nenhum item no lote.' });
+    }
+
+    const resultados = await Promise.allSettled(
+        itens.map(async (item) => {
+            const { produto_sku, quantidade_solicitada, prioridade } = item;
+            const qtd = parseInt(quantidade_solicitada);
+            if (!produto_sku || !qtd || qtd < 1) throw new Error('Dados inválidos.');
+            const prioridadeFinal = parseInt(prioridade) === 1 ? 1 : 2;
+            const r = await pool.query(
+                `INSERT INTO demandas_producao (produto_sku, quantidade_solicitada, solicitado_por, prioridade)
+                 VALUES ($1, $2, $3, $4) RETURNING id`,
+                [produto_sku.trim(), qtd, usuarioLogado.nome, prioridadeFinal]
+            );
+            return { sku: produto_sku, id: r.rows[0].id };
+        })
+    );
+
+    const sucesso = resultados.filter(r => r.status === 'fulfilled').map(r => r.value);
+    const falhas  = resultados.filter(r => r.status === 'rejected').map(r => r.reason?.message);
+
+    res.status(201).json({
+        totalCriadas: sucesso.length,
+        totalErros: falhas.length,
+        message: `${sucesso.length} demanda(s) criada(s).${falhas.length > 0 ? ` ${falhas.length} com erro.` : ''}`,
+        sucesso,
+        falhas
+    });
+});
+
+// PATCH /api/demandas/:id/concluir
+router.patch('/:id/concluir', async (req, res) => {
+    const { id } = req.params;
+    const { usuarioLogado } = req;
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const result = await dbClient.query(`
+            UPDATE demandas_producao
+            SET status = 'concluida',
+                data_conclusao = NOW(),
+                concluida_manualmente_por = $1
+            WHERE id = $2
+            RETURNING *
+        `, [usuarioLogado.nome, id]);
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Demanda não encontrada.' });
+        res.status(200).json({ message: 'Demanda concluída manualmente.', demanda: result.rows[0] });
+    } catch (error) {
+        console.error('[PATCH /demandas/:id/concluir] Erro:', error);
+        res.status(500).json({ error: 'Erro interno.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// GET /api/demandas/verificar-duplicata?sku=...
+// Retorna demandas ativas (não concluídas/canceladas) para o mesmo SKU.
+router.get('/verificar-duplicata', async (req, res) => {
+    const { sku } = req.query;
+    if (!sku) return res.status(400).json({ error: 'SKU obrigatório.' });
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const result = await dbClient.query(`
+            SELECT id, produto_sku, quantidade_solicitada, prioridade,
+                   status, data_solicitacao, solicitado_por
+            FROM demandas_producao
+            WHERE produto_sku = $1
+              AND status NOT IN ('concluida', 'cancelada')
+              AND arquivada_em IS NULL
+            ORDER BY data_solicitacao DESC
+            LIMIT 5
+        `, [sku.trim()]);
+        res.status(200).json({
+            temDuplicata: result.rows.length > 0,
+            demandasAtivas: result.rows
+        });
+    } catch (error) {
+        console.error('[GET /demandas/verificar-duplicata] Erro:', error);
+        res.status(500).json({ error: 'Erro interno.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// PATCH /api/demandas/:id/prioridade
+router.patch('/:id/prioridade', async (req, res) => {
+    const { id } = req.params;
+    const { nova_prioridade } = req.body;
+    const prioridade = parseInt(nova_prioridade) === 1 ? 1 : 2;
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const result = await dbClient.query(
+            `UPDATE demandas_producao SET prioridade = $1 WHERE id = $2 RETURNING *`,
+            [prioridade, id]
+        );
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Demanda não encontrada.' });
+        // Registra evento de alerta (best-effort — não falha se a tabela não existir)
+        if (prioridade === 1) {
+            dbClient.query(
+                `INSERT INTO eventos_sistema (tipo_evento, mensagem, lido)
+                 VALUES ('DEMANDA_PRIORITARIA', $1, false)`,
+                [`Demanda #${id} promovida a PRIORIDADE — verificar painel imediatamente!`]
+            ).catch(() => {});
+        }
+        res.status(200).json({ message: 'Prioridade atualizada.', demanda: result.rows[0] });
+    } catch (error) {
+        console.error('[PATCH /demandas/:id/prioridade] Erro:', error);
+        res.status(500).json({ error: 'Erro interno.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// PATCH /api/demandas/:id/quantidade
+router.patch('/:id/quantidade', async (req, res) => {
+    const { id } = req.params;
+    const qtd = parseInt(req.body.nova_quantidade);
+    if (!qtd || qtd < 1) return res.status(400).json({ error: 'Quantidade inválida.' });
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const result = await dbClient.query(
+            `UPDATE demandas_producao SET quantidade_solicitada = $1 WHERE id = $2 RETURNING *`,
+            [qtd, id]
+        );
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Demanda não encontrada.' });
+        res.status(200).json({ message: 'Quantidade atualizada.', demanda: result.rows[0] });
+    } catch (error) {
+        console.error('[PATCH /demandas/:id/quantidade] Erro:', error);
+        res.status(500).json({ error: 'Erro interno.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
 export default router;

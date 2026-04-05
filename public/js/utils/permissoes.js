@@ -49,6 +49,7 @@ export const permissoesDisponiveis = [
     { id: 'excluir-corte-pendente', label: 'Ação: Excluir pedido de corte pendente', categoria: 'Produção e Cortes' },
     { id: 'excluir-estoque-corte', label: 'Ação: Excluir corte do estoque', categoria: 'Produção e Cortes' },
     { id: 'deletar-demanda', label: 'Ação: Deletar Demanda', categoria: 'Produção e Cortes' },
+    { id: 'concluir-demanda-manual', label: 'Ação: Concluir Demanda Manualmente', categoria: 'Produção e Cortes' },
 
     // --- GERENCIAR PRODUÇÃO ---
     { id: 'acesso-gerenciar-producao', label: 'Ver Tela de Gerenciar Produção', categoria: 'Gerenciar Produção' },
