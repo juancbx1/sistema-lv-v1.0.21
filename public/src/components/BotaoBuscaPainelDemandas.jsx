@@ -34,7 +34,6 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [], onC
     const ITENS_POR_PAGINA = 6;
     const [paginaAtual, setPaginaAtual] = useState(1);
 
-    const [showConcluidos, setShowConcluidos] = useState(false);
     const [itemParaRepetir, setItemParaRepetir] = useState(null);
 
     const [popoverAberto, setPopoverAberto] = useState(false);
@@ -362,38 +361,6 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [], onC
                                         currentPage={paginaAtual}
                                         onPageChange={setPaginaAtual}
                                     />
-                                )}
-
-                                {/* Seção colapsável de concluídas */}
-                                {concluidas.length > 0 && (
-                                    <div className="gs-secao-concluidas">
-                                        <button
-                                            className="gs-secao-toggle"
-                                            onClick={() => setShowConcluidos(v => !v)}
-                                        >
-                                            <span>
-                                                <i className="fas fa-check-circle"></i>
-                                                Concluídas ({concluidas.length})
-                                            </span>
-                                            <i className={`fas fa-chevron-${showConcluidos ? 'up' : 'down'}`}></i>
-                                        </button>
-
-                                        {showConcluidos && (
-                                            <div className="gs-secao-concluidas-lista">
-                                                {concluidas.map(item => (
-                                                    <CardPipelineProducao
-                                                        key={gerarKeyUnica(item)}
-                                                        item={item}
-                                                        onPlanejar={() => {}}
-                                                        onDelete={() => handleDeleteDemanda(item.demanda_id)}
-                                                        permissoes={permissoes}
-                                                        onRefresh={fetchDiagnostico}
-                                                        onRepetir={handleRepetirDemanda}
-                                                    />
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
                                 )}
 
                             </div>

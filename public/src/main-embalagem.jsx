@@ -10,6 +10,7 @@ import { renderizarPaginacao } from '/js/utils/Paginacao.js';
 import UIHeaderPagina from './components/UIHeaderPagina.jsx'; 
 import UIFeedbackNotFound from './components/UIFeedbackNotFound.jsx';
 import BotaoBuscaFunil from './components/BotaoBuscaFunil.jsx';
+import AlertasFAB from './components/AlertasFAB.jsx';
 import { mostrarMensagem } from '/js/utils/popups.js';
 import { verificarAutenticacao } from '/js/utils/auth.js';
 
@@ -356,6 +357,7 @@ function PainelComFab() {
         <React.Fragment>
             <PainelEmbalagem />
             <BotaoBuscaFunil permissoes={permissoes} />
+            <AlertasFAB />
         </React.Fragment>
     );
 }

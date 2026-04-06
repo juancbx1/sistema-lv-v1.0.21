@@ -165,21 +165,24 @@ router.get('/verificar-status', async (req, res) => {
         const hoje = new Date();
         const diaDaSemana = hoje.getDay();
         const diasDeTrabalho = diasTrabalhoResult.rows[0]?.valor || {};
-        
-        if (!diasDeTrabalho[diaDaSemana.toString()]) {
-            return res.status(200).json([]);
-        }
+        // Se não configurado (objeto vazio), considera sempre dia de trabalho
+        const diasConfigurados = Object.keys(diasDeTrabalho).length > 0;
+        const ehDiaDeTrabalho = !diasConfigurados || !!diasDeTrabalho[diaDaSemana.toString()];
+        // Alertas baseados em eventos (DEMANDA_NOVA etc.) sempre disparam independente do dia.
+        // Apenas os alertas de tempo (ociosidade, lentidão) respeitam o calendário.
 
         const configResult = await dbClient.query('SELECT * FROM configuracoes_alertas WHERE ativo = TRUE');
         const configs = configResult.rows;
-        
+
         const alertasParaDisparar = [];
         const queriesDeAtualizacao = [];
 
         // =====================================================================
-        // VERIFICAÇÃO DE ALERTAS DE ARREMATE
+        // ALERTAS DE TEMPO — só verificar em dias de trabalho configurados
         // =====================================================================
-        
+        if (ehDiaDeTrabalho) {
+
+        // ─── Arremate ───────────────────────────────────────────────────────
         const configOciosidade = configs.find(c => c.tipo_alerta === 'OCIOSIDADE_ARREMATE');
         const configLentidao = configs.find(c => c.tipo_alerta === 'LENTIDAO_CRITICA_ARREMATE');
 
@@ -229,7 +232,8 @@ router.get('/verificar-status', async (req, res) => {
                                 alertasParaDisparar.push({
                                     tipo: 'OCIOSIDADE_ARREMATE',
                                     mensagem: `Atenção: ${tiktik.nome} está ocioso(a) há mais de ${formatarMinutos(minutosOcioso)}.`,
-                                    config: configOciosidade
+                                    config: configOciosidade,
+                                    nivel: 'critico'
                                 });
                                 queriesDeAtualizacao.push(
                                     dbClient.query(`UPDATE usuarios SET ultimo_alerta_ociosidade_em = NOW() WHERE id = $1`, [tiktik.id])
@@ -261,7 +265,7 @@ router.get('/verificar-status', async (req, res) => {
                                         tipo: 'LENTIDAO_CRITICA_ARREMATE',
                                         mensagem: `🐢 Performance Baixa: ${tiktik.nome} está com ritmo lento há mais de ${Math.floor(minutosEmTarefa)} minutos.`,
                                         config: configLentidao,
-                                        nivel: 'erro'
+                                        nivel: 'aviso'
                                     });
                                     queriesDeAtualizacao.push(
                                         dbClient.query(`UPDATE usuarios SET ultimo_alerta_lentidao_em = NOW() WHERE id = $1`, [tiktik.id])
@@ -274,29 +278,160 @@ router.get('/verificar-status', async (req, res) => {
             }
         }
         
-        // --- LÓGICA DE VERIFICAÇÃO DE EVENTOS (COM LOGS DE DEPURAÇÃO) ---
+        // =====================================================================
+        // VERIFICAÇÃO DE ALERTAS DE COSTURA
+        // =====================================================================
+
+        const configOciosidadeCostureira = configs.find(c => c.tipo_alerta === 'OCIOSIDADE_COSTUREIRA');
+        const configLentidaoCostureira   = configs.find(c => c.tipo_alerta === 'LENTIDAO_COSTUREIRA');
+
+        if (configOciosidadeCostureira || configLentidaoCostureira) {
+            const costureirasResult = await dbClient.query(`
+                SELECT
+                    u.id, u.nome, u.status_atual, u.status_data_modificacao,
+                    u.ultimo_alerta_ociosidade_em, u.ultimo_alerta_lentidao_em,
+                    s.data_inicio as sessao_data_inicio,
+                    (
+                        SELECT MAX(s2.data_fim)
+                        FROM sessoes_trabalho_producao s2
+                        WHERE s2.funcionario_id = u.id
+                          AND s2.status IN ('FINALIZADA', 'FINALIZADA_FORCADA')
+                          AND s2.data_fim >= date_trunc('day', NOW() AT TIME ZONE 'America/Sao_Paulo')
+                    ) as data_ultima_tarefa_finalizada_hoje
+                FROM usuarios u
+                LEFT JOIN sessoes_trabalho_producao s ON u.id_sessao_trabalho_atual = s.id
+                WHERE 'costureira' = ANY(u.tipos) AND u.data_demissao IS NULL
+            `);
+
+            for (const costureira of costureirasResult.rows) {
+                // --- Ociosidade ---
+                if (configOciosidadeCostureira && costureira.status_atual === 'LIVRE') {
+                    const agoraMs = hoje.getTime();
+                    const ultimoAlerta = costureira.ultimo_alerta_ociosidade_em
+                        ? new Date(costureira.ultimo_alerta_ociosidade_em).getTime() : 0;
+                    const minutosDesdeUltimoAlerta = (agoraMs - ultimoAlerta) / (1000 * 60);
+
+                    if (minutosDesdeUltimoAlerta >= configOciosidadeCostureira.intervalo_repeticao_minutos) {
+                        const dataModificacao = costureira.status_data_modificacao
+                            ? new Date(costureira.status_data_modificacao).getTime() : 0;
+                        const dataUltimaTarefa = costureira.data_ultima_tarefa_finalizada_hoje
+                            ? new Date(costureira.data_ultima_tarefa_finalizada_hoje).getTime() : 0;
+                        const inicioOciosidadeMs = Math.max(dataModificacao, dataUltimaTarefa);
+
+                        if (inicioOciosidadeMs > 0) {
+                            const minutosOciosa = (agoraMs - inicioOciosidadeMs) / (1000 * 60);
+                            if (minutosOciosa >= configOciosidadeCostureira.gatilho_minutos) {
+                                alertasParaDisparar.push({
+                                    tipo: 'OCIOSIDADE_COSTUREIRA',
+                                    mensagem: `Atenção: ${costureira.nome} está ociosa há mais de ${formatarMinutos(minutosOciosa)}.`,
+                                    config: configOciosidadeCostureira,
+                                    nivel: 'critico'
+                                });
+                                queriesDeAtualizacao.push(
+                                    dbClient.query(`UPDATE usuarios SET ultimo_alerta_ociosidade_em = NOW() WHERE id = $1`, [costureira.id])
+                                );
+                            }
+                        }
+                    }
+                }
+
+                // --- Lentidão ---
+                if (configLentidaoCostureira && costureira.status_atual === 'PRODUZINDO' && costureira.sessao_data_inicio) {
+                    const agoraMs = hoje.getTime();
+                    const ultimoAlerta = costureira.ultimo_alerta_lentidao_em
+                        ? new Date(costureira.ultimo_alerta_lentidao_em).getTime() : 0;
+                    const minutosDesdeUltimoAlerta = (agoraMs - ultimoAlerta) / (1000 * 60);
+
+                    if (minutosDesdeUltimoAlerta >= configLentidaoCostureira.intervalo_repeticao_minutos) {
+                        const minutosEmTarefa = (agoraMs - new Date(costureira.sessao_data_inicio).getTime()) / (1000 * 60);
+                        if (minutosEmTarefa >= configLentidaoCostureira.gatilho_minutos) {
+                            alertasParaDisparar.push({
+                                tipo: 'LENTIDAO_COSTUREIRA',
+                                mensagem: `Performance: ${costureira.nome} está na mesma tarefa há ${formatarMinutos(minutosEmTarefa)}.`,
+                                config: configLentidaoCostureira,
+                                nivel: 'aviso'
+                            });
+                            queriesDeAtualizacao.push(
+                                dbClient.query(`UPDATE usuarios SET ultimo_alerta_lentidao_em = NOW() WHERE id = $1`, [costureira.id])
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // ─── Demandas não iniciadas ──────────────────────────────────────────
+        const configDemandaNaoIniciada = configs.find(c => c.tipo_alerta === 'DEMANDA_NAO_INICIADA');
+
+        if (configDemandaNaoIniciada) {
+            const demandasParadasResult = await dbClient.query(`
+                SELECT COUNT(*) as total
+                FROM demandas_producao
+                WHERE status = 'pendente'
+                  AND prioridade = 2
+                  AND criado_em < NOW() - INTERVAL '${parseInt(configDemandaNaoIniciada.gatilho_minutos)} minutes'
+            `);
+            const totalParadas = parseInt(demandasParadasResult.rows[0]?.total || 0);
+
+            if (totalParadas > 0) {
+                const mensagem = totalParadas === 1
+                    ? `1 demanda aguardando início há mais de ${configDemandaNaoIniciada.gatilho_minutos} minutos.`
+                    : `${totalParadas} demandas aguardando início há mais de ${configDemandaNaoIniciada.gatilho_minutos} minutos.`;
+                alertasParaDisparar.push({
+                    tipo: 'DEMANDA_NAO_INICIADA',
+                    mensagem,
+                    config: configDemandaNaoIniciada,
+                    nivel: 'aviso'
+                });
+            }
+        }
+
+        // =====================================================================
+        // FIM DOS ALERTAS DE TEMPO (dias de trabalho)
+        // =====================================================================
+        } // end if (ehDiaDeTrabalho)
+
+        // =====================================================================
+        // ALERTAS DE EVENTOS — sempre disparam (independente do dia)
+        // =====================================================================
+        // Busca todos os eventos não lidos e os agrupa por tipo (evita flood de N alertas iguais)
         const eventosResult = await dbClient.query("SELECT * FROM eventos_sistema WHERE lido = false ORDER BY criado_em ASC");
         if (eventosResult.rows.length > 0) {
             console.log(`[LOG EVENTOS] ${eventosResult.rows.length} evento(s) não lido(s) encontrado(s).`);
             const idsEventosLidos = [];
-            for (const evento of eventosResult.rows) {
-                console.log(`[LOG EVENTOS] Processando evento tipo: "${evento.tipo_evento}"`);
-                const configDoEvento = configs.find(c => c.tipo_alerta === evento.tipo_evento);
-                console.log('[LOG EVENTOS] Configuração correspondente encontrada:', configDoEvento ? 'SIM' : 'NÃO');
 
-                if (configDoEvento) {
-                    console.log('[LOG EVENTOS] Adicionando evento à fila de disparo.');
-                    alertasParaDisparar.push({
-                        tipo: evento.tipo_evento,
-                        mensagem: evento.mensagem,
-                        config: configDoEvento,
-                        nivel: evento.tipo_evento === 'META_BATIDA_ARREMATE' ? 'sucesso' : 'aviso'
-                    });
-                    idsEventosLidos.push(evento.id);
+            // Agrupa por tipo para não disparar 10x o mesmo alerta
+            const eventosPorTipo = new Map();
+            for (const evento of eventosResult.rows) {
+                if (!eventosPorTipo.has(evento.tipo_evento)) {
+                    eventosPorTipo.set(evento.tipo_evento, []);
                 }
+                eventosPorTipo.get(evento.tipo_evento).push(evento);
             }
+
+            for (const [tipoEvento, eventosDoTipo] of eventosPorTipo) {
+                const configDoEvento = configs.find(c => c.tipo_alerta === tipoEvento);
+                if (!configDoEvento) continue;
+
+                const nivel = tipoEvento === 'META_BATIDA_ARREMATE'  ? 'info'    :
+                              tipoEvento === 'DEMANDA_PRIORITARIA'   ? 'critico' :
+                              tipoEvento === 'DEMANDA_NOVA'          ? 'critico' : 'aviso';
+
+                let mensagem;
+                if (eventosDoTipo.length === 1) {
+                    mensagem = eventosDoTipo[0].mensagem;
+                } else {
+                    // Mensagem agrupada
+                    const exemplos = eventosDoTipo.slice(-2).map(e => e.mensagem.split('—')[0].replace('Nova demanda: ', '').trim()).join(', ');
+                    mensagem = `${eventosDoTipo.length} novas demandas aguardando início (últimas: ${exemplos}…)`;
+                }
+
+                alertasParaDisparar.push({ tipo: tipoEvento, mensagem, config: configDoEvento, nivel });
+                eventosDoTipo.forEach(e => idsEventosLidos.push(e.id));
+                console.log(`[LOG EVENTOS] Tipo "${tipoEvento}": ${eventosDoTipo.length} evento(s) → 1 alerta agrupado.`);
+            }
+
             if (idsEventosLidos.length > 0) {
-                console.log('[LOG EVENTOS] Marcando eventos como lidos:', idsEventosLidos);
                 await dbClient.query("UPDATE eventos_sistema SET lido = true WHERE id = ANY($1::int[])", [idsEventosLidos]);
             }
         }

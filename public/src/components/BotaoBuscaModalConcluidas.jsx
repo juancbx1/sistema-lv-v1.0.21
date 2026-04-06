@@ -36,7 +36,7 @@ function HistoricoItemCard({ item, statusFinal }) {
                     <span className="gs-historico-card-variante">{item.variante}</span>
                 )}
                 <span className="gs-historico-card-meta">
-                    {item.quantidade_solicitada} pçs · {dataFormatada} · {item.solicitado_por || '—'}
+                    {item.quantidade_solicitada} pçs · Pedido em {dataFormatada} · {item.solicitado_por || '—'}
                 </span>
             </div>
             <span className="gs-historico-card-badge" style={{ color: meta.cor, borderColor: meta.cor }}>
@@ -180,17 +180,31 @@ export default function BotaoBuscaModalConcluidas({ isOpen, onClose }) {
     );
 
     const { gruposArquivoPag, totalPagsArquivo } = useMemo(() => {
-        const total = Math.ceil(itensArquivados.length / ITENS_POR_PAG_ARQUIVO);
-        const paginados = itensArquivados.slice(
+        // Ordena globalmente: mais recentemente arquivado primeiro (backend já entrega DESC,
+        // mas garantimos aqui para segurança)
+        const ordenados = [...itensArquivados].sort(
+            (a, b) => new Date(b.arquivada_em) - new Date(a.arquivada_em)
+        );
+
+        const total = Math.ceil(ordenados.length / ITENS_POR_PAG_ARQUIVO);
+        const paginados = ordenados.slice(
             (paginaArquivo - 1) * ITENS_POR_PAG_ARQUIVO,
             paginaArquivo * ITENS_POR_PAG_ARQUIVO
         );
+
+        // Agrupa por data de arquivamento (DD/MM/AAAA)
         const grupos = new Map();
         paginados.forEach(item => {
             const key = formatarData(item.arquivada_em);
             if (!grupos.has(key)) grupos.set(key, []);
             grupos.get(key).push(item);
         });
+
+        // Dentro de cada grupo: pedido mais recente primeiro
+        grupos.forEach((itens, key) => {
+            itens.sort((a, b) => new Date(b.data_solicitacao) - new Date(a.data_solicitacao));
+        });
+
         return { gruposArquivoPag: Array.from(grupos.entries()), totalPagsArquivo: total };
     }, [itensArquivados, paginaArquivo]);
 

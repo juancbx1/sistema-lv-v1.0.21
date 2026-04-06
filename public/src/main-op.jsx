@@ -9,6 +9,7 @@ import OPGerenciamentoTela from './components/OPGerenciamentoTela.jsx';
 import OPCortesTela from './components/OPCortesTela.jsx';
 import OPModalTempos from './components/OPModalTempos.jsx';
 import BotaoBuscaFunil from './components/BotaoBuscaFunil.jsx';
+import AlertasFAB from './components/AlertasFAB.jsx';
 
 import { verificarAutenticacao } from '/js/utils/auth.js';
 
@@ -207,10 +208,11 @@ function App() {
       <OPModalTempos isOpen={modalTppAberto} onClose={() => setModalTppAberto(false)} />
       
       {/* PASSA A FUNÇÃO E AS PERMISSÕES */}
-      <BotaoBuscaFunil 
-          onIniciarProducao={iniciarProcessoDeCorte} 
-          permissoes={permissoes} 
+      <BotaoBuscaFunil
+          onIniciarProducao={iniciarProcessoDeCorte}
+          permissoes={permissoes}
       />
+      <AlertasFAB />
 
     </ErrorBoundary>
   );

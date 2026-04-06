@@ -1,75 +1,243 @@
-/*public/css/config-alertas.css */
+/* public/css/config-alertas.css */
 
 main {
-    padding: 25px;
-    max-width: 900px;
+    padding: 20px;
+    max-width: 720px;
     margin: 0 auto;
 }
 
+/* ── Header da página ── */
 .config-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 25px;
-    padding-bottom: 15px;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
     border-bottom: 1px solid var(--gs-borda);
-}
-
-.config-card {
-    background-color: var(--gs-branco);
-    border-radius: var(--gs-raio-borda-card);
-    box-shadow: var(--gs-sombra-padrao);
-    margin-bottom: 25px;
-    overflow: hidden; /* Para o header colorido */
-}
-
-.card-header {
-    padding: 15px 20px;
-    background-color: var(--gs-fundo-input);
-    border-bottom: 1px solid var(--gs-borda);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.card-header h3 {
-    margin: 0;
-    font-size: 1.2rem;
-    color: var(--gs-secundaria);
-}
-
-.card-body {
-    padding: 20px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-}
-
-.form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.form-group label {
-    font-weight: 500;
-}
-
-.form-group .input-com-sufixo {
-    display: flex;
-    align-items: center;
+    flex-wrap: wrap;
     gap: 10px;
 }
 
-.form-group .input-com-sufixo input {
-    width: 80px;
+.config-header h1 {
+    margin: 0;
+    font-size: 1.3rem;
 }
 
+/* ── Grupos de alertas ── */
+.config-grupo {
+    margin-bottom: 28px;
+}
+
+.config-grupo-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    border-left: 4px solid;
+    border-radius: 0 6px 6px 0;
+    background: rgba(0,0,0,0.03);
+}
+
+.config-grupo-header h2 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #2c3e50;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ── Card de alerta ── */
+.config-card {
+    background: #fff;
+    border-radius: var(--gs-raio-borda-card, 8px);
+    box-shadow: var(--gs-sombra-padrao, 0 1px 4px rgba(0,0,0,0.08));
+    margin-bottom: 10px;
+    overflow: hidden;
+    border: 1px solid #ecf0f1;
+    transition: border-color 0.2s;
+}
+
+.config-card.ativo {
+    border-color: #d5e8d4;
+}
+
+/* Header do card */
+.config-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    gap: 12px;
+}
+
+.config-card-header-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.config-card-titulo {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #2c3e50;
+}
+
+.config-card-detalhe {
+    font-size: 0.8rem;
+    color: #7f8c8d;
+}
+
+.config-card-header-acoes {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+/* Pill de nível */
+.config-nivel-pill {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    border: 1px solid;
+    white-space: nowrap;
+}
+
+/* Body do card (quando ativo) */
+.config-card-body {
+    padding: 12px 16px 16px;
+    border-top: 1px solid #f0f0f0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.config-form-grupo {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.config-form-grupo label {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: #555;
+}
+
+.config-input-sufixo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.config-input-sufixo input {
+    width: 72px;
+}
+
+.config-input-sufixo span {
+    font-size: 0.85rem;
+    color: #7f8c8d;
+}
+
+/* ── Toggle Switch ── */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 52px;
+    height: 28px;
+    flex-shrink: 0;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #ccc;
+    transition: 0.3s;
+    border-radius: 28px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 22px;
+    width: 22px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+input:checked + .slider {
+    background-color: var(--gs-sucesso, #27ae60);
+}
+
+input:checked + .slider:before {
+    transform: translateX(24px);
+}
+
+/* ── Seção "Futuras Áreas" ── */
+.config-futuras-areas {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border: 1px dashed #bdc3c7;
+    border-radius: 8px;
+    color: #95a5a6;
+    margin-top: 8px;
+}
+
+.config-futuras-areas i {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.config-futuras-areas div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+}
+
+.config-futuras-areas strong {
+    font-size: 0.85rem;
+    color: #7f8c8d;
+}
+
+.config-futuras-areas span {
+    font-size: 0.78rem;
+}
+
+.config-futuras-badge {
+    font-size: 0.72rem;
+    background: #f0f0f0;
+    border-radius: 10px;
+    padding: 3px 10px;
+    white-space: nowrap;
+    flex-shrink: 0 !important;
+    flex: none !important;
+}
+
+/* ── Dias de trabalho (DiasTrabalhoCard usa classes .config-card) ── */
 .dias-semana-container {
     display: flex;
     flex-wrap: wrap;
-    gap: 15px;
-    padding: 10px 0;
+    gap: 10px;
+    padding: 4px 0;
 }
 
 .dias-semana-container label {
@@ -77,42 +245,7 @@ main {
     align-items: center;
     gap: 8px;
     cursor: pointer;
-}
-
-/* Estilos para o Toggle Switch (interruptor) */
-.switch {
-    position: relative;
-    display: inline-block;
-    width: 50px;
-    height: 28px;
-}
-.switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-.slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background-color: #ccc;
-    transition: .4s;
-    border-radius: 28px;
-}
-.slider:before {
-    position: absolute;
-    content: "";
-    height: 20px;
-    width: 20px;
-    left: 4px;
-    bottom: 4px;
-    background-color: white;
-    transition: .4s;
-    border-radius: 50%;
-}
-input:checked + .slider {
-    background-color: var(--gs-sucesso);
-}
-input:checked + .slider:before {
-    transform: translateX(22px);
+    font-size: 0.9rem;
+    min-height: 44px;
+    padding: 0 4px;
 }

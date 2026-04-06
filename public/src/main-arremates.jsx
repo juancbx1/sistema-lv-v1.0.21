@@ -11,6 +11,7 @@ import PerdaModal from './components/ArrematePerdaModal.jsx';
 
 import ArremateModalTempos from './components/ArremateModalTempos.jsx';
 import BotaoBuscaFunil from './components/BotaoBuscaFunil.jsx';
+import AlertasFAB from './components/AlertasFAB.jsx';
 import { verificarAutenticacao } from '/js/utils/auth.js';
 
 // O componente raiz da aplicação React nesta página.
@@ -80,6 +81,7 @@ function App() {
 
             {/* O Botão FAB é renderizado aqui e se posicionará corretamente via CSS */}
             <BotaoBuscaFunil permissoes={permissoes} />
+            <AlertasFAB />
         </>
     );
 }

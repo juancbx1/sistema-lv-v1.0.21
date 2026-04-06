@@ -68,7 +68,35 @@ router.post('/', async (req, res) => {
             prioridadeFinal // Agora vai salvar 1 ou 2 corretamente
         ]);
 
-        res.status(201).json(result.rows[0]);
+        const novaDemanda = result.rows[0];
+
+        // Notificar supervisores sobre nova demanda (best-effort — não falha o POST)
+        try {
+            const configNova = await dbClient.query(
+                `SELECT ativo FROM configuracoes_alertas WHERE tipo_alerta = 'DEMANDA_NOVA' LIMIT 1`
+            );
+            if (configNova.rows[0]?.ativo) {
+                await dbClient.query(
+                    `INSERT INTO eventos_sistema (tipo_evento, mensagem, lido) VALUES ($1, $2, false)`,
+                    ['DEMANDA_NOVA', `Nova demanda: ${produto_sku} — ${parseInt(quantidade_solicitada)} peças aguardando início.`]
+                );
+            }
+            if (prioridadeFinal === 1) {
+                const configPrioritaria = await dbClient.query(
+                    `SELECT ativo FROM configuracoes_alertas WHERE tipo_alerta = 'DEMANDA_PRIORITARIA' LIMIT 1`
+                );
+                if (configPrioritaria.rows[0]?.ativo) {
+                    await dbClient.query(
+                        `INSERT INTO eventos_sistema (tipo_evento, mensagem, lido) VALUES ($1, $2, false)`,
+                        ['DEMANDA_PRIORITARIA', `Demanda PRIORITÁRIA criada: ${produto_sku} — ${parseInt(quantidade_solicitada)} peças.`]
+                    );
+                }
+            }
+        } catch (eventoErr) {
+            console.warn('[POST /demandas] Falha ao registrar evento de alerta (não crítico):', eventoErr.message);
+        }
+
+        res.status(201).json(novaDemanda);
 
     } catch (error) {
         console.error('[API /demandas POST] Erro:', error);

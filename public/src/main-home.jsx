@@ -8,6 +8,7 @@ import { verificarAutenticacao } from '/js/utils/auth.js';
 import HOMEHeader from './components/HOMEHeader.jsx';
 import HOMEQuickActions from './components/HOMEQuickActions.jsx';
 import HOMENews from './components/HOMENews.jsx';
+import AlertasFAB from './components/AlertasFAB.jsx';
 
 function App() {
     const [usuario, setUsuario] = useState(null);
@@ -33,16 +34,19 @@ function App() {
     if (authLoading) return null; // Tela branca rápida enquanto verifica token
 
     return (
-        <div className="home-content-wrapper">
-            {/* 1. Saudação + Data */}
-            <HOMEHeader usuario={usuario} />
-            
-            {/* 2. Novidades (Importante para comunicação) */}
-            <HOMENews />
+        <>
+            <div className="home-content-wrapper">
+                {/* 1. Saudação + Data */}
+                <HOMEHeader usuario={usuario} />
 
-            {/* 3. O Protagonista: Menu de Ações */}
-            <HOMEQuickActions permissoes={permissoes} />
-        </div>
+                {/* 2. Novidades (Importante para comunicação) */}
+                <HOMENews />
+
+                {/* 3. O Protagonista: Menu de Ações */}
+                <HOMEQuickActions permissoes={permissoes} />
+            </div>
+            <AlertasFAB />
+        </>
     );
 }
 

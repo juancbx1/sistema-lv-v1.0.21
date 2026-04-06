@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import BotaoBuscaFunil from './components/BotaoBuscaFunil.jsx';
+import AlertasFAB from './components/AlertasFAB.jsx';
 import { verificarAutenticacao } from '/js/utils/auth.js';
 
 function EstoqueFab() {
@@ -17,7 +18,12 @@ function EstoqueFab() {
         });
     }, []);
 
-    return <BotaoBuscaFunil permissoes={permissoes} />;
+    return (
+        <>
+            <BotaoBuscaFunil permissoes={permissoes} />
+            <AlertasFAB />
+        </>
+    );
 }
 
 const rootElement = document.getElementById('estoque-react-root');

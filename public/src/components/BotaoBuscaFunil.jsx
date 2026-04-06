@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import PainelDemandas from './BotaoBuscaPainelDemandas.jsx';
+import { calcularStatusDemanda } from '/src/utils/demandaStatus.js';
 
 const POLLING_INTERVAL = 3 * 60 * 1000; // 3 minutos
 
@@ -14,13 +15,24 @@ export default function BotaoBuscaFunil({ onIniciarProducao, permissoes }) {
     const checkPrioridades = async () => {
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch('/api/demandas/tem-prioridade', {
-                headers: { 'Authorization': `Bearer ${token}` }
+            const res = await fetch('/api/demandas/diagnostico-completo', {
+                headers: { 'Authorization': `Bearer ${token}`, 'Cache-Control': 'no-cache' }
             });
             if (res.ok) {
                 const data = await res.json();
-                setTotalUrgentes(data.totalUrgentes ?? 0);
-                setTotalAtivas(data.totalAtivas ?? 0);
+                const todas = data.diagnosticoAgregado || [];
+
+                let urgentes = 0;
+                let ativas = 0;
+                todas.forEach(item => {
+                    const status = calcularStatusDemanda(item);
+                    if (status === 'CONCLUIDO' || status === 'DIVERGENCIA') return;
+                    ativas++;
+                    if (parseInt(item.prioridade) === 1 && status === 'AGUARDANDO') urgentes++;
+                });
+
+                setTotalUrgentes(urgentes);
+                setTotalAtivas(ativas);
             }
         } catch (e) {
             console.error('[FAB] Erro check prioridade:', e);
