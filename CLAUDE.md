@@ -339,3 +339,211 @@ Esse padrão existe em `api/arremates.js` e deve ser replicado onde houver neces
 - **Nunca usar `saldo_op` diretamente** — calcular sempre a partir de `quantidade_real_produzida - total_ja_arrematado`.
 - O arquivo `regra de negocio das OP.txt` na raiz contém exemplos concretos das regras de OP com dados reais do banco.
 - Ao tomar uma decisão arquitetural importante ou implementar uma regra de negócio nova, **atualizar este CLAUDE.md**.
+- A pasta `_planejamento/` na raiz contém planos detalhados por funcionalidade (spec, checklist, decisões). **Sempre ler o arquivo relevante antes de começar a implementar qualquer coisa**. Arquivos existentes: `central-de-alertas.md`, `horario-empregados.md`, `producao-geral.md`.
+
+---
+
+## Funcionalidades Implementadas — Ponto Dinâmico (referência)
+
+### Visão geral
+Sistema de jornada inteligente para costureiras e tiktiks. O ponto é registrado **reativamente** (ao finalizar tarefa), não por relógio fixo. Nenhuma ação manual do supervisor é necessária no fluxo normal.
+
+### Arquivos envolvidos
+| Arquivo | Responsabilidade |
+|---|---|
+| `api/usuarios.js` | `determinarStatusFinalServidor()` — única fonte de verdade de status; `atualizarStatusUsuarioDB()` — atualiza status + timestamp no banco |
+| `api/producao.js` | GET `/status-funcionarios` — bulk fetch com `ponto_diario` + `dias_trabalho`; chama `determinarStatusFinalServidor` |
+| `api/producoes.js` | `detectarIntervaloAoFinalizar()` — detecta almoço/pausa ao finalizar tarefa; chamada no step 9 do PUT `/finalizar` |
+| `api/ponto.js` | `POST /excecao` (saída antecipada/atraso) e `POST /liberar-intervalo` (liberar antecipado para almoço/pausa) |
+| `OPStatusCard.jsx` | Card do funcionário ativo: cronômetro, ritmo, indicadores de tolerância S3, botão liberar intervalo, menu ⋮, modal ⓘ de jornada |
+| `OPPainelAtividades.jsx` | Grid principal (ativos) + seção de inativos com mini-cards; handlers de todas as ações |
+| `UserCardEdicao.jsx` | Chips de dias da semana na seção "Jornada" da edição de usuário |
+| `UserCardView.jsx` | Exibição dos chips de dias na visualização do card de usuário |
+| `public/css/ordens-de-producao.css` | Classes `.oa-inativos-*`, `.bs-*` (bottom sheets), `.cracha-*`, `.op-status-*` |
+
+---
+
+### Fluxo completo de status — como funciona
+
+#### 1. Atualização periódica (polling)
+O frontend (`OPPainelAtividades.jsx`) chama `GET /api/producao/status-funcionarios` a cada foco de aba e nos eventos de ação. A API:
+1. Busca todos os funcionários (costureiras + tiktiks) do banco com sessões ativas agregadas
+2. Busca `ponto_diario` de hoje para todos eles em paralelo
+3. Para cada funcionário, chama `determinarStatusFinalServidor(row, pontoDiario)` que recalcula o status com base no horário atual e no ponto do dia
+4. Se tem sessão EM_ANDAMENTO → força `PRODUZINDO` (independente do que a função retornou)
+5. Retorna o objeto com `status_atual` calculado + horários de jornada + `ponto_hoje`
+
+#### 2. Detecção automática de almoço/pausa (`detectarIntervaloAoFinalizar`)
+Chamada no `PUT /api/producoes/finalizar` (step 9), após concluir a sessão. Regras:
+- Se `horaAtualSP >= S1_agendado` E almoço não registrado hoje → status = `ALMOCO`, grava `horario_real_s1` + `horario_real_e2` no `ponto_diario`
+- Se `horaAtualSP >= S2_agendado` E pausa não registrada E almoço já passou → status = `PAUSA`, grava `horario_real_s2` + `horario_real_e3`
+- Caso contrário → status = `LIVRE`
+
+#### 3. `determinarStatusFinalServidor` — lógica de prioridades (CRÍTICO)
+Função exportada de `api/usuarios.js`. É chamada SOMENTE pelo `GET /status-funcionarios`. Nunca duplicar essa lógica em outro lugar.
+
+```
+Prioridade 1 — PRODUZINDO
+  → Se status_atual = 'PRODUZINDO': retorna PRODUZINDO (mas na prática a API de producao.js
+    faz override para PRODUZINDO quando existe sessão ativa, então esse step raramente é
+    atingido com esse valor no banco)
+
+Prioridade 2 — Status manuais com data (valem APENAS no dia em que foram definidos)
+  → Cobre: FALTOU, ALOCADO_EXTERNO, LIVRE_MANUAL
+  → Compara status_data_modificacao (data SP) com hoje (data SP)
+  → Se bate: retorna o status (LIVRE_MANUAL → LIVRE)
+  → Se não bate (dia anterior): cai para cálculo automático
+
+Prioridade 3 — PAUSA_MANUAL (sem expiração — persiste até supervisor liberar)
+
+Prioridade 4 — Cálculo automático
+  Verifica dias_trabalho ANTES de qualquer outra coisa:
+    → Se hoje não é dia de trabalho (ex: domingo):
+        → Se ehLivreManual = true → LIVRE (supervisor autorizou folga atípica)
+        → Senão → FORA_DO_HORARIO
+  Verifica janela de horário (E1 a S3):
+    → Fora da janela → FORA_DO_HORARIO
+  Verifica janela de almoço (S1 a E2 — usa ponto_diario quando disponível):
+    → Na janela + ehLivreManual → LIVRE (supervisor antecipou retorno)
+    → Na janela → ALMOCO
+  Verifica janela de pausa (S2 a E3 — usa ponto_diario quando disponível):
+    → Na janela + ehLivreManual → LIVRE (supervisor antecipou retorno)
+    → Na janela → PAUSA
+  Dentro do horário de trabalho → LIVRE
+```
+
+**REGRA CRÍTICA**: `ehLivreManual` deve ser declarado ANTES de qualquer early return no passo 4. Se declarado depois do check `if (!diasTrabalhoEfetivo[diaKey])`, o override de folga nunca é alcançado. (BUG-08 — corrigido em v1.5)
+
+---
+
+### Regras de negócio críticas
+
+| Regra | Detalhe |
+|---|---|
+| **Duração do almoço** | Calculada como `E2 - S1` do cadastro do funcionário (fallback 60min). **Nunca hardcodar `+ 60`** |
+| **Duração da pausa** | Calculada como `E3 - S2` do cadastro do funcionário (default 15min) |
+| **Retorno dinâmico** | `horario_real_e2` / `horario_real_e3` no `ponto_diario` — substitui o horário agendado no cálculo de "Retorno previsto" |
+| **Tolerância S3** | Badge visual em PRODUZINDO quando ultrapassa S3. Sem consequências sistêmicas. Limite informativo: 20min |
+| **Botão "Liberar para intervalo"** | Aparece 25min antes do S1 ou S2 SOMENTE se o intervalo do dia ainda não foi registrado (`!ponto_hoje?.horario_real_s1` / `horario_real_s2`). Separado do `.cracha-footer` para não comprimir "Atribuir Tarefa" |
+| **LIVRE_MANUAL** | Supervisor "libera" um funcionário inativo para trabalhar. Vence: dias de folga, janela de almoço, janela de pausa. NÃO vence: fora do horário (antes E1 ou depois S3) |
+| **FALTOU / ALOCADO_EXTERNO** | Valem apenas no dia em que foram definidos. No dia seguinte, o cálculo automático assume |
+| **PAUSA_MANUAL** | Persiste indefinidamente (até supervisor liberar com LIVRE_MANUAL). Único status sem expiração |
+| **Saída antecipada** | Registra `horario_real_s3` no `ponto_diario`. Muda status para FORA_DO_HORARIO. Cancela sessão ativa se houver |
+| **Chegada atrasada** | Registra `horario_real_e1` no `ponto_diario`. Muda status para LIVRE |
+
+---
+
+### Nomenclatura dos horários (padrão do sistema)
+
+| Campo no banco | Nome no sistema | Label no modal ⓘ |
+|---|---|---|
+| `horario_entrada_1` | E1 | Entrada (E1) |
+| `horario_saida_1` | S1 | Almoço (S1 → E2) |
+| `horario_entrada_2` | E2 | Almoço (S1 → E2) |
+| `horario_saida_2` | S2 | Pausa (S2 → E3) |
+| `horario_entrada_3` | E3 | Pausa (S2 → E3) |
+| `horario_saida_3` | S3 | Saída (S3) |
+
+---
+
+### Tabela `ponto_diario`
+Migration necessária (SQL em `_planejamento/horario-empregados.md`). Um registro por funcionário por dia (UNIQUE funcionario_id + data).
+
+| Campo | Significado |
+|---|---|
+| `horario_real_s1` | Hora real em que o almoço começou (detectada ao finalizar tarefa) |
+| `horario_real_e2` | Retorno previsto do almoço = `horario_real_s1` + duração (E2-S1) |
+| `horario_real_s2` | Hora real em que a pausa começou |
+| `horario_real_e3` | Retorno previsto da pausa = `horario_real_s2` + duração (E3-S2) |
+| `horario_real_s3` | Hora real de saída antecipada (exceção manual) |
+| `horario_real_e1` | Hora real de chegada atrasada (exceção manual) |
+
+---
+
+### Coluna `dias_trabalho` na tabela `usuarios`
+- Tipo: `JSONB`. Formato: `{"0": false, "1": true, "2": true, "3": true, "4": true, "5": true, "6": false}` (0=Dom, 1=Seg, ..., 6=Sáb)
+- Padrão (fallback quando null): `{"1":true,"2":true,"3":true,"4":true,"5":true}` (Seg–Sex)
+- **SQL migration pendente** (executar manualmente no banco):
+  ```sql
+  ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS dias_trabalho JSONB DEFAULT '{"1":true,"2":true,"3":true,"4":true,"5":true}';
+  ```
+- Editável em `UserCardEdicao.jsx` (chips clicáveis). Salvo via `PUT /api/usuarios` com o campo `dias_trabalho` como objeto JS (pg serializa JSONB nativamente — **não usar JSON.stringify**)
+
+---
+
+### Status possíveis e onde vivem
+
+| Status | Fonte | Onde aparece |
+|---|---|---|
+| `PRODUZINDO` | `api/producao.js` (tem sessão ativa) | Grid principal do painel |
+| `LIVRE` | `determinarStatusFinalServidor` | Grid principal |
+| `LIVRE_MANUAL` | Supervisor via menu ⋮ | Grid principal (renderizado como LIVRE) |
+| `ALMOCO` | `detectarIntervaloAoFinalizar` ou cálculo auto | Seção de inativos |
+| `PAUSA` | `detectarIntervaloAoFinalizar` ou cálculo auto | Seção de inativos |
+| `PAUSA_MANUAL` | Supervisor (obsoleto — opção removida do menu) | Seção de inativos |
+| `FORA_DO_HORARIO` | `determinarStatusFinalServidor` (auto) | Seção de inativos |
+| `FALTOU` | Supervisor via menu ⋮ | Seção de inativos |
+| `ALOCADO_EXTERNO` | Supervisor via menu ⋮ | Seção de inativos |
+
+**Nota**: `PAUSA_MANUAL` foi removida do menu ⋮ (opção "Iniciar Pausa" excluída em v1.5) pois gerava bugs com o sistema automático de detecção de pausa. O status ainda existe no banco e no código de renderização para não quebrar funcionários que possam tê-lo, mas não é mais criado.
+
+---
+
+### Menu ⋮ do OPStatusCard — ações disponíveis
+
+| Status do funcionário | Ações no menu |
+|---|---|
+| LIVRE / LIVRE_MANUAL / PRODUZINDO | Marcar Falta · Alocar em Outro Setor · Saída Antecipada |
+| Qualquer outro (ALMOCO, PAUSA, etc.) | Liberar para Trabalho (LIVRE_MANUAL) |
+| FORA_DO_HORARIO | Liberar para Trabalho (LIVRE_MANUAL) · Chegada Atrasada (ATRASO) |
+
+---
+
+### Bugs corrigidos — histórico (importante para debugging futuro)
+
+| Bug | Causa raiz | Correção |
+|---|---|---|
+| BUG-01 | Status do dia anterior persistia | `statusManuaisFortes` em `api/producao.js` re-aplicava status do DB após `determinarStatusFinalServidor` | Bloco removido |
+| BUG-02 | Almoço hardcoded em 60min | `+ 60` hardcoded em `api/producoes.js` e `api/ponto.js` | Calculado via `E2 - S1` delta |
+| BUG-03 | Timestamp `status_data_modificacao` quebrava no edge case midnight-3h SP | `(NOW() AT TIME ZONE 'SP')` salva naive local em coluna timestamptz → PostgreSQL interpreta como UTC → ao ler de volta como Date, a data SP fica -3h errada. Entre meia-noite e 3h SP a data do dia anterior é retornada | Defensive parsing: `typeof === 'string' ? substring(0,10) : new Date(rawTs).toLocaleDateString('en-CA', {timeZone:'America/Sao_Paulo'})` |
+| BUG-04 | `dias_trabalho` não persistia após F5 | GET `/api/usuarios` não incluía `u.dias_trabalho` no SELECT | Adicionado ao SELECT |
+| BUG-05 | PUT `/api/usuarios` não salvava `dias_trabalho` corretamente | `JSON.stringify()` antes de passar para pg — pg serializa JSONB nativamente | Removido o `JSON.stringify` |
+| BUG-06 | Botão "Liberar para almoço" reaparecia após retorno do almoço | `intervaloProximo` não checava se `ponto_hoje.horario_real_s1` já existia | Adicionado guard `!ponto_hoje?.horario_real_s1` |
+| BUG-07 | LIVRE_MANUAL não liberava funcionário em dia de almoço (horário exato) | Comparação `>` estrita no limite da janela | Mudado para `>=` |
+| BUG-08 | LIVRE_MANUAL não liberava funcionário em dia de folga | `ehLivreManual` declarado APÓS early return `if (!diasTrabalhoEfetivo[diaKey]) return FORA_DO_HORARIO` — o override nunca era alcançado | `ehLivreManual` movido para ANTES do check de `diasTrabalhoEfetivo` |
+
+---
+
+### `determinarStatusFinalServidor` — única fonte de verdade de status
+
+**Nunca duplicar esta lógica.** Nunca fazer override do resultado em `api/producao.js` ou em qualquer outro lugar. Todo status manual que precisa persistir faz isso via `atualizarStatusUsuarioDB()` que grava no banco com timestamp — e `determinarStatusFinalServidor` lerá esse valor na próxima chamada.
+
+A única exceção é o override para `PRODUZINDO` em `api/producao.js` quando há sessão ativa — isso é intencional e não é uma duplicação de lógica, é uma regra de negócio diferente (sessão ativa sempre bate PRODUZINDO, independente do status do banco).
+
+---
+
+## Funcionalidades Implementadas — Central de Alertas (referência)
+
+### Visão geral
+- Componente principal: `public/src/components/AlertasFAB.jsx` (sino flutuante presente em todas as páginas admin)
+- API: `api/alertas.js` — endpoints `/verificar-status`, `/configuracoes`, `/dias-trabalho`, `/historico`
+- Config UI: `public/src/pages/ConfigAlertas/` (ConfigAlertasPage, AlertaCard, DiasTrabalhoCard, HorariosCard)
+- Documentação completa: `_planejamento/central-de-alertas.md` (v2.4)
+
+### Tipos de alerta — nomenclatura correta (não alterar sem migration de banco)
+
+| Constante | Significado |
+|---|---|
+| `DEMANDA_NORMAL` | Demanda criada sem prioridade (antes chamada incorretamente de `DEMANDA_NOVA` até v2.3) |
+| `DEMANDA_PRIORITARIA` | Demanda criada com prioridade = 1 |
+| `OCIOSIDADE_COSTUREIRA` / `OCIOSIDADE_ARREMATE` | Funcionário sem tarefa além do gatilho |
+| `LENTIDAO_COSTUREIRA` / `LENTIDAO_CRITICA_ARREMATE` | Tarefa com >120% do tempo TPP estimado |
+| `DEMANDA_NAO_INICIADA` | Demanda prioritária parada há mais do gatilho configurado |
+| `META_BATIDA_ARREMATE` | Evento positivo — tiktik bateu a meta diária |
+
+### Regras críticas da Central de Alertas
+
+- **Nunca hardcodar portão de horário no frontend.** O controle de expediente fica exclusivamente em `api/alertas.js` (timezone SP, lido do banco). O frontend só usa a `janelaPollRef` (carregada do banco como `janela_polling`) para economizar chamadas à API.
+- **Alertas de evento** (`DEMANDA_NORMAL`, `DEMANDA_PRIORITARIA`, `META_BATIDA_ARREMATE`) sempre disparam — não são bloqueados pelo horário de expediente. Só os **alertas de tempo** (ociosidade, lentidão, demanda não iniciada) respeitam o calendário.
+- **LENTIDAO_COSTUREIRA** usa TPP da tabela `tempos_padrao_producao` com chave composta `produto_id + processo`. Sem TPP cadastrado, o alerta não dispara (só loga `console.warn`).
+- **Polling:** a cada 4 minutos, `AlertasFAB` chama `GET /api/alertas/verificar-status`. Backoff de 5 erros consecutivos (reseta ao voltar à aba). Janela de polling configurável em "Configurar Alertas".

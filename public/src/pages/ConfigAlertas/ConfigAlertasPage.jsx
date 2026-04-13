@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { mostrarMensagem } from '/js/utils/popups.js';
 import AlertaCard from './AlertaCard.jsx';
 import DiasTrabalhoCard from './DiasTrabalhoCard.jsx';
+import HorariosCard from './HorariosCard.jsx';
 
 async function fetchApi(endpoint, options = {}) {
     const token = localStorage.getItem('token');
@@ -32,13 +33,17 @@ const GRUPOS = [
         titulo: 'Demandas de Produção',
         icone: 'fa-tasks',
         cor: '#e74c3c',
-        tipos: ['DEMANDA_NOVA', 'DEMANDA_PRIORITARIA', 'DEMANDA_NAO_INICIADA'],
+        tipos: ['DEMANDA_NORMAL', 'DEMANDA_PRIORITARIA', 'DEMANDA_NAO_INICIADA'],
     },
 ];
 
 export default function ConfigAlertasPage() {
     const [configuracoes, setConfiguracoes] = useState([]);
     const [diasDeTrabalho, setDiasDeTrabalho] = useState({});
+    const [horarioInicio, setHorarioInicio]       = useState('07:00');
+    const [horarioFim, setHorarioFim]             = useState('18:00');
+    const [janelaPollInicio, setJanelaPollInicio] = useState('06:00');
+    const [janelaPollFim, setJanelaPollFim]       = useState('23:00');
     const [carregando, setCarregando] = useState(true);
     const [salvando, setSalvando] = useState(false);
 
@@ -49,6 +54,10 @@ export default function ConfigAlertasPage() {
         ]).then(([configsAlertas, configDias]) => {
             setConfiguracoes(configsAlertas);
             setDiasDeTrabalho(configDias.valor || {});
+            setHorarioInicio(configDias.horario_inicio     || '07:00');
+            setHorarioFim(configDias.horario_fim           || '18:00');
+            setJanelaPollInicio(configDias.janela_poll_inicio || '06:00');
+            setJanelaPollFim(configDias.janela_poll_fim       || '23:00');
         }).catch(err => {
             mostrarMensagem(`Erro ao carregar configurações: ${err.message}`, 'erro');
         }).finally(() => {
@@ -65,7 +74,7 @@ export default function ConfigAlertasPage() {
         try {
             await Promise.all([
                 fetchApi('/api/alertas/configuracoes', { method: 'PUT', body: JSON.stringify(configuracoes) }),
-                fetchApi('/api/alertas/dias-trabalho', { method: 'PUT', body: JSON.stringify({ valor: diasDeTrabalho }) })
+                fetchApi('/api/alertas/dias-trabalho', { method: 'PUT', body: JSON.stringify({ valor: diasDeTrabalho, horario_inicio: horarioInicio, horario_fim: horarioFim, janela_poll_inicio: janelaPollInicio, janela_poll_fim: janelaPollFim }) })
             ]);
             mostrarMensagem('Configurações salvas com sucesso!', 'sucesso');
         } catch (err) {
@@ -98,7 +107,18 @@ export default function ConfigAlertasPage() {
                 </div>
             </div>
 
-            <DiasTrabalhoCard diasConfig={diasDeTrabalho} onUpdate={setDiasDeTrabalho} />
+            <DiasTrabalhoCard
+                diasConfig={diasDeTrabalho}
+                onUpdate={setDiasDeTrabalho}
+            />
+            <HorariosCard
+                horarioInicio={horarioInicio}
+                horarioFim={horarioFim}
+                onUpdateHorario={(campo, valor) => campo === 'horario_inicio' ? setHorarioInicio(valor) : setHorarioFim(valor)}
+                janelaPollInicio={janelaPollInicio}
+                janelaPollFim={janelaPollFim}
+                onUpdateJanelaPoll={(campo, valor) => campo === 'janela_poll_inicio' ? setJanelaPollInicio(valor) : setJanelaPollFim(valor)}
+            />
 
             {GRUPOS.map(grupo => {
                 const cardsDoGrupo = configuracoes.filter(c => grupo.tipos.includes(c.tipo_alerta));

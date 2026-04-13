@@ -17,6 +17,101 @@ const pool = new Pool({
 const SECRET_KEY = process.env.JWT_SECRET;
 
 /**
+ * Detecta se a finalização de uma tarefa ocorre durante/após uma janela de intervalo.
+ * Se sim, registra os horários reais no ponto_diario e retorna o novo status.
+ * Deve ser chamada DENTRO de uma transaction já aberta.
+ *
+ * @param {object} dbClient - Conexão ativa com o banco (dentro da transaction)
+ * @param {number} funcionarioId - ID do funcionário
+ * @param {object} horarios - Campos horario_* do usuário
+ * @param {string} dataHojeSP - Data de hoje em São Paulo: 'YYYY-MM-DD'
+ * @param {string} horaAtualSP - Hora atual em São Paulo: 'HH:MM'
+ * @returns {Promise<string>} Novo status: 'ALMOCO', 'PAUSA' ou 'LIVRE'
+ */
+async function detectarIntervaloAoFinalizar(dbClient, funcionarioId, horarios, dataHojeSP, horaAtualSP) {
+    const n = (t) => t ? String(t).substring(0, 5) : null;
+
+    const s1Agendado = n(horarios.horario_saida_1);
+    const s2Agendado = n(horarios.horario_saida_2);
+    const e3Agendado = n(horarios.horario_entrada_3);
+
+    if (!s1Agendado) return 'LIVRE'; // Sem horário de saída para almoço → não tem intervalos
+
+    // Busca ponto_diario de hoje para verificar se o intervalo já foi registrado
+    const pontoRes = await dbClient.query(
+        `SELECT horario_real_s1, horario_real_e2, horario_real_s2, horario_real_e3
+         FROM ponto_diario
+         WHERE funcionario_id = $1 AND data = $2`,
+        [funcionarioId, dataHojeSP]
+    );
+    const pontoHoje = pontoRes.rows[0] || null;
+
+    // ── CASO 1: Detecção de ALMOÇO ──────────────────────────────────────────
+    if (horaAtualSP >= s1Agendado && !pontoHoje?.horario_real_s1) {
+        // Duração do almoço: E2 - S1 do cadastro. Default: 60 min.
+        const e2Agendado = n(horarios.horario_entrada_2);
+        let duracaoAlmocoMin = 60;
+        if (s1Agendado && e2Agendado) {
+            const [s1h, s1m] = s1Agendado.split(':').map(Number);
+            const [e2h, e2m] = e2Agendado.split(':').map(Number);
+            const delta = (e2h * 60 + e2m) - (s1h * 60 + s1m);
+            if (delta > 0) duracaoAlmocoMin = delta;
+        }
+        const [h, m] = horaAtualSP.split(':').map(Number);
+        const totalMin = h * 60 + m + duracaoAlmocoMin;
+        const e2Dinamico = `${String(Math.floor(totalMin / 60)).padStart(2, '0')}:${String(totalMin % 60).padStart(2, '0')}`;
+
+        await dbClient.query(
+            `INSERT INTO ponto_diario (funcionario_id, data, horario_real_s1, horario_real_e2)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (funcionario_id, data) DO UPDATE SET
+                 horario_real_s1 = EXCLUDED.horario_real_s1,
+                 horario_real_e2 = EXCLUDED.horario_real_e2,
+                 updated_at = NOW()`,
+            [funcionarioId, dataHojeSP, horaAtualSP, e2Dinamico]
+        );
+
+        console.log(`[PONTO] Almoço registrado para func ${funcionarioId}: saiu ${horaAtualSP} → volta ${e2Dinamico}`);
+        return 'ALMOCO';
+    }
+
+    // ── CASO 2: Detecção de PAUSA (café/lanche) ──────────────────────────────
+    if (s2Agendado && horaAtualSP >= s2Agendado && !pontoHoje?.horario_real_s2) {
+        // Garante que o almoço já terminou antes de registrar a pausa
+        const e2Real = n(pontoHoje?.horario_real_e2) || n(horarios.horario_entrada_2);
+        if (!e2Real || horaAtualSP < e2Real) return 'LIVRE'; // Almoço ainda não acabou
+
+        // Duração da pausa = E3 - S2 do cadastro. Default: 15 min.
+        let duracaoPausaMin = 15;
+        if (e3Agendado && s2Agendado) {
+            const [s2h, s2m] = s2Agendado.split(':').map(Number);
+            const [e3h, e3m] = e3Agendado.split(':').map(Number);
+            const delta = (e3h * 60 + e3m) - (s2h * 60 + s2m);
+            if (delta > 0) duracaoPausaMin = delta;
+        }
+
+        const [h, m] = horaAtualSP.split(':').map(Number);
+        const totalMin = h * 60 + m + duracaoPausaMin;
+        const e3Dinamico = `${String(Math.floor(totalMin / 60)).padStart(2, '0')}:${String(totalMin % 60).padStart(2, '0')}`;
+
+        await dbClient.query(
+            `INSERT INTO ponto_diario (funcionario_id, data, horario_real_s2, horario_real_e3)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (funcionario_id, data) DO UPDATE SET
+                 horario_real_s2 = EXCLUDED.horario_real_s2,
+                 horario_real_e3 = EXCLUDED.horario_real_e3,
+                 updated_at = NOW()`,
+            [funcionarioId, dataHojeSP, horaAtualSP, e3Dinamico]
+        );
+
+        console.log(`[PONTO] Pausa registrada para func ${funcionarioId}: saiu ${horaAtualSP} → volta ${e3Dinamico}`);
+        return 'PAUSA';
+    }
+
+    return 'LIVRE';
+}
+
+/**
  * Calcula os pontos de uma produção com base nos parâmetros fornecidos.
  * @param {object} dbClient - A conexão ativa com o banco de dados.
  * @param {number} produto_id - O ID do produto.
@@ -675,14 +770,43 @@ router.put('/finalizar', async (req, res) => {
              }
         }
 
-        // 9. Finaliza sessão e libera usuário
+        // 9. Finaliza sessão — detecta intervalo e define o novo status
+        const agoraSP = new Date();
+        const horaAtualSP = agoraSP.toLocaleTimeString('en-GB', {
+            timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit'
+        });
+        const dataHojeSP = agoraSP.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+
+        const horariosRes = await dbClient.query(
+            `SELECT horario_saida_1, horario_entrada_2, horario_saida_2,
+                    horario_entrada_3, horario_saida_3
+             FROM usuarios WHERE id = $1`,
+            [sessao.funcionario_id]
+        );
+        const horariosFuncionario = horariosRes.rows[0] || {};
+
+        const novoStatusFinal = await detectarIntervaloAoFinalizar(
+            dbClient,
+            sessao.funcionario_id,
+            horariosFuncionario,
+            dataHojeSP,
+            horaAtualSP
+        );
+
         await dbClient.query(
-            `UPDATE sessoes_trabalho_producao SET status = 'FINALIZADA', data_fim = NOW(), quantidade_finalizada = $1 WHERE id = $2`,
+            `UPDATE sessoes_trabalho_producao
+             SET status = 'FINALIZADA', data_fim = NOW(), quantidade_finalizada = $1
+             WHERE id = $2`,
             [quantidade_finalizada, id_sessao]
         );
+        // Status pode ser LIVRE, ALMOCO ou PAUSA — não hardcodar 'LIVRE'
         await dbClient.query(
-            `UPDATE usuarios SET status_atual = 'LIVRE', id_sessao_trabalho_atual = NULL WHERE id = $1`,
-            [sessao.funcionario_id]
+            `UPDATE usuarios
+             SET status_atual = $1,
+                 status_data_modificacao = (NOW() AT TIME ZONE 'America/Sao_Paulo'),
+                 id_sessao_trabalho_atual = NULL
+             WHERE id = $2`,
+            [novoStatusFinal, sessao.funcionario_id]
         );
 
         await dbClient.query('COMMIT');

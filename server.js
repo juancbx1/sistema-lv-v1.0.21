@@ -34,6 +34,7 @@ import configuracoesRouter from './api/configuracoes.js';
 import alertasRouter from './api/alertas.js';
 import demandasRouter from './api/demandas.js';
 import producaoRouter from './api/producao.js';
+import pontoRouter from './api/ponto.js';
 import cronRoutes from './api/cron.js';
 
 
@@ -115,6 +116,7 @@ app.use('/api/configuracoes', configuracoesRouter);
 app.use('/api/alertas', alertasRouter);
 app.use('/api/demandas', demandasRouter);
 app.use('/api/producao', producaoRouter);
+app.use('/api/ponto', pontoRouter);
 app.use('/api/cron', cronRoutes);
 
 

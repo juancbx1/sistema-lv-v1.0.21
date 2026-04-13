@@ -4106,3 +4106,332 @@ body.autenticado {
 .op-lote-resultado-icone  { font-size: 2.5rem; }
 .op-lote-resultado-titulo { font-size: 1rem; font-weight: 700; color: #1e293b; margin: 0; }
 .op-lote-resultado-detalhe { font-size: 0.85rem; color: #64748b; margin: 0; }
+
+/* ─── Ponto Dinâmico — Indicadores de intervalo (almoço / pausa) ─── */
+.op-status-card-intervalo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: #555;
+    padding: 6px 12px;
+    background: #f5f5f5;
+    border-radius: 6px;
+    margin: 8px 0 0;
+}
+.op-status-card-intervalo i { color: #7f8c8d; flex-shrink: 0; }
+.op-status-card-intervalo strong { color: #2c3e50; }
+
+/* ─── Indicador de tolerância S3 (além do horário final) ─── */
+.op-status-tolerancia {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-top: 6px;
+}
+.op-status-tolerancia.aviso {
+    background: #fef9e7;
+    color: #b7950b;
+    border: 1px solid #f9e79f;
+}
+.op-status-tolerancia.critico {
+    background: #fdedec;
+    color: #c0392b;
+    border: 1px solid #f5b7b1;
+    animation: pisca-suave 1.5s ease-in-out infinite;
+}
+@keyframes pisca-suave {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.6; }
+}
+
+/* ─── Botão de liberação antecipada para intervalo ─── */
+.op-btn-liberar-intervalo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #2980b9;
+    background: #eaf4fb;
+    border: 1px solid #aed6f1;
+    border-radius: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    min-height: 36px;
+    margin-top: 8px;
+}
+.op-btn-liberar-intervalo:hover { background: #d6eaf8; border-color: #85c1e9; }
+
+/* ─── Botões de exceção (saída antecipada / chegada atrasada) ─── */
+.op-status-excecoes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #eee;
+}
+.op-btn-excecao {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    color: #7f8c8d;
+    background: transparent;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    min-height: 32px;
+}
+.op-btn-excecao:hover { color: #2c3e50; border-color: #bbb; background: #f8f8f8; }
+
+/* ─── Subárea de inativos — mini-cards (MELHORIA-01) ─── */
+.oa-inativos-secao {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #eee;
+}
+.oa-inativos-titulo {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 10px;
+}
+.oa-inativos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+}
+.oa-inativo-card {
+    background: #fff;
+    border: 1px solid #eee;
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+.oa-inativo-card-topo {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+.oa-inativo-avatar-icone {
+    color: #bbb;
+    font-size: 1.1rem;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+.oa-inativo-card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.oa-inativo-nome {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #2c3e50;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.oa-inativo-status {
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.oa-inativo-retorno {
+    font-size: 0.72rem;
+    color: #7f8c8d;
+}
+.oa-inativo-retorno strong {
+    color: #2c3e50;
+}
+.oa-inativo-tempo {
+    font-size: 0.7rem;
+    color: #27ae60;
+}
+.oa-inativo-tempo.atrasado {
+    color: #e74c3c;
+}
+.oa-inativo-btn-info {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #b0bec5;
+    font-size: 0.9rem;
+    padding: 2px 4px;
+    margin-left: auto;
+    flex-shrink: 0;
+    align-self: flex-start;
+    transition: color 0.15s;
+}
+.oa-inativo-btn-info:hover { color: #4a90d9; }
+
+.oa-inativo-btn-liberar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #27ae60;
+    background: #f0faf4;
+    border: 1px solid #a8ddb8;
+    border-radius: 6px;
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    min-height: 30px;
+}
+.oa-inativo-btn-liberar:hover {
+    background: #dff2e6;
+    border-color: #7ecb96;
+}
+
+/* ─── Avatar miniatura nos cards inativos ─── */
+.oa-inativo-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-size: cover;
+    background-position: center;
+    flex-shrink: 0;
+}
+.oa-inativo-avatar-vazio {
+    background: #e8e8e8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #bbb;
+    font-size: 0.9rem;
+}
+
+/* ─── Bottom sheet de horários (botão ⓘ) ─── */
+.bs-info-secao {
+    padding: 10px 16px;
+    border-bottom: 1px solid #f0f0f0;
+}
+.bs-info-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+}
+.bs-dias-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.bs-dia-chip {
+    padding: 4px 9px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    background: #f0f0f0;
+    color: #bbb;
+}
+.bs-dia-chip.ativo {
+    background: #27ae60;
+    color: #fff;
+}
+.bs-horarios-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.bs-horario-linha {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.bs-horario-icone {
+    width: 20px;
+    text-align: center;
+    color: #7f8c8d;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+.bs-horario-intervalo .bs-horario-icone { color: #f97316; }
+.bs-horario-desc {
+    flex: 1;
+    font-size: 0.88rem;
+    color: #555;
+}
+.bs-horario-ref {
+    font-size: 0.75rem;
+    color: #999;
+    font-weight: 400;
+}
+.bs-horario-valor {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #2c3e50;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Cabeçalho do bottom sheet de inativos (alias de .bs-header) */
+.bs-cabecalho {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+/* ─── Registros de hoje (almoço/pausa reais) ─── */
+.bs-registros-hoje {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.bs-registro-linha {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.bs-registro-icone {
+    width: 20px;
+    text-align: center;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+    color: #7f8c8d;
+}
+.bs-registro-desc {
+    flex: 1;
+    font-size: 0.88rem;
+    color: #555;
+}
+.bs-registro-valor {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #2c3e50;
+    font-variant-numeric: tabular-nums;
+}
+.bs-registro-valor.registrado {
+    color: #27ae60;
+}
+.bs-registro-vazio {
+    font-size: 0.82rem;
+    color: #bbb;
+    font-style: italic;
+    padding: 4px 0;
+}

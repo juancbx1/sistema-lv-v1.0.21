@@ -40,7 +40,7 @@ router.get('/status-funcionarios', async (req, res) => {
             SELECT 
                 u.id, u.nome, u.avatar_url, u.foto_oficial, u.nivel, u.status_atual, u.status_data_modificacao,
                 u.horario_entrada_1, u.horario_saida_1, u.horario_entrada_2, u.horario_saida_2,
-                u.horario_entrada_3, u.horario_saida_3,
+                u.horario_entrada_3, u.horario_saida_3, u.dias_trabalho,
                 u.tipos,
                 COALESCE(
                     json_agg(
@@ -68,9 +68,19 @@ router.get('/status-funcionarios', async (req, res) => {
         
         const result = await dbClient.query(query);
 
+        // Busca ponto_diario de hoje para todos os funcionários (horários reais de intervalo)
+        const pontoDiarioResult = await dbClient.query(
+            `SELECT funcionario_id, horario_real_s1, horario_real_e2,
+                    horario_real_s2, horario_real_e3, horario_real_s3
+             FROM ponto_diario
+             WHERE data = CURRENT_DATE AT TIME ZONE 'America/Sao_Paulo'`
+        );
+        const pontoDiarioMap = new Map(pontoDiarioResult.rows.map(p => [p.funcionario_id, p]));
+
         const resultadoFinal = result.rows.map(row => {
-            let statusCalculado = determinarStatusFinalServidor(row);
-            
+            const pontoDiario = pontoDiarioMap.get(row.id) || null;
+            let statusCalculado = determinarStatusFinalServidor(row, pontoDiario);
+
             // Se tem tarefas no array, status é PRODUZINDO
             const tarefas = row.tarefas_ativas || [];
             const temTarefa = tarefas.length > 0;
@@ -79,17 +89,9 @@ router.get('/status-funcionarios', async (req, res) => {
 
             if (temTarefa) {
                 statusFinal = 'PRODUZINDO';
-            } else {
-                // Lógica manual forte (FALTOU, PAUSA, etc)
-                const statusManuaisFortes = ['FALTOU', 'PAUSA_MANUAL', 'ALOCADO_EXTERNO', 'LIVRE_MANUAL'];
-                if (statusManuaisFortes.includes(row.status_atual)) {
-                    statusFinal = row.status_atual;
-                    if (statusFinal === 'LIVRE_MANUAL') statusFinal = 'LIVRE'; 
-                }
             }
 
             // Pegamos a primeira tarefa como "principal" para compatibilidade com código antigo
-            // Mas enviamos a lista completa em 'tarefas'
             const tarefaPrincipal = temTarefa ? tarefas[0] : null;
 
             return {
@@ -100,9 +102,25 @@ router.get('/status-funcionarios', async (req, res) => {
                 nivel: row.nivel,
                 tipos: row.tipos,
                 status_atual: statusFinal,
+                // Horários de jornada (usados pelo OPStatusCard para indicadores de intervalo)
+                horario_entrada_1: row.horario_entrada_1,
+                horario_saida_1:   row.horario_saida_1,
+                horario_entrada_2: row.horario_entrada_2,
+                horario_saida_2:   row.horario_saida_2,
+                horario_entrada_3: row.horario_entrada_3,
+                horario_saida_3:   row.horario_saida_3,
+                dias_trabalho:     row.dias_trabalho,
+                // Ponto do dia (horários reais de intervalo — null quando não há registro)
+                ponto_hoje: pontoDiario ? {
+                    horario_real_s1: pontoDiario.horario_real_s1,
+                    horario_real_e2: pontoDiario.horario_real_e2,
+                    horario_real_s2: pontoDiario.horario_real_s2,
+                    horario_real_e3: pontoDiario.horario_real_e3,
+                    horario_real_s3: pontoDiario.horario_real_s3,
+                } : null,
                 tarefa_atual: tarefaPrincipal,
                 tarefas: tarefas
-            }
+            };
         });
 
         res.status(200).json(resultadoFinal);

@@ -12,7 +12,7 @@ const NIVEL_POR_TIPO = {
     OCIOSIDADE_COSTUREIRA:     { label: 'CRÍTICO',  cor: '#e74c3c' },
     LENTIDAO_COSTUREIRA:       { label: 'AVISO',    cor: '#e67e22' },
     // Demandas
-    DEMANDA_NOVA:              { label: 'CRÍTICO',  cor: '#e74c3c' },
+    DEMANDA_NORMAL:            { label: 'AVISO',    cor: '#e67e22' },
     DEMANDA_PRIORITARIA:       { label: 'CRÍTICO',  cor: '#e74c3c' },
     DEMANDA_NAO_INICIADA:      { label: 'AVISO',    cor: '#e67e22' },
 };
@@ -32,10 +32,12 @@ export default function AlertaCard({ config, onUpdate }) {
     // Estado local como string para evitar o "03" ao digitar após apagar
     const [gatilhoStr, setGatilhoStr]     = useState(String(config.gatilho_minutos));
     const [intervaloStr, setIntervaloStr] = useState(String(config.intervalo_repeticao_minutos));
+    const [pesoStr, setPesoStr]           = useState(String(config.peso_risco ?? 0));
 
     // Sincroniza se o pai atualizar os valores (ex: reload)
     useEffect(() => { setGatilhoStr(String(config.gatilho_minutos)); },     [config.gatilho_minutos]);
     useEffect(() => { setIntervaloStr(String(config.intervalo_repeticao_minutos)); }, [config.intervalo_repeticao_minutos]);
+    useEffect(() => { setPesoStr(String(config.peso_risco ?? 0)); }, [config.peso_risco]);
 
     const handleGatilhoBlur = () => {
         const val = parseInt(gatilhoStr) || 0;
@@ -47,6 +49,20 @@ export default function AlertaCard({ config, onUpdate }) {
         const val = parseInt(intervaloStr) || 0;
         setIntervaloStr(String(val));
         onUpdate(config.id, 'intervalo_repeticao_minutos', val);
+    };
+
+    const handlePesoBlur = () => {
+        const val = parseInt(pesoStr) || 0;
+        const clamped = Math.max(-50, Math.min(100, val));
+        setPesoStr(String(clamped));
+        onUpdate(config.id, 'peso_risco', clamped);
+    };
+
+    const pesoHint = () => {
+        const v = parseInt(pesoStr) || 0;
+        if (v > 0)  return `+${v} pts de risco`;
+        if (v < 0)  return `${v} pts (bônus)`;
+        return 'Neutro';
     };
 
     // Descrição: usar a parte depois dos dois pontos se existir, senão a descrição completa
@@ -106,6 +122,26 @@ export default function AlertaCard({ config, onUpdate }) {
                                 onBlur={handleIntervaloBlur}
                             />
                             <span>min</span>
+                        </div>
+                    </div>
+
+                    <div className="config-form-grupo">
+                        <label title="Quanto maior o peso, mais este alerta eleva o Score de Risco do Turno. Use negativos para eventos positivos como metas batidas.">
+                            Peso no Score de Risco <i className="fas fa-question-circle" style={{ fontSize: '0.75rem', color: '#aaa' }}></i>
+                        </label>
+                        <div className="config-input-sufixo">
+                            <input
+                                type="number"
+                                min="-50"
+                                max="100"
+                                className="gs-input"
+                                value={pesoStr}
+                                onChange={e => setPesoStr(e.target.value)}
+                                onBlur={handlePesoBlur}
+                            />
+                            <span style={{ color: parseInt(pesoStr) < 0 ? '#27ae60' : parseInt(pesoStr) > 0 ? '#e74c3c' : '#95a5a6', whiteSpace: 'nowrap' }}>
+                                {pesoHint()}
+                            </span>
                         </div>
                     </div>
                 </div>

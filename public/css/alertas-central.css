@@ -94,14 +94,15 @@
 
 
 /* ══════════════════════════════════════════════════════════
-   Alerta Popup — canto superior direito
+   Alerta Popup — centralizado na tela
 ══════════════════════════════════════════════════════════ */
 
 .alertas-popup {
     position: fixed;
-    top: 16px;
-    right: 16px;
-    width: 320px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -60%);
+    width: 360px;
     max-width: calc(100vw - 32px);
     background-color: rgba(255, 255, 255, 0.92);
     backdrop-filter: blur(12px);
@@ -193,8 +194,8 @@
 
 /* Animações do popup */
 @keyframes alertas-popup-entrada {
-    from { opacity: 0; transform: translateX(20px); }
-    to   { opacity: 1; transform: translateX(0); }
+    from { opacity: 0; transform: translate(-50%, -60%) scale(0.9); }
+    to   { opacity: 1; transform: translate(-50%, -60%) scale(1); }
 }
 
 
@@ -222,6 +223,7 @@
     flex-direction: column;
     box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
     animation: alertas-slide-in 0.25s ease-out;
+    overflow: hidden; /* necessário para o painel de histórico (position: absolute inset: 0) */
 }
 
 @keyframes alertas-fade-in  { from { opacity: 0; } to { opacity: 1; } }
@@ -285,6 +287,241 @@
     background: rgba(230, 126, 34, 0.08);
 }
 
+
+/* ══════════════════════════════════════════════════════════
+   Score de Risco do Turno
+══════════════════════════════════════════════════════════ */
+
+.alertas-score-widget {
+    margin: 10px 12px 0;
+    padding: 12px 14px 10px;
+    border-radius: var(--ml-raio-borda, 8px);
+    background: #f8f9fa;
+    border: 1px solid #ecf0f1;
+    flex-shrink: 0;
+}
+
+.alertas-score-titulo {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: #7f8c8d;
+    margin-bottom: 8px;
+}
+
+.alertas-score-barra-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.alertas-score-barra {
+    flex: 1;
+    height: 8px;
+    background: rgba(0, 0, 0, 0.08);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.alertas-score-barra-inner {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.6s ease, background-color 0.4s ease;
+}
+
+.score-tranquilo .alertas-score-barra-inner { background: #27ae60; }
+.score-atencao   .alertas-score-barra-inner { background: #e67e22; }
+.score-elevado   .alertas-score-barra-inner { background: #e74c3c; animation: alertas-pulse 1.5s infinite; }
+
+.alertas-score-valor {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #2c3e50;
+    min-width: 36px;
+    text-align: right;
+}
+
+.alertas-score-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+.alertas-score-label.score-tranquilo { background: rgba(39,174,96,0.12);  color: #27ae60; }
+.alertas-score-label.score-atencao   { background: rgba(230,126,34,0.12); color: #e67e22; }
+.alertas-score-label.score-elevado   { background: rgba(231,76,60,0.12);  color: #e74c3c; }
+
+.alertas-score-turno {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.alertas-score-turno-barra {
+    flex: 1;
+    height: 4px;
+    background: rgba(0, 0, 0, 0.06);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.alertas-score-turno-barra div {
+    height: 100%;
+    background: #bdc3c7;
+    border-radius: 999px;
+    transition: width 0.6s ease;
+}
+
+.alertas-score-turno span {
+    font-size: 0.72rem;
+    color: #95a5a6;
+    white-space: nowrap;
+}
+
+.alertas-score-fora {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.alertas-score-timestamp {
+    display: block;
+    font-size: 0.7rem;
+    color: #bdc3c7;
+}
+
+/* ══════════════════════════════════════════════════════════
+   IA de Dicas
+══════════════════════════════════════════════════════════ */
+
+.alertas-dicas-container {
+    margin: 10px 12px 0;
+    flex-shrink: 0;
+}
+
+.alertas-dicas-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: #7f8c8d;
+    margin-bottom: 6px;
+    cursor: pointer;
+    user-select: none;
+    padding: 2px 0;
+}
+
+.alertas-dica-card {
+    position: relative;
+    background: rgba(255, 255, 255, 0.85);
+    border-radius: var(--ml-raio-borda, 8px);
+    padding: 9px 12px 9px 18px;
+    margin-bottom: 6px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    font-size: 0.84rem;
+    line-height: 1.4;
+}
+
+.alertas-dica-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0;
+    width: 5px; height: 100%;
+    border-radius: var(--ml-raio-borda, 8px) 0 0 var(--ml-raio-borda, 8px);
+}
+
+.alertas-dica-card.cor-critico::before { background: #e74c3c; }
+.alertas-dica-card.cor-aviso::before   { background: #e67e22; }
+.alertas-dica-card.cor-info::before    { background: #27ae60; }
+
+.alertas-dica-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.cor-critico .alertas-dica-label { color: #e74c3c; }
+.cor-aviso   .alertas-dica-label { color: #e67e22; }
+.cor-info    .alertas-dica-label { color: #27ae60; }
+
+.alertas-dica-card p {
+    margin: 0;
+    color: #2c3e50;
+}
+
+/* Linha separadora entre dicas/score e lista de alertas */
+.alertas-drawer-corpo {
+    border-top: 1px solid #ecf0f1;
+    margin-top: 10px;
+}
+
+/* ══════════════════════════════════════════════════════════
+   Chips de filtro por área
+══════════════════════════════════════════════════════════ */
+
+.alertas-filtros {
+    display: flex;
+    gap: 6px;
+    padding: 10px 12px 0;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+}
+
+.alertas-filtro-chip {
+    position: relative;
+    background: #f5f6fa;
+    border: 1px solid #dde1e5;
+    border-radius: 20px;
+    padding: 5px 12px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: #555;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.alertas-filtro-chip.ativo {
+    background: #2c3e50;
+    border-color: #2c3e50;
+    color: #fff;
+}
+
+.alertas-filtro-chip:not(.ativo):hover {
+    background: #eaecf0;
+}
+
+/* Dot indicando que há alertas nessa área */
+.alertas-filtro-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #e74c3c;
+    flex-shrink: 0;
+}
+
+.alertas-filtro-chip.ativo .alertas-filtro-dot {
+    background: #ff8a80;
+}
 
 /* ══════════════════════════════════════════════════════════
    Corpo do Drawer — lista de alertas
@@ -375,6 +612,24 @@
     letter-spacing: 0.4px;
 }
 
+.alertas-card-dismiss {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #bdc3c7;
+    font-size: 0.75rem;
+    padding: 4px 6px;
+    border-radius: 4px;
+    align-self: flex-start;
+    transition: color 0.15s, background 0.15s;
+}
+
+.alertas-card-dismiss:hover {
+    color: #7f8c8d;
+    background: rgba(0, 0, 0, 0.05);
+}
+
 
 /* ══════════════════════════════════════════════════════════
    Rodapé do Drawer
@@ -410,4 +665,181 @@
 
 .alertas-btn-atualizar:hover {
     background: #f5f6fa;
+}
+
+.alertas-btn-historico {
+    background: none;
+    border: none;
+    font-size: 0.78rem;
+    color: #7f8c8d;
+    cursor: pointer;
+    padding: 4px 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: color 0.15s;
+}
+
+.alertas-btn-historico:hover {
+    color: #2c3e50;
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   Mini-card de produto (demandas visuais)
+══════════════════════════════════════════════════════════ */
+
+.alertas-produto-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px 8px;
+}
+
+/* Versão compacta para os cards do drawer */
+.alertas-produto-card.compact {
+    padding: 0 0 6px 0;
+    gap: 10px;
+}
+
+.alertas-produto-thumb {
+    width: 52px;
+    height: 52px;
+    border-radius: 6px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: #f0f0f0;
+}
+
+.alertas-produto-card.compact .alertas-produto-thumb {
+    width: 40px;
+    height: 40px;
+}
+
+.alertas-produto-thumb-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #bdc3c7;
+    font-size: 1.3rem;
+}
+
+.alertas-produto-card.compact .alertas-produto-thumb-placeholder {
+    font-size: 1rem;
+}
+
+.alertas-produto-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.alertas-produto-info strong {
+    font-size: 0.9rem;
+    color: #2c3e50;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.alertas-produto-card.compact .alertas-produto-info strong {
+    font-size: 0.85rem;
+}
+
+.alertas-produto-variante {
+    font-size: 0.8rem;
+    color: #7f8c8d;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.alertas-produto-qtd {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #e74c3c;
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   Painel de histórico (sobrepõe o drawer)
+══════════════════════════════════════════════════════════ */
+
+.alertas-historico-painel {
+    position: absolute;
+    inset: 0;
+    background: #fff;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.alertas-historico-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid #ecf0f1;
+    flex-shrink: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.alertas-historico-header span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.alertas-historico-header button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #7f8c8d;
+    font-size: 0.9rem;
+    padding: 4px;
+}
+
+.alertas-historico-lista {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.alertas-historico-item {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    padding: 10px 10px 10px 18px;
+    border-radius: var(--ml-raio-borda, 8px);
+    background: #fafafa;
+    border: 1px solid #ecf0f1;
+}
+
+.alertas-historico-item .alertas-card-borda {
+    border-radius: 8px 0 0 8px;
+}
+
+.alertas-historico-item.nivel-critico .alertas-card-borda { background-color: #e74c3c; }
+.alertas-historico-item.nivel-aviso   .alertas-card-borda { background-color: #e67e22; }
+.alertas-historico-item.nivel-info    .alertas-card-borda { background-color: #27ae60; }
+
+.alertas-historico-item-corpo p {
+    margin: 0 0 3px;
+    font-size: 0.85rem;
+    color: #2c3e50;
+    line-height: 1.4;
+}
+
+.alertas-historico-item-corpo span {
+    font-size: 0.72rem;
+    color: #95a5a6;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
 }

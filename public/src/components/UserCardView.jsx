@@ -90,6 +90,22 @@ export default function UserCardView({ usuario, permissoesLogado, onEditar, onEx
             {(ehEmpregadoProdutivo || ehSocio) && (
                 <div className="card-secao">
                     <h4 className="card-secao-titulo">Jornada de Trabalho</h4>
+                    {usuario.dias_trabalho && (
+                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                            {[['0','Dom'],['1','Seg'],['2','Ter'],['3','Qua'],['4','Qui'],['5','Sex'],['6','Sáb']].map(([dia, label]) => (
+                                <span key={dia} style={{
+                                    padding: '3px 8px',
+                                    borderRadius: '20px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '600',
+                                    background: usuario.dias_trabalho[dia] ? '#27ae60' : '#f0f0f0',
+                                    color: usuario.dias_trabalho[dia] ? '#fff' : '#bbb',
+                                }}>
+                                    {label}
+                                </span>
+                            ))}
+                        </div>
+                    )}
                     <div className="jornada-display">
                         <span><strong>E1:</strong> {formatarHora(usuario.horario_entrada_1) || '--:--'}</span>
                         <span><strong>S1:</strong> {formatarHora(usuario.horario_saida_1) || '--:--'}</span>

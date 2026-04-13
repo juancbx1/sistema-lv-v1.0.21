@@ -73,25 +73,27 @@ router.put('/configuracoes', async (req, res) => {
 
         // Itera sobre cada configuração e executa um "UPSERT"
         for (const config of configuracoes) {
-        const { id, ativo, gatilho_minutos, acao_popup, acao_notificacao, intervalo_repeticao_minutos } = config;
-        
+        const { id, ativo, gatilho_minutos, acao_popup, acao_notificacao, intervalo_repeticao_minutos, peso_risco } = config;
+
         const query = `
-            UPDATE configuracoes_alertas 
-            SET 
-                ativo = $1, 
-                gatilho_minutos = $2, 
-                acao_popup = $3, 
+            UPDATE configuracoes_alertas
+            SET
+                ativo = $1,
+                gatilho_minutos = $2,
+                acao_popup = $3,
                 acao_notificacao = $4,
-                intervalo_repeticao_minutos = $5, -- <<< E AQUI >>>
+                intervalo_repeticao_minutos = $5,
+                peso_risco = $6,
                 atualizado_em = CURRENT_TIMESTAMP
-            WHERE id = $6; -- <<< O ÍNDICE DO 'id' MUDA PARA $6 >>>
+            WHERE id = $7
         `;
         await dbClient.query(query, [
             Boolean(ativo),
             parseInt(gatilho_minutos) || 5,
             Boolean(acao_popup),
             Boolean(acao_notificacao),
-            parseInt(intervalo_repeticao_minutos) || 15, // <<< E AQUI >>>
+            parseInt(intervalo_repeticao_minutos) || 15,
+            parseInt(peso_risco) || 0,
             parseInt(id)
         ]);
     }
@@ -109,16 +111,29 @@ router.put('/configuracoes', async (req, res) => {
 });
 
 // GET /api/alertas/dias-trabalho
+// Retorna configurações de calendário/horário: dias de trabalho, horário de expediente e janela de polling.
 router.get('/dias-trabalho', async (req, res) => {
     let dbClient;
     try {
         dbClient = await pool.connect();
-        const result = await dbClient.query("SELECT valor FROM alertas_configuracoes_gerais WHERE chave = 'dias_de_trabalho'");
-        if (result.rows.length === 0) {
-            // Fallback caso a linha não exista no banco
-            return res.status(200).json({ chave: 'dias_de_trabalho', valor: {} });
-        }
-        res.status(200).json({ chave: 'dias_de_trabalho', valor: result.rows[0].valor });
+        // Busca as duas chaves em paralelo
+        const [diasResult, pollResult] = await Promise.all([
+            dbClient.query("SELECT valor, horario_inicio, horario_fim FROM alertas_configuracoes_gerais WHERE chave = 'dias_de_trabalho'"),
+            dbClient.query("SELECT horario_inicio, horario_fim FROM alertas_configuracoes_gerais WHERE chave = 'janela_polling'"),
+        ]);
+
+        const diasRow = diasResult.rows[0];
+        const pollRow = pollResult.rows[0];
+
+        res.status(200).json({
+            chave: 'dias_de_trabalho',
+            valor:         diasRow?.valor        || {},
+            horario_inicio: diasRow?.horario_inicio ? diasRow.horario_inicio.substring(0, 5) : '07:00',
+            horario_fim:    diasRow?.horario_fim    ? diasRow.horario_fim.substring(0, 5)    : '18:00',
+            // Janela de polling (quando o frontend faz chamadas à API)
+            janela_poll_inicio: pollRow?.horario_inicio ? pollRow.horario_inicio.substring(0, 5) : '06:00',
+            janela_poll_fim:    pollRow?.horario_fim    ? pollRow.horario_fim.substring(0, 5)    : '23:00',
+        });
     } catch (error) {
         console.error('[API /dias-trabalho GET] Erro:', error);
         res.status(500).json({ error: 'Erro ao buscar dias de trabalho.' });
@@ -128,9 +143,10 @@ router.get('/dias-trabalho', async (req, res) => {
 });
 
 // PUT /api/alertas/dias-trabalho
+// Salva dias de trabalho, horário de expediente e janela de polling em lote.
 router.put('/dias-trabalho', async (req, res) => {
     let dbClient;
-    const { valor } = req.body;
+    const { valor, horario_inicio, horario_fim, janela_poll_inicio, janela_poll_fim } = req.body;
     try {
         dbClient = await pool.connect();
         const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, req.usuarioLogado.id);
@@ -138,14 +154,23 @@ router.put('/dias-trabalho', async (req, res) => {
             return res.status(403).json({ error: 'Permissão negada.' });
         }
 
-        const query = `
-            INSERT INTO alertas_configuracoes_gerais (chave, valor) 
-            VALUES ('dias_de_trabalho', $1)
-            ON CONFLICT (chave) 
-            DO UPDATE SET valor = $1;
-        `;
-        await dbClient.query(query, [valor]);
-        res.status(200).json({ message: 'Dias de trabalho atualizados.' });
+        await Promise.all([
+            // Dias de trabalho + horário de expediente
+            dbClient.query(`
+                INSERT INTO alertas_configuracoes_gerais (chave, valor, horario_inicio, horario_fim)
+                VALUES ('dias_de_trabalho', $1, $2, $3)
+                ON CONFLICT (chave) DO UPDATE SET valor = $1, horario_inicio = $2, horario_fim = $3
+            `, [valor, horario_inicio || '07:00', horario_fim || '18:00']),
+
+            // Janela de polling
+            dbClient.query(`
+                INSERT INTO alertas_configuracoes_gerais (chave, valor, horario_inicio, horario_fim)
+                VALUES ('janela_polling', '{}', $1, $2)
+                ON CONFLICT (chave) DO UPDATE SET horario_inicio = $1, horario_fim = $2
+            `, [janela_poll_inicio || '06:00', janela_poll_fim || '23:00']),
+        ]);
+
+        res.status(200).json({ message: 'Configurações de calendário atualizadas.' });
 
     } catch (error) {
         console.error('[API /dias-trabalho PUT] Erro:', error);
@@ -168,8 +193,38 @@ router.get('/verificar-status', async (req, res) => {
         // Se não configurado (objeto vazio), considera sempre dia de trabalho
         const diasConfigurados = Object.keys(diasDeTrabalho).length > 0;
         const ehDiaDeTrabalho = !diasConfigurados || !!diasDeTrabalho[diaDaSemana.toString()];
-        // Alertas baseados em eventos (DEMANDA_NOVA etc.) sempre disparam independente do dia.
+        // Alertas baseados em eventos (DEMANDA_NORMAL, DEMANDA_PRIORITARIA etc.) sempre disparam independente do dia.
         // Apenas os alertas de tempo (ociosidade, lentidão) respeitam o calendário.
+
+        // ── Verificar horário de expediente ──────────────────────────────────
+        // Tenta ler horario_inicio/horario_fim da tabela; se as colunas não existirem
+        // ainda (migração pendente), usa os padrões 07:00–18:00 silenciosamente.
+        let horaInicioExpediente = 7;
+        let horaFimExpediente    = 18;
+        try {
+            const horarioResult = await dbClient.query(
+                `SELECT horario_inicio, horario_fim FROM alertas_configuracoes_gerais WHERE chave = 'dias_de_trabalho' LIMIT 1`
+            );
+            const row = horarioResult.rows[0];
+            if (row?.horario_inicio) horaInicioExpediente = parseInt(row.horario_inicio.toString().split(':')[0]);
+            if (row?.horario_fim)    horaFimExpediente    = parseInt(row.horario_fim.toString().split(':')[0]);
+        } catch {
+            // colunas ainda não existem no banco — padrão 07h–18h
+        }
+        // ⚠️ CORREÇÃO: usar hora em São Paulo, não UTC (servidor roda em TZ=UTC)
+        // Comparação usa hora+minuto como número inteiro (ex: 14h30 = 1430)
+        // para evitar o problema de "23 < 23 = false" com horários de fim exatos
+        const horaAtualStr = hoje.toLocaleTimeString('en-GB', {
+            timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit'
+        }); // ex: "14:30"
+        const [hAtual, mAtual] = horaAtualStr.split(':').map(Number);
+        const horaAtualMinutos = hAtual * 60 + mAtual; // ex: 870 (= 14h30)
+
+        // horaInicioExpediente e horaFimExpediente são horas inteiras (ex: 7, 18)
+        // Converter para minutos para comparação consistente
+        const inicioExpedienteMin = horaInicioExpediente * 60;
+        const fimExpedienteMin    = horaFimExpediente    * 60 + 59; // inclui toda a hora final
+        const estaNoExpediente = horaAtualMinutos >= inicioExpedienteMin && horaAtualMinutos <= fimExpedienteMin;
 
         const configResult = await dbClient.query('SELECT * FROM configuracoes_alertas WHERE ativo = TRUE');
         const configs = configResult.rows;
@@ -178,9 +233,9 @@ router.get('/verificar-status', async (req, res) => {
         const queriesDeAtualizacao = [];
 
         // =====================================================================
-        // ALERTAS DE TEMPO — só verificar em dias de trabalho configurados
+        // ALERTAS DE TEMPO — só verificar em dias e horários de trabalho
         // =====================================================================
-        if (ehDiaDeTrabalho) {
+        if (ehDiaDeTrabalho && estaNoExpediente) {
 
         // ─── Arremate ───────────────────────────────────────────────────────
         const configOciosidade = configs.find(c => c.tipo_alerta === 'OCIOSIDADE_ARREMATE');
@@ -243,34 +298,47 @@ router.get('/verificar-status', async (req, res) => {
                     }
                 }
 
-                // --- Verificação de Lentidão Crítica (LÓGICA COMPLETA) ---
+                // --- Verificação de Lentidão Crítica ---
                 if (configLentidao && tiktik.status_atual === 'PRODUZINDO' && tiktik.data_inicio) {
                     const agoraMs = hoje.getTime();
                     const ultimoAlerta = tiktik.ultimo_alerta_lentidao_em ? new Date(tiktik.ultimo_alerta_lentidao_em).getTime() : 0;
                     const minutosDesdeUltimoAlerta = (agoraMs - ultimoAlerta) / (1000 * 60);
-                    
+
                     if (minutosDesdeUltimoAlerta >= configLentidao.intervalo_repeticao_minutos) {
                         const tpe = temposMap.get(tiktik.produto_id);
-                        if (tpe) {
-                            const dataInicio = new Date(tiktik.data_inicio);
-                            const minutosEmTarefa = (agoraMs - dataInicio.getTime()) / (1000 * 60);
-                            
-                            if (minutosEmTarefa >= configLentidao.gatilho_minutos) {
-                                const tempoDecorridoSegundos = minutosEmTarefa * 60;
-                                const tempoTotalEstimado = tpe * tiktik.quantidade_entregue;
-                                const progressoTempo = (tempoDecorridoSegundos / tempoTotalEstimado) * 100;
+                        const dataInicio = new Date(tiktik.data_inicio);
+                        const minutosEmTarefa = (agoraMs - dataInicio.getTime()) / (1000 * 60);
 
-                                if (progressoTempo >= 120) {
-                                    alertasParaDisparar.push({
-                                        tipo: 'LENTIDAO_CRITICA_ARREMATE',
-                                        mensagem: `🐢 Performance Baixa: ${tiktik.nome} está com ritmo lento há mais de ${Math.floor(minutosEmTarefa)} minutos.`,
-                                        config: configLentidao,
-                                        nivel: 'aviso'
-                                    });
-                                    queriesDeAtualizacao.push(
-                                        dbClient.query(`UPDATE usuarios SET ultimo_alerta_lentidao_em = NOW() WHERE id = $1`, [tiktik.id])
-                                    );
-                                }
+                        // --- LOG DE DIAGNÓSTICO (remover após confirmar funcionamento) ---
+                        console.log('[DEBUG LENTIDAO_ARREMATE]', {
+                            nome:             tiktik.nome,
+                            status:           tiktik.status_atual,
+                            produto_id:       tiktik.produto_id,
+                            quantidade:       tiktik.quantidade_entregue,
+                            minutos_em_tarefa: minutosEmTarefa.toFixed(1),
+                            tpe_segundos:     tpe ?? 'NÃO CADASTRADO',
+                        });
+
+                        if (!tpe) {
+                            console.warn(`[LENTIDAO_ARREMATE] TPP não cadastrado para produto_id=${tiktik.produto_id}. Cadastre em Arremate > Tempos Padrão.`);
+                        } else if (minutosEmTarefa >= configLentidao.gatilho_minutos) {
+                            const tempoDecorridoSegundos = minutosEmTarefa * 60;
+                            const tempoTotalEstimado     = tpe * (tiktik.quantidade_entregue || 1);
+                            const progressoTempo         = (tempoDecorridoSegundos / tempoTotalEstimado) * 100;
+
+                            console.log('[DEBUG LENTIDAO_ARREMATE] progressoTempo:', progressoTempo.toFixed(1) + '%',
+                                '| estimado:', (tempoTotalEstimado / 60).toFixed(1) + 'min');
+
+                            if (progressoTempo >= 120) {
+                                alertasParaDisparar.push({
+                                    tipo: 'LENTIDAO_CRITICA_ARREMATE',
+                                    mensagem: `🐢 Performance Baixa: ${tiktik.nome} está com ritmo lento — ${formatarMinutos(minutosEmTarefa)} na tarefa (estimado: ${formatarMinutos(tempoTotalEstimado / 60)}).`,
+                                    config: configLentidao,
+                                    nivel: 'aviso'
+                                });
+                                queriesDeAtualizacao.push(
+                                    dbClient.query(`UPDATE usuarios SET ultimo_alerta_lentidao_em = NOW() WHERE id = $1`, [tiktik.id])
+                                );
                             }
                         }
                     }
@@ -290,21 +358,32 @@ router.get('/verificar-status', async (req, res) => {
                 SELECT
                     u.id, u.nome, u.status_atual, u.status_data_modificacao,
                     u.ultimo_alerta_ociosidade_em, u.ultimo_alerta_lentidao_em,
-                    s.data_inicio as sessao_data_inicio,
+                    s.data_inicio      AS sessao_data_inicio,
+                    s.produto_id       AS sessao_produto_id,
+                    s.processo         AS sessao_processo,
+                    s.quantidade_atribuida AS sessao_quantidade,
                     (
                         SELECT MAX(s2.data_fim)
                         FROM sessoes_trabalho_producao s2
                         WHERE s2.funcionario_id = u.id
                           AND s2.status IN ('FINALIZADA', 'FINALIZADA_FORCADA')
                           AND s2.data_fim >= date_trunc('day', NOW() AT TIME ZONE 'America/Sao_Paulo')
-                    ) as data_ultima_tarefa_finalizada_hoje
+                    ) AS data_ultima_tarefa_finalizada_hoje
                 FROM usuarios u
                 LEFT JOIN sessoes_trabalho_producao s ON u.id_sessao_trabalho_atual = s.id
                 WHERE 'costureira' = ANY(u.tipos) AND u.data_demissao IS NULL
             `);
 
+            // Busca TPP de produção — chave composta: produto_id + processo
+            const tppProducaoResult = await dbClient.query(
+                'SELECT produto_id, processo, tempo_segundos FROM tempos_padrao_producao'
+            );
+            const tppProducaoMap = new Map(
+                tppProducaoResult.rows.map(r => [`${r.produto_id}-${r.processo}`, parseFloat(r.tempo_segundos)])
+            );
+
             for (const costureira of costureirasResult.rows) {
-                // --- Ociosidade ---
+                // --- Ociosidade (lógica inalterada) ---
                 if (configOciosidadeCostureira && costureira.status_atual === 'LIVRE') {
                     const agoraMs = hoje.getTime();
                     const ultimoAlerta = costureira.ultimo_alerta_ociosidade_em
@@ -335,7 +414,7 @@ router.get('/verificar-status', async (req, res) => {
                     }
                 }
 
-                // --- Lentidão ---
+                // --- Lentidão baseada em TPP (mesma lógica do arremate) ---
                 if (configLentidaoCostureira && costureira.status_atual === 'PRODUZINDO' && costureira.sessao_data_inicio) {
                     const agoraMs = hoje.getTime();
                     const ultimoAlerta = costureira.ultimo_alerta_lentidao_em
@@ -344,16 +423,48 @@ router.get('/verificar-status', async (req, res) => {
 
                     if (minutosDesdeUltimoAlerta >= configLentidaoCostureira.intervalo_repeticao_minutos) {
                         const minutosEmTarefa = (agoraMs - new Date(costureira.sessao_data_inicio).getTime()) / (1000 * 60);
+
+                        // Só verifica lentidão depois do gatilho mínimo de tempo
                         if (minutosEmTarefa >= configLentidaoCostureira.gatilho_minutos) {
-                            alertasParaDisparar.push({
-                                tipo: 'LENTIDAO_COSTUREIRA',
-                                mensagem: `Performance: ${costureira.nome} está na mesma tarefa há ${formatarMinutos(minutosEmTarefa)}.`,
-                                config: configLentidaoCostureira,
-                                nivel: 'aviso'
+                            const chaveTPP = `${costureira.sessao_produto_id}-${costureira.sessao_processo}`;
+                            const tpp = tppProducaoMap.get(chaveTPP);
+
+                            // --- LOG DE DIAGNÓSTICO (remover após confirmar funcionamento) ---
+                            console.log('[DEBUG LENTIDAO_COSTUREIRA]', {
+                                nome:              costureira.nome,
+                                status:            costureira.status_atual,
+                                sessao_inicio:     costureira.sessao_data_inicio,
+                                produto_id:        costureira.sessao_produto_id,
+                                processo:          costureira.sessao_processo,
+                                quantidade:        costureira.sessao_quantidade,
+                                minutos_em_tarefa: minutosEmTarefa.toFixed(1),
+                                tpp_segundos:      tpp ?? 'NÃO CADASTRADO',
+                                chave_tpp:         chaveTPP,
                             });
-                            queriesDeAtualizacao.push(
-                                dbClient.query(`UPDATE usuarios SET ultimo_alerta_lentidao_em = NOW() WHERE id = $1`, [costureira.id])
-                            );
+
+                            if (tpp) {
+                                const tempoDecorridoSeg   = minutosEmTarefa * 60;
+                                const tempoEstimadoSeg    = tpp * (costureira.sessao_quantidade || 1);
+                                const progressoTempo      = (tempoDecorridoSeg / tempoEstimadoSeg) * 100;
+
+                                console.log('[DEBUG LENTIDAO_COSTUREIRA] progressoTempo:', progressoTempo.toFixed(1) + '%',
+                                    '| estimado:', (tempoEstimadoSeg / 60).toFixed(1) + 'min');
+
+                                if (progressoTempo >= 120) { // Passou 20% acima do tempo esperado
+                                    alertasParaDisparar.push({
+                                        tipo: 'LENTIDAO_COSTUREIRA',
+                                        mensagem: `🐢 Performance Baixa: ${costureira.nome} está com ritmo lento — ${formatarMinutos(minutosEmTarefa)} na tarefa (estimado: ${formatarMinutos(tempoEstimadoSeg / 60)}).`,
+                                        config: configLentidaoCostureira,
+                                        nivel: 'aviso'
+                                    });
+                                    queriesDeAtualizacao.push(
+                                        dbClient.query(`UPDATE usuarios SET ultimo_alerta_lentidao_em = NOW() WHERE id = $1`, [costureira.id])
+                                    );
+                                }
+                            } else {
+                                // TPP não cadastrado — loga mas não dispara alerta
+                                console.warn(`[LENTIDAO_COSTUREIRA] TPP não cadastrado para: produto_id=${costureira.sessao_produto_id}, processo="${costureira.sessao_processo}". Cadastre em Produção > Tempos Padrão.`);
+                            }
                         }
                     }
                 }
@@ -368,7 +479,6 @@ router.get('/verificar-status', async (req, res) => {
                 SELECT COUNT(*) as total
                 FROM demandas_producao
                 WHERE status = 'pendente'
-                  AND prioridade = 2
                   AND criado_em < NOW() - INTERVAL '${parseInt(configDemandaNaoIniciada.gatilho_minutos)} minutes'
             `);
             const totalParadas = parseInt(demandasParadasResult.rows[0]?.total || 0);
@@ -387,9 +497,9 @@ router.get('/verificar-status', async (req, res) => {
         }
 
         // =====================================================================
-        // FIM DOS ALERTAS DE TEMPO (dias de trabalho)
+        // FIM DOS ALERTAS DE TEMPO (dias e horário de trabalho)
         // =====================================================================
-        } // end if (ehDiaDeTrabalho)
+        } // end if (ehDiaDeTrabalho && estaNoExpediente)
 
         // =====================================================================
         // ALERTAS DE EVENTOS — sempre disparam (independente do dia)
@@ -415,18 +525,23 @@ router.get('/verificar-status', async (req, res) => {
 
                 const nivel = tipoEvento === 'META_BATIDA_ARREMATE'  ? 'info'    :
                               tipoEvento === 'DEMANDA_PRIORITARIA'   ? 'critico' :
-                              tipoEvento === 'DEMANDA_NOVA'          ? 'critico' : 'aviso';
+                              tipoEvento === 'DEMANDA_NORMAL'        ? 'aviso'   : 'aviso';
+                // DEMANDA_NORMAL é 'aviso' (não dispara popup/som) — só DEMANDA_PRIORITARIA é 'critico'.
 
                 let mensagem;
                 if (eventosDoTipo.length === 1) {
                     mensagem = eventosDoTipo[0].mensagem;
                 } else {
-                    // Mensagem agrupada
+                    // Mensagem agrupada — mostra as 2 mais recentes para o supervisor saber o que chegou
                     const exemplos = eventosDoTipo.slice(-2).map(e => e.mensagem.split('—')[0].replace('Nova demanda: ', '').trim()).join(', ');
                     mensagem = `${eventosDoTipo.length} novas demandas aguardando início (últimas: ${exemplos}…)`;
                 }
 
-                alertasParaDisparar.push({ tipo: tipoEvento, mensagem, config: configDoEvento, nivel });
+                // dados_extras (mini-card visual) só faz sentido para 1 evento específico.
+                // Para múltiplos eventos agrupados, o mini-card mostraria a variante errada
+                // (sempre a primeira, ignorando as demais). Nesses casos usamos só a mensagem de texto.
+                const dadosExtras = eventosDoTipo.length === 1 ? (eventosDoTipo[0]?.dados_extras || null) : null;
+                alertasParaDisparar.push({ tipo: tipoEvento, mensagem, config: configDoEvento, nivel, dados_extras: dadosExtras });
                 eventosDoTipo.forEach(e => idsEventosLidos.push(e.id));
                 console.log(`[LOG EVENTOS] Tipo "${tipoEvento}": ${eventosDoTipo.length} evento(s) → 1 alerta agrupado.`);
             }
@@ -442,6 +557,13 @@ router.get('/verificar-status', async (req, res) => {
 
         if (alertasParaDisparar.length > 0) {
             console.log(`[API /verificar-status] Enviando ${alertasParaDisparar.length} alerta(s) para o frontend:`, alertasParaDisparar);
+            // Gravar no histórico (fire-and-forget — não bloqueia a resposta)
+            Promise.all(alertasParaDisparar.map(a =>
+                dbClient.query(
+                    `INSERT INTO historico_alertas (tipo_alerta, mensagem, nivel) VALUES ($1, $2, $3)`,
+                    [a.tipo, a.mensagem, a.nivel]
+                ).catch(() => {}) // silencioso caso a tabela ainda não exista
+            ));
         }
 
         res.status(200).json(alertasParaDisparar);
@@ -449,6 +571,26 @@ router.get('/verificar-status', async (req, res) => {
     } catch (error) {
         console.error('[API /alertas/verificar-status GET] Erro:', error);
         res.status(500).json({ error: 'Erro ao verificar status para alertas.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// GET /api/alertas/historico — alertas disparados hoje
+router.get('/historico', async (req, res) => {
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const result = await dbClient.query(`
+            SELECT id, tipo_alerta, mensagem, nivel, disparado_em
+            FROM historico_alertas
+            WHERE disparado_em >= date_trunc('day', NOW() AT TIME ZONE 'America/Sao_Paulo')
+            ORDER BY disparado_em DESC
+        `);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        console.error('[API /alertas/historico GET] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar histórico de alertas.' });
     } finally {
         if (dbClient) dbClient.release();
     }

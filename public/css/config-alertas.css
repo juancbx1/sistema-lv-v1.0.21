@@ -232,20 +232,116 @@ input:checked + .slider:before {
     flex: none !important;
 }
 
-/* ── Dias de trabalho (DiasTrabalhoCard usa classes .config-card) ── */
+/* ── Card body em coluna (HorariosCard) ── */
+.config-card-body-coluna {
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+}
+
+/* ── Bloco de horário (expediente / janela poll) ── */
+.config-horario-bloco {
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.config-horario-label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.config-horario-label strong {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.config-horario-label span {
+    font-size: 0.8rem;
+    color: #7f8c8d;
+    line-height: 1.4;
+}
+
+.config-horario-divisor {
+    height: 1px;
+    background: #f0f0f0;
+    margin: 0 20px;
+}
+
+/* ── Calendário — chips de dias ── */
 .dias-semana-container {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
-    padding: 4px 0;
+    gap: 8px;
+    padding: 0;
 }
 
-.dias-semana-container label {
+.dia-toggle {
+    cursor: pointer;
+    display: block;
+}
+
+.dia-toggle input[type="checkbox"] {
+    display: none;
+}
+
+.dia-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 14px;
+    border-radius: 20px;
+    border: 1px solid #dde1e5;
+    background: #f8f9fa;
+    font-size: 0.85rem;
+    color: #7f8c8d;
+    font-weight: 500;
+    transition: all 0.15s;
+    min-height: 36px;
+    user-select: none;
+}
+
+.dia-chip.ativo {
+    background: #eaf6ed;
+    border-color: #27ae60;
+    color: #1e8449;
+    font-weight: 600;
+}
+
+/* ── Horário de expediente ── */
+.horario-expediente-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.horario-expediente-campo {
     display: flex;
     align-items: center;
     gap: 8px;
-    cursor: pointer;
+}
+
+.horario-expediente-campo span {
+    font-size: 0.85rem;
+    color: #7f8c8d;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.horario-expediente-campo input[type="time"] {
+    padding: 8px 10px;
+    border: 1px solid #dde1e5;
+    border-radius: 6px;
     font-size: 0.9rem;
+    color: #2c3e50;
+    background: #fff;
     min-height: 44px;
-    padding: 0 4px;
+}
+
+.horario-expediente-separador {
+    font-size: 0.85rem;
+    color: #95a5a6;
 }

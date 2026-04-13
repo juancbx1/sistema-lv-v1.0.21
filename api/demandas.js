@@ -72,13 +72,41 @@ router.post('/', async (req, res) => {
 
         // Notificar supervisores sobre nova demanda (best-effort — não falha o POST)
         try {
+            // Buscar dados visuais do produto para exibir no sino (nome, imagem, variante)
+            const produtoVisualResult = await dbClient.query(`
+                SELECT
+                    p.nome,
+                    COALESCE(
+                        (SELECT g->>'imagem' FROM jsonb_array_elements(p.grade) g WHERE g->>'sku' = $1 LIMIT 1),
+                        p.imagem
+                    ) AS imagem,
+                    (SELECT g->>'variacao' FROM jsonb_array_elements(p.grade) g WHERE g->>'sku' = $1 LIMIT 1) AS variante
+                FROM produtos p
+                WHERE p.sku = $1
+                   OR EXISTS (SELECT 1 FROM jsonb_array_elements(p.grade) g WHERE g->>'sku' = $1)
+                LIMIT 1
+            `, [produto_sku]);
+
+            const pv = produtoVisualResult.rows[0];
+            const nomeLegivel = pv
+                ? (pv.variante ? `${pv.nome} — ${pv.variante}` : pv.nome)
+                : produto_sku; // fallback para o SKU se produto não encontrado
+            const qtd = parseInt(quantidade_solicitada);
+            const dadosExtras = pv ? {
+                sku:          produto_sku,
+                produto_nome: pv.nome,
+                variante:     pv.variante || null,
+                imagem:       pv.imagem   || null,
+                quantidade:   qtd,
+            } : null;
+
             const configNova = await dbClient.query(
-                `SELECT ativo FROM configuracoes_alertas WHERE tipo_alerta = 'DEMANDA_NOVA' LIMIT 1`
+                `SELECT ativo FROM configuracoes_alertas WHERE tipo_alerta = 'DEMANDA_NORMAL' LIMIT 1`
             );
             if (configNova.rows[0]?.ativo) {
                 await dbClient.query(
-                    `INSERT INTO eventos_sistema (tipo_evento, mensagem, lido) VALUES ($1, $2, false)`,
-                    ['DEMANDA_NOVA', `Nova demanda: ${produto_sku} — ${parseInt(quantidade_solicitada)} peças aguardando início.`]
+                    `INSERT INTO eventos_sistema (tipo_evento, mensagem, lido, dados_extras) VALUES ($1, $2, false, $3)`,
+                    ['DEMANDA_NORMAL', `Nova demanda: ${nomeLegivel} — ${qtd} peça${qtd !== 1 ? 's' : ''} aguardando início.`, dadosExtras]
                 );
             }
             if (prioridadeFinal === 1) {
@@ -87,8 +115,8 @@ router.post('/', async (req, res) => {
                 );
                 if (configPrioritaria.rows[0]?.ativo) {
                     await dbClient.query(
-                        `INSERT INTO eventos_sistema (tipo_evento, mensagem, lido) VALUES ($1, $2, false)`,
-                        ['DEMANDA_PRIORITARIA', `Demanda PRIORITÁRIA criada: ${produto_sku} — ${parseInt(quantidade_solicitada)} peças.`]
+                        `INSERT INTO eventos_sistema (tipo_evento, mensagem, lido, dados_extras) VALUES ($1, $2, false, $3)`,
+                        ['DEMANDA_PRIORITARIA', `Demanda PRIORITÁRIA: ${nomeLegivel} — ${qtd} peça${qtd !== 1 ? 's' : ''}.`, dadosExtras]
                     );
                 }
             }
@@ -187,6 +215,16 @@ router.delete('/:id', async (req, res) => {
 
         // 2. Chama a função de limpeza para remover quaisquer atribuições que se tornaram órfãs
         await limparAtribuicoesOrfas(dbClient);
+
+        // 3. Limpa eventos de alerta pendentes relacionados à demanda deletada
+        // (evita que o sino continue disparando para uma demanda que não existe mais)
+        await dbClient.query(`
+            UPDATE eventos_sistema
+            SET lido = true
+            WHERE tipo_evento IN ('DEMANDA_NORMAL', 'DEMANDA_PRIORITARIA')
+              AND lido = false
+              AND criado_em >= NOW() - INTERVAL '2 hours'
+        `);
 
         await dbClient.query('COMMIT');
         res.status(200).json({ message: 'Demanda removida e atribuições limpas com sucesso.' });

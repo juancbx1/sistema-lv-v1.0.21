@@ -204,13 +204,22 @@ body {
     color: var(--gs-terciaria);
 }
 
+/* Ajustes gerais para telas menores TIPO IPAD (aplicado a todos os breakpoints mobile) */
+@media (max-width: 1024px) {
+    .container-dashboard {
+    margin: 10px 50px;
+    }
+
+}
+
+
 /* Responsivo */
 @media (max-width: 768px) {
     .container-dashboard {
-        margin-left: 0;
+        margin-left: 50px;
         padding: 20px 15px;
         margin-top: 40px; /* Espaço para o hamburguer */
     }
-    .home-header-container { padding: 20px; }
-    .home-welcome-title { font-size: 1.8rem; }
 }
+
+

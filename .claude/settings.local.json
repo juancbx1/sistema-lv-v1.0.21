@@ -4,7 +4,8 @@
       "Bash(python3:*)",
       "Bash(sed 's/^\\\\.//')",
       "Bash(grep -l \"BotaoBuscaFunil\\\\|ReactDOM.createRoot\" \"C:\\\\Users\\\\Juan\\\\Documents\\\\Lojas Variara\\\\sistema-lv\\\\sistema-lv-v1.0.21\\\\public\\\\src\\\\main-\"*.jsx)",
-      "Bash(xargs -I{} basename {})"
+      "Bash(xargs -I{} basename {})",
+      "Bash(node:*)"
     ]
   }
 }

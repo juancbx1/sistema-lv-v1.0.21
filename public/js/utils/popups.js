@@ -269,6 +269,64 @@ export function mostrarPromptTexto(mensagem, opcoes = {}) {
  * @param {Array<object>} sessoes - O array de sessões que compõem o lote.
  * @returns {Promise<object|null>} - Um objeto com o total e os detalhes por sessão, ou null se cancelado.
  */
+/**
+ * Exibe um popup para o usuário inserir um horário (input type="time").
+ * @param {string} mensagem - A mensagem principal.
+ * @param {object} [opcoes={}]
+ * @param {string} [opcoes.valorInicial=''] - Horário pré-preenchido (HH:MM).
+ * @param {string} [opcoes.tipo='info'] - Tipo de popup para a cor da borda.
+ * @param {string} [opcoes.textoConfirmar='Confirmar'] - Texto do botão de confirmação.
+ * @returns {Promise<string|null>} - O horário no formato 'HH:MM' ou null se cancelado.
+ */
+export function mostrarPromptHorario(mensagem, opcoes = {}) {
+    removerPopupExistente();
+    const { valorInicial = '', tipo = 'info', textoConfirmar = 'Confirmar' } = opcoes;
+
+    return new Promise((resolve) => {
+        const container = document.createElement('div');
+        container.className = 'popup-container';
+
+        container.innerHTML = `
+            <div class="popup-overlay"></div>
+            <div class="popup-box popup-${tipo}">
+                <p>${mensagem}</p>
+                <div class="popup-input-container" style="margin-bottom: 20px;">
+                    <input type="time" id="popupInputHorario" class="popup-input-numerico"
+                           value="${valorInicial}" style="width: 100%; padding: 8px; font-size: 1rem;" />
+                </div>
+                <div class="popup-botoes">
+                    <button class="popup-btn popup-btn-cancelar">Cancelar</button>
+                    <button id="popupBtnConfirmarHorario" class="popup-btn popup-btn-confirmar">${textoConfirmar}</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(container);
+
+        const input = container.querySelector('#popupInputHorario');
+        const btnConfirmar = container.querySelector('#popupBtnConfirmarHorario');
+        const btnCancelar = container.querySelector('.popup-btn-cancelar');
+        const overlay = container.querySelector('.popup-overlay');
+
+        const fecharPopup = (valor) => {
+            removerPopupExistente();
+            resolve(valor);
+        };
+
+        btnConfirmar.onclick = () => {
+            const val = input.value.trim();
+            if (!val) return;
+            fecharPopup(val);
+        };
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); btnConfirmar.click(); }
+        });
+        btnCancelar.onclick = () => fecharPopup(null);
+        overlay.onclick = () => fecharPopup(null);
+
+        input.focus();
+    });
+}
+
 export function mostrarPromptFinalizarLote(mensagem, sessoes) {
     removerPopupExistente();
 

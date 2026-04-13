@@ -36,6 +36,7 @@ export default function UserCardEdicao({ usuario, onSalvar, onCancelar, salvando
         horario_saida_2: formatarHora(usuario.horario_saida_2) || '17:18',
         horario_entrada_3: formatarHora(usuario.horario_entrada_3) || '',
         horario_saida_3: formatarHora(usuario.horario_saida_3) || '',
+        dias_trabalho: usuario.dias_trabalho || { '1': true, '2': true, '3': true, '4': true, '5': true },
 
         // Financeiro
         salario_fixo: usuario.salario_fixo || 0,
@@ -60,6 +61,13 @@ export default function UserCardEdicao({ usuario, onSalvar, onCancelar, salvando
         setFormData(prev => ({
             ...prev,
             [name]: type === 'checkbox' ? checked : value
+        }));
+    };
+
+    const handleDiasTrabalhoChange = (dia) => {
+        setFormData(prev => ({
+            ...prev,
+            dias_trabalho: { ...prev.dias_trabalho, [dia]: !prev.dias_trabalho[dia] }
         }));
     };
 
@@ -113,6 +121,7 @@ export default function UserCardEdicao({ usuario, onSalvar, onCancelar, salvando
             // Horários vazios viram null
             horario_entrada_3: formData.horario_entrada_3 || null,
             horario_saida_3: formData.horario_saida_3 || null,
+            dias_trabalho: formData.dias_trabalho,
         };
         onSalvar(payload);
     };
@@ -228,13 +237,42 @@ export default function UserCardEdicao({ usuario, onSalvar, onCancelar, salvando
             {/* JORNADA (Edita para todos) */}
             <div className="card-secao">
                 <h4 className="card-secao-titulo">Jornada de Trabalho</h4>
+
+                {/* Dias de trabalho */}
+                <div style={{ marginBottom: '12px' }}>
+                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.82rem', color: '#555' }}>Dias de trabalho</label>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                        {[['0','Dom'],['1','Seg'],['2','Ter'],['3','Qua'],['4','Qui'],['5','Sex'],['6','Sáb']].map(([dia, label]) => (
+                            <button
+                                key={dia}
+                                type="button"
+                                onClick={() => handleDiasTrabalhoChange(dia)}
+                                style={{
+                                    padding: '5px 10px',
+                                    borderRadius: '20px',
+                                    border: '1px solid',
+                                    fontSize: '0.8rem',
+                                    fontWeight: '600',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s',
+                                    background: formData.dias_trabalho[dia] ? '#27ae60' : '#f0f0f0',
+                                    color: formData.dias_trabalho[dia] ? '#fff' : '#888',
+                                    borderColor: formData.dias_trabalho[dia] ? '#27ae60' : '#ddd',
+                                }}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
                 <div className="jornada-grid">
                     <div><label>Entrada 1</label><input type="time" name="horario_entrada_1" className="gs-input" value={formData.horario_entrada_1} onChange={handleChange} /></div>
                     <div><label>Saída 1</label><input type="time" name="horario_saida_1" className="gs-input" value={formData.horario_saida_1} onChange={handleChange} /></div>
-                    
+
                     <div><label>Entrada 2</label><input type="time" name="horario_entrada_2" className="gs-input" value={formData.horario_entrada_2} onChange={handleChange} /></div>
                     <div><label>Saída 2</label><input type="time" name="horario_saida_2" className="gs-input" value={formData.horario_saida_2} onChange={handleChange} /></div>
-                    
+
                     <div><label>Entrada 3</label><input type="time" name="horario_entrada_3" className="gs-input" value={formData.horario_entrada_3} onChange={handleChange} /></div>
                     <div><label>Saída 3</label><input type="time" name="horario_saida_3" className="gs-input" value={formData.horario_saida_3} onChange={handleChange} /></div>
                 </div>

@@ -33,55 +33,70 @@ const STATUS = {
     ALOCADO_EXTERNO: 'ALOCADO_EXTERNO'
 };
 
-export function determinarStatusFinalServidor(usuario) {
-    let statusFinalBruto;
+export function determinarStatusFinalServidor(usuario, pontoDiario = null) {
+    // 1. PRODUZINDO ganha de tudo
+    if (usuario.status_atual === STATUS.PRODUZINDO) return STATUS.PRODUZINDO;
 
-    // 1. Se estiver PRODUZINDO, ganha de tudo.
-    if (usuario.status_atual === STATUS.PRODUZINDO) {
-        statusFinalBruto = STATUS.PRODUZINDO;
-    } 
-    // 2. Status Manuais Fortes (Faltou, Outro Setor, e agora LIVRE_MANUAL)
-    // Esses status respeitam a data de modificação (valem só por hoje)
-    else if ([STATUS.FALTOU, STATUS.ALOCADO_EXTERNO, 'LIVRE_MANUAL'].includes(usuario.status_atual)) {
+    // 2. Status manuais fortes — valem SOMENTE no dia em que foram definidos
+    // Se foram definidos em outro dia, ignorar e recalcular pelo automático abaixo
+    if ([STATUS.FALTOU, STATUS.ALOCADO_EXTERNO, 'LIVRE_MANUAL'].includes(usuario.status_atual)) {
         const hojeSP = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
-        
-        const dataModificacao = (typeof usuario.status_data_modificacao === 'string') 
-            ? usuario.status_data_modificacao.substring(0, 10) 
+        // Suporta tanto string ('2026-04-12 14:30:00') quanto objeto Date (coluna timestamptz)
+        const rawTs = usuario.status_data_modificacao;
+        const dataModificacao = rawTs
+            ? (typeof rawTs === 'string'
+                ? rawTs.substring(0, 10)
+                : new Date(rawTs).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }))
             : null;
-
-        // Se a liberação manual foi HOJE, respeita ela.
         if (hojeSP === dataModificacao) {
-            // Se for LIVRE_MANUAL, retornamos LIVRE para o frontend entender
-            if (usuario.status_atual === 'LIVRE_MANUAL') {
-                return STATUS.LIVRE; 
-            }
-            statusFinalBruto = usuario.status_atual;
+            return usuario.status_atual === 'LIVRE_MANUAL' ? STATUS.LIVRE : usuario.status_atual;
         }
-    } 
-    // 3. Pausa Manual
-    else if (usuario.status_atual === STATUS.PAUSA_MANUAL) {
-        statusFinalBruto = STATUS.PAUSA_MANUAL;
-    } 
-    // 4. Cálculo Automático de Horário (Só entra aqui se não caiu nos casos acima)
-    else {
-        const agora = new Date();
-        const horaAtualStr = agora.toLocaleTimeString('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
-        const { horario_entrada_1, horario_saida_1, horario_entrada_2, horario_saida_2, horario_entrada_3, horario_saida_3 } = usuario;
-        
-        const saidaFinal = horario_saida_3 || horario_saida_2 || horario_saida_1 || '23:59';
-        const entradaInicial = horario_entrada_1 || '00:00';
-
-        if (horaAtualStr < entradaInicial || horaAtualStr > saidaFinal) {
-            statusFinalBruto = STATUS.FORA_DO_HORARIO;
-        } else if (horario_saida_1 && horario_entrada_2 && horaAtualStr > horario_saida_1 && horaAtualStr < horario_entrada_2) {
-            statusFinalBruto = STATUS.ALMOCO;
-        } else if (horario_saida_2 && horario_entrada_3 && horaAtualStr > horario_saida_2 && horaAtualStr < horario_entrada_3) {
-            statusFinalBruto = STATUS.PAUSA;
-        }
+        // Modificação de dia anterior — cai no cálculo automático (não retorna aqui)
     }
-    
-    // Retorno final
-    return statusFinalBruto || usuario.status_atual || STATUS.LIVRE;
+
+    // 3. Pausa Manual — sem expiração, persiste até o supervisor liberar
+    if (usuario.status_atual === STATUS.PAUSA_MANUAL) return STATUS.PAUSA_MANUAL;
+
+    // 4. Cálculo automático (inclui verificação de dias de trabalho)
+    const agora = new Date();
+    const horaAtualStr = agora.toLocaleTimeString('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+    const { horario_entrada_1, horario_saida_1, horario_entrada_2, horario_saida_2, horario_entrada_3, horario_saida_3, dias_trabalho } = usuario;
+
+    // Verifica se hoje é dia de trabalho (fallback Mon-Sex se coluna dias_trabalho não existir ainda)
+    const diasTrabalhoEfetivo = dias_trabalho || { '1': true, '2': true, '3': true, '4': true, '5': true };
+    const hojeSPStr = agora.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    const [yr, mo, dy] = hojeSPStr.split('-').map(Number);
+    const diaKey = String(new Date(Date.UTC(yr, mo - 1, dy, 12)).getDay()); // 0=Dom...6=Sáb
+
+    // LIVRE_MANUAL = supervisor liberou explicitamente. Vence dias de folga e janelas de intervalo.
+    // DEVE ser declarado ANTES de qualquer early return para que os overrides funcionem.
+    // O step 2 já trata o caso principal (data bate); esse bloco é o fallback robusto quando
+    // o step 2 falha por qualquer motivo (ex: edge case de timezone entre meia-noite e 3h SP).
+    const ehLivreManual = usuario.status_atual === 'LIVRE_MANUAL';
+
+    if (!diasTrabalhoEfetivo[diaKey]) {
+        if (ehLivreManual) return STATUS.LIVRE; // folga atípica autorizada pelo supervisor
+        return STATUS.FORA_DO_HORARIO;
+    }
+
+    const n = (t) => t ? String(t).substring(0, 5) : null;
+    const inicioAlmoco  = n(pontoDiario?.horario_real_s1) || n(horario_saida_1);
+    const fimAlmoco     = n(pontoDiario?.horario_real_e2) || n(horario_entrada_2);
+    const inicioPausa   = n(pontoDiario?.horario_real_s2) || n(horario_saida_2);
+    const fimPausa      = n(pontoDiario?.horario_real_e3) || n(horario_entrada_3);
+    const saidaFinal    = n(pontoDiario?.horario_real_s3) || n(horario_saida_3) || n(horario_saida_2) || n(horario_saida_1) || '23:59';
+    const entradaInicial = n(horario_entrada_1) || '00:00';
+
+    if (horaAtualStr < entradaInicial || horaAtualStr > saidaFinal) return STATUS.FORA_DO_HORARIO;
+    if (inicioAlmoco && fimAlmoco && horaAtualStr >= inicioAlmoco && horaAtualStr < fimAlmoco) {
+        if (ehLivreManual) return STATUS.LIVRE; // supervisor antecipou retorno do almoço
+        return STATUS.ALMOCO;
+    }
+    if (inicioPausa  && fimPausa  && horaAtualStr >= inicioPausa  && horaAtualStr < fimPausa) {
+        if (ehLivreManual) return STATUS.LIVRE; // supervisor antecipou retorno da pausa
+        return STATUS.PAUSA;
+    }
+    return STATUS.LIVRE;
 }
 
 export async function atualizarStatusUsuarioDB(usuarioId, novoStatus) {
@@ -309,8 +324,9 @@ router.get('/', async (req, res) => {
                 u.id_contato_financeiro, u.data_admissao,
                 u.data_demissao,
                 u.horario_entrada_1, u.horario_saida_1,
-                u.horario_entrada_2, u.horario_saida_2, 
-                u.horario_entrada_3, u.horario_saida_3, 
+                u.horario_entrada_2, u.horario_saida_2,
+                u.horario_entrada_3, u.horario_saida_3,
+                u.dias_trabalho,
                 COALESCE(u.avatar_url, $1) as avatar_url,
                 u.foto_oficial,
                 c.nome AS nome_contato_financeiro,
@@ -505,6 +521,7 @@ router.put('/', async (req, res) => {
         if (horario_saida_2 !== undefined) { fieldsToUpdate.push(`horario_saida_2 = $${paramIndex++}`); values.push(horario_saida_2 || null); }
         if (horario_entrada_3 !== undefined) { fieldsToUpdate.push(`horario_entrada_3 = $${paramIndex++}`); values.push(horario_entrada_3 || null); }
         if (horario_saida_3 !== undefined) { fieldsToUpdate.push(`horario_saida_3 = $${paramIndex++}`); values.push(horario_saida_3 || null); }
+        if (req.body.dias_trabalho !== undefined) { fieldsToUpdate.push(`dias_trabalho = $${paramIndex++}`); values.push(req.body.dias_trabalho); }
         if (foto_oficial !== undefined) { fieldsToUpdate.push(`foto_oficial = $${paramIndex++}`); values.push(foto_oficial || null); }
 
         if (fieldsToUpdate.length > 0) {
