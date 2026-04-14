@@ -15,6 +15,7 @@ export default function OPPainelAtividades() {
     const [modalAberto, setModalAberto] = useState(false);
     const [funcionarioSelecionado, setFuncionarioSelecionado] = useState(null);
     const [inativoInfoId, setInativoInfoId] = useState(null);
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
     const pollingTimeoutRef = useRef(null);
 
@@ -74,6 +75,17 @@ export default function OPPainelAtividades() {
         setFuncionarioSelecionado(null);
         buscarDadosPainel();
     };
+
+    // MELHORIA-05: refresh manual sem recarregar a página
+    const handleRefreshManual = useCallback(async () => {
+        if (isRefreshing) return;
+        setIsRefreshing(true);
+        try {
+            await buscarDadosPainel();
+        } finally {
+            setIsRefreshing(false);
+        }
+    }, [isRefreshing, buscarDadosPainel]);
 
     const handleAcaoManual = async (funcionario, acao, mensagem) => {
         // Intercepta ações de ponto — não são status de usuário, vão para api/ponto
@@ -156,9 +168,18 @@ export default function OPPainelAtividades() {
             });
             if (motivoDigitado === null) return; // cancelou no popup de motivo
             motivo = motivoDigitado;
-            horario = new Date().toLocaleTimeString('en-GB', {
+            // BUG-13: horário real será calculado no servidor; enviamos string vazia
+            horario = '';
+
+            // BUG-09: atualização otimista — muda o card imediatamente sem esperar a API
+            const horaOtimistaSP = new Date().toLocaleTimeString('en-GB', {
                 timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit'
             });
+            setFuncionarios(prev => prev.map(f =>
+                f.id === funcionarioId
+                    ? { ...f, status_atual: 'FORA_DO_HORARIO', ponto_hoje: { ...(f.ponto_hoje || {}), horario_real_s3: horaOtimistaSP, saida_desfeita: false } }
+                    : f
+            ));
         } else if (tipoExcecao === 'ATRASO') {
             const entrada = await mostrarPromptHorario('Horário real de chegada:', {
                 tipo: 'info',
@@ -177,10 +198,17 @@ export default function OPPainelAtividades() {
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ funcionario_id: funcionarioId, tipo_excecao: tipoExcecao, horario, motivo })
             });
-            if (!res.ok) throw new Error((await res.json()).error || 'Erro');
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                // Reverte estado otimista em caso de falha
+                buscarDadosPainel();
+                mostrarMensagem(body.error || 'Erro ao registrar exceção. Tente novamente.', 'erro');
+                return;
+            }
             mostrarMensagem('Exceção registrada.', 'sucesso');
-            buscarDadosPainel();
+            buscarDadosPainel(); // sincroniza com o banco (confirma o estado otimista)
         } catch (err) {
+            buscarDadosPainel(); // reverte estado otimista
             mostrarMensagem(`Erro: ${err.message}`, 'erro');
         }
     }, [buscarDadosPainel]);
@@ -197,6 +225,33 @@ export default function OPPainelAtividades() {
             if (!res.ok) throw new Error((await res.json()).error || 'Erro');
             const data = await res.json();
             mostrarMensagem(`Retorno previsto: ${data.retorno_previsto}`, 'sucesso');
+            buscarDadosPainel();
+        } catch (err) {
+            mostrarMensagem(`Erro: ${err.message}`, 'erro');
+        }
+    }, [buscarDadosPainel]);
+
+    // BUG-10: Desfazer saída antecipada lançada por engano
+    const handleDesfazerSaida = useCallback(async (funcionarioId) => {
+        const confirmado = await mostrarConfirmacao(
+            'Desfazer saída antecipada?',
+            'aviso'
+        );
+        if (!confirmado) return;
+
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch('/api/ponto/desfazer-saida', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ funcionario_id: funcionarioId })
+            });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                mostrarMensagem(body.error || 'Erro ao desfazer saída.', 'erro');
+                return;
+            }
+            mostrarMensagem('Saída antecipada desfeita. Funcionário disponível.', 'sucesso');
             buscarDadosPainel();
         } catch (err) {
             mostrarMensagem(`Erro: ${err.message}`, 'erro');
@@ -252,8 +307,19 @@ export default function OPPainelAtividades() {
         } else if (s === 'PAUSA' || s === 'PAUSA_MANUAL') {
             retorno = n(func.ponto_hoje?.horario_real_e3) || n(func.horario_entrada_3);
         } else if (s === 'FORA_DO_HORARIO') {
-            const saidaAntecipada = n(func.ponto_hoje?.horario_real_s3);
-            retorno = saidaAntecipada ? null : n(func.horario_entrada_1);
+            const temSaidaAntecipada = func.ponto_hoje?.horario_real_s3 && !func.ponto_hoje?.saida_desfeita;
+            if (!temSaidaAntecipada) {
+                // Só mostra "Retorno: HH:MM" se for ANTES do E1 (funcionário ainda não chegou hoje).
+                // Depois do S3 o turno já encerrou — não faz sentido mostrar "atrasado X min".
+                const horaAtual = new Date().toLocaleTimeString('en-GB', {
+                    timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit'
+                });
+                const e1 = n(func.horario_entrada_1);
+                if (e1 && horaAtual < e1) {
+                    retorno = e1; // antes do início do turno → mostra horário de entrada
+                }
+                // depois do S3 → retorno = null (turno encerrado normalmente)
+            }
         }
 
         let tempoFalta = null;
@@ -289,6 +355,15 @@ export default function OPPainelAtividades() {
                                     AO VIVO
                                 </span>
                             )}
+                            {/* MELHORIA-05: botão de refresh manual */}
+                            <button
+                                className="oa-btn-refresh"
+                                onClick={handleRefreshManual}
+                                disabled={isRefreshing}
+                                title="Atualizar dados do painel"
+                            >
+                                <i className={`fas fa-sync-alt ${isRefreshing ? 'girando' : ''}`}></i>
+                            </button>
                         </div>
                         <div className="oa-kpi-strip">
                             <span className={`oa-kpi-item${qtdProduzindo > 0 ? ' produzindo' : ''}`}>
@@ -377,13 +452,24 @@ export default function OPPainelAtividades() {
                                                     <i className="fas fa-info-circle"></i>
                                                 </button>
                                             </div>
-                                            <button
-                                                className="oa-inativo-btn-liberar"
-                                                onClick={() => handleAcaoManual(func, 'LIVRE_MANUAL', `Liberar ${primeiroNome} para o trabalho?`)}
-                                                title="Liberar para o trabalho"
-                                            >
-                                                <i className="fas fa-play"></i> Liberar
-                                            </button>
+                                            {/* BUG-11: saída antecipada ativa → Desfazer; outros casos → Liberar */}
+                                            {func.status_atual === 'FORA_DO_HORARIO' && func.ponto_hoje?.horario_real_s3 && !func.ponto_hoje?.saida_desfeita ? (
+                                                <button
+                                                    className="oa-inativo-btn-desfazer"
+                                                    onClick={() => handleDesfazerSaida(func.id)}
+                                                    title="Desfazer saída antecipada"
+                                                >
+                                                    <i className="fas fa-undo"></i> Desfazer Saída
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    className="oa-inativo-btn-liberar"
+                                                    onClick={() => handleAcaoManual(func, 'LIVRE_MANUAL', `Liberar ${primeiroNome} para o trabalho?`)}
+                                                    title="Liberar para o trabalho"
+                                                >
+                                                    <i className="fas fa-play"></i> Liberar
+                                                </button>
+                                            )}
 
                                             {/* Bottom sheet de jornada do inativo */}
                                             {inativoInfoId === func.id && ReactDOM.createPortal(
@@ -477,9 +563,14 @@ export default function OPPainelAtividades() {
                                                                         </div>
                                                                     )}
                                                                     {func.ponto_hoje.horario_real_s3 && (
-                                                                        <div className="bs-registro-linha">
+                                                                        <div className={`bs-registro-linha${func.ponto_hoje.saida_desfeita ? ' desfeito' : ''}`}>
                                                                             <span className="bs-registro-icone"><i className="fas fa-sign-out-alt"></i></span>
-                                                                            <span className="bs-registro-desc">Saída antecipada</span>
+                                                                            <span className="bs-registro-desc">
+                                                                                Saída antecipada
+                                                                                {func.ponto_hoje.saida_desfeita && (
+                                                                                    <em className="bs-registro-desfeito"> — desfeita por {func.ponto_hoje.saida_desfeita_por || 'supervisor'}</em>
+                                                                                )}
+                                                                            </span>
                                                                             <span className="bs-registro-valor registrado">{fmtH(func.ponto_hoje.horario_real_s3)}</span>
                                                                         </div>
                                                                     )}

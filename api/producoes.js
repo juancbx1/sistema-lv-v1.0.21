@@ -47,7 +47,10 @@ async function detectarIntervaloAoFinalizar(dbClient, funcionarioId, horarios, d
     const pontoHoje = pontoRes.rows[0] || null;
 
     // ── CASO 1: Detecção de ALMOÇO ──────────────────────────────────────────
-    if (horaAtualSP >= s1Agendado && !pontoHoje?.horario_real_s1) {
+    // BUG-15: limite superior — se já passou do S2, não registrar almoço retroativo.
+    // Funcionária que não almoçou via sistema e finaliza tarefa às 16h (hora da pausa)
+    // não deve ganhar um almoço falso; cai direto no CASO 2 (pausa).
+    if (horaAtualSP >= s1Agendado && !pontoHoje?.horario_real_s1 && (!s2Agendado || horaAtualSP < s2Agendado)) {
         // Duração do almoço: E2 - S1 do cadastro. Default: 60 min.
         const e2Agendado = n(horarios.horario_entrada_2);
         let duracaoAlmocoMin = 60;
@@ -779,19 +782,27 @@ router.put('/finalizar', async (req, res) => {
 
         const horariosRes = await dbClient.query(
             `SELECT horario_saida_1, horario_entrada_2, horario_saida_2,
-                    horario_entrada_3, horario_saida_3
+                    horario_entrada_3, horario_saida_3, status_atual
              FROM usuarios WHERE id = $1`,
             [sessao.funcionario_id]
         );
         const horariosFuncionario = horariosRes.rows[0] || {};
 
-        const novoStatusFinal = await detectarIntervaloAoFinalizar(
-            dbClient,
-            sessao.funcionario_id,
-            horariosFuncionario,
-            dataHojeSP,
-            horaAtualSP
-        );
+        // BUG-14: se o supervisor fez LIVRE_MANUAL (liberou manualmente durante intervalo),
+        // preservar esse override. Não detectar intervalo automático — evita loop
+        // "supervisor libera → finaliza tarefa → sistema volta ALMOCO".
+        let novoStatusFinal;
+        if (horariosFuncionario.status_atual === 'LIVRE_MANUAL') {
+            novoStatusFinal = 'LIVRE_MANUAL'; // respeitar o override do supervisor
+        } else {
+            novoStatusFinal = await detectarIntervaloAoFinalizar(
+                dbClient,
+                sessao.funcionario_id,
+                horariosFuncionario,
+                dataHojeSP,
+                horaAtualSP
+            );
+        }
 
         await dbClient.query(
             `UPDATE sessoes_trabalho_producao

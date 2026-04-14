@@ -40,12 +40,21 @@ router.post('/excecao', async (req, res) => {
     const { funcionario_id, tipo_excecao, horario, motivo } = req.body;
     const supervisor = req.usuarioLogado?.nome || 'Supervisor';
 
-    if (!funcionario_id || !tipo_excecao || !horario) {
-        return res.status(400).json({ error: 'Campos obrigatórios: funcionario_id, tipo_excecao, horario.' });
+    if (!funcionario_id || !tipo_excecao) {
+        return res.status(400).json({ error: 'Campos obrigatórios: funcionario_id, tipo_excecao.' });
     }
     if (!['ATRASO', 'SAIDA_ANTECIPADA'].includes(tipo_excecao)) {
         return res.status(400).json({ error: 'tipo_excecao deve ser ATRASO ou SAIDA_ANTECIPADA.' });
     }
+    if (tipo_excecao === 'ATRASO' && !horario) {
+        return res.status(400).json({ error: 'Para ATRASO, o campo horario é obrigatório.' });
+    }
+
+    // BUG-13: para SAIDA_ANTECIPADA usar sempre o relógio do servidor (tablet pode estar dessincronizado).
+    // Para ATRASO: usar o horário informado pelo supervisor (é dado manual intencional).
+    const horarioFinal = tipo_excecao === 'SAIDA_ANTECIPADA'
+        ? new Date().toLocaleTimeString('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })
+        : horario;
 
     let dbClient;
     try {
@@ -64,7 +73,7 @@ router.post('/excecao', async (req, res) => {
                  motivo_excecao    = EXCLUDED.motivo_excecao,
                  registrado_por    = EXCLUDED.registrado_por,
                  updated_at        = NOW()`,
-            [funcionario_id, dataHojeSP, horario, tipo_excecao, motivo || null, supervisor]
+            [funcionario_id, dataHojeSP, horarioFinal, tipo_excecao, motivo || null, supervisor]
         );
 
         // Saída antecipada: força status FORA_DO_HORARIO e cancela sessão ativa
@@ -198,6 +207,71 @@ router.post('/liberar-intervalo', async (req, res) => {
     } catch (error) {
         if (dbClient) await dbClient.query('ROLLBACK');
         console.error('[API POST /ponto/liberar-intervalo] Erro:', error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+/**
+ * POST /api/ponto/desfazer-saida
+ * Desfaz uma saída antecipada lançada por engano.
+ * Preserva o horario_real_s3 original para auditoria — apenas marca saida_desfeita = true.
+ *
+ * Body: { funcionario_id: number, motivo: string (opcional) }
+ */
+router.post('/desfazer-saida', async (req, res) => {
+    const { funcionario_id, motivo } = req.body;
+    const supervisor = req.usuarioLogado?.nome || 'Supervisor';
+
+    if (!funcionario_id) {
+        return res.status(400).json({ error: 'funcionario_id obrigatório.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        await dbClient.query('BEGIN');
+
+        const dataHojeSP = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+
+        // Verifica se existe saída antecipada hoje (não desfeita)
+        const pontoRes = await dbClient.query(
+            `SELECT id, horario_real_s3 FROM ponto_diario
+             WHERE funcionario_id = $1 AND data = $2 AND horario_real_s3 IS NOT NULL AND (saida_desfeita IS NULL OR saida_desfeita = FALSE)`,
+            [funcionario_id, dataHojeSP]
+        );
+
+        if (!pontoRes.rows.length) {
+            return res.status(400).json({ error: 'Nenhuma saída antecipada ativa registrada hoje para este funcionário.' });
+        }
+
+        // Marca como desfeita — NÃO remove horario_real_s3 (preservar para auditoria)
+        await dbClient.query(
+            `UPDATE ponto_diario SET
+                saida_desfeita     = TRUE,
+                saida_desfeita_em  = NOW(),
+                saida_desfeita_por = $1,
+                updated_at         = NOW()
+             WHERE funcionario_id = $2 AND data = $3`,
+            [supervisor + (motivo ? ` — ${motivo}` : ''), funcionario_id, dataHojeSP]
+        );
+
+        // Volta status do funcionário para LIVRE
+        await dbClient.query(
+            `UPDATE usuarios
+             SET status_atual = 'LIVRE',
+                 status_data_modificacao = (NOW() AT TIME ZONE 'America/Sao_Paulo')
+             WHERE id = $1`,
+            [funcionario_id]
+        );
+
+        await dbClient.query('COMMIT');
+        res.status(200).json({ message: `Saída antecipada desfeita para funcionário ${funcionario_id}.` });
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error('[API POST /ponto/desfazer-saida] Erro:', error);
         res.status(500).json({ error: error.message });
     } finally {
         if (dbClient) dbClient.release();

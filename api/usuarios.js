@@ -84,10 +84,15 @@ export function determinarStatusFinalServidor(usuario, pontoDiario = null) {
     const fimAlmoco     = n(pontoDiario?.horario_real_e2) || n(horario_entrada_2);
     const inicioPausa   = n(pontoDiario?.horario_real_s2) || n(horario_saida_2);
     const fimPausa      = n(pontoDiario?.horario_real_e3) || n(horario_entrada_3);
-    const saidaFinal    = n(pontoDiario?.horario_real_s3) || n(horario_saida_3) || n(horario_saida_2) || n(horario_saida_1) || '23:59';
+    // Se saida_desfeita = true, ignorar horario_real_s3 (saída foi cancelada pelo supervisor)
+    const saidaFinal    = (!pontoDiario?.saida_desfeita && n(pontoDiario?.horario_real_s3))
+        || n(horario_saida_3) || n(horario_saida_2) || n(horario_saida_1) || '23:59';
     const entradaInicial = n(horario_entrada_1) || '00:00';
 
-    if (horaAtualStr < entradaInicial || horaAtualStr > saidaFinal) return STATUS.FORA_DO_HORARIO;
+    if (horaAtualStr < entradaInicial || horaAtualStr > saidaFinal) {
+        if (ehLivreManual) return STATUS.LIVRE; // horas extras autorizadas pelo supervisor
+        return STATUS.FORA_DO_HORARIO;
+    }
     if (inicioAlmoco && fimAlmoco && horaAtualStr >= inicioAlmoco && horaAtualStr < fimAlmoco) {
         if (ehLivreManual) return STATUS.LIVRE; // supervisor antecipou retorno do almoço
         return STATUS.ALMOCO;
@@ -126,7 +131,7 @@ export async function atualizarStatusUsuarioDB(usuarioId, novoStatus) {
 
     } catch (error) {
         console.error(`[ATOMIC-HAMMER] ERRO ao atualizar status para usuário ${usuarioId}:`, error);
-        // Não relançamos o erro para não quebrar a aplicação principal, apenas logamos.
+        throw error; // Propaga para o caller retornar erro HTTP adequado
     } finally {
         if (localClient) {
             localClient.release(); // Garante que a conexão local seja sempre liberada.

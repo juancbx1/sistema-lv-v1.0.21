@@ -425,7 +425,7 @@ Prioridade 4 — Cálculo automático
 | **Retorno dinâmico** | `horario_real_e2` / `horario_real_e3` no `ponto_diario` — substitui o horário agendado no cálculo de "Retorno previsto" |
 | **Tolerância S3** | Badge visual em PRODUZINDO quando ultrapassa S3. Sem consequências sistêmicas. Limite informativo: 20min |
 | **Botão "Liberar para intervalo"** | Aparece 25min antes do S1 ou S2 SOMENTE se o intervalo do dia ainda não foi registrado (`!ponto_hoje?.horario_real_s1` / `horario_real_s2`). Separado do `.cracha-footer` para não comprimir "Atribuir Tarefa" |
-| **LIVRE_MANUAL** | Supervisor "libera" um funcionário inativo para trabalhar. Vence: dias de folga, janela de almoço, janela de pausa. NÃO vence: fora do horário (antes E1 ou depois S3) |
+| **LIVRE_MANUAL** | Supervisor "libera" um funcionário inativo para trabalhar. Vence: dias de folga, janela de almoço, janela de pausa, janela de expediente (antes E1 ou depois S3 — permite horas extras autorizadas). Corrigido em BUG-17. |
 | **FALTOU / ALOCADO_EXTERNO** | Valem apenas no dia em que foram definidos. No dia seguinte, o cálculo automático assume |
 | **PAUSA_MANUAL** | Persiste indefinidamente (até supervisor liberar com LIVRE_MANUAL). Único status sem expiração |
 | **Saída antecipada** | Registra `horario_real_s3` no `ponto_diario`. Muda status para FORA_DO_HORARIO. Cancela sessão ativa se houver |
@@ -511,6 +511,27 @@ Migration necessária (SQL em `_planejamento/horario-empregados.md`). Um registr
 | BUG-06 | Botão "Liberar para almoço" reaparecia após retorno do almoço | `intervaloProximo` não checava se `ponto_hoje.horario_real_s1` já existia | Adicionado guard `!ponto_hoje?.horario_real_s1` |
 | BUG-07 | LIVRE_MANUAL não liberava funcionário em dia de almoço (horário exato) | Comparação `>` estrita no limite da janela | Mudado para `>=` |
 | BUG-08 | LIVRE_MANUAL não liberava funcionário em dia de folga | `ehLivreManual` declarado APÓS early return `if (!diasTrabalhoEfetivo[diaKey]) return FORA_DO_HORARIO` — o override nunca era alcançado | `ehLivreManual` movido para ANTES do check de `diasTrabalhoEfetivo` |
+| BUG-09 | Saída antecipada sem feedback imediato (~30s delay) | `buscarDadosPainel()` chamado após fetch, mas sem atualização local prévia | Atualização otimista em `handleExcecao`: estado muda para `FORA_DO_HORARIO` imediatamente, `buscarDadosPainel` sincroniza depois |
+| BUG-10 | Impossível desfazer saída antecipada lançada por engano | Não havia endpoint nem UI para isso | `POST /api/ponto/desfazer-saida` + `handleDesfazerSaida` + botão "Desfazer Saída" nos inativos. SQL: `saida_desfeita`, `saida_desfeita_em`, `saida_desfeita_por` na tabela `ponto_diario` |
+| BUG-11 | Botão "Liberar" aparecia para funcionário com saída antecipada | Sem distinção entre FORA_DO_HORARIO por horário vs. saída antecipada | Card de inativo verifica `ponto_hoje.horario_real_s3 && !ponto_hoje.saida_desfeita` → mostra "Desfazer Saída" ou "Liberar" condicionalmente |
+| BUG-12 | `atualizarStatusUsuarioDB` engolia erros silenciosamente | `catch` só logava, não relançava — callers recebiam `200 OK` mesmo quando o banco falhou | `throw error` adicionado no catch — callers já têm try/catch e retornam 500 |
+| BUG-13 | Horário de saída antecipada gerado no tablet (relógio pode estar errado) | `handleExcecao` calculava `new Date()` no navegador e enviava para a API | `api/ponto.js POST /excecao`: para SAIDA_ANTECIPADA, ignora o `horario` do body e calcula `new Date()` no servidor |
+| BUG-16 | FORA_DO_HORARIO após turno encerrado mostrava "Retorno: 07:30 (atrasado 880 min)" | `getInfoInativo` atribuía `retorno = horario_entrada_1` sem checar se o turno já acabou — E1 era tratado como retorno atrasado | Verificação `horaAtual < e1` antes de atribuir retorno: só exibe "Entra às E1" quando ainda não chegou. Após S3 → `retorno = null` |
+| BUG-14 | LIVRE_MANUAL destruído ao finalizar tarefa durante janela de almoço — criava loop infinito supervisor libera → finaliza → sistema volta ALMOCO | Step 9 de `api/producoes.js` sobrescrevia status incondicionalmente; `detectarIntervaloAoFinalizar` também criava registro de almoço mesmo com override ativo | Lê `status_atual` do banco antes de detectar intervalo; se for `LIVRE_MANUAL`, preserva e pula a detecção |
+| BUG-15 | Pausa exibida como "Almoço" quando funcionária não almoçou via sistema | `detectarIntervaloAoFinalizar` CASO 1 sem limite superior: `horaAtual >= S1 && !horario_real_s1` era verdadeiro também às 16h (hora da pausa) | Adicionado guard `horaAtualSP < s2Agendado` no CASO 1 — se já passou do S2, pula almoço e vai direto ao CASO 2 (pausa) |
+| BUG-17 | LIVRE_MANUAL não libera funcionário após S3 — horas extras não funcionam | `determinarStatusFinalServidor` linha 92: `if (horaAtual > saidaFinal) return FORA_DO_HORARIO` sem checar `ehLivreManual` — override de overtime nunca atingido | Adicionado `if (ehLivreManual) return STATUS.LIVRE` dentro do bloco de janela de expediente, padrão idêntico ao já existente para almoço/pausa |
+
+---
+
+### Tabela `ponto_diario` — campos adicionados em v1.6
+
+| Campo | Significado |
+|---|---|
+| `saida_desfeita` | `BOOLEAN DEFAULT FALSE` — true quando o supervisor desfez a saída |
+| `saida_desfeita_em` | `TIMESTAMPTZ` — quando foi desfeita |
+| `saida_desfeita_por` | `TEXT` — nome do supervisor que desfez (+ motivo opcional) |
+
+> Quando `saida_desfeita = true`, o campo `horario_real_s3` é preservado para auditoria mas **ignorado** pelo `determinarStatusFinalServidor` ao calcular `saidaFinal`.
 
 ---
 
@@ -519,6 +540,25 @@ Migration necessária (SQL em `_planejamento/horario-empregados.md`). Um registr
 **Nunca duplicar esta lógica.** Nunca fazer override do resultado em `api/producao.js` ou em qualquer outro lugar. Todo status manual que precisa persistir faz isso via `atualizarStatusUsuarioDB()` que grava no banco com timestamp — e `determinarStatusFinalServidor` lerá esse valor na próxima chamada.
 
 A única exceção é o override para `PRODUZINDO` em `api/producao.js` quando há sessão ativa — isso é intencional e não é uma duplicação de lógica, é uma regra de negócio diferente (sessão ativa sempre bate PRODUZINDO, independente do status do banco).
+
+#### ⚠️ Regra anti-regressão — `ehLivreManual` (BUG recorrente — ocorreu 3+ vezes)
+
+**`ehLivreManual` deve vencer TODOS os checks de janela em `determinarStatusFinalServidor`**, sem exceção. O padrão correto é:
+
+```javascript
+if (alguma_condicao_restritiva) {
+    if (ehLivreManual) return STATUS.LIVRE; // supervisor autorizou — sempre vence
+    return STATUS.FORA_DO_HORARIO; // (ou ALMOCO, PAUSA, etc.)
+}
+```
+
+**Nunca escrever** `return STATUS.FORA_DO_HORARIO` (ou qualquer status restritivo) diretamente sem checar `ehLivreManual` antes. Isso se aplica a:
+- Check de `dias_trabalho` (folga) — já corrigido em BUG-08
+- Check de janela de almoço (S1→E2) — já corrigido em BUG-07
+- Check de janela de pausa (S2→E3) — já corrigido em BUG-07
+- Check de janela de expediente (`horaAtual < E1 || horaAtual > S3`) — corrigido em BUG-17
+
+Se adicionar um novo check de janela no futuro, **incluir o override `ehLivreManual` imediatamente**.
 
 ---
 

@@ -71,7 +71,8 @@ router.get('/status-funcionarios', async (req, res) => {
         // Busca ponto_diario de hoje para todos os funcionários (horários reais de intervalo)
         const pontoDiarioResult = await dbClient.query(
             `SELECT funcionario_id, horario_real_s1, horario_real_e2,
-                    horario_real_s2, horario_real_e3, horario_real_s3
+                    horario_real_s2, horario_real_e3, horario_real_s3,
+                    saida_desfeita, saida_desfeita_por, saida_desfeita_em
              FROM ponto_diario
              WHERE data = CURRENT_DATE AT TIME ZONE 'America/Sao_Paulo'`
         );
@@ -112,11 +113,14 @@ router.get('/status-funcionarios', async (req, res) => {
                 dias_trabalho:     row.dias_trabalho,
                 // Ponto do dia (horários reais de intervalo — null quando não há registro)
                 ponto_hoje: pontoDiario ? {
-                    horario_real_s1: pontoDiario.horario_real_s1,
-                    horario_real_e2: pontoDiario.horario_real_e2,
-                    horario_real_s2: pontoDiario.horario_real_s2,
-                    horario_real_e3: pontoDiario.horario_real_e3,
-                    horario_real_s3: pontoDiario.horario_real_s3,
+                    horario_real_s1:    pontoDiario.horario_real_s1,
+                    horario_real_e2:    pontoDiario.horario_real_e2,
+                    horario_real_s2:    pontoDiario.horario_real_s2,
+                    horario_real_e3:    pontoDiario.horario_real_e3,
+                    horario_real_s3:    pontoDiario.horario_real_s3,
+                    saida_desfeita:     pontoDiario.saida_desfeita || false,
+                    saida_desfeita_por: pontoDiario.saida_desfeita_por || null,
+                    saida_desfeita_em:  pontoDiario.saida_desfeita_em || null,
                 } : null,
                 tarefa_atual: tarefaPrincipal,
                 tarefas: tarefas

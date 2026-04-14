@@ -173,11 +173,14 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
                         {/* Indicador de tolerância S3 — trabalhando além do horário final */}
                         {toleranciaS3 !== null && (
                             <div className={`op-status-tolerancia ${toleranciaS3 > 20 ? 'critico' : 'aviso'}`}>
-                                <i className="fas fa-clock"></i>
-                                {toleranciaS3 <= 20
-                                    ? `+${toleranciaS3}min além do horário`
-                                    : `+${toleranciaS3}min além — verificar`
-                                }
+                                {toleranciaS3 > 20 ? (
+                                    <>
+                                        <div className="op-tolerancia-linha1">🚨 Passou {toleranciaS3}min do horário de saída</div>
+                                        <div className="op-tolerancia-linha2">Saída prevista às {formatarHora(horario_saida_3 || horario_saida_2 || horario_saida_1)} — falar com ela</div>
+                                    </>
+                                ) : (
+                                    <span>⏰ +{toleranciaS3}min após o horário de saída ({formatarHora(horario_saida_3 || horario_saida_2 || horario_saida_1)})</span>
+                                )}
                             </div>
                         )}
 
@@ -421,9 +424,14 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
                                         </div>
                                     )}
                                     {ponto_hoje.horario_real_s3 && (
-                                        <div className="bs-registro-linha">
+                                        <div className={`bs-registro-linha${ponto_hoje.saida_desfeita ? ' desfeito' : ''}`}>
                                             <span className="bs-registro-icone"><i className="fas fa-sign-out-alt"></i></span>
-                                            <span className="bs-registro-desc">Saída antecipada</span>
+                                            <span className="bs-registro-desc">
+                                                Saída antecipada
+                                                {ponto_hoje.saida_desfeita && (
+                                                    <em className="bs-registro-desfeito"> — desfeita por {ponto_hoje.saida_desfeita_por || 'supervisor'}</em>
+                                                )}
+                                            </span>
                                             <span className="bs-registro-valor registrado">{String(ponto_hoje.horario_real_s3).substring(0,5)}</span>
                                         </div>
                                     )}
