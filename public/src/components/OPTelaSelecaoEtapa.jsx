@@ -69,6 +69,7 @@ export default function OPTelaSelecaoEtapa({ onEtapaSelect, funcionario }) {
 
     const [termoFiltro, setTermoFiltro] = useState('');
     const [selecionados, setSelecionados] = useState([]);
+    const [sugestao, setSugestao] = useState(null);
     const ITENS_POR_PAGINA = 6;
 
     useEffect(() => {
@@ -104,9 +105,36 @@ export default function OPTelaSelecaoEtapa({ onEtapaSelect, funcionario }) {
         });
     }, [filaDeTarefas, todosProdutos, funcionario]);
 
+    // Busca sugestão assim que a lista filtrada para este funcionário estiver pronta
+    useEffect(() => {
+        if (!funcionario?.id || tarefasFiltradasParaFuncionario.length === 0) {
+            setSugestao(null);
+            return;
+        }
+        const token = localStorage.getItem('token');
+        fetch('/api/producao/sugestao-tarefa', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ funcionario_id: funcionario.id, candidatas: tarefasFiltradasParaFuncionario })
+        })
+            .then(r => r.json())
+            .then(data => setSugestao(data.sugestao || null))
+            .catch(() => setSugestao(null));
+    }, [tarefasFiltradasParaFuncionario, funcionario?.id]);
+
     const listaFinalFiltrada = useMemo(() => {
         return filtrarListaInteligente(tarefasFiltradasParaFuncionario, termoFiltro, ['produto_nome', 'variante', 'processo']);
     }, [tarefasFiltradasParaFuncionario, termoFiltro]);
+
+    // BUG-24: quando o card de sugestão está visível, remove a tarefa sugerida da lista
+    // para evitar duplicação (ela já aparece destacada acima com botão de atribuição próprio)
+    const listaParaExibir = useMemo(() => {
+        if (!sugestao || termoFiltro) return listaFinalFiltrada;
+        const chaveSugestao = `${sugestao.produto_id}-${sugestao.variante}-${sugestao.processo}`;
+        return listaFinalFiltrada.filter(t =>
+            `${t.produto_id}-${t.variante}-${t.processo}` !== chaveSugestao
+        );
+    }, [listaFinalFiltrada, sugestao, termoFiltro]);
 
     const getEtapaInfo = (tarefa) => {
         const produto = todosProdutos.find(p => p.id === tarefa.produto_id);
@@ -142,8 +170,8 @@ export default function OPTelaSelecaoEtapa({ onEtapaSelect, funcionario }) {
         }
     };
 
-    const totalPaginas = Math.ceil(listaFinalFiltrada.length / ITENS_POR_PAGINA);
-    const tarefasPaginadas = listaFinalFiltrada.slice(
+    const totalPaginas = Math.ceil(listaParaExibir.length / ITENS_POR_PAGINA);
+    const tarefasPaginadas = listaParaExibir.slice(
         (pagina - 1) * ITENS_POR_PAGINA,
         pagina * ITENS_POR_PAGINA
     );
@@ -164,6 +192,44 @@ export default function OPTelaSelecaoEtapa({ onEtapaSelect, funcionario }) {
 
     return (
         <div className="coluna-lista-produtos">
+
+            {sugestao && !termoFiltro && (() => {
+                const { label: sLabel, imagemUrl: sImg } = getEtapaInfo(sugestao);
+                return (
+                    <div className="op-sugestao-destaque">
+                        <div className="op-sugestao-header">
+                            <i className="fas fa-magic"></i> Sugestão para {funcionario?.nome?.split(' ')[0]}
+                        </div>
+                        <div className="op-sugestao-corpo">
+                            <img src={sImg || '/img/placeholder-image.png'} alt={sugestao.produto_nome} className="op-sugestao-img" />
+                            <div className="op-sugestao-info">
+                                <span className="op-sugestao-produto">{sugestao.produto_nome}</span>
+                                {sugestao.variante && <span className="op-sugestao-variante">{sugestao.variante}</span>}
+                                <span className="op-sugestao-processo">{sugestao.processo}</span>
+                                <div className="op-sugestao-tags">
+                                    <span className="op-sugestao-tag etapa">{sLabel}</span>
+                                    {sugestao.motivos?.includes('especialista') && (
+                                        <span className="op-sugestao-tag especialista">
+                                            <i className="fas fa-star"></i> Especialista ({sugestao.sessoesHistorico} sess.)
+                                        </span>
+                                    )}
+                                    {sugestao.motivos?.includes('urgente') && (
+                                        <span className="op-sugestao-tag urgente">
+                                            <i className="fas fa-fire"></i> OP aguardando
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                            <button
+                                className="op-sugestao-btn"
+                                onClick={() => onEtapaSelect(sugestao)}
+                            >
+                                <i className="fas fa-check"></i> Atribuir
+                            </button>
+                        </div>
+                    </div>
+                );
+            })()}
 
             <div style={{ marginBottom: '6px' }}>
                 <UIBuscaInteligente onSearch={setTermoFiltro} placeholder="Buscar por produto, variante ou processo..." />

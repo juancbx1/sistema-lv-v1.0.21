@@ -111,7 +111,7 @@ export default function OPPainelAtividades() {
         } catch(e) { mostrarMensagem(e.message, 'erro'); }
     };
 
-    const handleFinalizarTarefa = async (funcionario) => {
+    const handleFinalizarTarefa = async (funcionario, pausaManualMs = 0) => {
         const { tarefa_atual } = funcionario;
         if (!tarefa_atual || !tarefa_atual.id_sessao) {
             mostrarMensagem("Erro: Sessão inválida.", "erro");
@@ -122,13 +122,17 @@ export default function OPPainelAtividades() {
             { valorInicial: tarefa_atual.quantidade, tipo: 'info' }
         );
         if (quantidadeFinal === null || quantidadeFinal === '') return;
-        
+
         try {
             const token = localStorage.getItem('token');
             await fetch('/api/producoes/finalizar', {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id_sessao: tarefa_atual.id_sessao, quantidade_finalizada: Number(quantidadeFinal) })
+                body: JSON.stringify({
+                    id_sessao: tarefa_atual.id_sessao,
+                    quantidade_finalizada: Number(quantidadeFinal),
+                    pausa_manual_ms: Math.round(pausaManualMs) || 0
+                })
             });
             mostrarMensagem('Finalizado!', 'sucesso');
             buscarDadosPainel();
@@ -593,10 +597,11 @@ export default function OPPainelAtividades() {
                 </section>
             </div>
 
-            <OPAtribuicaoModal 
+            <OPAtribuicaoModal
                 isOpen={modalAberto}
                 onClose={handleCloseModal}
                 funcionario={funcionarioSelecionado}
+                tpp={temposPadraoProducao}
             />
         </>
     );

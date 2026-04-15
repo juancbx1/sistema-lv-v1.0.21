@@ -68,18 +68,39 @@ router.get('/status-funcionarios', async (req, res) => {
         
         const result = await dbClient.query(query);
 
-        // Busca ponto_diario de hoje para todos os funcionários (horários reais de intervalo)
-        const pontoDiarioResult = await dbClient.query(
-            `SELECT funcionario_id, horario_real_s1, horario_real_e2,
-                    horario_real_s2, horario_real_e3, horario_real_s3,
-                    saida_desfeita, saida_desfeita_por, saida_desfeita_em
-             FROM ponto_diario
-             WHERE data = CURRENT_DATE AT TIME ZONE 'America/Sao_Paulo'`
-        );
-        const pontoDiarioMap = new Map(pontoDiarioResult.rows.map(p => [p.funcionario_id, p]));
+        // Busca ponto_diario e sessoes_hoje em paralelo (bulk — sem N+1)
+        const [pontoDiarioResult, sessoesHojeResult] = await Promise.all([
+            dbClient.query(
+                `SELECT funcionario_id, horario_real_s1, horario_real_e2,
+                        horario_real_s2, horario_real_e3, horario_real_s3,
+                        saida_desfeita, saida_desfeita_por, saida_desfeita_em
+                 FROM ponto_diario
+                 WHERE data = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date`
+            ),
+            dbClient.query(
+                `SELECT
+                    funcionario_id,
+                    json_agg(
+                        json_build_object(
+                            'inicio', to_char(data_inicio AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI'),
+                            'fim',    to_char(data_fim    AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI'),
+                            'op_numero', op_numero,
+                            'produto_id', produto_id
+                        ) ORDER BY data_inicio
+                    ) AS sessoes
+                 FROM sessoes_trabalho_producao
+                 WHERE (data_inicio AT TIME ZONE 'America/Sao_Paulo')::date
+                           = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+                   AND status IN ('FINALIZADA', 'EM_ANDAMENTO')
+                 GROUP BY funcionario_id`
+            ),
+        ]);
+        const pontoDiarioMap  = new Map(pontoDiarioResult.rows.map(p => [p.funcionario_id, p]));
+        const sessoesHojeMap  = new Map(sessoesHojeResult.rows.map(r => [r.funcionario_id, r.sessoes || []]));
 
         const resultadoFinal = result.rows.map(row => {
-            const pontoDiario = pontoDiarioMap.get(row.id) || null;
+            const pontoDiario  = pontoDiarioMap.get(row.id)  || null;
+            const sessoesHoje  = sessoesHojeMap.get(row.id)  || [];
             let statusCalculado = determinarStatusFinalServidor(row, pontoDiario);
 
             // Se tem tarefas no array, status é PRODUZINDO
@@ -123,7 +144,8 @@ router.get('/status-funcionarios', async (req, res) => {
                     saida_desfeita_em:  pontoDiario.saida_desfeita_em || null,
                 } : null,
                 tarefa_atual: tarefaPrincipal,
-                tarefas: tarefas
+                tarefas: tarefas,
+                sessoes_hoje: sessoesHoje,
             };
         });
 
@@ -250,6 +272,91 @@ router.get('/fila-de-tarefas', async (req, res) => {
     } catch (error) {
         console.error('[API /producao/fila-de-tarefas V3] Erro:', error);
         res.status(500).json({ error: 'Erro ao montar a fila de tarefas de produção.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// ROTA POST: Sugestão inteligente de tarefa para um funcionário
+// Recebe a lista de candidatas já filtradas pelo frontend e devolve a melhor pontuada.
+router.post('/sugestao-tarefa', async (req, res) => {
+    const { funcionario_id, candidatas } = req.body;
+    if (!funcionario_id || !Array.isArray(candidatas) || candidatas.length === 0) {
+        return res.status(200).json({ sugestao: null, candidatas: [] });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+
+        // 1. Histórico de especialidade: sessões deste funcionário por produto+processo (últimos 90 dias)
+        // funcionario_id em sessoes_trabalho_producao é INTEGER — sem cast
+        const historicoResult = await dbClient.query(`
+            SELECT produto_id, processo, COUNT(*) AS contagem
+            FROM sessoes_trabalho_producao
+            WHERE funcionario_id = $1
+              AND data_inicio > NOW() - INTERVAL '90 days'
+            GROUP BY produto_id, processo
+        `, [funcionario_id]);
+
+        const historicoMap = new Map();
+        historicoResult.rows.forEach(row => {
+            historicoMap.set(`${row.produto_id}-${row.processo}`, parseInt(row.contagem));
+        });
+
+        // 2. Datas de abertura das OPs (data_entrega = data de criação, per CLAUDE.md)
+        // numero em ordens_de_producao é character varying — cast ::text[]
+        const todasOps = [...new Set(candidatas.flatMap(c => c.origem_ops || []).map(String))];
+        const opDatesMap = new Map(); // chave = string do numero da OP
+
+        if (todasOps.length > 0) {
+            const opDatesResult = await dbClient.query(
+                'SELECT numero, data_entrega FROM ordens_de_producao WHERE numero = ANY($1::text[])',
+                [todasOps]
+            );
+            opDatesResult.rows.forEach(row => {
+                opDatesMap.set(String(row.numero), new Date(row.data_entrega));
+            });
+        }
+
+        const agora = new Date();
+
+        // 3. Pontuar cada candidata
+        const scoradas = candidatas.map(tarefa => {
+            const chave = `${tarefa.produto_id}-${tarefa.processo}`;
+
+            // Especialidade: normalizado 0–1 (10 sessões = especialista pleno)
+            const sessoes = historicoMap.get(chave) || 0;
+            const scoreEspecialidade = Math.min(sessoes / 10, 1.0);
+
+            // Antiguidade: normalizado 0–1 (30+ dias = urgência máxima)
+            // origem_ops pode conter números ou strings → normalizar para string antes de buscar no Map
+            const datasOps = (tarefa.origem_ops || []).map(n => opDatesMap.get(String(n))).filter(Boolean);
+            let scoreAntiguidade = 0;
+            if (datasOps.length > 0) {
+                const maisAntiga = new Date(Math.min(...datasOps.map(d => d.getTime())));
+                const dias = (agora.getTime() - maisAntiga.getTime()) / (1000 * 60 * 60 * 24);
+                scoreAntiguidade = Math.min(dias / 30, 1.0);
+            }
+
+            const scoreFinal = 0.60 * scoreEspecialidade + 0.40 * scoreAntiguidade;
+
+            const motivos = [];
+            if (scoreEspecialidade >= 0.5) motivos.push('especialista');
+            if (scoreAntiguidade >= 0.5) motivos.push('urgente');
+
+            return { ...tarefa, scoreFinal, scoreEspecialidade, scoreAntiguidade, motivos, sessoesHistorico: sessoes };
+        });
+
+        scoradas.sort((a, b) => b.scoreFinal - a.scoreFinal);
+        const melhor = scoradas[0];
+        const sugestao = (melhor && melhor.scoreFinal >= 0.30) ? melhor : null;
+
+        res.status(200).json({ sugestao, candidatas: scoradas });
+
+    } catch (error) {
+        console.error('[API /producao/sugestao-tarefa] Erro:', error);
+        res.status(500).json({ error: 'Erro ao calcular sugestão.', sugestao: null });
     } finally {
         if (dbClient) dbClient.release();
     }

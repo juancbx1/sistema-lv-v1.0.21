@@ -4,7 +4,46 @@ import React, { useState, useEffect } from 'react';
 import { mostrarMensagem } from '/js/utils/popups.js';
 import { obterProdutos as obterProdutosDoStorage } from '/js/utils/storage.js';
 
-export default function OPTelaConfirmacaoQtd({ etapa, funcionario, onClose }) {
+/**
+ * Calcula se atribuir `qtd` peças deste item vai ultrapassar o horário de saída (S3).
+ * Retorna null se tudo estiver ok ou se não houver dados suficientes.
+ * @returns {{ excedenteMin: number, terminoEstimado: string, s3Formatado: string } | null}
+ */
+function calcularAvisoHorario(item, qtd, funcionario, tpp) {
+    const s3Str = funcionario?.horario_saida_3 || funcionario?.horario_saida_2 || funcionario?.horario_saida_1;
+    if (!s3Str) return null;
+
+    const chave = `${item.produto_id}-${item.processo}`;
+    const tppSegundos = tpp?.[chave];
+    if (!tppSegundos || !qtd || qtd <= 0) return null;
+
+    const estimadoMin = Math.ceil((tppSegundos * qtd) / 60);
+
+    const agora = new Date();
+    const horaAtualStr = agora.toLocaleTimeString('en-GB', {
+        timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit'
+    });
+    const [ah, am] = horaAtualStr.split(':').map(Number);
+    const [s3h, s3m] = String(s3Str).substring(0, 5).split(':').map(Number);
+
+    const agoraMin = ah * 60 + am;
+    const s3Min = s3h * 60 + s3m;
+    const terminoEstimadoMin = agoraMin + estimadoMin;
+
+    if (terminoEstimadoMin <= s3Min) return null;
+
+    const excedenteMin = terminoEstimadoMin - s3Min;
+    const terminoHH = String(Math.floor(terminoEstimadoMin / 60) % 24).padStart(2, '0');
+    const terminoMM = String(terminoEstimadoMin % 60).padStart(2, '0');
+
+    return {
+        excedenteMin,
+        terminoEstimado: `${terminoHH}:${terminoMM}`,
+        s3Formatado: String(s3Str).substring(0, 5),
+    };
+}
+
+export default function OPTelaConfirmacaoQtd({ etapa, funcionario, onClose, tpp }) {
     const itensLote = Array.isArray(etapa) ? etapa : [etapa];
 
     const [quantidades, setQuantidades] = useState({});
@@ -174,6 +213,18 @@ export default function OPTelaConfirmacaoQtd({ etapa, funcionario, onClose }) {
                                         Max ({item.quantidade_disponivel})
                                     </button>
                                 </div>
+                                {/* MELHORIA-08: aviso quando a tarefa vai ultrapassar o horário de saída */}
+                                {(() => {
+                                    const aviso = calcularAvisoHorario(item, parseInt(qtd) || 0, funcionario, tpp);
+                                    if (!aviso) return null;
+                                    return (
+                                        <div className="op-atrib-aviso-horario">
+                                            ⚠️ Estimativa: término às {aviso.terminoEstimado}
+                                            <br />
+                                            <small>Saída prevista: {aviso.s3Formatado} — {aviso.excedenteMin}min além do horário</small>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
                     );

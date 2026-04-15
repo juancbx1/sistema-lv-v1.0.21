@@ -352,14 +352,17 @@ Sistema de jornada inteligente para costureiras e tiktiks. O ponto é registrado
 | Arquivo | Responsabilidade |
 |---|---|
 | `api/usuarios.js` | `determinarStatusFinalServidor()` — única fonte de verdade de status; `atualizarStatusUsuarioDB()` — atualiza status + timestamp no banco |
-| `api/producao.js` | GET `/status-funcionarios` — bulk fetch com `ponto_diario` + `dias_trabalho`; chama `determinarStatusFinalServidor` |
-| `api/producoes.js` | `detectarIntervaloAoFinalizar()` — detecta almoço/pausa ao finalizar tarefa; chamada no step 9 do PUT `/finalizar` |
+| `api/producao.js` | GET `/status-funcionarios` — bulk fetch com `ponto_diario` + `dias_trabalho` + `sessoes_hoje`; chama `determinarStatusFinalServidor`. POST `/sugestao-tarefa` — scoring de atribuição inteligente |
+| `api/producoes.js` | `detectarIntervaloAoFinalizar()` — detecta almoço/pausa ao finalizar tarefa (step 9 do PUT `/finalizar`). PUT `/finalizar` aceita e salva `pausa_manual_ms` |
 | `api/ponto.js` | `POST /excecao` (saída antecipada/atraso) e `POST /liberar-intervalo` (liberar antecipado para almoço/pausa) |
-| `OPStatusCard.jsx` | Card do funcionário ativo: cronômetro, ritmo, indicadores de tolerância S3, botão liberar intervalo, menu ⋮, modal ⓘ de jornada |
-| `OPPainelAtividades.jsx` | Grid principal (ativos) + seção de inativos com mini-cards; handlers de todas as ações |
+| `OPStatusCard.jsx` | Card do funcionário ativo: cronômetro ciente da jornada (`calcularTempoEfetivo`), pausa manual (`pausaManualFrozenMsRef` + `pausaManualAcumuladoMsRef`), tolerância S3 em tempo real, botão liberar intervalo, menu ⋮, modal ⓘ com `LinhaDoTempoDia` + `ModalInfoTimeline` |
+| `OPPainelAtividades.jsx` | Grid principal (ativos) + seção de inativos; `handleFinalizarTarefa(funcionario, pausaManualMs)` |
+| `OPTelaSelecaoEtapa.jsx` | Lista de tarefas para atribuição + card de sugestão inteligente (MELHORIA-07) |
+| `OPTelaConfirmacaoQtd.jsx` | Confirmação de quantidade com aviso de ultrapassagem de S3 (MELHORIA-08) |
+| `OPAtribuicaoModal.jsx` | Modal de atribuição — passa `tpp` para `OPTelaConfirmacaoQtd` |
 | `UserCardEdicao.jsx` | Chips de dias da semana na seção "Jornada" da edição de usuário |
 | `UserCardView.jsx` | Exibição dos chips de dias na visualização do card de usuário |
-| `public/css/ordens-de-producao.css` | Classes `.oa-inativos-*`, `.bs-*` (bottom sheets), `.cracha-*`, `.op-status-*` |
+| `public/css/ordens-de-producao.css` | Classes `.oa-inativos-*`, `.bs-*`, `.cracha-*`, `.op-status-*`, `.bs-timeline-*`, `.op-sugestao-*`, `.op-atrib-aviso-horario`, `.op-btn-pausar-timer` |
 
 ---
 
@@ -520,6 +523,13 @@ Migration necessária (SQL em `_planejamento/horario-empregados.md`). Um registr
 | BUG-14 | LIVRE_MANUAL destruído ao finalizar tarefa durante janela de almoço — criava loop infinito supervisor libera → finaliza → sistema volta ALMOCO | Step 9 de `api/producoes.js` sobrescrevia status incondicionalmente; `detectarIntervaloAoFinalizar` também criava registro de almoço mesmo com override ativo | Lê `status_atual` do banco antes de detectar intervalo; se for `LIVRE_MANUAL`, preserva e pula a detecção |
 | BUG-15 | Pausa exibida como "Almoço" quando funcionária não almoçou via sistema | `detectarIntervaloAoFinalizar` CASO 1 sem limite superior: `horaAtual >= S1 && !horario_real_s1` era verdadeiro também às 16h (hora da pausa) | Adicionado guard `horaAtualSP < s2Agendado` no CASO 1 — se já passou do S2, pula almoço e vai direto ao CASO 2 (pausa) |
 | BUG-17 | LIVRE_MANUAL não libera funcionário após S3 — horas extras não funcionam | `determinarStatusFinalServidor` linha 92: `if (horaAtual > saidaFinal) return FORA_DO_HORARIO` sem checar `ehLivreManual` — override de overtime nunca atingido | Adicionado `if (ehLivreManual) return STATUS.LIVRE` dentro do bloco de janela de expediente, padrão idêntico ao já existente para almoço/pausa |
+| BUG-18 | Badge `toleranciaS3` só aparecia na próxima poll do servidor, não em tempo real | `useMemo` com `new Date()` interno só recalcula quando as dependências (horários) mudam, não quando o relógio passa de S3 | Convertido para `useState + useEffect + setInterval(30000)` — recalcula a cada 30s independente de re-render |
+| BUG-19 | Cronômetro desconectado da jornada — acumulava tempo de almoço/pausa como se fosse trabalho | Timer era um `setInterval` simples sem nenhuma consciência de intervalos do dia | Nova função `calcularTempoEfetivo(dataInicio, pontoHoje)` que desconta almoço/pausa via `ponto_diario` em tempo real. Pausa manual do supervisor via `pausaManualFrozenMsRef` + `pausaManualAcumuladoMsRef`. `api/producao.js` agora inclui `sessoes_hoje` no payload |
+| BUG-20 | Cronômetro acumulava tempo de pausa manual ao retomar | `tempoManualPausadoMsRef` congelava o display, mas ao retomar `calcularTempoEfetivo` recalculava desde `data_inicio` sem conhecer a pausa → exibia tempo real acumulado | Dois refs: `pausaManualFrozenMsRef` (display congelado) + `pausaManualAcumuladoMsRef` (offset permanente). `handleRetomarTimer` calcula `drift = efetivoBruto - frozenMs` e acumula. `atualizar()` subtrai o acumulado do resultado |
+| BUG-21 | `POST /producao/sugestao-tarefa` falhava com dois erros de tipo em queries diferentes | (a) `numero` em `ordens_de_producao` é `character varying` mas query usava `ANY($1::int[])` → `character varying = integer`; (b) `funcionario_id` em `sessoes_trabalho_producao` é INTEGER mas tentativa de correção adicionou `::text` → `integer = text` | (a) Trocado para `ANY($1::text[])` com `String(n)` no map lookup; (b) Removido o cast — `WHERE funcionario_id = $1` sem cast |
+| BUG-23 | Blocos azuis (sessões de produção) não apareciam na Linha do Tempo do Dia | `json_build_object` retornava timestamp completo (`"2026-04-14T16:00:00"`); a função `n()` em `LinhaDoTempoDia` extrai `substring(0,5)` esperando `"HH:MM"`, obtendo `"2026-"` → `toMin` retornava NaN → segmentos silenciosamente ignorados | Trocado para `to_char(data_inicio AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI')` na query — retorna diretamente `"HH:MM"` |
+| BUG-24 | Tarefa sugerida aparecia duplicada — uma vez no card dourado e outra na lista normal abaixo | `tarefasPaginadas` era derivado de `listaFinalFiltrada` sem excluir a sugestão já exibida | Novo `useMemo` `listaParaExibir` que filtra a tarefa sugerida da lista quando o card de sugestão está visível (`!termoFiltro && sugestao`). Paginação e contagens passaram a usar `listaParaExibir` |
+| BUG-22 | Pausa manual do cronômetro não era persistida no banco — tempo de espera inflava produtividade histórica | `PUT /finalizar` não recebia nem salvava o tempo de pausa manual; `sessoes_trabalho_producao` não tinha coluna para isso | Nova coluna `pausa_manual_ms INTEGER DEFAULT 0` na tabela. `OPStatusCard` passa `pausaManualAcumuladoMsRef.current` para `onFinalizarTarefa`, que chega via `OPPainelAtividades` até o `PUT /finalizar`. API salva no UPDATE. **SQL migration obrigatória:** `ALTER TABLE sessoes_trabalho_producao ADD COLUMN IF NOT EXISTS pausa_manual_ms INTEGER DEFAULT 0;` |
 
 ---
 

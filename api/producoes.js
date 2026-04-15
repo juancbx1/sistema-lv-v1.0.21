@@ -646,7 +646,7 @@ router.put('/assinar-tiktik-op', async (req, res) => {
 // ========= NOVA ROTA PARA FINALIZAR UMA TAREFA DE PRODUÇÃO (OTIMIZADA) =========
 router.put('/finalizar', async (req, res) => {
     const { usuarioLogado } = req;
-    const { id_sessao, quantidade_finalizada } = req.body;
+    const { id_sessao, quantidade_finalizada, pausa_manual_ms = 0 } = req.body;
     let dbClient;
 
     try {
@@ -806,9 +806,10 @@ router.put('/finalizar', async (req, res) => {
 
         await dbClient.query(
             `UPDATE sessoes_trabalho_producao
-             SET status = 'FINALIZADA', data_fim = NOW(), quantidade_finalizada = $1
+             SET status = 'FINALIZADA', data_fim = NOW(), quantidade_finalizada = $1,
+                 pausa_manual_ms = $3
              WHERE id = $2`,
-            [quantidade_finalizada, id_sessao]
+            [quantidade_finalizada, id_sessao, Math.max(0, parseInt(pausa_manual_ms) || 0)]
         );
         // Status pode ser LIVRE, ALMOCO ou PAUSA — não hardcodar 'LIVRE'
         await dbClient.query(

@@ -1,6 +1,6 @@
 // public/src/components/OPStatusCard.jsx
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom';
 
 const getRoleInfo = (tipos = []) => {
@@ -34,20 +34,275 @@ const calcularRitmo = (ms, tpp, quantidade) => {
     if (!tpp || !quantidade || tpp <= 0) return null;
     const estimadoMs = tpp * quantidade * 1000;
     const pct = (ms / estimadoMs) * 100;
-    if (pct >= 120) return { texto: 'Lento',       emoji: '🐢', classe: 'ritmo-lento',      pct };
-    if (pct >= 100) return { texto: 'Atenção',      emoji: '⚠️', classe: 'ritmo-atencao',    pct };
-    if (pct >= 60)  return { texto: 'No Ritmo',     emoji: '👍', classe: 'ritmo-normal',     pct };
-    if (pct >= 30)  return { texto: 'Rápido',       emoji: '✅', classe: 'ritmo-rapido',     pct };
-    return                  { texto: 'Super Rápido', emoji: '🚀', classe: 'ritmo-super',      pct };
+    if (pct >= 120) return { texto: 'Lento',       emoji: '🐢', classe: 'ritmo-lento',   pct };
+    if (pct >= 100) return { texto: 'Atenção',      emoji: '⚠️', classe: 'ritmo-atencao', pct };
+    if (pct >= 60)  return { texto: 'No Ritmo',     emoji: '👍', classe: 'ritmo-normal',  pct };
+    if (pct >= 30)  return { texto: 'Rápido',       emoji: '✅', classe: 'ritmo-rapido',  pct };
+    return                  { texto: 'Super Rápido', emoji: '🚀', classe: 'ritmo-super',   pct };
 };
 
 // Formata 'HH:MM:SS' ou 'HH:MM' para exibição (ex: '13:10')
 const formatarHora = (t) => t ? String(t).substring(0, 5) : '--:--';
 
+/**
+ * Calcula o tempo efetivo de trabalho descontando intervalos (almoço/pausa) já registrados.
+ *
+ * @param {string} dataInicio - ISO string com timezone (ex: "2026-04-13T16:00:00+00:00")
+ * @param {object|null} pontoHoje - ponto_diario de hoje com horarios_reais
+ * @returns {{ ms: number, pausado: boolean, motivo: 'ALMOCO'|'PAUSA'|null }}
+ *   ms = milissegundos de trabalho efetivo (intervalos descontados)
+ *   pausado = true quando o relógio deve estar congelado agora
+ *   motivo = razão do congelamento automático (null se não pausado automaticamente)
+ */
+function calcularTempoEfetivo(dataInicio, pontoHoje) {
+    const agora = new Date();
+    const inicioDate = new Date(dataInicio); // ISO string → Date correto em UTC
+    const n = (t) => t ? String(t).substring(0, 5) : null; // normaliza para 'HH:MM'
+
+    // Converte 'HH:MM' (horário SP) para Date absoluto de hoje.
+    // Brasil é UTC-3 sem horário de verão desde 2019 — offset fixo é seguro.
+    const toAbsolute = (hhmm) => {
+        if (!hhmm) return null;
+        const hojeSP = agora.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+        return new Date(`${hojeSP}T${hhmm}:00-03:00`);
+    };
+
+    let descontarMs = 0;
+
+    // ── Almoço (horario_real_s1 → horario_real_e2) ───────────────────────────
+    const s1 = toAbsolute(n(pontoHoje?.horario_real_s1));
+    const e2 = toAbsolute(n(pontoHoje?.horario_real_e2));
+
+    if (s1 && s1 > inicioDate) {
+        if (e2 && agora >= e2) {
+            // Almoço já terminou — descontar duração completa
+            descontarMs += e2.getTime() - s1.getTime();
+        } else if (agora >= s1) {
+            // Ainda em almoço — congelar no momento em que o almoço começou
+            return {
+                ms: Math.max(0, s1.getTime() - inicioDate.getTime()),
+                pausado: true,
+                motivo: 'ALMOCO',
+            };
+        }
+    }
+
+    // ── Pausa (horario_real_s2 → horario_real_e3) ────────────────────────────
+    const s2 = toAbsolute(n(pontoHoje?.horario_real_s2));
+    const e3 = toAbsolute(n(pontoHoje?.horario_real_e3));
+
+    if (s2 && s2 > inicioDate) {
+        if (e3 && agora >= e3) {
+            // Pausa já terminou — descontar
+            descontarMs += e3.getTime() - s2.getTime();
+        } else if (agora >= s2) {
+            // Ainda em pausa — congelar
+            return {
+                ms: Math.max(0, s2.getTime() - inicioDate.getTime() - descontarMs),
+                pausado: true,
+                motivo: 'PAUSA',
+            };
+        }
+    }
+
+    return {
+        ms: Math.max(0, agora.getTime() - inicioDate.getTime() - descontarMs),
+        pausado: false,
+        motivo: null,
+    };
+}
+
+// ── MELHORIA-06: Linha do Tempo do Dia ──────────────────────────────────────
+function LinhaAgora({ e1Min, totalMin }) {
+    const agora = new Date().toLocaleTimeString('en-GB', {
+        timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit'
+    });
+    const [h, m] = agora.split(':').map(Number);
+    const left = ((h * 60 + m - e1Min) / totalMin) * 100;
+    if (left < 0 || left > 100) return null;
+    return <div className="bs-timeline-agora" style={{ left: `${left}%` }} title={`Agora: ${agora}`} />;
+}
+
+function ModalInfoTimeline({ onClose }) {
+    return ReactDOM.createPortal(
+        <>
+            <div className="bs-overlay" onClick={onClose} />
+            <div className="bs-sheet bs-sheet-info-tl" onClick={e => e.stopPropagation()}>
+                <div className="bs-sheet-info-tl-header">
+                    <span><i className="fas fa-chart-bar"></i> Linha do Tempo do Dia</span>
+                    <button className="bs-sheet-info-tl-fechar" onClick={onClose}>
+                        <i className="fas fa-times"></i>
+                    </button>
+                </div>
+                <div className="bs-sheet-info-tl-corpo">
+                    <p className="bs-tl-info-intro">
+                        Gráfico visual de tudo que aconteceu na jornada de hoje, do horário de entrada até a saída prevista.
+                    </p>
+                    <div className="bs-tl-info-legenda-detalhada">
+                        <div className="bs-tl-info-item">
+                            <span className="bs-tl-dot" style={{ background: '#2980b9', borderRadius: '3px' }}></span>
+                            <div>
+                                <strong>Produzindo</strong>
+                                <span>Período em que havia uma tarefa ativa sendo executada. Cada bloco = uma sessão de trabalho registrada pelo sistema.</span>
+                            </div>
+                        </div>
+                        <div className="bs-tl-info-item">
+                            <span className="bs-tl-dot" style={{ background: '#e67e22', borderRadius: '3px' }}></span>
+                            <div>
+                                <strong>Almoço</strong>
+                                <span>Intervalo de almoço, detectado automaticamente ao finalizar a tarefa próxima ao horário de almoço cadastrado.</span>
+                            </div>
+                        </div>
+                        <div className="bs-tl-info-item">
+                            <span className="bs-tl-dot" style={{ background: '#f39c12', borderRadius: '3px' }}></span>
+                            <div>
+                                <strong>Pausa / Café</strong>
+                                <span>Intervalo da tarde, detectado da mesma forma que o almoço.</span>
+                            </div>
+                        </div>
+                        <div className="bs-tl-info-item">
+                            <span className="bs-tl-dot" style={{ background: '#e74c3c', borderRadius: '3px' }}></span>
+                            <div>
+                                <strong>Saída antecipada</strong>
+                                <span>Trecho após a saída registrada antecipadamente — representa o tempo de jornada que não foi trabalhado.</span>
+                            </div>
+                        </div>
+                        <div className="bs-tl-info-item">
+                            <span className="bs-tl-dot" style={{ background: '#dfe6e9', borderRadius: '3px', border: '1px solid #bdc3c7' }}></span>
+                            <div>
+                                <strong>Tempo livre</strong>
+                                <span>A funcionária estava disponível mas sem tarefa atribuída — inclui o tempo entre o retorno do intervalo e a próxima tarefa.</span>
+                            </div>
+                        </div>
+                    </div>
+                    <p className="bs-tl-info-nota">
+                        <i className="fas fa-grip-lines-vertical" style={{ color: '#e74c3c' }}></i>
+                        A linha vermelha vertical indica o horário atual. Toque em cada bloco colorido para ver o detalhe daquele período.
+                    </p>
+                </div>
+            </div>
+        </>,
+        document.body
+    );
+}
+
+function LinhaDoTempoDia({ funcionario, pontoHoje }) {
+    const [infoAberto, setInfoAberto] = useState(false);
+    const n = (t) => t ? String(t).substring(0, 5) : null;
+    const e1 = n(funcionario.horario_entrada_1) || '07:00';
+    const s3 = n(funcionario.horario_saida_3 || funcionario.horario_saida_2 || funcionario.horario_saida_1) || '17:00';
+
+    const toMin = (hhmm) => {
+        if (!hhmm) return null;
+        const [h, m] = hhmm.split(':').map(Number);
+        return h * 60 + m;
+    };
+
+    const inicioMin = toMin(e1);
+    const fimMin    = toMin(s3);
+    const totalMin  = fimMin - inicioMin;
+    if (totalMin <= 0) return null;
+
+    // Retorna estilo de posição/largura para um segmento da barra (em %)
+    const segmento = (inicioHHMM, fimHHMM, cor, titulo) => {
+        const si = toMin(inicioHHMM);
+        const sf = toMin(fimHHMM);
+        if (si === null || sf === null || sf <= si) return null;
+        const left  = ((si - inicioMin) / totalMin) * 100;
+        const width = ((sf - si) / totalMin) * 100;
+        if (width <= 0) return null;
+        return { left: `${left.toFixed(2)}%`, width: `${width.toFixed(2)}%`, background: cor, title: titulo };
+    };
+
+    const segmentos = [];
+
+    // Sessões de produção (azul)
+    const agoraSP = new Date().toLocaleTimeString('en-GB', {
+        timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit'
+    });
+    (funcionario.sessoes_hoje || []).forEach(s => {
+        const ini = n(s.inicio); // já vem em SP (AT TIME ZONE no servidor)
+        const fim = n(s.fim) || agoraSP;
+        if (ini) {
+            const seg = segmento(ini, fim, '#2980b9', `Produzindo — OP ${s.op_numero || ''}`);
+            if (seg) segmentos.push(seg);
+        }
+    });
+
+    // Almoço (laranja)
+    const s1 = n(pontoHoje?.horario_real_s1) || n(funcionario.horario_saida_1);
+    const e2 = n(pontoHoje?.horario_real_e2) || n(funcionario.horario_entrada_2);
+    if (s1 && e2) { const seg = segmento(s1, e2, '#e67e22', 'Almoço'); if (seg) segmentos.push(seg); }
+
+    // Pausa (amarelo-ocre)
+    const s2 = n(pontoHoje?.horario_real_s2) || n(funcionario.horario_saida_2);
+    const e3 = n(pontoHoje?.horario_real_e3) || n(funcionario.horario_entrada_3);
+    if (s2 && e3) { const seg = segmento(s2, e3, '#f39c12', 'Pausa'); if (seg) segmentos.push(seg); }
+
+    // Saída antecipada — colorir do s3_real até o S3 cadastrado (vermelho)
+    if (pontoHoje?.horario_real_s3 && !pontoHoje?.saida_desfeita) {
+        const seg = segmento(n(pontoHoje.horario_real_s3), s3, '#e74c3c', 'Saída antecipada');
+        if (seg) segmentos.push(seg);
+    }
+
+    return (
+        <div className="bs-timeline-container">
+            {infoAberto && <ModalInfoTimeline onClose={() => setInfoAberto(false)} />}
+
+            <div className="bs-timeline-header">
+                <span className="bs-timeline-titulo">
+                    <i className="fas fa-chart-bar"></i> Linha do Tempo do Dia
+                </span>
+                <button
+                    className="bs-timeline-info-btn"
+                    onClick={() => setInfoAberto(true)}
+                    title="O que é isso?"
+                >
+                    <i className="fas fa-info-circle"></i>
+                </button>
+            </div>
+
+            <div className="bs-timeline-labels">
+                <span>{e1}</span>
+                <span>{s3}</span>
+            </div>
+            <div className="bs-timeline-barra">
+                <div className="bs-timeline-fundo" />
+                {segmentos.filter(Boolean).map((seg, i) => (
+                    <div key={i} className="bs-timeline-segmento" style={seg} title={seg.title} />
+                ))}
+                <LinhaAgora e1Min={inicioMin} totalMin={totalMin} />
+            </div>
+            <div className="bs-timeline-legenda">
+                <span><span className="bs-tl-dot" style={{ background: '#2980b9' }}></span>Produzindo</span>
+                <span><span className="bs-tl-dot" style={{ background: '#e67e22' }}></span>Almoço</span>
+                <span><span className="bs-tl-dot" style={{ background: '#f39c12' }}></span>Pausa</span>
+            </div>
+        </div>
+    );
+}
+// ────────────────────────────────────────────────────────────────────────────
+
 export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAcaoManual, onFinalizarTarefa, onCancelarTarefa, onExcecao, onLiberarIntervalo }) {
     const [menuAberto, setMenuAberto] = useState(false);
     const [infoAberto, setInfoAberto] = useState(false);
+
+    // ── Cronômetro ──────────────────────────────────────────────────────────
     const [tempoMs, setTempoMs] = useState(0);
+    const [cronoPausadoAuto, setCronoPausadoAuto] = useState(false);   // pausa automática (almoço/pausa detectados)
+    const [cronoPausadoMotivo, setCronoPausadoMotivo] = useState(null); // 'ALMOCO' | 'PAUSA' | null
+
+    // Pausa manual do supervisor (congela o relógio até ele retomar)
+    const [timerManualPausado, setTimerManualPausado] = useState(false);
+    // BUG-20 fix: dois refs para rastrear a pausa sem perder o offset acumulado
+    const pausaManualFrozenMsRef   = useRef(null); // ms exibido no momento em que o supervisor pausou
+    const pausaManualAcumuladoMsRef = useRef(0);   // total de ms "desperdiçados" em pausas manuais anteriores
+
+    // ── Tolerância S3 ────────────────────────────────────────────────────────
+    const [toleranciaS3, setToleranciaS3] = useState(null);
+
+    // ── Botão de liberação antecipada ─────────────────────────────────────────
+    const [intervaloProximo, setIntervaloProximo] = useState(null);
 
     if (!funcionario) return null;
 
@@ -64,66 +319,117 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
     const role = getRoleInfo(tipos);
     const fotoExibida = avatar_url || foto_oficial || null;
 
-    // --- CRONÔMETRO INTERNO ---
+    // --- CRONÔMETRO INTERNO (intervalo-ciente) --- BUG-20 fix
     useEffect(() => {
         if (status_atual !== 'PRODUZINDO' || !tarefaPrincipal?.data_inicio) {
             setTempoMs(0);
+            setCronoPausadoAuto(false);
+            setCronoPausadoMotivo(null);
+            pausaManualFrozenMsRef.current = null;
+            pausaManualAcumuladoMsRef.current = 0;
+            setTimerManualPausado(false);
             return;
         }
-        const inicio = new Date(tarefaPrincipal.data_inicio).getTime();
-        const atualizar = () => setTempoMs(Math.max(0, Date.now() - inicio));
+
+        const atualizar = () => {
+            // Pausa manual ativa: manter o display congelado no valor capturado
+            if (pausaManualFrozenMsRef.current !== null) {
+                setTempoMs(pausaManualFrozenMsRef.current);
+                return;
+            }
+            const resultado = calcularTempoEfetivo(tarefaPrincipal.data_inicio, ponto_hoje);
+            // Descontar o total de pausas manuais anteriores já computadas
+            const msEfetivo = Math.max(0, resultado.ms - pausaManualAcumuladoMsRef.current);
+            setTempoMs(msEfetivo);
+            setCronoPausadoAuto(resultado.pausado);
+            setCronoPausadoMotivo(resultado.motivo);
+        };
+
         atualizar();
         const id = setInterval(atualizar, 1000);
         return () => clearInterval(id);
-    }, [status_atual, tarefaPrincipal?.data_inicio]);
+    }, [status_atual, tarefaPrincipal?.data_inicio, ponto_hoje]);
 
-    const ritmo = status_atual === 'PRODUZINDO' ? calcularRitmo(tempoMs, tpp, tarefaPrincipal?.quantidade) : null;
+    const handlePausarTimer = () => {
+        // Salva o ms atual como "ponto de congelamento" — display fica travado aqui
+        pausaManualFrozenMsRef.current = tempoMs;
+        setTimerManualPausado(true);
+    };
 
-    // --- INDICADOR DE TOLERÂNCIA S3 (trabalhando além do horário final) ---
-    const toleranciaS3 = useMemo(() => {
-        if (status_atual !== 'PRODUZINDO') return null;
-        const s3 = horario_saida_3 || horario_saida_2 || horario_saida_1;
-        if (!s3) return null;
-        const agora = new Date();
-        const horaAtual = agora.toLocaleTimeString('en-GB', {
-            timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit'
-        });
-        const [s3h, s3m] = String(s3).substring(0, 5).split(':').map(Number);
-        const [ah, am] = horaAtual.split(':').map(Number);
-        const minutos = (ah * 60 + am) - (s3h * 60 + s3m);
-        return minutos > 0 ? minutos : null;
+    const handleRetomarTimer = () => {
+        if (pausaManualFrozenMsRef.current !== null) {
+            // Calcula o drift ocorrido durante a pausa manual e acumula como offset permanente
+            const resultado = calcularTempoEfetivo(tarefaPrincipal.data_inicio, ponto_hoje);
+            const efetivoBruto = Math.max(0, resultado.ms - pausaManualAcumuladoMsRef.current);
+            const drift = efetivoBruto - pausaManualFrozenMsRef.current;
+            pausaManualAcumuladoMsRef.current += Math.max(0, drift);
+            pausaManualFrozenMsRef.current = null;
+        }
+        setTimerManualPausado(false);
+    };
+
+    // Estado derivado: qualquer forma de pausa (auto ou manual)
+    const cronoPausado = cronoPausadoAuto || timerManualPausado;
+
+    // --- INDICADOR DE TOLERÂNCIA S3 (BUG-18: recalcula a cada 30s em tempo real) ---
+    useEffect(() => {
+        const calcular = () => {
+            if (status_atual !== 'PRODUZINDO') { setToleranciaS3(null); return; }
+            const s3 = horario_saida_3 || horario_saida_2 || horario_saida_1;
+            if (!s3) { setToleranciaS3(null); return; }
+            const horaAtual = new Date().toLocaleTimeString('en-GB', {
+                timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit'
+            });
+            const [s3h, s3m] = String(s3).substring(0, 5).split(':').map(Number);
+            const [ah, am] = horaAtual.split(':').map(Number);
+            const minutos = (ah * 60 + am) - (s3h * 60 + s3m);
+            setToleranciaS3(minutos > 0 ? minutos : null);
+        };
+        calcular();
+        const id = setInterval(calcular, 30000); // recalcula a cada 30s
+        return () => clearInterval(id);
     }, [status_atual, horario_saida_1, horario_saida_2, horario_saida_3]);
 
-    // --- BOTÃO "LIBERAR PARA INTERVALO" (aparece 25min antes do horário de almoço ou pausa) ---
-    const intervaloProximo = useMemo(() => {
-        if (status_atual !== 'LIVRE') return null;
-        const agora = new Date();
-        const horaAtual = agora.toLocaleTimeString('en-GB', {
-            timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit'
-        });
-        const [ah, am] = horaAtual.split(':').map(Number);
-        const agoraMin = ah * 60 + am;
-        const n = (t) => t ? String(t).substring(0, 5) : null;
+    // --- BOTÃO "LIBERAR PARA INTERVALO" (recalcula a cada 60s) ---
+    useEffect(() => {
+        const calcular = () => {
+            if (status_atual !== 'LIVRE') { setIntervaloProximo(null); return; }
+            const agora = new Date();
+            const horaAtual = agora.toLocaleTimeString('en-GB', {
+                timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit'
+            });
+            const [ah, am] = horaAtual.split(':').map(Number);
+            const agoraMin = ah * 60 + am;
+            const n = (t) => t ? String(t).substring(0, 5) : null;
 
-        // Só mostra o botão se o intervalo do dia ainda não foi registrado
-        const s1 = n(horario_saida_1);
-        if (s1 && !ponto_hoje?.horario_real_s1) {
-            const [s1h, s1m] = s1.split(':').map(Number);
-            const s1Min = s1h * 60 + s1m;
-            if (agoraMin >= s1Min - 25 && agoraMin < s1Min) {
-                return { tipo: 'ALMOCO', label: 'Liberar para almoço', icone: 'fa-utensils' };
+            const s1 = n(horario_saida_1);
+            if (s1 && !ponto_hoje?.horario_real_s1) {
+                const [s1h, s1m] = s1.split(':').map(Number);
+                const s1Min = s1h * 60 + s1m;
+                if (agoraMin >= s1Min - 25 && agoraMin < s1Min) {
+                    setIntervaloProximo({ tipo: 'ALMOCO', label: 'Liberar para almoço', icone: 'fa-utensils' });
+                    return;
+                }
             }
-        }
-        const s2 = n(horario_saida_2);
-        if (s2 && !ponto_hoje?.horario_real_s2) {
-            const [s2h, s2m] = s2.split(':').map(Number);
-            const s2Min = s2h * 60 + s2m;
-            if (agoraMin >= s2Min - 25 && agoraMin < s2Min) {
-                return { tipo: 'PAUSA', label: 'Liberar para pausa', icone: 'fa-coffee' };
+            const s2 = n(horario_saida_2);
+            if (s2 && !ponto_hoje?.horario_real_s2) {
+                const [s2h, s2m] = s2.split(':').map(Number);
+                const s2Min = s2h * 60 + s2m;
+                if (agoraMin >= s2Min - 25 && agoraMin < s2Min) {
+                    setIntervaloProximo({ tipo: 'PAUSA', label: 'Liberar para pausa', icone: 'fa-coffee' });
+                    return;
+                }
             }
-        }
-        return null;
-    }, [status_atual, horario_saida_1, horario_saida_2]);
+            setIntervaloProximo(null);
+        };
+        calcular();
+        const id = setInterval(calcular, 60000); // recalcula a cada 60s
+        return () => clearInterval(id);
+    }, [status_atual, horario_saida_1, horario_saida_2, ponto_hoje?.horario_real_s1, ponto_hoje?.horario_real_s2]);
+
+    const ritmo = (status_atual === 'PRODUZINDO' && !cronoPausado)
+        ? calcularRitmo(tempoMs, tpp, tarefaPrincipal?.quantidade)
+        : null;
 
     // --- MENU DE AÇÕES ---
     const getMenuItems = () => {
@@ -151,6 +457,14 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
     const renderBody = () => {
         if (status_atual === 'PRODUZINDO' && tarefaPrincipal) {
             const progressoVisual = ritmo ? Math.min(100, ritmo.pct) : 0;
+
+            // Label de pausa automática (almoço/pausa detectado pelo ponto_hoje)
+            const labelPausaAuto = cronoPausadoMotivo === 'ALMOCO'
+                ? { icone: 'fa-utensils', texto: 'Almoço em andamento' }
+                : cronoPausadoMotivo === 'PAUSA'
+                ? { icone: 'fa-coffee',   texto: 'Pausa em andamento' }
+                : null;
+
             return (
                 <>
                     <div className="cracha-tarefa">
@@ -162,15 +476,50 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
                         <div className="cracha-tarefa-qtd">{tarefaPrincipal.quantidade} <small>pçs</small></div>
 
                         <div className="cracha-metricas">
-                            <span className="cracha-cronometro"><i className="fas fa-clock"></i> {formatarTempo(tempoMs)}</span>
-                            {ritmo && <span className={`cracha-ritmo ${ritmo.classe}`}>{ritmo.emoji} {ritmo.texto}</span>}
+                            {/* Cronômetro — visual muda quando pausado */}
+                            <span className={`cracha-cronometro${cronoPausado ? ' cronometro-pausado' : ''}`}>
+                                <i className={`fas ${cronoPausado ? 'fa-pause-circle' : 'fa-clock'}`}></i>
+                                {' '}{formatarTempo(tempoMs)}
+                            </span>
+                            {ritmo && !cronoPausado && (
+                                <span className={`cracha-ritmo ${ritmo.classe}`}>{ritmo.emoji} {ritmo.texto}</span>
+                            )}
                         </div>
+
+                        {/* Indicador de pausa automática (almoço/pausa via ponto_hoje) */}
+                        {cronoPausadoAuto && labelPausaAuto && (
+                            <div className="cracha-crono-pausa-label auto">
+                                <i className={`fas ${labelPausaAuto.icone}`}></i>
+                                <span>{labelPausaAuto.texto} — relógio pausado</span>
+                            </div>
+                        )}
+
+                        {/* Indicador de pausa manual do supervisor */}
+                        {timerManualPausado && (
+                            <div className="cracha-crono-pausa-label manual">
+                                <i className="fas fa-hand-paper"></i>
+                                <span>Relógio pausado manualmente</span>
+                            </div>
+                        )}
 
                         <div className="cracha-barra-container">
-                            <div className={`cracha-barra ${ritmo?.classe || ''}`} style={{ width: `${progressoVisual}%` }}></div>
+                            <div className={`cracha-barra ${ritmo?.classe || ''}${cronoPausado ? ' barra-pausada' : ''}`} style={{ width: `${progressoVisual}%` }}></div>
                         </div>
 
-                        {/* Indicador de tolerância S3 — trabalhando além do horário final */}
+                        {/* Botão de pausa manual (só aparece quando NÃO está em pausa automática) */}
+                        {!cronoPausadoAuto && (
+                            timerManualPausado ? (
+                                <button className="op-btn-pausar-timer retomar" onClick={handleRetomarTimer}>
+                                    <i className="fas fa-play"></i> Retomar Relógio
+                                </button>
+                            ) : (
+                                <button className="op-btn-pausar-timer" onClick={handlePausarTimer}>
+                                    <i className="fas fa-pause"></i> Pausar Relógio
+                                </button>
+                            )
+                        )}
+
+                        {/* Indicador de tolerância S3 — trabalhando além do horário final (BUG-18: atualiza em tempo real) */}
                         {toleranciaS3 !== null && (
                             <div className={`op-status-tolerancia ${toleranciaS3 > 20 ? 'critico' : 'aviso'}`}>
                                 {toleranciaS3 > 20 ? (
@@ -205,7 +554,7 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
                         <button className="cracha-btn cancelar" onClick={() => onCancelarTarefa(funcionario)}>
                             <i className="fas fa-times"></i> Cancelar
                         </button>
-                        <button className="cracha-btn finalizar" onClick={() => onFinalizarTarefa(funcionario)}>
+                        <button className="cracha-btn finalizar" onClick={() => onFinalizarTarefa(funcionario, pausaManualAcumuladoMsRef.current)}>
                             <i className="fas fa-check-double"></i> Finalizar
                         </button>
                     </div>
@@ -214,7 +563,6 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
         }
 
         const idle = getStatusIdle(status_atual);
-        // Horário de retorno: usa ponto_hoje (real) ou horário cadastrado (fallback)
         const retornoAlmoco = ponto_hoje?.horario_real_e2
             ? formatarHora(ponto_hoje.horario_real_e2)
             : formatarHora(horario_entrada_2);
@@ -229,7 +577,6 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
                     <span className="cracha-status-idle-texto">{idle.texto}</span>
                 </div>
 
-                {/* Horário dinâmico de retorno para ALMOCO/PAUSA */}
                 {status_atual === 'ALMOCO' && retornoAlmoco !== '--:--' && (
                     <div className="op-status-card-intervalo">
                         <i className="fas fa-utensils"></i>
@@ -251,7 +598,7 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
                     )}
                 </div>
 
-                {/* Botão de liberação antecipada — separado do footer para não comprimir o botão principal */}
+                {/* Botão de liberação antecipada — separado do footer */}
                 {intervaloProximo && onLiberarIntervalo && (
                     <button
                         className="op-btn-liberar-intervalo"
@@ -269,7 +616,7 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
     return (
         <div className={`cracha-card ${role.classe}${status_atual === 'PRODUZINDO' ? ' cracha-em-producao' : ''}`}>
 
-            {/* BANDA SUPERIOR — elemento visual de identidade */}
+            {/* BANDA SUPERIOR */}
             <div className="cracha-banda">
                 <div className="cracha-role-label">
                     <i className={`fas ${role.icon}`}></i>
@@ -287,7 +634,7 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
                 </div>
             </div>
 
-            {/* BOTTOM SHEET — renderizado via Portal no body para não ser afetado pelo transform do card */}
+            {/* BOTTOM SHEET — menu de ações */}
             {menuAberto && ReactDOM.createPortal(
                 <>
                     <div className="bs-overlay" onClick={() => setMenuAberto(false)} />
@@ -345,6 +692,9 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
                                 <div className="bs-role">Jornada de Trabalho</div>
                             </div>
                         </div>
+
+                        {/* Linha do Tempo do Dia (MELHORIA-06) */}
+                        <LinhaDoTempoDia funcionario={funcionario} pontoHoje={ponto_hoje} />
 
                         {/* Dias de trabalho */}
                         <div className="bs-info-secao">

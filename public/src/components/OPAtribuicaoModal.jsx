@@ -11,7 +11,7 @@ const getRoleInfo = (tipos = []) => {
     return                                  { label: 'Costureira', icon: 'fa-tshirt',      classe: 'badge-costureira' };
 };
 
-export default function OPAtribuicaoModal({ funcionario, isOpen, onClose }) {
+export default function OPAtribuicaoModal({ funcionario, isOpen, onClose, tpp }) {
   const [telaAtual, setTelaAtual] = useState('selecao');
   const [etapaSelecionada, setEtapaSelecionada] = useState(null);
 
@@ -83,6 +83,7 @@ export default function OPAtribuicaoModal({ funcionario, isOpen, onClose }) {
                 etapa={etapaSelecionada}
                 funcionario={funcionario}
                 onClose={onClose}
+                tpp={tpp}
             />
           )}
         </div>
