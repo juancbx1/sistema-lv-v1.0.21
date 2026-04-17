@@ -12,6 +12,14 @@ const pool = new Pool({
 });
 const SECRET_KEY = process.env.JWT_SECRET;
 
+// Converte 'HH:MM' (ou 'HH:MM:SS') em minutos desde meia-noite. Null se inválido.
+const hhmmParaMin = (hhmm) => {
+    if (!hhmm || typeof hhmm !== 'string' || hhmm.length < 5) return null;
+    const [h, m] = hhmm.substring(0, 5).split(':').map(Number);
+    if (isNaN(h) || isNaN(m)) return null;
+    return h * 60 + m;
+};
+
 // Middleware de autenticação (pode ser copiado de outros arquivos de API)
 router.use(async (req, res, next) => {
     try {
@@ -52,14 +60,23 @@ router.get('/status-funcionarios', async (req, res) => {
                             'processo', s.processo,
                             'quantidade', s.quantidade_atribuida,
                             'data_inicio', s.data_inicio,
-                            'produto_nome', p.nome
-                        ) 
-                    ) FILTER (WHERE s.id IS NOT NULL), 
+                            'produto_nome', p.nome,
+                            'imagem', COALESCE(g.imagem, p.imagem)
+                        )
+                    ) FILTER (WHERE s.id IS NOT NULL),
                     '[]'
                 ) as tarefas_ativas
             FROM usuarios u
             LEFT JOIN sessoes_trabalho_producao s ON u.id = s.funcionario_id AND s.status = 'EM_ANDAMENTO'
             LEFT JOIN produtos p ON s.produto_id = p.id
+            LEFT JOIN LATERAL (
+                SELECT gr.imagem
+                FROM jsonb_to_recordset(
+                    CASE WHEN jsonb_typeof(p.grade) = 'array' THEN p.grade ELSE '[]'::jsonb END
+                ) AS gr(sku TEXT, variacao TEXT, imagem TEXT)
+                WHERE gr.variacao = s.variante
+                LIMIT 1
+            ) g ON true
             WHERE u.data_demissao IS NULL
             AND ('costureira' = ANY(u.tipos) OR 'tiktik' = ANY(u.tipos))
             GROUP BY u.id
@@ -79,24 +96,146 @@ router.get('/status-funcionarios', async (req, res) => {
             ),
             dbClient.query(
                 `SELECT
-                    funcionario_id,
+                    s.funcionario_id,
                     json_agg(
                         json_build_object(
-                            'inicio', to_char(data_inicio AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI'),
-                            'fim',    to_char(data_fim    AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI'),
-                            'op_numero', op_numero,
-                            'produto_id', produto_id
-                        ) ORDER BY data_inicio
+                            'inicio',       to_char(s.data_inicio AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI'),
+                            'fim',          to_char(s.data_fim    AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI'),
+                            'op_numero',    s.op_numero,
+                            'produto_id',   s.produto_id,
+                            'produto_nome', p.nome,
+                            'variante',     s.variante,
+                            'processo',     s.processo,
+                            'quantidade',   s.quantidade_atribuida,
+                            'imagem',       COALESCE(g.imagem, p.imagem)
+                        ) ORDER BY s.data_inicio
                     ) AS sessoes
-                 FROM sessoes_trabalho_producao
-                 WHERE (data_inicio AT TIME ZONE 'America/Sao_Paulo')::date
+                 FROM sessoes_trabalho_producao s
+                 LEFT JOIN produtos p ON s.produto_id = p.id
+                 LEFT JOIN LATERAL (
+                     SELECT gr.imagem
+                     FROM jsonb_to_recordset(
+                         CASE WHEN jsonb_typeof(p.grade) = 'array' THEN p.grade ELSE '[]'::jsonb END
+                     ) AS gr(sku TEXT, variacao TEXT, imagem TEXT)
+                     WHERE gr.variacao = s.variante
+                     LIMIT 1
+                 ) g ON true
+                 WHERE (s.data_inicio AT TIME ZONE 'America/Sao_Paulo')::date
                            = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
-                   AND status IN ('FINALIZADA', 'EM_ANDAMENTO')
-                 GROUP BY funcionario_id`
+                   AND s.status IN ('FINALIZADA', 'EM_ANDAMENTO')
+                 GROUP BY s.funcionario_id`
             ),
         ]);
         const pontoDiarioMap  = new Map(pontoDiarioResult.rows.map(p => [p.funcionario_id, p]));
         const sessoesHojeMap  = new Map(sessoesHojeResult.rows.map(r => [r.funcionario_id, r.sessoes || []]));
+
+        // ─────────────────────────────────────────────────────────────────────
+        // BUG-15b — Rede de segurança pós-E2/E3
+        // Garante que TODO funcionário com evidência de atividade hoje tenha
+        // registro no ponto_diario, mesmo que o supervisor não tenha clicado
+        // no botão de liberar e nenhuma tarefa tenha sido finalizada dentro da
+        // janela de tolerância de 30min.
+        // Usa horários AGENDADOS (S1/E2/S2/E3 do cadastro) como fallback.
+        // Precisão: limitada pela janela de polling do frontend (~4-10min).
+        // Aceitável para este cenário raro (supervisor distraído + tarefa longa).
+        // ─────────────────────────────────────────────────────────────────────
+        const agoraSP = new Date().toLocaleTimeString('en-GB', {
+            timeZone: 'America/Sao_Paulo', hour12: false, hour: '2-digit', minute: '2-digit'
+        });
+        const dataHojeSP = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+        const agoraMin = hhmmParaMin(agoraSP);
+        const safetyNetInserts = [];
+        const n5 = (t) => t ? String(t).substring(0, 5) : null;
+
+        for (const row of result.rows) {
+            // Pula status explícitos de ausência — se o supervisor marcou,
+            // o empregado não estava lá pra ir no almoço.
+            if (row.status_atual === 'FALTOU' || row.status_atual === 'ALOCADO_EXTERNO') continue;
+
+            // Só aplica safety net se há evidência de atividade hoje
+            // (sessão finalizada/ativa). Senão, não há razão para gravar ponto.
+            const temAtividadeHoje =
+                (sessoesHojeMap.get(row.id)?.length || 0) > 0 ||
+                (row.tarefas_ativas && row.tarefas_ativas.length > 0);
+            if (!temAtividadeHoje) continue;
+
+            const ponto = pontoDiarioMap.get(row.id) || null;
+            const s1 = n5(row.horario_saida_1);
+            const e2 = n5(row.horario_entrada_2);
+            const s2 = n5(row.horario_saida_2);
+            const e3 = n5(row.horario_entrada_3);
+
+            // Fallback ALMOÇO: agora passou de E2 e não há registro de s1
+            if (s1 && e2 && !ponto?.horario_real_s1) {
+                const e2Min = hhmmParaMin(e2);
+                if (agoraMin !== null && e2Min !== null && agoraMin >= e2Min) {
+                    safetyNetInserts.push(
+                        dbClient.query(
+                            `INSERT INTO ponto_diario (funcionario_id, data, horario_real_s1, horario_real_e2)
+                             VALUES ($1, $2, $3, $4)
+                             ON CONFLICT (funcionario_id, data) DO UPDATE SET
+                                 horario_real_s1 = COALESCE(ponto_diario.horario_real_s1, EXCLUDED.horario_real_s1),
+                                 horario_real_e2 = COALESCE(ponto_diario.horario_real_e2, EXCLUDED.horario_real_e2),
+                                 updated_at = NOW()`,
+                            [row.id, dataHojeSP, s1, e2]
+                        )
+                    );
+                    // Atualiza em memória para refletir na resposta
+                    if (!ponto) {
+                        pontoDiarioMap.set(row.id, {
+                            funcionario_id: row.id,
+                            horario_real_s1: s1, horario_real_e2: e2,
+                            horario_real_s2: null, horario_real_e3: null, horario_real_s3: null,
+                            saida_desfeita: false, saida_desfeita_por: null, saida_desfeita_em: null,
+                        });
+                    } else {
+                        ponto.horario_real_s1 = s1;
+                        ponto.horario_real_e2 = e2;
+                    }
+                    console.log(`[SAFETY-NET] Almoço fallback func ${row.id} (${row.nome}): ${s1}→${e2} (agendado)`);
+                }
+            }
+
+            // Fallback PAUSA: agora passou de E3 e não há registro de s2
+            const pontoAtual = pontoDiarioMap.get(row.id) || null;
+            if (s2 && e3 && !pontoAtual?.horario_real_s2) {
+                const e3Min = hhmmParaMin(e3);
+                if (agoraMin !== null && e3Min !== null && agoraMin >= e3Min) {
+                    safetyNetInserts.push(
+                        dbClient.query(
+                            `INSERT INTO ponto_diario (funcionario_id, data, horario_real_s2, horario_real_e3)
+                             VALUES ($1, $2, $3, $4)
+                             ON CONFLICT (funcionario_id, data) DO UPDATE SET
+                                 horario_real_s2 = COALESCE(ponto_diario.horario_real_s2, EXCLUDED.horario_real_s2),
+                                 horario_real_e3 = COALESCE(ponto_diario.horario_real_e3, EXCLUDED.horario_real_e3),
+                                 updated_at = NOW()`,
+                            [row.id, dataHojeSP, s2, e3]
+                        )
+                    );
+                    if (!pontoAtual) {
+                        pontoDiarioMap.set(row.id, {
+                            funcionario_id: row.id,
+                            horario_real_s1: null, horario_real_e2: null,
+                            horario_real_s2: s2, horario_real_e3: e3, horario_real_s3: null,
+                            saida_desfeita: false, saida_desfeita_por: null, saida_desfeita_em: null,
+                        });
+                    } else {
+                        pontoAtual.horario_real_s2 = s2;
+                        pontoAtual.horario_real_e3 = e3;
+                    }
+                    console.log(`[SAFETY-NET] Pausa fallback func ${row.id} (${row.nome}): ${s2}→${e3} (agendado)`);
+                }
+            }
+        }
+
+        if (safetyNetInserts.length > 0) {
+            // Não-fatal: se o safety net falhar, o restante da resposta ainda é válido.
+            try {
+                await Promise.all(safetyNetInserts);
+            } catch (err) {
+                console.error('[SAFETY-NET] Falha ao gravar fallback de ponto:', err);
+            }
+        }
 
         const resultadoFinal = result.rows.map(row => {
             const pontoDiario  = pontoDiarioMap.get(row.id)  || null;

@@ -390,7 +390,12 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
         return () => clearInterval(id);
     }, [status_atual, horario_saida_1, horario_saida_2, horario_saida_3]);
 
-    // --- BOTÃO "LIBERAR PARA INTERVALO" (recalcula a cada 60s) ---
+    // --- BOTÃO "LIBERAR PARA INTERVALO" (janela estendida S-25 a S+30, com 4 fases escalonadas) ---
+    //   Fase 1 — antecipacao:  [S-25, S-5]  → discreto (azul suave)
+    //   Fase 2 — iminente:      [S-5, S)    → amarelo com pulse lento
+    //   Fase 3 — hora-agora:   [S, S+10]    → laranja forte com pulse + halo
+    //   Fase 4 — atrasado:     [S+10, S+30] → vermelho + contador de atraso + pulse na borda do card
+    //   Após S+30 → botão some (rede de segurança do backend assume)
     useEffect(() => {
         const calcular = () => {
             if (status_atual !== 'LIVRE') { setIntervaloProximo(null); return; }
@@ -402,28 +407,46 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
             const agoraMin = ah * 60 + am;
             const n = (t) => t ? String(t).substring(0, 5) : null;
 
+            // Calcula a fase com base em minutos relativos ao horário alvo (S1 ou S2)
+            const calcFase = (alvoMin) => {
+                const delta = agoraMin - alvoMin;
+                if (delta < -25) return null;
+                if (delta < -5)  return { nome: 'antecipacao', classe: 'fase-antecipacao', atrasoMin: 0 };
+                if (delta < 0)   return { nome: 'iminente',    classe: 'fase-iminente',    atrasoMin: 0 };
+                if (delta <= 10) return { nome: 'hora-agora',  classe: 'fase-hora-agora',  atrasoMin: 0 };
+                if (delta <= 30) return { nome: 'atrasado',    classe: 'fase-atrasado',    atrasoMin: delta };
+                return null; // após S+30 — safety net do backend assume
+            };
+
             const s1 = n(horario_saida_1);
             if (s1 && !ponto_hoje?.horario_real_s1) {
                 const [s1h, s1m] = s1.split(':').map(Number);
-                const s1Min = s1h * 60 + s1m;
-                if (agoraMin >= s1Min - 25 && agoraMin < s1Min) {
-                    setIntervaloProximo({ tipo: 'ALMOCO', label: 'Liberar para almoço', icone: 'fa-utensils' });
+                const fase = calcFase(s1h * 60 + s1m);
+                if (fase) {
+                    setIntervaloProximo({
+                        tipo: 'ALMOCO', label: 'Liberar para almoço', icone: 'fa-utensils',
+                        ...fase,
+                    });
                     return;
                 }
             }
             const s2 = n(horario_saida_2);
             if (s2 && !ponto_hoje?.horario_real_s2) {
                 const [s2h, s2m] = s2.split(':').map(Number);
-                const s2Min = s2h * 60 + s2m;
-                if (agoraMin >= s2Min - 25 && agoraMin < s2Min) {
-                    setIntervaloProximo({ tipo: 'PAUSA', label: 'Liberar para pausa', icone: 'fa-coffee' });
+                const fase = calcFase(s2h * 60 + s2m);
+                if (fase) {
+                    setIntervaloProximo({
+                        tipo: 'PAUSA', label: 'Liberar para pausa', icone: 'fa-coffee',
+                        ...fase,
+                    });
                     return;
                 }
             }
             setIntervaloProximo(null);
         };
         calcular();
-        const id = setInterval(calcular, 60000); // recalcula a cada 60s
+        // Recalcula a cada 30s para atualizar o contador de atraso com precisão (fase 4)
+        const id = setInterval(calcular, 30000);
         return () => clearInterval(id);
     }, [status_atual, horario_saida_1, horario_saida_2, ponto_hoje?.horario_real_s1, ponto_hoje?.horario_real_s2]);
 
@@ -465,25 +488,45 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
                 ? { icone: 'fa-coffee',   texto: 'Pausa em andamento' }
                 : null;
 
+            const imagemVariacao = tarefaPrincipal.imagem || null;
+            const nomeExibido = tarefaPrincipal.variante || tarefaPrincipal.produto_nome;
+
             return (
                 <>
                     <div className="cracha-tarefa">
                         <div className="cracha-tarefa-processo">{tarefaPrincipal.processo}</div>
-                        <div className="cracha-tarefa-produto">
-                            {tarefaPrincipal.produto_nome}
-                            {tarefaPrincipal.variante && <span className="cracha-tarefa-variante"> · {tarefaPrincipal.variante}</span>}
-                        </div>
-                        <div className="cracha-tarefa-qtd">{tarefaPrincipal.quantidade} <small>pçs</small></div>
 
-                        <div className="cracha-metricas">
-                            {/* Cronômetro — visual muda quando pausado */}
-                            <span className={`cracha-cronometro${cronoPausado ? ' cronometro-pausado' : ''}`}>
-                                <i className={`fas ${cronoPausado ? 'fa-pause-circle' : 'fa-clock'}`}></i>
-                                {' '}{formatarTempo(tempoMs)}
-                            </span>
-                            {ritmo && !cronoPausado && (
-                                <span className={`cracha-ritmo ${ritmo.classe}`}>{ritmo.emoji} {ritmo.texto}</span>
-                            )}
+                        {/* Cabeçalho da tarefa: imagem da variação + nome da variação */}
+                        <div className="cracha-tarefa-cabeca">
+                            <div className="cracha-tarefa-imagem">
+                                {imagemVariacao ? (
+                                    <img src={imagemVariacao} alt={nomeExibido || 'Produto'} />
+                                ) : (
+                                    <div className="cracha-tarefa-imagem-placeholder">
+                                        <i className="fas fa-tshirt"></i>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="cracha-tarefa-variante-texto">{nomeExibido}</div>
+                        </div>
+
+                        {/* Dois blocos grandes: Quantidade | Cronômetro */}
+                        <div className="cracha-metricas-grandes">
+                            <div className="cracha-metrica-bloco">
+                                <div className="cracha-metrica-valor">{tarefaPrincipal.quantidade}</div>
+                                <div className="cracha-metrica-label">peças</div>
+                            </div>
+                            <div className={`cracha-metrica-bloco crono${cronoPausado ? ' cronometro-pausado' : ''}`}>
+                                <div className="cracha-metrica-valor cronometro">
+                                    <i className={`fas ${cronoPausado ? 'fa-pause-circle' : 'fa-clock'}`}></i>
+                                    {' '}{formatarTempo(tempoMs)}
+                                </div>
+                                {ritmo && !cronoPausado ? (
+                                    <div className={`cracha-metrica-label ritmo ${ritmo.classe}`}>{ritmo.emoji} {ritmo.texto}</div>
+                                ) : (
+                                    <div className="cracha-metrica-label">tempo</div>
+                                )}
+                            </div>
                         </div>
 
                         {/* Indicador de pausa automática (almoço/pausa via ponto_hoje) */}
@@ -570,6 +613,12 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
             ? formatarHora(ponto_hoje.horario_real_e3)
             : formatarHora(horario_entrada_3);
 
+        // Últimas tarefas finalizadas hoje (para o card LIVRE — dá contexto ao supervisor).
+        // Pega as 3 mais recentes (sessoes_hoje já vem ordenado por data_inicio ASC).
+        const mostrarUltimas = status_atual === 'LIVRE' || status_atual === 'LIVRE_MANUAL';
+        const sessoesFinalizadas = (funcionario.sessoes_hoje || []).filter(s => s.fim);
+        const ultimasTarefas = sessoesFinalizadas.slice(-3).reverse();
+
         return (
             <>
                 <div className="cracha-status-idle">
@@ -590,6 +639,43 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
                     </div>
                 )}
 
+                {/* Últimas tarefas realizadas — preenche o vazio dos cards LIVRE e dá
+                    contexto útil ao supervisor (ele vê o que foi feito antes de atribuir a próxima) */}
+                {mostrarUltimas && (
+                    <div className="cracha-livre-body">
+                        {ultimasTarefas.length > 0 ? (
+                            <>
+                                <div className="cracha-livre-titulo">
+                                    <i className="fas fa-history"></i>
+                                    <span>Últimas tarefas</span>
+                                </div>
+                                <ul className="cracha-livre-lista">
+                                    {ultimasTarefas.map((s, i) => (
+                                        <li key={`${s.op_numero}-${s.fim}-${i}`}>
+                                            <div className="cracha-livre-horario">{s.fim}</div>
+                                            <div className="cracha-livre-info">
+                                                <div className="cracha-livre-produto" title={`${s.produto_nome || ''}${s.variante ? ' · ' + s.variante : ''}`}>
+                                                    {s.produto_nome || `Produto #${s.produto_id}`}
+                                                    {s.variante ? <span className="cracha-livre-variante"> · {s.variante}</span> : null}
+                                                </div>
+                                                <div className="cracha-livre-meta">
+                                                    <span className="cracha-livre-qtd">{s.quantidade}</span>
+                                                    <span className="cracha-livre-proc">{s.processo}</span>
+                                                </div>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </>
+                        ) : (
+                            <div className="cracha-livre-vazio">
+                                <i className="fas fa-flag-checkered"></i>
+                                <span>Ainda sem tarefas finalizadas hoje</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 <div className="cracha-footer">
                     {status_atual === 'LIVRE' && (
                         <button className="cracha-btn finalizar full-width" onClick={() => onAtribuirTarefa(funcionario)}>
@@ -598,31 +684,50 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
                     )}
                 </div>
 
-                {/* Botão de liberação antecipada — separado do footer */}
+                {/* Botão de liberação antecipada — separado do footer, com fases visuais escalonadas */}
                 {intervaloProximo && onLiberarIntervalo && (
                     <button
-                        className="op-btn-liberar-intervalo"
+                        className={`op-btn-liberar-intervalo ${intervaloProximo.classe}`}
                         onClick={() => onLiberarIntervalo(funcionario.id, intervaloProximo.tipo)}
                         title={`${intervaloProximo.label} agora (retorno calculado automaticamente)`}
                     >
                         <i className={`fas ${intervaloProximo.icone}`}></i>
-                        {intervaloProximo.label}
+                        <span className="op-btn-liberar-texto">{intervaloProximo.label}</span>
+                        {intervaloProximo.atrasoMin > 0 && (
+                            <span className="op-btn-liberar-atraso">+{intervaloProximo.atrasoMin}min</span>
+                        )}
                     </button>
                 )}
             </>
         );
     };
 
-    return (
-        <div className={`cracha-card ${role.classe}${status_atual === 'PRODUZINDO' ? ' cracha-em-producao' : ''}`}>
+    const cardClasses = [
+        'cracha-card',
+        role.classe,
+        status_atual === 'PRODUZINDO' ? 'cracha-em-producao' : '',
+        intervaloProximo?.nome === 'atrasado' ? 'cracha-liberar-atrasado' : '',
+    ].filter(Boolean).join(' ');
 
-            {/* BANDA SUPERIOR */}
-            <div className="cracha-banda">
-                <div className="cracha-role-label">
-                    <i className={`fas ${role.icon}`}></i>
-                    <span>{role.label}</span>
+    return (
+        <div className={cardClasses}>
+
+            {/* TOPO UNIFICADO — banda + identidade em uma única faixa compacta */}
+            <div className="cracha-topo">
+                <div
+                    className={`cracha-avatar${!fotoExibida ? ' cracha-avatar-vazio' : ''}`}
+                    style={fotoExibida ? { backgroundImage: `url('${fotoExibida}')` } : {}}
+                    title={role.label + (nivel ? ` · Nível ${nivel}` : '')}
+                >
+                    {!fotoExibida && <i className="fas fa-user"></i>}
+                    {nivel ? (
+                        <span className="cracha-avatar-nivel-badge" aria-label={`Nível ${nivel}`}>{nivel}</span>
+                    ) : null}
                 </div>
-                <div className="cracha-banda-acoes">
+                <div className="cracha-identidade-compacta">
+                    <div className="cracha-nome" title={nome}>{nome}</div>
+                </div>
+                <div className="cracha-topo-acoes">
                     <button className="cracha-menu-btn" onClick={() => setInfoAberto(true)} title="Ver horários">
                         <i className="fas fa-info-circle"></i>
                     </button>
@@ -796,20 +901,6 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
                 </>,
                 document.body
             )}
-
-            {/* IDENTIDADE */}
-            <div className="cracha-identidade">
-                <div
-                    className={`cracha-avatar${!fotoExibida ? ' cracha-avatar-vazio' : ''}`}
-                    style={fotoExibida ? { backgroundImage: `url('${fotoExibida}')` } : {}}
-                >
-                    {!fotoExibida && <i className="fas fa-user"></i>}
-                </div>
-                <div className="cracha-nome">{nome}</div>
-                {nivel && <div className="cracha-nivel">Nível {nivel}</div>}
-            </div>
-
-            <div className="cracha-divider" />
 
             {/* CORPO + RODAPÉ */}
             {renderBody()}

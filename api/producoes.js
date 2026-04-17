@@ -16,6 +16,24 @@ const pool = new Pool({
 });
 const SECRET_KEY = process.env.JWT_SECRET;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// BUG-15b — Tolerância máxima de atraso para detecção automática de intervalo.
+// Se a tarefa for finalizada além de (S1/S2 + TOLERANCIA), o sistema NÃO registra
+// mais o almoço/pausa automaticamente — a rede de segurança em
+// GET /status-funcionarios assume e grava o horário agendado como fallback.
+// Regra operacional de chão de fábrica (reunião com equipe): proibido tirar
+// almoço/pausa após 30min do horário agendado.
+// ─────────────────────────────────────────────────────────────────────────────
+const TOLERANCIA_ATRASO_INTERVALO_MIN = 30;
+
+// Converte 'HH:MM' em minutos desde meia-noite. Retorna null se inválido.
+const hhmmParaMin = (hhmm) => {
+    if (!hhmm || typeof hhmm !== 'string' || hhmm.length < 5) return null;
+    const [h, m] = hhmm.substring(0, 5).split(':').map(Number);
+    if (isNaN(h) || isNaN(m)) return null;
+    return h * 60 + m;
+};
+
 /**
  * Detecta se a finalização de uma tarefa ocorre durante/após uma janela de intervalo.
  * Se sim, registra os horários reais no ponto_diario e retorna o novo status.
@@ -46,11 +64,23 @@ async function detectarIntervaloAoFinalizar(dbClient, funcionarioId, horarios, d
     );
     const pontoHoje = pontoRes.rows[0] || null;
 
+    // Pré-cálculo em minutos para comparações com tolerância
+    const horaAtualMin = hhmmParaMin(horaAtualSP);
+    const s1Min = hhmmParaMin(s1Agendado);
+    const s2Min = hhmmParaMin(s2Agendado);
+
     // ── CASO 1: Detecção de ALMOÇO ──────────────────────────────────────────
     // BUG-15: limite superior — se já passou do S2, não registrar almoço retroativo.
+    // BUG-15b: janela reduzida a [S1, S1+30min]. Além disso → cai para rede de segurança.
     // Funcionária que não almoçou via sistema e finaliza tarefa às 16h (hora da pausa)
-    // não deve ganhar um almoço falso; cai direto no CASO 2 (pausa).
-    if (horaAtualSP >= s1Agendado && !pontoHoje?.horario_real_s1 && (!s2Agendado || horaAtualSP < s2Agendado)) {
+    // não deve ganhar um almoço falso; cai direto no CASO 2 (pausa) ou rede de segurança.
+    const dentroJanelaAlmoco =
+        s1Min !== null && horaAtualMin !== null &&
+        horaAtualMin >= s1Min &&
+        horaAtualMin <= s1Min + TOLERANCIA_ATRASO_INTERVALO_MIN &&
+        (s2Min === null || horaAtualMin < s2Min);
+
+    if (dentroJanelaAlmoco && !pontoHoje?.horario_real_s1) {
         // Duração do almoço: E2 - S1 do cadastro. Default: 60 min.
         const e2Agendado = n(horarios.horario_entrada_2);
         let duracaoAlmocoMin = 60;
@@ -79,7 +109,13 @@ async function detectarIntervaloAoFinalizar(dbClient, funcionarioId, horarios, d
     }
 
     // ── CASO 2: Detecção de PAUSA (café/lanche) ──────────────────────────────
-    if (s2Agendado && horaAtualSP >= s2Agendado && !pontoHoje?.horario_real_s2) {
+    // BUG-15b: janela reduzida a [S2, S2+30min]. Além disso → rede de segurança.
+    const dentroJanelaPausa =
+        s2Min !== null && horaAtualMin !== null &&
+        horaAtualMin >= s2Min &&
+        horaAtualMin <= s2Min + TOLERANCIA_ATRASO_INTERVALO_MIN;
+
+    if (dentroJanelaPausa && !pontoHoje?.horario_real_s2) {
         // Garante que o almoço já terminou antes de registrar a pausa
         const e2Real = n(pontoHoje?.horario_real_e2) || n(horarios.horario_entrada_2);
         if (!e2Real || horaAtualSP < e2Real) return 'LIVRE'; // Almoço ainda não acabou
