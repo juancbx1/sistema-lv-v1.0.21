@@ -165,10 +165,12 @@ router.get('/status-funcionarios', async (req, res) => {
             const s2 = n5(row.horario_saida_2);
             const e3 = n5(row.horario_entrada_3);
 
-            // Fallback ALMOÇO: agora passou de E2 e não há registro de s1
+            // Fallback ALMOÇO: agora passou de S1 e não há registro de s1
+            // v1.8: gatilho antecipado — dispara no S1 (não após E2), para que
+            // calcularTempoEfetivo no frontend congele o timer imediatamente.
             if (s1 && e2 && !ponto?.horario_real_s1) {
-                const e2Min = hhmmParaMin(e2);
-                if (agoraMin !== null && e2Min !== null && agoraMin >= e2Min) {
+                const s1Min = hhmmParaMin(s1);
+                if (agoraMin !== null && s1Min !== null && agoraMin >= s1Min) {
                     safetyNetInserts.push(
                         dbClient.query(
                             `INSERT INTO ponto_diario (funcionario_id, data, horario_real_s1, horario_real_e2)
@@ -196,11 +198,12 @@ router.get('/status-funcionarios', async (req, res) => {
                 }
             }
 
-            // Fallback PAUSA: agora passou de E3 e não há registro de s2
+            // Fallback PAUSA: agora passou de S2 e não há registro de s2
+            // v1.8: gatilho antecipado — dispara no S2 (não após E3).
             const pontoAtual = pontoDiarioMap.get(row.id) || null;
             if (s2 && e3 && !pontoAtual?.horario_real_s2) {
-                const e3Min = hhmmParaMin(e3);
-                if (agoraMin !== null && e3Min !== null && agoraMin >= e3Min) {
+                const s2Min = hhmmParaMin(s2);
+                if (agoraMin !== null && s2Min !== null && agoraMin >= s2Min) {
                     safetyNetInserts.push(
                         dbClient.query(
                             `INSERT INTO ponto_diario (funcionario_id, data, horario_real_s2, horario_real_e3)

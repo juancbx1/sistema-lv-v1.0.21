@@ -132,12 +132,15 @@ router.post('/liberar-intervalo', async (req, res) => {
         });
         const dataHojeSP = agora.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 
-        // Busca horários do funcionário para calcular duração do intervalo
+        // Busca horários E verifica se está PRODUZINDO (tem sessão ativa)
+        // v1.8: se PRODUZINDO, só grava ponto_diario — não toca status nem sessão
         const horRes = await dbClient.query(
-            `SELECT horario_saida_1, horario_entrada_2, horario_saida_2, horario_entrada_3 FROM usuarios WHERE id = $1`,
+            `SELECT horario_saida_1, horario_entrada_2, horario_saida_2, horario_entrada_3,
+                    id_sessao_trabalho_atual FROM usuarios WHERE id = $1`,
             [funcionario_id]
         );
         const horarios = horRes.rows[0] || {};
+        const isProduzindo = !!horarios.id_sessao_trabalho_atual;
         const n = (t) => t ? String(t).substring(0, 5) : null;
 
         let campoSaida, campoRetorno, horarioRetorno, novoStatus;
@@ -189,19 +192,25 @@ router.post('/liberar-intervalo', async (req, res) => {
             [funcionario_id, dataHojeSP, horaAtualSP, horarioRetorno, supervisor]
         );
 
-        await dbClient.query(
-            `UPDATE usuarios
-             SET status_atual = $1,
-                 status_data_modificacao = (NOW() AT TIME ZONE 'America/Sao_Paulo'),
-                 id_sessao_trabalho_atual = NULL
-             WHERE id = $2`,
-            [novoStatus, funcionario_id]
-        );
+        // v1.8: se PRODUZINDO, não altera status nem sessão.
+        // O frontend congela o timer via calcularTempoEfetivo ao detectar o ponto_diario.
+        // Se LIVRE, atualiza status para ALMOCO/PAUSA normalmente.
+        if (!isProduzindo) {
+            await dbClient.query(
+                `UPDATE usuarios
+                 SET status_atual = $1,
+                     status_data_modificacao = (NOW() AT TIME ZONE 'America/Sao_Paulo'),
+                     id_sessao_trabalho_atual = NULL
+                 WHERE id = $2`,
+                [novoStatus, funcionario_id]
+            );
+        }
 
         await dbClient.query('COMMIT');
         res.status(200).json({
             message: `Funcionário liberado para ${tipo}.`,
-            retorno_previsto: horarioRetorno
+            retorno_previsto: horarioRetorno,
+            era_produzindo: isProduzindo,
         });
 
     } catch (error) {
@@ -272,6 +281,42 @@ router.post('/desfazer-saida', async (req, res) => {
     } catch (error) {
         if (dbClient) await dbClient.query('ROLLBACK');
         console.error('[API POST /ponto/desfazer-saida] Erro:', error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+/**
+ * POST /api/ponto/desfazer-liberacao
+ * Desfaz a liberação manual de um funcionário que estava em ALMOCO ou PAUSA.
+ * Resets status para 'LIVRE' (neutro) → determinarStatusFinalServidor recalcula
+ * e retorna ALMOCO/PAUSA automaticamente se ainda estivermos na janela do intervalo.
+ *
+ * Body: { funcionario_id: number }
+ */
+router.post('/desfazer-liberacao', async (req, res) => {
+    const { funcionario_id } = req.body;
+    if (!funcionario_id) {
+        return res.status(400).json({ error: 'funcionario_id obrigatório.' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        // Reseta status para 'LIVRE' (sem LIVRE_MANUAL com data).
+        // O cálculo automático em determinarStatusFinalServidor usará o ponto_diario
+        // para detectar que ainda estamos na janela de almoço/pausa → retorna ALMOCO/PAUSA.
+        await dbClient.query(
+            `UPDATE usuarios
+             SET status_atual = 'LIVRE',
+                 status_data_modificacao = (NOW() AT TIME ZONE 'America/Sao_Paulo')
+             WHERE id = $1`,
+            [funcionario_id]
+        );
+        res.status(200).json({ message: 'Liberação desfeita — intervalo restaurado.' });
+    } catch (error) {
+        console.error('[API POST /ponto/desfazer-liberacao] Erro:', error);
         res.status(500).json({ error: error.message });
     } finally {
         if (dbClient) dbClient.release();

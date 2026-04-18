@@ -5218,3 +5218,273 @@ body.autenticado {
     gap: 8px;
     line-height: 1.5;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   v1.8 — CARD BLOQUEADO (ALMOCO / PAUSA)
+   Card fica no grid principal com visual diferenciado quando o
+   funcionário está em intervalo. Timer congelado, ações bloqueadas.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Estado do card quando em intervalo */
+.cracha-card.cracha-em-intervalo {
+    background: #f8f9fa;
+    border: 1.5px solid #dee2e6;
+    opacity: 0.92;
+}
+.cracha-card.cracha-em-intervalo .cracha-topo {
+    background: linear-gradient(135deg, #adb5bd 0%, #868e96 100%);
+}
+
+/* Corpo do card bloqueado */
+.cracha-intervalo-corpo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 28px 16px 20px;
+    text-align: center;
+    min-height: 120px;
+}
+.cracha-intervalo-icone {
+    font-size: 2.2rem;
+    line-height: 1;
+}
+.cracha-intervalo-status {
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+.cracha-intervalo-retorno {
+    font-size: 0.88rem;
+    color: #495057;
+}
+.cracha-intervalo-retorno strong {
+    color: #212529;
+    font-size: 0.95rem;
+}
+.cracha-intervalo-lock {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.78rem;
+    color: #adb5bd;
+    margin-top: 4px;
+}
+
+/* Botão "Liberar para Trabalho" no card bloqueado */
+.cracha-btn-retomar {
+    background: linear-gradient(135deg, #868e96 0%, #6c757d 100%) !important;
+}
+.cracha-btn-retomar:hover {
+    background: linear-gradient(135deg, #6c757d 0%, #495057 100%) !important;
+}
+
+/* Footer bloqueado para PRODUZINDO em intervalo (timer congelado, sem botões) */
+.cracha-footer-bloqueado {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 0;
+    font-size: 0.88rem;
+    color: #868e96;
+    border-top: 1px dashed #dee2e6;
+    margin-top: 4px;
+}
+.cracha-footer-bloqueado i {
+    color: #adb5bd;
+}
+.cracha-footer-bloqueado strong {
+    color: #495057;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   v1.8 — POPUP DE ALERTA DE INTERVALO
+   Aparece quando o timer detecta o cruzamento de S1/S2.
+   Exige interação do supervisor ("Entendi") para fechar.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.oa-popup-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 9000;
+    animation: fadeIn 0.2s ease;
+}
+
+.oa-popup-intervalo {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 9001;
+    background: #fff;
+    border-radius: 20px;
+    padding: 32px 28px 24px;
+    width: min(420px, 90vw);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.28);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    animation: popIn 0.25s ease;
+}
+.oa-popup-intervalo-icone {
+    font-size: 3rem;
+    line-height: 1;
+}
+.oa-popup-intervalo-titulo {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #2c3e50;
+    text-align: center;
+}
+.oa-popup-intervalo-corpo {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.oa-popup-intervalo-linha {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 0.95rem;
+}
+.oa-popup-intervalo-linha.almoco {
+    background: #fff3e0;
+    color: #e65100;
+    border: 1px solid #ffcc80;
+}
+.oa-popup-intervalo-linha.pausa {
+    background: #fff8e1;
+    color: #f57f17;
+    border: 1px solid #ffe082;
+}
+.oa-popup-intervalo-linha i {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+.oa-popup-intervalo-aviso {
+    margin: 0;
+    font-size: 0.82rem;
+    color: #7f8c8d;
+    text-align: center;
+    line-height: 1.5;
+}
+.oa-popup-intervalo-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 12px;
+    border: none;
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    min-height: 50px;
+    transition: opacity 0.15s;
+}
+.oa-popup-intervalo-btn:hover {
+    opacity: 0.88;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   v1.8 — POPUP DE "DESFAZER LIBERAÇÃO" com countdown
+   Aparece após supervisor clicar "Liberar para Trabalho" num card
+   de ALMOCO/PAUSA. Desaparece em 10s se não interagir.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.oa-popup-desfazer {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 9001;
+    background: #fff;
+    border-radius: 20px;
+    padding: 28px 24px 22px;
+    width: min(360px, 88vw);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.28);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    animation: popIn 0.2s ease;
+}
+.oa-popup-desfazer-icone {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #d4edda;
+    color: #155724;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    font-weight: 700;
+}
+.oa-popup-desfazer-titulo {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #2c3e50;
+    text-align: center;
+}
+.oa-popup-desfazer-desc {
+    margin: 0;
+    font-size: 0.88rem;
+    color: #6c757d;
+    text-align: center;
+    line-height: 1.5;
+}
+.oa-popup-desfazer-countdown {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #adb5bd;
+    line-height: 1;
+}
+.oa-popup-desfazer-acoes {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+}
+.oa-popup-desfazer-btn {
+    flex: 1;
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    font-size: 0.92rem;
+    font-weight: 700;
+    cursor: pointer;
+    min-height: 46px;
+    transition: opacity 0.15s;
+}
+.oa-popup-desfazer-btn:hover { opacity: 0.85; }
+.oa-popup-desfazer-btn.desfazer {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffc107;
+}
+.oa-popup-desfazer-btn.confirmar {
+    background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+    color: #fff;
+}
+
+/* KPI chip para "em intervalo" */
+.oa-kpi-item.intervalo {
+    color: #f97316;
+}
+
+/* Animações compartilhadas */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+@keyframes popIn {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.88); }
+    to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}

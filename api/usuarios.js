@@ -89,7 +89,7 @@ export function determinarStatusFinalServidor(usuario, pontoDiario = null) {
         || n(horario_saida_3) || n(horario_saida_2) || n(horario_saida_1) || '23:59';
     const entradaInicial = n(horario_entrada_1) || '00:00';
 
-    if (horaAtualStr < entradaInicial || horaAtualStr > saidaFinal) {
+    if (horaAtualStr < entradaInicial || horaAtualStr >= saidaFinal) {
         if (ehLivreManual) return STATUS.LIVRE; // horas extras autorizadas pelo supervisor
         return STATUS.FORA_DO_HORARIO;
     }

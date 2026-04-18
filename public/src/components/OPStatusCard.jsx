@@ -283,7 +283,7 @@ function LinhaDoTempoDia({ funcionario, pontoHoje }) {
 }
 // ────────────────────────────────────────────────────────────────────────────
 
-export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAcaoManual, onFinalizarTarefa, onCancelarTarefa, onExcecao, onLiberarIntervalo }) {
+export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAcaoManual, onFinalizarTarefa, onCancelarTarefa, onExcecao, onLiberarIntervalo, onLiberarParaTrabalho }) {
     const [menuAberto, setMenuAberto] = useState(false);
     const [infoAberto, setInfoAberto] = useState(false);
 
@@ -390,12 +390,11 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
         return () => clearInterval(id);
     }, [status_atual, horario_saida_1, horario_saida_2, horario_saida_3]);
 
-    // --- BOTÃO "LIBERAR PARA INTERVALO" (janela estendida S-25 a S+30, com 4 fases escalonadas) ---
-    //   Fase 1 — antecipacao:  [S-25, S-5]  → discreto (azul suave)
-    //   Fase 2 — iminente:      [S-5, S)    → amarelo com pulse lento
-    //   Fase 3 — hora-agora:   [S, S+10]    → laranja forte com pulse + halo
-    //   Fase 4 — atrasado:     [S+10, S+30] → vermelho + contador de atraso + pulse na borda do card
-    //   Após S+30 → botão some (rede de segurança do backend assume)
+    // --- BOTÃO "LIBERAR PARA INTERVALO" (janela S-20 a S, com 2 fases escalonadas) ---
+    //   Fase 1 — antecipacao:  [S-20, S-5]  → discreto (azul suave)
+    //   Fase 2 — iminente:     [S-5, S)     → amarelo com pulse lento
+    //   A partir de S: o sistema toma conta automaticamente (timer 60s + rede de segurança backend)
+    //   Após S → botão some; card bloqueado automaticamente pelo 60s timer do painel
     useEffect(() => {
         const calcular = () => {
             if (status_atual !== 'LIVRE') { setIntervaloProximo(null); return; }
@@ -410,12 +409,10 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
             // Calcula a fase com base em minutos relativos ao horário alvo (S1 ou S2)
             const calcFase = (alvoMin) => {
                 const delta = agoraMin - alvoMin;
-                if (delta < -25) return null;
-                if (delta < -5)  return { nome: 'antecipacao', classe: 'fase-antecipacao', atrasoMin: 0 };
-                if (delta < 0)   return { nome: 'iminente',    classe: 'fase-iminente',    atrasoMin: 0 };
-                if (delta <= 10) return { nome: 'hora-agora',  classe: 'fase-hora-agora',  atrasoMin: 0 };
-                if (delta <= 30) return { nome: 'atrasado',    classe: 'fase-atrasado',    atrasoMin: delta };
-                return null; // após S+30 — safety net do backend assume
+                if (delta < -20) return null;                                                    // mais de 20min antes — botão não aparece
+                if (delta < -5)  return { nome: 'antecipacao', classe: 'fase-antecipacao', atrasoMin: 0 }; // [S-20, S-5]
+                if (delta < 0)   return { nome: 'iminente',    classe: 'fase-iminente',    atrasoMin: 0 }; // [S-5, S)
+                return null; // a partir de S → sistema assume automaticamente
             };
 
             const s1 = n(horario_saida_1);
@@ -478,6 +475,49 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
 
     // --- CORPO DO CARD ---
     const renderBody = () => {
+        // v1.8 — Card bloqueado: funcionário em ALMOCO ou PAUSA (sem tarefa ativa)
+        // Aparece quando o funcionário estava LIVRE quando o intervalo começou.
+        // Para quem estava PRODUZINDO, o status permanece PRODUZINDO com timer congelado.
+        if ((status_atual === 'ALMOCO' || status_atual === 'PAUSA' || status_atual === 'PAUSA_MANUAL') && !tarefaPrincipal) {
+            const isAlmoco  = status_atual === 'ALMOCO';
+            const icone     = isAlmoco ? 'fa-utensils' : 'fa-coffee';
+            const textoTipo = isAlmoco ? 'Em Almoço' : 'Em Pausa';
+            const corTipo   = isAlmoco ? '#f97316' : '#f59e0b';
+            const retorno   = isAlmoco
+                ? (formatarHora(ponto_hoje?.horario_real_e2 || horario_entrada_2))
+                : (formatarHora(ponto_hoje?.horario_real_e3 || horario_entrada_3));
+
+            return (
+                <>
+                    <div className="cracha-intervalo-corpo">
+                        <div className="cracha-intervalo-icone" style={{ color: corTipo }}>
+                            <i className={`fas ${icone}`}></i>
+                        </div>
+                        <div className="cracha-intervalo-status" style={{ color: corTipo }}>
+                            {textoTipo}
+                        </div>
+                        {retorno && retorno !== '--:--' && (
+                            <div className="cracha-intervalo-retorno">
+                                Retorno previsto às <strong>{retorno}</strong>
+                            </div>
+                        )}
+                        <div className="cracha-intervalo-lock">
+                            <i className="fas fa-lock"></i>
+                            <span>Bloqueado durante o intervalo</span>
+                        </div>
+                    </div>
+                    <div className="cracha-footer">
+                        <button
+                            className="cracha-btn finalizar full-width cracha-btn-retomar"
+                            onClick={() => onLiberarParaTrabalho && onLiberarParaTrabalho(funcionario)}
+                        >
+                            <i className="fas fa-play"></i> Liberar para Trabalho
+                        </button>
+                    </div>
+                </>
+            );
+        }
+
         if (status_atual === 'PRODUZINDO' && tarefaPrincipal) {
             const progressoVisual = ritmo ? Math.min(100, ritmo.pct) : 0;
 
@@ -593,13 +633,31 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
                         )}
                     </div>
 
+                    {/* v1.8: botões bloqueados durante intervalo automático (almoço/pausa) */}
                     <div className="cracha-footer">
-                        <button className="cracha-btn cancelar" onClick={() => onCancelarTarefa(funcionario)}>
-                            <i className="fas fa-times"></i> Cancelar
-                        </button>
-                        <button className="cracha-btn finalizar" onClick={() => onFinalizarTarefa(funcionario, pausaManualAcumuladoMsRef.current)}>
-                            <i className="fas fa-check-double"></i> Finalizar
-                        </button>
+                        {cronoPausadoAuto ? (
+                            // Tarefa travada — mostra quando o relógio vai retomar
+                            (() => {
+                                const retornoAuto = cronoPausadoMotivo === 'ALMOCO'
+                                    ? formatarHora(ponto_hoje?.horario_real_e2 || horario_entrada_2)
+                                    : formatarHora(ponto_hoje?.horario_real_e3 || horario_entrada_3);
+                                return (
+                                    <div className="cracha-footer-bloqueado">
+                                        <i className="fas fa-lock"></i>
+                                        <span>Retoma às <strong>{retornoAuto}</strong></span>
+                                    </div>
+                                );
+                            })()
+                        ) : (
+                            <>
+                                <button className="cracha-btn cancelar" onClick={() => onCancelarTarefa(funcionario)}>
+                                    <i className="fas fa-times"></i> Cancelar
+                                </button>
+                                <button className="cracha-btn finalizar" onClick={() => onFinalizarTarefa(funcionario, pausaManualAcumuladoMsRef.current)}>
+                                    <i className="fas fa-check-double"></i> Finalizar
+                                </button>
+                            </>
+                        )}
                     </div>
                 </>
             );
@@ -702,10 +760,13 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
         );
     };
 
+    const estaEmIntervalo = ['ALMOCO', 'PAUSA', 'PAUSA_MANUAL'].includes(status_atual) && !tarefaPrincipal;
     const cardClasses = [
         'cracha-card',
         role.classe,
         status_atual === 'PRODUZINDO' ? 'cracha-em-producao' : '',
+        estaEmIntervalo ? 'cracha-em-intervalo' : '',
+        (status_atual === 'PRODUZINDO' && cronoPausadoAuto) ? 'cracha-em-intervalo' : '',
         intervaloProximo?.nome === 'atrasado' ? 'cracha-liberar-atrasado' : '',
     ].filter(Boolean).join(' ');
 

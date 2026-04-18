@@ -17,6 +17,22 @@ export default function OPPainelAtividades() {
     const [inativoInfoId, setInativoInfoId] = useState(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
+    // v1.8 — Alerta de intervalo (almoço/pausa automático)
+    const [alertaIntervalo, setAlertaIntervalo] = useState(null);
+    // { almoco: ['Maria', 'Ana'], pausa: ['Rosa'] }
+
+    // v1.8 — Popup de "Desfazer liberação" com countdown
+    const [desfazerPopup, setDesfazerPopup] = useState(null);
+    // { funcionarioId, nome, tipo: 'ALMOCO'|'PAUSA', countdown: 10 }
+
+    // v1.8 — Controle de áudio (Web Audio API)
+    const audioCtxRef      = useRef(null);
+    const audioUnlockedRef = useRef(false);
+
+    // v1.8 — Rastreia quais funcionários já receberam alerta nesta sessão
+    // Chave: `${funcionario_id}-almoco-${dataSP}` ou `...-pausa-...`
+    const alertadosRef = useRef(new Set());
+
     const pollingTimeoutRef = useRef(null);
 
     // --- 1. BUSCA DE DADOS ---
@@ -51,7 +67,6 @@ export default function OPPainelAtividades() {
 
         // Configura atualização ao voltar para a aba
         const handleFocus = () => {
-            // console.log("Foco na aba Painel: Atualizando...");
             buscarDadosPainel();
         };
 
@@ -61,6 +76,131 @@ export default function OPPainelAtividades() {
             window.removeEventListener('focus', handleFocus);
         };
     }, [buscarDadosPainel]);
+
+    // --- v1.8: DESBLOQUEIO DE ÁUDIO ---
+    // Chrome bloqueia áudio sem interação prévia do usuário.
+    // Desbloqueamos no primeiro clique/toque — silencioso, sem popup de permissão.
+    useEffect(() => {
+        const unlock = () => {
+            if (audioUnlockedRef.current) return;
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                ctx.resume().then(() => {
+                    audioCtxRef.current = ctx;
+                    audioUnlockedRef.current = true;
+                });
+            } catch (e) { /* sem suporte a AudioContext — degrada graciosamente */ }
+        };
+        document.addEventListener('click', unlock, { once: true });
+        document.addEventListener('touchstart', unlock, { once: true });
+        return () => {
+            document.removeEventListener('click', unlock);
+            document.removeEventListener('touchstart', unlock);
+        };
+    }, []);
+
+    // Toca 3 bips descendentes (880→660→440 Hz) — som de alerta de fábrica.
+    const tocarBeep = useCallback(() => {
+        try {
+            const ctx = audioCtxRef.current;
+            if (!ctx || ctx.state === 'suspended') return;
+            [880, 660, 440].forEach((freq, i) => {
+                const osc  = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.frequency.value = freq;
+                osc.type = 'sine';
+                const t = ctx.currentTime + i * 0.28;
+                gain.gain.setValueAtTime(0.35, t);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+                osc.start(t);
+                osc.stop(t + 0.25);
+            });
+        } catch (e) { /* áudio indisponível */ }
+    }, []);
+
+    // --- v1.8: TIMER 60s — DETECÇÃO DE CRUZAMENTO S1/S2 ---
+    // Verifica a cada 60s se algum funcionário passou do horário de almoço (S1)
+    // ou pausa (S2). Quando detectado: grava ponto_diario + exibe popup de alerta + toca bip.
+    const liberarIntervaloSilencioso = useCallback(async (funcionarioId, tipo) => {
+        try {
+            const token = localStorage.getItem('token');
+            await fetch('/api/ponto/liberar-intervalo', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ funcionario_id: funcionarioId, tipo }),
+            });
+            // Não precisa tratar resposta — o próximo poll do buscarDadosPainel sincroniza o estado.
+        } catch (e) { /* silencioso — poll regular vai recuperar */ }
+    }, []);
+
+    useEffect(() => {
+        const checarIntervalos = () => {
+            const agora   = new Date();
+            const agoraSP = agora.toLocaleTimeString('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+            const dataSP  = agora.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+            const [ah, am] = agoraSP.split(':').map(Number);
+            const agoraMin = ah * 60 + am;
+            const n = (t) => t ? String(t).substring(0, 5) : null;
+
+            const novosAlmoco = [];
+            const novosPausa  = [];
+
+            for (const func of funcionarios) {
+                // Só verifica funcionários que estão ativos (produzindo ou disponíveis)
+                if (!['PRODUZINDO', 'LIVRE', 'LIVRE_MANUAL'].includes(func.status_atual)) continue;
+
+                const s1 = n(func.horario_saida_1);
+                const s2 = n(func.horario_saida_2);
+
+                // Verificar almoço (S1)
+                if (s1 && !func.ponto_hoje?.horario_real_s1) {
+                    const [s1h, s1m] = s1.split(':').map(Number);
+                    const chave = `${func.id}-almoco-${dataSP}`;
+                    if (agoraMin >= s1h * 60 + s1m && !alertadosRef.current.has(chave)) {
+                        alertadosRef.current.add(chave);
+                        novosAlmoco.push(func.nome.split(' ')[0]);
+                        liberarIntervaloSilencioso(func.id, 'ALMOCO');
+                    }
+                }
+
+                // Verificar pausa (S2) — só se almoço já foi (ponto tem s1 ou não tem almoço)
+                if (s2 && !func.ponto_hoje?.horario_real_s2) {
+                    const [s2h, s2m] = s2.split(':').map(Number);
+                    const chave = `${func.id}-pausa-${dataSP}`;
+                    if (agoraMin >= s2h * 60 + s2m && !alertadosRef.current.has(chave)) {
+                        alertadosRef.current.add(chave);
+                        novosPausa.push(func.nome.split(' ')[0]);
+                        liberarIntervaloSilencioso(func.id, 'PAUSA');
+                    }
+                }
+            }
+
+            if (novosAlmoco.length > 0 || novosPausa.length > 0) {
+                setAlertaIntervalo({ almoco: novosAlmoco, pausa: novosPausa });
+                tocarBeep();
+                // Sincroniza estado após pequeno delay (ponto_diario já foi gravado)
+                setTimeout(() => buscarDadosPainel(), 1500);
+            }
+        };
+
+        const id = setInterval(checarIntervalos, 60000);
+        return () => clearInterval(id);
+    }, [funcionarios, liberarIntervaloSilencioso, tocarBeep, buscarDadosPainel]);
+
+    // --- v1.8: COUNTDOWN DO POPUP "DESFAZER LIBERAÇÃO" ---
+    useEffect(() => {
+        if (!desfazerPopup) return;
+        if (desfazerPopup.countdown <= 0) {
+            setDesfazerPopup(null); // tempo esgotado — liberação confirmada
+            return;
+        }
+        const id = setTimeout(() => {
+            setDesfazerPopup(prev => prev ? { ...prev, countdown: prev.countdown - 1 } : null);
+        }, 1000);
+        return () => clearTimeout(id);
+    }, [desfazerPopup]);
 
  
 
@@ -86,6 +226,55 @@ export default function OPPainelAtividades() {
             setIsRefreshing(false);
         }
     }, [isRefreshing, buscarDadosPainel]);
+
+    // --- v1.8: LIBERAR FUNCIONÁRIO EM ALMOCO/PAUSA PARA O TRABALHO ---
+    // Chamado pelo botão "Liberar para trabalho" no card bloqueado.
+    // Após a ação, exibe o popup de "Desfazer" com countdown.
+    const handleLiberarParaTrabalho = useCallback(async (funcionario) => {
+        const primeiroNome = funcionario.nome.split(' ')[0];
+        const tipoIntervalo = funcionario.status_atual; // 'ALMOCO' | 'PAUSA'
+
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`/api/usuarios/${funcionario.id}/status`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'LIVRE_MANUAL' }),
+            });
+            if (!res.ok) throw new Error((await res.json()).error || 'Erro ao liberar');
+
+            // Atualização otimista — card muda imediatamente para LIVRE
+            setFuncionarios(prev => prev.map(f =>
+                f.id === funcionario.id ? { ...f, status_atual: 'LIVRE' } : f
+            ));
+
+            // Exibe popup de desfazer com countdown de 10s
+            setDesfazerPopup({ funcionarioId: funcionario.id, nome: primeiroNome, tipo: tipoIntervalo, countdown: 10 });
+            buscarDadosPainel();
+        } catch (err) {
+            mostrarMensagem(`Erro: ${err.message}`, 'erro');
+        }
+    }, [buscarDadosPainel]);
+
+    // --- v1.8: DESFAZER LIBERAÇÃO (popup com countdown) ---
+    const handleDesfazerLiberacao = useCallback(async () => {
+        if (!desfazerPopup) return;
+        const { funcionarioId, nome } = desfazerPopup;
+        setDesfazerPopup(null);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch('/api/ponto/desfazer-liberacao', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ funcionario_id: funcionarioId }),
+            });
+            if (!res.ok) throw new Error('Erro ao desfazer');
+            mostrarMensagem(`${nome} voltou para o intervalo.`, 'sucesso');
+            buscarDadosPainel();
+        } catch (err) {
+            mostrarMensagem(`Erro: ${err.message}`, 'erro');
+        }
+    }, [desfazerPopup, buscarDadosPainel]);
 
     const handleAcaoManual = async (funcionario, acao, mensagem) => {
         // Intercepta ações de ponto — não são status de usuário, vão para api/ponto
@@ -161,17 +350,18 @@ export default function OPPainelAtividades() {
         let horario, motivo = '';
 
         if (tipoExcecao === 'SAIDA_ANTECIPADA') {
-            // 1. Confirmar a ação
+            // 1. Confirmar a ação (único ponto de cancelamento — motivo não é ponto de cancelamento)
             const confirmado = await mostrarConfirmacao('Confirmar saída antecipada?', 'aviso');
             if (!confirmado) return;
-            // 2. Pedir motivo opcional
-            const motivoDigitado = await mostrarPromptTexto('Motivo da saída (opcional — pressione Confirmar para pular):', {
-                placeholder: 'Ex: consulta médica, problema pessoal...',
+            // 2. Pedir motivo opcional — mas se o supervisor fechar/cancelar, prossegue sem motivo.
+            // BUG-25: null no prompt de motivo cancelava a ação inteira → supervisor tentava 4-5x
+            // no tablet. Agora null = "sem motivo", prossegue normalmente.
+            const motivoDigitado = await mostrarPromptTexto('Motivo da saída (opcional):', {
+                placeholder: 'Ex: consulta médica, problema pessoal... (pode deixar em branco)',
                 tipo: 'aviso',
                 textoConfirmar: 'Registrar saída'
             });
-            if (motivoDigitado === null) return; // cancelou no popup de motivo
-            motivo = motivoDigitado;
+            motivo = motivoDigitado ?? ''; // null (fechou sem preencher) = sem motivo — prossegue
             // BUG-13: horário real será calculado no servidor; enviamos string vazia
             horario = '';
 
@@ -266,12 +456,15 @@ export default function OPPainelAtividades() {
     if (carregando) return <div className="spinner">Carregando painel...</div>;
     if (erro) return <p style={{ color: 'red', textAlign: 'center' }}>Erro: {erro}</p>;
 
-    const statusPrincipais = ['PRODUZINDO', 'LIVRE', 'LIVRE_MANUAL'];
+    // v1.8: ALMOCO e PAUSA ficam no grid principal (cards bloqueados) — não vão para inativos.
+    // Inativos = somente verdadeiramente inativos: FORA_DO_HORARIO, FALTOU, ALOCADO_EXTERNO.
+    const statusPrincipais = ['PRODUZINDO', 'LIVRE', 'LIVRE_MANUAL', 'ALMOCO', 'PAUSA', 'PAUSA_MANUAL'];
     const funcionariosPrincipais = funcionarios.filter(f => statusPrincipais.includes(f.status_atual));
-    const funcionariosInativos = funcionarios.filter(f => !statusPrincipais.includes(f.status_atual));
+    const funcionariosInativos   = funcionarios.filter(f => !statusPrincipais.includes(f.status_atual));
 
-    const qtdProduzindo = funcionarios.filter(f => f.status_atual === 'PRODUZINDO').length;
-    const qtdDisponivel = funcionarios.filter(f => ['LIVRE', 'LIVRE_MANUAL'].includes(f.status_atual)).length;
+    const qtdProduzindo  = funcionarios.filter(f => f.status_atual === 'PRODUZINDO').length;
+    const qtdDisponivel  = funcionarios.filter(f => ['LIVRE', 'LIVRE_MANUAL'].includes(f.status_atual)).length;
+    const qtdIntervalo   = funcionarios.filter(f => ['ALMOCO', 'PAUSA', 'PAUSA_MANUAL'].includes(f.status_atual)).length;
     const temAlguemProduzindo = qtdProduzindo > 0;
 
     // Determina se hoje é dia de trabalho para o funcionário (mesmo fallback do servidor)
@@ -376,9 +569,9 @@ export default function OPPainelAtividades() {
                             <span className={`oa-kpi-item${qtdDisponivel > 0 ? ' disponivel' : ''}`}>
                                 <i className="fas fa-check-circle"></i> {qtdDisponivel} disponível
                             </span>
-                            {funcionariosInativos.length > 0 && (
-                                <span className="oa-kpi-item">
-                                    <i className="fas fa-pause-circle"></i> {funcionariosInativos.length} em pausa
+                            {qtdIntervalo > 0 && (
+                                <span className="oa-kpi-item intervalo">
+                                    <i className="fas fa-pause-circle"></i> {qtdIntervalo} em intervalo
                                 </span>
                             )}
                         </div>
@@ -405,6 +598,7 @@ export default function OPPainelAtividades() {
                                         onCancelarTarefa={handleCancelarTarefa}
                                         onExcecao={handleExcecao}
                                         onLiberarIntervalo={handleLiberarIntervalo}
+                                        onLiberarParaTrabalho={handleLiberarParaTrabalho}
                                     />
                                 );
                             })}
@@ -413,7 +607,7 @@ export default function OPPainelAtividades() {
 
                     {funcionariosInativos.length > 0 && (
                         <div className="oa-inativos-secao">
-                            <div className="oa-inativos-titulo">Em pausa / inativos</div>
+                            <div className="oa-inativos-titulo">Inativos</div>
                             <div className="oa-inativos-grid">
                                 {funcionariosInativos.map(func => {
                                     const info = getInfoInativo(func);
@@ -596,6 +790,67 @@ export default function OPPainelAtividades() {
 
                 </section>
             </div>
+
+            {/* v1.8 — POPUP DE ALERTA DE INTERVALO (almoço/pausa automático) */}
+            {alertaIntervalo && ReactDOM.createPortal(
+                <>
+                    <div className="oa-popup-overlay" onClick={() => setAlertaIntervalo(null)} />
+                    <div className="oa-popup-intervalo" onClick={e => e.stopPropagation()}>
+                        <div className="oa-popup-intervalo-icone">⏸️</div>
+                        <div className="oa-popup-intervalo-titulo">Horário de Intervalo</div>
+                        <div className="oa-popup-intervalo-corpo">
+                            {alertaIntervalo.almoco.length > 0 && (
+                                <div className="oa-popup-intervalo-linha almoco">
+                                    <i className="fas fa-utensils"></i>
+                                    <span><strong>Almoço</strong> — {alertaIntervalo.almoco.join(', ')}</span>
+                                </div>
+                            )}
+                            {alertaIntervalo.pausa.length > 0 && (
+                                <div className="oa-popup-intervalo-linha pausa">
+                                    <i className="fas fa-coffee"></i>
+                                    <span><strong>Pausa</strong> — {alertaIntervalo.pausa.join(', ')}</span>
+                                </div>
+                            )}
+                            <p className="oa-popup-intervalo-aviso">
+                                Cards bloqueados até o retorno. Relógio pausado automaticamente.
+                            </p>
+                        </div>
+                        <button
+                            className="oa-popup-intervalo-btn"
+                            onClick={() => setAlertaIntervalo(null)}
+                        >
+                            Entendi
+                        </button>
+                    </div>
+                </>,
+                document.body
+            )}
+
+            {/* v1.8 — POPUP DE "DESFAZER LIBERAÇÃO" com countdown */}
+            {desfazerPopup && ReactDOM.createPortal(
+                <>
+                    <div className="oa-popup-overlay" />
+                    <div className="oa-popup-desfazer" onClick={e => e.stopPropagation()}>
+                        <div className="oa-popup-desfazer-icone">✓</div>
+                        <div className="oa-popup-desfazer-titulo">
+                            {desfazerPopup.nome} liberado{desfazerPopup.tipo === 'ALMOCO' ? ' do almoço' : ' da pausa'}
+                        </div>
+                        <p className="oa-popup-desfazer-desc">
+                            Clique em <strong>Desfazer</strong> para retornar ao intervalo.
+                        </p>
+                        <div className="oa-popup-desfazer-countdown">{desfazerPopup.countdown}s</div>
+                        <div className="oa-popup-desfazer-acoes">
+                            <button className="oa-popup-desfazer-btn desfazer" onClick={handleDesfazerLiberacao}>
+                                <i className="fas fa-undo"></i> Desfazer
+                            </button>
+                            <button className="oa-popup-desfazer-btn confirmar" onClick={() => setDesfazerPopup(null)}>
+                                Confirmar
+                            </button>
+                        </div>
+                    </div>
+                </>,
+                document.body
+            )}
 
             <OPAtribuicaoModal
                 isOpen={modalAberto}
