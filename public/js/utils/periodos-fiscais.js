@@ -26,6 +26,27 @@ export function getPeriodoFiscalAtual(dataRef = new Date()) {
     return { inicio: dataInicio, fim: dataFim, nomeCompetencia: nomeMes };
 }
 
+export function contarDiasUteis(inicio, fim) {
+    // Converte qualquer input (string 'YYYY-MM-DD' ou Date) para noon local.
+    // Strings date-only são interpretadas como UTC midnight pelo JS, o que em
+    // fusos UTC-3 (Brasil) coloca o cursor no dia anterior — daí o T12:00:00 local.
+    const toLocalNoon = (d) => {
+        const s = (typeof d === 'string') ? d.slice(0, 10) : d.toISOString().slice(0, 10);
+        return new Date(s + 'T12:00:00');
+    };
+
+    let count = 0;
+    let cursor = toLocalNoon(inicio);
+    const fimDate = toLocalNoon(fim);
+
+    while (cursor <= fimDate) {
+        const dow = cursor.getDay();
+        if (dow !== 0 && dow !== 6) count++;
+        cursor.setDate(cursor.getDate() + 1);
+    }
+    return count;
+}
+
 export function getDataPagamentoEstimada(fimDoCiclo) {
     const d = new Date(fimDoCiclo);
     d.setMonth(d.getMonth() + 1);

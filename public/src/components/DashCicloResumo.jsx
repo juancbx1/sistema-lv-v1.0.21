@@ -33,8 +33,9 @@ export default function DashCicloResumo({ blocos, aoClicarDetalhes }) {
                 </button>
             </div>
 
-            {/* A Linha do Tempo (Grid de Blocos) */}
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${blocosParaExibir.length}, 1fr)`, gap: '4px', marginBottom: '15px' }}>
+            {/* A Linha do Tempo (Grid de Blocos) — scroll horizontal em mobile */}
+            <div style={{ overflowX: 'auto', margin: '0 -5px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${blocosParaExibir.length}, minmax(80px, 1fr))`, gap: '4px', marginBottom: '15px', minWidth: `${blocosParaExibir.length * 84}px` }}>
                 {blocosParaExibir.map((bloco, idx) => {
                     const fimBlocoDate = new Date(bloco.fim);
                     const isPassado = hoje > fimBlocoDate;
@@ -96,6 +97,7 @@ export default function DashCicloResumo({ blocos, aoClicarDetalhes }) {
                         </div>
                     );
                 })}
+            </div>
             </div>
 
             {/* Legenda (Opcional, pode manter ou simplificar) */}

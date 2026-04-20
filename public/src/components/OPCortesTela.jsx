@@ -321,7 +321,7 @@ export default function OPCortesTela({ demandaInicial, onLimparDemanda }) {
       };
 
       return (
-        <div className="op-card-estilizado">
+        <div className="gs-card">
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: '15px' }}>
                 {passo > 0 && (
                     <button className="btn-voltar-header" onClick={voltarPasso}>

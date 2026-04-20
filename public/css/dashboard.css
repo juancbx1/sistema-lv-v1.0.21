@@ -2997,3 +2997,728 @@ body.ds-body.autenticado {
         padding: 20px;
 }
 }
+
+/* ============================================================
+   PROJEÇÃO ASPIRACIONAL DO CICLO (Fase 11 — mobile-first)
+   ============================================================ */
+.ds-projecao-card {
+    padding: 16px;
+}
+
+.ds-projecao-acumulado-chip {
+    background: #f0f7ff;
+    border: 1px solid #d0e8ff;
+    border-radius: 12px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.ds-projecao-acumulado-chip .fa-check-circle {
+    font-size: 1.2rem;
+    color: var(--ds-cor-primaria);
+    flex-shrink: 0;
+}
+
+.ds-projecao-acumulado-chip > div {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.ds-projecao-acumulado-label {
+    font-size: 0.75rem;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.ds-projecao-acumulado-valor {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--ds-cor-azul-escuro);
+}
+
+.ds-projecao-mensagem {
+    font-size: 0.9rem;
+    color: #555;
+    margin-bottom: 10px;
+    line-height: 1.5;
+}
+
+.ds-projecao-nivel-row {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.ds-projecao-nivel-icone {
+    font-size: 1.8rem;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.ds-projecao-valor-grande {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: var(--ds-cor-sucesso);
+    line-height: 1;
+}
+
+.ds-projecao-valor-grande.ouro {
+    color: #f9a825;
+}
+
+.ds-projecao-valor-medio {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--ds-cor-sucesso);
+    line-height: 1;
+}
+
+.ds-projecao-valor-medio.ouro {
+    color: #f9a825;
+}
+
+.ds-projecao-alerta-fim {
+    background: #fff3e0;
+    border-left: 4px solid #fb8c00;
+    border-radius: 0 8px 8px 0;
+    padding: 10px 14px;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #e65100;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+
+.ds-projecao-contexto {
+    font-size: 0.8rem;
+    color: #999;
+    margin-top: 4px;
+    margin-bottom: 16px;
+}
+
+.ds-projecao-divisor {
+    height: 1px;
+    background: #f0f0f0;
+    margin: 12px 0;
+}
+
+.ds-projecao-horizonte {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.ds-projecao-horizonte-valor {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #bbb;
+    display: block;
+}
+
+.ds-projecao-horizonte-label {
+    font-size: 0.78rem;
+    color: #ccc;
+}
+
+.ds-projecao-horizonte-rotulo {
+    font-size: 0.75rem;
+    color: #ddd;
+}
+
+.ds-projecao-manutencao {
+    background: #fffde7;
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 0.88rem;
+    color: #f57f17;
+    font-weight: 600;
+    margin-top: 8px;
+}
+
+/* Nudge inteligente */
+.ds-nudge-card {
+    background: #fff8e1;
+    border: 1px solid #ffe082;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-top: 16px;
+}
+
+.ds-nudge-titulo {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #555;
+    margin: 0 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ds-nudge-titulo .fa-lightbulb {
+    color: #f9a825;
+}
+
+.ds-nudge-delta {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--ds-cor-sucesso);
+    margin-bottom: 14px;
+}
+
+.ds-nudge-acoes {
+    display: flex;
+    gap: 10px;
+}
+
+.ds-nudge-btn-cta {
+    flex: 1;
+    background: var(--ds-cor-primaria);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    min-height: 48px;
+}
+
+.ds-nudge-btn-cta:active {
+    opacity: 0.85;
+}
+
+.ds-nudge-btn-ok {
+    background: #fff;
+    color: #999;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    padding: 12px 18px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    min-height: 48px;
+}
+
+.ds-nudge-btn-ok:active {
+    background: #f5f5f5;
+}
+
+/* ============================================================
+   COFRE / BANCO DE RESGATE (Fase 3 — mobile-first)
+   ============================================================ */
+.ds-cofre-icone-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 10px 0 16px;
+}
+
+.ds-cofre-vault-icon {
+    font-size: 3rem;
+    color: var(--ds-cor-primaria);
+    margin-bottom: 8px;
+}
+
+.ds-cofre-saldo-grande {
+    text-align: center;
+    font-size: 2.8rem;
+    font-weight: 800;
+    color: var(--ds-cor-azul-escuro);
+    line-height: 1;
+}
+
+.ds-cofre-saldo-grande small {
+    font-size: 1rem;
+    color: #999;
+    font-weight: 400;
+    margin-left: 4px;
+}
+
+.ds-cofre-slots-semana {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 14px;
+    margin: 12px 0;
+    text-align: center;
+}
+
+.ds-cofre-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 80px;
+    padding: 12px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.ds-cofre-slot.disponivel {
+    background: #e8f5e9;
+    color: var(--ds-cor-sucesso);
+}
+
+.ds-cofre-slot.usado {
+    background: #f5f5f5;
+    color: #bbb;
+}
+
+.ds-cofre-condicao-hoje {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin: 8px 0;
+    text-align: left;
+}
+
+/* Seções da tela de info */
+.ds-info-secao {
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px dashed #eee;
+    text-align: left;
+}
+
+.ds-info-secao h4 {
+    font-size: 0.95rem;
+    color: var(--ds-cor-azul-escuro);
+    margin-bottom: 8px;
+}
+
+.ds-info-secao p {
+    font-size: 0.88rem;
+    color: #555;
+    margin-bottom: 6px;
+    line-height: 1.6;
+}
+
+.ds-info-secao ul li {
+    font-size: 0.88rem;
+    color: #555;
+    line-height: 1.8;
+}
+
+/* ============================================================
+   EXTRATO DETALHADO — DashTabelaCiclo (Fase 4 — mobile-first)
+   ============================================================ */
+.ds-extrato-header-metricas {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+@media (min-width: 600px) {
+    .ds-extrato-header-metricas {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+.ds-extrato-metrica-chip {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 12px;
+    text-align: center;
+    border: 1px solid #eee;
+}
+
+.ds-extrato-metrica-valor {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--ds-cor-azul-escuro);
+    line-height: 1.2;
+}
+
+.ds-extrato-metrica-label {
+    font-size: 0.72rem;
+    color: #999;
+    margin-top: 4px;
+}
+
+/* Mini-calendário */
+.ds-calendario-ciclo {
+    margin-bottom: 20px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 12px;
+}
+
+.ds-calendario-semana {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.ds-calendario-dia {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    flex: 1;
+}
+
+.ds-calendario-bolinha {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    box-sizing: border-box;
+}
+
+.ds-calendario-num {
+    font-size: 0.62rem;
+    color: #999;
+}
+
+/* Cards semanais */
+.ds-semana-card {
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 10px;
+    border-left: 5px solid #dee2e6;
+    background: #fff;
+    border: 1px solid #eee;
+    border-left: 5px solid #dee2e6;
+    position: relative;
+}
+
+.ds-semana-card.status-ok {
+    border-left-color: var(--ds-cor-sucesso);
+}
+
+.ds-semana-card.status-atual {
+    border-left-color: var(--ds-cor-primaria);
+    background: #f0f7ff;
+}
+
+.ds-semana-card.status-zero {
+    border-left-color: #ced4da;
+}
+
+.ds-semana-badge-comparacao {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 20px;
+}
+
+.ds-semana-badge-up {
+    background: #e8f5e9;
+    color: var(--ds-cor-sucesso);
+}
+
+.ds-semana-badge-down {
+    background: #fff3e0;
+    color: #e65100;
+}
+
+.ds-semana-badge-neutral {
+    background: #f5f5f5;
+    color: #666;
+}
+
+.ds-semana-badge-futuro {
+    background: #f5f5f5;
+    color: #bbb;
+}
+
+.ds-semana-card.status-futuro {
+    border-left-color: #dee2e6;
+    background: #fafafa;
+    opacity: 0.65;
+}
+
+.ds-semana-pontos-destaque {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--ds-cor-primaria);
+    line-height: 1.1;
+}
+
+/* ============================================================
+   IA RITMO EM TEMPO REAL (Fase 5 — mobile-first)
+   ============================================================ */
+.ds-ritmo-ia-card {
+    padding: 16px;
+}
+
+.ds-ritmo-ia-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.ds-ritmo-ia-titulo {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--ds-cor-azul-escuro);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ds-ritmo-ia-metricas {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.ds-ritmo-ia-metrica {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 12px;
+}
+
+.ds-ritmo-ia-valor-grande {
+    font-size: 1.8rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.ds-ritmo-ia-label {
+    font-size: 0.72rem;
+    color: #999;
+    margin-top: 4px;
+}
+
+.ds-ritmo-ia-comparacao {
+    font-size: 0.78rem;
+    font-weight: 700;
+    margin-top: 6px;
+}
+
+.ds-ritmo-ia-comparacao.acima {
+    color: var(--ds-cor-sucesso);
+}
+
+.ds-ritmo-ia-comparacao.abaixo {
+    color: var(--ds-cor-perigo);
+}
+
+.ds-ritmo-ia-previsao {
+    background: #f0f7ff;
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 0.88rem;
+    color: var(--ds-cor-primaria);
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+.ds-ritmo-ia-previsao.nao-atingivel {
+    background: #fff3e0;
+    color: #e65100;
+}
+
+/* ==========================================================================
+   Ranking Anônimo da Semana
+   ========================================================================== */
+
+.ds-ranking-card {
+    margin-bottom: 16px;
+}
+
+.ds-ranking-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.ds-ranking-semana-label {
+    font-size: 0.75rem;
+    color: #999;
+}
+
+.ds-ranking-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ds-ranking-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: transparent;
+}
+
+.ds-ranking-item.sou-eu {
+    background: #e8f0fe;
+    border: 1px solid #c5d3f8;
+}
+
+.ds-ranking-item.primeiro {
+    background: #fffde7;
+}
+
+.ds-ranking-item.separador {
+    justify-content: center;
+    color: #ccc;
+    font-size: 0.75rem;
+    padding: 2px;
+}
+
+.ds-ranking-posicao {
+    width: 28px;
+    font-weight: 800;
+    font-size: 0.95rem;
+    color: #333;
+    flex-shrink: 0;
+    text-align: center;
+}
+
+.ds-ranking-nome {
+    flex: 1;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #444;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ds-ranking-nome.sou-eu {
+    color: var(--ds-cor-primaria);
+}
+
+.ds-ranking-barra-container {
+    width: 70px;
+    height: 8px;
+    background: #e9ecef;
+    border-radius: 4px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.ds-ranking-barra-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: var(--ds-cor-primaria);
+    transition: width 0.5s ease;
+}
+
+.ds-ranking-barra-fill.primeiro {
+    background: #f9a825;
+}
+
+.ds-ranking-pontos {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #555;
+    flex-shrink: 0;
+    min-width: 62px;
+    text-align: right;
+}
+
+/* ==========================================================================
+   Foco de Hoje
+   ========================================================================== */
+
+.ds-foco-hoje-card {
+    width: 100%;
+    margin-bottom: 16px;
+}
+
+.ds-foco-hoje-data {
+    font-size: 0.78rem;
+    color: #999;
+    font-weight: 500;
+    margin-bottom: 12px;
+    text-transform: capitalize;
+}
+
+.ds-foco-hoje-pts {
+    font-size: 3rem;
+    font-weight: 800;
+    color: var(--ds-cor-azul-escuro);
+    line-height: 1;
+}
+
+.ds-foco-hoje-pts-label {
+    font-size: 0.85rem;
+    color: #999;
+    margin-bottom: 16px;
+}
+
+.ds-foco-barra-container {
+    height: 20px;
+    border-radius: 10px;
+    background: #e9ecef;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.ds-foco-barra-fill {
+    height: 100%;
+    border-radius: 10px;
+    transition: width 0.6s ease-out, background 0.3s ease;
+}
+
+.ds-foco-barra-legenda {
+    font-size: 0.8rem;
+    color: #666;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.ds-foco-status-badge {
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.ds-foco-status-badge.sem-inicio  { background: #e3f2fd; color: #1565c0; }
+.ds-foco-status-badge.em-progresso { background: #fff8e1; color: #f57f17; }
+.ds-foco-status-badge.bronze      { background: #fdf3e3; color: #a0522d; }
+.ds-foco-status-badge.prata       { background: #e8f5e9; color: var(--ds-cor-sucesso); }
+.ds-foco-status-badge.ouro        { background: #e8f5e9; color: #1b5e20; font-size: 0.95rem; }
+
+.ds-foco-meta-chips {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.ds-foco-meta-info {
+    font-size: 0.82rem;
+    color: #888;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+/* ==========================================================================
+   Ranking Anônimo da Semana
+   ========================================================================== */
+
+.ds-ranking-motivacao {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: #f0f7ff;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    color: var(--ds-cor-primaria);
+    font-weight: 600;
+    text-align: center;
+    line-height: 1.5;
+}

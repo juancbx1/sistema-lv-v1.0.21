@@ -4,7 +4,7 @@ import pkg from 'pg';
 const { Pool } = pkg;
 import jwt from 'jsonwebtoken';
 import express from 'express';
-import { getPeriodoFiscalAtual, gerarBlocosSemanais } from '../public/js/utils/periodos-fiscais.js';
+import { getPeriodoFiscalAtual, gerarBlocosSemanais, contarDiasUteis } from '../public/js/utils/periodos-fiscais.js';
 
 const router = express.Router();
 const pool = new Pool({
@@ -123,7 +123,22 @@ async function auditarCofrePontos(dbClient, usuarioId, historicoDias, metasConfi
         );
     }
 
-    return { saldo: novoSaldo, usos: novosUsos };
+    // Conta resgates da semana atual (Seg–Dom, horário SP)
+    const agoraSP = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+    const diaSemana = agoraSP.getDay();
+    const diasDesdeSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
+    const inicioSemanaAtual = new Date(agoraSP);
+    inicioSemanaAtual.setDate(agoraSP.getDate() - diasDesdeSegunda);
+    inicioSemanaAtual.setHours(0, 0, 0, 0);
+
+    const resgatesSemanaisRes = await dbClient.query(
+        `SELECT COUNT(*)::int as total FROM banco_pontos_log
+         WHERE usuario_id = $1 AND tipo = 'RESGATE' AND data_evento >= $2`,
+        [usuarioId, inicioSemanaAtual]
+    );
+    const usosEssaSemana = resgatesSemanaisRes.rows[0].total;
+
+    return { saldo: novoSaldo, usos: novosUsos, usosEssaSemana };
 }
 
 router.get('/desempenho', async (req, res) => {
@@ -212,7 +227,11 @@ router.get('/desempenho', async (req, res) => {
             return { data: diaStr, pontos: pontosFeitos, ganho: ganhoDia };
         });
 
-        // 6. PROCESSA O COFRE AUTOMATICAMENTE
+        // 6. MÉTRICAS DO CICLO (para o Termômetro)
+        const diasUteisNoCiclo = contarDiasUteis(periodo.inicio, periodo.fim);
+        const diasTrabalhadosNoCiclo = historicoDias.filter(d => d.pontos > 0).length;
+
+        // 7. PROCESSA O COFRE AUTOMATICAMENTE
         const dadosCofre = await auditarCofrePontos(dbClient, usuario.id, historicoDias, metasConfiguradas, periodo.inicio);
 
         // 7. Blocos Semanais
@@ -238,7 +257,10 @@ router.get('/desempenho', async (req, res) => {
         fimCicloAnterior.setDate(fimCicloAnterior.getDate() - 1); // 20/12
         fimCicloAnterior.setHours(23, 59, 59, 999);
 
-        const inicioCicloAnterior = new Date('2025-12-14T00:00:00');
+        const inicioCicloAnterior = new Date(fimCicloAnterior);
+        inicioCicloAnterior.setDate(21);
+        inicioCicloAnterior.setMonth(inicioCicloAnterior.getMonth() - 1);
+        inicioCicloAnterior.setHours(0, 0, 0, 0);
         
         let valorCicloAnterior = 0;
         let dataPagamentoAnterior = null;
@@ -337,12 +359,24 @@ router.get('/desempenho', async (req, res) => {
             },
             acumulado: {
                 totalGanho: totalGanhoPeriodo,
-                blocos: blocosComDados
+                blocos: blocosComDados,
+                diasUteisNoCiclo,
+                diasTrabalhadosNoCiclo,
+                diasDetalhes: historicoDias
             },
             pagamentoPendente: {
-                valor: valorCicloAnterior,
-                data: dataPagamentoAnterior,
-                periodo: `${inicioCicloAnterior.toLocaleDateString('pt-BR')} a ${fimCicloAnterior.toLocaleDateString('pt-BR')}`
+                // "Próximo pagamento" = ciclo ATUAL em andamento, pago no mês seguinte ao fechamento
+                valor: totalGanhoPeriodo,
+                periodo: `${periodo.inicio.toLocaleDateString('pt-BR')} a ${periodo.fim.toLocaleDateString('pt-BR')}`,
+                mesReferencia: (() => {
+                    const d = new Date(periodo.fim);
+                    d.setMonth(d.getMonth() + 1);
+                    return d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+                })()
+            },
+            periodo: {
+                inicio: periodo.inicio.toISOString().split('T')[0],
+                fim: periodo.fim.toISOString().split('T')[0]
             },
             cofre: dadosCofre,
             atividadesRecentes: atividadesParaLista,
@@ -459,17 +493,56 @@ router.post('/resgatar-pontos', async (req, res) => {
         dbClient = await pool.connect();
         await dbClient.query('BEGIN');
 
-        // 1. Verifica saldo e limite de usos
+        // 1. Verifica saldo
         const saldoRes = await dbClient.query('SELECT * FROM banco_pontos_saldo WHERE usuario_id = $1 FOR UPDATE', [usuarioId]);
         if (saldoRes.rows.length === 0) throw new Error('Cofre não encontrado.');
-        
+
         const saldoAtual = parseFloat(saldoRes.rows[0].saldo_atual);
-        const usosAtuais = saldoRes.rows[0].usos_neste_ciclo;
-
         if (saldoAtual < quantidade) throw new Error('Saldo insuficiente no cofre.');
-        if (usosAtuais >= 5) throw new Error('Limite de 5 resgates por ciclo atingido.');
 
-        // 2. Deduz do Saldo
+        // 2. Verifica limite semanal (2 por semana Seg–Dom, horário SP)
+        const agoraSP = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+        const diaSemana = agoraSP.getDay();
+        const diasDesdeSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
+        const inicioSemanaAtual = new Date(agoraSP);
+        inicioSemanaAtual.setDate(agoraSP.getDate() - diasDesdeSegunda);
+        inicioSemanaAtual.setHours(0, 0, 0, 0);
+
+        const resgatesSemanaisRes = await dbClient.query(
+            `SELECT COUNT(*)::int as total FROM banco_pontos_log
+             WHERE usuario_id = $1 AND tipo = 'RESGATE' AND data_evento >= $2`,
+            [usuarioId, inicioSemanaAtual]
+        );
+        if (resgatesSemanaisRes.rows[0].total >= 2) {
+            throw new Error('Você já usou seus 2 resgates desta semana. Volta na segunda-feira!');
+        }
+
+        // 3. Verifica produção mínima hoje (500 pts)
+        const tipoRes = await dbClient.query('SELECT tipos FROM usuarios WHERE id = $1', [usuarioId]);
+        const tipoUsuario = tipoRes.rows[0]?.tipos?.[0] || 'costureira';
+        const hojeStrSP = agoraSP.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+
+        const pontosHojeProd = await dbClient.query(
+            `SELECT COALESCE(SUM(pontos_gerados), 0)::float as total FROM producoes
+             WHERE funcionario_id = $1 AND data::date = $2::date`,
+            [usuarioId, hojeStrSP]
+        );
+        let pontosHoje = pontosHojeProd.rows[0].total;
+
+        if (tipoUsuario === 'tiktik') {
+            const pontosHojeArr = await dbClient.query(
+                `SELECT COALESCE(SUM(pontos_gerados), 0)::float as total FROM arremates
+                 WHERE usuario_tiktik_id = $1 AND tipo_lancamento = 'PRODUCAO' AND data_lancamento::date = $2::date`,
+                [usuarioId, hojeStrSP]
+            );
+            pontosHoje += pontosHojeArr.rows[0].total;
+        }
+
+        if (pontosHoje < 500) {
+            throw new Error(`Produção insuficiente hoje (${Math.round(pontosHoje)} pts). São necessários pelo menos 500 pts para resgatar.`);
+        }
+
+        // 4. Deduz do Saldo
         await dbClient.query(
             `UPDATE banco_pontos_saldo SET saldo_atual = saldo_atual - $1, usos_neste_ciclo = usos_neste_ciclo + 1 WHERE usuario_id = $2`,
             [quantidade, usuarioId]
@@ -551,7 +624,7 @@ router.get('/meus-pagamentos', async (req, res) => {
               AND descricao ILIKE '%Comissão%' -- Filtra apenas Comissões
               AND data_pagamento >= '2025-12-14 00:00:00' -- Filtra data de corte
             ORDER BY data_pagamento DESC
-            LIMIT 12
+            LIMIT 2
         `, [usuarioId]);
 
         res.status(200).json(historicoRes.rows);
@@ -559,6 +632,351 @@ router.get('/meus-pagamentos', async (req, res) => {
     } catch (error) {
         console.error('[API Meus Pagamentos] Erro:', error);
         res.status(500).json({ error: 'Erro ao buscar pagamentos.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// GET /api/dashboard/ritmo-atual
+router.get('/ritmo-atual', async (req, res) => {
+    const { id: usuarioId } = req.usuarioLogado;
+    const metaAlvo = parseInt(req.query.meta_pontos) || 0;
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+
+        // 1. Tipo e dias de trabalho do usuário
+        const tipoRes = await dbClient.query('SELECT tipos, dias_trabalho FROM usuarios WHERE id = $1', [usuarioId]);
+        const tipoUsuario = tipoRes.rows[0]?.tipos?.[0] || 'costureira';
+        const diasTrabalho = tipoRes.rows[0]?.dias_trabalho || { "1":true,"2":true,"3":true,"4":true,"5":true };
+
+        // 2. Data e dia da semana (SP)
+        const agoraSP = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+        const hojeStr = agoraSP.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+        const diaSemana = agoraSP.getDay();
+        const nomesDia = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+        const nomeDiaAtual = nomesDia[diaSemana];
+
+        // Se hoje não é dia de trabalho deste empregado, não exibir o card
+        if (!diasTrabalho[String(diaSemana)]) {
+            return res.status(200).json({ naoEDiaDeTrabalho: true });
+        }
+
+        // 3. Pontos de hoje (paralelo)
+        const [pontosHojeRes, sessoesRes] = await Promise.all([
+            tipoUsuario === 'tiktik'
+                ? dbClient.query(
+                    `SELECT COALESCE(SUM(pontos_gerados), 0)::float as total
+                     FROM arremates
+                     WHERE usuario_tiktik_id = $1 AND tipo_lancamento = 'PRODUCAO'
+                     AND data_lancamento::date = $2::date`,
+                    [usuarioId, hojeStr]
+                )
+                : dbClient.query(
+                    `SELECT COALESCE(SUM(pontos_gerados), 0)::float as total
+                     FROM producoes WHERE funcionario_id = $1 AND data::date = $2::date`,
+                    [usuarioId, hojeStr]
+                ),
+            // 4. Horas trabalhadas hoje (sessões)
+            tipoUsuario === 'tiktik'
+                ? dbClient.query(
+                    `SELECT COALESCE(SUM(
+                         EXTRACT(EPOCH FROM (COALESCE(data_fim, NOW()) - data_inicio)) / 3600.0
+                     ), 0)::float as horas_total
+                     FROM sessoes_trabalho_arremate
+                     WHERE usuario_tiktik_id = $1
+                     AND data_inicio::date = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+                     AND status NOT IN ('CANCELADA', 'ESTORNADA')`,
+                    [usuarioId]
+                )
+                : dbClient.query(
+                    `SELECT COALESCE(SUM(
+                         EXTRACT(EPOCH FROM (COALESCE(data_fim, NOW()) - data_inicio)) / 3600.0
+                     ), 0)::float as horas_total
+                     FROM sessoes_trabalho_producao
+                     WHERE funcionario_id = $1
+                     AND data_inicio::date = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+                     AND status != 'CANCELADA'`,
+                    [usuarioId]
+                )
+        ]);
+
+        const pontosHoje = pontosHojeRes.rows[0].total;
+        const horasTrabalhadasHoje = sessoesRes.rows[0].horas_total || 0;
+
+        // 5. Ritmo atual (pts/hora) — mínimo 30 min de dados
+        const MINIMO_HORAS = 0.5;
+        const temDadosSuficientes = horasTrabalhadasHoje >= MINIMO_HORAS;
+        const ritmoAtual = temDadosSuficientes ? pontosHoje / horasTrabalhadasHoje : null;
+
+        // 6. Histórico do mesmo dia da semana (últimas 6 ocorrências)
+        const historicoRes = await dbClient.query(
+            tipoUsuario === 'tiktik'
+                ? `SELECT data_lancamento::date as data_dia, SUM(pontos_gerados)::float as pontos_dia
+                   FROM arremates
+                   WHERE usuario_tiktik_id = $1 AND tipo_lancamento = 'PRODUCAO'
+                   AND EXTRACT(DOW FROM data_lancamento AT TIME ZONE 'America/Sao_Paulo') = $2
+                   AND data_lancamento::date < $3::date
+                   GROUP BY data_dia ORDER BY data_dia DESC LIMIT 6`
+                : `SELECT data::date as data_dia, SUM(pontos_gerados)::float as pontos_dia
+                   FROM producoes
+                   WHERE funcionario_id = $1
+                   AND EXTRACT(DOW FROM data AT TIME ZONE 'America/Sao_Paulo') = $2
+                   AND data::date < $3::date
+                   GROUP BY data_dia ORDER BY data_dia DESC LIMIT 6`,
+            [usuarioId, diaSemana, hojeStr]
+        );
+
+        const pontosHistorico = historicoRes.rows.map(r => r.pontos_dia);
+        const mediaHistoricaPontosDia = pontosHistorico.length > 0
+            ? pontosHistorico.reduce((a, b) => a + b, 0) / pontosHistorico.length
+            : null;
+
+        // Ritmo histórico estimado em 8h de expediente
+        const HORAS_EXPEDIENTE = 8;
+        const ritmoHistorico = mediaHistoricaPontosDia != null
+            ? mediaHistoricaPontosDia / HORAS_EXPEDIENTE
+            : null;
+
+        // 7. Comparação ritmo atual vs histórico
+        let comparacaoHistorico = null;
+        if (ritmoAtual != null && ritmoHistorico != null && ritmoHistorico > 0) {
+            comparacaoHistorico = Math.round(((ritmoAtual - ritmoHistorico) / ritmoHistorico) * 100);
+        }
+
+        // 8. Previsão de batida de meta
+        // ritmoAtual > 0 obrigatório: se for 0, a divisão dá Infinity → new Date(Infinity) = "Invalid Date"
+        let previsao = null;
+        if (ritmoAtual != null && ritmoAtual > 0 && metaAlvo > 0 && pontosHoje < metaAlvo) {
+            const pontosRestantes = metaAlvo - pontosHoje;
+            const horasAteAMeta = pontosRestantes / ritmoAtual;
+            const previsaoMs = agoraSP.getTime() + (horasAteAMeta * 3600 * 1000);
+            const previsaoDate = new Date(previsaoMs);
+            previsao = {
+                horario: previsaoDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
+                atingivel: horasAteAMeta < 6
+            };
+        }
+
+        res.status(200).json({
+            pontosHoje: Math.round(pontosHoje),
+            horasTrabalhadasHoje: Math.round(horasTrabalhadasHoje * 10) / 10,
+            ritmoAtual: ritmoAtual != null ? Math.round(ritmoAtual) : null,
+            ritmoHistorico: ritmoHistorico != null ? Math.round(ritmoHistorico) : null,
+            comparacaoHistorico,
+            nomeDiaAtual,
+            previsao,
+            temDadosSuficientes,
+            amostrasHistorico: pontosHistorico.length
+        });
+
+    } catch (error) {
+        console.error('[API Ritmo IA] Erro:', error);
+        res.status(500).json({ error: 'Erro ao calcular ritmo.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// GET /api/dashboard/minha-tabela-pontos
+router.get('/minha-tabela-pontos', async (req, res) => {
+    const { id: usuarioId } = req.usuarioLogado;
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+
+        // 1. Tipo do usuário
+        const tipoRes = await dbClient.query('SELECT tipos FROM usuarios WHERE id = $1', [usuarioId]);
+        const tipoUsuario = tipoRes.rows[0]?.tipos?.[0] || 'costureira';
+
+        // costureiras usam 'costura_op_costureira'; tiktiks usam 'processo_op_tiktik' e 'arremate_tiktik'
+        const tiposAtividade = tipoUsuario === 'tiktik'
+            ? ['processo_op_tiktik', 'arremate_tiktik']
+            : ['costura_op_costureira'];
+
+        // 2. Produtos que o empregado trabalhou nos últimos 90 dias
+        const queryProdutos = tipoUsuario === 'tiktik'
+            ? `SELECT DISTINCT produto_id FROM arremates
+               WHERE usuario_tiktik_id = $1 AND data_lancamento >= NOW() - INTERVAL '90 days'`
+            : `SELECT DISTINCT produto_id FROM producoes
+               WHERE funcionario_id = $1 AND data >= NOW() - INTERVAL '90 days'`;
+
+        const produtosRes = await dbClient.query(queryProdutos, [usuarioId]);
+        const produtosIds = produtosRes.rows.map(r => r.produto_id);
+
+        if (produtosIds.length === 0) return res.status(200).json([]);
+
+        // 3. Configurações de pontos para esses produtos e tipos de atividade
+        const tabelaRes = await dbClient.query(`
+            SELECT
+                cpp.produto_id,
+                p.nome          AS produto_nome,
+                p.imagem        AS produto_imagem,
+                cpp.processo_nome,
+                cpp.pontos_padrao
+            FROM configuracoes_pontos_processos cpp
+            JOIN produtos p ON cpp.produto_id = p.id
+            WHERE cpp.produto_id = ANY($1::int[])
+              AND cpp.tipo_atividade = ANY($2::text[])
+              AND cpp.ativo = true
+            ORDER BY p.nome ASC, cpp.pontos_padrao DESC
+        `, [produtosIds, tiposAtividade]);
+
+        // 4. Agrupa por produto
+        const mapaGrupo = {};
+        tabelaRes.rows.forEach(row => {
+            if (!mapaGrupo[row.produto_id]) {
+                mapaGrupo[row.produto_id] = {
+                    produto_id: row.produto_id,
+                    produto_nome: row.produto_nome,
+                    produto_imagem: row.produto_imagem,
+                    processos: []
+                };
+            }
+            mapaGrupo[row.produto_id].processos.push({
+                nome: row.processo_nome,
+                pontos: parseFloat(row.pontos_padrao)
+            });
+        });
+
+        res.status(200).json(Object.values(mapaGrupo));
+
+    } catch (error) {
+        console.error('[API Tabela Pontos] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar tabela de pontos.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// GET /api/dashboard/ranking-semana
+router.get('/ranking-semana', async (req, res) => {
+    const { id: usuarioId } = req.usuarioLogado;
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+
+        // 1. Tipo do usuário logado
+        const tipoRes = await dbClient.query('SELECT tipos FROM usuarios WHERE id = $1', [usuarioId]);
+        const tipoUsuario = tipoRes.rows[0]?.tipos?.[0] || 'costureira';
+
+        // 2. Início da semana (domingo 00:00 SP → semana Dom–Sab)
+        const agoraSP = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+        const diaSemana = agoraSP.getDay(); // 0=Dom, 1=Seg, ..., 6=Sab
+        const inicioSemana = new Date(agoraSP);
+        inicioSemana.setDate(agoraSP.getDate() - diaSemana);
+        inicioSemana.setHours(0, 0, 0, 0);
+
+        // Label da semana para o header do card
+        const fimSemana = new Date(inicioSemana);
+        fimSemana.setDate(inicioSemana.getDate() + 6);
+        const fmtDia = (d) => `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}`;
+        const labelSemana = `${fmtDia(inicioSemana)}–${fmtDia(fimSemana)}`;
+
+        // 3. Buscar todos os usuários ativos do mesmo tipo
+        // data_admissao NOT NULL = empregado formalmente admitido
+        // data_demissao IS NULL  = ainda na empresa
+        const usuariosRes = await dbClient.query(
+            `SELECT id FROM usuarios
+             WHERE $1 = ANY(tipos)
+               AND data_admissao IS NOT NULL
+               AND data_demissao IS NULL`,
+            [tipoUsuario]
+        );
+        const todosIds = usuariosRes.rows.map(r => r.id);
+
+        if (todosIds.length <= 1) {
+            return res.status(200).json({ totalParticipantes: todosIds.length, ranking: [] });
+        }
+
+        // 4. Somar pontos de cada usuário na semana
+        let queryPontos;
+        if (tipoUsuario === 'tiktik') {
+            queryPontos = `
+                SELECT usuario_tiktik_id AS uid, COALESCE(SUM(pontos_gerados), 0)::int AS pontos
+                FROM arremates
+                WHERE usuario_tiktik_id = ANY($1::int[])
+                AND tipo_lancamento = 'PRODUCAO'
+                AND data_lancamento >= $2
+                GROUP BY uid
+            `;
+        } else {
+            queryPontos = `
+                SELECT funcionario_id AS uid, COALESCE(SUM(pontos_gerados), 0)::int AS pontos
+                FROM producoes
+                WHERE funcionario_id = ANY($1::int[])
+                AND data >= $2
+                GROUP BY uid
+            `;
+        }
+        const pontosRes = await dbClient.query(queryPontos, [todosIds, inicioSemana]);
+
+        // 5. Incluir usuários com 0 pontos e ordenar
+        const mapaRanking = new Map(pontosRes.rows.map(r => [r.uid, r.pontos]));
+        todosIds.forEach(id => { if (!mapaRanking.has(id)) mapaRanking.set(id, 0); });
+
+        const rankingOrdenado = [...mapaRanking.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .map(([uid, pontos], idx) => ({ uid, pontos, posicao: idx + 1, isEu: uid === usuarioId }));
+
+        const minhaEntrada = rankingOrdenado.find(r => r.isEu);
+        const minhaPosicao = minhaEntrada?.posicao || rankingOrdenado.length;
+        const meusPontos = minhaEntrada?.pontos || 0;
+
+        // 6. Slice visível
+        // Times pequenos (≤ 8): mostrar todos — nenhum membro fica de fora.
+        // Times grandes: janela de #1 fixo + 2 acima + eu + 2 abaixo.
+        const indiceEu = rankingOrdenado.findIndex(r => r.isEu);
+        let slice;
+        if (rankingOrdenado.length <= 8) {
+            slice = rankingOrdenado;
+        } else {
+            const inicioSlice = Math.max(0, indiceEu - 2);
+            const fimSlice = Math.min(rankingOrdenado.length, indiceEu + 3);
+            slice = rankingOrdenado.slice(inicioSlice, fimSlice);
+
+            // Garantir que o #1 está sempre presente
+            if (slice[0]?.posicao !== 1) {
+                slice = [
+                    rankingOrdenado[0],
+                    { posicao: null, pontos: null, uid: null, isEu: false, separador: true },
+                    ...slice
+                ];
+            }
+        }
+
+        // 7. Anonimizar (não enviar uid de outros)
+        const rankingFinal = slice.map(r => ({
+            posicao: r.posicao,
+            pontos: r.pontos,
+            isEu: r.isEu,
+            separador: r.separador || false
+        }));
+
+        // 8. Gap para motivação
+        const proximoAcima = rankingOrdenado[indiceEu - 1];
+        const gapParaProximo = proximoAcima ? proximoAcima.pontos - meusPontos : 0;
+        const posicaoAcima = proximoAcima ? proximoAcima.posicao : null;
+        const gapParaPrimeiro = rankingOrdenado[0].pontos - meusPontos;
+        const todosZerados = rankingOrdenado[0].pontos === 0;
+
+        res.status(200).json({
+            minhaPosicao,
+            totalParticipantes: rankingOrdenado.length,
+            meusPontos,
+            tipoUsuario,
+            gapParaProximo,
+            posicaoAcima,
+            gapParaPrimeiro,
+            labelSemana,
+            diaSemana,
+            todosZerados,
+            ranking: rankingFinal
+        });
+
+    } catch (error) {
+        console.error('[API Ranking] Erro:', error);
+        res.status(500).json({ error: 'Erro ao buscar ranking.' });
     } finally {
         if (dbClient) dbClient.release();
     }

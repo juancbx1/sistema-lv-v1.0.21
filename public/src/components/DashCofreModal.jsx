@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { fetchAPI } from '/js/utils/api-utils.js';
-import { mostrarMensagem, mostrarConfirmacao } from '/js/utils/popups.js';
+import { mostrarConfirmacao } from '/js/utils/popups.js';
 
-// ADICIONADA A PROP 'metaMinima' NA ASSINATURA DA FUNÇÃO
-export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, metaMinima, aoResgatarSucesso, onClose }) {
+export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, aoResgatarSucesso, onClose }) {
     const [loading, setLoading] = useState(false);
-    const [tela, setTela] = useState('resumo'); 
+    const [tela, setTela] = useState('resumo');
     const [historico, setHistorico] = useState([]);
     const [paginaExtrato, setPaginaExtrato] = useState(1);
     const [temMaisExtrato, setTemMaisExtrato] = useState(false);
@@ -13,42 +12,19 @@ export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, meta
     if (!dadosCofre) return null;
 
     const saldo = parseFloat(dadosCofre.saldo || 0);
-    const usos = dadosCofre.usos || 0;
-    const limiteUsos = 5;
-    const resgatesRestantes = Math.max(0, limiteUsos - usos);
-    
-    // --- CÁLCULOS DE REGRA ---
-    
-    // 1. Quanto falta?
+    const usosEssaSemana = dadosCofre.usosEssaSemana || 0;
+
+    const LIMITE_SEMANAL = 2;
+    const resgatesRestantesSemana = Math.max(0, LIMITE_SEMANAL - usosEssaSemana);
+    const temVidas = usosEssaSemana < LIMITE_SEMANAL;
+
+    const PONTOS_MINIMOS = 500;
+    const temProducaoMinima = pontosHoje >= PONTOS_MINIMOS;
+
     const faltaParaMeta = metaDoDia ? Math.max(0, metaDoDia.pontos_meta - pontosHoje) : 0;
-    
-    // 2. Tem Saldo?
     const temSaldoSuficiente = saldo >= faltaParaMeta;
-    
-    // 3. Tem Vidas?
-    const temVidas = usos < limiteUsos;
 
-    // 4. Anti-Fraude: Produção Mínima (50% da Meta Bronze/Mínima)
-    const pontosMinimosNecessarios = metaMinima ? Math.round(metaMinima.pontos_meta * 0.5) : 0;
-    const temProducaoMinima = pontosHoje >= pontosMinimosNecessarios;
-
-    // CONDIÇÃO FINAL PARA O BOTÃO
     const podeResgatar = faltaParaMeta > 0 && temSaldoSuficiente && temVidas && temProducaoMinima;
-
-
-    // --- LÓGICA VISUAL DO PORQUINHO ---
-    const isRico = saldo > 10; 
-    const isBloqueado = isRico && (!temVidas || !temProducaoMinima); // Bloqueado se rico mas sem vida ou sem produção mínima
-
-    const imgRico = "https://ock3xwuhzid9sows.public.blob.vercel-storage.com/dashboard_empregados/porquinho_rico.png";
-    const imgPobre = "https://ock3xwuhzid9sows.public.blob.vercel-storage.com/dashboard_empregados/porquinho_pobre.png";
-
-    let classeCofre = isRico ? 'ds-cofre-rico' : 'ds-cofre-pobre';
-    let imagemAtual = isRico ? imgRico : imgPobre;
-    
-    if (isBloqueado) {
-        classeCofre = 'ds-cofre-bloqueado';
-    }
 
     // --- AÇÕES ---
     const handleResgatar = async () => {
@@ -61,33 +37,29 @@ export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, meta
                 method: 'POST',
                 body: JSON.stringify({ quantidade: faltaParaMeta })
             });
-            mostrarMensagem('Resgate realizado com sucesso!', 'sucesso');
             aoResgatarSucesso();
             onClose();
         } catch (error) {
-            mostrarMensagem(`Erro: ${error.message}`, 'erro');
+            // Exibe o erro diretamente sem usar mostrarMensagem (evita dep extra)
+            alert(`Erro: ${error.message}`);
         } finally {
             setLoading(false);
         }
     };
 
-     // Função para carregar (ou carregar mais)
     const carregarExtrato = async (reset = true) => {
         setLoading(true);
         try {
             const pg = reset ? 1 : paginaExtrato + 1;
             const dados = await fetchAPI(`/api/dashboard/cofre/extrato?page=${pg}&limit=8`);
-            
             if (reset) {
                 setHistorico(dados.rows);
             } else {
                 setHistorico(prev => [...prev, ...dados.rows]);
             }
-            
             setPaginaExtrato(pg);
             setTemMaisExtrato(pg < dados.pagination.totalPages);
-            
-            if (reset) setTela('extrato'); // Só muda de tela se for a primeira carga
+            if (reset) setTela('extrato');
         } catch (error) {
             console.error(error);
         } finally {
@@ -95,263 +67,334 @@ export default function DashCofreModal({ dadosCofre, metaDoDia, pontosHoje, meta
         }
     };
 
-    // Função auxiliar para calcular o saldo histórico reverso
-    // Função auxiliar para calcular o saldo histórico reverso
+    // Saldo histórico reverso (mantém lógica original)
     const itensComSaldo = (() => {
-        let saldoVolatil = saldo; // Saldo ATUAL do usuário (do banco)
+        let saldoVolatil = saldo;
         let encontrouReset = false;
-
         return historico.map(item => {
-            // Se já passamos por um reset (estamos no passado profundo), paramos de calcular saldo
-            if (encontrouReset) {
-                return { ...item, saldoApos: null }; // Null indica para não exibir
-            }
-
+            if (encontrouReset) return { ...item, saldoApos: null };
             const qtd = parseFloat(item.quantidade);
-            const isGanho = item.tipo === 'GANHO';
             const isReset = item.tipo === 'RESET';
-            
             if (isReset) {
-                encontrouReset = true; // Marca que achamos a barreira do ciclo
-                return { ...item, saldoApos: 0 }; // No momento do reset, o saldo era 0
+                encontrouReset = true;
+                return { ...item, saldoApos: 0 };
             }
-
-            // O saldo DEPOIS dessa operação (linha atual) é o saldoVolatil atual
             const saldoMomento = saldoVolatil;
-            
-            // Prepara para a próxima linha (passado)
-            // Desfazemos a operação para descobrir quanto tinha ANTES
-            if (isGanho) saldoVolatil -= qtd;
+            if (item.tipo === 'GANHO') saldoVolatil -= qtd;
             else if (item.tipo === 'RESGATE') saldoVolatil += qtd;
-            
             return { ...item, saldoApos: saldoMomento };
         });
     })();
 
     // --- RENDERIZADORES ---
 
-    const renderVidas = () => {
-        const moedas = [];
-        for (let i = 0; i < limiteUsos; i++) {
-            const gasta = i < usos;
-            moedas.push(
-                <i key={i} className="fas fa-coins" style={{
-                    color: gasta ? '#e0e0e0' : '#ffc107', 
-                    fontSize: '1.2rem', margin: '0 2px', 
-                    filter: gasta ? 'none' : 'drop-shadow(0 2px 2px rgba(0,0,0,0.1))'
-                }}></i>
-            );
-        }
-        return (
-            <div style={{marginTop: '10px'}}>
-                <div style={{display:'flex', justifyContent:'center', gap:'5px'}}>{moedas}</div>
-                <div style={{fontSize: '0.8rem', color: resgatesRestantes > 0 ? 'var(--ds-cor-sucesso)' : 'var(--ds-cor-perigo)', marginTop: '5px', fontWeight: '600'}}>
-                    {resgatesRestantes > 0 
-                        ? `Você ainda tem ${resgatesRestantes} resgates neste ciclo.` 
-                        : `Acabaram seus resgates deste ciclo.`
-                    }
-                </div>
+    const renderSlotsSemana = () => (
+        <div className="ds-cofre-slots-semana">
+            <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#666', marginBottom: '8px' }}>
+                Resgates desta semana:
             </div>
-        );
-    };
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                {[0, 1].map(i => {
+                    const usado = i < usosEssaSemana;
+                    return (
+                        <div key={i} className={`ds-cofre-slot ${usado ? 'usado' : 'disponivel'}`}>
+                            <i className={`fas ${usado ? 'fa-lock' : 'fa-unlock'}`}></i>
+                            <span>{usado ? 'Usado' : 'Disponível'}</span>
+                        </div>
+                    );
+                })}
+            </div>
+            <div style={{
+                fontSize: '0.8rem', marginTop: '8px', fontWeight: '600',
+                color: resgatesRestantesSemana > 0 ? 'var(--ds-cor-sucesso)' : 'var(--ds-cor-perigo)'
+            }}>
+                {resgatesRestantesSemana > 0
+                    ? `${resgatesRestantesSemana} resgate(s) disponível(is) esta semana`
+                    : 'Limite semanal atingido. Volta no próximo domingo.'}
+            </div>
+        </div>
+    );
+
+    const renderCondicaoHoje = () => (
+        <div className="ds-cofre-condicao-hoje">
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '5px' }}>
+                <span>Produção hoje</span>
+                <strong style={{ color: temProducaoMinima ? 'var(--ds-cor-sucesso)' : 'var(--ds-cor-perigo)' }}>
+                    {Math.round(pontosHoje)} / {PONTOS_MINIMOS} pts
+                </strong>
+            </div>
+            <div style={{ height: '8px', borderRadius: '4px', background: '#e9ecef', overflow: 'hidden' }}>
+                <div style={{
+                    height: '100%',
+                    width: `${Math.min((pontosHoje / PONTOS_MINIMOS) * 100, 100)}%`,
+                    background: temProducaoMinima ? 'var(--ds-cor-sucesso)' : 'var(--ds-cor-aviso)',
+                    borderRadius: '4px',
+                    transition: 'width 0.5s ease'
+                }}></div>
+            </div>
+            <small style={{ color: '#999', fontSize: '0.72rem' }}>
+                {temProducaoMinima
+                    ? '✅ Produção mínima atingida'
+                    : `Faltam ${PONTOS_MINIMOS - Math.round(pontosHoje)} pts para liberar o resgate`}
+            </small>
+        </div>
+    );
 
     const renderResumo = () => (
         <>
-            {/* IMAGEM VIVA COM ESTADOS */}
-            <div className={`ds-cofre-container ${classeCofre}`}>
-                <img src={imagemAtual} alt="Estado do Cofre" className="ds-cofre-img" />
-                {isBloqueado && (
-                    <div className="ds-cofre-overlay-icon" title="Bloqueado">
-                        <i className="fas fa-lock"></i>
-                    </div>
-                )}
+            {/* Ícone do cofre + saldo */}
+            <div className="ds-cofre-icone-container">
+                <i className="fas fa-vault ds-cofre-vault-icon"></i>
+                <div className="ds-cofre-saldo-grande">
+                    <span>{Math.round(saldo)}</span>
+                    <small>pontos</small>
+                </div>
             </div>
-            
-            {/* TÍTULO COM TOOLTIP */}
-             <div style={{display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', marginBottom:'5px'}}>
-                <h2 style={{color: 'var(--ds-cor-azul-escuro)', margin:0}}>Banco de Resgate</h2>
-                <button 
-                    onClick={() => mostrarMensagem(`
-                        <p><strong>Como ganhar pontos para o cofre?</strong></p>
-                        <p>Sempre que você bater a <strong>Segunda Meta (Prata)</strong> ou superior, os pontos que sobrarem acima dela serão guardados aqui.</p>
-                        <p>Exemplo: Meta Prata é 800. Você fez 850. Você ganha 50 pts no cofre!</p>
-                        <p><em>*A Meta Bronze (mínima) não gera sobra.</em></p>
-                    `, 'info')}
-                    style={{background:'none', border:'none', color:'var(--ds-cor-primaria)', cursor:'pointer', fontSize:'1.2rem'}}
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '5px' }}>
+                <h2 style={{ color: 'var(--ds-cor-azul-escuro)', margin: 0, fontSize: '1.2rem' }}>Banco de Resgate</h2>
+                <button
+                    onClick={() => setTela('info')}
+                    style={{ background: 'none', border: 'none', color: 'var(--ds-cor-primaria)', cursor: 'pointer', fontSize: '1.2rem', padding: '0 4px' }}
                 >
                     <i className="fas fa-info-circle"></i>
                 </button>
             </div>
-            
-            <p style={{color: '#666', fontSize: '0.7rem', marginBottom: '10px'}}>
-                Acumule pontos excedentes de produção para usar em dias que sua produção foi menor.
+
+            <p style={{ color: '#666', fontSize: '0.78rem', marginBottom: '14px' }}>
+                Pontos excedentes guardados para dias de menor produção.
             </p>
 
-            <div style={{backgroundColor: '#f8f9fa', padding: '15px', borderRadius: '12px', marginBottom: '10px'}}>
-                <div style={{fontSize: '0.9rem', color: '#666', textTransform:'uppercase', letterSpacing:'1px', fontWeight:'600'}}>Saldo do Cofre</div>
-                <div style={{fontSize: '2.5rem', fontWeight: '800', color: isRico ? 'var(--ds-cor-primaria)' : '#666'}}>
-                    {Math.round(saldo)} <span style={{fontSize:'1rem'}}>pts</span>
-                </div>
-                {renderVidas()}
-            </div>
+            {/* Slots semanais */}
+            {renderSlotsSemana()}
 
-            {/* ÁREA DE AÇÃO / FEEDBACK */}
-            {faltaParaMeta > 0 ? (
-                <div style={{marginBottom: '20px'}}>
-                    
-                    {podeResgatar ? (
-                        // CENÁRIO 1: TUDO CERTO PARA RESGATAR
-                         <button 
+            {/* Condição de hoje */}
+            {renderCondicaoHoje()}
+
+            {/* Área de ação */}
+            <div style={{ marginTop: '14px', marginBottom: '14px' }}>
+                {faltaParaMeta > 0 ? (
+                    podeResgatar ? (
+                        <button
                             className="ds-btn-resgate-especial efeito-pulso"
                             disabled={loading}
                             onClick={handleResgatar}
-                            style={{width: '100%', padding: '18px', display:'flex', justifyContent:'center', alignItems:'center', gap:'10px'}}
+                            style={{ width: '100%', padding: '18px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}
                         >
                             <i className="fas fa-bolt"></i> USAR RESGATE AGORA
                         </button>
                     ) : (
-                        // CENÁRIO 2: BLOQUEADO (MENSAGENS ESPECÍFICAS SEM REPETIÇÃO)
-                        <div style={{
-                            backgroundColor: '#fff3cd', 
-                            borderRadius: '12px', 
-                            padding: '15px', 
-                            border: '1px solid #ffeeba',
-                            color: '#856404',
-                            textAlign: 'left'
-                        }}>
+                        <div style={{ backgroundColor: '#fff3cd', borderRadius: '12px', padding: '15px', border: '1px solid #ffeeba', color: '#856404', textAlign: 'left' }}>
                             {!temProducaoMinima ? (
-                                // A. BLOQUEIO ANTI-FRAUDE
                                 <>
-                                    <div style={{fontWeight: 'bold', marginBottom:'5px', color:'#d35400'}}>
+                                    <div style={{ fontWeight: 'bold', marginBottom: '5px', color: '#d35400' }}>
                                         <i className="fas fa-lock"></i> Produção Mínima Necessária
                                     </div>
-                                    <div style={{fontSize:'0.85rem'}}>
-                                        Para usar o cofre, você precisa produzir pelo menos <strong>{pontosMinimosNecessarios} pts</strong> hoje (50% da Meta Bronze).
+                                    <div style={{ fontSize: '0.85rem' }}>
+                                        Produza pelo menos <strong>{PONTOS_MINIMOS} pts</strong> hoje para liberar o resgate.
                                     </div>
                                 </>
-                            ) : usos >= limiteUsos ? (
-                                // B. BLOQUEIO DE VIDAS
+                            ) : !temVidas ? (
                                 <>
-                                    <div style={{fontWeight: 'bold', marginBottom:'5px'}}><i className="fas fa-ban"></i> Limite Atingido</div>
-                                    <div style={{fontSize:'0.85rem'}}>Você já usou seus 5 resgates neste ciclo.</div>
+                                    <div style={{ fontWeight: 'bold', marginBottom: '5px' }}><i className="fas fa-ban"></i> Limite Semanal Atingido</div>
+                                    <div style={{ fontSize: '0.85rem' }}>Você já usou seus 2 resgates desta semana. Volta na segunda-feira!</div>
                                 </>
                             ) : (
-                                // C. BLOQUEIO DE SALDO (Sem repetir números)
                                 <>
-                                    <div style={{fontWeight: 'bold', marginBottom:'5px'}}><i className="fas fa-piggy-bank"></i> Saldo Insuficiente</div>
-                                    <div style={{fontSize:'0.85rem'}}>
-                                        Seu saldo atual não cobre a falta de hoje. Tente produzir um pouco mais!
-                                    </div>
+                                    <div style={{ fontWeight: 'bold', marginBottom: '5px' }}><i className="fas fa-vault"></i> Saldo Insuficiente</div>
+                                    <div style={{ fontSize: '0.85rem' }}>Seu saldo não cobre a falta de hoje. Continue produzindo!</div>
                                 </>
                             )}
                         </div>
-                    )}
-                </div>
-            ) : (
-                // CENÁRIO 3: META JÁ BATIDA
-                <div style={{padding: '15px', backgroundColor: '#e6fffa', color: '#2c7a7b', borderRadius: '8px', marginBottom: '20px'}}>
-                    <i className="fas fa-check-circle"></i> Parabéns! A meta de hoje já foi batida.
-                </div>
-            )}
+                    )
+                ) : (
+                    <div style={{ padding: '15px', backgroundColor: '#e6fffa', color: '#2c7a7b', borderRadius: '8px' }}>
+                        <i className="fas fa-check-circle"></i> A meta de hoje já foi batida!
+                    </div>
+                )}
+            </div>
 
-            <button className="ds-btn ds-btn-secundario" style={{width: '100%'}} onClick={carregarExtrato} disabled={loading}>
+            <button className="ds-btn ds-btn-secundario" style={{ width: '100%' }} onClick={carregarExtrato} disabled={loading}>
                 Ver Extrato
             </button>
         </>
     );
 
-    const renderExtrato = () => (
-        <div style={{textAlign: 'left'}}>
-            <div style={{display:'flex', alignItems:'center', marginBottom:'20px'}}>
-                <button onClick={() => setTela('resumo')} className="ds-btn-fechar-painel-padrao" style={{position:'static', marginRight:'15px', backgroundColor:'var(--ds-cor-cinza-claro-fundo)', color:'#666', border:'none'}}><i class="fas fa-arrow-left"></i></button>
-                <h3 style={{margin:0, color:'var(--ds-cor-azul-escuro)'}}>Extrato</h3>
-            </div>
-            
-            <div style={{maxHeight:'400px', overflowY:'auto', borderTop:'1px solid #eee', paddingRight:'5px'}}>
-                {itensComSaldo.length === 0 ? <p style={{padding:'20px', textAlign:'center', color:'#999'}}>Vazio.</p> : 
-                    itensComSaldo.map((item, idx) => {
-                        const isGanho = item.tipo === 'GANHO';
-                        const isReset = item.tipo === 'RESET';
-                        
-                        if (isReset) {
-                            return (
-                                <div key={idx} style={{
-                                    backgroundColor: '#e3f2fd', 
-                                    padding: '15px', 
-                                    borderRadius: '8px', 
-                                    margin: '10px 0', 
-                                    textAlign: 'center',
-                                    color: '#0d47a1',
-                                    fontSize: '0.9rem',
-                                    border: '1px solid #bbdefb'
+    const renderExtrato = () => {
+        // Agrupar itens por data, intercalando cabeçalhos
+        const itensAgrupados = [];
+        let ultimaData = null;
+        itensComSaldo.forEach((item) => {
+            if (item.tipo === 'RESET') {
+                itensAgrupados.push({ tipo: '_RESET', item });
+                ultimaData = null;
+                return;
+            }
+            const dataStr = new Date(item.data_evento).toLocaleDateString('pt-BR', {
+                day: '2-digit', month: 'long', timeZone: 'America/Sao_Paulo'
+            });
+            if (dataStr !== ultimaData) {
+                itensAgrupados.push({ tipo: '_DATA_HEADER', dataStr });
+                ultimaData = dataStr;
+            }
+            itensAgrupados.push({ tipo: '_ITEM', item });
+        });
+
+        return (
+            <div style={{ textAlign: 'left' }}>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
+                    <button
+                        onClick={() => setTela('resumo')}
+                        className="ds-btn-fechar-painel-padrao"
+                        style={{ position: 'static', marginRight: '15px', backgroundColor: 'var(--ds-cor-cinza-claro-fundo)', color: '#666', border: 'none' }}
+                    >
+                        <i className="fas fa-arrow-left"></i>
+                    </button>
+                    <h3 style={{ margin: 0, color: 'var(--ds-cor-azul-escuro)' }}>Extrato do Cofre</h3>
+                </div>
+
+                {/* Saldo fixado no topo */}
+                <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    backgroundColor: 'var(--ds-cor-primaria)', color: '#fff',
+                    borderRadius: '10px', padding: '12px 16px', marginBottom: '16px'
+                }}>
+                    <span style={{ fontSize: '0.85rem', opacity: 0.9 }}>Saldo atual no Cofre</span>
+                    <strong style={{ fontSize: '1.4rem' }}>{Math.round(saldo)} pts</strong>
+                </div>
+
+                <div style={{ maxHeight: '380px', overflowY: 'auto', paddingRight: '4px' }}>
+                    {itensAgrupados.length === 0
+                        ? <p style={{ padding: '20px', textAlign: 'center', color: '#999' }}>Vazio.</p>
+                        : itensAgrupados.map((entrada, idx) => {
+                            if (entrada.tipo === '_DATA_HEADER') return (
+                                <div key={`h-${idx}`} style={{
+                                    fontSize: '0.72rem', fontWeight: '700', color: '#aaa',
+                                    textTransform: 'uppercase', letterSpacing: '0.5px',
+                                    padding: '10px 0 4px', marginTop: '4px'
                                 }}>
-                                    <i className="fas fa-calendar-check" style={{fontSize:'1.2rem', marginBottom:'5px', display:'block'}}></i>
-                                    <strong>Novo Ciclo</strong>
-                                    <div style={{fontSize:'0.8rem', marginTop:'3px'}}>Saldo Zerado: Novo ciclo iniciado!</div>
-                                    <div style={{fontSize:'0.7rem', opacity: 0.7, marginTop:'5px'}}>{new Date(item.data_evento).toLocaleDateString('pt-BR')}</div>
+                                    {entrada.dataStr}
                                 </div>
                             );
-                        }
 
-                        return (
-                            <div key={idx} style={{padding: '15px 0', borderBottom: '1px solid #eee'}}>
-                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
-                                    <div>
-                                        <div style={{fontWeight:'600', fontSize:'0.9rem', color:'#333', marginBottom:'4px'}}>{item.descricao}</div>
-                                        <div style={{fontSize:'0.75rem', color:'#999'}}>
-                                            {new Date(item.data_evento).toLocaleDateString('pt-BR')} às {new Date(item.data_evento).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}
+                            if (entrada.tipo === '_RESET') return (
+                                <div key={`r-${idx}`} style={{
+                                    display: 'flex', alignItems: 'center', gap: '10px',
+                                    margin: '16px 0', color: '#999'
+                                }}>
+                                    <div style={{ flex: 1, height: '1px', backgroundColor: '#e0e0e0' }}></div>
+                                    <span style={{
+                                        fontSize: '0.72rem', fontWeight: '700', color: '#bbb',
+                                        whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '0.5px'
+                                    }}>
+                                        <i className="fas fa-rotate-right" style={{ marginRight: '4px' }}></i>
+                                        Início do Ciclo · {new Date(entrada.item.data_evento).toLocaleDateString('pt-BR', {
+                                            day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Sao_Paulo'
+                                        })}
+                                    </span>
+                                    <div style={{ flex: 1, height: '1px', backgroundColor: '#e0e0e0' }}></div>
+                                </div>
+                            );
+
+                            const { item } = entrada;
+                            const isGanho = item.tipo === 'GANHO';
+                            return (
+                                <div key={`i-${idx}`} style={{
+                                    display: 'flex', alignItems: 'center', gap: '12px',
+                                    padding: '12px 0', borderBottom: '1px solid #f0f0f0'
+                                }}>
+                                    {/* Ícone circulado */}
+                                    <div style={{
+                                        width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        backgroundColor: isGanho ? '#e8f5e9' : '#fdecea',
+                                        color: isGanho ? 'var(--ds-cor-sucesso)' : 'var(--ds-cor-perigo)'
+                                    }}>
+                                        <i className={`fas ${isGanho ? 'fa-arrow-up' : 'fa-arrow-down'}`} style={{ fontSize: '0.9rem' }}></i>
+                                    </div>
+
+                                    {/* Texto central */}
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontWeight: '700', fontSize: '0.9rem', color: '#333' }}>
+                                            {isGanho ? 'Depósito' : 'Saque'}
+                                        </div>
+                                        <div style={{ fontSize: '0.75rem', color: '#999' }}>
+                                            {new Date(item.data_evento).toLocaleTimeString('pt-BR', {
+                                                hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo'
+                                            })}
                                         </div>
                                     </div>
+
+                                    {/* Valor à direita */}
                                     <div style={{
-                                        fontWeight:'700', 
-                                        color: isGanho ? 'var(--ds-cor-sucesso)' : 'var(--ds-cor-perigo)',
-                                        textAlign: 'right'
+                                        fontWeight: '800', fontSize: '1.1rem', flexShrink: 0,
+                                        color: isGanho ? 'var(--ds-cor-sucesso)' : 'var(--ds-cor-perigo)'
                                     }}>
-                                        <div>{isGanho ? '+' : '-'}{Math.round(item.quantidade)}</div>
+                                        {isGanho ? '+' : '-'}{Math.round(item.quantidade)} pts
                                     </div>
                                 </div>
-                                
-                                {/* LINHA DE SALDO APÓS A OPERAÇÃO */}
-                                {/* Só mostra se saldoApos não for null */}
-                                {item.saldoApos !== null && (
-                                    <div style={{
-                                        marginTop: '8px', 
-                                        paddingTop: '8px', 
-                                        borderTop: '1px dashed #eee', 
-                                        display: 'flex', 
-                                        justifyContent: 'space-between',
-                                        color: '#666',
-                                        fontSize: '0.8rem'
-                                    }}>
-                                        <span>Saldo Disponível:</span>
-                                        <strong>{Math.round(item.saldoApos)} pts</strong>
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })
-                }
-                
-                {/* BOTÃO CARREGAR MAIS */}
-                {temMaisExtrato && (
-                    <button 
-                        onClick={() => carregarExtrato(false)} 
-                        className="ds-btn ds-btn-secundario" 
-                        style={{width: '100%', marginTop: '15px'}}
-                        disabled={loading}
-                    >
-                        {loading ? 'Carregando...' : 'Carregar Mais Antigos'}
-                    </button>
-                )}
+                            );
+                        })
+                    }
+                    {temMaisExtrato && (
+                        <button onClick={() => carregarExtrato(false)} className="ds-btn ds-btn-secundario" style={{ width: '100%', marginTop: '15px' }} disabled={loading}>
+                            {loading ? 'Carregando...' : 'Carregar Mais Antigos'}
+                        </button>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    const renderInfo = () => (
+        <div style={{ textAlign: 'left', maxHeight: '60vh', overflowY: 'auto', paddingRight: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
+                <button
+                    onClick={() => setTela('resumo')}
+                    className="ds-btn-fechar-painel-padrao"
+                    style={{ position: 'static', marginRight: '15px', backgroundColor: 'var(--ds-cor-cinza-claro-fundo)', color: '#666', border: 'none' }}
+                >
+                    <i className="fas fa-arrow-left"></i>
+                </button>
+                <h3 style={{ margin: 0, color: 'var(--ds-cor-azul-escuro)' }}>Como funciona o Cofre</h3>
+            </div>
+
+            <div className="ds-info-secao">
+                <h4>🏦 O que é o Banco de Resgate?</h4>
+                <p>O Cofre guarda <strong>pontos excedentes</strong> da sua produção. Quando você bate a Meta Prata ou Ouro e ainda sobram pontos acima da meta, essa sobra vai direto pro cofre. É uma reserva para os dias mais difíceis.</p>
+            </div>
+
+            <div className="ds-info-secao">
+                <h4>📈 Como acumulo pontos no Cofre?</h4>
+                <p>Ao atingir a <strong>Meta Prata ou superior</strong>, os pontos que você fizer <em>acima</em> da meta vão para o cofre automaticamente.</p>
+                <p><em>Exemplo: Meta Prata = 800 pts. Você fez 870. Os 70 pontos extras vão para o cofre.</em></p>
+                <p style={{ color: '#999', fontSize: '0.82rem' }}>⚠️ A Meta Bronze não gera sobra no cofre.</p>
+            </div>
+
+            <div className="ds-info-secao">
+                <h4>🔓 Como usar o Resgate?</h4>
+                <p>Para usar o cofre em um dia que não bateu a meta, você precisa:</p>
+                <ul style={{ paddingLeft: '20px', marginTop: '8px' }}>
+                    <li>Ter <strong>pelo menos 500 pts de produção</strong> no dia</li>
+                    <li>Ter <strong>saldo suficiente</strong> no cofre para cobrir o que falta</li>
+                    <li>Não ter usado seus <strong>2 resgates da semana</strong> (conta de domingo a sábado)</li>
+                </ul>
+            </div>
+
+            <div className="ds-info-secao" style={{ borderBottom: 'none', marginBottom: 0, paddingBottom: 0 }}>
+                <h4>📅 E no início de cada ciclo?</h4>
+                <p>No dia 21 de cada mês, quando começa um novo ciclo, o saldo do cofre é <strong>zerado</strong>. Os resgates semanais reiniciam toda segunda-feira.</p>
             </div>
         </div>
     );
 
     return (
-        <div className="ds-popup-overlay ativo" onClick={onClose} style={{zIndex: 1200}}>
-            <div className="ds-modal-assinatura-content" onClick={e => e.stopPropagation()} style={{textAlign: 'center', padding: '30px', position:'relative', maxWidth:'400px'}}>
-                <button className="ds-modal-close-simple" onClick={onClose}><i class="fas fa-times"></i></button>
-                {tela === 'resumo' ? renderResumo() : renderExtrato()}
+        <div className="ds-popup-overlay ativo" onClick={onClose} style={{ zIndex: 1200 }}>
+            <div className="ds-modal-assinatura-content" onClick={e => e.stopPropagation()} style={{ textAlign: 'center', padding: '30px', position: 'relative', maxWidth: '400px' }}>
+                <button className="ds-modal-close-simple" onClick={onClose}><i className="fas fa-times"></i></button>
+                {tela === 'resumo' && renderResumo()}
+                {tela === 'extrato' && renderExtrato()}
+                {tela === 'info' && renderInfo()}
             </div>
         </div>
     );

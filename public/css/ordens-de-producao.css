@@ -56,14 +56,14 @@ body.autenticado {
     visibility: visible;
 }
 
-/* Container principal da página de OPs */
-/* Estilo de Card Genérico (para seções) */
-.op-card-estilizado { /* Nova classe genérica para aplicar o estilo de card */
-    background-color: var(--op-cor-fundo-card);
-    border-radius: var(--op-raio-borda-card);
+/* Card estilizado de OPs — alias da classe global gs-card.
+   Mantido para compatibilidade com componentes que ainda usam este nome.
+   Novas páginas devem usar gs-card diretamente. */
+.op-card-estilizado {
+    background-color: var(--gs-fundo-card, #fff);
+    border-radius: var(--gs-raio-borda-card, 10px);
     padding: 25px;
-    box-shadow: var(--op-sombra-card);
-    margin-bottom: 30px; /* Espaço entre cards */
+    box-shadow: var(--gs-sombra-padrao, 0 3px 8px rgba(0,0,0,0.07));
 }
 
 /* Cabeçalhos de Página e Seção */
@@ -2134,10 +2134,6 @@ body.autenticado {
     max-width: 80px;
 }
 
-    .op-card-estilizado {
-        padding: 15px;
-    }
-
     .op-input, .op-select, #opFormView  select, #corteView .variantes-selects-corte select {
     width: 100%;
     }
@@ -2395,7 +2391,7 @@ body.autenticado {
     }
     
     /* Aproveitamos para garantir que o título não cole no botão voltar (bolinha) */
-    .op-card-estilizado .op-titulo-secao {
+    .gs-card .op-titulo-secao {
         padding-left: 10px !important;
         padding-right: 10px !important;
     }

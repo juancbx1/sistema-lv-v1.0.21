@@ -37,7 +37,7 @@ export default function DashHeader({ usuario, saldoCofre, aoAbrirDesempenho, aoA
                     onClick={aoAbrirCofre}
                     style={{color: saldoCofre > 0 ? 'var(--ds-cor-primaria)' : 'inherit', borderColor: saldoCofre > 0 ? 'var(--ds-cor-primaria)' : 'var(--ds-cor-cinza-borda)'}}
                 >
-                    <i className="fas fa-piggy-bank"></i>
+                    <i className="fas fa-vault"></i>
                     {saldoCofre > 0 && (
                         <span className="ds-badge" style={{backgroundColor: 'var(--ds-cor-sucesso)', border: 'none', top: '-5px', right: '-5px'}}>
                             {Math.round(saldoCofre)}

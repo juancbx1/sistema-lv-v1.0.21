@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { fetchAPI } from '/js/utils/api-utils';
+import DashTabelaPontosModal from './DashTabelaPontos';
 
 export default function DashAtividadesLista({ aoAtualizar }) {
     const [filtroPeriodo, setFiltroPeriodo] = useState('hoje');
@@ -95,12 +96,30 @@ export default function DashAtividadesLista({ aoAtualizar }) {
     const selecionarHoje = () => { setFiltroPeriodo('hoje'); setDataEspecifica(getDataLocalISO(new Date())); setTermoInput(''); };
     const selecionarOntem = () => { setFiltroPeriodo('ontem'); const d=new Date(); d.setDate(d.getDate()-1); setDataEspecifica(getDataLocalISO(d)); setTermoInput(''); };
     const selecionarEspecifico = (e) => { setDataEspecifica(e.target.value); setFiltroPeriodo('especifico'); setTermoInput(''); };
-    const fmtData = (iso) => new Date(iso).toLocaleDateString('pt-BR');
-    const fmtHora = (iso) => new Date(iso).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+    const fmtData = (iso) => new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const fmtHora = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+
+    const [modalTabelaAberto, setModalTabelaAberto] = useState(false);
 
     return (
         <section className="ds-card ds-painel-detalhamento">
-            <h2 className="ds-card-titulo">Detalhamento das Atividades</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <h2 className="ds-card-titulo" style={{ margin: 0 }}>Detalhamento das Atividades</h2>
+                <button
+                    onClick={() => setModalTabelaAberto(true)}
+                    title="Ver minha tabela de pontos"
+                    style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: 'var(--ds-cor-primaria)', fontSize: '1.1rem',
+                        padding: '2px 4px', lineHeight: 1
+                    }}
+                >
+                    <i className="fas fa-info-circle"></i>
+                </button>
+            </div>
+            {modalTabelaAberto && (
+                <DashTabelaPontosModal onClose={() => setModalTabelaAberto(false)} />
+            )}
             
             <div className="ds-controles-detalhamento" style={{marginBottom:'20px'}}>
                 <div style={{display:'flex', gap:'10px', marginBottom:'10px'}}>

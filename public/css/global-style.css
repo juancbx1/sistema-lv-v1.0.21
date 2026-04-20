@@ -450,14 +450,49 @@ body.autenticado {
    # CARD 
    ========================================================================== */
 
-/* --- Componente Card Genérico --- */
+/* ── Card genérico padrão do sistema ──────────────────────────────────────
+   Uso: qualquer seção com fundo branco elevado.
+   Dentro de gs-conteudo-pagina o margin-bottom é zerado (gap cuida do espaço).
+   Referência visual: ordens-de-producao.
+   ────────────────────────────────────────────────────────────────────────── */
 .gs-card {
     background-color: var(--gs-fundo-card);
     border-radius: var(--gs-raio-borda-card);
     padding: 25px;
     box-shadow: var(--gs-sombra-padrao);
     margin-bottom: 30px;
-    position: relative; 
+    position: relative;
+}
+
+.gs-card--compacto {
+    padding: 14px 20px;
+}
+
+/* Dentro de gs-conteudo-pagina o gap já espaça os cards */
+.gs-conteudo-pagina > .gs-card {
+    margin-bottom: 0;
+}
+
+/* Wrapper de página inteira — card flutuante sobre o fundo da página */
+main.gs-card {
+    margin: 20px;
+    margin-bottom: 30px;
+    padding: 25px;
+}
+
+/* O gs-cabecalho-pagina tem margin: 25px próprio para quando não há card externo.
+   Dentro de main.gs-card o card já fornece o recuo — zeramos o margin. */
+main.gs-card .gs-cabecalho-pagina {
+    margin: 0 0 0 0;
+}
+
+/* gs-conteudo-pagina dentro do card principal não precisa de padding lateral extra */
+main.gs-card .gs-conteudo-pagina {
+    padding: 20px 0 0 0;
+}
+
+@media (max-width: 768px) {
+    main.gs-card { margin: 10px; padding: 15px; }
 }
 
 .gs-container-cards{
@@ -4169,9 +4204,18 @@ font-weight: 500;
     line-height: 1;
 }
 
-/* Wrapper do conteúdo principal após o tab nav */
+/* Wrapper do conteúdo principal após o tab nav (ou direto após o header) */
 .gs-conteudo-pagina {
     padding: 24px 25px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+@media (max-width: 768px) {
+    .gs-conteudo-pagina { padding: 16px 12px; }
+    .gs-card { padding: 15px; }
+    .gs-card--compacto { padding: 10px 14px; }
 }
 
 /* Botão limpar busca (X) dentro de gs-filtro-busca-wrapper */
@@ -4197,7 +4241,6 @@ font-weight: 500;
 @media (max-width: 768px) {
     .gs-tab-nav { padding: 0 12px; }
     .gs-tab-btn { padding: 10px 14px; font-size: 0.85rem; }
-    .gs-conteudo-pagina { padding: 16px 12px; }
 }
 
 /* ===== CARD DE DEMANDA (BotaoBuscaPipelineProducao) ===== */

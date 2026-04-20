@@ -17,11 +17,10 @@ export default function DashDesempenhoModal({ dadosAcumulados, onClose }) {
                 </div>
 
                 <div className="ds-modal-body-scrollable" style={{padding: '20px'}}>
-                    <DashTabelaCiclo blocos={dadosAcumulados.blocos} />
-                    
-                    <div style={{marginTop: '20px', textAlign: 'right', fontSize: '1.2rem'}}>
-                        Total Acumulado: <strong style={{color: 'var(--ds-cor-sucesso)'}}>R$ {dadosAcumulados.totalGanho.toFixed(2)}</strong>
-                    </div>
+                    <DashTabelaCiclo
+                        blocos={dadosAcumulados.blocos}
+                        diasDetalhes={dadosAcumulados.diasDetalhes || []}
+                    />
                 </div>
             </div>
         </div>

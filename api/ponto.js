@@ -181,13 +181,18 @@ router.post('/liberar-intervalo', async (req, res) => {
             novoStatus = 'PAUSA';
         }
 
+        // COALESCE: se o cron server-side já gravou o horário agendado, não sobrescreve.
+        // Isso garante que o timer automático do frontend (60s) não corrija retroativamente
+        // um horário já correto gravado pelo cron enquanto a tela estava fechada.
+        // Ação manual do supervisor (botão "Liberar") chega sempre ANTES de S1/S2,
+        // portanto neste momento o campo ainda é NULL — o COALESCE não interfere.
         await dbClient.query(
             `INSERT INTO ponto_diario (funcionario_id, data, ${campoSaida}, ${campoRetorno}, registrado_por)
              VALUES ($1, $2, $3, $4, $5)
              ON CONFLICT (funcionario_id, data) DO UPDATE SET
-                 ${campoSaida}   = EXCLUDED.${campoSaida},
-                 ${campoRetorno} = EXCLUDED.${campoRetorno},
-                 registrado_por  = EXCLUDED.registrado_por,
+                 ${campoSaida}   = COALESCE(ponto_diario.${campoSaida},   EXCLUDED.${campoSaida}),
+                 ${campoRetorno} = COALESCE(ponto_diario.${campoRetorno}, EXCLUDED.${campoRetorno}),
+                 registrado_por  = COALESCE(ponto_diario.registrado_por,  EXCLUDED.registrado_por),
                  updated_at      = NOW()`,
             [funcionario_id, dataHojeSP, horaAtualSP, horarioRetorno, supervisor]
         );

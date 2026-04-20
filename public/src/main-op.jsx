@@ -218,7 +218,7 @@ function App() {
   );
 }
 
-const container = document.getElementById('op-react-root');
+const container = document.getElementById('root');
 if (container) {
   const root = ReactDOM.createRoot(container);
   root.render(<App />);

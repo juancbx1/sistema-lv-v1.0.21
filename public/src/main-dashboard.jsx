@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import DashHeader from './components/DashHeader';
-import DashPontosAnel from './components/DashPontosAnel';
-import DashMetaSlider from './components/DashMetaSlider';
 import DashAtividadesLista from './components/DashAtividadesLista';
-import DashCicloResumo from './components/DashCicloResumo';
+import DashFocoHoje from './components/DashFocoHoje';
 import DashDesempenhoModal from './components/DashDesempenhoModal';
 import { fetchAPI } from '/js/utils/api-utils';
 import { verificarAutenticacao } from '/js/utils/auth.js'; 
-import DashSaldoCard from './components/DashSaldoCard';
-import { getDataPagamentoEstimada } from '/js/utils/periodos-fiscais.js';
+import DashProjecaoCiclo from './components/DashProjecaoCiclo';
+import DashRitmoIA from './components/DashRitmoIA';
 import DashCofreModal from './components/DashCofreModal';
 import DashPerfilModal from './components/DashPerfilModal';
-import DashPagamentosModal from './components/DashPagamentosModal'
+import DashPagamentosModal from './components/DashPagamentosModal';
+import DashRankingCard from './components/DashRankingCard';
 
 export default function MainDashboard() {
     const [loading, setLoading] = useState(true);
@@ -39,9 +38,14 @@ export default function MainDashboard() {
                 metaInicial = resultado.metasPossiveis.find(m => m.pontos_meta.toString() === metaSalvaPontos);
             }
 
-            // Se não tiver salva (ou não existir mais), usa a sugestão da API (proximaMeta) ou a primeira
             if (!metaInicial) {
-                metaInicial = resultado.hoje.proximaMeta || resultado.metasPossiveis[0];
+                // Só usa sugestão do servidor se o usuário NUNCA escolheu nada
+                if (!metaSalvaPontos) {
+                    metaInicial = resultado.hoje.proximaMeta || resultado.metasPossiveis[0];
+                } else {
+                    // Tinha salvo mas a meta não existe mais — usa a primeira disponível
+                    metaInicial = resultado.metasPossiveis[0];
+                }
             }
 
             setMetaDoUsuario(metaInicial);
@@ -68,9 +72,6 @@ export default function MainDashboard() {
 
     if (!dados) return <div style={{textAlign:'center', padding:'20px'}}>Erro ao carregar dados.</div>;
 
-    // Objeto auxiliar (pode por fora do return)
-    const dataPagamento = dados ? getDataPagamentoEstimada(dados.acumulado.blocos[dados.acumulado.blocos.length - 1].fim) : '--/--/----';
-
     return (
         <div className="ds-body autenticado">
             <DashHeader 
@@ -85,44 +86,28 @@ export default function MainDashboard() {
             />
 
             <main className="ds-container-principal">
-                {/* NOVO BLOCO DE SALDO */}
-                {dados && (
-                    <DashSaldoCard 
-                        valorAcumulado={dados.acumulado.totalGanho} 
-                        dataPagamento={dataPagamento} 
-                    />
-                )}
+                <DashProjecaoCiclo
+                    valorAcumulado={dados.acumulado.totalGanho}
+                    diasUteisNoCiclo={dados.acumulado.diasUteisNoCiclo}
+                    diasTrabalhadosNoCiclo={dados.acumulado.diasTrabalhadosNoCiclo}
+                    diasDetalhes={dados.acumulado.diasDetalhes}
+                    metasPossiveis={dados.metasPossiveis}
+                    metaDoUsuario={metaDoUsuario}
+                    aoMudarMeta={setMetaDoUsuario}
+                    inicioCiclo={dados.periodo?.inicio}
+                    fimCiclo={dados.periodo?.fim}
+                />
                 
-                {/* Painel Superior */}
-                <section className="ds-painel-desempenho">
-                    {/* COLUNA ESQUERDA: HOJE + REALIDADE */}
-                    <div style={{flex: 1, minWidth: '300px', display: 'flex', flexDirection: 'column'}}>
-                        <DashPontosAnel 
-                            dadosHoje={dados.hoje} 
-                            metaDinamica={metaDoUsuario} 
-                        />
+                <DashFocoHoje
+                    dadosHoje={dados.hoje}
+                    metasPossiveis={dados.metasPossiveis}
+                    metaInicial={metaDoUsuario}
+                    aoMudarMeta={setMetaDoUsuario}
+                />
 
-                        {/* COLUNA DIREITA: SONHO (Slider) */}
-                        <div style={{flex: 1.5, minWidth: '300px'}}>
-                            <DashMetaSlider 
-                                metasPossiveis={dados.metasPossiveis} 
-                                aoMudarMeta={setMetaDoUsuario} 
-                                metaInicial={metaDoUsuario}
-                            />
-                            {/* Você pode colocar dicas ou avisos aqui embaixo do slider se quiser */}
-                        </div>
-                        
-                        
-                        {/* NOVO BLOCO: Realidade do Ciclo */}
-                        <DashCicloResumo 
-                            blocos={dados.acumulado.blocos}
-                            acumuladoTotal={dados.acumulado.totalGanho}
-                            aoClicarDetalhes={() => setModalDesempenhoAberto(true)}
-                        />
-                    </div>
-                    
-                    
-                </section>
+                <DashRitmoIA metaDoUsuario={metaDoUsuario} />
+
+                <DashRankingCard />
 
                 {/* Lista de Atividades */}
                 <DashAtividadesLista 
@@ -141,12 +126,10 @@ export default function MainDashboard() {
             )}
 
             {modalCofreAberto && (
-                <DashCofreModal 
+                <DashCofreModal
                     dadosCofre={dados.cofre}
                     metaDoDia={metaDoUsuario}
                     pontosHoje={dados.hoje.pontos}
-                    // NOVA PROP: Envia a primeira meta (Bronze) para cálculo da trava
-                    metaMinima={dados.metasPossiveis ? dados.metasPossiveis[0] : null}
                     aoResgatarSucesso={carregar}
                     onClose={() => setModalCofreAberto(false)}
                 />
