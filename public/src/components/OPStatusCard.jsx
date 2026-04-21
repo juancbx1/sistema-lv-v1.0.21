@@ -397,7 +397,8 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
     //   Após S → botão some; card bloqueado automaticamente pelo 60s timer do painel
     useEffect(() => {
         const calcular = () => {
-            if (status_atual !== 'LIVRE') { setIntervaloProximo(null); return; }
+            // v1.9: botão de liberação antecipada aparece para LIVRE e PRODUZINDO
+            if (status_atual !== 'LIVRE' && status_atual !== 'PRODUZINDO') { setIntervaloProximo(null); return; }
             const agora = new Date();
             const horaAtual = agora.toLocaleTimeString('en-GB', {
                 timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit'
@@ -633,19 +634,44 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
                         )}
                     </div>
 
+                    {/* v1.9: botão de liberação antecipada quando PRODUZINDO e intervalo se aproxima */}
+                    {intervaloProximo && onLiberarIntervalo && !cronoPausadoAuto && (
+                        <button
+                            className={`op-btn-liberar-intervalo ${intervaloProximo.classe}`}
+                            onClick={() => onLiberarIntervalo(funcionario.id, intervaloProximo.tipo)}
+                            title={`${intervaloProximo.label} agora (retorno calculado automaticamente)`}
+                        >
+                            <i className={`fas ${intervaloProximo.icone}`}></i>
+                            <span className="op-btn-liberar-texto">{intervaloProximo.label}</span>
+                            {intervaloProximo.atrasoMin > 0 && (
+                                <span className="op-btn-liberar-atraso">+{intervaloProximo.atrasoMin}min</span>
+                            )}
+                        </button>
+                    )}
+
                     {/* v1.8: botões bloqueados durante intervalo automático (almoço/pausa) */}
+                    {/* v1.9: quando congelado, supervisor pode liberar para trabalho antecipadamente */}
                     <div className="cracha-footer">
                         {cronoPausadoAuto ? (
-                            // Tarefa travada — mostra quando o relógio vai retomar
+                            // Tarefa travada — mostra retorno previsto + botão para liberar antecipadamente
                             (() => {
                                 const retornoAuto = cronoPausadoMotivo === 'ALMOCO'
                                     ? formatarHora(ponto_hoje?.horario_real_e2 || horario_entrada_2)
                                     : formatarHora(ponto_hoje?.horario_real_e3 || horario_entrada_3);
                                 return (
-                                    <div className="cracha-footer-bloqueado">
-                                        <i className="fas fa-lock"></i>
-                                        <span>Retoma às <strong>{retornoAuto}</strong></span>
-                                    </div>
+                                    <>
+                                        <div className="cracha-footer-bloqueado">
+                                            <i className="fas fa-lock"></i>
+                                            <span>Retoma às <strong>{retornoAuto}</strong></span>
+                                        </div>
+                                        <button
+                                            className="cracha-btn finalizar full-width cracha-btn-retomar"
+                                            style={{ marginTop: '6px' }}
+                                            onClick={() => onLiberarParaTrabalho && onLiberarParaTrabalho(funcionario, cronoPausadoMotivo)}
+                                        >
+                                            <i className="fas fa-play"></i> Liberar para Trabalho
+                                        </button>
+                                    </>
                                 );
                             })()
                         ) : (
@@ -734,15 +760,7 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
                     </div>
                 )}
 
-                <div className="cracha-footer">
-                    {status_atual === 'LIVRE' && (
-                        <button className="cracha-btn finalizar full-width" onClick={() => onAtribuirTarefa(funcionario)}>
-                            <i className="fas fa-play"></i> Atribuir Tarefa
-                        </button>
-                    )}
-                </div>
-
-                {/* Botão de liberação antecipada — separado do footer, com fases visuais escalonadas */}
+                {/* Botão de liberação antecipada — aparece acima do "Atribuir Tarefa" */}
                 {intervaloProximo && onLiberarIntervalo && (
                     <button
                         className={`op-btn-liberar-intervalo ${intervaloProximo.classe}`}
@@ -756,6 +774,14 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
                         )}
                     </button>
                 )}
+
+                <div className="cracha-footer">
+                    {status_atual === 'LIVRE' && (
+                        <button className="cracha-btn finalizar full-width" onClick={() => onAtribuirTarefa(funcionario)}>
+                            <i className="fas fa-play"></i> Atribuir Tarefa
+                        </button>
+                    )}
+                </div>
             </>
         );
     };

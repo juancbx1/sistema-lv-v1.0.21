@@ -328,4 +328,91 @@ router.post('/desfazer-liberacao', async (req, res) => {
     }
 });
 
+/**
+ * POST /api/ponto/retomar-trabalho
+ * Supervisor libera antecipadamente o contador de um funcionário PRODUZINDO que está
+ * com o cronômetro congelado por almoço/pausa detectado (cronoPausadoAuto = true).
+ * Registra o horário real de retorno no ponto_diario → calcularTempoEfetivo detecta
+ * agora >= e2/e3 e descongela o contador automaticamente na próxima atualização.
+ *
+ * NÃO altera status nem sessão — o funcionário continua PRODUZINDO normalmente.
+ *
+ * Body: { funcionario_id: number, tipo: 'ALMOCO' | 'PAUSA' }
+ */
+router.post('/retomar-trabalho', async (req, res) => {
+    const { funcionario_id, tipo } = req.body;
+
+    if (!funcionario_id || !['ALMOCO', 'PAUSA'].includes(tipo)) {
+        return res.status(400).json({ error: 'Campos obrigatórios: funcionario_id, tipo (ALMOCO|PAUSA).' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+
+        const agora = new Date();
+        const horaAtualSP = agora.toLocaleTimeString('en-GB', {
+            timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit'
+        });
+        const dataHojeSP = agora.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+        const campoRetorno = tipo === 'ALMOCO' ? 'horario_real_e2' : 'horario_real_e3';
+
+        // Atualiza o campo de retorno para "agora" → frontend descongela o contador
+        await dbClient.query(
+            `UPDATE ponto_diario
+             SET ${campoRetorno} = $1, updated_at = NOW()
+             WHERE funcionario_id = $2 AND data = $3`,
+            [horaAtualSP, funcionario_id, dataHojeSP]
+        );
+
+        res.status(200).json({ message: `Retomada registrada para ${tipo}.`, horario_retorno: horaAtualSP });
+
+    } catch (error) {
+        console.error('[API POST /ponto/retomar-trabalho] Erro:', error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+/**
+ * POST /api/ponto/desfazer-retomada
+ * Desfaz uma retomada antecipada de um funcionário PRODUZINDO.
+ * Reseta horario_real_e2 (ou e3) para NULL → calcularTempoEfetivo volta a detectar
+ * que agora < e2 (nulo) e recongelará o contador automaticamente.
+ *
+ * Body: { funcionario_id: number, tipo: 'ALMOCO' | 'PAUSA' }
+ */
+router.post('/desfazer-retomada', async (req, res) => {
+    const { funcionario_id, tipo } = req.body;
+
+    if (!funcionario_id || !['ALMOCO', 'PAUSA'].includes(tipo)) {
+        return res.status(400).json({ error: 'Campos obrigatórios: funcionario_id, tipo (ALMOCO|PAUSA).' });
+    }
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+
+        const dataHojeSP = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+        const campoRetorno = tipo === 'ALMOCO' ? 'horario_real_e2' : 'horario_real_e3';
+
+        // Reseta o campo para NULL → contador recongelará via calcularTempoEfetivo
+        await dbClient.query(
+            `UPDATE ponto_diario
+             SET ${campoRetorno} = NULL, updated_at = NOW()
+             WHERE funcionario_id = $1 AND data = $2`,
+            [funcionario_id, dataHojeSP]
+        );
+
+        res.status(200).json({ message: 'Retomada desfeita — intervalo restaurado.' });
+
+    } catch (error) {
+        console.error('[API POST /ponto/desfazer-retomada] Erro:', error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
 export default router;

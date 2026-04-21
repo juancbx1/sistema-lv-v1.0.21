@@ -229,27 +229,47 @@ export default function OPPainelAtividades() {
 
     // --- v1.8: LIBERAR FUNCIONÁRIO EM ALMOCO/PAUSA PARA O TRABALHO ---
     // Chamado pelo botão "Liberar para trabalho" no card bloqueado.
-    // Após a ação, exibe o popup de "Desfazer" com countdown.
-    const handleLiberarParaTrabalho = useCallback(async (funcionario) => {
+    // v1.9: suporta também o caso PRODUZINDO + cronoPausadoAuto (motivoOverride = 'ALMOCO'|'PAUSA').
+    //   - Caso ALMOCO/PAUSA idle: muda status para LIVRE_MANUAL (comportamento original).
+    //   - Caso PRODUZINDO: chama POST /ponto/retomar-trabalho que seta e2/e3=agora
+    //     → calcularTempoEfetivo detecta e descongela o contador sem mexer em status/sessão.
+    // Após a ação, exibe o popup de "Desfazer" com countdown de 10s.
+    const handleLiberarParaTrabalho = useCallback(async (funcionario, motivoOverride) => {
         const primeiroNome = funcionario.nome.split(' ')[0];
-        const tipoIntervalo = funcionario.status_atual; // 'ALMOCO' | 'PAUSA'
+        const isProduzindo = funcionario.status_atual === 'PRODUZINDO';
+        // motivoOverride vem do OPStatusCard quando PRODUZINDO ('ALMOCO' ou 'PAUSA')
+        const tipoIntervalo = motivoOverride || funcionario.status_atual; // 'ALMOCO' | 'PAUSA'
 
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(`/api/usuarios/${funcionario.id}/status`, {
-                method: 'PUT',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: 'LIVRE_MANUAL' }),
-            });
-            if (!res.ok) throw new Error((await res.json()).error || 'Erro ao liberar');
 
-            // Atualização otimista — card muda imediatamente para LIVRE
-            setFuncionarios(prev => prev.map(f =>
-                f.id === funcionario.id ? { ...f, status_atual: 'LIVRE' } : f
-            ));
+            if (isProduzindo) {
+                // Caso PRODUZINDO: descongela contador via ponto_diario (não toca status/sessão)
+                const res = await fetch('/api/ponto/retomar-trabalho', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ funcionario_id: funcionario.id, tipo: tipoIntervalo }),
+                });
+                if (!res.ok) throw new Error((await res.json()).error || 'Erro ao retomar trabalho');
+                // Sem atualização otimista de status — o buscarDadosPainel atualizará o ponto_hoje
+                // e calcularTempoEfetivo descongelará o contador automaticamente
+            } else {
+                // Caso ALMOCO/PAUSA idle: muda status para LIVRE_MANUAL
+                const res = await fetch(`/api/usuarios/${funcionario.id}/status`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'LIVRE_MANUAL' }),
+                });
+                if (!res.ok) throw new Error((await res.json()).error || 'Erro ao liberar');
+                // Atualização otimista — card muda imediatamente para LIVRE
+                setFuncionarios(prev => prev.map(f =>
+                    f.id === funcionario.id ? { ...f, status_atual: 'LIVRE' } : f
+                ));
+            }
 
             // Exibe popup de desfazer com countdown de 10s
-            setDesfazerPopup({ funcionarioId: funcionario.id, nome: primeiroNome, tipo: tipoIntervalo, countdown: 10 });
+            // 'origem' diferencia o caminho do desfazer: PRODUZINDO reseta e2/e3; INTERVALO reseta status
+            setDesfazerPopup({ funcionarioId: funcionario.id, nome: primeiroNome, tipo: tipoIntervalo, countdown: 10, origem: isProduzindo ? 'PRODUZINDO' : 'INTERVALO' });
             buscarDadosPainel();
         } catch (err) {
             mostrarMensagem(`Erro: ${err.message}`, 'erro');
@@ -257,18 +277,34 @@ export default function OPPainelAtividades() {
     }, [buscarDadosPainel]);
 
     // --- v1.8: DESFAZER LIBERAÇÃO (popup com countdown) ---
+    // v1.9: roteia para endpoint correto conforme 'origem' do popup:
+    //   - 'PRODUZINDO': chama /desfazer-retomada (reseta e2/e3 → contador recongelará)
+    //   - 'INTERVALO' (ou ausente): chama /desfazer-liberacao (reseta status → ALMOCO/PAUSA recalculado)
     const handleDesfazerLiberacao = useCallback(async () => {
         if (!desfazerPopup) return;
-        const { funcionarioId, nome } = desfazerPopup;
+        const { funcionarioId, nome, tipo, origem } = desfazerPopup;
         setDesfazerPopup(null);
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch('/api/ponto/desfazer-liberacao', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ funcionario_id: funcionarioId }),
-            });
-            if (!res.ok) throw new Error('Erro ao desfazer');
+
+            if (origem === 'PRODUZINDO') {
+                // Desfaz retomada: reseta e2/e3 para NULL → calcularTempoEfetivo recongelará o contador
+                const res = await fetch('/api/ponto/desfazer-retomada', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ funcionario_id: funcionarioId, tipo }),
+                });
+                if (!res.ok) throw new Error('Erro ao desfazer retomada');
+            } else {
+                // Desfaz liberação de ALMOCO/PAUSA idle: reseta status → determinarStatusFinalServidor recalcula
+                const res = await fetch('/api/ponto/desfazer-liberacao', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ funcionario_id: funcionarioId }),
+                });
+                if (!res.ok) throw new Error('Erro ao desfazer');
+            }
+
             mostrarMensagem(`${nome} voltou para o intervalo.`, 'sucesso');
             buscarDadosPainel();
         } catch (err) {
