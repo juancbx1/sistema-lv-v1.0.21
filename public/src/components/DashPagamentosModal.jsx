@@ -61,7 +61,11 @@ export default function DashPagamentosModal({ pagamentoPendente, onClose }) {
                     <div style={{marginTop:'20px', paddingTop:'15px', borderTop:'1px solid rgba(255,255,255,0.2)', fontSize:'0.85rem'}}>
                         <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px'}}>
                             <span style={{opacity:0.8}}>Data Prevista:</span>
-                            <strong style={{fontSize:'1rem'}}>5º dia útil de {mesReferencia}</strong>
+                            <strong style={{fontSize:'1rem'}}>
+                                {pagamentoPendente.dataPagamentoFormatada
+                                    ? pagamentoPendente.dataPagamentoFormatada
+                                    : `5º dia útil de ${mesReferencia}`}
+                            </strong>
                         </div>
                         <div style={{display:'flex', justifyContent:'space-between'}}>
                             <span style={{opacity:0.8}}>Ref. Ciclo:</span>

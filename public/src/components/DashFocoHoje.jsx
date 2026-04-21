@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export default function DashFocoHoje({ dadosHoje, metasPossiveis, metaInicial, aoMudarMeta }) {
+export default function DashFocoHoje({ dadosHoje, metasPossiveis, metaInicial, aoMudarMeta, diasUteisNoCiclo }) {
     const [metaSelecionada, setMetaSelecionada] = useState(metaInicial);
 
     useEffect(() => {
@@ -20,8 +20,7 @@ export default function DashFocoHoje({ dadosHoje, metasPossiveis, metaInicial, a
     const valorComissao = parseFloat(metaSelecionada?.valor_comissao || 0);
     const progresso = Math.min((pontosFeitos / metaAlvo) * 100, 100);
     const falta = Math.max(0, metaAlvo - pontosFeitos);
-    const valorMensalMin = (valorComissao * 22).toFixed(0);
-    const valorMensalMax = (valorComissao * 25).toFixed(0);
+    const valorPotencial = valorComissao * (diasUteisNoCiclo || 22);
 
     const hoje = new Date().toLocaleDateString('pt-BR', {
         weekday: 'long', day: 'numeric', month: 'long',
@@ -127,7 +126,7 @@ export default function DashFocoHoje({ dadosHoje, metasPossiveis, metaInicial, a
             {/* Potencial mensal */}
             <div className="ds-foco-meta-info">
                 <span>Se bater: <strong style={{ color: 'var(--ds-cor-sucesso)' }}>R$ {valorComissao.toFixed(2)} hoje</strong></span>
-                <span>Potencial: <strong>R$ {valorMensalMin} – R$ {valorMensalMax}/mês</strong></span>
+                <span>Potencial este ciclo: <strong>R$ {valorPotencial.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
             </div>
         </div>
     );

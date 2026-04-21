@@ -386,7 +386,12 @@ export default function CalendarioCompleto() {
                                 <label className="cal-form-toggle">
                                     <input type="checkbox" checked={form.conta_como_dia_util_pagamento}
                                         onChange={e => setForm(f => ({ ...f, conta_como_dia_util_pagamento: e.target.checked }))} />
-                                    <span>Conta como dia útil para pagamento (CLT)</span>
+                                    <span>
+                                        Conta como dia útil para pagamento (CLT)
+                                        <span style={{ display: 'block', fontSize: '0.75rem', color: '#888', fontWeight: '400', marginTop: '2px' }}>
+                                            Apenas para exceções. Sábados já contam automaticamente (CLT Art. 459).
+                                        </span>
+                                    </span>
                                 </label>
                             </div>
 

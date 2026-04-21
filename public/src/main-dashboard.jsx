@@ -103,6 +103,7 @@ export default function MainDashboard() {
                     metasPossiveis={dados.metasPossiveis}
                     metaInicial={metaDoUsuario}
                     aoMudarMeta={setMetaDoUsuario}
+                    diasUteisNoCiclo={dados.acumulado.diasUteisRealDoEmpregadoNoCiclo}
                 />
 
                 <DashRitmoIA metaDoUsuario={metaDoUsuario} />
@@ -119,8 +120,9 @@ export default function MainDashboard() {
 
             {/* Modal de Detalhes (Abre ao clicar no botão "Ver Detalhes" do resumo) */}
             {modalDesempenhoAberto && (
-                <DashDesempenhoModal 
+                <DashDesempenhoModal
                     dadosAcumulados={dados.acumulado}
+                    diasTrabalho={dados.usuario?.dias_trabalho}
                     onClose={() => setModalDesempenhoAberto(false)}
                 />
             )}

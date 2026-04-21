@@ -81,7 +81,6 @@ async function auditarCofrePontos(dbClient, usuarioId, historicoDias, metasConfi
         if (dia.data >= hojeStr) continue;
         const dataDia = new Date(dia.data);
         if (dataDia < periodoInicio) continue;
-        if (dia.data < '2025-12-14') continue; 
 
         const pontosFeitos = parseFloat(dia.pontos);
         
@@ -148,7 +147,7 @@ router.get('/desempenho', async (req, res) => {
         dbClient = await pool.connect();
 
         // 1. Busca Usuário (Com ID explícito)
-        const userRes = await dbClient.query('SELECT id, nome, tipos, nivel, avatar_url FROM usuarios WHERE id = $1', [usuarioId]);
+        const userRes = await dbClient.query('SELECT id, nome, tipos, nivel, avatar_url, dias_trabalho FROM usuarios WHERE id = $1', [usuarioId]);
         if (userRes.rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado.' });
         const usuario = userRes.rows[0];
         const tipoUsuario = usuario.tipos?.[0] || 'costureira';
@@ -220,15 +219,72 @@ router.get('/desempenho', async (req, res) => {
                 }
             }
             const ganhoDia = metaBatida ? parseFloat(metaBatida.valor_comissao) : 0;
-            // Regra do corte de 14/12
-            if (diaStr >= '2025-12-14') {
-                totalGanhoPeriodo += ganhoDia;
-            }
-            return { data: diaStr, pontos: pontosFeitos, ganho: ganhoDia };
+            totalGanhoPeriodo += ganhoDia;
+            // Nível da meta atingida naquele dia (para o calendário)
+            const idxMeta = metaBatida ? metasConfiguradas.findIndex(m => m.pontos_meta === metaBatida.pontos_meta) : -1;
+            const ultimoIdx = metasConfiguradas.length - 1;
+            const nivelMeta = idxMeta < 0
+                ? (pontosFeitos > 0 ? 'nao_bateu' : null)
+                : idxMeta === ultimoIdx ? 'ouro'
+                : idxMeta === ultimoIdx - 1 && ultimoIdx >= 2 ? 'prata'
+                : 'bronze';
+            return { data: diaStr, pontos: pontosFeitos, ganho: ganhoDia, nivelMeta };
         });
 
-        // 6. MÉTRICAS DO CICLO (para o Termômetro)
-        const diasUteisNoCiclo = contarDiasUteis(periodo.inicio, periodo.fim);
+        // 6. MÉTRICAS DO CICLO
+        const inicioCicloStr = periodo.inicio.toISOString().slice(0, 10);
+        const fimCicloStr    = periodo.fim.toISOString().slice(0, 10);
+
+        // Feriados e folgas gerais visíveis na dashboard — usados em 12-D e 12-E
+        const feriadosCicloRes = await dbClient.query(`
+            SELECT data::text AS data FROM calendario_empresa
+            WHERE data BETWEEN $1 AND $2
+              AND tipo IN ('feriado_nacional', 'feriado_regional', 'folga_empresa')
+              AND funcionario_id IS NULL
+              AND visivel_dashboard = true
+        `, [inicioCicloStr, fimCicloStr]);
+        const datasExcluidas = new Set(feriadosCicloRes.rows.map(r => r.data.slice(0, 10)));
+
+        // Todos os eventos do ciclo visíveis ao empregado (para o calendário da dashboard)
+        const eventosCalendarioRes = await dbClient.query(`
+            SELECT data::text AS data, tipo, descricao
+            FROM calendario_empresa
+            WHERE data BETWEEN $1 AND $2
+              AND visivel_dashboard = true
+              AND (funcionario_id IS NULL OR funcionario_id = $3)
+            ORDER BY data
+        `, [inicioCicloStr, fimCicloStr, usuario.id]);
+        const eventosCalendario = eventosCalendarioRes.rows.map(r => ({ ...r, data: r.data.slice(0, 10) }));
+
+        // 12-E: dias úteis genéricos do ciclo (Seg-Sex, sem feriados visíveis)
+        const diasUteisNoCiclo = (() => {
+            let count = 0;
+            let cursor = new Date(periodo.inicio.toISOString().slice(0,10) + 'T12:00:00');
+            const fimDate = new Date(periodo.fim.toISOString().slice(0,10) + 'T12:00:00');
+            while (cursor <= fimDate) {
+                const dow = cursor.getDay();
+                const dateStr = cursor.toISOString().slice(0, 10);
+                if (dow !== 0 && dow !== 6 && !datasExcluidas.has(dateStr)) count++;
+                cursor.setDate(cursor.getDate() + 1);
+            }
+            return count;
+        })();
+
+        // 12-D: dias úteis reais do empregado (considera dias_trabalho + feriados visíveis)
+        const diasTrabalhoMap = usuario.dias_trabalho || { "1": true, "2": true, "3": true, "4": true, "5": true };
+        const diasUteisRealDoEmpregadoNoCiclo = (() => {
+            let count = 0;
+            let cursor = new Date(periodo.inicio.toISOString().slice(0,10) + 'T12:00:00');
+            const fimDate = new Date(periodo.fim.toISOString().slice(0,10) + 'T12:00:00');
+            while (cursor <= fimDate) {
+                const dow = cursor.getDay();
+                const dateStr = cursor.toISOString().slice(0, 10);
+                if (diasTrabalhoMap[String(dow)] === true && !datasExcluidas.has(dateStr)) count++;
+                cursor.setDate(cursor.getDate() + 1);
+            }
+            return count;
+        })();
+
         const diasTrabalhadosNoCiclo = historicoDias.filter(d => d.pontos > 0).length;
 
         // 7. PROCESSA O COFRE AUTOMATICAMENTE
@@ -349,6 +405,54 @@ router.get('/desempenho', async (req, res) => {
         const listaRes = await dbClient.query(queryLista, [usuario.id]);
         const atividadesParaLista = listaRes.rows;
 
+        // 10. DATA EXATA DE PAGAMENTO (12-F)
+        // Usa o mesmo ciclo que será exibido em pagamentoPendente
+        const fimCicloExibido = totalGanhoPeriodo > 0 ? periodo.fim
+                              : valorCicloAnterior > 0 ? fimCicloAnterior
+                              : null;
+
+        let dataPagamentoExata = null;
+        let dataPagamentoFormatada = null;
+
+        if (fimCicloExibido) {
+            // Mês seguinte ao fim do ciclo
+            const fimStr = fimCicloExibido.toISOString().slice(0, 10);
+            let [anoRef, mesRef] = fimStr.split('-').map(Number);
+            mesRef += 1;
+            if (mesRef > 12) { mesRef = 1; anoRef++; }
+
+            const primeiroDiaPgto = new Date(Date.UTC(anoRef, mesRef - 1, 1));
+            const ultimoDiaPgto   = new Date(Date.UTC(anoRef, mesRef, 0));
+
+            // Feriados do mês de pagamento visíveis na dashboard
+            const feriadosPgtoRes = await dbClient.query(`
+                SELECT data::text AS data FROM calendario_empresa
+                WHERE data BETWEEN $1 AND $2
+                  AND tipo IN ('feriado_nacional', 'feriado_regional', 'folga_empresa')
+                  AND funcionario_id IS NULL
+                  AND visivel_dashboard = true
+            `, [primeiroDiaPgto.toISOString().slice(0, 10), ultimoDiaPgto.toISOString().slice(0, 10)]);
+
+            const datasExcluidasPgto = new Set(feriadosPgtoRes.rows.map(r => r.data.slice(0, 10)));
+
+            // 5º dia útil — CLT Art. 459: Seg–Sab contam, domingo não
+            let diasContados = 0;
+            let cursorPgto = new Date(primeiroDiaPgto);
+            while (diasContados < 5) {
+                const dow = cursorPgto.getUTCDay();
+                const dateStr = cursorPgto.toISOString().slice(0, 10);
+                if (dow !== 0 && !datasExcluidasPgto.has(dateStr)) {
+                    diasContados++;
+                    if (diasContados === 5) break;
+                }
+                cursorPgto.setUTCDate(cursorPgto.getUTCDate() + 1);
+            }
+
+            dataPagamentoExata = cursorPgto.toISOString().slice(0, 10);
+            dataPagamentoFormatada = new Date(dataPagamentoExata + 'T12:00:00Z')
+                .toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+        }
+
         res.status(200).json({
             usuario: { ...usuario, tipo: tipoUsuario },
             competencia: periodo.nomeCompetencia,
@@ -362,18 +466,37 @@ router.get('/desempenho', async (req, res) => {
                 blocos: blocosComDados,
                 diasUteisNoCiclo,
                 diasTrabalhadosNoCiclo,
-                diasDetalhes: historicoDias
+                diasDetalhes: historicoDias,
+                diasUteisRealDoEmpregadoNoCiclo,
+                eventosCalendario
             },
-            pagamentoPendente: {
-                // "Próximo pagamento" = ciclo ATUAL em andamento, pago no mês seguinte ao fechamento
-                valor: totalGanhoPeriodo,
-                periodo: `${periodo.inicio.toLocaleDateString('pt-BR')} a ${periodo.fim.toLocaleDateString('pt-BR')}`,
-                mesReferencia: (() => {
+            pagamentoPendente: (() => {
+                // Ciclo atual tem produção → mostrar como pagamento pendente
+                if (totalGanhoPeriodo > 0) {
                     const d = new Date(periodo.fim);
                     d.setMonth(d.getMonth() + 1);
-                    return d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-                })()
-            },
+                    return {
+                        valor: totalGanhoPeriodo,
+                        periodo: `${periodo.inicio.toLocaleDateString('pt-BR')} a ${periodo.fim.toLocaleDateString('pt-BR')}`,
+                        mesReferencia: d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+                        dataPagamentoExata,
+                        dataPagamentoFormatada
+                    };
+                }
+                // Ciclo atual vazio (ex: primeiro dia do novo ciclo) → mostrar ciclo anterior se tiver valor
+                if (valorCicloAnterior > 0) {
+                    const d = new Date(fimCicloAnterior);
+                    d.setMonth(d.getMonth() + 1);
+                    return {
+                        valor: valorCicloAnterior,
+                        periodo: `${inicioCicloAnterior.toLocaleDateString('pt-BR')} a ${fimCicloAnterior.toLocaleDateString('pt-BR')}`,
+                        mesReferencia: d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+                        dataPagamentoExata,
+                        dataPagamentoFormatada
+                    };
+                }
+                return { valor: 0, periodo: null, mesReferencia: '', dataPagamentoExata: null, dataPagamentoFormatada: null };
+            })(),
             periodo: {
                 inicio: periodo.inicio.toISOString().split('T')[0],
                 fim: periodo.fim.toISOString().split('T')[0]

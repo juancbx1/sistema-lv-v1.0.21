@@ -540,29 +540,24 @@ Conceito de **ciclo fiscal**: começa no dia 21 e termina no dia 20 do mês segu
 
 | Arquivo | Responsabilidade |
 |---|---|
-| `api/dashboard.js` | Backend principal — ciclo fiscal, acumulado, cofre, ritmo IA. Response inclui objeto `periodo: { inicio, fim }` (strings YYYY-MM-DD) |
-| `public/js/utils/periodos-fiscais.js` | `getPeriodoFiscalAtual`, `gerarBlocosSemanais`, `contarDiasUteis(inicio, fim)` — **atenção:** aceita strings `'YYYY-MM-DD'` ou objetos Date; usa `T12:00:00` local para evitar UTC midnight (bug de fuso corrigido em 2026-04) |
-| `public/src/main-dashboard.jsx` | Componente raiz — orquestra todos os outros e faz o fetch principal |
+| `api/dashboard.js` | Backend principal — ciclo fiscal, acumulado, cofre, ritmo IA. Response inclui `periodo: { inicio, fim }`, `acumulado.eventosCalendario`, `acumulado.diasUteisRealDoEmpregadoNoCiclo`, `pagamentoPendente.dataPagamentoFormatada` |
+| `public/js/utils/periodos-fiscais.js` | `getPeriodoFiscalAtual`, `gerarBlocosSemanais`, `contarDiasUteis(inicio, fim)` — aceita strings `'YYYY-MM-DD'` ou objetos Date; usa `T12:00:00` local para evitar UTC midnight |
+| `public/src/main-dashboard.jsx` | Componente raiz — passa `diasTrabalho={dados.usuario?.dias_trabalho}` para `DashDesempenhoModal` |
 | `public/src/components/DashHeader.jsx` | Header: avatar, nome, nível, botões cofre/desempenho/pagamentos |
-| `public/src/components/DashProjecaoCiclo.jsx` | Card de projeção aspiracional do ciclo — substitui DashTermometro. 6 estados, nudge inteligente, `diasRestantes` calculado via `contarDiasUteis(hoje, fimCiclo)` |
-| `public/src/components/DashFocoHoje.jsx` | Card "Foco de Hoje" — funde PontosAnel + MetaSlider. Chips de meta (bronze/prata/ouro), barra de progresso, badge de nível |
-| `public/src/components/DashRitmoIA.jsx` | Card "Análise de Ritmo" — pts/h atual vs. histórico do mesmo dia da semana. Page Visibility API para pausar polling |
+| `public/src/components/DashProjecaoCiclo.jsx` | Card de projeção aspiracional do ciclo. 6 estados, nudge inteligente, `diasRestantes` via `contarDiasUteis` |
+| `public/src/components/DashFocoHoje.jsx` | Card "Foco de Hoje" — chips de meta (bronze/prata/ouro), barra de progresso, badge de nível. Prop `diasUteisNoCiclo` para calcular "Potencial este ciclo" com dias reais do empregado |
+| `public/src/components/DashRitmoIA.jsx` | Card "Análise de Ritmo" — pts/h atual vs. histórico do mesmo dia da semana. Page Visibility API |
 | `public/src/components/DashRankingCard.jsx` | Ranking anônimo semanal por tipo (costureira/tiktik). Some quando ≤1 participante |
 | `public/src/components/DashAtividadesLista.jsx` | Lista/histórico de lançamentos + inclui `DashTabelaPontos` |
-| `public/src/components/DashTabelaPontos.jsx` | Tabela colapsável de pontos por processo/produto. Modal usa `ReactDOM.createPortal` (evita bug de posicionamento com ancestor CSS) |
-| `public/src/components/DashDesempenhoModal.jsx` | Modal "Extrato Detalhado" — passa `diasDetalhes` para DashTabelaCiclo |
-| `public/src/components/DashTabelaCiclo.jsx` | 3 partes: chips de métricas + mini-calendário de bolinhas + cards semanais com comparação + semanas futuras |
+| `public/src/components/DashTabelaPontos.jsx` | Tabela colapsável de pontos por processo/produto. Modal usa `ReactDOM.createPortal` |
+| `public/src/components/DashDesempenhoModal.jsx` | Modal "Extrato Detalhado" — passa `eventosCalendario`, `diasTrabalho` e `diasDetalhes` para `DashTabelaCiclo` |
+| `public/src/components/DashTabelaCiclo.jsx` | 3 partes: chips de métricas + calendário do ciclo (grade 7 colunas) + cards semanais. Ver seção abaixo. |
 | `public/src/components/DashCofreModal.jsx` | Modal "Cofre de Resgate" — ícone `fa-vault`, 2 resgates/semana, mínimo 500pts/dia |
-| `public/src/components/DashPagamentosModal.jsx` | Modal "Próximo Pagamento" — exibe "5º dia útil de [mês]" (data exata virá do calendário de feriados) |
+| `public/src/components/DashPagamentosModal.jsx` | Modal "Próximo Pagamento" — exibe data exata (`dataPagamentoFormatada`) quando disponível, senão "5º dia útil de [mês]" |
 | `public/src/components/DashPerfilModal.jsx` | Modal de perfil — não mexer |
 
-**Arquivos órfãos (não importados em nenhum lugar — deletar na próxima faxina):**
-- `public/src/components/DashTermometro.jsx` — substituído por `DashProjecaoCiclo.jsx`
-- `public/src/components/DashSaldoCard.jsx` — substituído por `DashTermometro.jsx` (que também é órfão)
-- `public/src/components/DashBlocosSemanais.jsx` — legado, predecessor do `DashTabelaCiclo`
-- `public/src/components/DashPontosAnel.jsx` — fundido em `DashFocoHoje.jsx`
-- `public/src/components/DashMetaSlider.jsx` — fundido em `DashFocoHoje.jsx`
-- `public/src/components/DashCicloResumo.jsx` — removido do layout principal
+**Arquivos órfãos deletados em 2026-04 (12-H):**
+`DashTermometro.jsx`, `DashSaldoCard.jsx`, `DashBlocosSemanais.jsx`, `DashPontosAnel.jsx`, `DashMetaSlider.jsx`, `DashCicloResumo.jsx`
 
 ### Regras de negócio — Cofre de Resgate
 
@@ -592,5 +587,44 @@ Semana calendário (Seg–Dom) foi escolhida intencionalmente para evitar exploi
 - **Times pequenos (≤ 8):** todos os membros são exibidos, sem recorte
 - **Times grandes (> 8):** janela deslizante de #1 fixo + 2 acima + empregado + 2 abaixo; separador quando há gap
 - Card some silenciosamente quando `totalParticipantes <= 1` ou erro de fetch
+
+### Calendário do Ciclo (`DashTabelaCiclo.jsx` — Parte 2)
+
+Grade 7 colunas (Dom→Sáb) com bolinhas coloridas por nível de meta. Integrado ao calendário da empresa.
+
+**Props recebidas:**
+- `blocos` — blocos semanais do ciclo
+- `diasDetalhes` — array de `{ data, pontos, ganho, nivelMeta }` — `nivelMeta` calculado no backend
+- `eventosCalendario` — array de `{ data, tipo, descricao }` com `visivel_dashboard = true` do `calendario_empresa`
+- `diasTrabalho` — objeto JSONB `{"0":false,"1":true,...}` do `usuarios.dias_trabalho` do empregado
+
+**Cores das bolinhas:**
+| Cor | Constante | Significado |
+|---|---|---|
+| `#F9A825` | `CORES_META.ouro` | Meta Ouro batida |
+| `#78909C` | `CORES_META.prata` | Meta Prata batida |
+| `#A1887F` | `CORES_META.bronze` | Meta Bronze batida |
+| `#EF9A9A` | `CORES_META.nao_bateu` | Dia trabalhado, sem meta |
+| `#E0E0E0` | `COR_SEM_PROD` | Dia útil sem produção |
+| `#B0BEC5` | `COR_FOLGA` | Folga (fora da jornada) ou feriado/folga empresa |
+| `#F5F5F5` | `COR_FUTURO` | Dia futuro |
+
+**Lógica de folga:** um dia é considerado folga se `diasTrabalho[dow] !== true` OU se a data está em `eventosCalendario` com tipo `feriado_nacional`, `feriado_regional` ou `folga_empresa`. Feriados sempre sobrescrevem dias úteis — a empresa nunca trabalha em feriados.
+
+**Evento no calendário:** dias com evento exibem um ponto azul (`#1565c0`) abaixo da bolinha. Ao clicar, abre um popup centralizado (`position: fixed`, `z-index: 2000`) mostrando a data por extenso, o tipo do evento (badge) e a descrição. Somente visualização — nenhuma edição possível.
+
+**Regra de visibilidade de eventos:** `calendario_empresa` tem campo `visivel_dashboard boolean`. **NUNCA** exibir eventos com `visivel_dashboard = false` para empregados — em todas as queries da dashboard, obrigatório filtrar `AND visivel_dashboard = true`.
+
+**`nivelMeta` no backend (`api/dashboard.js`):** calculado em `historicoDias` dentro de `auditarCofrePontos`. Última posição do array de metas = `'ouro'`, penúltima (se ≥3 níveis) = `'prata'`, demais = `'bronze'`. Pontos > 0 sem meta = `'nao_bateu'`. Pontos = 0 = `null`.
+
+### Regras de negócio — Dias Úteis e Pagamento (2026-04)
+
+**`diasUteisNoCiclo`** — dias Seg–Sex do ciclo excluindo feriados/folgas visíveis na dashboard (`visivel_dashboard = true`, `funcionario_id IS NULL`). Retornado em `acumulado.diasUteisNoCiclo`.
+
+**`diasUteisRealDoEmpregadoNoCiclo`** — usa `usuarios.dias_trabalho` (JSONB) + mesmos feriados. Cada empregado pode ter jornada diferente. Retornado em `acumulado.diasUteisRealDoEmpregadoNoCiclo`. Usado em `DashFocoHoje` para calcular "Potencial este ciclo".
+
+**Data exata do pagamento** (`dataPagamentoFormatada`) — calculada no backend (seção 10 de `api/dashboard.js`): 5º dia útil do mês de pagamento usando CLT Art. 459 (Seg–Sab contam, domingo não), excluindo feriados visíveis. Retornada em `pagamentoPendente.dataPagamentoFormatada` (string por extenso, ex: "segunda-feira, 05 de maio de 2025"). `DashPagamentosModal` exibe essa data quando disponível.
+
+**`pagamentoPendente` — lógica de fallback (2026-04):** se `totalGanhoPeriodo > 0`, mostra ciclo atual. Se for 0 (ex: primeiro dia do novo ciclo) e `valorCicloAnterior > 0`, mostra o ciclo anterior. Evita o modal aparecer vazio no primeiro dia do ciclo.
 
 ---

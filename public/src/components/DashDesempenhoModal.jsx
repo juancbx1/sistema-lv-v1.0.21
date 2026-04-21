@@ -1,7 +1,7 @@
 import React from 'react';
 import DashTabelaCiclo from './DashTabelaCiclo'; // Importe o novo componente
 
-export default function DashDesempenhoModal({ dadosAcumulados, onClose }) {
+export default function DashDesempenhoModal({ dadosAcumulados, diasTrabalho, onClose }) {
     if (!dadosAcumulados) return null;
 
     return (
@@ -20,6 +20,8 @@ export default function DashDesempenhoModal({ dadosAcumulados, onClose }) {
                     <DashTabelaCiclo
                         blocos={dadosAcumulados.blocos}
                         diasDetalhes={dadosAcumulados.diasDetalhes || []}
+                        eventosCalendario={dadosAcumulados.eventosCalendario || []}
+                        diasTrabalho={diasTrabalho}
                     />
                 </div>
             </div>

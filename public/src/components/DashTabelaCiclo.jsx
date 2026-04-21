@@ -1,21 +1,64 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 
-export default function DashTabelaCiclo({ blocos, diasDetalhes }) {
+const CORES_META = {
+    ouro:     '#F9A825',
+    prata:    '#78909C',
+    bronze:   '#A1887F',
+    nao_bateu:'#EF9A9A',
+};
+const COR_FOLGA     = '#B0BEC5';
+const COR_SEM_PROD  = '#E0E0E0';
+const COR_FUTURO    = '#F5F5F5';
+const TIPOS_FOLGA   = new Set(['feriado_nacional', 'feriado_regional', 'folga_empresa']);
+const LABELS_DOW    = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+const TIPO_LABEL = {
+    feriado_nacional:  { label: 'Feriado Nacional',  icon: 'fa-flag' },
+    feriado_regional:  { label: 'Feriado Regional',  icon: 'fa-map-marker-alt' },
+    folga_empresa:     { label: 'Folga da Empresa',  icon: 'fa-building' },
+    evento:            { label: 'Evento',             icon: 'fa-calendar-day' },
+};
+
+function fmtDataLonga(dateStr) {
+    const d = new Date(dateStr + 'T12:00:00');
+    return d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+export default function DashTabelaCiclo({ blocos, diasDetalhes, eventosCalendario = [], diasTrabalho }) {
+    const [eventoPopup, setEventoPopup] = useState(null); // { dateStr, eventos }
     const hojeStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 
-    // Lookup rápido de dias por data string
     const diasMap = useMemo(() =>
         Object.fromEntries((diasDetalhes || []).map(d => [d.data, d])),
         [diasDetalhes]
     );
 
-    // Blocos válidos (corte 14/12/2025)
-    const dataCorte = '2025-12-14';
-    const blocosVisiveis = blocos.filter(b => {
-        const d = new Date(b.fim);
-        const s = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
-        return s >= dataCorte;
-    });
+    const eventosMap = useMemo(() => {
+        const m = {};
+        eventosCalendario.forEach(ev => {
+            if (!m[ev.data]) m[ev.data] = [];
+            m[ev.data].push(ev);
+        });
+        return m;
+    }, [eventosCalendario]);
+
+    // Datas que são feriado/folga empresa no calendário
+    const folgasSet = useMemo(() => {
+        const s = new Set();
+        eventosCalendario.forEach(ev => {
+            if (TIPOS_FOLGA.has(ev.tipo)) s.add(ev.data);
+        });
+        return s;
+    }, [eventosCalendario]);
+
+    // Jornada do empregado (fallback Seg–Sex)
+    const jornada = diasTrabalho || { "1":true, "2":true, "3":true, "4":true, "5":true };
+
+    const ehDiaDeTrabalho = (dow, dateStr) =>
+        jornada[String(dow)] === true && !folgasSet.has(dateStr);
+
+    // Sem o filtro de data de corte — mostra o ciclo inteiro
+    const blocosVisiveis = blocos || [];
 
     // Métricas do header
     const totalGanho = blocosVisiveis.reduce((acc, b) => acc + b.ganho, 0);
@@ -26,54 +69,60 @@ export default function DashTabelaCiclo({ blocos, diasDetalhes }) {
         blocosVisiveis[0] || { ganho: 0, numero: 1 }
     );
 
-    // Formata DD/MM
     const fmtDiaMes = (dataISO) => {
         if (!dataISO) return '--';
         const d = new Date(dataISO);
         return `${d.getUTCDate().toString().padStart(2,'0')}/${(d.getUTCMonth()+1).toString().padStart(2,'0')}`;
     };
 
-    // Gera todos os dias do ciclo como strings YYYY-MM-DD (via UTC para evitar fuso)
-    const diasDoCiclo = useMemo(() => {
+    // Gera todas as semanas do ciclo como grade 7 colunas (Dom→Sáb)
+    // com nulls para preenchimento antes/depois
+    const semanasDoCiclo = useMemo(() => {
         if (blocosVisiveis.length === 0) return [];
-        const cursor = new Date(blocosVisiveis[0].inicio);
-        cursor.setUTCHours(12, 0, 0, 0);
-        const fim = new Date(blocosVisiveis[blocosVisiveis.length - 1].fim);
-        fim.setUTCHours(12, 0, 0, 0);
-        const dias = [];
+
+        // primeiro e último dia do ciclo
+        const primeiroDia = new Date(blocosVisiveis[0].inicio);
+        primeiroDia.setUTCHours(12, 0, 0, 0);
+        const ultimoDia = new Date(blocosVisiveis[blocosVisiveis.length - 1].fim);
+        ultimoDia.setUTCHours(12, 0, 0, 0);
+
+        // recua até o domingo da semana do primeiro dia
+        const inicio = new Date(primeiroDia);
+        inicio.setUTCDate(inicio.getUTCDate() - inicio.getUTCDay());
+
+        // avança até o sábado da semana do último dia
+        const fim = new Date(ultimoDia);
+        fim.setUTCDate(fim.getUTCDate() + (6 - fim.getUTCDay()));
+
+        const semanas = [];
+        let cursor = new Date(inicio);
+        let semana = [];
+
         while (cursor <= fim) {
             const y = cursor.getUTCFullYear();
             const m = String(cursor.getUTCMonth() + 1).padStart(2, '0');
             const d = String(cursor.getUTCDate()).padStart(2, '0');
-            dias.push({ dateStr: `${y}-${m}-${d}`, dow: cursor.getUTCDay(), diaNum: cursor.getUTCDate() });
+            const dateStr = `${y}-${m}-${d}`;
+            const dentroDoCiclo = cursor >= primeiroDia && cursor <= ultimoDia;
+
+            semana.push(dentroDoCiclo ? { dateStr, diaNum: cursor.getUTCDate(), dow: cursor.getUTCDay() } : null);
+
+            if (semana.length === 7) {
+                semanas.push(semana);
+                semana = [];
+            }
             cursor.setUTCDate(cursor.getUTCDate() + 1);
         }
-        return dias;
+        if (semana.length > 0) semanas.push(semana);
+        return semanas;
     }, [blocosVisiveis]);
 
-    // Agrupa dias úteis (seg-sex) por semana calendária
-    const semanasDoCiclo = useMemo(() => {
-        const uteis = diasDoCiclo.filter(d => d.dow !== 0 && d.dow !== 6);
-        const semanas = [];
-        let atual = [];
-        uteis.forEach((d, i) => {
-            if (i > 0 && d.dow === 1) { // segunda = nova semana
-                semanas.push(atual);
-                atual = [];
-            }
-            atual.push(d);
-        });
-        if (atual.length > 0) semanas.push(atual);
-        return semanas;
-    }, [diasDoCiclo]);
-
-    // Cor da bolinha do calendário
-    const corBolinha = (dateStr) => {
-        if (dateStr > hojeStr) return '#e9ecef'; // futuro
+    const corBolinha = (dateStr, dow) => {
+        if (!dateStr || dateStr > hojeStr) return COR_FUTURO;
+        if (!ehDiaDeTrabalho(dow, dateStr)) return COR_FOLGA;
         const dia = diasMap[dateStr];
-        if (!dia || dia.pontos === 0) return '#ced4da'; // sem produção
-        if (dia.ganho > 0) return 'var(--ds-cor-sucesso)';
-        return 'var(--ds-cor-aviso)';
+        if (!dia || dia.pontos === 0) return COR_SEM_PROD;
+        return CORES_META[dia.nivelMeta] || COR_SEM_PROD;
     };
 
     if (blocosVisiveis.length === 0) {
@@ -110,41 +159,72 @@ export default function DashTabelaCiclo({ blocos, diasDetalhes }) {
                 </div>
             </div>
 
-            {/* ── PARTE 2: MINI-CALENDÁRIO ── */}
-            <div className="ds-calendario-ciclo">
-                <div style={{ fontSize: '0.8rem', fontWeight: '700', color: '#555', marginBottom: '8px' }}>
-                    Calendário do Ciclo
+            {/* ── PARTE 2: CALENDÁRIO DO CICLO ── */}
+            <div className="ds-cal-container">
+                <div className="ds-cal-titulo">Calendário do Ciclo</div>
+
+                {/* Cabeçalho dos dias da semana */}
+                <div className="ds-cal-grid-header">
+                    {LABELS_DOW.map(l => (
+                        <div key={l} className="ds-cal-dow-label">{l}</div>
+                    ))}
                 </div>
+
+                {/* Semanas */}
                 {semanasDoCiclo.map((semana, si) => (
-                    <div key={si} className="ds-calendario-semana">
-                        {semana.map(({ dateStr, diaNum }) => {
-                            const ehHoje = dateStr === hojeStr;
-                            const ehFuturo = dateStr > hojeStr;
+                    <div key={si} className="ds-cal-grid-row">
+                        {semana.map((dia, di) => {
+                            if (!dia) {
+                                return <div key={di} className="ds-cal-celula ds-cal-celula--vazia" />;
+                            }
+                            const { dateStr, diaNum, dow } = dia;
+                            const ehHoje    = dateStr === hojeStr;
+                            const ehFuturo  = dateStr > hojeStr;
+                            const eventos   = eventosMap[dateStr] || [];
+                            const temEvento = eventos.length > 0;
+                            const corFundo  = corBolinha(dateStr, dow);
+                            const nomeEvento = temEvento ? eventos.map(e => e.descricao).join(', ') : null;
+
                             return (
-                                <div key={dateStr} className="ds-calendario-dia">
+                                <div
+                                    key={dateStr}
+                                    className={`ds-cal-celula${ehHoje ? ' ds-cal-celula--hoje' : ''}${ehFuturo ? ' ds-cal-celula--futuro' : ''}${temEvento ? ' ds-cal-celula--evento' : ''}`}
+                                    onClick={temEvento ? () => setEventoPopup({ dateStr, eventos }) : undefined}
+                                    role={temEvento ? 'button' : undefined}
+                                    tabIndex={temEvento ? 0 : undefined}
+                                    onKeyDown={temEvento ? (e) => e.key === 'Enter' && setEventoPopup({ dateStr, eventos }) : undefined}
+                                >
                                     <div
-                                        className="ds-calendario-bolinha"
-                                        style={{
-                                            background: corBolinha(dateStr),
-                                            border: ehHoje ? '2px solid var(--ds-cor-primaria)' : '2px solid transparent',
-                                            opacity: ehFuturo ? 0.4 : 1,
-                                        }}
-                                    ></div>
-                                    <span className="ds-calendario-num">{diaNum}</span>
+                                        className="ds-cal-bolinha"
+                                        style={{ background: corFundo }}
+                                    >
+                                        <span className="ds-cal-dia-num">{diaNum}</span>
+                                    </div>
+                                    {temEvento && <div className="ds-cal-evento-dot" />}
                                 </div>
                             );
                         })}
                     </div>
                 ))}
-                <div style={{ display: 'flex', gap: '12px', marginTop: '6px', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '0.65rem', color: '#666', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--ds-cor-sucesso)', display: 'inline-block' }}></span> Meta batida
-                    </span>
-                    <span style={{ fontSize: '0.65rem', color: '#666', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--ds-cor-aviso)', display: 'inline-block' }}></span> Sem meta
-                    </span>
-                    <span style={{ fontSize: '0.65rem', color: '#666', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ced4da', display: 'inline-block' }}></span> Sem prod.
+
+                {/* Legenda */}
+                <div className="ds-cal-legenda">
+                    {[
+                        { cor: CORES_META.ouro,     label: 'Meta Ouro' },
+                        { cor: CORES_META.prata,    label: 'Meta Prata' },
+                        { cor: CORES_META.bronze,   label: 'Meta Bronze' },
+                        { cor: CORES_META.nao_bateu,label: 'Não bateu' },
+                        { cor: COR_SEM_PROD,        label: 'Sem produção' },
+                        { cor: COR_FOLGA,           label: 'Folga / Feriado' },
+                    ].map(({ cor, label }) => (
+                        <span key={label} className="ds-cal-legenda-item">
+                            <span className="ds-cal-legenda-bolinha" style={{ background: cor }} />
+                            {label}
+                        </span>
+                    ))}
+                    <span className="ds-cal-legenda-item">
+                        <span className="ds-cal-legenda-evento-dot" />
+                        Evento
                     </span>
                 </div>
             </div>
@@ -158,7 +238,6 @@ export default function DashTabelaCiclo({ blocos, diasDetalhes }) {
                     const ehFuturo  = hojeStr < inicioStr;
                     const ehAtual   = hojeStr >= inicioStr && hojeStr <= fimStr;
 
-                    // Badge de comparação com semana anterior
                     let badgeTexto = '1ª sem.';
                     let badgeClasse = 'ds-semana-badge-neutral';
                     if (ehFuturo) {
@@ -187,12 +266,9 @@ export default function DashTabelaCiclo({ blocos, diasDetalhes }) {
 
                     return (
                         <div key={idx} className={`ds-semana-card ${statusCard}`}>
-                            {/* Badge de comparação */}
                             <span className={`ds-semana-badge-comparacao ${badgeClasse}`}>
                                 {badgeTexto}
                             </span>
-
-                            {/* Cabeçalho */}
                             <div style={{ fontSize: '0.78rem', color: '#999', marginBottom: '6px', paddingRight: '60px' }}>
                                 Semana #{bloco.numero} · {fmtDiaMes(bloco.inicio)} – {fmtDiaMes(bloco.fim)}
                                 {ehFuturo && (
@@ -206,14 +282,10 @@ export default function DashTabelaCiclo({ blocos, diasDetalhes }) {
                                     </span>
                                 )}
                             </div>
-
-                            {/* Pontos em destaque */}
                             <div className="ds-semana-pontos-destaque" style={{ color: ehFuturo ? '#ccc' : undefined }}>
                                 {ehFuturo ? '—' : `${Math.round(bloco.pontos)}`}
                                 {!ehFuturo && <span style={{ fontSize: '1rem', fontWeight: '400', color: '#999' }}> pts</span>}
                             </div>
-
-                            {/* Ganho em reais */}
                             {!ehFuturo && (
                                 <div style={{
                                     fontSize: '0.9rem', fontWeight: '600', marginTop: '2px',
@@ -231,6 +303,32 @@ export default function DashTabelaCiclo({ blocos, diasDetalhes }) {
                     );
                 })}
             </div>
+
+            {/* ── POPUP DE EVENTO DO CALENDÁRIO ── */}
+            {eventoPopup && (
+                <div className="ds-cal-popup-overlay" onClick={() => setEventoPopup(null)}>
+                    <div className="ds-cal-popup-content" onClick={e => e.stopPropagation()}>
+                        <div className="ds-cal-popup-data">{fmtDataLonga(eventoPopup.dateStr)}</div>
+                        <ul className="ds-cal-popup-lista">
+                            {eventoPopup.eventos.map((ev, i) => {
+                                const info = TIPO_LABEL[ev.tipo] || { label: 'Evento', icon: 'fa-calendar-day' };
+                                return (
+                                    <li key={i} className="ds-cal-popup-item">
+                                        <span className="ds-cal-popup-tipo-badge">
+                                            <i className={`fas ${info.icon}`}></i>
+                                            {info.label}
+                                        </span>
+                                        <span className="ds-cal-popup-descricao">{ev.descricao}</span>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                        <button className="ds-cal-popup-fechar" onClick={() => setEventoPopup(null)}>
+                            Fechar
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
