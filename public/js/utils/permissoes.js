@@ -129,6 +129,7 @@ export const permissoesDisponiveis = [
     
     // --- ACESSAR PRODUCAO GERAL ---
     { id: 'acesso-producao-geral', label: 'Ver Tela a Tela Produção Geral dos Empregados', categoria: 'Produção Geral' },
+    { id: 'cancelar-pontos-extras', label: 'Permite Cancelar Pontos Extras', categoria: 'Produção Geral' },
 
     
 ];

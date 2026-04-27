@@ -157,6 +157,7 @@ router.get('/calcular', async (req, res) => {
                 if (tipoUsuario === 'tiktik') {
                     queryAtiv += ` UNION ALL SELECT data_lancamento as data, pontos_gerados FROM arremates WHERE usuario_tiktik_id = $1 AND data_lancamento BETWEEN $2 AND $3 AND tipo_lancamento = 'PRODUCAO'`;
                 }
+                queryAtiv += ` UNION ALL SELECT data_referencia::timestamptz as data, pontos as pontos_gerados FROM pontos_extras WHERE funcionario_id = $1 AND data_referencia BETWEEN $2::date AND $3::date AND cancelado = FALSE`;
                 const ativRes = await dbClient.query(queryAtiv, [usuario.id, inicioCompetencia, fimCompetencia]);
 
                 // Busca Resgates
@@ -839,14 +840,15 @@ router.get('/recibos/dados', async (req, res) => {
             metasConfiguradas = regrasRes.rows;
         }
 
-        // 2. Busca Produção + Arremates
+        // 2. Busca Produção + Arremates + Pontos Extras
         let queryText = `
             SELECT data, pontos_gerados FROM producoes WHERE funcionario_id = $1 AND data BETWEEN $2 AND $3
         `;
         if (tipoUsuario === 'tiktik') {
             queryText += ` UNION ALL SELECT data_lancamento as data, pontos_gerados FROM arremates WHERE usuario_tiktik_id = $1 AND data_lancamento BETWEEN $2 AND $3 AND tipo_lancamento = 'PRODUCAO'`;
         }
-        
+        queryText += ` UNION ALL SELECT data_referencia::timestamptz as data, pontos as pontos_gerados FROM pontos_extras WHERE funcionario_id = $1 AND data_referencia BETWEEN $2::date AND $3::date AND cancelado = FALSE`;
+
         const producaoRes = await dbClient.query(queryText, [usuario_id, data_inicio + ' 00:00:00', data_fim + ' 23:59:59']);
 
         // 3. Busca Resgates e Ganhos (Cofre)

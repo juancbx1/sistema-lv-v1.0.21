@@ -179,13 +179,19 @@ router.get('/desempenho', async (req, res) => {
         `;
         if (tipoUsuario === 'tiktik') {
             queryText += `
-                UNION ALL 
+                UNION ALL
                 SELECT ar.id::text as id_original, ar.data_lancamento as data, ar.pontos_gerados, ar.op_numero, 'Arremate' as processo, p.nome as produto, ar.quantidade_arrematada as quantidade, ar.variante as variacao, 'Arremate' as tipo_origem
-                FROM arremates ar JOIN produtos p ON ar.produto_id = p.id 
+                FROM arremates ar JOIN produtos p ON ar.produto_id = p.id
                 WHERE ar.usuario_tiktik_id = $1 AND ar.tipo_lancamento = 'PRODUCAO' AND ar.data_lancamento BETWEEN $2 AND $3
             `;
         }
-        
+        queryText += `
+            UNION ALL
+            SELECT pe.id::text as id_original, pe.data_referencia as data, pe.pontos as pontos_gerados, NULL::text as op_numero, 'Pontos Extras' as processo, 'Bônus' as produto, 0 as quantidade, NULL as variacao, 'PontosExtra' as tipo_origem
+            FROM pontos_extras pe
+            WHERE pe.funcionario_id = $1 AND pe.data_referencia BETWEEN $2::date AND $3::date AND pe.cancelado = FALSE
+        `;
+
         const atividadesRes = await dbClient.query(queryText, [usuario.id, periodo.inicio, periodo.fim]);
         const atividades = atividadesRes.rows;
 
@@ -393,12 +399,18 @@ router.get('/desempenho', async (req, res) => {
         `;
         if (tipoUsuario === 'tiktik') {
             queryLista += `
-                UNION ALL 
+                UNION ALL
                 SELECT ar.id::text as id_original, ar.data_lancamento as data, ar.pontos_gerados, ar.op_numero, 'Arremate' as processo, p.nome as produto, ar.quantidade_arrematada as quantidade, ar.variante as variacao, 'Arremate' as tipo_origem
-                FROM arremates ar JOIN produtos p ON ar.produto_id = p.id 
+                FROM arremates ar JOIN produtos p ON ar.produto_id = p.id
                 WHERE ar.usuario_tiktik_id = $1 AND ar.tipo_lancamento = 'PRODUCAO'
             `;
         }
+        queryLista += `
+            UNION ALL
+            SELECT pe.id::text as id_original, pe.data_referencia as data, pe.pontos as pontos_gerados, NULL::text as op_numero, 'Pontos Extras' as processo, 'Bônus' as produto, 0 as quantidade, NULL as variacao, 'PontosExtra' as tipo_origem
+            FROM pontos_extras pe
+            WHERE pe.funcionario_id = $1 AND pe.cancelado = FALSE
+        `;
         // Ordena por data decrescente e limita
         queryLista += ` ORDER BY data DESC LIMIT 100`;
 
@@ -533,7 +545,7 @@ router.get('/atividades', async (req, res) => {
             SELECT pr.id, pr.data, pr.pontos_gerados, pr.op_numero, pr.processo, p.nome as nome_produto, pr.quantidade, pr.variacao, 'OP' as tipo_origem, pr.funcionario_id as uid
             FROM producoes pr JOIN produtos p ON pr.produto_id = p.id
         `;
-        
+
         if (tipoUsuario === 'tiktik') {
             subQuery += `
                 UNION ALL
@@ -542,6 +554,19 @@ router.get('/atividades', async (req, res) => {
                 WHERE ar.tipo_lancamento = 'PRODUCAO'
             `;
         }
+
+        // Pontos extras para todos os tipos (costureira e tiktik)
+        // Usa data_lancamento (TIMESTAMPTZ) como data para que fmtHora() mostre o horário real
+        // e não 00:00 como aconteceria com data_referencia (DATE sem horário)
+        subQuery += `
+            UNION ALL
+            SELECT pe.id::text as id, pe.data_lancamento as data, pe.pontos as pontos_gerados,
+                   NULL::text as op_numero, 'Pontos Extras' as processo, 'Bônus' as nome_produto,
+                   0 as quantidade, NULL as variacao, 'PontosExtra' as tipo_origem,
+                   pe.funcionario_id as uid
+            FROM pontos_extras pe
+            WHERE pe.cancelado = FALSE
+        `;
 
         // 2. Filtros
         let whereClauses = [];
@@ -660,6 +685,12 @@ router.post('/resgatar-pontos', async (req, res) => {
             );
             pontosHoje += pontosHojeArr.rows[0].total;
         }
+        const pontosHojeExtras = await dbClient.query(
+            `SELECT COALESCE(SUM(pontos), 0)::float as total FROM pontos_extras
+             WHERE funcionario_id = $1 AND data_referencia = $2::date AND cancelado = FALSE`,
+            [usuarioId, hojeStrSP]
+        );
+        pontosHoje += pontosHojeExtras.rows[0].total;
 
         if (pontosHoje < 500) {
             throw new Error(`Produção insuficiente hoje (${Math.round(pontosHoje)} pts). São necessários pelo menos 500 pts para resgatar.`);
@@ -786,7 +817,7 @@ router.get('/ritmo-atual', async (req, res) => {
         }
 
         // 3. Pontos de hoje (paralelo)
-        const [pontosHojeRes, sessoesRes] = await Promise.all([
+        const [pontosHojeRes, sessoesRes, pontosExtrasRes] = await Promise.all([
             tipoUsuario === 'tiktik'
                 ? dbClient.query(
                     `SELECT COALESCE(SUM(pontos_gerados), 0)::float as total
@@ -821,10 +852,16 @@ router.get('/ritmo-atual', async (req, res) => {
                      AND data_inicio::date = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
                      AND status != 'CANCELADA'`,
                     [usuarioId]
-                )
+                ),
+            // Pontos extras de hoje
+            dbClient.query(
+                `SELECT COALESCE(SUM(pontos), 0)::float as total FROM pontos_extras
+                 WHERE funcionario_id = $1 AND data_referencia = $2::date AND cancelado = FALSE`,
+                [usuarioId, hojeStr]
+            )
         ]);
 
-        const pontosHoje = pontosHojeRes.rows[0].total;
+        const pontosHoje = pontosHojeRes.rows[0].total + pontosExtrasRes.rows[0].total;
         const horasTrabalhadasHoje = sessoesRes.rows[0].horas_total || 0;
 
         // 5. Ritmo atual (pts/hora) — mínimo 30 min de dados
@@ -1013,6 +1050,8 @@ router.get('/ranking-semana', async (req, res) => {
         }
 
         // 4. Somar pontos de cada usuário na semana
+        // NOTA: pontos_extras propositalmente excluídos do ranking — seria injusto
+        // com quem não recebeu bônus. O card exibe um 'i' explicando isso ao usuário.
         let queryPontos;
         if (tipoUsuario === 'tiktik') {
             queryPontos = `

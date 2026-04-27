@@ -164,15 +164,47 @@ export default function DashAtividadesLista({ aoAtualizar }) {
                         ) : (
                             itensParaExibir.map((item, index) => {
                                 const key = item.id_original || index;
+
+                                // ── Item especial: Pontos Extras ──────────────────
+                                if (item.tipo_origem === 'PontosExtra') {
+                                    return (
+                                        <div key={key} className="ds-atividade-pontos-extra">
+                                            <div className="ds-ape-estrela">
+                                                <i className="fas fa-star"></i>
+                                            </div>
+                                            <div className="ds-ape-corpo">
+                                                <div className="ds-ape-titulo">✨ Bônus do Supervisor</div>
+                                                <div className="ds-ape-info">
+                                                    <span>
+                                                        <i className="fas fa-calendar-alt"></i>
+                                                        {fmtData(item.data)}
+                                                    </span>
+                                                    <span>
+                                                        <i className="fas fa-clock"></i>
+                                                        Creditado às {fmtHora(item.data)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="ds-ape-pontos">
+                                                <span className="ds-ape-pontos-valor">
+                                                    +{parseFloat(item.pontos_gerados).toFixed(0)}
+                                                </span>
+                                                <span className="ds-ape-pontos-label">pts</span>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
+                                // ── Item normal: OP / Arremate ────────────────────
                                 const tituloTipo = `OP ${item.op_numero}`;
                                 const variacao = item.variacao || '';
 
                                 return (
                                     <div key={key} className="ds-atividade-item" style={{
-                                        backgroundColor:'#fff', 
-                                        border:'1px solid #eee', 
-                                        borderRadius:'8px', 
-                                        padding:'15px', 
+                                        backgroundColor:'#fff',
+                                        border:'1px solid #eee',
+                                        borderRadius:'8px',
+                                        padding:'15px',
                                         marginBottom:'10px',
                                         display:'grid',
                                         gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
@@ -181,7 +213,7 @@ export default function DashAtividadesLista({ aoAtualizar }) {
                                         <div style={{gridColumn: '1 / -1'}}>
                                             <small style={{display:'block', color:'#999', fontSize:'0.75rem', fontWeight:'bold'}}>PRODUTO</small>
                                             <span style={{fontWeight:'600', color:'#333'}}>
-                                                {item.nome_produto} 
+                                                {item.nome_produto}
                                                 {variacao && <span style={{color: '#555', marginLeft: '5px'}}>[{variacao}]</span>}
                                             </span>
                                         </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { fetchAPI } from '/js/utils/api-utils';
+import { mostrarMensagem } from '/js/utils/popups.js';
 
 export default function DashRankingCard() {
     const [dados, setDados] = useState(null);
@@ -80,7 +81,25 @@ export default function DashRankingCard() {
     return (
         <div className="ds-card ds-ranking-card">
             <div className="ds-ranking-header">
-                <span className="ds-card-titulo">🏆 Ranking da Semana</span>
+                <span className="ds-card-titulo">
+                    🏆 Ranking da Semana
+                    <button
+                        className="ds-ranking-info-btn"
+                        title="Sobre o ranking"
+                        onClick={() => mostrarMensagem(
+                            '🏆 <strong>Ranking da Semana</strong><br><br>' +
+                            'O ranking conta apenas a produção real da semana — ' +
+                            'peças produzidas e arremates.<br><br>' +
+                            '✨ <strong>Pontos Extras</strong> (bônus concedidos pelo supervisor) ' +
+                            '<strong>não entram no ranking</strong>, pois seria injusto comparar ' +
+                            'quem recebeu bônus com quem não recebeu.<br><br>' +
+                            'Continue produzindo para subir na classificação! 💪',
+                            'info'
+                        )}
+                    >
+                        <i className="fas fa-circle-info"></i>
+                    </button>
+                </span>
                 <span className="ds-ranking-semana-label">{labelSemana}</span>
             </div>
 

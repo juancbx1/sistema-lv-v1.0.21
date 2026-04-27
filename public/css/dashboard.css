@@ -3722,6 +3722,20 @@ body.ds-body.autenticado {
     margin-bottom: 15px;
 }
 
+.ds-ranking-info-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--ds-cor-primaria);
+    opacity: 0.55;
+    font-size: 0.85rem;
+    padding: 0 0 0 5px;
+    line-height: 1;
+    vertical-align: middle;
+    transition: opacity 0.15s;
+}
+.ds-ranking-info-btn:hover { opacity: 1; }
+
 .ds-ranking-semana-label {
     font-size: 0.75rem;
     color: #999;
@@ -3906,4 +3920,94 @@ body.ds-body.autenticado {
     font-weight: 600;
     text-align: center;
     line-height: 1.5;
+}
+/* ==========================================================================
+   Pontos Extras — item dourado no detalhamento de atividades
+   ========================================================================== */
+
+.ds-atividade-pontos-extra {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px 14px 20px;
+    margin-bottom: 12px;
+    border-radius: var(--ds-raio-borda);
+    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 55%, #fde68a 100%);
+    border: 1.5px solid #f59e0b;
+    overflow: hidden;
+}
+.ds-atividade-pontos-extra::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 5px;
+    height: 100%;
+    background: linear-gradient(to bottom, #f59e0b, #d97706);
+    border-radius: 4px 0 0 4px;
+}
+.ds-atividade-pontos-extra:last-child {
+    margin-bottom: 0;
+}
+
+.ds-ape-estrela {
+    flex-shrink: 0;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 1.2rem;
+    box-shadow: 0 3px 10px rgba(245, 158, 11, 0.45);
+}
+
+.ds-ape-corpo {
+    flex: 1;
+    min-width: 0;
+}
+
+.ds-ape-titulo {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #92400e;
+    margin-bottom: 5px;
+}
+
+.ds-ape-info {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-size: 0.78rem;
+    color: #b45309;
+}
+.ds-ape-info i {
+    margin-right: 4px;
+    opacity: 0.75;
+}
+
+.ds-ape-pontos {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+}
+
+.ds-ape-pontos-valor {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #d97706;
+    line-height: 1;
+}
+
+.ds-ape-pontos-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #b45309;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
 }
