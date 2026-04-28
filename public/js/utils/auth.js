@@ -47,9 +47,7 @@ export async function verificarAutenticacao(pagina, permissoesRequeridas = [], m
 
     // --- MUDANÇA 1: Identificar o "ambiente" da página (admin vs dashboard) ---
     const ambiente = pagina.startsWith('dashboard/') ? 'dashboard' : 'admin';
-    const paginaAcessoNegado = ambiente === 'dashboard'
-        ? '/dashboard/acesso-restrito-costureira.html' // << Página de acesso negado para o dashboard
-        : '/admin/acesso-negado.html';                  // << Página de acesso negado para o admin
+    const paginaAcessoNegado = '/admin/acesso-negado.html';
 
     try {
         const response = await fetch('/api/usuarios/me', {

@@ -29,7 +29,10 @@ router.post('/', async (req, res) => {
   let clienteDb;
   try {
     clienteDb = await pool.connect();
-    const result = await clienteDb.query('SELECT id, nome, nome_usuario, email, senha, tipos, permissoes, nivel FROM usuarios WHERE nome_usuario = $1', [nomeUsuario]);
+    const result = await clienteDb.query(
+      'SELECT id, nome, nome_usuario, email, senha, tipos, permissoes, nivel, data_demissao FROM usuarios WHERE nome_usuario = $1',
+      [nomeUsuario]
+    );
     const usuario = result.rows[0];
 
     if (!usuario) {
@@ -42,6 +45,15 @@ router.post('/', async (req, res) => {
       return res.status(401).json({ error: 'Credenciais inválidas.' });
     }
 
+    // Verificar se o empregado foi demitido (apenas para usuários do tipo costureira/tiktik)
+    // Admins não têm data_demissao, mas a verificação é segura para qualquer tipo
+    if (usuario.data_demissao) {
+      return res.status(403).json({
+        error: 'CONTRATO_ENCERRADO',
+        nome: usuario.nome,
+      });
+    }
+
     // O payload do token contém as informações essenciais para identificar o usuário
     const payload = {
       id: usuario.id,
@@ -50,10 +62,15 @@ router.post('/', async (req, res) => {
       tipos: usuario.tipos || [],
     };
 
+    // Se o usuário escolheu "manter conectado", emitir token de longa duração (30 dias).
+    // Caso contrário, token curto de 8 horas (mais seguro para dispositivos compartilhados).
+    const { manterConectado } = req.body;
+    const expiresIn = manterConectado ? '30d' : '8h';
+
     const token = jwt.sign(
       payload,
       SECRET_KEY,
-      { expiresIn: '24h' }
+      { expiresIn }
     );
 
     // O frontend agora é responsável por pegar este token e fazer uma

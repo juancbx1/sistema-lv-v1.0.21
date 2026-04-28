@@ -225,6 +225,7 @@ Tabela de controle para evitar retrabalho. Atualizar sempre que uma etapa for co
 
 | Área | Arquivo CSS | React 100% | CSS Limpo | Usa gs-card | Observações |
 |---|---|---|---|---|---|
+| Login / Index | `login.css` | ✅ | ✅ | N/A | React 100% (27/04). `LoginApp.jsx` único. Tablet-first (2 col), glassmorphism. Token 8h/30d via `manterConectado`. Demitidos → tela de despedida + cooldown crescente. |
 | Ordens de Produção | `ordens-de-producao.css` | ✅ | ✅ | ✅ (via alias) | Referência de qualidade para outras áreas |
 | Calendário da Empresa | `calendario.css` | ✅ | ✅ | ✅ | Página nova — estrutura padrão aplicada |
 | Central de Pagamentos | `central-de-pagamentos.css` | ✅ | ❌ | ❌ | |
