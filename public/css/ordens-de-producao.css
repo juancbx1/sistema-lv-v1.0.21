@@ -1567,13 +1567,14 @@ body.autenticado {
 .op-filtros-container-redesenhado {
     display: flex;
     flex-wrap: wrap; /* Permite quebrar linha em telas menores */
-    gap: 20px;
+    gap: 16px;
     align-items: center;
-    padding: 20px;
-    margin-bottom: 20px;
+    padding: 14px 18px;
+    margin-bottom: 10px;
     background-color: var(--op-cor-branco);
     border-radius: var(--op-raio-borda-card);
     box-shadow: var(--op-sombra-card);
+    border-left: 4px solid #e2e8f0;
 }
 
 .op-filtro-busca-wrapper {
@@ -5483,4 +5484,892 @@ body.autenticado {
 @keyframes popIn {
     from { opacity: 0; transform: translate(-50%, -50%) scale(0.88); }
     to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+
+/* ==========================================================================
+   # REDESIGN V2 — OPCard (layout flexível, variação em destaque)
+   ========================================================================== */
+
+/* O card vira flex-coluna para comportar o corpo + tira de status */
+.op-card-react {
+    display: flex !important;
+    flex-direction: column;
+    padding: 0;
+    gap: 0;
+}
+
+/* Corpo: imagem | info | quantidade em linha */
+.op-card-corpo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 14px 12px 22px; /* 22px left = espaço para a borda-charme */
+    flex: 1;
+}
+
+/* Imagem do produto — tamanho ligeiramente menor, mais compacto */
+.op-card-corpo .card-imagem-produto {
+    width: 58px !important;
+    height: 58px !important;
+    object-fit: cover;
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+
+/* Área de informações — ocupa o espaço restante */
+.op-card-corpo .card-info-principal {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* Linha de metadados: OP# + data */
+.card-meta-linha {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.card-op-num {
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: var(--op-cor-azul-claro);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.card-data-criacao {
+    font-size: 0.68rem;
+    color: #94a3b8;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Variação — elemento herói do card */
+.card-variante-hero {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--op-cor-azul-escuro);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.25;
+}
+
+/* Bloco de quantidade — agora filho do corpo (flex) */
+.op-card-corpo .card-bloco-pendente {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: #f0f8ff;
+    padding: 10px 14px;
+    border-radius: 8px;
+    text-align: center;
+    flex-shrink: 0;
+    min-width: 56px;
+    align-self: stretch;
+}
+
+/* Tira verde no rodapé do card para OPs prontas */
+.card-pronta-tira {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 5px 14px;
+    background: linear-gradient(90deg, #d1fae5, #a7f3d0);
+    color: #065f46;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-top: 1px solid #6ee7b7;
+}
+
+/* Responsivo: telas muito pequenas (<420px) */
+@media (max-width: 420px) {
+    .op-card-corpo {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .op-card-corpo .card-bloco-pendente {
+        flex-direction: row;
+        gap: 8px;
+        width: 100%;
+        padding: 8px 12px;
+    }
+}
+
+
+/* ==========================================================================
+   # CENTRAL DE ENCERRAMENTO — Pulso do Sistema + Agente IA
+   ========================================================================== */
+
+.op-central-encerramento {
+    background: var(--op-cor-branco);
+    border: 1.5px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 16px;
+}
+
+/* ── Pulso do Sistema ── */
+.op-pulso-sistema {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 11px 16px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid transparent; /* ganha borda quando agente está aberto */
+}
+
+.op-central-encerramento:has(.op-agente-terminal),
+.op-central-encerramento:has(.op-agente-resultado) {
+    /* mantém borda entre pulso e agente */
+}
+.op-central-encerramento:has(.op-agente-terminal) .op-pulso-sistema,
+.op-central-encerramento:has(.op-agente-resultado) .op-pulso-sistema {
+    border-bottom-color: #e2e8f0;
+}
+
+.op-pulso-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+/* Ponto pulsante verde — indica sistema online */
+.op-pulso-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #22c55e;
+    flex-shrink: 0;
+    animation: pulso-vivo 2.2s ease-in-out infinite;
+}
+
+@keyframes pulso-vivo {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18); }
+    50%       { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.06); }
+}
+
+.op-pulso-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.9px;
+    white-space: nowrap;
+}
+
+.op-pulso-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.op-pulso-chip {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 20px;
+    min-width: 48px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+}
+
+.op-pulso-chip.prontas.destaque {
+    background: #dcfce7;
+    border-color: #86efac;
+}
+
+.op-pulso-chip.alerta {
+    background: #fef3c7;
+    border-color: #fcd34d;
+}
+
+.chip-valor {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #1e293b;
+    line-height: 1.1;
+}
+
+.op-pulso-chip.prontas.destaque .chip-valor { color: #15803d; }
+.op-pulso-chip.alerta .chip-valor           { color: #b45309; }
+
+.chip-rotulo {
+    font-size: 0.58rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+    color: #94a3b8;
+}
+
+.op-pulso-chip.prontas.destaque .chip-rotulo { color: #16a34a; }
+.op-pulso-chip.alerta .chip-rotulo           { color: #d97706; }
+
+/* Botão do Agente */
+.op-agente-btn-abrir {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1.5px solid #6366f1;
+    background: #f5f3ff;
+    color: #4f46e5;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    min-height: 40px;
+    flex-shrink: 0;
+}
+
+.op-agente-btn-abrir:hover:not(:disabled) {
+    background: #ede9fe;
+    border-color: #4f46e5;
+    transform: translateY(-1px);
+}
+
+.op-agente-btn-abrir:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.op-agente-btn-abrir.ativo {
+    background: #fff;
+    border-color: #cbd5e1;
+    color: #64748b;
+}
+
+.op-agente-btn-abrir.ativo:hover:not(:disabled) {
+    background: #f8fafc;
+    transform: none;
+}
+
+/* ── Terminal de Scan do Agente ── */
+.op-agente-terminal {
+    background: #0f172a;
+    padding: 14px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    font-family: 'Courier New', 'Menlo', 'Monaco', monospace;
+}
+
+.op-agente-linha {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 0.83rem;
+    animation: fadeIn 0.2s ease;
+}
+
+.op-agente-linha.concluida .agente-prompt { color: #22c55e; }
+.op-agente-linha.concluida .agente-msg    { color: #64748b; }
+.op-agente-linha.atual .agente-prompt     { color: #818cf8; }
+.op-agente-linha.atual .agente-msg        { color: #e2e8f0; }
+
+.agente-prompt {
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.agente-cursor {
+    color: #818cf8;
+    animation: cursor-blink 0.75s step-end infinite;
+    margin-left: 2px;
+    font-size: 1rem;
+}
+
+@keyframes cursor-blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0; }
+}
+
+/* ── Resultado do Agente ── */
+.op-agente-resultado {
+    border-top: 1px solid #e2e8f0;
+    padding: 14px 16px;
+}
+
+.op-agente-vazio {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #16a34a;
+    font-size: 0.88rem;
+    font-weight: 600;
+    padding: 6px 0;
+}
+
+.op-agente-vazio i { font-size: 1.1rem; }
+
+.op-agente-lista-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #475569;
+}
+
+.op-agente-sel-todas {
+    font-size: 0.75rem;
+    color: #4f46e5;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-weight: 700;
+    padding: 3px 6px;
+    border-radius: 4px;
+    text-decoration: underline;
+    transition: background 0.1s;
+}
+
+.op-agente-sel-todas:hover { background: #f5f3ff; text-decoration: none; }
+
+.op-agente-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+/* Item da lista do Agente */
+.op-agente-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1.5px solid #e2e8f0;
+    cursor: pointer;
+    transition: border-color 0.12s, background 0.12s;
+    background: #fff;
+    user-select: none;
+}
+
+.op-agente-item:hover          { border-color: #818cf8; background: #f5f3ff; }
+.op-agente-item.selecionado    { border-color: #6366f1; background: #eef2ff; }
+
+.op-agente-item-check {
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    border: 2px solid #cbd5e1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.68rem;
+    color: transparent;
+    transition: all 0.12s;
+}
+
+.op-agente-item-check.ativo {
+    background: #6366f1;
+    border-color: #6366f1;
+    color: white;
+}
+
+.op-agente-item-img {
+    width: 36px;
+    height: 36px;
+    object-fit: cover;
+    border-radius: 6px;
+    flex-shrink: 0;
+    background: #f1f5f9;
+}
+
+.op-agente-item-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.agente-item-num {
+    font-size: 0.67rem;
+    font-weight: 800;
+    color: var(--op-cor-azul-claro);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.agente-item-variante {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #1e293b;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+    line-height: 1.3;
+}
+
+.agente-item-qty {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #64748b;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+/* Rodapé de ações do Agente */
+.op-agente-acoes {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border-top: 1px solid #f1f5f9;
+    padding-top: 10px;
+    flex-wrap: wrap;
+}
+
+.op-agente-sel-info {
+    font-size: 0.78rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.op-agente-btn-encerrar {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 22px;
+    border-radius: 8px;
+    border: none;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    color: white;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+    min-height: 44px;
+}
+
+.op-agente-btn-encerrar:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(99, 102, 241, 0.4);
+}
+
+.op-agente-btn-encerrar:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+
+/* ==========================================================================
+   # INICIALIZAÇÃO INTELIGENTE — Terminal de primeiro carregamento
+   ========================================================================== */
+
+.op-init-terminal {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 18px 22px;
+    background: #0f172a;
+    border-radius: 12px;
+    margin: 8px 0 16px;
+    font-family: 'Courier New', 'Menlo', 'Monaco', monospace;
+    min-height: 90px;
+}
+
+.op-init-linha {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 0.84rem;
+    animation: fadeIn 0.25s ease;
+}
+
+.op-init-linha.ok .init-prompt         { color: #22c55e; }
+.op-init-linha.ok span:not(.init-prompt)    { color: #64748b; }
+.op-init-linha.atual .init-prompt       { color: #818cf8; }
+.op-init-linha.atual span:not(.init-prompt) { color: #e2e8f0; }
+
+.init-prompt { font-size: 1rem; flex-shrink: 0; }
+    margin: 8px 0 16px;
+    font-family: 'Courier New', 'Menlo', 'Monaco', monospace;
+    min-height: 90px;
+}
+
+.op-init-linha {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 0.84rem;
+    animation: fadeIn 0.25s ease;
+}
+
+.op-init-linha.ok .init-prompt           { color: #22c55e; }
+.op-init-linha.ok span:not(.init-prompt)  { color: #64748b; }
+.op-init-linha.atual .init-prompt         { color: #818cf8; }
+.op-init-linha.atual span:not(.init-prompt) { color: #e2e8f0; }
+
+.init-prompt { font-size: 1rem; flex-shrink: 0; }
+
+
+/* ==========================================================================
+   # FIXES V2 — Azul do sistema, terminal claro, cards, tablet 2 colunas
+   ========================================================================== */
+
+/* ── 1. Roxo → Azul do sistema (#3498db) ── */
+
+.op-agente-btn-abrir {
+    border-color: var(--op-cor-azul-claro);
+    background: #ebf5fb;
+    color: #2471a3;
+}
+.op-agente-btn-abrir:hover:not(:disabled) {
+    background: #d6eaf8;
+    border-color: var(--op-cor-azul-hover);
+    transform: translateY(-1px);
+}
+.op-agente-btn-abrir.ativo {
+    background: #fff;
+    border-color: #e2e8f0;
+    color: #64748b;
+}
+.op-agente-btn-abrir.ativo:hover:not(:disabled) {
+    background: #f8fafc;
+    transform: none;
+}
+
+.op-agente-item:hover       { border-color: var(--op-cor-azul-claro); background: #ebf5fb; }
+.op-agente-item.selecionado { border-color: var(--op-cor-azul-claro); background: #ebf5fb; }
+.op-agente-item-check.ativo { background: var(--op-cor-azul-claro); border-color: var(--op-cor-azul-claro); }
+.op-agente-sel-todas        { color: var(--op-cor-azul-claro); }
+.op-agente-sel-todas:hover  { background: #ebf5fb; }
+
+.op-agente-btn-encerrar {
+    background: linear-gradient(135deg, #2980b9 0%, #3498db 100%);
+}
+.op-agente-btn-encerrar:hover:not(:disabled) {
+    box-shadow: 0 6px 18px rgba(52, 152, 219, 0.4);
+}
+
+/* ── 2. Terminal e Inicialização — modo claro ── */
+
+.op-agente-terminal {
+    background: #f4f8fb !important;
+    border-top: 1px solid #dce8f0;
+}
+.op-agente-linha.concluida .agente-prompt { color: #27ae60; }
+.op-agente-linha.concluida .agente-msg    { color: #8fa8b8; }
+.op-agente-linha.atual .agente-prompt     { color: var(--op-cor-azul-claro); }
+.op-agente-linha.atual .agente-msg        { color: #1e293b; }
+.agente-cursor                            { color: var(--op-cor-azul-claro); }
+
+.op-init-terminal {
+    background: #f4f8fb !important;
+    border: 1.5px solid #dce8f0;
+}
+.op-init-linha.ok .init-prompt              { color: #27ae60; }
+.op-init-linha.ok span:not(.init-prompt)    { color: #8fa8b8; }
+.op-init-linha.atual .init-prompt           { color: var(--op-cor-azul-claro); }
+.op-init-linha.atual span:not(.init-prompt) { color: #1e293b; }
+
+/* ── 3. Controles de seleção — Selecionar Todas + Limpar ── */
+
+.op-agente-sel-controles {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.op-agente-sel-todas.limpar {
+    color: #94a3b8;
+    text-decoration: none;
+    border-bottom: 1px dashed #cbd5e1;
+}
+.op-agente-sel-todas.limpar:hover {
+    background: #f1f5f9;
+    color: #64748b;
+    text-decoration: none;
+}
+
+/* ── 4a. Tira "Pronta pra encerrar" — respiro nas bordas ── */
+
+.op-card-react {
+    overflow: visible !important;
+}
+
+.card-pronta-tira {
+    margin: 0 10px 10px;
+    border-radius: 8px;
+    border: 1px solid #6ee7b7 !important;
+    border-top: none !important;
+}
+
+/* ── 4b. Variante — 2 linhas máx, não estoura o layout ── */
+
+.card-variante-hero {
+    white-space: normal !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden !important;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+/* ── 4c. Grid de cards — 2 colunas em tablet ── */
+
+.op-cards-container {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    padding: 12px;
+    gap: 12px;
+}
+
+/* Tablet (481–1100px): 2 colunas fixas, card compactado */
+@media (min-width: 481px) and (max-width: 1100px) {
+    .op-cards-container {
+        grid-template-columns: repeat(2, 1fr) !important;
+        padding: 10px;
+        gap: 10px;
+    }
+
+    .op-card-corpo {
+        padding: 12px 10px 10px 18px;
+        gap: 10px;
+    }
+
+    .op-card-corpo .card-imagem-produto {
+        width: 46px !important;
+        height: 46px !important;
+    }
+
+    .op-card-corpo .card-bloco-pendente {
+        min-width: 42px;
+        padding: 8px;
+    }
+
+    .op-card-corpo .card-bloco-pendente .valor {
+        font-size: 1.5rem;
+    }
+
+    .card-variante-hero {
+        font-size: 0.95rem;
+    }
+}
+
+/* Mobile (≤480px): 1 coluna, desfaz grid overrides antigos */
+@media (max-width: 480px) {
+    .op-cards-container {
+        grid-template-columns: 1fr !important;
+        padding: 8px;
+        gap: 10px;
+    }
+
+    .op-card-corpo {
+        padding: 12px 10px 10px 18px;
+        gap: 10px;
+    }
+
+    .op-card-corpo .card-imagem-produto {
+        width: 50px !important;
+        height: 50px !important;
+    }
+
+    .op-card-react {
+        display: flex !important;
+        flex-direction: column !important;
+        padding: 0 !important;
+    }
+}
+
+
+/* ==========================================================================
+   # ENCERRAMENTO PARCIAL — Cards e Agente de Encerramento
+   ========================================================================== */
+
+/* ── Card: tira laranja de encerramento parcial ── */
+
+.card-parcial-tira {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin: 0 10px 10px;
+    padding: 5px 14px;
+    border-radius: 8px;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    color: #9a3412;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.card-parcial-tira i { color: #f97316; }
+
+/* ── Agente: item parcial — fundo âmbar, borda laranja ── */
+
+.op-agente-item.parcial {
+    border-color: #fed7aa;
+    background: #fffbf5;
+}
+.op-agente-item.parcial:hover {
+    border-color: #f97316;
+    background: #fff7ed;
+}
+.op-agente-item.parcial.selecionado {
+    border-color: #f97316;
+    background: #fff7ed;
+}
+
+/* Check parcial selecionado — laranja em vez de azul */
+.op-agente-item-check.parcial.ativo {
+    background: #f97316;
+    border-color: #f97316;
+}
+
+/* Linha do topo com OP# + badge PARCIAL */
+.agente-item-linha-topo {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+/* Badge PARCIAL em destaque máximo */
+.agente-item-badge-parcial {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    color: #c2410c;
+    font-size: 0.6rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+}
+.agente-item-badge-parcial i { color: #f97316; font-size: 0.58rem; }
+
+/* Quantidade parcial: produzida / meta — mostra o deficit */
+.agente-item-qty-parcial {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+.agente-qty-produzida {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #f97316;
+    line-height: 1.1;
+}
+.agente-qty-sep {
+    display: none; /* usamos layout coluna, sep visual não necessário */
+}
+.agente-qty-meta {
+    font-size: 0.68rem;
+    color: #94a3b8;
+    text-decoration: line-through;
+    line-height: 1;
+}
+
+/* Aviso geral de parciais no rodapé da lista */
+.op-agente-aviso-parcial {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 0 0 10px;
+    padding: 10px 13px;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 8px;
+}
+.op-agente-aviso-parcial i {
+    color: #f97316;
+    font-size: 0.95rem;
+    margin-top: 1px;
+    flex-shrink: 0;
+}
+.op-agente-aviso-parcial p {
+    font-size: 0.8rem;
+    color: #9a3412;
+    margin: 0;
+    line-height: 1.45;
+}
+
+
+/* ==========================================================================
+   # AGENTE — Lista em 2 colunas (tablet e PC)
+   ========================================================================== */
+
+/* Grid de 2 colunas a partir de tablets — elimina o vazio entre info e qty */
+@media (min-width: 481px) {
+    .op-agente-lista {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        max-height: 380px; /* mais itens visíveis com 2 colunas */
+    }
+
+    /* Com item mais estreito, o qty fica colado naturalmente — sem vazio */
+    .op-agente-item {
+        align-items: center;
+    }
+
+    /* Info não precisa crescer tanto — ocupa o espaço disponível sem exagero */
+    .op-agente-item-info {
+        min-width: 0;
+        flex: 1;
+    }
+
+    /* Qty fica compacto à direita do item */
+    .agente-item-qty {
+        flex-shrink: 0;
+        font-size: 0.75rem;
+        white-space: nowrap;
+    }
+
+    /* Qty parcial mais compacto */
+    .agente-item-qty-parcial {
+        flex-shrink: 0;
+    }
+    .agente-qty-produzida {
+        font-size: 0.9rem;
+    }
+    .agente-qty-meta {
+        font-size: 0.62rem;
+    }
+}
+
+/* Mobile: mantém 1 coluna */
+@media (max-width: 480px) {
+    .op-agente-lista {
+        display: flex !important;
+        flex-direction: column;
+        max-height: 260px;
+    }
 }

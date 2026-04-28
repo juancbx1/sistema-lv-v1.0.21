@@ -2,6 +2,12 @@
 
 import React from 'react';
 
+function isParcial(op) {
+    if (!op.etapas || op.etapas.length === 0) return false;
+    const ultima = op.etapas[op.etapas.length - 1];
+    return (ultima?.quantidade_feita || 0) < op.quantidade;
+}
+
 function formatarData(dataISO) {
     try {
         if (!dataISO) return 'N/A';
@@ -17,7 +23,10 @@ function RadarBadge({ radar }) {
     if (!radar || radar.faixa === 'normal') return null;
     const isCritico = radar.faixa === 'critico';
     return (
-        <span className={`op-radar-badge ${radar.faixa}`} title={`Esta OP está em produção há ${radar.horas_abertas}h. O tempo normal para este produto é ${radar.media_horas}h.`}>
+        <span
+            className={`op-radar-badge ${radar.faixa}`}
+            title={`Esta OP está em produção há ${radar.horas_abertas}h. O tempo normal para este produto é ${radar.media_horas}h.`}
+        >
             <i className={`fas fa-${isCritico ? 'radiation-alt' : 'exclamation-triangle'}`}></i>
             {isCritico ? 'Atrasada: ' : 'Atenção: '}
             em prod. há {radar.horas_abertas}h (normal: {radar.media_horas}h)
@@ -25,7 +34,7 @@ function RadarBadge({ radar }) {
     );
 }
 
-export function OPCard({ op, onClick, modoSelecao, selecionado, onToggleSelecao, onCancelar }) {
+export function OPCard({ op, onClick, onCancelar }) {
     if (!op) return null;
 
     const imagemSrc = op.imagem_produto || '/img/placeholder-image.png';
@@ -38,49 +47,28 @@ export function OPCard({ op, onClick, modoSelecao, selecionado, onToggleSelecao,
             const todasProntas = op.etapas.every(e => e && e.lancado === true);
             if (todasProntas) statusClass = 'status-pronta-finalizar';
         }
-    } catch {
-        // ignora erro de cálculo
-    }
+    } catch { /* ignora */ }
 
-    // No modo seleção: apenas cards status-pronta-finalizar são elegíveis
     const elegivel = statusClass === 'status-pronta-finalizar';
 
-    // Botão de cancelar: só aparece se a OP ainda está ativa e o usuário tem permissão
     const podeCancelar = onCancelar &&
-        !modoSelecao &&
         op.status !== 'cancelada' &&
         op.status !== 'finalizado';
 
     const handleClick = () => {
-        if (modoSelecao) {
-            if (elegivel && onToggleSelecao) onToggleSelecao(op);
-        } else {
-            if (onClick) onClick(op);
-        }
+        if (onClick) onClick(op);
     };
 
     const handleCancelarClick = (e) => {
-        e.stopPropagation(); // não abrir o modal de detalhes
+        e.stopPropagation();
         onCancelar(op);
     };
 
-    // Classes dinâmicas
-    const cardClasses = [
-        'op-card-react',
-        modoSelecao ? 'modo-selecao' : '',
-        modoSelecao && elegivel ? 'elegivel' : '',
-        modoSelecao && !elegivel ? 'inelegivel' : '',
-        selecionado ? 'selecionado' : ''
-    ].filter(Boolean).join(' ');
+    const varianteTexto = op.variante && op.variante !== '-' ? op.variante : 'Padrão';
 
     return (
-        <div className={cardClasses} onClick={handleClick}>
+        <div className="op-card-react" onClick={handleClick}>
             <div className={`card-borda-charme ${statusClass}`}></div>
-
-            {/* Checkbox circular (modo seleção) */}
-            <div className="op-selecao-check">
-                {selecionado && <i className="fas fa-check"></i>}
-            </div>
 
             {/* Botão cancelar — canto superior direito */}
             {podeCancelar && (
@@ -94,32 +82,42 @@ export function OPCard({ op, onClick, modoSelecao, selecionado, onToggleSelecao,
                 </button>
             )}
 
-            <img src={imagemSrc} alt={op.produto || 'Produto'} className="card-imagem-produto" />
+            {/* Corpo principal: imagem | info | quantidade */}
+            <div className="op-card-corpo">
+                <img src={imagemSrc} alt={varianteTexto} className="card-imagem-produto" />
 
-            <div className="card-info-principal">
-                <span style={{
-                    fontSize: '0.85rem', fontWeight: '800', color: 'var(--op-cor-azul-claro)',
-                    textTransform: 'uppercase', letterSpacing: '0.5px'
-                }}>
-                    OP #{op.numero}
-                </span>
-                <h3>{op.produto || 'Produto Indefinido'}</h3>
-                <p>{op.variante && op.variante !== '-' ? op.variante : 'Padrão'}</p>
-
-                <div className="card-info-secundaria">
-                    <span className="info-item info-item-data" title="Data de criação">
-                        <i className="fas fa-calendar-alt"></i>
-                        <span><strong>{formatarData(op.data_entrega)}</strong></span>
-                    </span>
+                <div className="card-info-principal">
+                    <div className="card-meta-linha">
+                        <span className="card-op-num">OP #{op.numero}</span>
+                        <span className="card-data-criacao">
+                            <i className="fas fa-calendar-alt"></i>
+                            {formatarData(op.data_entrega)}
+                        </span>
+                    </div>
+                    <div className="card-variante-hero">{varianteTexto}</div>
+                    <RadarBadge radar={op.radar} />
                 </div>
 
-                <RadarBadge radar={op.radar} />
+                <div className="card-bloco-pendente">
+                    <span className="label">PÇS</span>
+                    <span className="valor">{op.quantidade || 0}</span>
+                </div>
             </div>
 
-            <div className="card-bloco-pendente">
-                <span className="label">QUANTIDADE</span>
-                <span className="valor">{op.quantidade || 0}</span>
-            </div>
+            {/* Tira de status: verde para pronta completa, laranja para parcial */}
+            {elegivel && (
+                isParcial(op) ? (
+                    <div className="card-parcial-tira">
+                        <i className="fas fa-exclamation-triangle"></i>
+                        <span>Encerramento Parcial</span>
+                    </div>
+                ) : (
+                    <div className="card-pronta-tira">
+                        <i className="fas fa-check-circle"></i>
+                        <span>Pronta para encerrar</span>
+                    </div>
+                )
+            )}
         </div>
     );
 }
