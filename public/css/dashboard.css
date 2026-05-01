@@ -4004,6 +4004,185 @@ body.ds-body.autenticado {
     line-height: 1;
 }
 
+/* ==========================================================================
+   Banner de Impersonação — visível apenas quando admin acessa como funcionário
+   ========================================================================== */
+
+.ds-impersonacao-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background-color: #e67e22;
+    color: #fff;
+    font-size: 0.88rem;
+    font-weight: 600;
+    padding: 10px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.ds-impersonacao-banner i {
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.ds-impersonacao-info {
+    margin-left: auto;
+    font-weight: 400;
+    opacity: 0.85;
+    font-size: 0.8rem;
+}
+
+/* ==========================================================================
+   DashVersionFooter — rodapé de versão + modal de novidades
+   ========================================================================== */
+
+.ds-version-footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 18px 0 24px;
+    cursor: pointer;
+    color: var(--ds-cor-cinza-texto-secundario);
+    font-size: 0.78rem;
+    transition: color 0.2s;
+    user-select: none;
+}
+
+.ds-version-footer:hover {
+    color: var(--ds-cor-primaria);
+}
+
+.ds-version-footer i {
+    font-size: 0.75rem;
+}
+
+/* Modal de versão */
+.ds-version-modal {
+    background: var(--ds-cor-branco);
+    border-radius: var(--ds-raio-borda);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    width: 100%;
+    max-width: 460px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.ds-version-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 20px 16px;
+    border-bottom: 1px solid var(--ds-cor-cinza-borda);
+    flex-shrink: 0;
+}
+
+.ds-version-modal-titulo-bloco {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ds-version-modal-titulo-bloco i {
+    font-size: 1.1rem;
+    color: var(--ds-cor-primaria);
+}
+
+.ds-version-modal-titulo-bloco h2 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--ds-cor-azul-escuro);
+    margin: 0;
+}
+
+.ds-version-modal-body {
+    overflow-y: auto;
+    padding: 16px 20px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* Cada bloco de versão */
+.ds-version-entrada {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.ds-version-entrada-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ds-version-badge {
+    font-size: 0.78rem;
+    font-weight: 700;
+    background: var(--ds-cor-azul-escuro);
+    color: #fff;
+    padding: 3px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.03em;
+}
+
+.ds-version-atual-tag {
+    font-size: 0.7rem;
+    font-weight: 700;
+    background: var(--ds-cor-sucesso);
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.ds-version-data {
+    font-size: 0.78rem;
+    color: var(--ds-cor-cinza-texto-secundario);
+    margin-left: auto;
+}
+
+.ds-version-lista {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.ds-version-lista li {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    font-size: 0.88rem;
+    color: var(--ds-cor-texto-principal);
+    line-height: 1.45;
+}
+
+.ds-version-lista li i {
+    font-size: 0.7rem;
+    color: var(--ds-cor-sucesso);
+    margin-top: 4px;
+    flex-shrink: 0;
+}
+
+.ds-version-vazio {
+    font-size: 0.88rem;
+    color: var(--ds-cor-cinza-texto-secundario);
+    text-align: center;
+    padding: 20px 0;
+}
+
+/* ==========================================================================
+   (continua) */
+
 .ds-ape-pontos-label {
     font-size: 0.7rem;
     font-weight: 700;

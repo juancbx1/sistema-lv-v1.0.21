@@ -238,6 +238,7 @@ router.get('/diaria', async (req, res) => {
                 WHERE tipos && ARRAY['costureira','tiktik']
                   AND data_admissao IS NOT NULL
                   AND data_demissao IS NULL
+                  AND (is_test IS FALSE OR is_test IS NULL)
                 ORDER BY nome
             `),
 

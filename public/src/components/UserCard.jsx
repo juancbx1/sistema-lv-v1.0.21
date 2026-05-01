@@ -28,6 +28,16 @@ export default function UserCard({ usuario, permissoesLogado, aoAtualizarLista, 
         }
     };
 
+    const handleImpersonar = async () => {
+        try {
+            const { token, nome } = await fetchAPI(`/api/usuarios/${usuario.id}/impersonar`, { method: 'POST' });
+            const url = `/dashboard/dashboard.html?impersonando=${encodeURIComponent(token)}`;
+            window.open(url, '_blank');
+        } catch (error) {
+            mostrarMensagem(`Erro ao iniciar impersonação: ${error.message}`, 'erro');
+        }
+    };
+
     const handleExcluir = async () => {
         const confirmado = await mostrarConfirmacao(`Tem certeza que deseja excluir o usuário "${usuario.nome}"?`);
         if (!confirmado) return;
@@ -58,13 +68,14 @@ export default function UserCard({ usuario, permissoesLogado, aoAtualizarLista, 
     }
 
     return (
-        <UserCardView 
-            usuario={usuario} 
+        <UserCardView
+            usuario={usuario}
             permissoesLogado={permissoesLogado}
             onEditar={() => setModoEdicao(true)}
             onExcluir={handleExcluir}
             onFerias={() => aoAbrirFerias(usuario)}
             onVinculo={() => aoAbrirVinculo(usuario)}
+            onImpersonar={handleImpersonar}
         />
     );
 }

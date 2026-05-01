@@ -12,7 +12,7 @@ const LABELS_TIPOS = {
     'cortador': 'Cortador'
 };
 
-export default function UserCardView({ usuario, permissoesLogado, onEditar, onExcluir, onFerias, onVinculo }) {
+export default function UserCardView({ usuario, permissoesLogado, onEditar, onExcluir, onFerias, onVinculo, onImpersonar }) {
     
     // --- LÓGICA DE STATUS (SÓCIO / EMPREGADO) ---
     const tipos = usuario.tipos || [];
@@ -142,6 +142,16 @@ export default function UserCardView({ usuario, permissoesLogado, onEditar, onEx
 
             {/* BOTÕES */}
             <div className="uc-card-botoes-container">
+                {permissoesLogado.includes('gerenciar-permissoes') && ehEmpregadoProdutivo && !usuario.data_demissao && (
+                    <button
+                        className="gs-btn gs-btn-aviso"
+                        onClick={onImpersonar}
+                        title="Acessar a dashboard como este funcionário (modo admin)"
+                    >
+                        <i className="fas fa-eye"></i>
+                    </button>
+                )}
+
                 {permissoesLogado.includes('editar-usuarios') && (
                      <button className="gs-btn gs-btn-secundario" onClick={onVinculo} title="Vincular Contato Financeiro">
                         <i className="fas fa-link"></i>

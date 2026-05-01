@@ -1,227 +1,149 @@
-/* Reset básico */
-* {
+/* ============================================================
+   acesso-negado.css
+   Paleta consistente com login.css: #0d1f14 / #6ee7b7 / Inter
+   ============================================================ */
+
+*, *::before, *::after {
+    box-sizing: border-box;
     margin: 0;
     padding: 0;
-    box-sizing: border-box;
 }
 
 body {
-    font-family: sans-serif;
-    background: linear-gradient(135deg, #2e2e2e, #1a1a1a);
-    height: 100vh;
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    background: #0d1f14;
+    min-height: 100vh;
     display: flex;
-    justify-content: center;
     align-items: center;
+    justify-content: center;
     overflow: hidden;
 }
 
-.container {
-    background: rgba(255, 255, 255, 0.95);
-    padding: 40px;
-    border-radius: 15px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+/* Fundo com gradiente sutil igual ao login */
+.an-bg {
+    width: 100%;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    position: relative;
+}
+
+.an-bg::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+        radial-gradient(ellipse 70% 50% at 20% 30%, rgba(110,231,183,0.06) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 70%, rgba(110,231,183,0.04) 0%, transparent 60%);
+    pointer-events: none;
+}
+
+/* Card central */
+.an-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(110, 231, 183, 0.15);
+    border-radius: 20px;
+    padding: 52px 48px;
     text-align: center;
-    max-width: 500px;
-    animation: fadeIn 0.5s ease-in-out;
+    max-width: 460px;
+    width: 100%;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow:
+        0 0 0 1px rgba(110, 231, 183, 0.05),
+        0 24px 60px rgba(0, 0, 0, 0.5);
+    animation: cardEntrada 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
-.lock-icon {
-    font-size: 100px; /* Tamanho grande para destacar */
-    margin-bottom: 20px;
-    color: #ff4d4d; /* Vermelho para indicar restrição */
-    animation: pulse 1.5s infinite;
-}
-
-h1 {
-    font-size: 28px;
-    color: #333;
-    margin-bottom: 15px;
-}
-
-p {
-    font-size: 16px;
-    color: #666;
-    line-height: 1.5;
-    margin-bottom: 25px;
-}
-
-.home-btn {
-    padding: 12px 30px;
-    background-color: #00aaff;
-    color: white;
-    border: none;
-    border-radius: 25px;
-    font-size: 16px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(0, 170, 255, 0.4);
-}
-
-.home-btn:hover {
-    background-color: #0088cc;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 136, 204, 0.5);
-}
-
-.home-btn:active {
-    transform: translateY(0);
-    box-shadow: 0 2px 10px rgba(0, 136, 204, 0.3);
-}
-
-/* Animações */
-@keyframes fadeIn {
+@keyframes cardEntrada {
     from {
         opacity: 0;
-        transform: translateY(-20px);
+        transform: translateY(24px) scale(0.97);
     }
     to {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(0) scale(1);
     }
 }
 
-@keyframes pulse {
-    0% {
-        transform: scale(1);
-    }
-    50% {
-        transform: scale(1.1);
-    }
-    100% {
-        transform: scale(1);
-    }
+/* Ícone */
+.an-icon-wrap {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(110, 231, 183, 0.08);
+    border: 1px solid rgba(110, 231, 183, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 28px;
 }
 
-/* Breakpoint para telas menores (max-width: 414px, como iPhone XR) */
-@media (max-width: 414px) {
-    .container {
-        padding: 20px;
-        max-width: 90%;
-        margin: 0 15px;
-    }
-
-    .lock-icon {
-        font-size: 70px; /* Reduz o tamanho do ícone */
-        margin-bottom: 15px;
-    }
-
-    h1 {
-        font-size: 22px; /* Reduz o tamanho do título */
-        margin-bottom: 10px;
-    }
-
-    p {
-        font-size: 13px; /* Reduz o tamanho do texto */
-        line-height: 1.4;
-        margin-bottom: 20px;
-    }
-
-    .home-btn {
-        padding: 10px 20px;
-        font-size: 14px;
-        border-radius: 20px;
-    }
+.an-icon-wrap i {
+    font-size: 2rem;
+    color: #6ee7b7;
 }
 
-/* Breakpoint para Mobile (max-width: 576px) */
-@media (max-width: 576px) {
-    .container {
-        padding: 25px;
-        max-width: 90%;
-        margin: 0 20px;
-    }
-
-    .lock-icon {
-        font-size: 80px;
-        margin-bottom: 15px;
-    }
-
-    h1 {
-        font-size: 24px;
-        margin-bottom: 12px;
-    }
-
-    p {
-        font-size: 14px;
-        line-height: 1.5;
-        margin-bottom: 20px;
-    }
-
-    .home-btn {
-        padding: 10px 25px;
-        font-size: 15px;
-        border-radius: 22px;
-    }
+/* Título */
+.an-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #f0fdf4;
+    margin-bottom: 14px;
+    letter-spacing: -0.02em;
 }
 
-/* Breakpoint para iPad Pro (768px a 1024px) */
-@media (min-width: 768px) and (max-width: 1024px) {
-    .container {
-        padding: 35px;
-        max-width: 600px;
-        margin: 0 30px;
-    }
-
-    .lock-icon {
-        font-size: 90px;
-        margin-bottom: 20px;
-    }
-
-    h1 {
-        font-size: 26px;
-        margin-bottom: 15px;
-    }
-
-    p {
-        font-size: 15px;
-        line-height: 1.5;
-        margin-bottom: 25px;
-    }
-
-    .home-btn {
-        padding: 12px 30px;
-        font-size: 16px;
-        border-radius: 25px;
-    }
+/* Mensagem */
+.an-msg {
+    font-size: 0.95rem;
+    color: rgba(240, 253, 244, 0.55);
+    line-height: 1.65;
+    margin-bottom: 36px;
 }
 
-/* Estilo para o botão de login */
-.login-btn {
-    padding: 12px 24px;
-    background: #3498db; /* Azul consistente com btn-primary */
-    color: white;
+/* Botão */
+.an-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 32px;
+    background: #6ee7b7;
+    color: #0d1f14;
     border: none;
-    border-radius: 8px;
-    font-size: 1.1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.3s ease, transform 0.2s ease;
-    margin-top: 20px;
-}
-
-.login-btn:hover {
-    background: #2980b9; /* Tom mais escuro ao passar o mouse */
-    transform: translateY(-2px);
-}
-
-.login-btn:active {
-    transform: translateY(0);
-}
-
-/* Ajuste no ícone para token expirado */
-.lock-icon {
-    font-size: 4rem;
-    margin-bottom: 20px;
-}
-
-/* Container ajustado para centralização */
-.containerToken {
-    width: 500px;
-    max-width: 90%;
-    margin: 50px auto;
-    text-align: center;
-    background: #ffffff;
-    padding: 40px;
     border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+    box-shadow: 0 4px 20px rgba(110, 231, 183, 0.25);
+    min-height: 48px;
+}
+
+.an-btn:hover {
+    background: #a7f3d0;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 28px rgba(110, 231, 183, 0.35);
+}
+
+.an-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 10px rgba(110, 231, 183, 0.2);
+}
+
+/* ── Responsividade ───────────────────────────────────────── */
+@media (max-width: 480px) {
+    .an-card {
+        padding: 40px 28px;
+    }
+
+    .an-title {
+        font-size: 1.35rem;
+    }
+
+    .an-msg {
+        font-size: 0.88rem;
+    }
 }

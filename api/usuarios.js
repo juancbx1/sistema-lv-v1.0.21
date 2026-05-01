@@ -350,6 +350,7 @@ router.get('/', async (req, res) => {
             FROM usuarios u
             LEFT JOIN fc_contatos c ON u.id_contato_financeiro = c.id
             WHERE (u.arquivado IS FALSE OR u.arquivado IS NULL) -- <<< ESCONDE OS ARQUIVADOS
+              AND (u.is_test IS FALSE OR u.is_test IS NULL)   -- <<< ESCONDE USUÁRIOS DE TESTE
             ORDER BY u.nome ASC;
         `;
     // Passamos a variável de ambiente como um parâmetro para a query
@@ -836,6 +837,58 @@ router.post('/:id/foto-oficial', uploadMulter.single('foto'), async (req, res) =
     } catch (error) {
         console.error('[foto-oficial] Erro:', error);
         res.status(500).json({ error: 'Falha no upload da foto.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// POST /api/usuarios/:id/impersonar — gera token temporário para admin visualizar como funcionário
+router.post('/:id/impersonar', async (req, res) => {
+    const { usuarioLogado } = req;
+    const { id: idAlvo } = req.params;
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+
+        const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, usuarioLogado.id);
+        if (!permissoes.includes('gerenciar-permissoes')) {
+            return res.status(403).json({ error: 'Permissão negada. Apenas administradores podem usar impersonação.' });
+        }
+
+        const result = await dbClient.query(
+            `SELECT id, nome, nome_usuario, tipos
+             FROM usuarios
+             WHERE id = $1 AND (arquivado IS FALSE OR arquivado IS NULL) AND data_demissao IS NULL`,
+            [idAlvo]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Usuário não encontrado ou já desligado.' });
+        }
+        const alvo = result.rows[0];
+
+        const tiposAlvo = alvo.tipos || [];
+        const ehProdutivo = tiposAlvo.includes('costureira') || tiposAlvo.includes('tiktik');
+        if (!ehProdutivo) {
+            return res.status(400).json({ error: 'Impersonação disponível apenas para costureiras e tiktiks.' });
+        }
+
+        const tokenImpersonacao = jwt.sign(
+            {
+                id: alvo.id,
+                nome_usuario: alvo.nome_usuario,
+                nome: alvo.nome,
+                tipos: tiposAlvo,
+                impersonando: true,
+                impersonadoPor: usuarioLogado.id,
+            },
+            SECRET_KEY,
+            { expiresIn: '2h' }
+        );
+
+        res.json({ token: tokenImpersonacao, nome: alvo.nome });
+    } catch (error) {
+        console.error('[impersonar] Erro:', error);
+        res.status(500).json({ error: 'Erro ao gerar token de impersonação.' });
     } finally {
         if (dbClient) dbClient.release();
     }

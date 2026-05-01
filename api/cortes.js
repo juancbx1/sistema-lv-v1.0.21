@@ -42,6 +42,122 @@ router.use(async (req, res, next) => {
     }
 });
 
+// GET /api/cortes/radar — Pulso do setor + déficit de estoque
+router.get('/radar', async (req, res) => {
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const permissoesCompletas = await getPermissoesCompletasUsuarioDB(dbClient, req.usuarioLogado.id);
+
+        if (!permissoesCompletas.includes('acesso-ordens-de-producao')) {
+            return res.status(403).json({ error: 'Permissão negada.' });
+        }
+
+        // 1. Estatísticas gerais do estoque de cortes
+        // NOTA: usa campo `data` (enviado pelo cliente na criação) para lancamentos_hoje,
+        // pois `data_atualizacao` só é preenchido em UPDATEs — não em INSERTs novos.
+        const statsResult = await dbClient.query(`
+            SELECT
+                COALESCE(SUM(quantidade) FILTER (WHERE status = 'cortados' AND op IS NULL), 0)::int AS total_pecas_estoque,
+                COUNT(*) FILTER (WHERE status = 'cortados' AND op IS NULL)::int AS total_cortes_disponiveis,
+                COUNT(*) FILTER (WHERE data::date = CURRENT_DATE AND status != 'excluido')::int AS lancamentos_hoje
+            FROM cortes
+            WHERE status != 'excluido'
+        `);
+
+        // 2. Último lançamento — ordena por id DESC para pegar o mais recente mesmo sem data_atualizacao
+        const ultimoResult = await dbClient.query(`
+            SELECT c.cortador, c.data, p.nome AS produto_nome
+            FROM cortes c
+            LEFT JOIN produtos p ON c.produto_id = p.id
+            WHERE c.status != 'excluido'
+            ORDER BY c.id DESC
+            LIMIT 1
+        `);
+
+        // 3. Alertas de déficit: demandas ativas sem corte suficiente em estoque
+        // Wrapped in try/catch — se a estrutura da tabela demandas_producao mudar, não quebra o endpoint
+        let alertasDeficit = [];
+        try {
+            const deficitResult = await dbClient.query(`
+                WITH estoque AS (
+                    SELECT
+                        produto_id,
+                        COALESCE(variante, '') AS variante,
+                        SUM(quantidade)::int AS disponiveis
+                    FROM cortes
+                    WHERE status = 'cortados' AND op IS NULL
+                    GROUP BY produto_id, variante
+                ),
+                demandas_ativas AS (
+                    SELECT
+                        p.id AS produto_id,
+                        p.nome AS produto_nome,
+                        COALESCE(
+                            (SELECT g->>'variacao'
+                             FROM jsonb_array_elements(
+                                 CASE WHEN jsonb_typeof(p.grade) = 'array' THEN p.grade ELSE '[]'::jsonb END
+                             ) g
+                             WHERE g->>'sku' = dp.produto_sku
+                             LIMIT 1),
+                            ''
+                        ) AS variante,
+                        SUM(dp.quantidade_solicitada)::int AS necessarias
+                    FROM demandas_producao dp
+                    JOIN produtos p ON (
+                        p.sku = dp.produto_sku
+                        OR EXISTS (
+                            SELECT 1 FROM jsonb_array_elements(
+                                CASE WHEN jsonb_typeof(p.grade) = 'array' THEN p.grade ELSE '[]'::jsonb END
+                            ) g
+                            WHERE g->>'sku' = dp.produto_sku
+                        )
+                    )
+                    WHERE p.is_kit = false
+                      AND dp.status NOT IN ('em_producao', 'concluida', 'cancelada', 'arquivada', 'finalizada')
+                    GROUP BY p.id, p.nome, variante
+                )
+                SELECT
+                    d.produto_id,
+                    d.produto_nome,
+                    CASE WHEN d.variante = '' THEN NULL ELSE d.variante END AS variante,
+                    d.necessarias AS pecas_necessarias,
+                    COALESCE(e.disponiveis, 0) AS pecas_em_estoque
+                FROM demandas_ativas d
+                LEFT JOIN estoque e
+                    ON e.produto_id = d.produto_id
+                    AND e.variante = d.variante
+                WHERE COALESCE(e.disponiveis, 0) < d.necessarias
+                ORDER BY d.produto_nome
+            `);
+            alertasDeficit = deficitResult.rows;
+        } catch (deficitErr) {
+            console.warn('[Radar/cortes] Erro ao calcular déficit:', deficitErr.message);
+        }
+
+        const stats = statsResult.rows[0];
+        const ultimo = ultimoResult.rows[0] || null;
+
+        res.json({
+            totalPecasEstoque: stats.total_pecas_estoque,
+            totalCortesDisponiveis: stats.total_cortes_disponiveis,
+            lancamentosHoje: stats.lancamentos_hoje,
+            ultimoLancamento: ultimo ? {
+                cortador: ultimo.cortador || 'Sistema',
+                data: ultimo.data,   // campo 'data' = data do corte (enviado no INSERT)
+                produto: ultimo.produto_nome
+            } : null,
+            alertasDeficit
+        });
+
+    } catch (error) {
+        console.error('[API Cortes GET /radar] Erro:', error);
+        res.status(500).json({ error: 'Erro ao gerar radar de cortes.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
 router.get('/next-pc-number', async (req, res) => {
     let dbClient;
     try {

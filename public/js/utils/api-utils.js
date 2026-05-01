@@ -8,7 +8,8 @@
  * @throws {Error} Lança um erro se a resposta não for 'ok'.
  */
 export async function fetchAPI(endpoint, options = {}) {
-    const token = localStorage.getItem('token');
+    // Em modo impersonação, a aba usa sessionStorage para não afetar o token do admin
+    const token = sessionStorage.getItem('impersonation_token') || localStorage.getItem('token');
     
     // Se não tiver token e não for login, redireciona (ajuste conforme sua rota de login)
     if (!token && !endpoint.includes('login')) {

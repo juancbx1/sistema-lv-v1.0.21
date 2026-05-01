@@ -11,6 +11,7 @@ import DashCofreModal from './components/DashCofreModal';
 import DashPerfilModal from './components/DashPerfilModal';
 import DashPagamentosModal from './components/DashPagamentosModal';
 import DashRankingCard from './components/DashRankingCard';
+import DashVersionFooter from './components/DashVersionFooter';
 
 export default function MainDashboard() {
     const [loading, setLoading] = useState(true);
@@ -20,12 +21,30 @@ export default function MainDashboard() {
     const [modalCofreAberto, setModalCofreAberto] = useState(false);
     const [modalPerfilAberto, setModalPerfilAberto] = useState(false);
     const [modalPagamentosAberto, setModalPagamentosAberto] = useState(false);
+    const [impersonandoNome, setImpersonandoNome] = useState(null);
 
     const carregar = async () => {
+        // Detecta token de impersonação na URL e o armazena em sessionStorage (isolado por aba)
+        const urlParams = new URLSearchParams(window.location.search);
+        const tokenUrl = urlParams.get('impersonando');
+        if (tokenUrl) {
+            sessionStorage.setItem('impersonation_token', tokenUrl);
+            window.history.replaceState({}, '', window.location.pathname);
+        }
+
         const auth = await verificarAutenticacao('dashboard/dashboard.html', ['acesso-dashboard']);
         if (!auth) return;
 
         try {
+            // Se houver token de impersonação, extrair o nome do payload (sem chamar API extra)
+            const impToken = sessionStorage.getItem('impersonation_token');
+            if (impToken) {
+                try {
+                    const payload = JSON.parse(atob(impToken.split('.')[1]));
+                    if (payload.impersonando) setImpersonandoNome(payload.nome);
+                } catch (_) { /* ignora erro de decode */ }
+            }
+
             const resultado = await fetchAPI('/api/dashboard/desempenho');
             setDados(resultado);
             
@@ -74,7 +93,14 @@ export default function MainDashboard() {
 
     return (
         <div className="ds-body autenticado">
-            <DashHeader 
+            {impersonandoNome && (
+                <div className="ds-impersonacao-banner">
+                    <i className="fas fa-user-shield"></i>
+                    <span>Modo Admin — visualizando como <strong>{impersonandoNome}</strong></span>
+                    <span className="ds-impersonacao-info">Sessão de 2h · Feche a aba para encerrar</span>
+                </div>
+            )}
+            <DashHeader
                 usuario={dados.usuario}
                 saldoCofre={dados.cofre?.saldo} // Passa o saldo para o header
                 aoAbrirCofre={() => setModalCofreAberto(true)} // Abre o modal
@@ -111,12 +137,14 @@ export default function MainDashboard() {
                 <DashRankingCard />
 
                 {/* Lista de Atividades */}
-                <DashAtividadesLista 
-                    atividades={dados.atividadesRecentes} 
-                    aoAtualizar={carregar} 
+                <DashAtividadesLista
+                    atividades={dados.atividadesRecentes}
+                    aoAtualizar={carregar}
                 />
 
             </main>
+
+            <DashVersionFooter />
 
             {/* Modal de Detalhes (Abre ao clicar no botão "Ver Detalhes" do resumo) */}
             {modalDesempenhoAberto && (

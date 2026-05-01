@@ -38,7 +38,8 @@ export async function sincronizarPermissoesUsuario(usuario) {
  * @returns {Promise<object|null>} Um objeto com {usuario, permissoes} ou null se a autenticação falhar.
  */
 export async function verificarAutenticacao(pagina, permissoesRequeridas = [], modo = 'all') {
-    const token = localStorage.getItem('token');
+    // Em modo impersonação, a aba usa sessionStorage para não afetar o token do admin
+    const token = sessionStorage.getItem('impersonation_token') || localStorage.getItem('token');
     if (!token) {
         console.log('[Auth] Token não encontrado, redirecionando para login.');
         window.location.href = '/index.html';

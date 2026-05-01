@@ -1,12 +1,15 @@
 // public/src/components/OPCortesTela.jsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import OPSelecaoProdutoCorte from './OPSelecaoProdutoCorte.jsx';
 import OPSelecaoVarianteCorte from './OPSelecaoVarianteCorte.jsx';
 import OPRegistroCorte from './OPRegistroCorte.jsx';
 import OPCorteEstoqueCard from './OPCorteEstoqueCard.jsx';
 import OPFormulario from './OPFormulario.jsx';
 import OPPaginacaoWrapper from './OPPaginacaoWrapper.jsx';
+import OPCortesRadar from './OPCortesRadar.jsx';
+import OPCortesAgente from './OPCortesAgente.jsx';
+import OPQuickLogModal from './OPQuickLogModal.jsx';
 import { obterProdutos as obterProdutosDoStorage } from '/js/utils/storage.js';
 import { mostrarMensagem, mostrarConfirmacao } from '/js/utils/popups.js';
 
@@ -17,323 +20,426 @@ async function fetchCortesEmEstoque() {
     });
     if (!response.ok) throw new Error('Falha ao buscar cortes em estoque.');
     const cortes = await response.json();
-    // Filtra apenas os que não têm OP vinculada (são estoque livre)
     return cortes.filter(corte => corte.op === null);
 }
 
+// Terminal de inicialização — exibido apenas no primeiro carregamento
+function InitTerminal() {
+    const [fase, setFase] = useState(0);
+    useEffect(() => {
+        if (fase >= 2) return;
+        const t = setTimeout(() => setFase(f => f + 1), 650);
+        return () => clearTimeout(t);
+    }, [fase]);
+    const msgs = [
+        'Conectando ao setor de cortes...',
+        'Carregando estoque de cortes...',
+        'Verificando alertas...',
+    ];
+    const visiveis = msgs.slice(0, fase + 1);
+    return (
+        <div className="op-init-terminal">
+            {visiveis.map((msg, i) => (
+                <div key={i} className={`op-init-linha ${i < visiveis.length - 1 ? 'ok' : 'atual'}`}>
+                    <span className="init-prompt">›</span>
+                    <span>{msg}</span>
+                    {i === visiveis.length - 1 && <span className="agente-cursor">▌</span>}
+                </div>
+            ))}
+        </div>
+    );
+}
+
 export default function OPCortesTela({ demandaInicial, onLimparDemanda }) {
-  const [passo, setPasso] = useState(0); 
-  const [corteSelecionado, setCorteSelecionado] = useState(null);
-  const [produtos, setProdutos] = useState([]);
-  const [cortesEmEstoque, setCortesEmEstoque] = useState([]);
-  
-  const [produtoSelecionado, setProdutoSelecionado] = useState(null);
-  const [varianteSelecionada, setVarianteSelecionada] = useState(null);
-  const [quantidadePreenchida, setQuantidadePreenchida] = useState('');
-  
-  const [demandaIdAtiva, setDemandaIdAtiva] = useState(null);
+    // ── Estado principal (mantido do original) ──
+    const [passo, setPasso] = useState(0);
+    const [corteSelecionado, setCorteSelecionado] = useState(null);
+    const [produtos, setProdutos] = useState([]);
+    const [cortesEmEstoque, setCortesEmEstoque] = useState([]);
+    const [produtoSelecionado, setProdutoSelecionado] = useState(null);
+    const [varianteSelecionada, setVarianteSelecionada] = useState(null);
+    const [quantidadePreenchida, setQuantidadePreenchida] = useState('');
+    const [demandaIdAtiva, setDemandaIdAtiva] = useState(null);
+    const [carregando, setCarregando] = useState(true);
+    const [erro, setErro] = useState(null);
+    const [usuarioLogado, setUsuarioLogado] = useState(null);
+    const [gerandoOP, setGerandoOP] = useState(null);
+    const [paginaCortes, setPaginaCortes] = useState(1);
 
-  const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState(null);
-  const [usuarioLogado, setUsuarioLogado] = useState(null);
-  
-  const [gerandoOP, setGerandoOP] = useState(null);
-  const [paginaCortes, setPaginaCortes] = useState(1);
-  const ITENS_POR_PAGINA_CORTES = 6;
+    // ── Estado novo ──
+    const [quickLogAberto, setQuickLogAberto] = useState(false);
+    const [quickLogPreenchido, setQuickLogPreenchido] = useState(null); // {produto, variante, quantidadeSugerida}
+    const [radarRefreshKey, setRadarRefreshKey] = useState(0);
+    const [agenteRescanKey, setAgenteRescanKey] = useState(0);
 
-  const carregarDados = useCallback(async () => {
-    setCarregando(true);
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error("Não autenticado");
+    const isFirstLoadRef = useRef(true);
+    const ITENS_POR_PAGINA_CORTES = 6;
 
-      const [todosProdutos, dadosUsuario, cortesData] = await Promise.all([
-        obterProdutosDoStorage(),
-        fetch('/api/usuarios/me', { headers: { 'Authorization': `Bearer ${token}` } }).then(res => res.json()),
-        fetchCortesEmEstoque()
-      ]);
-      
-      if (dadosUsuario.error) throw new Error(dadosUsuario.error);
+    // ── Carregamento de dados ──
+    const carregarDados = useCallback(async () => {
+        setCarregando(true);
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) throw new Error('Não autenticado');
 
-      const produtosProduziveis = todosProdutos.filter(p => !p.is_kit);
-      setProdutos(produtosProduziveis);
-      setUsuarioLogado(dadosUsuario);
-      setCortesEmEstoque(cortesData); 
-      setPaginaCortes(1); // Reseta página ao recarregar
+            const [todosProdutos, dadosUsuario, cortesData] = await Promise.all([
+                obterProdutosDoStorage(),
+                fetch('/api/usuarios/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }).then(res => res.json()),
+                fetchCortesEmEstoque()
+            ]);
 
-    } catch (err) {
-      setErro(`Falha ao carregar dados: ${err.message}`);
-    } finally {
-      setCarregando(false);
-    }
-  }, []);
+            if (dadosUsuario.error) throw new Error(dadosUsuario.error);
 
-  useEffect(() => {
-    carregarDados();
-  }, [carregarDados]);
+            setProdutos(todosProdutos.filter(p => !p.is_kit));
+            setUsuarioLogado(dadosUsuario);
+            setCortesEmEstoque(cortesData);
+            setPaginaCortes(1);
+        } catch (err) {
+            setErro(`Falha ao carregar dados: ${err.message}`);
+        } finally {
+            setCarregando(false);
+            isFirstLoadRef.current = false;
+        }
+    }, []);
 
-  // --- LÓGICA DE EXCLUSÃO DE CORTE ---
-  const handleExcluirCorte = async (corte) => {
-      const confirmado = await mostrarConfirmacao(
-          `Tem certeza que deseja excluir o corte PC #${corte.pn} (${corte.quantidade} pçs)?\nEsta ação é irreversível e remove o corte do estoque.`,
-          { tipo: 'perigo', textoConfirmar: 'Sim, Excluir', textoCancelar: 'Cancelar' }
-      );
+    useEffect(() => { carregarDados(); }, [carregarDados]);
 
-      if (!confirmado) return;
+    // ── Exclusão de corte ──
+    const handleExcluirCorte = async (corte) => {
+        const confirmado = await mostrarConfirmacao(
+            `Excluir o corte PC #${corte.pn} (${corte.quantidade} pçs)?\nEsta ação remove o corte do estoque.`,
+            { tipo: 'perigo', textoConfirmar: 'Sim, Excluir', textoCancelar: 'Cancelar' }
+        );
+        if (!confirmado) return;
 
-      try {
-          const token = localStorage.getItem('token');
-          const response = await fetch('/api/cortes', {
-              method: 'DELETE',
-              headers: { 
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json' 
-              },
-              body: JSON.stringify({ id: corte.id })
-          });
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch('/api/cortes', {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ id: corte.id })
+            });
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || 'Falha ao excluir corte.');
+            }
+            mostrarMensagem('Corte excluído com sucesso.', 'sucesso');
+            setRadarRefreshKey(k => k + 1);
+            carregarDados();
+        } catch (err) {
+            mostrarMensagem(err.message, 'erro');
+        }
+    };
 
-          if (!response.ok) {
-              const errData = await response.json();
-              throw new Error(errData.error || 'Falha ao excluir corte.');
-          }
-          
-          mostrarMensagem('Corte excluído com sucesso.', 'sucesso');
-          carregarDados(); // Atualiza a lista
+    // ── Quick Log: sucesso ──
+    const handleQuickLogSuccess = () => {
+        const vinhDoAgente = !!quickLogPreenchido;
+        setQuickLogAberto(false);
+        setQuickLogPreenchido(null);
+        setRadarRefreshKey(k => k + 1);
+        carregarDados();
+        // Se o corte foi via agente, dispara rescan automático do plano
+        if (vinhDoAgente) {
+            setAgenteRescanKey(k => k + 1);
+        }
+    };
 
-      } catch (err) {
-          console.error(err);
-          mostrarMensagem(err.message, 'erro');
-      }
-  };
+    // ── Agente: "Cortar Agora" pré-preenche o Quick-Log ──
+    const handleCortarAgora = ({ produto, variante, quantidadeSugerida }) => {
+        setQuickLogPreenchido({ produto, variante, quantidadeSugerida });
+        setQuickLogAberto(true);
+    };
 
-  // --- LÓGICA DE AUTOMATIZAÇÃO ---
-  useEffect(() => {
-      if (demandaInicial && produtos.length > 0 && !carregando) {
-          console.log("[Automação] Processando demanda:", demandaInicial);
-          
-          const { produto_id, variante, quantidade, demanda_id } = demandaInicial;
-          setDemandaIdAtiva(demanda_id);
+    // ── Automação via demanda (preservada do original) ──
+    useEffect(() => {
+        if (!demandaInicial || produtos.length === 0 || carregando) return;
 
-          const produtoAlvo = produtos.find(p => p.id === produto_id);
-          if (!produtoAlvo) {
-              mostrarMensagem("Erro: Produto da demanda não encontrado.", "erro");
-              onLimparDemanda();
-              return;
-          }
+        const { produto_id, variante, quantidade, demanda_id } = demandaInicial;
+        setDemandaIdAtiva(demanda_id);
 
-          const normalizarVariante = (v) => (!v || v === '-' || v === '') ? null : v;
-          const varianteAlvo = normalizarVariante(variante);
+        const produtoAlvo = produtos.find(p => p.id === produto_id);
+        if (!produtoAlvo) {
+            mostrarMensagem('Erro: Produto da demanda não encontrado.', 'erro');
+            onLimparDemanda();
+            return;
+        }
 
-          const cortesDoProduto = cortesEmEstoque.filter(c => 
-              c.produto_id === produto_id && 
-              normalizarVariante(c.variante) === varianteAlvo
-          );
+        const normalizarVariante = (v) => (!v || v === '-' || v === '') ? null : v;
+        const varianteAlvo = normalizarVariante(variante);
 
-          const cortePerfeito = cortesDoProduto.find(c => c.quantidade >= quantidade);
+        const cortesDoProduto = cortesEmEstoque.filter(c =>
+            c.produto_id === produto_id &&
+            normalizarVariante(c.variante) === varianteAlvo
+        );
 
-          if (cortePerfeito) {
-              mostrarMensagem(`Encontramos um corte ideal (PC: ${cortePerfeito.pn})!`, 'sucesso');
-              setGerandoOP(cortePerfeito.id);
-              setCorteSelecionado(cortePerfeito);
-              setPasso(4); 
-          } 
-          else if (cortesDoProduto.length > 0) {
-              const melhorCorteParcial = cortesDoProduto.sort((a, b) => b.quantidade - a.quantidade)[0];
-              mostrarConfirmacao(
-                  `Você precisa de ${quantidade} peças, mas o maior corte tem ${melhorCorteParcial.quantidade}. \n\nDeseja usar este corte parcial?`,
-                  { tipo: 'aviso', textoConfirmar: `Usar Corte de ${melhorCorteParcial.quantidade}`, textoCancelar: 'Não, fazer novo corte' }
-              ).then((usarParcial) => {
-                  if (usarParcial) {
-                      setGerandoOP(melhorCorteParcial.id);
-                      setCorteSelecionado(melhorCorteParcial);
-                      setPasso(4);
-                  } else {
-                      setProdutoSelecionado(produtoAlvo);
-                      setVarianteSelecionada(variante);
-                      setQuantidadePreenchida(quantidade);
-                      setPasso(3);
-                  }
-              });
+        const cortePerfeito = cortesDoProduto.find(c => c.quantidade >= quantidade);
 
-          } else {
-              mostrarMensagem(`Nenhum corte em estoque. Redirecionando para novo corte.`, 'info');
-              setProdutoSelecionado(produtoAlvo);
-              setVarianteSelecionada(variante);
-              setQuantidadePreenchida(quantidade);
-              setPasso(3); 
-          }
-          onLimparDemanda();
-      }
-  }, [demandaInicial, produtos, cortesEmEstoque, carregando, onLimparDemanda]);
+        if (cortePerfeito) {
+            mostrarMensagem(`Corte ideal encontrado (PC: ${cortePerfeito.pn})!`, 'sucesso');
+            setGerandoOP(cortePerfeito.id);
+            setCorteSelecionado(cortePerfeito);
+            setPasso(4);
+        } else if (cortesDoProduto.length > 0) {
+            const melhor = [...cortesDoProduto].sort((a, b) => b.quantidade - a.quantidade)[0];
+            mostrarConfirmacao(
+                `Você precisa de ${quantidade} peças, mas o maior corte tem ${melhor.quantidade}.\n\nDeseja usar este corte parcial?`,
+                { tipo: 'aviso', textoConfirmar: `Usar Corte de ${melhor.quantidade}`, textoCancelar: 'Não, fazer novo corte' }
+            ).then((usarParcial) => {
+                if (usarParcial) {
+                    setGerandoOP(melhor.id);
+                    setCorteSelecionado(melhor);
+                    setPasso(4);
+                } else {
+                    setProdutoSelecionado(produtoAlvo);
+                    setVarianteSelecionada(variante);
+                    setQuantidadePreenchida(quantidade);
+                    setPasso(3);
+                }
+            });
+        } else {
+            mostrarMensagem('Nenhum corte em estoque. Abrindo registro de novo corte.', 'info');
+            setProdutoSelecionado(produtoAlvo);
+            setVarianteSelecionada(variante);
+            setQuantidadePreenchida(quantidade);
+            setPasso(3);
+        }
+        onLimparDemanda();
+    }, [demandaInicial, produtos, cortesEmEstoque, carregando, onLimparDemanda]);
 
+    // ── Handlers do wizard ──
+    const handleProdutoSelect = (produto) => { setProdutoSelecionado(produto); setPasso(2); };
+    const handleVarianteSelect = (variante) => { setVarianteSelecionada(variante); setPasso(3); };
 
-  const handleProdutoSelect = (produto) => { setProdutoSelecionado(produto); setPasso(2); };
-  const handleVarianteSelect = (variante) => { setVarianteSelecionada(variante); setPasso(3); };
-  
-  const handleCorteRegistrado = (novoCorte) => {
-    setProdutoSelecionado(null);
-    setVarianteSelecionada(null);
-    setQuantidadePreenchida('');
-    
-    if (demandaIdAtiva && novoCorte) {
-        console.log("Fluxo Contínuo: Indo para Gerar OP com corte", novoCorte.pn);
-        setCorteSelecionado(novoCorte);
-        setGerandoOP(novoCorte.id);
-        setPasso(4);
-        carregarDados(); 
-    } else {
-        setPasso(0); 
-        setGerandoOP(null);
-        setDemandaIdAtiva(null);
-        carregarDados(); 
-    }
-  };
-
-  const handleGerarOP = (corte) => {
-      if (gerandoOP) return;
-      setGerandoOP(corte.id);
-      setCorteSelecionado(corte);
-      setPasso(4);
-  };
-
-  const handleOPCriada = () => {
-      setCorteSelecionado(null);
-      setPasso(0);
-      setGerandoOP(null);
-      setDemandaIdAtiva(null);
-      carregarDados();
-  };
-  
-  const voltarPasso = () => {
-    if (passo === 4) {
-        setGerandoOP(null);
-        setCorteSelecionado(null);
-        setPasso(0);
-        setDemandaIdAtiva(null);
-        return;
-    }
-    if (passo === 1) setProdutoSelecionado(null);
-    if (passo === 2) setVarianteSelecionada(null);
-    if (passo === 3) setQuantidadePreenchida('');
-
-    if (passo > 1) { 
-        setPasso(passo - 1); 
-    } else { 
-        setPasso(0); 
+    const handleCorteRegistrado = (novoCorte) => {
         setProdutoSelecionado(null);
         setVarianteSelecionada(null);
+        setQuantidadePreenchida('');
+        if (demandaIdAtiva && novoCorte) {
+            setCorteSelecionado(novoCorte);
+            setGerandoOP(novoCorte.id);
+            setPasso(4);
+            carregarDados();
+        } else {
+            setPasso(0);
+            setGerandoOP(null);
+            setDemandaIdAtiva(null);
+            setRadarRefreshKey(k => k + 1);
+            carregarDados();
+        }
+    };
+
+    const handleGerarOP = (corte) => {
+        if (gerandoOP) return;
+        setGerandoOP(corte.id);
+        setCorteSelecionado(corte);
+        setPasso(4);
+    };
+
+    const handleOPCriada = () => {
+        setCorteSelecionado(null);
+        setPasso(0);
+        setGerandoOP(null);
         setDemandaIdAtiva(null);
-    }
-  };
+        carregarDados();
+    };
 
-  const renderContent = () => {
-        if (carregando) return <div className="spinner">Carregando...</div>;
-        if (erro) return <p style={{ color: 'red', textAlign: 'center' }}>{erro}</p>;
+    const voltarPasso = () => {
+        if (passo === 4) {
+            setGerandoOP(null);
+            setCorteSelecionado(null);
+            setPasso(0);
+            setDemandaIdAtiva(null);
+            return;
+        }
+        if (passo === 1) setProdutoSelecionado(null);
+        if (passo === 2) setVarianteSelecionada(null);
+        if (passo === 3) setQuantidadePreenchida('');
+        if (passo > 1) setPasso(passo - 1);
+        else {
+            setPasso(0);
+            setProdutoSelecionado(null);
+            setVarianteSelecionada(null);
+            setDemandaIdAtiva(null);
+        }
+    };
 
-        switch (passo) {
-            case 1:
-                return (
-                    <>
-                        <h3 className="op-subtitulo-secao">Passo 1: Selecione o Produto</h3>
-                        <OPSelecaoProdutoCorte produtos={produtos} onProdutoSelect={handleProdutoSelect} />
-                    </>
-                );
-            case 2:
-                 return (
-                    <>
-                        <h3 className="op-subtitulo-secao">Passo 2: Selecione a Variação de "{produtoSelecionado?.nome}"</h3>
-                        <OPSelecaoVarianteCorte produto={produtoSelecionado} onVarianteSelect={handleVarianteSelect} />
-                    </>
-                );
-            case 3:
-                return (
-                    <>
-                        <h3 className="op-subtitulo-secao">Passo 3: Informe a Quantidade</h3>
-                        <OPRegistroCorte 
-                            key={quantidadePreenchida ? `corte-pre-${quantidadePreenchida}` : 'corte-novo'}
-                            produto={produtoSelecionado} 
-                            variante={varianteSelecionada} 
-                            usuario={usuarioLogado} 
-                            onCorteRegistrado={handleCorteRegistrado}
-                            quantidadeInicial={quantidadePreenchida}
-                            demandaId={demandaIdAtiva} 
-                        />
-                    </>
-                );
-            case 4:
-                return (
-                    <>
-                        <h3 className="op-subtitulo-secao">Gerar Ordem de Produção</h3>
-                        <OPFormulario
-                            corteSelecionado={corteSelecionado}
-                            onOPCriada={handleOPCriada}
-                            onSetGerando={setGerandoOP} 
-                            demandaId={demandaIdAtiva}
-                        />
-                    </>
-                );
-            default: 
-                const totalPaginasCortes = Math.ceil(cortesEmEstoque.length / ITENS_POR_PAGINA_CORTES);
-                const cortesPaginados = cortesEmEstoque.slice(
-                    (paginaCortes - 1) * ITENS_POR_PAGINA_CORTES,
-                    paginaCortes * ITENS_POR_PAGINA_CORTES
-                );
+    // ── Render da vista principal (passo 0) ──
+    const renderVistaPrincipal = () => {
+        const totalPaginasCortes = Math.ceil(cortesEmEstoque.length / ITENS_POR_PAGINA_CORTES);
+        const cortesPaginados = cortesEmEstoque.slice(
+            (paginaCortes - 1) * ITENS_POR_PAGINA_CORTES,
+            paginaCortes * ITENS_POR_PAGINA_CORTES
+        );
 
-                return (
-                    <>
-                        <div className="op-form-botoes" style={{ justifyContent: 'center', marginBottom: '30px' }}>
-                            <button className="op-botao op-botao-destaque-incluir" onClick={() => setPasso(1)}>
-                                <i className="fas fa-plus"></i> Registrar Novo Corte
+        return (
+            <>
+                {/* RADAR */}
+                <OPCortesRadar refreshKey={radarRefreshKey} />
+
+                {/* AGENTE DE PLANEJAMENTO + AÇÕES — linha horizontal */}
+                <div className="op-cortes-controles">
+                    {/* Botões de ação (sempre visíveis quando Quick-Log fechado) */}
+                    {!quickLogAberto && (
+                        <div className="op-cortes-acoes-btns">
+                            <button
+                                className="op-cortes-btn-quicklog"
+                                onClick={() => { setQuickLogPreenchido(null); setQuickLogAberto(true); }}
+                            >
+                                <i className="fas fa-bolt"></i>
+                                Registrar Corte
+                            </button>
+                            <button
+                                className="op-cortes-btn-avancado"
+                                onClick={() => setPasso(1)}
+                                title="Fluxo completo com mais opções"
+                            >
+                                <i className="fas fa-sliders-h"></i>
+                                Modo Avançado
                             </button>
                         </div>
-                        <h3 className="op-subtitulo-secao">Estoque de Cortes (Prontos para Virar OP)</h3>
-                        
+                    )}
+
+                    {/* Agente de planejamento — ao lado dos botões */}
+                    {!quickLogAberto && (
+                        <OPCortesAgente
+                            produtos={produtos}
+                            onCortarAgora={handleCortarAgora}
+                            rescanKey={agenteRescanKey}
+                        />
+                    )}
+                </div>
+
+                {/* Quick-Log inline (abre embaixo dos controles) */}
+                {quickLogAberto && (
+                    <div className="op-cortes-acoes-header">
+                        <OPQuickLogModal
+                            produtos={produtos}
+                            usuario={usuarioLogado}
+                            onClose={() => { setQuickLogAberto(false); setQuickLogPreenchido(null); }}
+                            onSuccess={handleQuickLogSuccess}
+                            preenchido={quickLogPreenchido}
+                        />
+                    </div>
+                )}
+
+                {/* ESTOQUE */}
+                {!quickLogAberto && (
+                    <div className="op-cortes-estoque-secao">
+                        <div className="op-cortes-estoque-titulo-row">
+                            <h3 className="op-cortes-estoque-titulo">
+                                <i className="fas fa-boxes"></i>
+                                Estoque de Cortes
+                            </h3>
+                            {cortesEmEstoque.length > 0 && (
+                                <span className="op-cortes-estoque-badge">
+                                    {cortesEmEstoque.length} {cortesEmEstoque.length === 1 ? 'lote' : 'lotes'}
+                                </span>
+                            )}
+                        </div>
+
                         <div className="op-cards-container">
                             {cortesPaginados.length > 0 ? (
                                 cortesPaginados.map(corte => {
                                     const produtoCompleto = produtos.find(p => p.id === corte.produto_id);
                                     return (
-                                        <OPCorteEstoqueCard 
-                                            key={corte.id} 
+                                        <OPCorteEstoqueCard
+                                            key={corte.id}
                                             corte={corte}
-                                            produto={produtoCompleto} 
+                                            produto={produtoCompleto}
                                             onGerarOP={handleGerarOP}
-                                            onExcluir={handleExcluirCorte} // <--- Passando a função
+                                            onExcluir={handleExcluirCorte}
                                             isGerando={gerandoOP === corte.id}
                                         />
                                     );
                                 })
                             ) : (
-                                <p style={{ textAlign: 'center', padding: '20px' }}>Nenhum corte em estoque no momento.</p>
+                                <div className="op-cortes-estoque-vazio">
+                                    <i className="fas fa-cut"></i>
+                                    <p>Nenhum corte em estoque no momento.</p>
+                                    <span>Use "Registrar Corte" acima para adicionar peças ao estoque.</span>
+                                </div>
                             )}
                         </div>
 
                         {totalPaginasCortes > 1 && (
-                            <OPPaginacaoWrapper 
+                            <OPPaginacaoWrapper
                                 totalPages={totalPaginasCortes}
                                 currentPage={paginaCortes}
                                 onPageChange={setPaginaCortes}
                             />
                         )}
-                    </>
-                );
-        }
-      };
+                    </div>
+                )}
+            </>
+        );
+    };
 
-      return (
+    return (
         <div className="gs-card">
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '15px' }}>
-                {passo > 0 && (
+            {/* Header com voltar (wizard) */}
+            {passo > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '15px' }}>
                     <button className="btn-voltar-header" onClick={voltarPasso}>
                         <i className="fas fa-arrow-left"></i> Voltar
                     </button>
-                )}
-                <h2 className="op-titulo-secao" style={{ flexGrow: 1, textAlign: 'center', borderBottom: 'none', marginBottom: 0 }}>
-                  Área de Cortes
-                </h2>
-                {passo > 0 && <div className="op-header-spacer"></div>}
-            </div>
-            {renderContent()}
+                    <h2 className="op-titulo-secao" style={{ flexGrow: 1, textAlign: 'center', borderBottom: 'none', marginBottom: 0 }}>
+                        Área de Cortes
+                    </h2>
+                    <div className="op-header-spacer"></div>
+                </div>
+            )}
+
+            {/* Init terminal */}
+            {carregando && isFirstLoadRef.current && <InitTerminal />}
+
+            {erro && <p style={{ color: 'red', textAlign: 'center' }}>{erro}</p>}
+
+            {/* Vista principal */}
+            {!carregando && !erro && passo === 0 && renderVistaPrincipal()}
+
+            {/* Wizard */}
+            {!carregando && !erro && passo === 1 && (
+                <>
+                    <h3 className="op-subtitulo-secao">Passo 1: Selecione o Produto</h3>
+                    <OPSelecaoProdutoCorte produtos={produtos} onProdutoSelect={handleProdutoSelect} />
+                </>
+            )}
+            {!carregando && !erro && passo === 2 && (
+                <>
+                    <h3 className="op-subtitulo-secao">Passo 2: Selecione a Variação de "{produtoSelecionado?.nome}"</h3>
+                    <OPSelecaoVarianteCorte produto={produtoSelecionado} onVarianteSelect={handleVarianteSelect} />
+                </>
+            )}
+            {!carregando && !erro && passo === 3 && (
+                <>
+                    <h3 className="op-subtitulo-secao">Passo 3: Informe a Quantidade</h3>
+                    <OPRegistroCorte
+                        key={quantidadePreenchida ? `corte-pre-${quantidadePreenchida}` : 'corte-novo'}
+                        produto={produtoSelecionado}
+                        variante={varianteSelecionada}
+                        usuario={usuarioLogado}
+                        onCorteRegistrado={handleCorteRegistrado}
+                        quantidadeInicial={quantidadePreenchida}
+                        demandaId={demandaIdAtiva}
+                    />
+                </>
+            )}
+            {!carregando && !erro && passo === 4 && (
+                <>
+                    <h3 className="op-subtitulo-secao">Gerar Ordem de Produção</h3>
+                    <OPFormulario
+                        corteSelecionado={corteSelecionado}
+                        onOPCriada={handleOPCriada}
+                        onSetGerando={setGerandoOP}
+                        demandaId={demandaIdAtiva}
+                    />
+                </>
+            )}
         </div>
-      );
+    );
 }

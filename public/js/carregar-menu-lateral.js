@@ -1,5 +1,108 @@
 // /js/carregar-menu-lateral.js
 import { logout } from '/js/utils/auth.js';
+import { changelog } from '/js/utils/changelog-data.js';
+
+// ── Modal de novidades da versão (admin) ─────────────────────────────────────
+function abrirModalVersaoAdmin() {
+    // Evita duplicatas
+    if (document.getElementById('ml-version-modal-overlay')) return;
+
+    const entradasAdmin = changelog.filter(e => e.admin && e.admin.length > 0);
+
+    const overlay = document.createElement('div');
+    overlay.id = 'ml-version-modal-overlay';
+    overlay.style.cssText = `
+        position:fixed; inset:0; z-index:99999;
+        background:rgba(0,0,0,0.55);
+        display:flex; align-items:center; justify-content:center;
+        padding:20px; backdrop-filter:blur(2px);
+        animation:mlFadeIn 0.2s ease;
+    `;
+
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        background:#fff; border-radius:14px;
+        box-shadow:0 12px 40px rgba(0,0,0,0.25);
+        width:100%; max-width:480px; max-height:80vh;
+        display:flex; flex-direction:column; overflow:hidden;
+        font-family:'Inter',system-ui,sans-serif;
+        animation:mlSlideUp 0.25s cubic-bezier(0.34,1.56,0.64,1);
+    `;
+
+    // Header
+    const header = document.createElement('div');
+    header.style.cssText = `
+        display:flex; align-items:center; justify-content:space-between;
+        padding:18px 20px 16px; border-bottom:1px solid #e9ecef; flex-shrink:0;
+    `;
+    header.innerHTML = `
+        <div style="display:flex;align-items:center;gap:10px;">
+            <i class="fas fa-rocket" style="color:#007bff;font-size:1.05rem;"></i>
+            <h2 style="font-size:1rem;font-weight:700;color:#2c3e50;margin:0;">Novidades do Sistema</h2>
+        </div>
+        <button id="ml-version-modal-close" style="
+            background:none;border:none;cursor:pointer;
+            color:#6c757d;font-size:1.1rem;padding:4px;line-height:1;
+            border-radius:6px;transition:background 0.15s;
+        " title="Fechar"><i class="fas fa-times"></i></button>
+    `;
+
+    // Body
+    const body = document.createElement('div');
+    body.style.cssText = `overflow-y:auto; padding:16px 20px 20px; display:flex; flex-direction:column; gap:20px;`;
+
+    if (entradasAdmin.length === 0) {
+        body.innerHTML = `<p style="text-align:center;color:#6c757d;font-size:0.88rem;padding:20px 0;">Nenhuma novidade registrada ainda.</p>`;
+    } else {
+        entradasAdmin.forEach((entrada, idx) => {
+            const bloco = document.createElement('div');
+            bloco.style.cssText = `display:flex;flex-direction:column;gap:10px;`;
+
+            const atualTag = idx === 0
+                ? `<span style="font-size:0.68rem;font-weight:700;background:#28a745;color:#fff;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:0.04em;">Atual</span>`
+                : '';
+
+            bloco.innerHTML = `
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="font-size:0.76rem;font-weight:700;background:#2c3e50;color:#fff;padding:3px 10px;border-radius:20px;">v${entrada.versao}</span>
+                    ${atualTag}
+                    <span style="font-size:0.76rem;color:#6c757d;margin-left:auto;">${entrada.data}</span>
+                </div>
+                <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:7px;">
+                    ${entrada.admin.map(item => `
+                        <li style="display:flex;align-items:flex-start;gap:9px;font-size:0.87rem;color:#333;line-height:1.45;">
+                            <i class="fas fa-check" style="color:#28a745;font-size:0.68rem;margin-top:4px;flex-shrink:0;"></i>
+                            <span>${item}</span>
+                        </li>
+                    `).join('')}
+                </ul>
+            `;
+            body.appendChild(bloco);
+        });
+    }
+
+    modal.appendChild(header);
+    modal.appendChild(body);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    // Fechar
+    const fechar = () => overlay.remove();
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) fechar(); });
+    document.getElementById('ml-version-modal-close').addEventListener('click', fechar);
+
+    // Keyframes (injetados uma vez)
+    if (!document.getElementById('ml-version-keyframes')) {
+        const style = document.createElement('style');
+        style.id = 'ml-version-keyframes';
+        style.textContent = `
+            @keyframes mlFadeIn { from { opacity:0 } to { opacity:1 } }
+            @keyframes mlSlideUp { from { opacity:0; transform:translateY(20px) scale(0.97) } to { opacity:1; transform:translateY(0) scale(1) } }
+        `;
+        document.head.appendChild(style);
+    }
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Função para mostrar/fechar o popup
 let popupAtual = null; // Guarda a referência do popup de loading
@@ -310,6 +413,15 @@ async function inicializarMenu() {
         const menuHTML = await response.text();
         menuContainer.innerHTML = menuHTML;
         
+        // Exibe a versão do sistema no rodapé do menu e abre modal de novidades ao clicar
+        const versionEl = document.getElementById('mlAppVersion');
+        if (versionEl) {
+            versionEl.textContent = `v${__APP_VERSION__}`;
+            versionEl.style.cursor = 'pointer';
+            versionEl.title = 'Ver novidades desta versão';
+            versionEl.addEventListener('click', abrirModalVersaoAdmin);
+        }
+
         // Busca os dados do usuário para popular o menu
         const userResponse = await fetch('/api/usuarios/me', {
             headers: { 'Authorization': `Bearer ${token}` },

@@ -8,69 +8,76 @@ function formatarData(dataISO) {
 }
 
 export default function OPCorteEstoqueCard({ corte, produto, onGerarOP, onExcluir, isGerando }) {
-    const getImagemCorreta = () => {
-        const placeholder = '/img/placeholder-image.png';
-        if (!produto) return placeholder;
 
+    const getImagem = () => {
+        if (!produto) return '/img/placeholder-image.png';
         if (corte.variante && produto.grade && Array.isArray(produto.grade)) {
-            const gradeInfo = produto.grade.find(g => g.variacao === corte.variante);
-            if (gradeInfo && gradeInfo.imagem) {
-                return gradeInfo.imagem;
-            }
+            const g = produto.grade.find(g => g.variacao === corte.variante);
+            if (g?.imagem) return g.imagem;
         }
-        return produto.imagem || placeholder;
+        return produto.imagem || '/img/placeholder-image.png';
     };
 
-    const imagemSrc = getImagemCorreta();
+    const variante = corte.variante && corte.variante !== '-' ? corte.variante : 'Padrão';
 
     return (
-        <div className="op-corte-estoque-card" style={{position: 'relative'}}>
-            
-            {/* --- BOTÃO DE EXCLUIR (LIXEIRA) --- */}
-            <button 
-                className="btn-excluir-corte"
-                style={{
-                    position: 'absolute', top: '10px', right: '10px',
-                    background: 'none', border: 'none', color: '#ccc', 
-                    cursor: 'pointer', fontSize: '1rem', padding: '5px',
-                    zIndex: 2 // Garante que fique clicável
-                }}
-                onClick={(e) => {
-                    e.stopPropagation(); // Não dispara outros cliques
-                    if (onExcluir) onExcluir(corte);
-                }}
-                title="Excluir Corte do Estoque"
-                onMouseOver={(e) => e.currentTarget.style.color = '#c0392b'}
-                onMouseOut={(e) => e.currentTarget.style.color = '#ccc'}
+        <div className="op-corte-card-v2">
+
+            {/* Borda-charme verde: corte disponível em estoque */}
+            <div className="card-borda-charme status-cortado"></div>
+
+            {/* Botão excluir */}
+            <button
+                className="op-corte-card-excluir"
+                onClick={e => { e.stopPropagation(); onExcluir?.(corte); }}
+                title="Excluir corte do estoque"
+                aria-label="Excluir corte"
             >
-                <i className="fas fa-trash"></i>
+                <i className="fas fa-trash-alt"></i>
             </button>
 
-            <div className="op-corte-estoque-imagem">
-                <img src={imagemSrc} alt={produto?.nome || 'Produto'} />
-            </div>
-            <div className="op-corte-estoque-info">
-                <h4>{produto?.nome || corte.produto}</h4>
-                <p>{corte.variante || 'Padrão'}</p>
-                <div className="op-corte-estoque-detalhes">
-                    <span><strong>PC:</strong> {corte.pn}</span>
-                    <span><strong>Data:</strong> {formatarData(corte.data)}</span>
+            {/* Corpo: imagem | info | quantidade */}
+            <div className="op-corte-card-corpo">
+                <img
+                    src={getImagem()}
+                    alt={variante}
+                    className="op-corte-card-img"
+                />
+
+                <div className="op-corte-card-info">
+                    <div className="op-corte-card-meta">
+                        <span className="op-corte-card-pc">PC {corte.pn}</span>
+                        <span className="op-corte-card-data">
+                            <i className="fas fa-calendar-alt"></i>
+                            {formatarData(corte.data)}
+                        </span>
+                    </div>
+                    <div className="op-corte-card-variante">{variante}</div>
+                    {corte.cortador && (
+                        <div className="op-corte-card-cortador">
+                            <i className="fas fa-user"></i> {corte.cortador}
+                        </div>
+                    )}
+                </div>
+
+                <div className="op-corte-card-qty">
+                    <span className="qty-valor">{corte.quantidade}</span>
+                    <span className="qty-label">pçs</span>
                 </div>
             </div>
-            <div className="op-corte-estoque-quantidade">
-                <span className="valor">{corte.quantidade}</span>
-                <span className="label">pçs</span>
-            </div>
-            <div className="op-corte-estoque-acao">
-                <button 
-                    className="op-botao op-botao-principal" 
-                    onClick={() => onGerarOP(corte)}
-                    disabled={isGerando}
-                >
-                    {isGerando ? <div className="spinner-btn-interno"></div> : <i className="fas fa-arrow-right"></i>}
-                    {isGerando ? 'Gerando...' : 'Gerar OP'}
-                </button>
-            </div>
+
+            {/* Tira de ação: Gerar OP */}
+            <button
+                className="op-corte-card-gerar-op"
+                onClick={() => onGerarOP(corte)}
+                disabled={isGerando}
+            >
+                {isGerando ? (
+                    <><div className="op-spinner-btn"></div> Gerando OP...</>
+                ) : (
+                    <><i className="fas fa-arrow-right"></i> Gerar OP</>
+                )}
+            </button>
         </div>
     );
 }

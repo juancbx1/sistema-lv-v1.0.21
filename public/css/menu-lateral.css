@@ -187,6 +187,20 @@
     font-size: 0.8rem;
     color: var(--ml-cor-texto-secundario);
     border-top: 1px solid var(--ml-cor-borda);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ml-version {
+    font-size: 0.7rem;
+    opacity: 0.5;
+    letter-spacing: 0.03em;
+    transition: opacity 0.2s;
+}
+
+.ml-version:hover {
+    opacity: 1;
 }
 
 /* ---- RESPONSIVIDADE E MENU HAMBÚRGUER (INTOCADO, COMO PEDIDO) ---- */

@@ -801,9 +801,10 @@ router.get('/status-tiktiks', async (req, res) => {
                 u.status_data_modificacao, u.horario_entrada_1, u.horario_saida_1, 
                 u.horario_entrada_2, u.horario_saida_2, u.horario_entrada_3, u.horario_saida_3
             FROM usuarios u
-            WHERE 
+            WHERE
                 'tiktik' = ANY(u.tipos)
                 AND u.data_demissao IS NULL
+                AND (u.is_test IS FALSE OR u.is_test IS NULL)
                 AND NOT EXISTS (
                     SELECT 1
                     FROM ferias_empregados fe

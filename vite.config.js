@@ -3,6 +3,9 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 import { globSync } from 'glob';
+import { readFileSync } from 'fs';
+
+const pkg = JSON.parse(readFileSync('./package.json', 'utf8'));
 
 // Encontra todos os arquivos .html dentro da pasta public
 // e os prepara para o Rollup.
@@ -16,8 +19,14 @@ const htmlFiles = globSync('public/**/*.html').reduce((acc, file) => {
 export default defineConfig({
   // A RAIZ DO NOSSO SITE É A PASTA 'public'.
   // O servidor de desenvolvimento vai rodar a partir daqui.
-  root: 'public', 
-  
+  root: 'public',
+
+  // Injeta a versão do package.json como constante global em todo o JS/JSX.
+  // Usar como: __APP_VERSION__ (string literal em tempo de build)
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
+
   plugins: [react()],
   
   server: {

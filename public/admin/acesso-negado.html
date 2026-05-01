@@ -1,18 +1,38 @@
-<!-- // /admin/acesso-negado.html-->
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Acesso Restrito</title>
+    <title>Acesso Restrito — Sistema LV</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/acesso-negado.css">
 </head>
 <body>
-    <div class="container">
-        <div class="lock-icon">🔒</div>
-        <h1>Oops! Acesso Restrito</h1>
-        <p>Parece que você não tem as chaves para entrar aqui. Fale com os seus queridos chefes caso acredite que "isso aqui" é um engano! (já te adianto que não é :x )</p>
-        <button class="home-btn" onclick="window.location.href='/admin/home.html'">Voltar ao Início</button>
+    <div class="an-bg">
+        <div class="an-card">
+            <div class="an-icon-wrap">
+                <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <h1 class="an-title">Acesso Restrito</h1>
+            <p class="an-msg">
+                Você não tem permissão para acessar esta área.<br>
+                Entre em contato com a administração caso acredite que isso é um erro.
+            </p>
+            <button class="an-btn" id="btnSair">
+                <i class="fa-solid fa-right-from-bracket"></i>
+                Sair e voltar ao login
+            </button>
+        </div>
     </div>
+
+    <script>
+        document.getElementById('btnSair').addEventListener('click', function () {
+            localStorage.removeItem('token');
+            localStorage.removeItem('permissoes');
+            window.location.href = '/index.html';
+        });
+    </script>
 </body>
 </html>
