@@ -12,6 +12,17 @@
 
 export const changelog = [
     {
+        versao: '1.21.1',
+        data: '01/05/2026',
+        admin: [
+            'Ambiente de staging configurado para testes seguros antes de ir à produção',
+        ],
+        dashboard: [
+            // Vazio — esta atualização não afeta as funcionárias
+        ],
+    },
+    
+    {
         versao: '1.21.0',
         data: '01/05/2026',
         admin: [
@@ -26,16 +37,6 @@ export const changelog = [
         ],
     },
 
-    {
-        versao: '1.21.1',
-        data: '01/05/2026',
-        admin: [
-            'Ambiente de staging configurado para testes seguros antes de ir à produção',
-        ],
-        dashboard: [
-            // Vazio — esta atualização não afeta as funcionárias
-        ],
-    },
 
     // Template para próximas versões:
     // {
