@@ -11,11 +11,14 @@ export default function DashVersionFooter() {
     // Apenas entradas que têm novidades para a dashboard
     const entradasDashboard = changelog.filter(e => e.dashboard && e.dashboard.length > 0);
 
+    // Versão exibida no rodapé = a mais recente com conteúdo de dashboard
+    const versaoRodape = entradasDashboard.length > 0 ? entradasDashboard[0].versao : __APP_VERSION__;
+
     return (
         <>
             <footer className="ds-version-footer" onClick={() => setAberto(true)} title="Ver novidades desta versão">
                 <i className="fas fa-circle-info"></i>
-                <span>v{__APP_VERSION__}</span>
+                <span>v{versaoRodape}</span>
             </footer>
 
             {aberto && (
@@ -44,13 +47,13 @@ export default function DashVersionFooter() {
                             {entradasDashboard.length === 0 ? (
                                 <p className="ds-version-vazio">Nenhuma novidade registrada ainda.</p>
                             ) : (
-                                entradasDashboard.map((entrada) => (
+                                entradasDashboard.map((entrada, idx) => (
                                     <div key={entrada.versao} className="ds-version-entrada">
                                         <div className="ds-version-entrada-header">
                                             <span className="ds-version-badge">
                                                 v{entrada.versao}
                                             </span>
-                                            {entrada.versao === __APP_VERSION__ && (
+                                            {idx === 0 && (
                                                 <span className="ds-version-atual-tag">Atual</span>
                                             )}
                                             <span className="ds-version-data">{entrada.data}</span>

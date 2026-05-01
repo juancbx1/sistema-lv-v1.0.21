@@ -414,17 +414,36 @@ git checkout staging      # volta ao staging para continuar
 
 O projeto usa **SemVer** (`MAJOR.MINOR.PATCH`). A versão fica em `package.json` e é injetada no build pelo Vite como `__APP_VERSION__`, exibida no rodapé do menu lateral.
 
-**Fluxo de release:**
+**Fluxo de release (PowerShell — rodar separado):**
 ```bash
-# 1. Atualizar CHANGELOG.md com o que mudou
-# 2. Rodar um dos comandos abaixo (atualiza package.json + commit + tag automaticamente):
+# 1. Atualizar changelog-data.js com as novidades (admin e/ou dashboard)
+# 2. Commitar todas as alterações:
+git add .
+git commit -m "feat: descrição do que mudou"
+# 3. Bumpar a versão (escolher um):
 npm version patch   # bug fix:      1.21.0 → 1.21.1
 npm version minor   # feature nova: 1.21.0 → 1.22.0
 npm version major   # breaking:     1.21.0 → 2.0.0
-# 3. Push:
-git push && git push --tags
-# 4. Vercel faz o deploy automaticamente
+# 4. Push (dois comandos separados no PowerShell):
+git push
+git push --tags
+# 5. Vercel faz o deploy automaticamente
 ```
+
+### Versioning por audiência — como funciona
+
+O arquivo `public/js/utils/changelog-data.js` é a **fonte de verdade** das notas de versão. Cada entrada tem dois campos independentes:
+
+- `admin` — novidades para o painel administrativo (linguagem técnica/funcional)
+- `dashboard` — novidades para as funcionárias (linguagem simples)
+
+Deixar um dos campos como `[]` significa que aquela versão não teve mudanças para aquela audiência — ela simplesmente não aparece no modal daquele público.
+
+**Admin (`UIHeaderPagina` / menu lateral):** exibe `__APP_VERSION__` do `package.json`. O modal mostra todas as entradas com `admin.length > 0`, marcando a primeira como "Atual".
+
+**Dashboard (`DashVersionFooter`):** exibe a versão da **última entrada com conteúdo de dashboard** — completamente independente do `__APP_VERSION__`. Isso evita que o rodapé da dashboard mude a cada release admin. O badge "Atual" vai sempre para a entrada mais recente com conteúdo de dashboard (`idx === 0` no array filtrado).
+
+> **Regra prática:** ao fazer um release só de admin (sem novidades para funcionárias), deixe `dashboard: []`. O rodapé da dashboard não vai mudar. Quando houver novidade para as funcionárias, preencha o campo `dashboard` — aí sim o rodapé delas atualiza.
 
 Repositório: `https://github.com/juancbx1/sistema-lv`
 
