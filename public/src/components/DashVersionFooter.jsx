@@ -44,13 +44,13 @@ export default function DashVersionFooter() {
                             {entradasDashboard.length === 0 ? (
                                 <p className="ds-version-vazio">Nenhuma novidade registrada ainda.</p>
                             ) : (
-                                entradasDashboard.map((entrada, idx) => (
+                                entradasDashboard.map((entrada) => (
                                     <div key={entrada.versao} className="ds-version-entrada">
                                         <div className="ds-version-entrada-header">
                                             <span className="ds-version-badge">
                                                 v{entrada.versao}
                                             </span>
-                                            {idx === 0 && (
+                                            {entrada.versao === __APP_VERSION__ && (
                                                 <span className="ds-version-atual-tag">Atual</span>
                                             )}
                                             <span className="ds-version-data">{entrada.data}</span>
