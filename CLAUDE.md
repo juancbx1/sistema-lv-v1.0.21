@@ -133,6 +133,7 @@ O sistema é usado majoritariamente em **tablets (80%)**, seguido de celulares (
 1. **Tablet primeiro** — layout, tamanho de botões, espaçamentos e touch targets devem funcionar perfeitamente em telas de ~768–1024px com uso por toque.
 2. **Celular** — deve funcionar sem quebrar, mesmo que seja experiência secundária.
 3. **PC** — suportado, mas não é o foco principal.
+4. Válido para todo sistema da parte admin. A parte de Dashboard ((acesso das costureiras e tiktiks)) deve seguir sempre **mobile first**
 
 Regras práticas:
 - Botões de ação devem ter área de toque mínima de 44px de altura
@@ -361,24 +362,39 @@ Esse padrão existe em `api/arremates.js` e deve ser replicado onde houver neces
   - `GET /api/cron/arquivar-concluidas` — `48 2 * * *` (2h48 UTC, diário) — arquiva demandas concluídas
   - `GET /api/cron/registrar-intervalos` — `*/5 10-20 * * *` (a cada 5min, 10h–20h UTC = 7h–17h SP) — detecta S1/S2 e grava intervalos no `ponto_diario` independente de qualquer supervisor estar com a tela aberta. Auth via header `Authorization: Bearer CRON_SECRET`.
 
+### Ambientes (Staging)
+
+O projeto tem dois ambientes configurados no Vercel desde 2026-05-01:
+
+| Ambiente | Branch git | URL | Banco |
+|---|---|---|---|
+| Produção | `main` | URL principal do projeto | `sistema_lv_db` (Neon, sa-east-1) |
+| Staging | `staging` | `sistema-lv-git-staging-lojas-variara.vercel.app` | `sistema-lv-staging` (Neon, us-east-1) |
+
+**Fluxo de trabalho atual:** desenvolvimento direto na `main` (push → produção). O staging existe para quando for necessário testar mudanças arriscadas antes de ir à produção.
+
+**Para usar o staging quando necessário:**
+```bash
+git checkout staging      # muda para o trilho de teste
+# ... faz as alterações ...
+git push origin staging   # publica no ambiente de preview (banco de staging)
+git checkout main
+git merge staging
+git push origin main      # manda para produção
+git checkout staging      # volta ao staging para continuar
+```
+
+**Utilitários de staging em `_planejamento/`:**
+- `gerar-schema-staging.js` — exporta schema da produção → `schema-staging.sql`
+- `testar-staging.js` — compara tabelas e colunas entre produção e staging
+- `seed-staging.js` — cria usuário admin de teste no staging (login: `admin_staging` / `staging123`)
+
+**Banner visual:** quando `VITE_ENV=staging`, o componente `UIHeaderPagina` exibe um banner laranja fixo no topo de todas as páginas admin. Em produção, `VITE_ENV=production` — banner não aparece.
+
 ---
 
 ## Funcionalidades Implementadas — OPs (referência)
 
-### Finalização em Lote (`OPModalLote.jsx`)
-- FAB fixo no centro-inferior da tela aparece quando `modoSelecao` está ativo
-- Botão "Selecionar" na toolbar entra em modo de seleção
-- "Selecionar Todas Prontas" faz fetch com `limit=999` para pegar OPs de todas as páginas, filtra as elegíveis (`status-pronta-finalizar`) e armazena em `opsTodasElegiveis`
-- A finalização usa `Promise.allSettled` — uma falha não cancela as outras
-- OPs com produção parcial na última etapa recebem badge "Parcial" no modal e o sistema registra a diferença como perda/quebra
-
-### Radar de Tempo (`api/ordens-de-producao.js` — GET `/`)
-- Calculado no bulk data após a seção "N+1 killer"
-- Busca OPs finalizadas a partir de 2026-01-01, agrupa por `produto_id`, calcula média de horas
-- Só ativa o radar se houver ≥ 5 OPs finalizadas do mesmo produto (amostra mínima para ser relevante)
-- OPs canceladas retornam `radar: null` (ignoradas)
-- Faixas: `normal` (<1.5× média), `atencao` (1.5×–3×), `critico` (>3×)
-- Campo `data_entrega` na tabela `ordens_de_producao` = **data de criação** da OP (naming histórico)
 
 ### Correção crítica — Finalização e Arremate (PUT `/api/ordens-de-producao`)
 - Ao finalizar uma OP, o PUT **sempre recalcula `etapas`** a partir da tabela `producoes`
@@ -393,15 +409,56 @@ Esse padrão existe em `api/arremates.js` e deve ser replicado onde houver neces
 
 ---
 
-## Funcionalidades Implementadas — Arremates (referência)
 
-### ArremateCard — Redesign (tablet-first)
-- Layout flex coluna, não mais grid de 3 colunas
-- Borda-charme de 6px na esquerda (`.card-borda-charme`)
-- Corpo em linha: imagem 64×64px + `.arremate-card-info` com `min-width: 0` (evita compressão em tablets)
-- Badge de saldo (`.arremate-saldo-badge`): `position: absolute; right: 14px; top: 50%` — nunca empurra o layout
-- Check de seleção (`.arremate-check-icone`): substitui o badge no mesmo lugar quando `isSelected`
-- Banner "Em andamento" (`.arremate-em-trabalho-banner`): na base do card, em vez de `padding-top: 48px`
+## Versionamento
+
+O projeto usa **SemVer** (`MAJOR.MINOR.PATCH`). A versão fica em `package.json` e é injetada no build pelo Vite como `__APP_VERSION__`, exibida no rodapé do menu lateral.
+
+**Fluxo de release:**
+```bash
+# 1. Atualizar CHANGELOG.md com o que mudou
+# 2. Rodar um dos comandos abaixo (atualiza package.json + commit + tag automaticamente):
+npm version patch   # bug fix:      1.21.0 → 1.21.1
+npm version minor   # feature nova: 1.21.0 → 1.22.0
+npm version major   # breaking:     1.21.0 → 2.0.0
+# 3. Push:
+git push && git push --tags
+# 4. Vercel faz o deploy automaticamente
+```
+
+Repositório: `https://github.com/juancbx1/sistema-lv`
+
+---
+
+## Usuário de Teste (Dashboard)
+
+Para testar a dashboard dos funcionários sem usar senha real, existem duas formas:
+
+### Opção A — Usuário de teste fixo
+
+Existe um usuário de teste no banco com `is_test = TRUE`.
+
+- **Login:** `teste` | **Senha:** `teste123`
+- **Tipo:** costureira | **Nome:** Funcionário Teste
+- Este usuário é **filtrado automaticamente** em todas as listagens de funcionários da interface (queries já incluem `AND (is_test IS FALSE OR is_test IS NULL)`)
+- Migration SQL em `_planejamento/migration-is-test-usuario.sql`
+
+### Opção B — Impersonação pelo Admin (recomendada para testes com dados reais)
+
+Na tela de **Usuários Cadastrados**, admins com permissão `gerenciar-permissoes` veem um botão laranja (`fa-eye`) em cada card de costureira/tiktik ativo. Ao clicar:
+
+1. Backend gera um JWT de impersonação com validade de **2h** (`POST /api/usuarios/:id/impersonar`)
+2. A dashboard abre em **nova aba** com `?impersonando=TOKEN` na URL
+3. O token é movido para `sessionStorage` da nova aba — o token do admin em outras abas **não é afetado**
+4. Um **banner laranja** fica fixo no topo da dashboard indicando o modo admin
+5. Fechar a aba encerra a sessão automaticamente (sessionStorage é por aba)
+
+**Arquivos envolvidos:**
+- `api/usuarios.js` → `POST /:id/impersonar`
+- `public/src/components/UserCardView.jsx` → botão laranja
+- `public/src/components/UserCard.jsx` → `handleImpersonar`
+- `public/src/main-dashboard.jsx` → detecção do token e banner
+- `public/js/utils/auth.js` e `api-utils.js` → preferem `sessionStorage.impersonation_token`
 
 ---
 
@@ -412,6 +469,7 @@ Esse padrão existe em `api/arremates.js` e deve ser replicado onde houver neces
 - **Nunca usar `saldo_op` diretamente** — calcular sempre a partir de `quantidade_real_produzida - total_ja_arrematado`.
 - O arquivo `regra de negocio das OP.txt` na raiz contém exemplos concretos das regras de OP com dados reais do banco.
 - Ao tomar uma decisão arquitetural importante ou implementar uma regra de negócio nova, **atualizar este CLAUDE.md**.
-- A pasta `_planejamento/` na raiz contém planos detalhados por funcionalidade (spec, checklist, decisões). **Sempre ler o arquivo relevante antes de começar a implementar qualquer coisa**. Arquivos existentes: `central-de-alertas.md`, `horario-empregados.md`, `producao-geral.md`.
+- A pasta `_planejamento/` na raiz contém planos detalhados por funcionalidade (spec, checklist, decisões). **Sempre ler o arquivo relevante antes de começar a implementar qualquer coisa**. Arquivos existentes: `central-de-alertas.md`, `horario-empregados.md`, `producao-geral.md`, `organizacao-sistemica.md`.
+- **Nunca usar `is_test` users em cálculos, listagens ou relatórios** — o filtro já está nas queries principais, mas atentar ao criar novas queries que listem funcionários.
 
 ---
