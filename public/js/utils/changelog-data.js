@@ -12,7 +12,7 @@
 
 export const changelog = [
     {
-        versao: '1.21.2',
+        versao: '1.22.0',
         data: '02/05/2026',
         admin: [
             'Agora é possível unificar tarefas atribuidas em ordens de producao e lancar tarefas no mesmo "bloco". ',
