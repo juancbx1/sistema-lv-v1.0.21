@@ -61,8 +61,9 @@ router.get('/status-funcionarios', async (req, res) => {
                             'quantidade', s.quantidade_atribuida,
                             'data_inicio', s.data_inicio,
                             'produto_nome', p.nome,
-                            'imagem', COALESCE(g.imagem, p.imagem)
-                        )
+                            'imagem', COALESCE(g.imagem, p.imagem),
+                            'etapas_unificadas', s.etapas_unificadas
+                        ) ORDER BY s.id ASC
                     ) FILTER (WHERE s.id IS NOT NULL),
                     '[]'
                 ) as tarefas_ativas
@@ -80,6 +81,7 @@ router.get('/status-funcionarios', async (req, res) => {
             WHERE u.data_demissao IS NULL
             AND ('costureira' = ANY(u.tipos) OR 'tiktik' = ANY(u.tipos))
             AND (u.is_test IS FALSE OR u.is_test IS NULL)
+            AND (u.is_freelance IS FALSE OR u.is_freelance IS NULL)
             GROUP BY u.id
             ORDER BY u.nome ASC;
         `;
@@ -87,7 +89,7 @@ router.get('/status-funcionarios', async (req, res) => {
         const result = await dbClient.query(query);
 
         // Busca ponto_diario e sessoes_hoje em paralelo (bulk — sem N+1)
-        const [pontoDiarioResult, sessoesHojeResult] = await Promise.all([
+        const [pontoDiarioResult, sessoesHojeResult, feriadoHojeResult] = await Promise.all([
             dbClient.query(
                 `SELECT funcionario_id, horario_real_s1, horario_real_e2,
                         horario_real_s2, horario_real_e3, horario_real_s3,
@@ -126,6 +128,18 @@ router.get('/status-funcionarios', async (req, res) => {
                    AND s.status IN ('FINALIZADA', 'EM_ANDAMENTO')
                  GROUP BY s.funcionario_id`
             ),
+            dbClient.query(`
+                SELECT descricao
+                FROM calendario_empresa
+                WHERE data = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+                  AND tipo IN ('feriado_nacional', 'feriado_regional', 'folga_empresa')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM calendario_empresa c2
+                      WHERE c2.data = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+                        AND c2.tipo = 'trabalho_extra'
+                  )
+                LIMIT 1
+            `),
         ]);
         const pontoDiarioMap  = new Map(pontoDiarioResult.rows.map(p => [p.funcionario_id, p]));
         const sessoesHojeMap  = new Map(sessoesHojeResult.rows.map(r => [r.funcionario_id, r.sessoes || []]));
@@ -292,9 +306,74 @@ router.get('/status-funcionarios', async (req, res) => {
             };
         });
 
-        res.status(200).json(resultadoFinal);
+        const feriadoHoje = feriadoHojeResult.rows[0] || null;
+        if (feriadoHoje) {
+            const resultadoComFeriado = resultadoFinal.map(func =>
+                func.status_atual === 'PRODUZINDO' || func.status_atual === 'LIVRE_MANUAL'
+                    ? func
+                    : { ...func, status_atual: 'FORA_DO_HORARIO' }
+            );
+            res.status(200).json({
+                is_feriado_hoje: true,
+                nome_feriado: feriadoHoje.descricao,
+                funcionarios: resultadoComFeriado,
+            });
+        } else {
+            res.status(200).json(resultadoFinal);
+        }
     } catch (error) {
-        // ...
+        console.error('[API /producao/status-funcionarios] Erro:', error);
+        res.status(500).json({ error: 'Erro ao carregar status dos funcionários.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// GET /api/producao/grupos-unificaveis — detecta etapas consecutivas unificáveis para um tipo de funcionário
+router.get('/grupos-unificaveis', async (req, res) => {
+    const { produto_id, tipo_funcionario } = req.query;
+    if (!produto_id || !tipo_funcionario) {
+        return res.status(400).json({ error: 'produto_id e tipo_funcionario são obrigatórios.' });
+    }
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const prodRes = await dbClient.query('SELECT etapas FROM produtos WHERE id = $1', [produto_id]);
+        const etapas = prodRes.rows[0]?.etapas || [];
+
+        const grupos = [];
+        let grupoAtual = null;
+
+        for (let i = 0; i < etapas.length; i++) {
+            const e = etapas[i];
+            const feitoPor = typeof e === 'object' ? e.feitoPor : null;
+            const processo = typeof e === 'object' ? e.processo : e;
+            const maquina = typeof e === 'object' ? (e.maquina || null) : null;
+
+            if (feitoPor === tipo_funcionario) {
+                if (grupoAtual) {
+                    grupoAtual.etapas.push({ etapa_index: i, processo, maquina, feitoPor });
+                } else {
+                    grupoAtual = {
+                        grupo_id: `${produto_id}-${i}`,
+                        etapas: [{ etapa_index: i, processo, maquina, feitoPor }],
+                    };
+                }
+            } else {
+                if (grupoAtual && grupoAtual.etapas.length >= 2) {
+                    grupos.push({ ...grupoAtual, muda_maquina: grupoAtual.etapas.some((ep, j) => j > 0 && ep.maquina !== grupoAtual.etapas[j - 1].maquina) });
+                }
+                grupoAtual = null;
+            }
+        }
+        if (grupoAtual && grupoAtual.etapas.length >= 2) {
+            grupos.push({ ...grupoAtual, muda_maquina: grupoAtual.etapas.some((ep, j) => j > 0 && ep.maquina !== grupoAtual.etapas[j - 1].maquina) });
+        }
+
+        res.status(200).json(grupos);
+    } catch (error) {
+        console.error('[API GET /producao/grupos-unificaveis] Erro:', error);
+        res.status(500).json({ error: error.message });
     } finally {
         if (dbClient) dbClient.release();
     }
@@ -313,17 +392,15 @@ router.get('/fila-de-tarefas', async (req, res) => {
             // Prateleira 2: Todos os lançamentos de produção já feitos
             dbClient.query(`SELECT op_numero, etapa_index, SUM(quantidade) as total_lancado FROM producoes GROUP BY op_numero, etapa_index`),
             
-            // Prateleira 3: Sessões EM ANDAMENTO (Agrupado por Produto/Etapa, IGNORANDO a OP específica)
-            // Isso permite o "Abatimento Global": Se alguém está fazendo 9 peças de Faixa Peach, descontamos do total disponível, não importa a OP.
+            // Prateleira 3: Sessões EM ANDAMENTO — inclui etapas_unificadas para abatimento correto
             dbClient.query(`
-                SELECT produto_id, variante, processo, SUM(quantidade_atribuida) as total_em_trabalho 
-                FROM sessoes_trabalho_producao 
-                WHERE status = 'EM_ANDAMENTO' 
-                GROUP BY produto_id, variante, processo
+                SELECT produto_id, variante, processo, quantidade_atribuida, etapas_unificadas
+                FROM sessoes_trabalho_producao
+                WHERE status = 'EM_ANDAMENTO'
             `),
             
-            // Prateleira 4: Produtos
-            dbClient.query(`SELECT id, nome, imagem FROM produtos`)
+            // Prateleira 4: Produtos (com grade para buscar imagem da variante)
+            dbClient.query(`SELECT id, nome, imagem, grade FROM produtos`)
         ]);
 
         // 2. Mapas de Acesso Rápido
@@ -333,8 +410,18 @@ router.get('/fila-de-tarefas', async (req, res) => {
         // Mapa de Trabalho Global: Chave "ProdID-Variante-Processo" -> Quantidade Total sendo feita na fábrica
         const emTrabalhoGlobalMap = new Map();
         sessoesResult.rows.forEach(r => {
-             const chave = `${r.produto_id}-${r.variante || '-'}-${r.processo}`;
-             emTrabalhoGlobalMap.set(chave, parseInt(r.total_em_trabalho, 10));
+            const qtd = parseInt(r.quantidade_atribuida, 10);
+            const chave = `${r.produto_id}-${r.variante || '-'}-${r.processo}`;
+            emTrabalhoGlobalMap.set(chave, (emTrabalhoGlobalMap.get(chave) || 0) + qtd);
+            // Sessões unificadas: abater também os processos secundários da fila
+            if (Array.isArray(r.etapas_unificadas)) {
+                r.etapas_unificadas.forEach(eu => {
+                    if (eu.processo !== r.processo) {
+                        const chaveUnif = `${r.produto_id}-${r.variante || '-'}-${eu.processo}`;
+                        emTrabalhoGlobalMap.set(chaveUnif, (emTrabalhoGlobalMap.get(chaveUnif) || 0) + qtd);
+                    }
+                });
+            }
         });
 
         // 3. Processamento (Cozinha)
@@ -385,10 +472,16 @@ router.get('/fila-de-tarefas', async (req, res) => {
                 // Se sobrou saldo real, adiciona na lista de tarefas
                 if (saldoRealDisponivel > 0) {
                     const produtoInfo = produtosMap.get(op.produto_id);
+                    // Busca imagem da variante no grade; fallback para imagem do produto
+                    let imagemProduto = produtoInfo?.imagem || null;
+                    if (op.variante && Array.isArray(produtoInfo?.grade)) {
+                        const gradeItem = produtoInfo.grade.find(g => g.variacao === op.variante);
+                        if (gradeItem?.imagem) imagemProduto = gradeItem.imagem;
+                    }
                     tarefasDisponiveis.push({
                         produto_id: op.produto_id,
                         produto_nome: produtoInfo?.nome || 'Produto Desconhecido',
-                        imagem_produto: produtoInfo?.imagem || null,
+                        imagem_produto: imagemProduto,
                         variante: op.variante,
                         processo: processo,
                         quantidade_disponivel: saldoRealDisponivel,
@@ -612,11 +705,33 @@ router.put('/sessoes/cancelar', async (req, res) => {
         // Atualiza a sessão para CANCELADA
         await dbClient.query(`UPDATE sessoes_trabalho_producao SET status = 'CANCELADA', data_fim = NOW() WHERE id = $1`, [id_sessao]);
 
-        // Libera o empregado
-        await dbClient.query(
-            `UPDATE usuarios SET status_atual = 'LIVRE', id_sessao_trabalho_atual = NULL WHERE id = $1 AND id_sessao_trabalho_atual = $2`,
+        // Verifica se há outras sessões em andamento para este funcionário
+        const restantesResult = await dbClient.query(
+            `SELECT id FROM sessoes_trabalho_producao
+             WHERE funcionario_id = $1 AND status = 'EM_ANDAMENTO' AND id != $2
+             ORDER BY id ASC LIMIT 1`,
             [sessao.funcionario_id, id_sessao]
         );
+
+        if (restantesResult.rows.length > 0) {
+            const proximaId = restantesResult.rows[0].id;
+            // Reinicia o cronômetro da próxima tarefa a partir de agora
+            await dbClient.query(
+                `UPDATE sessoes_trabalho_producao SET data_inicio = NOW() WHERE id = $1`,
+                [proximaId]
+            );
+            // Funcionário continua PRODUZINDO na próxima tarefa
+            await dbClient.query(
+                `UPDATE usuarios SET status_atual = 'PRODUZINDO', id_sessao_trabalho_atual = $1 WHERE id = $2`,
+                [proximaId, sessao.funcionario_id]
+            );
+        } else {
+            // Sem mais tarefas — libera o funcionário
+            await dbClient.query(
+                `UPDATE usuarios SET status_atual = 'LIVRE', id_sessao_trabalho_atual = NULL WHERE id = $1`,
+                [sessao.funcionario_id]
+            );
+        }
 
         await dbClient.query('COMMIT');
         res.status(200).json({ message: 'Tarefa cancelada com sucesso!' });

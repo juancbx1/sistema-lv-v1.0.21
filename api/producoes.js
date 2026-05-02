@@ -205,6 +205,29 @@ async function calcularPontosProducao(dbClient, produto_id, processo, quantidade
 }
 
 
+// Atualiza TPP de cada etapa unificada proporcionalmente ao peso histórico de cada uma
+async function atualizarTPPProporcionado(dbClient, produto_id, etapas, duracaoSegPorPeca) {
+    if (!duracaoSegPorPeca || duracaoSegPorPeca <= 0) return;
+    const processos = etapas.map(e => e.processo);
+    const tppResult = await dbClient.query(
+        `SELECT processo, tempo_segundos FROM tempos_padrao_producao WHERE produto_id = $1 AND processo = ANY($2::text[])`,
+        [produto_id, processos]
+    );
+    const tppMap = new Map(tppResult.rows.map(r => [r.processo, parseFloat(r.tempo_segundos)]));
+    const tppSoma = etapas.reduce((acc, e) => acc + (tppMap.get(e.processo) || duracaoSegPorPeca), 0);
+    for (const etapa of etapas) {
+        const tppExistente = tppMap.get(etapa.processo) || duracaoSegPorPeca;
+        const proporcao = tppSoma > 0 ? tppExistente / tppSoma : 1 / etapas.length;
+        const tempoProporcionado = duracaoSegPorPeca * proporcao;
+        await dbClient.query(`
+            INSERT INTO tempos_padrao_producao (produto_id, processo, tempo_segundos)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (produto_id, processo) DO UPDATE SET
+                tempo_segundos = EXCLUDED.tempo_segundos
+        `, [produto_id, etapa.processo, tempoProporcionado]);
+    }
+}
+
 // Função verificarToken
 const verificarToken = (reqOriginal) => {
     const authHeader = reqOriginal.headers.authorization;
@@ -325,16 +348,17 @@ router.post('/lote', async (req, res) => {
 
         // 2. Loop para criar cada sessão
         for (const item of itens) {
-            const { opNumero, produto_id, variante, processo, quantidade } = item;
+            const { opNumero, produto_id, variante, processo, quantidade, etapas_unificadas } = item;
 
             const sessaoQuery = `
-                INSERT INTO sessoes_trabalho_producao 
-                    (funcionario_id, op_numero, produto_id, variante, processo, quantidade_atribuida, status, data_inicio)
-                VALUES ($1, $2, $3, $4, $5, $6, 'EM_ANDAMENTO', NOW())
+                INSERT INTO sessoes_trabalho_producao
+                    (funcionario_id, op_numero, produto_id, variante, processo, quantidade_atribuida, status, data_inicio, etapas_unificadas)
+                VALUES ($1, $2, $3, $4, $5, $6, 'EM_ANDAMENTO', NOW(), $7)
                 RETURNING id;
             `;
             const sessaoResult = await dbClient.query(sessaoQuery, [
-                funcionario_id, opNumero, produto_id, variante || null, processo, quantidade
+                funcionario_id, opNumero, produto_id, variante || null, processo, quantidade,
+                etapas_unificadas ? JSON.stringify(etapas_unificadas) : null,
             ]);
             idsSessoesCriadas.push(sessaoResult.rows[0].id);
         }
@@ -711,10 +735,40 @@ router.put('/finalizar', async (req, res) => {
         const etapaConfigProduto = etapasDoProduto.find(e => (e.processo || e) === sessao.processo);
         const maquinaCorreta = (etapaConfigProduto && typeof etapaConfigProduto === 'object') ? (etapaConfigProduto.maquina || 'Não Definida') : 'Não Definida';
 
-        // console.log(`[FINALIZAR] Distribuindo ${quantidade_finalizada} peças...`); // Log opcional, pode tirar se quiser limpar
-        
+        // ─── SESSÃO UNIFICADA — insere producoes por etapa + TPP proporcional ────────────
+        const etapasUnificadas = Array.isArray(sessao.etapas_unificadas) && sessao.etapas_unificadas.length >= 2
+            ? sessao.etapas_unificadas : null;
+
+        if (etapasUnificadas) {
+            const duracaoTotalMs = Date.now() - new Date(sessao.data_inicio).getTime();
+            const pausaMs = Math.max(0, parseInt(pausa_manual_ms) || 0);
+            const duracaoSegPorPeca = parseInt(quantidade_finalizada) > 0
+                ? Math.max(0, duracaoTotalMs - pausaMs) / 1000 / parseInt(quantidade_finalizada)
+                : 0;
+
+            for (const etapaUnif of etapasUnificadas) {
+                const idxUnif = etapasDoProduto.findIndex(e => (e.processo || e) === etapaUnif.processo);
+                const { pontosGerados, valorPontoAplicado } = await calcularPontosProducao(
+                    dbClient, sessao.produto_id, etapaUnif.processo, parseInt(quantidade_finalizada), sessao.funcionario_id
+                );
+                await dbClient.query(
+                    `INSERT INTO producoes (id, op_numero, etapa_index, processo, produto_id, variacao, maquina, quantidade, funcionario, funcionario_id, data, lancado_por, valor_ponto_aplicado, pontos_gerados)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11, $12, $13)`,
+                    [
+                        `prod_unif_${Date.now()}_${Math.random().toString(36).substr(2,4)}`,
+                        sessao.op_numero, idxUnif, etapaUnif.processo, sessao.produto_id,
+                        sessao.variante, etapaUnif.maquina || 'Não Definida',
+                        parseInt(quantidade_finalizada), nomeFuncionario, sessao.funcionario_id,
+                        usuarioLogado.nome, valorPontoAplicado, pontosGerados,
+                    ]
+                );
+            }
+            await atualizarTPPProporcionado(dbClient, sessao.produto_id, etapasUnificadas, duracaoSegPorPeca);
+        } else {
+        // ─── SESSÃO NORMAL — distribuição por múltiplas OPs ──────────────────────────────
+
         let quantidadeRestante = parseInt(quantidade_finalizada);
-        
+
         // 5. Busca OPs candidatas
         const opsDisponiveisResult = await dbClient.query(`
             SELECT numero, etapas, quantidade 
@@ -808,6 +862,7 @@ router.put('/finalizar', async (req, res) => {
                 );
              }
         }
+        } // fim sessão normal
 
         // 9. Finaliza sessão — detecta intervalo e define o novo status
         const agoraSP = new Date();
@@ -847,6 +902,18 @@ router.put('/finalizar', async (req, res) => {
              WHERE id = $2`,
             [quantidade_finalizada, id_sessao, Math.max(0, parseInt(pausa_manual_ms) || 0)]
         );
+
+        // Reinicia o cronômetro da próxima tarefa na fila (se houver)
+        await dbClient.query(`
+            UPDATE sessoes_trabalho_producao
+            SET data_inicio = NOW()
+            WHERE id = (
+                SELECT id FROM sessoes_trabalho_producao
+                WHERE funcionario_id = $1 AND status = 'EM_ANDAMENTO' AND id != $2
+                ORDER BY id ASC LIMIT 1
+            )
+        `, [sessao.funcionario_id, id_sessao]);
+
         // Status pode ser LIVRE, ALMOCO ou PAUSA — não hardcodar 'LIVRE'
         await dbClient.query(
             `UPDATE usuarios
@@ -868,6 +935,159 @@ router.put('/finalizar', async (req, res) => {
     } catch (error) {
         if (dbClient) await dbClient.query('ROLLBACK');
         console.error('[API PUT /finalizar] Erro:', error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// GET /api/producoes/externos-recentes — últimos lançamentos externos das últimas 24h
+router.get('/externos-recentes', async (req, res) => {
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const result = await dbClient.query(`
+            SELECT
+                p.id, p.op_numero, p.variacao, p.processo, p.quantidade,
+                p.data, p.lancado_por,
+                prod.nome AS produto_nome,
+                u.nome AS freelance_nome, u.tipos AS freelance_tipos
+            FROM producoes p
+            JOIN usuarios u ON u.id = p.funcionario_id AND u.is_freelance = true
+            LEFT JOIN produtos prod ON prod.id = p.produto_id
+            WHERE p.data >= NOW() - INTERVAL '24 hours'
+            ORDER BY p.data DESC
+            LIMIT 20
+        `);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        console.error('[API GET /producoes/externos-recentes] Erro:', error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// DELETE /api/producoes/externo/:id — desfaz um lançamento externo (producao + sessao)
+router.delete('/externo/:id', async (req, res) => {
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        await dbClient.query('BEGIN');
+
+        const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, req.usuarioLogado.id);
+        if (!permissoes.includes('acesso-ordens-de-producao')) {
+            return res.status(403).json({ error: 'Permissão negada.' });
+        }
+
+        // Verifica que é realmente um lançamento externo (freelance)
+        const producaoRes = await dbClient.query(`
+            SELECT p.id, p.funcionario_id, p.op_numero, p.produto_id, p.processo
+            FROM producoes p
+            JOIN usuarios u ON u.id = p.funcionario_id AND u.is_freelance = true
+            WHERE p.id = $1
+        `, [req.params.id]);
+
+        if (producaoRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Lançamento externo não encontrado.' });
+        }
+
+        const p = producaoRes.rows[0];
+
+        // Remove a sessão FINALIZADA correspondente (a mais recente que bate com os dados)
+        await dbClient.query(`
+            DELETE FROM sessoes_trabalho_producao
+            WHERE id = (
+                SELECT id FROM sessoes_trabalho_producao
+                WHERE funcionario_id = $1 AND op_numero = $2 AND produto_id = $3 AND processo = $4 AND status = 'FINALIZADA'
+                ORDER BY data_inicio DESC
+                LIMIT 1
+            )
+        `, [p.funcionario_id, p.op_numero, p.produto_id, p.processo]);
+
+        // Remove o registro de producao
+        await dbClient.query('DELETE FROM producoes WHERE id = $1', [p.id]);
+
+        await dbClient.query('COMMIT');
+        res.status(200).json({ ok: true });
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error('[API DELETE /producoes/externo/:id] Erro:', error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// POST /api/producoes/externo — lançamento de produção realizada por prestador externo (freelance)
+router.post('/externo', async (req, res) => {
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        await dbClient.query('BEGIN');
+
+        const { freelance_tipo, itens } = req.body;
+        if (!freelance_tipo || !Array.isArray(itens) || itens.length === 0) {
+            return res.status(400).json({ error: 'Dados insuficientes.' });
+        }
+
+        const freelanceRes = await dbClient.query(
+            `SELECT id, nome FROM usuarios WHERE is_freelance = true AND $1 = ANY(tipos) LIMIT 1`,
+            [freelance_tipo]
+        );
+        if (freelanceRes.rows.length === 0) {
+            throw new Error(`Nenhum usuário freelance do tipo "${freelance_tipo}" cadastrado. Verifique o cadastro de usuários.`);
+        }
+        const freelance = freelanceRes.rows[0];
+
+        for (let i = 0; i < itens.length; i++) {
+            const { op_numero, produto_id, variante, processo, quantidade, etapas_unificadas } = itens[i];
+
+            const produtoRes = await dbClient.query('SELECT etapas FROM produtos WHERE id = $1', [produto_id]);
+            const etapasDoProduto = produtoRes.rows[0]?.etapas || [];
+            const etapaIndex = etapasDoProduto.findIndex(e => (e.processo || e) === processo);
+            const etapaConfig = etapasDoProduto[etapaIndex];
+            const maquina = (etapaConfig && typeof etapaConfig === 'object') ? (etapaConfig.maquina || 'Não Definida') : 'Não Definida';
+
+            await dbClient.query(`
+                INSERT INTO sessoes_trabalho_producao
+                    (funcionario_id, op_numero, produto_id, variante, processo, quantidade_atribuida, quantidade_finalizada, status, data_inicio, data_fim)
+                VALUES ($1, $2, $3, $4, $5, $6, $6, 'FINALIZADA', NOW(), NOW())
+            `, [freelance.id, op_numero, produto_id, variante || null, processo, parseInt(quantidade)]);
+
+            const etapasParaRegistrar = Array.isArray(etapas_unificadas) && etapas_unificadas.length >= 2
+                ? etapas_unificadas
+                : [{ etapa_index: etapaIndex, processo, maquina }];
+
+            for (const etapaUnif of etapasParaRegistrar) {
+                const idxUnif = typeof etapaUnif.etapa_index === 'number' ? etapaUnif.etapa_index : etapaIndex;
+                const maquinaUnif = etapaUnif.maquina || maquina;
+                const processoUnif = etapaUnif.processo || processo;
+
+                const { pontosGerados, valorPontoAplicado } = await calcularPontosProducao(
+                    dbClient, produto_id, processoUnif, parseInt(quantidade), freelance.id
+                );
+
+                await dbClient.query(
+                    `INSERT INTO producoes (id, op_numero, etapa_index, processo, produto_id, variacao, maquina, quantidade, funcionario, funcionario_id, data, lancado_por, valor_ponto_aplicado, pontos_gerados)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11, $12, $13)`,
+                    [
+                        `prod_ext_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 4)}`,
+                        op_numero, idxUnif, processoUnif, produto_id, variante || null, maquinaUnif,
+                        parseInt(quantidade), freelance.nome, freelance.id,
+                        req.usuarioLogado.nome, valorPontoAplicado, pontosGerados,
+                    ]
+                );
+            }
+        }
+
+        await dbClient.query('COMMIT');
+        res.status(201).json({ ok: true });
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error('[API POST /producoes/externo] Erro:', error);
         res.status(500).json({ error: error.message });
     } finally {
         if (dbClient) dbClient.release();

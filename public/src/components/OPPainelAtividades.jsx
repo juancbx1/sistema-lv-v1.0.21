@@ -5,6 +5,7 @@ import ReactDOM from 'react-dom';
 import OPStatusCard from './OPStatusCard.jsx';
 import { mostrarMensagem, mostrarConfirmacao, mostrarPromptNumerico, mostrarPromptTexto, mostrarPromptHorario } from '/js/utils/popups.js';
 import OPAtribuicaoModal from './OPAtribuicaoModal.jsx';
+import OPLancamentoExterno from './OPLancamentoExterno.jsx';
 
 export default function OPPainelAtividades() {
     const [funcionarios, setFuncionarios] = useState([]);
@@ -16,6 +17,8 @@ export default function OPPainelAtividades() {
     const [funcionarioSelecionado, setFuncionarioSelecionado] = useState(null);
     const [inativoInfoId, setInativoInfoId] = useState(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [infoFeriado, setInfoFeriado] = useState(null);
+    const [modalExternoAberto, setModalExternoAberto] = useState(false);
 
     // v1.8 — Alerta de intervalo (almoço/pausa automático)
     const [alertaIntervalo, setAlertaIntervalo] = useState(null);
@@ -50,7 +53,14 @@ export default function OPPainelAtividades() {
                 })
             ]);
 
-            setFuncionarios(dataFuncionarios);
+            const funcionariosArray = Array.isArray(dataFuncionarios)
+                ? dataFuncionarios
+                : dataFuncionarios.funcionarios;
+            const feriadoInfo = !Array.isArray(dataFuncionarios) && dataFuncionarios.is_feriado_hoje
+                ? { nome_feriado: dataFuncionarios.nome_feriado }
+                : null;
+            setFuncionarios(funcionariosArray);
+            setInfoFeriado(feriadoInfo);
             setTemposPadraoProducao(dataTempos);
             setErro(null);
         } catch (err) {
@@ -207,6 +217,17 @@ export default function OPPainelAtividades() {
 
     const handleAtribuirTarefa = (funcionario) => {
         setFuncionarioSelecionado(funcionario);
+        setModalAberto(true);
+    };
+
+    const handleSolicitarHoraExtra = async (funcionario) => {
+        const primeiroNome = funcionario.nome.split(' ')[0];
+        const confirmado = await mostrarConfirmacao(
+            `Autorizar lançamento em hora extra para ${primeiroNome}?\n\nEsta ação ficará registrada e o gerente será notificado.`,
+            'aviso'
+        );
+        if (!confirmado) return;
+        setFuncionarioSelecionado({ ...funcionario, _modo_hora_extra: true });
         setModalAberto(true);
     };
 
@@ -597,6 +618,13 @@ export default function OPPainelAtividades() {
                             >
                                 <i className={`fas fa-sync-alt ${isRefreshing ? 'girando' : ''}`}></i>
                             </button>
+                            <button
+                                className="oa-btn-externo"
+                                onClick={() => setModalExternoAberto(true)}
+                                title="Registrar produção de prestador externo"
+                            >
+                                <i className="fas fa-user-tie"></i> Externo
+                            </button>
                         </div>
                         <div className="oa-kpi-strip">
                             <span className={`oa-kpi-item${qtdProduzindo > 0 ? ' produzindo' : ''}`}>
@@ -613,6 +641,13 @@ export default function OPPainelAtividades() {
                         </div>
                     </div>
 
+                    {infoFeriado && (
+                        <div className="op-painel-banner-feriado">
+                            <i className="fas fa-umbrella-beach"></i>
+                            <span>FERIADO: {infoFeriado.nome_feriado} — Os funcionários não têm expediente hoje.</span>
+                        </div>
+                    )}
+
                     {funcionariosPrincipais.length === 0 ? (
                         <div className="oa-empty-state">
                             <i className="fas fa-tshirt oa-empty-state-icon"></i>
@@ -622,7 +657,10 @@ export default function OPPainelAtividades() {
                     ) : (
                         <div className="oa-painel-status-grid">
                             {funcionariosPrincipais.map(func => {
-                                const tppDaTarefa = temposPadraoProducao[`${func.tarefa_atual?.produto_id}-${func.tarefa_atual?.processo}`];
+                                const etapasUnif = func.tarefa_atual?.etapas_unificadas;
+                                const tppDaTarefa = (Array.isArray(etapasUnif) && etapasUnif.length >= 2)
+                                    ? etapasUnif.reduce((s, e) => s + (temposPadraoProducao[`${func.tarefa_atual.produto_id}-${e.processo}`] || 0), 0) || null
+                                    : temposPadraoProducao[`${func.tarefa_atual?.produto_id}-${func.tarefa_atual?.processo}`];
                                 return (
                                     <OPStatusCard
                                         key={func.id}
@@ -686,7 +724,7 @@ export default function OPPainelAtividades() {
                                                     <i className="fas fa-info-circle"></i>
                                                 </button>
                                             </div>
-                                            {/* BUG-11: saída antecipada ativa → Desfazer; outros casos → Liberar */}
+                                            {/* BUG-11: saída antecipada ativa → Desfazer; FORA_DO_HORARIO → Hora Extra; outros → Liberar */}
                                             {func.status_atual === 'FORA_DO_HORARIO' && func.ponto_hoje?.horario_real_s3 && !func.ponto_hoje?.saida_desfeita ? (
                                                 <button
                                                     className="oa-inativo-btn-desfazer"
@@ -694,6 +732,14 @@ export default function OPPainelAtividades() {
                                                     title="Desfazer saída antecipada"
                                                 >
                                                     <i className="fas fa-undo"></i> Desfazer Saída
+                                                </button>
+                                            ) : func.status_atual === 'FORA_DO_HORARIO' ? (
+                                                <button
+                                                    className="oa-inativo-btn-hora-extra"
+                                                    onClick={() => handleSolicitarHoraExtra(func)}
+                                                    title="Atribuir tarefa em hora extra"
+                                                >
+                                                    <i className="fas fa-clock"></i> Hora Extra
                                                 </button>
                                             ) : (
                                                 <button
@@ -893,6 +939,16 @@ export default function OPPainelAtividades() {
                 onClose={handleCloseModal}
                 funcionario={funcionarioSelecionado}
                 tpp={temposPadraoProducao}
+            />
+
+            <OPLancamentoExterno
+                isOpen={modalExternoAberto}
+                onClose={() => setModalExternoAberto(false)}
+                onSucesso={() => {
+                    setModalExternoAberto(false);
+                    buscarDadosPainel();
+                }}
+                onDesfazerSucesso={buscarDadosPainel}
             />
         </>
     );

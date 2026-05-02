@@ -525,6 +525,7 @@ router.get('/verificar-status', async (req, res) => {
 
                 const nivel = tipoEvento === 'META_BATIDA_ARREMATE'  ? 'info'    :
                               tipoEvento === 'DEMANDA_PRIORITARIA'   ? 'critico' :
+                              tipoEvento === 'HORA_EXTRA_LANCADA'    ? 'critico' :
                               tipoEvento === 'DEMANDA_NORMAL'        ? 'aviso'   : 'aviso';
                 // DEMANDA_NORMAL é 'aviso' (não dispara popup/som) — só DEMANDA_PRIORITARIA é 'critico'.
 
@@ -591,6 +592,37 @@ router.get('/historico', async (req, res) => {
     } catch (error) {
         console.error('[API /alertas/historico GET] Erro:', error);
         res.status(500).json({ error: 'Erro ao buscar histórico de alertas.' });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// POST /api/alertas/hora-extra — registra hora extra autorizada pelo supervisor
+router.post('/hora-extra', async (req, res) => {
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const { funcionario_id, funcionario_nome, produto_nome, processo, quantidade } = req.body;
+        const supervisor = req.usuarioLogado;
+
+        const mensagem = `Hora extra: supervisor "${supervisor.nome}" autorizou ${funcionario_nome} — ${quantidade}x ${produto_nome} (${processo})`;
+
+        await Promise.all([
+            dbClient.query(`
+                INSERT INTO eventos_sistema (tipo_evento, mensagem, lido, dados_extras, criado_em)
+                VALUES ('HORA_EXTRA_LANCADA', $1, false, $2, NOW())
+            `, [mensagem, JSON.stringify({ supervisor_id: supervisor.id, supervisor_nome: supervisor.nome, funcionario_id, funcionario_nome, produto_nome, processo, quantidade })]),
+
+            dbClient.query(`
+                INSERT INTO historico_alertas (tipo_alerta, mensagem, nivel, disparado_em)
+                VALUES ('HORA_EXTRA_LANCADA', $1, 'critico', NOW())
+            `, [mensagem]),
+        ]);
+
+        res.status(200).json({ ok: true });
+    } catch (error) {
+        console.error('[API POST /alertas/hora-extra] Erro:', error);
+        res.status(500).json({ error: 'Erro ao registrar hora extra.' });
     } finally {
         if (dbClient) dbClient.release();
     }

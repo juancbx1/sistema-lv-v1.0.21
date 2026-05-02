@@ -326,6 +326,7 @@ export default function AlertasFAB() {
         costura:  ['OCIOSIDADE_COSTUREIRA', 'LENTIDAO_COSTUREIRA'],
         arremate: ['OCIOSIDADE_ARREMATE', 'LENTIDAO_CRITICA_ARREMATE', 'META_BATIDA_ARREMATE'],
         demandas: ['DEMANDA_NORMAL', 'DEMANDA_PRIORITARIA', 'DEMANDA_NAO_INICIADA'],
+        rh:       ['HORA_EXTRA_LANCADA'],
     };
     const FILTROS = [
         { id: 'todos',    label: 'Todos' },

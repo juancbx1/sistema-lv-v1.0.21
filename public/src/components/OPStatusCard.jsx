@@ -535,7 +535,23 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
             return (
                 <>
                     <div className="cracha-tarefa">
-                        <div className="cracha-tarefa-processo">{tarefaPrincipal.processo}</div>
+                        {Array.isArray(tarefaPrincipal.etapas_unificadas) && tarefaPrincipal.etapas_unificadas.length >= 2 ? (
+                            <div className="cracha-tarefa-processo-wrapper">
+                                <span className="cracha-unif-badge">
+                                    <i className="fas fa-link"></i> Unificadas
+                                </span>
+                                <div className="cracha-tarefa-processo">
+                                    {tarefaPrincipal.etapas_unificadas.map((e, i) => (
+                                        <span key={e.processo}>
+                                            {i > 0 && <i className="fas fa-arrow-right cracha-unif-seta"></i>}
+                                            {e.processo}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="cracha-tarefa-processo">{tarefaPrincipal.processo}</div>
+                        )}
 
                         {/* Cabeçalho da tarefa: imagem da variação + nome da variação */}
                         <div className="cracha-tarefa-cabeca">
@@ -621,14 +637,26 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
                             <div className="cracha-fila">
                                 <span className="cracha-fila-titulo"><i className="fas fa-layer-group"></i> Fila ({filaEspera.length})</span>
                                 <ul>
-                                    {filaEspera.map((t, i) => (
-                                        <li key={t.id_sessao || i}>
-                                            <span className="fila-qtd">{t.quantidade}</span>
-                                            <span className="fila-nome">{t.produto_nome}</span>
-                                            {t.variante && <span className="fila-var">{t.variante}</span>}
-                                            <span className="fila-proc">{t.processo}</span>
-                                        </li>
-                                    ))}
+                                    {filaEspera.map((t, i) => {
+                                        const isUnif = Array.isArray(t.etapas_unificadas) && t.etapas_unificadas.length >= 2;
+                                        return (
+                                            <li key={t.id_sessao || i}>
+                                                <div className="fila-linha1">
+                                                    <span className="fila-qtd">{t.quantidade}</span>
+                                                    <span className="fila-nome">{t.produto_nome}</span>
+                                                </div>
+                                                {t.variante && (
+                                                    <div className="fila-variante">{t.variante}</div>
+                                                )}
+                                                <div className={`fila-proc${isUnif ? ' unif' : ''}`}>
+                                                    {isUnif
+                                                        ? <><i className="fas fa-link"></i>{t.etapas_unificadas.map(e => e.processo).join(' + ')}</>
+                                                        : t.processo
+                                                    }
+                                                </div>
+                                            </li>
+                                        );
+                                    })}
                                 </ul>
                             </div>
                         )}

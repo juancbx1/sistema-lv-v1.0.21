@@ -1,12 +1,12 @@
 // public/src/components/OPTelaSelecaoEtapa.jsx
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { obterProdutos as obterProdutosDoStorage } from '/js/utils/storage.js';
 import UIFeedbackNotFound from './UIFeedbackNotFound.jsx';
 import OPPaginacaoWrapper from './OPPaginacaoWrapper.jsx';
 import UIBuscaInteligente, { filtrarListaInteligente } from './UIBuscaInteligente.jsx';
 
-function OPEtapaCard({ etapa, onToggle, stepLabel, isFinal, imagemUrl, selecionado }) {
+function OPEtapaCard({ etapa, onToggle, stepLabel, isFinal, imagemUrl, selecionado, grupoInfo, unificacaoAtiva, onToggleUnificacao }) {
     const bordaClasse = etapa.processo.toLowerCase() === 'corte'
         ? 'borda-corte'
         : isFinal
@@ -14,17 +14,31 @@ function OPEtapaCard({ etapa, onToggle, stepLabel, isFinal, imagemUrl, seleciona
             : 'borda-etapa-normal';
 
     const ops = etapa.origem_ops || [];
-    let opsLabel = ops.length > 0 ? `Origem: OP #${ops.slice(0, 4).join(', #')}` : 'Nenhuma OP';
-    if (ops.length > 4) opsLabel += ` (+${ops.length - 4})`;
+    const opsTexto = ops.length > 0
+        ? `OP #${ops.slice(0, 3).join(' • #')}${ops.length > 3 ? ` +${ops.length - 3}` : ''}`
+        : null;
+
+    const ehPrimaria = grupoInfo && grupoInfo.idxNoGrupo === 0;
+    const ehSecundaria = grupoInfo && grupoInfo.idxNoGrupo > 0 && unificacaoAtiva;
+    const outrasEtapas = ehPrimaria ? grupoInfo.grupo.etapas.slice(1).map(e => e.processo).join(' + ') : '';
+
+    // Step secundário quando unificação ativa: fica embutido no card primário
+    if (ehSecundaria) return null;
+
+    const unificadoAtivo = ehPrimaria && unificacaoAtiva;
 
     return (
         <div
-            className={`op-card-react ${selecionado ? 'selecionado-lote' : ''}`}
+            className={`op-card-react ${selecionado ? 'selecionado-lote' : ''} ${unificadoAtivo ? 'op-card-unificado' : ''}`}
             onClick={() => onToggle(etapa)}
             style={{
                 cursor: 'pointer',
-                border: selecionado ? '2px solid var(--op-cor-azul-claro)' : '1px solid transparent',
-                backgroundColor: selecionado ? '#f0f8ff' : '#fff'
+                border: selecionado ? '2px solid var(--op-cor-azul-claro)'
+                    : unificadoAtivo ? '2px solid #6366f1'
+                    : '1px solid transparent',
+                backgroundColor: selecionado ? '#f0f8ff'
+                    : unificadoAtivo ? '#f5f3ff'
+                    : '#fff',
             }}
         >
             <div className={`card-borda-charme ${bordaClasse}`}></div>
@@ -36,16 +50,31 @@ function OPEtapaCard({ etapa, onToggle, stepLabel, isFinal, imagemUrl, seleciona
             <img src={imagemUrl || '/img/placeholder-image.png'} alt={etapa.produto_nome} className="card-imagem-produto" />
 
             <div className="card-info-principal">
-                <div className={`card-etapa-label ${isFinal ? 'borda-etapa-final' : 'borda-etapa-normal'}`}
-                     style={{ fontSize: '0.75rem', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase',
-                              color: isFinal ? '#e74c3c' : '#3498db' }}>
-                    {stepLabel}
-                </div>
+                {unificadoAtivo ? (
+                    <span className="op-unif-ativo-label">
+                        <i className="fas fa-link"></i> Etapas Unificadas
+                    </span>
+                ) : (
+                    <span className={`op-etapa-step-badge ${isFinal ? 'final' : 'normal'}`}>
+                        {stepLabel}
+                    </span>
+                )}
                 <h3>{etapa.produto_nome}</h3>
-                <p>{etapa.variante || 'Padrão'}</p>
-                <div className="card-info-secundaria" style={{ marginTop: '6px' }}>
-                    <span className="info-item"><strong>{etapa.processo}</strong></span>
-                </div>
+                {etapa.variante && <p>{etapa.variante}</p>}
+                {unificadoAtivo ? (
+                    <div className="op-unif-processos-linha">
+                        {grupoInfo.grupo.etapas.map((e, i) => (
+                            <React.Fragment key={e.processo}>
+                                <span className="op-processo-chip">{e.processo}</span>
+                                {i < grupoInfo.grupo.etapas.length - 1 && (
+                                    <i className="fas fa-arrow-right op-unif-seta"></i>
+                                )}
+                            </React.Fragment>
+                        ))}
+                    </div>
+                ) : (
+                    <span className="op-processo-chip">{etapa.processo}</span>
+                )}
             </div>
 
             <div className="card-bloco-pendente">
@@ -53,9 +82,37 @@ function OPEtapaCard({ etapa, onToggle, stepLabel, isFinal, imagemUrl, seleciona
                 <span className="valor">{etapa.quantidade_disponivel}</span>
             </div>
 
-            <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #f0f0f0', marginTop: '10px', paddingTop: '8px', fontSize: '0.75rem', color: '#95a5a6' }}>
-                <i className="fas fa-link"></i> {opsLabel}
-            </div>
+            {ehPrimaria && !unificacaoAtiva && (
+                <div className="op-etapa-unificavel-badge">
+                    <i className="fas fa-link"></i>
+                    <span>Unificável com: {outrasEtapas}</span>
+                    <button
+                        className="op-unificacao-toggle"
+                        onClick={e => { e.stopPropagation(); onToggleUnificacao(grupoInfo.grupo.grupo_id); }}
+                    >
+                        Unificar
+                    </button>
+                </div>
+            )}
+
+            {unificadoAtivo && (
+                <div className="op-etapa-unificavel-badge op-etapa-unificavel-badge--ativo">
+                    <i className="fas fa-check-circle"></i>
+                    <span>Ambas as etapas serão registradas juntas</span>
+                    <button
+                        className="op-unificacao-toggle op-unificacao-toggle--separar"
+                        onClick={e => { e.stopPropagation(); onToggleUnificacao(grupoInfo.grupo.grupo_id); }}
+                    >
+                        <i className="fas fa-unlink"></i> Separar
+                    </button>
+                </div>
+            )}
+
+            {opsTexto && (
+                <div className="op-card-ops-footer">
+                    <i className="fas fa-link"></i> {opsTexto}
+                </div>
+            )}
         </div>
     );
 }
@@ -70,7 +127,14 @@ export default function OPTelaSelecaoEtapa({ onEtapaSelect, funcionario }) {
     const [termoFiltro, setTermoFiltro] = useState('');
     const [selecionados, setSelecionados] = useState([]);
     const [sugestao, setSugestao] = useState(null);
+    const [gruposUnificaveis, setGruposUnificaveis] = useState({}); // "pid__var" → [{grupo_id, etapas, muda_maquina}]
+    const [unificacoesAtivas, setUnificacoesAtivas] = useState(new Set());
+    const candidatosKeyRef = useRef(''); // evita chamadas duplicadas à API quando o render não muda os dados
     const ITENS_POR_PAGINA = 6;
+
+    // Tipo estável como string primitiva (não causa loop de referência)
+    const tipoFuncionario = funcionario?.tipos?.includes('costureira') ? 'costureira'
+        : funcionario?.tipos?.includes('tiktik') ? 'tiktik' : null;
 
     useEffect(() => {
         async function buscarDados() {
@@ -104,6 +168,63 @@ export default function OPTelaSelecaoEtapa({ onEtapaSelect, funcionario }) {
             return funcionario.tipos.includes(etapaConfig.feitoPor);
         });
     }, [filaDeTarefas, todosProdutos, funcionario]);
+
+    // Detecta grupos unificáveis para cada produto único na fila deste funcionário
+    useEffect(() => {
+        if (!tipoFuncionario || tarefasFiltradasParaFuncionario.length === 0) {
+            setGruposUnificaveis({});
+            candidatosKeyRef.current = '';
+            return;
+        }
+
+        const candidatos = [...new Set(
+            tarefasFiltradasParaFuncionario.map(t => `${t.produto_id}__${t.variante || ''}`)
+        )].sort();
+
+        // Evita chamadas repetidas se os candidatos não mudaram
+        const candidatosKey = `${tipoFuncionario}:${candidatos.join(',')}`;
+        if (candidatosKey === candidatosKeyRef.current) return;
+        candidatosKeyRef.current = candidatosKey;
+
+        if (candidatos.length === 0) { setGruposUnificaveis({}); return; }
+
+        const token = localStorage.getItem('token');
+        Promise.all(candidatos.map(async pvKey => {
+            const sepIdx = pvKey.indexOf('__');
+            const produto_id = pvKey.substring(0, sepIdx);
+            const variante = pvKey.substring(sepIdx + 2);
+            const params = new URLSearchParams({ produto_id, tipo_funcionario: tipoFuncionario });
+            if (variante) params.append('variante', variante);
+            const res = await fetch(`/api/producao/grupos-unificaveis?${params}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const grupos = res.ok ? await res.json() : [];
+            return [pvKey, grupos.filter(g => g.etapas.length >= 2)];
+        })).then(results => {
+            const map = {};
+            results.forEach(([k, grupos]) => { if (grupos.length > 0) map[k] = grupos; });
+            setGruposUnificaveis(map);
+            setUnificacoesAtivas(new Set());
+        }).catch(() => {});
+    }, [tarefasFiltradasParaFuncionario, tipoFuncionario, funcionario?.id]);
+
+    const getGrupoInfo = useCallback((tarefa) => {
+        const pvKey = `${tarefa.produto_id}__${tarefa.variante || ''}`;
+        const grupos = gruposUnificaveis[pvKey] || [];
+        for (const grupo of grupos) {
+            const idxNoGrupo = grupo.etapas.findIndex(e => e.processo === tarefa.processo);
+            if (idxNoGrupo !== -1) return { grupo, idxNoGrupo };
+        }
+        return null;
+    }, [gruposUnificaveis]);
+
+    const handleToggleUnificacao = useCallback((grupoId) => {
+        setUnificacoesAtivas(prev => {
+            const next = new Set(prev);
+            if (next.has(grupoId)) next.delete(grupoId); else next.add(grupoId);
+            return next;
+        });
+    }, []);
 
     // Busca sugestão assim que a lista filtrada para este funcionário estiver pronta
     useEffect(() => {
@@ -152,6 +273,14 @@ export default function OPTelaSelecaoEtapa({ onEtapaSelect, funcionario }) {
     };
 
     const handleToggleSelect = (etapa) => {
+        const grupoInfo = getGrupoInfo(etapa);
+        const unificacaoAtiva = grupoInfo && unificacoesAtivas.has(grupoInfo.grupo.grupo_id);
+
+        // Se é o step primário de um grupo ativo, carrega o objeto com info de unificação
+        const etapaParaSelecionar = (unificacaoAtiva && grupoInfo.idxNoGrupo === 0)
+            ? { ...etapa, _unificada: true, _grupo_unificacao: grupoInfo.grupo }
+            : etapa;
+
         const etapaId = `${etapa.produto_id}-${etapa.variante}-${etapa.processo}`;
         setSelecionados(prev => {
             const jaSelecionado = prev.find(i => `${i.produto_id}-${i.variante}-${i.processo}` === etapaId);
@@ -159,7 +288,7 @@ export default function OPTelaSelecaoEtapa({ onEtapaSelect, funcionario }) {
                 return prev.filter(i => `${i.produto_id}-${i.variante}-${i.processo}` !== etapaId);
             } else {
                 if (prev.length >= 6) return prev;
-                return [...prev, etapa];
+                return [...prev, etapaParaSelecionar];
             }
         });
     };
@@ -220,12 +349,21 @@ export default function OPTelaSelecaoEtapa({ onEtapaSelect, funcionario }) {
                                     )}
                                 </div>
                             </div>
-                            <button
-                                className="op-sugestao-btn"
-                                onClick={() => onEtapaSelect(sugestao)}
-                            >
-                                <i className="fas fa-check"></i> Atribuir
-                            </button>
+                            {(() => {
+                                const chaveSug = `${sugestao.produto_id}-${sugestao.variante}-${sugestao.processo}`;
+                                const estaSelecionada = selecionados.some(s => `${s.produto_id}-${s.variante}-${s.processo}` === chaveSug);
+                                return (
+                                    <button
+                                        className={`op-sugestao-btn${estaSelecionada ? ' selecionado' : ''}`}
+                                        onClick={() => handleToggleSelect(sugestao)}
+                                    >
+                                        {estaSelecionada
+                                            ? <><i className="fas fa-check-circle"></i> Selecionada</>
+                                            : <><i className="fas fa-check"></i> Selecionar</>
+                                        }
+                                    </button>
+                                );
+                            })()}
                         </div>
                     </div>
                 );
@@ -244,6 +382,8 @@ export default function OPTelaSelecaoEtapa({ onEtapaSelect, funcionario }) {
                         const etapaId = `${etapa.produto_id}-${etapa.variante}-${etapa.processo}`;
                         const isSelected = selecionados.some(i => `${i.produto_id}-${i.variante}-${i.processo}` === etapaId);
 
+                        const grupoInfo = getGrupoInfo(etapa);
+                        const unificacaoAtiva = !!(grupoInfo && unificacoesAtivas.has(grupoInfo.grupo.grupo_id));
                         return (
                             <OPEtapaCard
                                 key={etapaId}
@@ -253,6 +393,9 @@ export default function OPTelaSelecaoEtapa({ onEtapaSelect, funcionario }) {
                                 imagemUrl={imagemUrl}
                                 selecionado={isSelected}
                                 onToggle={handleToggleSelect}
+                                grupoInfo={grupoInfo}
+                                unificacaoAtiva={unificacaoAtiva}
+                                onToggleUnificacao={handleToggleUnificacao}
                             />
                         );
                     })
@@ -266,14 +409,11 @@ export default function OPTelaSelecaoEtapa({ onEtapaSelect, funcionario }) {
             )}
 
             {qtdSelecionados > 0 && (
-                <div className="op-selecao-barra">
-                    <span className="op-selecao-barra-count">
-                        <i className="fas fa-check-circle"></i> {qtdSelecionados} selecionada{qtdSelecionados !== 1 ? 's' : ''}
-                    </span>
-                    <button className="op-selecao-barra-btn" onClick={handleAvancarLote}>
-                        <i className="fas fa-check-double"></i> {textoBotao}
-                    </button>
-                </div>
+                <button className="op-selecao-fab" onClick={handleAvancarLote}>
+                    <span className="op-selecao-fab-badge">{qtdSelecionados}</span>
+                    {textoBotao}
+                    <i className="fas fa-arrow-right"></i>
+                </button>
             )}
         </div>
     );

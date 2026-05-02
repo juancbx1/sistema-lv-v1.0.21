@@ -43,7 +43,7 @@ function calcularAvisoHorario(item, qtd, funcionario, tpp) {
     };
 }
 
-export default function OPTelaConfirmacaoQtd({ etapa, funcionario, onClose, tpp }) {
+export default function OPTelaConfirmacaoQtd({ etapa, funcionario, onClose, tpp, modoHoraExtra }) {
     const itensLote = Array.isArray(etapa) ? etapa : [etapa];
 
     const [quantidades, setQuantidades] = useState({});
@@ -139,7 +139,8 @@ export default function OPTelaConfirmacaoQtd({ etapa, funcionario, onClose, tpp 
                     produto_id: item.produto_id,
                     variante: item.variante || '-',
                     processo: item.processo,
-                    quantidade: qtd
+                    quantidade: qtd,
+                    ...(item._unificada && { etapas_unificadas: item._grupo_unificacao.etapas }),
                 };
             }).filter(i => i !== null);
 
@@ -161,6 +162,22 @@ export default function OPTelaConfirmacaoQtd({ etapa, funcionario, onClose, tpp 
             }
 
             mostrarMensagem(`Sucesso! ${payloadItens.length} tarefa${payloadItens.length !== 1 ? 's' : ''} atribuída${payloadItens.length !== 1 ? 's' : ''}.`, 'sucesso');
+
+            if (modoHoraExtra) {
+                const primeiroItem = payloadItens[0];
+                fetch('/api/alertas/hora-extra', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                    body: JSON.stringify({
+                        funcionario_id: funcionario.id,
+                        funcionario_nome: funcionario.nome,
+                        produto_nome: primeiroItem ? itensLote.find(i => i.produto_id === primeiroItem.produto_id)?.produto_nome || '' : '',
+                        processo: primeiroItem?.processo || '',
+                        quantidade: primeiroItem ? (parseInt(quantidades[`${primeiroItem.produto_id}-${primeiroItem.variante}-${primeiroItem.processo}`]) || 0) : 0,
+                    })
+                }).catch(() => {});
+            }
+
             onClose();
         } catch (err) {
             mostrarMensagem(err.message, 'erro');
@@ -193,7 +210,26 @@ export default function OPTelaConfirmacaoQtd({ etapa, funcionario, onClose, tpp 
                                 <div>
                                     <h4>{item.produto_nome}</h4>
                                     <p className="variante">{item.variante}</p>
-                                    <p className="processo">{item.processo}</p>
+                                    {item._unificada && item._grupo_unificacao?.etapas ? (
+                                        <div className="op-confirmacao-processos-unif">
+                                            {item._grupo_unificacao.etapas.map((e, i) => (
+                                                <React.Fragment key={e.processo}>
+                                                    <span className="op-confirmacao-etapa-chip">{e.processo}</span>
+                                                    {i < item._grupo_unificacao.etapas.length - 1 && (
+                                                        <i className="fas fa-arrow-right op-confirmacao-unif-seta"></i>
+                                                    )}
+                                                </React.Fragment>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="processo">{item.processo}</p>
+                                    )}
+                                    {item.origem_ops?.length > 0 && (
+                                        <p className="op-confirmacao-op-link">
+                                            <i className="fas fa-link"></i>
+                                            {' OP #'}{item.origem_ops.slice(0, 2).join(' • #')}{item.origem_ops.length > 2 ? ` +${item.origem_ops.length - 2}` : ''}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
 
@@ -213,7 +249,6 @@ export default function OPTelaConfirmacaoQtd({ etapa, funcionario, onClose, tpp 
                                         Max ({item.quantidade_disponivel})
                                     </button>
                                 </div>
-                                {/* MELHORIA-08: aviso quando a tarefa vai ultrapassar o horário de saída */}
                                 {(() => {
                                     const aviso = calcularAvisoHorario(item, parseInt(qtd) || 0, funcionario, tpp);
                                     if (!aviso) return null;
@@ -226,26 +261,48 @@ export default function OPTelaConfirmacaoQtd({ etapa, funcionario, onClose, tpp 
                                     );
                                 })()}
                             </div>
+
+                            {item._unificada && item._grupo_unificacao?.etapas && (
+                                <div className="op-confirmacao-unif-detalhe">
+                                    <div className="op-confirmacao-unif-titulo">
+                                        <i className="fas fa-link"></i> {item._grupo_unificacao.etapas.length} etapas — registradas juntas
+                                    </div>
+                                    {item._grupo_unificacao.etapas.map((e, i) => {
+                                        const isLast = i === item._grupo_unificacao.etapas.length - 1;
+                                        return (
+                                            <div key={e.processo} className="op-confirmacao-unif-item">
+                                                <span className="op-confirmacao-unif-step-label">
+                                                    {isLast ? 'Etapa Final' : `Etapa ${e.etapa_index + 1}`}
+                                                </span>
+                                                <span className="op-confirmacao-etapa-chip">{e.processo}</span>
+                                                {e.maquina && e.maquina !== 'Não Definida' && (
+                                                    <span className="op-confirmacao-unif-maquina">
+                                                        <i className="fas fa-cog"></i> {e.maquina}
+                                                    </span>
+                                                )}
+                                                <span className="op-confirmacao-unif-qtd-label">
+                                                    {parseInt(qtd) || 0} pçs
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
                     );
                 })}
             </div>
 
-            <div className="op-selecao-barra">
-                <span className="op-selecao-barra-count">
-                    <i className="fas fa-layer-group"></i> {itensLote.length} {itensLote.length !== 1 ? 'itens' : 'item'} no lote
-                </span>
-                <button
-                    className="op-selecao-barra-btn"
-                    onClick={handleConfirmar}
-                    disabled={carregando}
-                >
-                    {carregando
-                        ? <><div className="spinner-btn-interno"></div> Processando...</>
-                        : <><i className="fas fa-check-double"></i> {textoBotao}</>
-                    }
-                </button>
-            </div>
+            <button
+                className="op-selecao-fab"
+                onClick={handleConfirmar}
+                disabled={carregando}
+            >
+                {carregando
+                    ? <><div className="spinner-btn-interno"></div> Processando...</>
+                    : <><i className="fas fa-check-double"></i> {textoBotao}</>
+                }
+            </button>
 
         </div>
     );

@@ -778,12 +778,13 @@ body.autenticado {
 
 /* Cores da borda baseadas no status da OP */
 .op-card-react .card-borda-charme.status-em-aberto { background-color: var(--op-cor-status-em-aberto); }
-.op-card-react .card-borda-charme.status-produzindo { background-color: var(--op-cor-status-produzindo); }
+.op-card-react .card-borda-charme.status-produzindo { background-color: #94a3b8; }
+.op-card-react .card-borda-charme.status-em-aberto  { background-color: #94a3b8; }
 .op-card-react .card-borda-charme.status-finalizado { background-color: var(--op-cor-status-finalizado); }
-.op-card-react .card-borda-charme.status-cancelada { background-color: var(--op-cor-status-cancelada); }
-.op-card-react .card-borda-charme.status-pronta-finalizar { 
-    background-color: #ffc107; /* Amarelo/Laranja */
-}
+.op-card-react .card-borda-charme.status-cancelada  { background-color: var(--op-cor-status-cancelada); }
+.op-card-react .card-borda-charme.status-pronta-finalizar { background-color: #22c55e; }
+.op-card-react .card-borda-charme.status-radar-atencao    { background-color: #f59e0b; }
+.op-card-react .card-borda-charme.status-radar-critico    { background-color: #ef4444; }
 
 .op-card-react .card-imagem-produto {
     grid-column: 1 / 2;
@@ -800,6 +801,8 @@ body.autenticado {
     flex-direction: column;
     gap: 4px;
     overflow: hidden; /* Evita que textos muito grandes quebrem o layout */
+    align-items: center;
+    padding: 8px;
 }
 
 .op-card-react .card-info-principal h3 {
@@ -1116,6 +1119,19 @@ body.autenticado {
 .op-modal-atribuir-v2.modo-lista { max-width: 800px; }
 .op-modal-atribuir-v2.modo-confirmacao { max-width: 500px; }
 
+.op-modal-aviso-hora-extra {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #fff7ed;
+    border-left: 4px solid #f59e0b;
+    padding: 8px 16px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #92400e;
+}
+.op-modal-aviso-hora-extra i { flex-shrink: 0; }
+
 .op-modal-atribuir-v2 .op-modal-body {
     padding: 15px;
     flex-grow: 1;
@@ -1225,7 +1241,7 @@ body.autenticado {
 }
 
 /* --- ESTILOS DAS TELAS INTERNAS --- */
-.coluna-lista-produtos { width: 100%; }
+.coluna-lista-produtos { width: 100%; display: flex; flex-direction: column; }
 .op-cards-container-modal {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -1256,9 +1272,252 @@ body.autenticado {
     padding: 5px;
 }
 
-.op-card-react .card-borda-charme.borda-corte   { background-color: #8e44ad; }
+.op-card-react .card-borda-charme.borda-corte        { background-color: #8e44ad; }
 .op-card-react .card-borda-charme.borda-etapa-final  { background-color: #e74c3c; }
 .op-card-react .card-borda-charme.borda-etapa-normal { background-color: #3498db; }
+
+/* Badge de etapa (Etapa 1, Etapa Final) */
+.op-etapa-step-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 8px;
+    border-radius: 20px;
+    width: fit-content;
+    margin-bottom: 2px;
+}
+.op-etapa-step-badge.normal { background: #dbeafe; color: #1d4ed8; }
+.op-etapa-step-badge.final  { background: #fee2e2; color: #b91c1c; }
+
+/* Chip do nome do processo */
+.op-processo-chip {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.73rem;
+    font-weight: 600;
+    color: #374151;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 2px 8px;
+    width: fit-content;
+    margin-top: 3px;
+}
+
+/* Footer roxo com origem das OPs */
+.op-card-ops-footer {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    border-top: 1px solid #f0f0f0;
+    margin-top: 8px;
+    padding-top: 7px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: #6366f1;
+}
+
+/* Link roxo da OP nos cards de confirmação */
+.op-confirmacao-op-link {
+    align-items: center;
+    gap: 4px;
+    font-size: 0.7rem !important;
+    color: #6366f1 !important;
+    font-weight: 500;
+    margin-top: 5px !important;
+}
+
+/* Banner de etapas unificadas no card de confirmação */
+.op-confirmacao-unificada-info {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 5px;
+    font-size: 0.7rem;
+    color: #6366f1;
+    font-weight: 600;
+}
+.op-confirmacao-etapa-chip {
+    background: #ede9fe;
+    color: #5b21b6;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 0.68rem;
+    font-weight: 700;
+}
+
+/* Badge de unificação no card de seleção (step primário) */
+.op-etapa-unificavel-badge {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    background: #f5f3ff;
+    border: 1px solid #c4b5fd;
+    border-radius: 6px;
+    padding: 6px 10px;
+    margin-top: 6px;
+    font-size: 0.72rem;
+    color: #5b21b6;
+    font-weight: 600;
+}
+.op-etapa-unificavel-badge i { color: #7c3aed; }
+
+.op-unificacao-toggle {
+    margin-left: auto;
+    background: #7c3aed;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    padding: 3px 10px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.op-unificacao-toggle:hover { background: #6d28d9; }
+.op-unificacao-toggle.ativo { background: #dc2626; }
+.op-unificacao-toggle.ativo:hover { background: #b91c1c; }
+
+/* Badge "Incluída automaticamente" no step secundário */
+.op-etapa-incluida-badge {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    background: #ede9fe;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #5b21b6;
+    margin-top: 6px;
+}
+
+/* Card de step secundário em grupo unificado ativo — mantido para compatibilidade */
+.op-card-react.op-card-secundaria-unif {
+    pointer-events: none;
+}
+
+/* Card unificado ativo — fundo roxo-claro */
+.op-card-react.op-card-unificado {
+    background-color: #f5f3ff;
+}
+
+/* Label "Etapas Unificadas" no lugar do badge de etapa */
+.op-unif-ativo-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: #6366f1;
+    color: #fff;
+    width: fit-content;
+}
+
+/* Linha de processos com setas no card unificado ativo */
+.op-unif-processos-linha {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 2px;
+}
+.op-unif-seta {
+    color: #6366f1;
+    font-size: 0.7rem;
+}
+
+/* Badge de unificação — variante "ativo" (quando ambas as etapas estão unificadas) */
+.op-etapa-unificavel-badge--ativo {
+    background: #ede9fe;
+    border-color: #a78bfa;
+    color: #4c1d95;
+}
+.op-etapa-unificavel-badge--ativo i { color: #5b21b6; }
+
+/* Botão Separar — distinto do Unificar */
+.op-unificacao-toggle--separar {
+    background: #6b7280 !important;
+}
+.op-unificacao-toggle--separar:hover { background: #4b5563 !important; }
+
+/* Processos unificados na tela de confirmação (substitui .processo) */
+.op-confirmacao-processos-unif {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 4px 0 0;
+}
+.op-confirmacao-unif-seta {
+    color: #6366f1;
+    font-size: 0.6rem;
+}
+
+/* Bloco de detalhe das etapas unificadas na confirmação */
+.op-confirmacao-unif-detalhe {
+    width: 100%;
+    background: #f5f3ff;
+    border: 1px solid #c4b5fd;
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.op-confirmacao-unif-titulo {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #5b21b6;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.op-confirmacao-unif-item {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 5px 8px;
+    background: #fff;
+    border-radius: 6px;
+    border: 1px solid #ddd6fe;
+}
+.op-confirmacao-unif-step-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #7c3aed;
+    background: #ede9fe;
+    padding: 1px 6px;
+    border-radius: 10px;
+}
+.op-confirmacao-unif-maquina {
+    font-size: 0.7rem;
+    color: #6b7280;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+.op-confirmacao-unif-qtd-label {
+    margin-left: auto;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #374151;
+}
 
 /* Checkbox circular de seleção */
 .op-card-checkbox {
@@ -1822,55 +2081,57 @@ body.autenticado {
     flex-shrink: 0;
 }
 
-/* --- BARRA DE AÇÃO DE SELEÇÃO (substitui FAB) --- */
-.op-selecao-barra {
+/* --- FAB DE CONFIRMAÇÃO (substitui a barra) --- */
+.op-selecao-fab {
     position: sticky;
-    bottom: 0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 12px 20px;
-    background: #fff;
-    border-top: 2px solid var(--op-cor-azul-claro);
-    box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
-    margin: 16px -15px -15px;
-    border-radius: 0 0 var(--op-raio-borda-card) var(--op-raio-borda-card);
-    animation: barra-sobe 0.22s ease;
-    z-index: 10;
-}
-@keyframes barra-sobe {
-    from { transform: translateY(100%); opacity: 0; }
-    to   { transform: translateY(0);    opacity: 1; }
-}
-.op-selecao-barra-count {
-    font-size: 0.88rem;
-    color: #64748b;
-    font-weight: 500;
-}
-.op-selecao-barra-count strong {
-    color: var(--op-cor-azul-claro);
-    font-size: 1.05rem;
-    font-weight: 700;
-}
-.op-selecao-barra-btn {
+    bottom: 16px;
+    align-self: center;
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 22px;
-    background: var(--op-cor-azul-escuro);
+    gap: 10px;
+    padding: 14px 24px;
+    background: linear-gradient(135deg, #1d4ed8, #3b82f6);
     color: #fff;
     border: none;
-    border-radius: 8px;
+    border-radius: 50px;
     font-size: 0.95rem;
-    font-weight: 600;
+    font-weight: 700;
     cursor: pointer;
-    transition: background 0.15s, transform 0.1s;
     white-space: nowrap;
+    box-shadow: 0 4px 22px rgba(29, 78, 216, 0.42);
+    animation: fab-aparece 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    margin-top: 16px;
+    z-index: 10;
+    transition: transform 0.15s, box-shadow 0.15s;
 }
-.op-selecao-barra-btn:hover {
-    background: var(--op-cor-azul-claro);
-    transform: translateY(-1px);
+.op-selecao-fab:hover {
+    transform: scale(1.05) translateY(-2px);
+    box-shadow: 0 8px 30px rgba(29, 78, 216, 0.52);
+}
+.op-selecao-fab:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+/* Bolinha de contagem dentro do FAB */
+.op-selecao-fab-badge {
+    background: rgba(255,255,255,0.22);
+    border: 1.5px solid rgba(255,255,255,0.45);
+    border-radius: 50%;
+    min-width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 800;
+    line-height: 1;
+    flex-shrink: 0;
+}
+@keyframes fab-aparece {
+    from { transform: scale(0.6) translateY(12px); opacity: 0; }
+    to   { transform: scale(1)   translateY(0);    opacity: 1; }
 }
 
 @keyframes slideUpFade {
@@ -3018,8 +3279,38 @@ body.autenticado {
     letter-spacing: 0.08em;
     color: var(--cracha-cor);
     margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
 }
 
+/* Wrapper processo unificado (badge + processos) */
+.cracha-tarefa-processo-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+.cracha-unif-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #ede9fe;
+    color: #5b21b6;
+    border-radius: 20px;
+    padding: 1px 8px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    width: fit-content;
+}
+.cracha-unif-seta {
+    font-size: 0.6rem;
+    color: #7c3aed;
+    margin: 0 2px;
+}
 /* Cabeça da tarefa — imagem 64×64 + nome da variação */
 .cracha-tarefa-cabeca {
     display: flex;
@@ -3170,12 +3461,62 @@ body.autenticado {
     gap: 4px;
     margin-bottom: 4px;
 }
-.cracha-fila ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 3px; }
-.cracha-fila li { display: flex; gap: 6px; font-size: 0.72rem; color: #475569; align-items: center; }
-.cracha-fila .fila-qtd  { font-weight: 700; color: #1e293b; min-width: 24px; }
-.cracha-fila .fila-nome { font-weight: 500; }
-.cracha-fila .fila-var  { color: #94a3b8; }
-.cracha-fila .fila-proc { color: var(--cracha-cor); font-weight: 600; margin-left: auto; }
+.cracha-fila ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 5px; }
+.cracha-fila li {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    background: #fff;
+    border-radius: 6px;
+    padding: 7px 9px;
+    border: 1px solid #e2e8f0;
+}
+/* Linha 1: quantidade + nome do produto */
+.cracha-fila .fila-linha1 {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.cracha-fila .fila-qtd {
+    font-weight: 800;
+    color: #1e293b;
+    background: #f1f5f9;
+    border-radius: 4px;
+    padding: 1px 6px;
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    line-height: 1.4;
+}
+.cracha-fila .fila-nome {
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 0.74rem;
+    line-height: 1.3;
+}
+/* Linha 2: variante */
+.cracha-fila .fila-variante {
+    font-size: 0.7rem;
+    color: #64748b;
+    font-weight: 500;
+    line-height: 1.3;
+    padding-left: 2px;
+}
+/* Linha 3: processo(s) */
+.cracha-fila .fila-proc {
+    font-size: 0.68rem;
+    color: var(--cracha-cor);
+    font-weight: 700;
+    line-height: 1.3;
+    padding-left: 2px;
+}
+.cracha-fila .fila-proc.unif {
+    color: #5b21b6;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+.cracha-fila .fila-proc.unif i { font-size: 0.58rem; flex-shrink: 0; }
 
 /* --- Rodapé (botões) — +20% em altura/padding para "dedos grossos" em tablets --- */
 .cracha-footer {
@@ -3233,12 +3574,7 @@ body.autenticado {
     width: 5px; /* era 6px, um toque mais refinado */
 }
 .op-card-react .card-borda-charme.status-pronta-finalizar {
-    background: linear-gradient(180deg, #ffc107, #ff9800);
-    animation: borda-alerta-pulse 1.8s ease-in-out infinite;
-}
-@keyframes borda-alerta-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+    background: linear-gradient(180deg, #22c55e, #16a34a);
 }
 
 /* ==========================================================================
@@ -3265,6 +3601,224 @@ body.autenticado {
     flex-wrap: wrap;
     gap: 12px;
     margin-bottom: 20px;
+}
+
+/* === Botão Lançamento Externo no header do painel === */
+.oa-btn-externo {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #0ea5e9;
+    background: transparent;
+    border: 1px solid #0ea5e9;
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    min-height: 32px;
+}
+.oa-btn-externo:hover {
+    background: #f0f9ff;
+    border-color: #0284c7;
+    color: #0284c7;
+}
+
+/* === Modal Lançamento Externo === */
+.op-externo-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    background: #e0f2fe;
+    color: #0369a1;
+    border-radius: 4px;
+    padding: 2px 7px;
+}
+
+.op-externo-tipo-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 8px 0;
+}
+
+.op-externo-ver-historico {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    width: 100%;
+    background: none;
+    border: none;
+    color: #6b7280;
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 6px;
+    transition: color 0.15s, background 0.15s;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+.op-externo-ver-historico:hover { color: #374151; background: #f3f4f6; }
+
+/* Histórico */
+.op-externo-historico {
+    padding: 8px 0;
+    min-height: 120px;
+}
+
+.op-externo-historico-vazio {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 48px 16px;
+    color: #9ca3af;
+}
+.op-externo-historico-vazio i { font-size: 2rem; }
+.op-externo-historico-vazio p { font-size: 0.875rem; }
+
+.op-externo-historico-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.op-externo-historico-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 10px 14px;
+}
+
+.op-externo-historico-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.op-externo-historico-produto {
+    font-weight: 700;
+    font-size: 0.875rem;
+    color: #111827;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.op-externo-historico-variante {
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+
+.op-externo-historico-processo {
+    font-size: 0.78rem;
+    color: #374151;
+    font-weight: 600;
+}
+
+.op-externo-historico-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.op-externo-historico-qtd,
+.op-externo-historico-hora,
+.op-externo-historico-lancador {
+    font-size: 0.7rem;
+    color: #6b7280;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.op-externo-historico-btn-desfazer {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #ef4444;
+    background: transparent;
+    border: 1px solid #ef4444;
+    border-radius: 6px;
+    padding: 5px 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    min-height: 32px;
+}
+.op-externo-historico-btn-desfazer:hover:not(:disabled) {
+    background: #fef2f2;
+    border-color: #dc2626;
+    color: #dc2626;
+}
+.op-externo-historico-btn-desfazer:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.op-externo-tipo-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 24px 16px;
+}
+
+.op-externo-tipo-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: #fff;
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 28px 16px;
+    cursor: pointer;
+    transition: all 0.18s;
+    min-height: 140px;
+}
+.op-externo-tipo-card:hover {
+    border-color: #6366f1;
+    background: #f5f3ff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(99,102,241,0.15);
+}
+
+.op-externo-tipo-icone {
+    font-size: 2rem;
+    color: #6366f1;
+}
+
+.op-externo-tipo-label {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #374151;
+}
+
+.op-painel-banner-feriado {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #fff3cd;
+    border-left: 4px solid #f59e0b;
+    border-radius: 8px;
+    padding: 12px 20px;
+    margin-bottom: 16px;
+    color: #92400e;
+    font-weight: 600;
+}
+
+.op-painel-banner-feriado i {
+    font-size: 1.2rem;
+    flex-shrink: 0;
 }
 
 .oa-header-esquerda {
@@ -3452,7 +4006,7 @@ body.autenticado {
 .op-modal-v2.status-produzindo::before   { background: var(--op-cor-status-produzindo); }
 .op-modal-v2.status-finalizado::before   { background: var(--op-cor-status-finalizado); }
 .op-modal-v2.status-cancelada::before    { background: var(--op-cor-status-cancelada); }
-.op-modal-v2.status-pronta-finalizar::before { background: #f59e0b; }
+.op-modal-v2.status-pronta-finalizar::before { background: #22c55e; }
 
 /* Header do modal V2 */
 .op-modal-v2-header {
@@ -4596,6 +5150,28 @@ body.autenticado {
 }
 .oa-inativo-btn-info:hover { color: #4a90d9; }
 
+.oa-inativo-btn-hora-extra {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #6366f1;
+    background: transparent;
+    border: 1px solid #6366f1;
+    border-radius: 6px;
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    min-height: 30px;
+}
+.oa-inativo-btn-hora-extra:hover {
+    background: #eef2ff;
+    border-color: #4f46e5;
+    color: #4f46e5;
+}
+
 .oa-inativo-btn-liberar {
     display: flex;
     align-items: center;
@@ -5073,9 +5649,9 @@ body.autenticado {
     min-height: 44px;
     transition: background 0.15s;
 }
-.op-sugestao-btn:hover {
-    background: #d68910;
-}
+.op-sugestao-btn:hover { background: #d68910; }
+.op-sugestao-btn.selecionado { background: #27ae60; }
+.op-sugestao-btn.selecionado:hover { background: #1e8449; }
 
 /* =====================================================
    Linha do Tempo — Header + Modal Info (ⓘ)
@@ -5495,7 +6071,7 @@ body.autenticado {
 .op-card-react {
     display: flex !important;
     flex-direction: column;
-    padding: 0;
+    padding: 15px;
     gap: 0;
 }
 
@@ -6010,7 +6586,7 @@ body.autenticado {
 .op-init-linha.atual .init-prompt       { color: #818cf8; }
 .op-init-linha.atual span:not(.init-prompt) { color: #e2e8f0; }
 
-.init-prompt { font-size: 1rem; flex-shrink: 0; }
+.init-prompt { font-size: 1rem; flex-shrink: 0; 
     margin: 8px 0 16px;
     font-family: 'Courier New', 'Menlo', 'Monaco', monospace;
     min-height: 90px;
@@ -7178,13 +7754,13 @@ body.autenticado {
     flex-shrink: 0;
 }
 
-/* Wrapper do agente (cresce para preencher o espaço) */
+/* Conteúdo do agente — bloco full-width abaixo dos controles */
 .op-cortes-agente {
-    flex: 1;
-    min-width: 200px;
+    width: 100%;
+    margin-bottom: 8px;
 }
 
-/* Botão de acionamento do agente */
+/* Botão de acionamento do agente — inline com os outros botões */
 .op-cortes-agente-btn {
     display: inline-flex;
     align-items: center;
@@ -7199,8 +7775,7 @@ body.autenticado {
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s, color 0.15s;
     min-height: 44px;
-    width: 100%;
-    justify-content: center;
+    white-space: nowrap;
 }
 .op-cortes-agente-btn:hover:not(:disabled) {
     background: #e8f0f8;

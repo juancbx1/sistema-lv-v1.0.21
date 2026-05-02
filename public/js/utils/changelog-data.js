@@ -12,6 +12,21 @@
 
 export const changelog = [
     {
+        versao: '1.21.2',
+        data: '02/05/2026',
+        admin: [
+            'Agora é possível unificar tarefas atribuidas em ordens de producao e lancar tarefas no mesmo "bloco". ',
+            'O sistema reconhece finais de semana, e entende que após o horario de trabalho qualquer lancamento será "hora extra"', 
+            'Ajustes na logica das bordas do cards da aba "OPs" da pagina ordens de producao', 
+            'Cronometro agora "reseta/reinicia" quando troca de tarefa em um lote de tarefas', 
+            'Após cancelar a sessão atual, verifica se há sessões restantes. Se sim atualiza, se nao libera pra LIVRE'
+        ],
+        dashboard: [
+            // Vazio — esta atualização não afeta as funcionárias
+        ],
+    },
+
+    {
         versao: '1.21.1',
         data: '01/05/2026',
         admin: [

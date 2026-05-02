@@ -1,6 +1,7 @@
 // public/src/components/OPAtribuicaoModal.jsx
 
 import React, { useState, useEffect } from 'react';
+import { mostrarConfirmacao } from '/js/utils/popups.js';
 
 import OPTelaSelecaoEtapa from './OPTelaSelecaoEtapa.jsx';
 import OPTelaConfirmacaoQtd from './OPTelaConfirmacaoQtd.jsx';
@@ -12,6 +13,7 @@ const getRoleInfo = (tipos = []) => {
 };
 
 export default function OPAtribuicaoModal({ funcionario, isOpen, onClose, tpp }) {
+  const modoHoraExtra = !!funcionario?._modo_hora_extra;
   const [telaAtual, setTelaAtual] = useState('selecao');
   const [etapaSelecionada, setEtapaSelecionada] = useState(null);
 
@@ -26,7 +28,20 @@ export default function OPAtribuicaoModal({ funcionario, isOpen, onClose, tpp })
 
   const role = getRoleInfo(funcionario?.tipos);
 
-  const handleEtapaSelect = (etapa) => {
+  const handleEtapaSelect = async (etapa) => {
+    // Sessão unificada com troca de máquina → confirmar antes de avançar
+    const singleEtapa = Array.isArray(etapa) ? null : etapa;
+    if (singleEtapa?._unificada && singleEtapa._grupo_unificacao?.muda_maquina) {
+      const etapas = singleEtapa._grupo_unificacao.etapas;
+      const maqA = etapas[0]?.maquina || '?';
+      const maqB = etapas[etapas.length - 1]?.maquina || '?';
+      const primeiroNome = funcionario?.nome?.split(' ')[0] || funcionario?.nome;
+      const confirmado = await mostrarConfirmacao(
+        `${primeiroNome} precisará trocar de máquina durante esta tarefa (${maqA} → ${maqB}).\n\nDeseja continuar com as etapas unificadas?`,
+        'aviso'
+      );
+      if (!confirmado) return;
+    }
     setEtapaSelecionada(etapa);
     setTelaAtual('confirmacao');
   };
@@ -70,6 +85,12 @@ export default function OPAtribuicaoModal({ funcionario, isOpen, onClose, tpp })
           </div>
         </div>
 
+        {modoHoraExtra && (
+          <div className="op-modal-aviso-hora-extra">
+            <i className="fas fa-exclamation-triangle"></i> Lançamento em Hora Extra — será registrado e o gerente será notificado
+          </div>
+        )}
+
         <div className="op-modal-body">
           {telaAtual === 'selecao' && (
             <OPTelaSelecaoEtapa
@@ -84,6 +105,7 @@ export default function OPAtribuicaoModal({ funcionario, isOpen, onClose, tpp })
                 funcionario={funcionario}
                 onClose={onClose}
                 tpp={tpp}
+                modoHoraExtra={modoHoraExtra}
             />
           )}
         </div>

@@ -1,7 +1,7 @@
 // public/src/components/OPCortesAgente.jsx
 // Agente de Planejamento de Corte — scan de demandas pendentes + plano do dia
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 
 const MENSAGENS_SCAN = [
     'Verificando demandas abertas...',
@@ -10,13 +10,16 @@ const MENSAGENS_SCAN = [
     'Gerando plano de corte...',
 ];
 
-export default function OPCortesAgente({ produtos, onCortarAgora, rescanKey }) {
+const OPCortesAgente = forwardRef(function OPCortesAgente({ produtos, onCortarAgora, rescanKey, onStateChange }, ref) {
     const [agentState, setAgentState] = useState('idle'); // 'idle' | 'scanning' | 'done'
     const [mensagensVisiveis, setMensagensVisiveis] = useState([]);
     const [plano, setPlano] = useState([]);
 
+    useEffect(() => {
+        onStateChange?.(agentState);
+    }, [agentState, onStateChange]);
+
     // Auto-rescan quando rescanKey muda E o agente já está em 'done'
-    // (significa que o usuário cortou um item — vamos atualizar o plano)
     useEffect(() => {
         if (rescanKey > 0 && agentState === 'done') {
             iniciarScan();
@@ -32,12 +35,10 @@ export default function OPCortesAgente({ produtos, onCortarAgora, rescanKey }) {
         try {
             const token = localStorage.getItem('token');
 
-            // Dispara o fetch em paralelo com a animação do terminal
             const fetchPromise = fetch('/api/cortes/radar', {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(r => r.json());
 
-            // Mensagens sequenciais
             for (let i = 0; i < MENSAGENS_SCAN.length; i++) {
                 if (i > 0) await new Promise(r => setTimeout(r, 580));
                 setMensagensVisiveis(prev => [...prev, MENSAGENS_SCAN[i]]);
@@ -46,7 +47,6 @@ export default function OPCortesAgente({ produtos, onCortarAgora, rescanKey }) {
             const data = await fetchPromise;
             if (data.error) throw new Error(data.error);
 
-            // Enriquece cada item do déficit com imagem e objeto produto completo
             const planoEnriquecido = (data.alertasDeficit || []).map(item => {
                 const produtoCompleto = produtos.find(p => p.id === item.produto_id) || null;
                 let imagem = produtoCompleto?.imagem || null;
@@ -62,7 +62,6 @@ export default function OPCortesAgente({ produtos, onCortarAgora, rescanKey }) {
                 };
             });
 
-            // Mensagem final
             await new Promise(r => setTimeout(r, 380));
             const count = planoEnriquecido.length;
             const finalMsg = count > 0
@@ -86,21 +85,19 @@ export default function OPCortesAgente({ produtos, onCortarAgora, rescanKey }) {
         setPlano([]);
     };
 
+    // Expõe handleClick para o pai acionar via ref (sem duplicar o botão)
+    useImperativeHandle(ref, () => ({
+        handleClick: () => {
+            if (agentState === 'idle') iniciarScan();
+            else resetar();
+        }
+    }), [agentState, iniciarScan]);
+
+    // Só renderiza o conteúdo — o botão fica no pai (OPCortesTela)
+    if (agentState === 'idle') return null;
+
     return (
         <div className="op-cortes-agente">
-
-            {/* ── BOTÃO DE ACIONAMENTO ── */}
-            <button
-                className={`op-cortes-agente-btn ${agentState !== 'idle' ? 'ativo' : ''}`}
-                onClick={agentState === 'idle' ? iniciarScan : resetar}
-                disabled={agentState === 'scanning'}
-                title={agentState === 'idle' ? 'Gerar plano de corte do dia' : 'Fechar agente'}
-            >
-                <i className={`fas fa-${agentState === 'scanning' ? 'circle-notch fa-spin' : 'robot'}`}></i>
-                {agentState === 'idle' && 'Plano de Corte'}
-                {agentState === 'scanning' && 'Analisando...'}
-                {agentState === 'done' && 'Fechar Agente'}
-            </button>
 
             {/* ── TERMINAL DE SCAN ── */}
             {agentState === 'scanning' && (
@@ -124,7 +121,6 @@ export default function OPCortesAgente({ produtos, onCortarAgora, rescanKey }) {
             {agentState === 'done' && (
                 <div className="op-cortes-agente-resultado">
 
-                    {/* Tudo em dia ✅ */}
                     {plano.length === 0 && (
                         <div className="op-cortes-agente-zerado">
                             <i className="fas fa-check-circle"></i>
@@ -135,7 +131,6 @@ export default function OPCortesAgente({ produtos, onCortarAgora, rescanKey }) {
                         </div>
                     )}
 
-                    {/* Lista de itens a cortar */}
                     {plano.length > 0 && (
                         <>
                             <div className="op-cortes-agente-plano-header">
@@ -206,4 +201,6 @@ export default function OPCortesAgente({ produtos, onCortarAgora, rescanKey }) {
             )}
         </div>
     );
-}
+});
+
+export default OPCortesAgente;

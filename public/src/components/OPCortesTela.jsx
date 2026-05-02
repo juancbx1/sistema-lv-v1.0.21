@@ -71,6 +71,8 @@ export default function OPCortesTela({ demandaInicial, onLimparDemanda }) {
     const [quickLogPreenchido, setQuickLogPreenchido] = useState(null); // {produto, variante, quantidadeSugerida}
     const [radarRefreshKey, setRadarRefreshKey] = useState(0);
     const [agenteRescanKey, setAgenteRescanKey] = useState(0);
+    const [agenteEstado, setAgenteEstado] = useState('idle');
+    const agenteRef = useRef(null);
 
     const isFirstLoadRef = useRef(true);
     const ITENS_POR_PAGINA_CORTES = 6;
@@ -281,9 +283,8 @@ export default function OPCortesTela({ demandaInicial, onLimparDemanda }) {
                 {/* RADAR */}
                 <OPCortesRadar refreshKey={radarRefreshKey} />
 
-                {/* AGENTE DE PLANEJAMENTO + AÇÕES — linha horizontal */}
+                {/* AÇÕES + BOTÃO DO AGENTE — linha horizontal */}
                 <div className="op-cortes-controles">
-                    {/* Botões de ação (sempre visíveis quando Quick-Log fechado) */}
                     {!quickLogAberto && (
                         <div className="op-cortes-acoes-btns">
                             <button
@@ -304,15 +305,32 @@ export default function OPCortesTela({ demandaInicial, onLimparDemanda }) {
                         </div>
                     )}
 
-                    {/* Agente de planejamento — ao lado dos botões */}
+                    {/* Botão do agente — fica sempre na linha dos outros botões */}
                     {!quickLogAberto && (
-                        <OPCortesAgente
-                            produtos={produtos}
-                            onCortarAgora={handleCortarAgora}
-                            rescanKey={agenteRescanKey}
-                        />
+                        <button
+                            className={`op-cortes-agente-btn ${agenteEstado !== 'idle' ? 'ativo' : ''}`}
+                            onClick={() => agenteRef.current?.handleClick()}
+                            disabled={agenteEstado === 'scanning'}
+                            title={agenteEstado === 'idle' ? 'Gerar plano de corte do dia' : 'Fechar agente'}
+                        >
+                            <i className={`fas fa-${agenteEstado === 'scanning' ? 'circle-notch fa-spin' : 'robot'}`}></i>
+                            {agenteEstado === 'idle' && 'Plano de Corte'}
+                            {agenteEstado === 'scanning' && 'Analisando...'}
+                            {agenteEstado === 'done' && 'Fechar Agente'}
+                        </button>
                     )}
                 </div>
+
+                {/* Conteúdo do agente — bloco full-width abaixo dos controles */}
+                {!quickLogAberto && (
+                    <OPCortesAgente
+                        ref={agenteRef}
+                        produtos={produtos}
+                        onCortarAgora={handleCortarAgora}
+                        rescanKey={agenteRescanKey}
+                        onStateChange={setAgenteEstado}
+                    />
+                )}
 
                 {/* Quick-Log inline (abre embaixo dos controles) */}
                 {quickLogAberto && (

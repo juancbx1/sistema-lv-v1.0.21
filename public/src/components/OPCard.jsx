@@ -39,13 +39,19 @@ export function OPCard({ op, onClick, onCancelar }) {
 
     const imagemSrc = op.imagem_produto || '/img/placeholder-image.png';
 
-    // Calcula statusClass
+    // Calcula statusClass — prioridade: pronta > radar > status base
     let statusClass = `status-${op.status}`;
     try {
         if (op.status !== 'finalizado' && op.status !== 'cancelada' &&
             op.etapas && Array.isArray(op.etapas) && op.etapas.length > 0) {
             const todasProntas = op.etapas.every(e => e && e.lancado === true);
-            if (todasProntas) statusClass = 'status-pronta-finalizar';
+            if (todasProntas) {
+                statusClass = 'status-pronta-finalizar';
+            } else if (op.radar?.faixa === 'critico') {
+                statusClass = 'status-radar-critico';
+            } else if (op.radar?.faixa === 'atencao') {
+                statusClass = 'status-radar-atencao';
+            }
         }
     } catch { /* ignora */ }
 

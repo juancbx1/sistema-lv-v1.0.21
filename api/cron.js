@@ -97,6 +97,25 @@ router.get('/registrar-intervalos', async (req, res) => {
             return res.status(200).json({ success: true, ignorado: true, hora_sp: agoraSP, motivo: 'fora_do_horario' });
         }
 
+        // Guarda de feriado: não registra intervalos em dias de feriado/folga da empresa.
+        // Exceção: se houver um 'trabalho_extra' cadastrado na mesma data, opera normalmente.
+        const { rows: feriadoRows } = await dbClient.query(`
+            SELECT 1 FROM calendario_empresa
+            WHERE data = $1::date
+              AND tipo IN ('feriado_nacional', 'feriado_regional', 'folga_empresa')
+              AND NOT EXISTS (
+                  SELECT 1 FROM calendario_empresa c2
+                  WHERE c2.data = $1::date
+                    AND c2.tipo = 'trabalho_extra'
+              )
+            LIMIT 1
+        `, [dataHojeSP]);
+
+        if (feriadoRows.length > 0) {
+            console.log(`[CRON] registrar-intervalos ignorado — feriado/folga em ${dataHojeSP}`);
+            return res.status(200).json({ success: true, ignorado: true, hora_sp: agoraSP, motivo: 'feriado' });
+        }
+
         // Busca todos os funcionários ativos com horários, ponto de hoje e sessões de hoje.
         // Sessões de arremate são verificadas via status_atual para simplicidade.
         const { rows: funcionarios } = await dbClient.query(`
