@@ -1,5 +1,5 @@
 // public/src/components/OPCortesRadar.jsx
-// Pulso do Setor de Cortes — métricas em tempo real + alertas de déficit
+// Pulso do Setor de Cortes — métricas em tempo real
 
 import React, { useState, useEffect, useCallback } from 'react';
 
@@ -22,8 +22,6 @@ function isInativo48h(ultimoLancamento) {
 export default function OPCortesRadar({ refreshKey }) {
     const [radar, setRadar] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [alertasExpandido, setAlertasExpandido] = useState(false);
-
     const buscar = useCallback(async () => {
         setLoading(true);
         try {
@@ -42,7 +40,6 @@ export default function OPCortesRadar({ refreshKey }) {
 
     useEffect(() => { buscar(); }, [buscar, refreshKey]);
 
-    const temDeficit = !loading && (radar?.alertasDeficit?.length ?? 0) > 0;
     const inativo = !loading && isInativo48h(radar?.ultimoLancamento);
     const tempo = radar?.ultimoLancamento ? calcTempoDesde(radar.ultimoLancamento.data) : null;
 
@@ -88,43 +85,6 @@ export default function OPCortesRadar({ refreshKey }) {
                 )}
             </div>
 
-            {/* ── ALERTAS DE DÉFICIT ── */}
-            {temDeficit && (
-                <div className="op-cortes-alertas">
-                    <button
-                        className="op-cortes-alertas-header"
-                        onClick={() => setAlertasExpandido(v => !v)}
-                    >
-                        <span className="op-cortes-alertas-titulo">
-                            <i className="fas fa-radiation-alt"></i>
-                            {radar.alertasDeficit.length} produto{radar.alertasDeficit.length > 1 ? 's' : ''} com demanda aberta sem corte em estoque
-                        </span>
-                        <i className={`fas fa-chevron-${alertasExpandido ? 'up' : 'down'} op-cortes-alertas-chevron`}></i>
-                    </button>
-
-                    {alertasExpandido && (
-                        <div className="op-cortes-alertas-lista">
-                            {radar.alertasDeficit.map((a, i) => (
-                                <div key={i} className="op-corte-alerta-item">
-                                    <div className="op-corte-alerta-produto">
-                                        <i className="fas fa-cut op-corte-alerta-icone"></i>
-                                        <div>
-                                            <strong>{a.produto_nome}</strong>
-                                            {a.variante && (
-                                                <span className="op-corte-alerta-variante">{a.variante}</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="op-corte-alerta-nums">
-                                        <span className="alerta-precisa">{a.pecas_necessarias} pçs necessárias</span>
-                                        <span className="alerta-tem">0 em estoque</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            )}
         </div>
     );
 }

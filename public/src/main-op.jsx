@@ -8,6 +8,8 @@ import OPPainelAtividades from './components/OPPainelAtividades.jsx';
 import OPGerenciamentoTela from './components/OPGerenciamentoTela.jsx';
 import OPCortesTela from './components/OPCortesTela.jsx';
 import OPModalTempos from './components/OPModalTempos.jsx';
+import OPCriarModal from './components/OPCriarModal.jsx';
+import OPExternoTela from './components/OPExternoTela.jsx';
 import BotaoBuscaFunil from './components/BotaoBuscaFunil.jsx';
 import AlertasFAB from './components/AlertasFAB.jsx';
 
@@ -48,17 +50,11 @@ function App() {
   
   const [estaAutenticado, setEstaAutenticado] = useState(false);
   const [verificandoAuth, setVerificandoAuth] = useState(true);
-  
-  // --- CORREÇÃO: Declare o estado AQUI, junto com os outros states ---
   const [permissoes, setPermissoes] = useState([]);
-  const [demandaParaProcessar, setDemandaParaProcessar] = useState(null); // <--- MOVIDO PARA CIMA
-  
-  // Agora a função pode usar o setDemandaParaProcessar tranquilamente
-  const iniciarProcessoDeCorte = (dadosDemanda) => {
-      console.log("[Ponte] Recebido pedido de produção:", dadosDemanda);
-      setDemandaParaProcessar(dadosDemanda);
-      setVisaoAtual('cortes');
-  };
+
+  // Estado do OPCriarModal (aberto via URL params do Painel de Demandas)
+  const [opCriarModalAberto, setOpCriarModalAberto] = useState(false);
+  const [opCriarModalDados, setOpCriarModalDados] = useState(null);
 
 
   useEffect(() => {
@@ -70,20 +66,20 @@ function App() {
                   // Salva as permissões vindas do auth
                   setPermissoes(auth.permissoes || []);
 
-                  // Verifica se veio redirecionado do Painel de Demandas via "Iniciar Corte"
+                  // Verifica se veio redirecionado do Painel de Demandas via "Criar OP"
                   const params = new URLSearchParams(window.location.search);
                   const demandaId = params.get('demanda_id');
                   if (demandaId) {
-                      setDemandaParaProcessar({
-                          demanda_id: parseInt(demandaId),
-                          produto_id: parseInt(params.get('produto_id')),
+                      setOpCriarModalDados({
+                          demandaId: parseInt(demandaId),
+                          produtoId: parseInt(params.get('produto_id')),
                           variante: params.get('variante') || null,
-                          quantidade: parseInt(params.get('quantidade')) || 0,
+                          quantidadeSugerida: parseInt(params.get('quantidade')) || 0,
                       });
-                      setVisaoAtual('cortes');
+                      setOpCriarModalAberto(true);
                       // Limpa a URL para evitar re-disparo ao recarregar a página
                       window.history.replaceState({}, '', window.location.pathname);
-                  } 
+                  }
                   document.body.classList.add('autenticado');
               } else {
                   document.body.innerHTML = '<p style="text-align:center; padding:20px;">Redirecionando...</p>';
@@ -123,25 +119,34 @@ function App() {
   }, [estaAutenticado]);
 
   useEffect(() => {
-    if (!estaAutenticado) return; 
+    if (!estaAutenticado) return;
 
-    // 1. Executa a busca imediatamente ao carregar a página
+    // 1. Executa imediatamente ao carregar
     verificarOpsProntas();
 
-    // 2. Cria um gatilho: Se o usuário saiu da aba e voltou, busca de novo
-    const handleFocus = () => {
-        verificarOpsProntas();
-    };
+    // 2. Polling a cada 30s — mantém o badge vivo sem depender de ação do usuário
+    const intervalo = setInterval(() => {
+        // Só faz a requisição se a aba estiver visível
+        if (document.visibilityState === 'visible') {
+            verificarOpsProntas();
+        }
+    }, 30_000);
 
+    // 3. Quando o usuário volta para a aba (troca de apps, minimiza etc.), busca na hora
+    const handleVisibility = () => {
+        if (document.visibilityState === 'visible') verificarOpsProntas();
+    };
+    const handleFocus = () => verificarOpsProntas();
+
+    document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('focus', handleFocus);
 
-    // Limpeza ao sair da tela
     return () => {
+        clearInterval(intervalo);
+        document.removeEventListener('visibilitychange', handleVisibility);
         window.removeEventListener('focus', handleFocus);
     };
-
-    // Removemos qualquer dependência de função, deixando apenas a autenticação
-  }, [estaAutenticado]);
+  }, [estaAutenticado, verificarOpsProntas]);
 
    if (verificandoAuth) return null;
    if (!estaAutenticado) return null;
@@ -184,6 +189,13 @@ function App() {
         >
           <i className="fas fa-cut"></i> Cortes
         </button>
+
+        <button
+          className={`gs-tab-btn ${visaoAtual === 'externo' ? 'ativo' : ''}`}
+          onClick={() => setVisaoAtual('externo')}
+        >
+          <i className="fas fa-user-tie"></i> P. Externo
+        </button>
       </nav>
 
       <div className="gs-conteudo-pagina">
@@ -197,21 +209,26 @@ function App() {
             />
           )}
 
-          {visaoAtual === 'cortes' && (
-            <OPCortesTela
-                demandaInicial={demandaParaProcessar}
-                onLimparDemanda={() => setDemandaParaProcessar(null)}
-            />
-          )}
+          {visaoAtual === 'cortes' && <OPCortesTela />}
+
+          {visaoAtual === 'externo' && <OPExternoTela />}
       </div>
 
       <OPModalTempos isOpen={modalTppAberto} onClose={() => setModalTppAberto(false)} />
-      
-      {/* PASSA A FUNÇÃO E AS PERMISSÕES */}
-      <BotaoBuscaFunil
-          onIniciarProducao={iniciarProcessoDeCorte}
-          permissoes={permissoes}
-      />
+
+      {opCriarModalDados && (
+          <OPCriarModal
+              isOpen={opCriarModalAberto}
+              onClose={() => { setOpCriarModalAberto(false); setOpCriarModalDados(null); }}
+              onOPCriada={() => { setOpCriarModalAberto(false); setOpCriarModalDados(null); verificarOpsProntas(); }}
+              demandaId={opCriarModalDados.demandaId}
+              produtoId={opCriarModalDados.produtoId}
+              variante={opCriarModalDados.variante}
+              quantidadeSugerida={opCriarModalDados.quantidadeSugerida}
+          />
+      )}
+
+      <BotaoBuscaFunil permissoes={permissoes} />
       <AlertasFAB />
 
     </ErrorBoundary>

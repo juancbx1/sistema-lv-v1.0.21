@@ -168,7 +168,7 @@ const OPCortesAgente = forwardRef(function OPCortesAgente({ produtos, onCortarAg
                                                 )}
                                                 <div className="op-cortes-agente-item-deficit">
                                                     <span className="deficit-falta">
-                                                        −{item.deficit} pçs
+                                                        {item.deficit} pçs
                                                     </span>
                                                     {cobertoParcial && (
                                                         <span className="deficit-tem">

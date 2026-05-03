@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { obterProdutos as obterProdutosDoStorage } from '/js/utils/storage.js';
 import UIFeedbackNotFound from './UIFeedbackNotFound.jsx';
+import UICarregando from './UICarregando.jsx';
 import OPPaginacaoWrapper from './OPPaginacaoWrapper.jsx';
 import UIBuscaInteligente, { filtrarListaInteligente } from './UIBuscaInteligente.jsx';
 
@@ -199,7 +200,13 @@ export default function OPTelaSelecaoEtapa({ onEtapaSelect, funcionario }) {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const grupos = res.ok ? await res.json() : [];
-            return [pvKey, grupos.filter(g => g.etapas.length >= 2)];
+            // BUGFIX: prefixar grupo_id com pvKey (produto+variante) para evitar
+            // que variantes diferentes do mesmo produto compartilhem o mesmo grupo_id
+            // no Set unificacoesAtivas, o que causava ativação cruzada indevida.
+            const gruposRemapeados = grupos
+                .filter(g => g.etapas.length >= 2)
+                .map(g => ({ ...g, grupo_id: `${pvKey}::${g.grupo_id}` }));
+            return [pvKey, gruposRemapeados];
         })).then(results => {
             const map = {};
             results.forEach(([k, grupos]) => { if (grupos.length > 0) map[k] = grupos; });
@@ -307,7 +314,7 @@ export default function OPTelaSelecaoEtapa({ onEtapaSelect, funcionario }) {
 
     useEffect(() => { setPagina(1); }, [termoFiltro]);
 
-    if (carregando) return <div className="spinner">Carregando fila...</div>;
+    if (carregando) return <UICarregando variante="bloco" />;
     if (erro) return <p style={{ color: 'red', textAlign: 'center' }}>{erro}</p>;
 
     const totalDisponivel = tarefasFiltradasParaFuncionario.length;

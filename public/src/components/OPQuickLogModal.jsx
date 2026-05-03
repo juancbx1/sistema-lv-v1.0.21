@@ -3,6 +3,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { mostrarMensagem } from '/js/utils/popups.js';
+import UIFeedbackNotFound from './UIFeedbackNotFound.jsx';
 
 function normalizarTexto(str) {
     return (str || '')
@@ -18,6 +19,7 @@ export default function OPQuickLogModal({ produtos, usuario, onClose, onSuccess,
     const [produtoSelecionado, setProdutoSelecionado] = useState(preenchido?.produto || null);
     const [varianteSelecionada, setVarianteSelecionada] = useState(preenchido?.variante || null);
     const [busca, setBusca] = useState('');
+    const [buscaVariante, setBuscaVariante] = useState('');
     const [quantidade, setQuantidade] = useState(
         preenchido?.quantidadeSugerida ? preenchido.quantidadeSugerida.toString() : ''
     );
@@ -40,7 +42,15 @@ export default function OPQuickLogModal({ produtos, usuario, onClose, onSuccess,
     const produtosFiltrados = useMemo(() => {
         if (!busca.trim()) return produtos;
         const t = normalizarTexto(busca);
-        return produtos.filter(p => normalizarTexto(p.nome).includes(t));
+        return produtos.filter(p => {
+            // Bate no nome do produto
+            if (normalizarTexto(p.nome).includes(t)) return true;
+            // Bate em qualquer variação da grade (cor, tamanho, combinações "Pérola | G" etc.)
+            if (Array.isArray(p.grade)) {
+                return p.grade.some(g => normalizarTexto(g.variacao).includes(t));
+            }
+            return false;
+        });
     }, [produtos, busca]);
 
     // Grade do produto selecionado (cada item = uma variação individual)
@@ -48,6 +58,13 @@ export default function OPQuickLogModal({ produtos, usuario, onClose, onSuccess,
         if (!produtoSelecionado?.grade || produtoSelecionado.grade.length === 0) return [];
         return produtoSelecionado.grade;
     }, [produtoSelecionado]);
+
+    // Variantes filtradas pela busca (passo 'variante')
+    const variantesFiltradas = useMemo(() => {
+        if (!buscaVariante.trim()) return variantes;
+        const t = normalizarTexto(buscaVariante);
+        return variantes.filter(g => normalizarTexto(g.variacao).includes(t));
+    }, [variantes, buscaVariante]);
 
     const temVariantes = variantes.length > 0;
 
@@ -67,7 +84,17 @@ export default function OPQuickLogModal({ produtos, usuario, onClose, onSuccess,
 
     const handleSelecionarProduto = (produto) => {
         setProdutoSelecionado(produto);
+
+        // Se o produto foi encontrado via variante (não pelo nome), herda o
+        // termo de busca para o passo de variante já aparecer pré-filtrado.
+        const t = normalizarTexto(busca.trim());
+        const nomeMatch = normalizarTexto(produto.nome).includes(t);
+        const herdarBusca = busca.trim() && !nomeMatch && Array.isArray(produto.grade)
+            && produto.grade.some(g => normalizarTexto(g.variacao).includes(t));
+
         setBusca('');
+        setBuscaVariante(herdarBusca ? busca.trim() : '');
+
         if (!produto.grade || produto.grade.length === 0) {
             setVarianteSelecionada(null);
             setStep('quantidade');
@@ -96,6 +123,7 @@ export default function OPQuickLogModal({ produtos, usuario, onClose, onSuccess,
         } else if (step === 'variante') {
             setProdutoSelecionado(null);
             setVarianteSelecionada(null);
+            setBuscaVariante('');
             setStep('produto');
         }
     };
@@ -212,7 +240,7 @@ export default function OPQuickLogModal({ produtos, usuario, onClose, onSuccess,
                             <input
                                 ref={inputBuscaRef}
                                 type="text"
-                                placeholder="Buscar produto..."
+                                placeholder="Buscar produto ou variante..."
                                 value={busca}
                                 onChange={e => setBusca(e.target.value)}
                             />
@@ -224,24 +252,43 @@ export default function OPQuickLogModal({ produtos, usuario, onClose, onSuccess,
                         </div>
                         <div className="op-quicklog-grid">
                             {produtosFiltrados.length === 0 ? (
-                                <div className="op-quicklog-vazio">
-                                    <i className="fas fa-search"></i>
-                                    <span>Nenhum produto encontrado</span>
-                                </div>
+                                <UIFeedbackNotFound
+                                    icon="fa-search"
+                                    titulo="Nenhum produto encontrado"
+                                    mensagem={`Nenhum produto ou variante corresponde a "${busca}".`}
+                                />
                             ) : (
-                                produtosFiltrados.map(p => (
-                                    <div
-                                        key={p.id}
-                                        className="op-quicklog-produto-card"
-                                        onClick={() => handleSelecionarProduto(p)}
-                                    >
-                                        <img
-                                            src={p.imagem || '/img/placeholder-image.png'}
-                                            alt={p.nome}
-                                        />
-                                        <span>{p.nome}</span>
-                                    </div>
-                                ))
+                                produtosFiltrados.map(p => {
+                                    // Destaque: mostra quantas variantes casam com a busca
+                                    const buscaAtiva = busca.trim();
+                                    const t = normalizarTexto(buscaAtiva);
+                                    const nomeMatch = normalizarTexto(p.nome).includes(t);
+                                    const variantesMatch = buscaAtiva && !nomeMatch && Array.isArray(p.grade)
+                                        ? p.grade.filter(g => normalizarTexto(g.variacao).includes(t))
+                                        : [];
+                                    return (
+                                        <div
+                                            key={p.id}
+                                            className="op-quicklog-produto-card"
+                                            onClick={() => handleSelecionarProduto(p)}
+                                        >
+                                            <img
+                                                src={p.imagem || '/img/placeholder-image.png'}
+                                                alt={p.nome}
+                                            />
+                                            <span>{p.nome}</span>
+                                            {variantesMatch.length > 0 && (
+                                                <span className="op-quicklog-variante-hint">
+                                                    <i className="fas fa-tag"></i>
+                                                    {variantesMatch.length === 1
+                                                        ? variantesMatch[0].variacao
+                                                        : `${variantesMatch.length} variantes`
+                                                    }
+                                                </span>
+                                            )}
+                                        </div>
+                                    );
+                                })
                             )}
                         </div>
                     </>
@@ -249,21 +296,48 @@ export default function OPQuickLogModal({ produtos, usuario, onClose, onSuccess,
 
                 {/* STEP: Variante */}
                 {!feito && step === 'variante' && (
-                    <div className="op-quicklog-grid">
-                        {variantes.map((g, i) => (
-                            <div
-                                key={i}
-                                className="op-quicklog-produto-card"
-                                onClick={() => handleSelecionarVariante(g)}
-                            >
-                                <img
-                                    src={g.imagem || produtoSelecionado?.imagem || '/img/placeholder-image.png'}
-                                    alt={g.variacao}
+                    <>
+                        {(variantes.length > 4 || buscaVariante) && (
+                            <div className="op-quicklog-busca">
+                                <i className="fas fa-search"></i>
+                                <input
+                                    type="text"
+                                    placeholder="Buscar variante, cor, tamanho..."
+                                    value={buscaVariante}
+                                    onChange={e => setBuscaVariante(e.target.value)}
+                                    autoFocus
                                 />
-                                <span>{g.variacao}</span>
+                                {buscaVariante && (
+                                    <button onClick={() => setBuscaVariante('')}>
+                                        <i className="fas fa-times"></i>
+                                    </button>
+                                )}
                             </div>
-                        ))}
-                    </div>
+                        )}
+                        <div className="op-quicklog-grid">
+                            {variantesFiltradas.length === 0 ? (
+                                <UIFeedbackNotFound
+                                    icon="fa-tag"
+                                    titulo="Nenhuma variante encontrada"
+                                    mensagem={`Nenhuma variante corresponde a "${buscaVariante}".`}
+                                />
+                            ) : (
+                                variantesFiltradas.map((g, i) => (
+                                    <div
+                                        key={i}
+                                        className="op-quicklog-produto-card"
+                                        onClick={() => handleSelecionarVariante(g)}
+                                    >
+                                        <img
+                                            src={g.imagem || produtoSelecionado?.imagem || '/img/placeholder-image.png'}
+                                            alt={g.variacao}
+                                        />
+                                        <span>{g.variacao}</span>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </>
                 )}
 
                 {/* STEP: Quantidade */}

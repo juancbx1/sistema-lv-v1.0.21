@@ -12,6 +12,22 @@
 
 export const changelog = [
     {
+        versao: '1.23.0',
+        data: '03/05/2026',
+        admin: [
+            'Painel de demandas completamente redesenhado',
+            '"Modo IA" implementado em algumas areas',
+            'Nova tela de carregamento padrao do sistema',
+            'Ajustes finais de design na pagina de ordens de producao',
+            'Modo avançado de cortes foi reimplementado com busca inteligente',
+        ],
+        dashboard: [
+            // Vazio — esta atualização não afeta as funcionárias
+        ],
+    },
+
+
+    {
         versao: '1.22.0',
         data: '02/05/2026',
         admin: [

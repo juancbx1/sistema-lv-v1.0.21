@@ -8,7 +8,8 @@
       "Bash(node:*)",
       "Bash(ls public/src/components/Dash*.jsx)",
       "Bash(curl -s \"https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css\")",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(grep -v \"//\")"
     ]
   }
 }

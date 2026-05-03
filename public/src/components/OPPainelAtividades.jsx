@@ -3,9 +3,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import OPStatusCard from './OPStatusCard.jsx';
+import UICarregando from './UICarregando.jsx';
 import { mostrarMensagem, mostrarConfirmacao, mostrarPromptNumerico, mostrarPromptTexto, mostrarPromptHorario } from '/js/utils/popups.js';
 import OPAtribuicaoModal from './OPAtribuicaoModal.jsx';
-import OPLancamentoExterno from './OPLancamentoExterno.jsx';
 
 export default function OPPainelAtividades() {
     const [funcionarios, setFuncionarios] = useState([]);
@@ -18,8 +18,6 @@ export default function OPPainelAtividades() {
     const [inativoInfoId, setInativoInfoId] = useState(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [infoFeriado, setInfoFeriado] = useState(null);
-    const [modalExternoAberto, setModalExternoAberto] = useState(false);
-
     // v1.8 — Alerta de intervalo (almoço/pausa automático)
     const [alertaIntervalo, setAlertaIntervalo] = useState(null);
     // { almoco: ['Maria', 'Ana'], pausa: ['Rosa'] }
@@ -510,7 +508,7 @@ export default function OPPainelAtividades() {
     }, [buscarDadosPainel]);
 
     
-    if (carregando) return <div className="spinner">Carregando painel...</div>;
+    if (carregando) return <UICarregando variante="bloco" />;
     if (erro) return <p style={{ color: 'red', textAlign: 'center' }}>Erro: {erro}</p>;
 
     // v1.8: ALMOCO e PAUSA ficam no grid principal (cards bloqueados) — não vão para inativos.
@@ -617,13 +615,6 @@ export default function OPPainelAtividades() {
                                 title="Atualizar dados do painel"
                             >
                                 <i className={`fas fa-sync-alt ${isRefreshing ? 'girando' : ''}`}></i>
-                            </button>
-                            <button
-                                className="oa-btn-externo"
-                                onClick={() => setModalExternoAberto(true)}
-                                title="Registrar produção de prestador externo"
-                            >
-                                <i className="fas fa-user-tie"></i> Externo
                             </button>
                         </div>
                         <div className="oa-kpi-strip">
@@ -941,15 +932,6 @@ export default function OPPainelAtividades() {
                 tpp={temposPadraoProducao}
             />
 
-            <OPLancamentoExterno
-                isOpen={modalExternoAberto}
-                onClose={() => setModalExternoAberto(false)}
-                onSucesso={() => {
-                    setModalExternoAberto(false);
-                    buscarDadosPainel();
-                }}
-                onDesfazerSucesso={buscarDadosPainel}
-            />
         </>
     );
 }

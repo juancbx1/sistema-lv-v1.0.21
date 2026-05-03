@@ -6,12 +6,15 @@ import OPSelecaoVarianteCorte from './OPSelecaoVarianteCorte.jsx';
 import OPRegistroCorte from './OPRegistroCorte.jsx';
 import OPCorteEstoqueCard from './OPCorteEstoqueCard.jsx';
 import OPFormulario from './OPFormulario.jsx';
+import OPCriarModal from './OPCriarModal.jsx';
 import OPPaginacaoWrapper from './OPPaginacaoWrapper.jsx';
 import OPCortesRadar from './OPCortesRadar.jsx';
 import OPCortesAgente from './OPCortesAgente.jsx';
 import OPQuickLogModal from './OPQuickLogModal.jsx';
 import { obterProdutos as obterProdutosDoStorage } from '/js/utils/storage.js';
 import { mostrarMensagem, mostrarConfirmacao } from '/js/utils/popups.js';
+import { BotaoIA } from './UIAgenteIA.jsx';
+import UICarregando from './UICarregando.jsx';
 
 async function fetchCortesEmEstoque() {
     const token = localStorage.getItem('token');
@@ -23,35 +26,8 @@ async function fetchCortesEmEstoque() {
     return cortes.filter(corte => corte.op === null);
 }
 
-// Terminal de inicialização — exibido apenas no primeiro carregamento
-function InitTerminal() {
-    const [fase, setFase] = useState(0);
-    useEffect(() => {
-        if (fase >= 2) return;
-        const t = setTimeout(() => setFase(f => f + 1), 650);
-        return () => clearTimeout(t);
-    }, [fase]);
-    const msgs = [
-        'Conectando ao setor de cortes...',
-        'Carregando estoque de cortes...',
-        'Verificando alertas...',
-    ];
-    const visiveis = msgs.slice(0, fase + 1);
-    return (
-        <div className="op-init-terminal">
-            {visiveis.map((msg, i) => (
-                <div key={i} className={`op-init-linha ${i < visiveis.length - 1 ? 'ok' : 'atual'}`}>
-                    <span className="init-prompt">›</span>
-                    <span>{msg}</span>
-                    {i === visiveis.length - 1 && <span className="agente-cursor">▌</span>}
-                </div>
-            ))}
-        </div>
-    );
-}
-
-export default function OPCortesTela({ demandaInicial, onLimparDemanda }) {
-    // ── Estado principal (mantido do original) ──
+export default function OPCortesTela() {
+    // ── Estado principal ──
     const [passo, setPasso] = useState(0);
     const [corteSelecionado, setCorteSelecionado] = useState(null);
     const [produtos, setProdutos] = useState([]);
@@ -59,12 +35,15 @@ export default function OPCortesTela({ demandaInicial, onLimparDemanda }) {
     const [produtoSelecionado, setProdutoSelecionado] = useState(null);
     const [varianteSelecionada, setVarianteSelecionada] = useState(null);
     const [quantidadePreenchida, setQuantidadePreenchida] = useState('');
-    const [demandaIdAtiva, setDemandaIdAtiva] = useState(null);
     const [carregando, setCarregando] = useState(true);
     const [erro, setErro] = useState(null);
     const [usuarioLogado, setUsuarioLogado] = useState(null);
     const [gerandoOP, setGerandoOP] = useState(null);
     const [paginaCortes, setPaginaCortes] = useState(1);
+
+    // ── OPCriarModal (Modo 2 — Estoque de Cortes) ──
+    const [opCriarModalAberto, setOpCriarModalAberto] = useState(false);
+    const [corteParaOP, setCorteParaOP] = useState(null);
 
     // ── Estado novo ──
     const [quickLogAberto, setQuickLogAberto] = useState(false);
@@ -74,7 +53,6 @@ export default function OPCortesTela({ demandaInicial, onLimparDemanda }) {
     const [agenteEstado, setAgenteEstado] = useState('idle');
     const agenteRef = useRef(null);
 
-    const isFirstLoadRef = useRef(true);
     const ITENS_POR_PAGINA_CORTES = 6;
 
     // ── Carregamento de dados ──
@@ -102,7 +80,6 @@ export default function OPCortesTela({ demandaInicial, onLimparDemanda }) {
             setErro(`Falha ao carregar dados: ${err.message}`);
         } finally {
             setCarregando(false);
-            isFirstLoadRef.current = false;
         }
     }, []);
 
@@ -157,96 +134,38 @@ export default function OPCortesTela({ demandaInicial, onLimparDemanda }) {
         setQuickLogAberto(true);
     };
 
-    // ── Automação via demanda (preservada do original) ──
-    useEffect(() => {
-        if (!demandaInicial || produtos.length === 0 || carregando) return;
-
-        const { produto_id, variante, quantidade, demanda_id } = demandaInicial;
-        setDemandaIdAtiva(demanda_id);
-
-        const produtoAlvo = produtos.find(p => p.id === produto_id);
-        if (!produtoAlvo) {
-            mostrarMensagem('Erro: Produto da demanda não encontrado.', 'erro');
-            onLimparDemanda();
-            return;
-        }
-
-        const normalizarVariante = (v) => (!v || v === '-' || v === '') ? null : v;
-        const varianteAlvo = normalizarVariante(variante);
-
-        const cortesDoProduto = cortesEmEstoque.filter(c =>
-            c.produto_id === produto_id &&
-            normalizarVariante(c.variante) === varianteAlvo
-        );
-
-        const cortePerfeito = cortesDoProduto.find(c => c.quantidade >= quantidade);
-
-        if (cortePerfeito) {
-            mostrarMensagem(`Corte ideal encontrado (PC: ${cortePerfeito.pn})!`, 'sucesso');
-            setGerandoOP(cortePerfeito.id);
-            setCorteSelecionado(cortePerfeito);
-            setPasso(4);
-        } else if (cortesDoProduto.length > 0) {
-            const melhor = [...cortesDoProduto].sort((a, b) => b.quantidade - a.quantidade)[0];
-            mostrarConfirmacao(
-                `Você precisa de ${quantidade} peças, mas o maior corte tem ${melhor.quantidade}.\n\nDeseja usar este corte parcial?`,
-                { tipo: 'aviso', textoConfirmar: `Usar Corte de ${melhor.quantidade}`, textoCancelar: 'Não, fazer novo corte' }
-            ).then((usarParcial) => {
-                if (usarParcial) {
-                    setGerandoOP(melhor.id);
-                    setCorteSelecionado(melhor);
-                    setPasso(4);
-                } else {
-                    setProdutoSelecionado(produtoAlvo);
-                    setVarianteSelecionada(variante);
-                    setQuantidadePreenchida(quantidade);
-                    setPasso(3);
-                }
-            });
-        } else {
-            mostrarMensagem('Nenhum corte em estoque. Abrindo registro de novo corte.', 'info');
-            setProdutoSelecionado(produtoAlvo);
-            setVarianteSelecionada(variante);
-            setQuantidadePreenchida(quantidade);
-            setPasso(3);
-        }
-        onLimparDemanda();
-    }, [demandaInicial, produtos, cortesEmEstoque, carregando, onLimparDemanda]);
 
     // ── Handlers do wizard ──
     const handleProdutoSelect = (produto) => { setProdutoSelecionado(produto); setPasso(2); };
     const handleVarianteSelect = (variante) => { setVarianteSelecionada(variante); setPasso(3); };
 
-    const handleCorteRegistrado = (novoCorte) => {
+    const handleCorteRegistrado = () => {
         setProdutoSelecionado(null);
         setVarianteSelecionada(null);
         setQuantidadePreenchida('');
-        if (demandaIdAtiva && novoCorte) {
-            setCorteSelecionado(novoCorte);
-            setGerandoOP(novoCorte.id);
-            setPasso(4);
-            carregarDados();
-        } else {
-            setPasso(0);
-            setGerandoOP(null);
-            setDemandaIdAtiva(null);
-            setRadarRefreshKey(k => k + 1);
-            carregarDados();
-        }
+        setPasso(0);
+        setGerandoOP(null);
+        setRadarRefreshKey(k => k + 1);
+        carregarDados();
     };
 
     const handleGerarOP = (corte) => {
         if (gerandoOP) return;
-        setGerandoOP(corte.id);
-        setCorteSelecionado(corte);
-        setPasso(4);
+        setCorteParaOP(corte);
+        setOpCriarModalAberto(true);
     };
 
     const handleOPCriada = () => {
         setCorteSelecionado(null);
         setPasso(0);
         setGerandoOP(null);
-        setDemandaIdAtiva(null);
+        carregarDados();
+    };
+
+    const handleOPCriadaModal = () => {
+        setOpCriarModalAberto(false);
+        setCorteParaOP(null);
+        setGerandoOP(null);
         carregarDados();
     };
 
@@ -255,7 +174,6 @@ export default function OPCortesTela({ demandaInicial, onLimparDemanda }) {
             setGerandoOP(null);
             setCorteSelecionado(null);
             setPasso(0);
-            setDemandaIdAtiva(null);
             return;
         }
         if (passo === 1) setProdutoSelecionado(null);
@@ -266,7 +184,6 @@ export default function OPCortesTela({ demandaInicial, onLimparDemanda }) {
             setPasso(0);
             setProdutoSelecionado(null);
             setVarianteSelecionada(null);
-            setDemandaIdAtiva(null);
         }
     };
 
@@ -295,29 +212,25 @@ export default function OPCortesTela({ demandaInicial, onLimparDemanda }) {
                                 Registrar Corte
                             </button>
                             <button
-                                className="op-cortes-btn-avancado"
-                                onClick={() => setPasso(1)}
-                                title="Fluxo completo com mais opções"
+                                className="op-cortes-btn-avancado op-cortes-btn-em-breve"
+                                disabled
+                                title="Funcionalidade em desenvolvimento"
                             >
-                                <i className="fas fa-sliders-h"></i>
-                                Modo Avançado
+                                <i className="fas fa-lock"></i>
+                                Em breve
                             </button>
                         </div>
                     )}
 
                     {/* Botão do agente — fica sempre na linha dos outros botões */}
                     {!quickLogAberto && (
-                        <button
-                            className={`op-cortes-agente-btn ${agenteEstado !== 'idle' ? 'ativo' : ''}`}
+                        <BotaoIA
+                            estado={agenteEstado}
+                            textoIdle="Plano de Corte"
+                            textoScanning="Analisando..."
+                            textoDone="Fechar Agente"
                             onClick={() => agenteRef.current?.handleClick()}
-                            disabled={agenteEstado === 'scanning'}
-                            title={agenteEstado === 'idle' ? 'Gerar plano de corte do dia' : 'Fechar agente'}
-                        >
-                            <i className={`fas fa-${agenteEstado === 'scanning' ? 'circle-notch fa-spin' : 'robot'}`}></i>
-                            {agenteEstado === 'idle' && 'Plano de Corte'}
-                            {agenteEstado === 'scanning' && 'Analisando...'}
-                            {agenteEstado === 'done' && 'Fechar Agente'}
-                        </button>
+                        />
                     )}
                 </div>
 
@@ -371,7 +284,7 @@ export default function OPCortesTela({ demandaInicial, onLimparDemanda }) {
                                             produto={produtoCompleto}
                                             onGerarOP={handleGerarOP}
                                             onExcluir={handleExcluirCorte}
-                                            isGerando={gerandoOP === corte.id}
+                                            isGerando={opCriarModalAberto && corteParaOP?.id === corte.id}
                                         />
                                     );
                                 })
@@ -413,7 +326,7 @@ export default function OPCortesTela({ demandaInicial, onLimparDemanda }) {
             )}
 
             {/* Init terminal */}
-            {carregando && isFirstLoadRef.current && <InitTerminal />}
+            {carregando && <UICarregando variante="bloco" />}
 
             {erro && <p style={{ color: 'red', textAlign: 'center' }}>{erro}</p>}
 
@@ -443,7 +356,6 @@ export default function OPCortesTela({ demandaInicial, onLimparDemanda }) {
                         usuario={usuarioLogado}
                         onCorteRegistrado={handleCorteRegistrado}
                         quantidadeInicial={quantidadePreenchida}
-                        demandaId={demandaIdAtiva}
                     />
                 </>
             )}
@@ -454,9 +366,18 @@ export default function OPCortesTela({ demandaInicial, onLimparDemanda }) {
                         corteSelecionado={corteSelecionado}
                         onOPCriada={handleOPCriada}
                         onSetGerando={setGerandoOP}
-                        demandaId={demandaIdAtiva}
                     />
                 </>
+            )}
+
+            {/* Modal rápido de criação de OP — Modo 2 (Estoque de Cortes) */}
+            {corteParaOP && (
+                <OPCriarModal
+                    isOpen={opCriarModalAberto}
+                    onClose={() => { setOpCriarModalAberto(false); setCorteParaOP(null); setGerandoOP(null); }}
+                    onOPCriada={handleOPCriadaModal}
+                    corteExistente={corteParaOP}
+                />
             )}
         </div>
     );

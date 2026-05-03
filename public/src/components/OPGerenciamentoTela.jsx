@@ -9,37 +9,7 @@ import OPPaginacaoWrapper from './OPPaginacaoWrapper.jsx';
 import OPCentralEncerramento from './OPCentralEncerramento.jsx';
 import { obterProdutos as obterProdutosDoStorage } from '/js/utils/storage.js';
 import { mostrarConfirmacao, mostrarToast } from '/js/utils/popups.js';
-
-// ── Inicialização Inteligente — exibida no primeiro carregamento ──
-function InitTerminal() {
-    const [fase, setFase] = useState(0);
-
-    useEffect(() => {
-        if (fase >= 2) return;
-        const t = setTimeout(() => setFase(f => f + 1), 650);
-        return () => clearTimeout(t);
-    }, [fase]);
-
-    const msgs = [
-        'Conectando ao sistema de produção...',
-        'Carregando ordens de produção...',
-        'Processando dados...',
-    ];
-
-    const visiveis = msgs.slice(0, fase + 1);
-
-    return (
-        <div className="op-init-terminal">
-            {visiveis.map((msg, i) => (
-                <div key={i} className={`op-init-linha ${i < visiveis.length - 1 ? 'ok' : 'atual'}`}>
-                    <span className="init-prompt">›</span>
-                    <span>{msg}</span>
-                    {i === visiveis.length - 1 && <span className="agente-cursor">▌</span>}
-                </div>
-            ))}
-        </div>
-    );
-}
+import UICarregando from './UICarregando.jsx';
 
 export default function OPGerenciamentoTela({ opsPendentesGlobal, onRefreshContadores, permissoes = [] }) {
     const [ops, setOps] = useState([]);
@@ -201,15 +171,7 @@ export default function OPGerenciamentoTela({ opsPendentesGlobal, onRefreshConta
                 resetKey={loteResetKey}
             />
 
-            {/* Inicialização Inteligente — primeiro carregamento */}
-            {mostrarInitTerminal && <InitTerminal />}
-
-            {/* Spinner simples para recarregamentos subsequentes */}
-            {mostrarSpinnerSimples && (
-                <div className="spinner" style={{ marginTop: 20 }}>
-                    Atualizando ordens de produção...
-                </div>
-            )}
+            {carregando && <UICarregando variante="bloco" />}
 
             {erro && <p style={{ color: 'red', textAlign: 'center' }}>Erro: {erro}</p>}
 

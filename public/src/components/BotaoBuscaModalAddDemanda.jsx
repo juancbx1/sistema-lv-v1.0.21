@@ -24,7 +24,7 @@ const formatarData = (iso) => {
     return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
-// --- Lista de resultados de busca ---
+// ── Lista de resultados de busca ──────────────────────────────
 const ListaResultadosBusca = ({ resultados, onSelecionar, paginacaoInfo, onPageChange, buscando, carrinhoSkus }) => {
     const paginacaoRef = useRef(null);
 
@@ -39,7 +39,6 @@ const ListaResultadosBusca = ({ resultados, onSelecionar, paginacaoInfo, onPageC
     if (buscando) {
         return <div className="gs-add-demanda-buscando"><i className="fas fa-circle-notch fa-spin"></i> Buscando...</div>;
     }
-
     if (resultados.length === 0) return null;
 
     return (
@@ -71,86 +70,112 @@ const ListaResultadosBusca = ({ resultados, onSelecionar, paginacaoInfo, onPageC
     );
 };
 
-// --- Carrinho (modo Express) ---
-const CarrinhoSection = ({ carrinho, onAtualizarQtd, onRemover, onLimpar, prioridade, onTogglePrioridade, onCriar, criando }) => (
-    <div className="gs-carrinho-section">
-        <div className="gs-carrinho-header">
-            <span><i className="fas fa-shopping-cart"></i> Carrinho ({carrinho.length} {carrinho.length === 1 ? 'item' : 'itens'})</span>
-            <button type="button" className="gs-carrinho-limpar" onClick={onLimpar}>Limpar</button>
-        </div>
+// ── Carrinho Express — prioridade por item ────────────────────
+const CarrinhoSection = ({ carrinho, onAtualizarQtd, onRemover, onLimpar, onTogglePrioridadeItem, onCriar, criando }) => {
+    const todosUrgentes = carrinho.length > 0 && carrinho.every(c => c.prioridade);
+    const algumUrgente  = carrinho.some(c => c.prioridade);
 
-        <div className="gs-carrinho-lista">
-            {carrinho.map(c => (
-                <div key={c.item.sku} className={`gs-carrinho-item-wrapper${c.temDuplicata === true ? ' tem-aviso' : ''}`}>
-                    <div className="gs-carrinho-item">
-                        <img src={c.item.imagem || '/img/placeholder-image.png'} alt={c.item.nome} className="gs-carrinho-img" />
-                        <div className="gs-carrinho-item-info">
-                            <span className="gs-carrinho-item-nome">{c.item.nome}</span>
-                            {c.item.variante && <span className="gs-carrinho-item-variante">{c.item.variante}</span>}
-                        </div>
-                        <div className="gs-qtd-input-wrapper gs-qtd-mini">
-                            <button type="button" className="gs-qtd-btn"
-                                onClick={() => onAtualizarQtd(c.item.sku, c.quantidade - 1)}>−</button>
-                            <input
-                                type="number"
-                                className="gs-input-qtd-compacto"
-                                value={c.quantidade}
-                                onChange={e => onAtualizarQtd(c.item.sku, e.target.value)}
-                                min="1"
-                            />
-                            <button type="button" className="gs-qtd-btn"
-                                onClick={() => onAtualizarQtd(c.item.sku, c.quantidade + 1)}>+</button>
-                        </div>
-                        <button type="button" className="gs-carrinho-del-btn" onClick={() => onRemover(c.item.sku)}>
-                            <i className="fas fa-trash"></i>
-                        </button>
-                    </div>
-                    {c.temDuplicata === true && (
-                        <div className="gs-carrinho-aviso-duplicata">
+    const handleToggleTodos = () => {
+        carrinho.forEach(c => onTogglePrioridadeItem(c.item.sku, !todosUrgentes));
+    };
+
+    return (
+        <div className="gs-carrinho-section">
+            <div className="gs-carrinho-header">
+                <span>
+                    <i className="fas fa-shopping-cart"></i>{' '}
+                    Carrinho ({carrinho.length} {carrinho.length === 1 ? 'item' : 'itens'})
+                    {algumUrgente && (
+                        <span className="gs-carrinho-urgente-badge" style={{ marginLeft: 6 }}>
                             <i className="fas fa-exclamation-triangle"></i>
-                            Já existe uma demanda ativa para este produto. Você pode criar assim mesmo ou remover do carrinho.
-                        </div>
+                            {carrinho.filter(c => c.prioridade).length} urgente{carrinho.filter(c => c.prioridade).length > 1 ? 's' : ''}
+                        </span>
                     )}
+                </span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                        type="button"
+                        className="gs-carrinho-limpar"
+                        onClick={handleToggleTodos}
+                        title={todosUrgentes ? 'Remover prioridade de todos' : 'Marcar todos como urgente'}
+                        style={{ color: todosUrgentes ? '#e74c3c' : undefined }}
+                    >
+                        <i className={`fas ${todosUrgentes ? 'fa-star' : 'fa-star'}`}></i>
+                        {todosUrgentes ? 'Remover urgência' : 'Todos urgentes'}
+                    </button>
+                    <button type="button" className="gs-carrinho-limpar" onClick={onLimpar}>Limpar</button>
                 </div>
-            ))}
+            </div>
+
+            <div className="gs-carrinho-lista">
+                {carrinho.map(c => (
+                    <div
+                        key={c.item.sku}
+                        className={`gs-carrinho-item-wrapper${c.temDuplicata === true ? ' tem-aviso' : ''}${c.prioridade ? ' urgente' : ''}`}
+                    >
+                        <div className="gs-carrinho-item">
+                            <img src={c.item.imagem || '/img/placeholder-image.png'} alt={c.item.nome} className="gs-carrinho-img" />
+                            <div className="gs-carrinho-item-info">
+                                <span className="gs-carrinho-item-nome">{c.item.nome}</span>
+                                {c.item.variante && <span className="gs-carrinho-item-variante">{c.item.variante}</span>}
+                                {c.prioridade && (
+                                    <span className="gs-carrinho-urgente-badge" style={{ alignSelf: 'flex-start', marginTop: 2 }}>
+                                        <i className="fas fa-exclamation-triangle"></i> URGENTE
+                                    </span>
+                                )}
+                            </div>
+                            <div className="gs-qtd-input-wrapper gs-qtd-mini">
+                                <button type="button" className="gs-qtd-btn"
+                                    onClick={() => onAtualizarQtd(c.item.sku, c.quantidade - 1)}>−</button>
+                                <input
+                                    type="number"
+                                    className="gs-input-qtd-compacto"
+                                    value={c.quantidade}
+                                    onChange={e => onAtualizarQtd(c.item.sku, e.target.value)}
+                                    min="1"
+                                />
+                                <button type="button" className="gs-qtd-btn"
+                                    onClick={() => onAtualizarQtd(c.item.sku, c.quantidade + 1)}>+</button>
+                            </div>
+                            <button
+                                type="button"
+                                className={`gs-carrinho-prioridade-btn${c.prioridade ? ' ativo' : ''}`}
+                                onClick={() => onTogglePrioridadeItem(c.item.sku, !c.prioridade)}
+                                title={c.prioridade ? 'Remover urgência' : 'Marcar como urgente'}
+                            >
+                                <i className={`fas fa-${c.prioridade ? 'exclamation-triangle' : 'star'}`}></i>
+                            </button>
+                            <button type="button" className="gs-carrinho-del-btn" onClick={() => onRemover(c.item.sku)}>
+                                <i className="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        {c.temDuplicata === true && (
+                            <div className="gs-carrinho-aviso-duplicata">
+                                <i className="fas fa-exclamation-triangle"></i>
+                                Já existe demanda ativa. Pode criar mesmo assim ou remover.
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
+
+            <button
+                type="button"
+                className="gs-btn gs-btn-primario gs-btn-full"
+                onClick={onCriar}
+                disabled={carrinho.length === 0 || criando}
+                style={{ marginTop: 12 }}
+            >
+                {criando
+                    ? <><div className="spinner-btn-interno"></div> Criando...</>
+                    : <><i className="fas fa-check"></i> Criar {carrinho.length} Demanda{carrinho.length !== 1 ? 's' : ''}</>
+                }
+            </button>
         </div>
+    );
+};
 
-        <div
-            className={`gs-prioridade-toggle${prioridade ? ' ativo' : ''}`}
-            style={{ marginTop: '12px', marginBottom: '12px' }}
-            onClick={onTogglePrioridade}
-            role="checkbox"
-            aria-checked={prioridade}
-            tabIndex={0}
-            onKeyDown={e => e.key === ' ' && onTogglePrioridade()}
-        >
-            <div className="gs-prioridade-icone">
-                <i className={`fas ${prioridade ? 'fa-exclamation-triangle' : 'fa-star'}`}></i>
-            </div>
-            <div className="gs-prioridade-texto">
-                <strong>{prioridade ? 'PRIORIDADE ATIVA' : 'Marcar como Prioridade'}</strong>
-                <span>{prioridade ? 'Todos os itens serão urgentes.' : 'Aplica a todos os itens do carrinho.'}</span>
-            </div>
-            <div className={`gs-prioridade-check${prioridade ? ' marcado' : ''}`}>
-                {prioridade && <i className="fas fa-check"></i>}
-            </div>
-        </div>
-
-        <button
-            type="button"
-            className="gs-btn gs-btn-primario gs-btn-full"
-            onClick={onCriar}
-            disabled={carrinho.length === 0 || criando}
-        >
-            {criando
-                ? <><div className="spinner-btn-interno"></div> Criando...</>
-                : <><i className="fas fa-check"></i> Criar {carrinho.length} Demanda{carrinho.length !== 1 ? 's' : ''}</>
-            }
-        </button>
-    </div>
-);
-
-// --- Tela de duplicata (modo normal) ---
+// ── Tela de duplicata (modo normal) ──────────────────────────
 const TelaDuplicata = ({ item, demandasAtivas, onCriarMesmoAssim, onVoltar, onDemandaAtualizada }) => {
     const [ajustandoId, setAjustandoId] = useState(null);
     const [novaQtd, setNovaQtd] = useState('');
@@ -205,12 +230,10 @@ const TelaDuplicata = ({ item, demandasAtivas, onCriarMesmoAssim, onVoltar, onDe
                 </button>
                 <span>Demanda já existe</span>
             </div>
-
             <div className="gs-duplicata-aviso">
                 <i className="fas fa-exclamation-triangle"></i>
                 <span>Já existe uma demanda ativa com este produto. O que você quer fazer?</span>
             </div>
-
             {demandasAtivas.map(d => (
                 <div key={d.id} className="gs-duplicata-card">
                     <div className="card-borda-charme" style={{ backgroundColor: d.prioridade === 1 ? '#e74c3c' : 'var(--cor-primaria)' }}></div>
@@ -228,7 +251,6 @@ const TelaDuplicata = ({ item, demandasAtivas, onCriarMesmoAssim, onVoltar, onDe
                         <span>·</span>
                         <span className="gs-duplicata-status">{d.status}</span>
                     </div>
-
                     {ajustandoId === d.id ? (
                         <div className="gs-duplicata-ajuste-qtd">
                             <div className="gs-qtd-input-wrapper">
@@ -265,9 +287,7 @@ const TelaDuplicata = ({ item, demandasAtivas, onCriarMesmoAssim, onVoltar, onDe
                     )}
                 </div>
             ))}
-
             <div className="gs-duplicata-separador"><span>ou</span></div>
-
             <button type="button" className="gs-btn gs-btn-primario gs-btn-full" onClick={onCriarMesmoAssim}>
                 <i className="fas fa-plus"></i> Criar nova demanda mesmo assim
             </button>
@@ -275,7 +295,7 @@ const TelaDuplicata = ({ item, demandasAtivas, onCriarMesmoAssim, onVoltar, onDe
     );
 };
 
-// --- Formulário de confirmação (modo normal) ---
+// ── Formulário de confirmação (modo normal) ───────────────────
 const FormularioConfirmacao = ({ item, onConfirmar, onVoltar, carregando }) => {
     const [quantidade, setQuantidade] = useState('');
     const [isPrioridade, setIsPrioridade] = useState(false);
@@ -294,7 +314,6 @@ const FormularioConfirmacao = ({ item, onConfirmar, onVoltar, carregando }) => {
                 </button>
                 <span>Confirmar Demanda</span>
             </div>
-
             <div className="gs-produto-confirmado">
                 <div className="card-borda-charme" style={{ backgroundColor: isPrioridade ? '#e74c3c' : 'var(--cor-primaria)' }}></div>
                 <img src={item.imagem || '/img/placeholder-image.png'} alt={item.nome} className="gs-resultado-img" />
@@ -303,7 +322,6 @@ const FormularioConfirmacao = ({ item, onConfirmar, onVoltar, carregando }) => {
                     {item.variante && <span className="gs-resultado-variante">{item.variante}</span>}
                 </div>
             </div>
-
             <div className="gs-form-quantidade-row">
                 <label>Quantidade necessária</label>
                 <div className="gs-qtd-input-wrapper">
@@ -315,7 +333,6 @@ const FormularioConfirmacao = ({ item, onConfirmar, onVoltar, carregando }) => {
                         onClick={() => setQuantidade(q => String((parseInt(q) || 0) + 1))}>+</button>
                 </div>
             </div>
-
             <div
                 className={`gs-prioridade-toggle${isPrioridade ? ' ativo' : ''}`}
                 onClick={() => setIsPrioridade(p => !p)}
@@ -333,7 +350,6 @@ const FormularioConfirmacao = ({ item, onConfirmar, onVoltar, carregando }) => {
                     {isPrioridade && <i className="fas fa-check"></i>}
                 </div>
             </div>
-
             <button type="submit" className="gs-btn gs-btn-primario gs-btn-full"
                 disabled={!quantidade || parseInt(quantidade) < 1 || carregando}>
                 {carregando
@@ -345,32 +361,55 @@ const FormularioConfirmacao = ({ item, onConfirmar, onVoltar, carregando }) => {
     );
 };
 
+// ── Campo de busca com X ──────────────────────────────────────
+const CampoBusca = ({ value, onChange, onLimpar, placeholder = 'Digite o nome, cor ou SKU do produto...' }) => (
+    <div className="gs-input-busca-wrapper">
+        <input
+            type="text"
+            className="gs-input"
+            placeholder={placeholder}
+            value={value}
+            onChange={onChange}
+            autoFocus
+        />
+        {value && (
+            <button
+                type="button"
+                className="gs-input-limpar-btn"
+                onClick={onLimpar}
+                tabIndex={-1}
+            >
+                <i className="fas fa-times"></i>
+            </button>
+        )}
+    </div>
+);
+
 // ============================================================
 // COMPONENTE PRINCIPAL
 // ============================================================
 export default function ModalAdicionarDemanda({ onClose, onDemandaCriada, itemPreSelecionado = null }) {
-    // --- Estados modo normal ---
-    const [termoBusca, setTermoBusca] = useState('');
-    const [resultados, setResultados] = useState([]);
-    const [buscando, setBuscando] = useState(false);
-    const [carregando, setCarregando] = useState(false);
+    // Estado modo normal
+    const [termoBusca, setTermoBusca]           = useState('');
+    const [resultados, setResultados]           = useState([]);
+    const [buscando, setBuscando]               = useState(false);
+    const [carregando, setCarregando]           = useState(false);
     const [itemSelecionado, setItemSelecionado] = useState(itemPreSelecionado);
-    const [paginaAtual, setPaginaAtual] = useState(1);
-    const [paginacaoInfo, setPaginacaoInfo] = useState(null);
-    const [recentes, setRecentes] = useState(() => lerRecentes());
+    const [paginaAtual, setPaginaAtual]         = useState(1);
+    const [paginacaoInfo, setPaginacaoInfo]     = useState(null);
+    const [recentes, setRecentes]               = useState(() => lerRecentes());
     const [verificandoDuplicata, setVerificandoDuplicata] = useState(false);
-    const [duplicataInfo, setDuplicataInfo] = useState(null);
-    const [itemPendente, setItemPendente] = useState(null);
+    const [duplicataInfo, setDuplicataInfo]     = useState(null);
+    const [itemPendente, setItemPendente]       = useState(null);
 
-    // --- Estados modo Express ---
-    const [modoExpress, setModoExpress] = useState(false);
-    const [carrinho, setCarrinho] = useState([]);
-    const [prioridadeCarrinho, setPrioridadeCarrinho] = useState(false);
-    const [criandoLote, setCriandoLote] = useState(false);
+    // Estado modo Express
+    const [modoExpress, setModoExpress]         = useState(false);
+    const [carrinho, setCarrinho]               = useState([]);
+    const [criandoLote, setCriandoLote]         = useState(false);
 
     const carrinhoSkus = useMemo(() => new Set(carrinho.map(c => c.item.sku)), [carrinho]);
 
-    // --- Busca de produtos ---
+    // ── Busca ──
     const buscarProdutos = async (termo, page = 1) => {
         if (termo.trim().length < 2) { setResultados([]); setPaginacaoInfo(null); return; }
         setBuscando(true);
@@ -381,9 +420,7 @@ export default function ModalAdicionarDemanda({ onClose, onDemandaCriada, itemPr
             const data = await response.json();
             setResultados(data.rows || []);
             setPaginacaoInfo(data.pagination || null);
-        } catch(e) {
-            // silently fail
-        } finally {
+        } catch(e) { /* silencioso */ } finally {
             setBuscando(false);
         }
     };
@@ -392,7 +429,9 @@ export default function ModalAdicionarDemanda({ onClose, onDemandaCriada, itemPr
         if (termoBusca.trim().length >= 2) buscarProdutos(termoBusca, paginaAtual);
     }, [paginaAtual]);
 
-    // --- Modo normal: selecionar item com verificação de duplicata ---
+    const limparBusca = () => { setTermoBusca(''); setResultados([]); setPaginacaoInfo(null); };
+
+    // ── Modo normal: selecionar item ──
     const handleSelecionarItem = async (item) => {
         salvarRecente(item);
         setRecentes(lerRecentes());
@@ -419,22 +458,19 @@ export default function ModalAdicionarDemanda({ onClose, onDemandaCriada, itemPr
         }
     };
 
-    // --- Modo Express: adicionar ao carrinho ---
+    // ── Modo Express: carrinho ──
     const handleAdicionarAoCarrinho = async (item) => {
         salvarRecente(item);
         setRecentes(lerRecentes());
 
         if (carrinhoSkus.has(item.sku)) {
-            // Já no carrinho → incrementa quantidade
             setCarrinho(prev => prev.map(c =>
                 c.item.sku === item.sku ? { ...c, quantidade: c.quantidade + 1 } : c
             ));
             return;
         }
 
-        // Adiciona com temDuplicata = null (verificando...)
-        setCarrinho(prev => [...prev, { item, quantidade: 1, temDuplicata: null }]);
-
+        setCarrinho(prev => [...prev, { item, quantidade: 1, prioridade: false, temDuplicata: null }]);
         try {
             const token = localStorage.getItem('token');
             const res = await fetch(
@@ -457,16 +493,14 @@ export default function ModalAdicionarDemanda({ onClose, onDemandaCriada, itemPr
         setCarrinho(prev => prev.map(c => c.item.sku === sku ? { ...c, quantidade: qtd } : c));
     };
 
-    const handleRemoverDoCarrinho = (sku) => {
-        setCarrinho(prev => prev.filter(c => c.item.sku !== sku));
+    const handleTogglePrioridadeItem = (sku, valor) => {
+        setCarrinho(prev => prev.map(c => c.item.sku === sku ? { ...c, prioridade: valor } : c));
     };
 
-    const handleLimparCarrinho = () => {
-        setCarrinho([]);
-        setPrioridadeCarrinho(false);
-    };
+    const handleRemoverDoCarrinho = (sku) => setCarrinho(prev => prev.filter(c => c.item.sku !== sku));
+    const handleLimparCarrinho    = () => setCarrinho([]);
 
-    // --- Criar lote (modo Express) ---
+    // ── Criar lote Express ──
     const handleCriarLote = async () => {
         if (carrinho.length === 0) return;
         setCriandoLote(true);
@@ -475,7 +509,7 @@ export default function ModalAdicionarDemanda({ onClose, onDemandaCriada, itemPr
             const itens = carrinho.map(c => ({
                 produto_sku: c.item.sku,
                 quantidade_solicitada: c.quantidade,
-                prioridade: prioridadeCarrinho ? 1 : 2
+                prioridade: c.prioridade ? 1 : 2,   // ← prioridade individual por item
             }));
             const res = await fetch('/api/demandas/lote', {
                 method: 'POST',
@@ -493,7 +527,7 @@ export default function ModalAdicionarDemanda({ onClose, onDemandaCriada, itemPr
         }
     };
 
-    // --- Criar demanda única (modo normal) ---
+    // ── Criar demanda única (modo normal) ──
     const handleCriarDemanda = async (dadosDemanda) => {
         setCarregando(true);
         try {
@@ -517,19 +551,17 @@ export default function ModalAdicionarDemanda({ onClose, onDemandaCriada, itemPr
         }
     };
 
-    // --- Toggle de modo ---
     const handleToggleModoExpress = () => {
         setModoExpress(v => !v);
         setCarrinho([]);
-        setPrioridadeCarrinho(false);
     };
 
-    // --- Render ---
-    const emFaseDetalhe = itemSelecionado || duplicataInfo;
-    const mostrarToggle = !emFaseDetalhe && !itemPreSelecionado;
+    // ── Render ──
+    const emFaseDetalhe  = itemSelecionado || duplicataInfo;
+    const mostrarToggle  = !emFaseDetalhe && !itemPreSelecionado;
+    const onItemClick    = modoExpress ? handleAdicionarAoCarrinho : handleSelecionarItem;
 
     const renderConteudo = () => {
-        // Modo normal: formulário ou tela de duplicata
         if (itemSelecionado) {
             return (
                 <FormularioConfirmacao
@@ -553,35 +585,13 @@ export default function ModalAdicionarDemanda({ onClose, onDemandaCriada, itemPr
             );
         }
 
-        // Tela de busca (normal ou express)
-        const onItemClick = modoExpress ? handleAdicionarAoCarrinho : handleSelecionarItem;
-
         return (
             <>
-                <div className="gs-input-busca-wrapper">
-                    <input
-                        type="text"
-                        className="gs-input"
-                        placeholder="Digite o nome, cor ou SKU do produto..."
-                        value={termoBusca}
-                        onChange={e => {
-                            setTermoBusca(e.target.value);
-                            setPaginaAtual(1);
-                            buscarProdutos(e.target.value, 1);
-                        }}
-                        autoFocus
-                    />
-                    {termoBusca && (
-                        <button
-                            type="button"
-                            className="gs-input-limpar-btn"
-                            onClick={() => { setTermoBusca(''); setResultados([]); setPaginacaoInfo(null); }}
-                            tabIndex={-1}
-                        >
-                            <i className="fas fa-times"></i>
-                        </button>
-                    )}
-                </div>
+                <CampoBusca
+                    value={termoBusca}
+                    onChange={e => { setTermoBusca(e.target.value); setPaginaAtual(1); buscarProdutos(e.target.value, 1); }}
+                    onLimpar={limparBusca}
+                />
 
                 {/* Carrinho (modo Express) */}
                 {modoExpress && carrinho.length > 0 && (
@@ -590,14 +600,13 @@ export default function ModalAdicionarDemanda({ onClose, onDemandaCriada, itemPr
                         onAtualizarQtd={handleAtualizarQtd}
                         onRemover={handleRemoverDoCarrinho}
                         onLimpar={handleLimparCarrinho}
-                        prioridade={prioridadeCarrinho}
-                        onTogglePrioridade={() => setPrioridadeCarrinho(p => !p)}
+                        onTogglePrioridadeItem={handleTogglePrioridadeItem}
                         onCriar={handleCriarLote}
                         criando={criandoLote}
                     />
                 )}
 
-                {/* Spinner de verificação (modo normal) */}
+                {/* Verificando duplicata */}
                 {!modoExpress && verificandoDuplicata && (
                     <div className="gs-add-demanda-buscando">
                         <i className="fas fa-circle-notch fa-spin"></i> Verificando...
@@ -641,30 +650,39 @@ export default function ModalAdicionarDemanda({ onClose, onDemandaCriada, itemPr
     };
 
     return (
-        <div className="gs-busca-modal-overlay" onClick={onClose}>
-            <div className="gs-busca-modal-conteudo" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-                <div className="gs-busca-modal-header">
-                    <h3>Nova Demanda</h3>
-                    {mostrarToggle && (
-                        <button
-                            type="button"
-                            className={`gs-toggle-express-btn${modoExpress ? ' ativo' : ''}`}
-                            onClick={handleToggleModoExpress}
-                            title="Modo Express: criar múltiplas demandas de uma vez"
-                        >
-                            <i className="fas fa-shopping-cart"></i>
-                            Express
+        <div className="gs-busca-modal-overlay centrado" onClick={onClose}>
+            <div
+                className="gs-busca-modal-conteudo"
+                onClick={e => e.stopPropagation()}
+                style={{ maxWidth: '540px', borderRadius: 14, overflow: 'hidden' }}
+            >
+                {/* Header escuro com gradiente */}
+                <div className="gs-add-demanda-header">
+                    <div className="gs-add-demanda-header-icone">
+                        <i className={`fas ${modoExpress ? 'fa-shopping-cart' : 'fa-plus'}`}></i>
+                    </div>
+                    <span className="gs-add-demanda-header-titulo">
+                        {modoExpress ? 'Nova Demanda — Modo Express' : 'Nova Demanda'}
+                    </span>
+                    <div className="gs-add-demanda-header-acoes">
+                        {mostrarToggle && (
+                            <button
+                                type="button"
+                                className={`gs-add-demanda-header-btn${modoExpress ? ' ativo' : ''}`}
+                                onClick={handleToggleModoExpress}
+                                title="Modo Express: criar múltiplas demandas de uma vez"
+                            >
+                                <i className="fas fa-shopping-cart"></i>
+                                Express
+                            </button>
+                        )}
+                        <button onClick={onClose} className="gs-add-demanda-fechar">
+                            <i className="fas fa-times"></i>
                         </button>
-                    )}
-                    <button onClick={onClose} className="gs-busca-modal-fechar" style={{ marginLeft: '15px' }}>&times;</button>
+                    </div>
                 </div>
+
                 <div className="gs-busca-modal-body">
-                    {modoExpress && !emFaseDetalhe && (
-                        <div className="gs-express-modo-banner">
-                            <i className="fas fa-shopping-cart"></i>
-                            Você está no <strong>MODO EXPRESS</strong> — selecione os produtos para o carrinho
-                        </div>
-                    )}
                     {renderConteudo()}
                 </div>
             </div>

@@ -108,11 +108,14 @@ export default function BotaoBuscaFunil({ onIniciarProducao, permissoes }) {
                             onIniciarProducao={(dados) => {
                                 setModalAberto(false);
                                 if (onIniciarProducao) {
-                                    // Já está na página de OPs — dispara o fluxo direto
                                     onIniciarProducao(dados);
                                 } else {
-                                    // Em outra página — redireciona para OPs com os dados na URL
-                                    const params = new URLSearchParams({ demanda_id: dados.demanda_id, produto_id: dados.produto_id, quantidade: dados.quantidade });
+                                    const params = new URLSearchParams({
+                                        demanda_id: dados.demanda_id,
+                                        produto_id: dados.produto_id,
+                                        quantidade:  dados.quantidade,
+                                        auto_abrir:  'true',
+                                    });
                                     if (dados.variante) params.set('variante', dados.variante);
                                     window.location.href = `/admin/ordens-de-producao.html?${params.toString()}`;
                                 }

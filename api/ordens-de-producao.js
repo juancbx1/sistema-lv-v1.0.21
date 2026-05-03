@@ -439,15 +439,16 @@ router.post('/', async (req, res) => {
         if (etapaCorteIndex !== -1) {
             const etapaConfigCorte = etapasConfig[etapaCorteIndex];
             const maquinaDoCorte = etapaConfigCorte?.maquina || 'Não Definida';
-            const cortadorInfo = await dbClient.query('SELECT id FROM usuarios WHERE nome ILIKE $1', [corte.cortador]);
+            const nomeCortador = corte.cortador || usuarioLogado.nome;
+            const cortadorInfo = await dbClient.query('SELECT id FROM usuarios WHERE nome ILIKE $1', [nomeCortador]);
             const cortadorId = cortadorInfo.rows.length > 0 ? cortadorInfo.rows[0].id : null;
-            
+
             const idProducaoTexto = `prod_${Date.now()}`;
 
             await dbClient.query(
                 `INSERT INTO producoes (id, op_numero, etapa_index, processo, produto_id, variacao, maquina, quantidade, funcionario, funcionario_id, data, lancado_por)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, 
-                [idProducaoTexto, opCriada.numero, etapaCorteIndex, 'Corte', corte.produto_id, corte.variante, maquinaDoCorte, opPayload.quantidade, corte.cortador, cortadorId, corte.data, usuarioLogado.nome]
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+                [idProducaoTexto, opCriada.numero, etapaCorteIndex, 'Corte', corte.produto_id, corte.variante, maquinaDoCorte, opPayload.quantidade, nomeCortador, cortadorId, corte.data, usuarioLogado.nome]
             );
         }
         

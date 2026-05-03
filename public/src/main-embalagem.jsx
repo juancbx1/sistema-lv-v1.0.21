@@ -28,9 +28,16 @@ function PainelEmbalagem() {
     const [filtros, setFiltros] = useState({
         termoBusca: '', ordenacao: 'mais_recentes', produtos: [], cores: [], tamanhos: [],
     });
-    
+
     // Ref para o container da paginação
     const paginacaoContainerRef = useRef(null);
+
+    // Detecta produto_id/variante na URL (vindo do painel de demandas)
+    const urlParamsProduto = useMemo(() => {
+        const p = new URLSearchParams(window.location.search);
+        const id = p.get('produto_id');
+        return id ? { produto_id: parseInt(id), variante: p.get('variante') || null } : null;
+    }, []);
 
     const carregarDados = useCallback(async () => {
         try {
@@ -89,6 +96,21 @@ function PainelEmbalagem() {
         await carregarDados();
         setAtualizando(false);
     };
+
+    // Auto-abre o produto quando produto_id vem na URL (CTA do painel de demandas)
+    useEffect(() => {
+        if (!urlParamsProduto || produtosFila.length === 0) return;
+        const { produto_id, variante } = urlParamsProduto;
+        const item = produtosFila.find(p =>
+            p.produto_id === produto_id &&
+            (!variante || p.variante === variante || (!p.variante && variante === '-'))
+        );
+        if (item) {
+            // Limpa a URL para não re-disparar ao recarregar
+            window.history.replaceState({}, '', window.location.pathname);
+            handleCardClick(item);
+        }
+    }, [produtosFila, urlParamsProduto]);
 
     useEffect(() => {
         // A função que será chamada quando o evento for disparado

@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { obterProdutos as obterProdutosDoStorage } from '/js/utils/storage.js';
+import { BotaoIA } from './UIAgenteIA.jsx';
 
 function isParcial(op) {
     if (!op.etapas || op.etapas.length === 0) return false;
@@ -179,17 +180,13 @@ export default function OPCentralEncerramento({ ops, onAbrirLote, resetKey }) {
                     </div>
                 </div>
 
-                <button
-                    className={`op-agente-btn-abrir ${agentState !== 'idle' ? 'ativo' : ''}`}
+                <BotaoIA
+                    estado={agentState}
+                    textoIdle="Finalizar OPs"
+                    textoScanning="Analisando..."
+                    textoDone="Fechar Agente"
                     onClick={agentState === 'idle' ? iniciarScan : resetar}
-                    disabled={agentState === 'scanning'}
-                    title={agentState === 'idle' ? 'Abrir Agente de Encerramento' : 'Fechar Agente'}
-                >
-                    <i className={`fas fa-${agentState === 'scanning' ? 'circle-notch fa-spin' : 'robot'}`}></i>
-                    {agentState === 'idle' && 'Agente de Encerramento'}
-                    {agentState === 'scanning' && 'Analisando...'}
-                    {agentState === 'done' && 'Fechar Agente'}
-                </button>
+                />
             </div>
 
             {/* ── TERMINAL DE SCAN ── */}

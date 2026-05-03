@@ -244,6 +244,65 @@ Tabela de controle para evitar retrabalho. Atualizar sempre que uma etapa for co
 
 ---
 
+## Componentes de Sistema — Padrões Obrigatórios
+
+### `UIAgenteIA` — Identidade Visual de IA
+
+**Arquivo:** `public/src/components/UIAgenteIA.jsx`
+
+**Regra absoluta:** qualquer funcionalidade que comunique processamento ou análise de IA ao usuário **deve usar este componente**. Não criar novos estilos de robô, terminal de IA, botão de agente ou loader de IA do zero — usar os exports deste arquivo.
+
+**Exports disponíveis:**
+
+| Export | Uso |
+|---|---|
+| `default UIAgenteIA` | Avatar standalone (círculo gradiente com robô). Tamanhos: `sm` / `md` / `lg`. |
+| `BotaoIA` | Botão que aciona/desativa um agente. Props: `estado` (`idle`/`scanning`/`done`), `textoIdle`, `textoScanning`, `textoDone`, `onClick`. |
+| `LoaderIA` | Carregamento com avatar + terminal monospace. Props: `fases` (array de `{texto}`), `faseAtual`, `mensagemFinal` (`{tipo, icone, texto}`). |
+
+**Onde já é usado:** PainelDemandas (ChatbotLoader), OPCentralEncerramento (botão "Finalizar OPs"), OPCortesTela (botão "Plano de Corte").
+
+**Identidade visual:**
+- Avatar: gradiente `var(--gs-primaria) → #8e44ad`, circular, pulsa quando idle (tamanho lg), gira quando scanning
+- Terminal: fundo `#f4f8fb`, fonte `Courier New`, prompt `›` / `✓`, cursor `▌` piscante
+- Botão: neutro (cinza) no idle → azul no scanning/done
+
+---
+
+### `UICarregando` — Spinner Universal do Sistema
+
+**Arquivo:** `public/src/components/UICarregando.jsx`
+
+**Regra absoluta:** qualquer carregamento genérico de dados (busca de API, carregamento de página, atualização de aba) **deve usar este componente**. Nunca usar `<div className="spinner">`, textos de "Carregando..." ou implementações ad-hoc.
+
+**⚠️ Diferença crítica com UIAgenteIA:** `UICarregando` é para **dados sendo buscados**. `UIAgenteIA.LoaderIA` é para **agente de IA processando ativamente** (com mensagens contextuais e identidade de robô). Não trocar um pelo outro.
+
+**Props:**
+
+| Prop | Valores | Padrão | Descrição |
+|---|---|---|---|
+| `variante` | `'bloco'` / `'pagina'` / `'inline'` | `'bloco'` | bloco = centraliza no pai; pagina = tela cheia; inline = compacto sem LV |
+| `tamanho` | `'sm'` / `'md'` / `'lg'` | auto por variante | Tamanho do spinner (omitir para usar o padrão da variante) |
+| `texto` | string | — | Texto opcional abaixo do spinner |
+
+**Exemplos de uso:**
+```jsx
+// Aba carregando (mais comum)
+{carregando && <UICarregando variante="bloco" />}
+
+// Carregamento inicial de página
+if (carregando) return <UICarregando variante="pagina" />;
+
+// Dentro de um botão
+<UICarregando variante="inline" />
+```
+
+**Para trocar o visual:** editar apenas as classes CSS `.ui-cg-*` em `global-style.css`. A lógica do componente não muda — assim toda a UI atualiza de uma vez.
+
+**Visual:** spinner de dois arcos (azul + roxo, mesmos tons do UIAgenteIA) girando sobre trilha cinza. Letras "LV" em gradiente no centro, com pulso suave. Fundo transparente (herda do container).
+
+---
+
 ## Identidade Visual — Borda-Charme
 
 A **borda-charme** é um dos elementos visuais mais marcantes e consistentes do sistema. É uma barra vertical de **6px de largura** posicionada na lateral esquerda de todos os cards de produto e popups. Ela muda de cor para indicar o status ou contexto do item.

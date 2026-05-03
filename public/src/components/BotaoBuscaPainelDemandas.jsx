@@ -2,387 +2,422 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { mostrarMensagem } from '/js/utils/popups.js';
-import UIFeedbackNotFound from './UIFeedbackNotFound.jsx';
 import BotaoBuscaModalAddDemanda from './BotaoBuscaModalAddDemanda.jsx';
-import CardPipelineProducao from './BotaoBuscaPipelineProducao.jsx';
-import OPPaginacaoWrapper from './OPPaginacaoWrapper.jsx';
+import PainelDemandaCard from './BotaoBuscaPipelineProducao.jsx';
 import BotaoBuscaModalConcluidas from './BotaoBuscaModalConcluidas.jsx';
 import { calcularStatusDemanda, STATUS_META } from '/src/utils/demandaStatus.js';
+import { LoaderIA } from './UIAgenteIA.jsx';
 
-const normalizarTexto = (texto) =>
-    texto ? texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
+const normalizarTexto = (t) =>
+    t ? t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase() : '';
 
-// Chips de filtro de status (seleção exclusiva — null = todos)
-const CHIPS_STATUS = [
-    { id: 'AGUARDANDO', ...STATUS_META.AGUARDANDO },
-    { id: 'COSTURA',    ...STATUS_META.COSTURA    },
-    { id: 'ARREMATE',   ...STATUS_META.ARREMATE   },
-    { id: 'EMBALAGEM',  ...STATUS_META.EMBALAGEM  },
+const FASES_CHATBOT = [
+    { texto: 'Conectando ao pipeline de produção...' },
+    { texto: 'Lendo demandas em andamento...'        },
+    { texto: 'Analisando estágios do fluxo...'       },
 ];
+
+const PILLS = [
+    { id: 'AGUARDANDO', label: 'Aguardando', icone: 'fa-hourglass-start', cor: '#e74c3c' },
+    { id: 'COSTURA',    label: 'Costura',    icone: 'fa-cut',             cor: '#3498db' },
+    { id: 'ARREMATE',   label: 'Arremate',   icone: 'fa-clipboard-check', cor: '#8e44ad' },
+    { id: 'EMBALAGEM',  label: 'Embalagem',  icone: 'fa-box-open',        cor: '#e67e22' },
+];
+
+
+function calcularDiagnostico(demandas) {
+    let urgentes = 0, aguardando = 0, totalAtivos = 0;
+    demandas.forEach(item => {
+        const s = calcularStatusDemanda(item);
+        if (s === 'CONCLUIDO' || s === 'DIVERGENCIA') return;
+        totalAtivos++;
+        if (s === 'AGUARDANDO') {
+            if (parseInt(item.prioridade) === 1) urgentes++;
+            else aguardando++;
+        }
+    });
+    if (totalAtivos === 0)
+        return { tipo: 'ok',      icone: 'fa-check-circle',     texto: 'Pipeline limpo — nenhuma demanda aguardando.' };
+    if (urgentes > 0)
+        return { tipo: 'urgente', icone: 'fa-exclamation-circle', texto: `${urgentes} demanda${urgentes > 1 ? 's' : ''} prioritária${urgentes > 1 ? 's' : ''} aguardando ação imediata.` };
+    if (aguardando > 0)
+        return { tipo: 'atencao', icone: 'fa-tasks',              texto: `${aguardando} demanda${aguardando > 1 ? 's' : ''} aguardando para iniciar produção.` };
+    return { tipo: 'ok',          icone: 'fa-check-double',       texto: `Tudo em andamento — ${totalAtivos} demanda${totalAtivos > 1 ? 's' : ''} no pipeline.` };
+}
+
+const ITENS_INICIAIS = 6;
 
 export default function PainelDemandas({ onIniciarProducao, permissoes = [], onClose }) {
     const [demandasAgregadas, setDemandasAgregadas] = useState([]);
-    const [carregando, setCarregando] = useState(true);
-    const [modalAddAberto, setModalAddAberto] = useState(false);
+    const [carregando, setCarregando]               = useState(true);
+    const [chatbotFase, setChatbotFase]             = useState(0);
+    const [mensagemFinal, setMensagemFinal]         = useState(null);
+    const [ultimaAtt, setUltimaAtt]                 = useState(null);
+    const [modalAddAberto, setModalAddAberto]       = useState(false);
     const [modalHistoricoAberto, setModalHistoricoAberto] = useState(false);
-    
-    const [termoBusca, setTermoBusca] = useState('');
-    const [filtroStatus, setFiltroStatus] = useState(null); // null = todos | 'AGUARDANDO' | 'COSTURA' | etc.
-    const [filtroPrioridade, setFiltroPrioridade] = useState(false);
+    const [termoBusca, setTermoBusca]               = useState('');
+    const [filtroStatus, setFiltroStatus]           = useState('AGUARDANDO');
+    const [filtroPrioridade, setFiltroPrioridade]   = useState(false);
+    const [pendentesArquivamento, setPendentesArquivamento] = useState(0);
+    const [expandidos, setExpandidos]               = useState({});
 
+    const timersRef = useRef([]);
 
-    const ITENS_POR_PAGINA = 6;
-    const [paginaAtual, setPaginaAtual] = useState(1);
+    const fetchDiagnostico = useCallback(async (silencioso = false) => {
+        if (!silencioso) {
+            setCarregando(true);
+            setChatbotFase(0);
+            setMensagemFinal(null);
 
-    const [itemParaRepetir, setItemParaRepetir] = useState(null);
+            timersRef.current.forEach(clearTimeout);
+            timersRef.current = [];
 
-    const [popoverAberto, setPopoverAberto] = useState(false);
-    const badgeRef = useRef(null);
+            const t1 = setTimeout(() => setChatbotFase(1), 500);
+            const t2 = setTimeout(() => setChatbotFase(2), 1000);
+            timersRef.current = [t1, t2];
+        }
 
-    // Fecha popover ao clicar fora
-    useEffect(() => {
-        if (!popoverAberto) return;
-        const handler = (e) => {
-            if (badgeRef.current && !badgeRef.current.contains(e.target)) {
-                setPopoverAberto(false);
-            }
-        };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, [popoverAberto]);
-    
-    const gerarKeyUnica = (item) => {
-        const varianteLimpa = item.variante || 'padrao';
-        return `${item.demanda_id}-${item.produto_id}-${varianteLimpa}`;
-    };
-
-    const fetchDiagnostico = useCallback(async () => {
-        setCarregando(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch('/api/demandas/diagnostico-completo', {
-                headers: { 'Authorization': `Bearer ${token}`, 'Cache-Control': 'no-cache' }
+            const res = await fetch('/api/demandas/diagnostico-completo', {
+                headers: { 'Authorization': `Bearer ${token}`, 'Cache-Control': 'no-cache' },
             });
-            if (!response.ok) throw new Error('Falha ao buscar diagnóstico.');
-            const data = await response.json();
-            setDemandasAgregadas(data.diagnosticoAgregado || []);
-        } catch (error) {
-            console.error("Erro painel:", error);
-            mostrarMensagem(error.message, "erro");
-        } finally {
-            setCarregando(false);
+            if (!res.ok) throw new Error('Falha ao buscar diagnóstico.');
+            const data = await res.json();
+            const lista = data.diagnosticoAgregado || [];
+
+            setDemandasAgregadas(lista);
+            setUltimaAtt(new Date());
+
+            const pendentes = lista.filter(i => {
+                const s = calcularStatusDemanda(i);
+                return s === 'CONCLUIDO' || s === 'DIVERGENCIA';
+            }).length;
+            setPendentesArquivamento(pendentes);
+
+            if (!silencioso) {
+                const diag = calcularDiagnostico(lista);
+                const t3 = setTimeout(() => {
+                    setMensagemFinal(diag);
+                    setChatbotFase(FASES_CHATBOT.length);
+                    const t4 = setTimeout(() => setCarregando(false), 700);
+                    timersRef.current.push(t4);
+                }, 2200);
+                timersRef.current.push(t3);
+            }
+        } catch (err) {
+            console.error('[PainelDemandas]', err);
+            mostrarMensagem(err.message, 'erro');
+            if (!silencioso) setCarregando(false);
         }
     }, []);
 
-    useEffect(() => { fetchDiagnostico(); }, [fetchDiagnostico]);
+    useEffect(() => {
+        fetchDiagnostico();
+        return () => timersRef.current.forEach(clearTimeout);
+    }, [fetchDiagnostico]);
 
-    // --- 1. LÓGICA DE FILTRAGEM E SEPARAÇÃO ---
-    const { pendentesFiltrados, concluidas, divergencias } = useMemo(() => {
-        const p = [], c = [], d = [];
-        const chavesVistas = new Set();
-        const listaUnica = [];
+    // texto "há X min"
+    const [tempoTexto, setTempoTexto] = useState('—');
+    useEffect(() => {
+        const atualizar = () => {
+            if (!ultimaAtt) { setTempoTexto('—'); return; }
+            const diff = Math.floor((Date.now() - ultimaAtt.getTime()) / 60000);
+            setTempoTexto(diff === 0 ? 'agora' : `há ${diff} min`);
+        };
+        atualizar();
+        const id = setInterval(atualizar, 30000);
+        return () => clearInterval(id);
+    }, [ultimaAtt]);
 
-        // Deduplicação
+    const { pendentes, concluidas } = useMemo(() => {
+        const p = [], c = [];
+        const vistas = new Set();
+        const unica = [];
         demandasAgregadas.forEach(item => {
-            const chave = gerarKeyUnica(item);
-            if (!chavesVistas.has(chave)) {
-                chavesVistas.add(chave);
-                listaUnica.push(item);
-            }
+            const chave = `${item.demanda_id}-${item.produto_id}-${item.variante || 'padrao'}`;
+            if (!vistas.has(chave)) { vistas.add(chave); unica.push(item); }
         });
-
-        // Ordenação: prioridade=1 primeiro, depois por id (mais antigo primeiro)
-        listaUnica.sort((a, b) => {
+        unica.sort((a, b) => {
             if (a.prioridade !== b.prioridade) return a.prioridade - b.prioridade;
             return a.demanda_id - b.demanda_id;
         });
-
-        const termoLimpo = normalizarTexto(termoBusca);
-
-        listaUnica.forEach(item => {
-            const statusItem = calcularStatusDemanda(item);
-
-            // Concluídos e divergências vão para listas separadas, fora da paginação principal
-            if (statusItem === 'CONCLUIDO') { c.push(item); return; }
-            if (statusItem === 'DIVERGENCIA') { d.push(item); return; }
-
-            // A partir daqui: apenas pendentes (AGUARDANDO / COSTURA / ARREMATE / EMBALAGEM)
-            let deveMostrar = true;
-
-            // Filtro de texto
-            if (termoLimpo) {
-                const nomeNorm = normalizarTexto(item.produto_nome);
-                const varNorm  = normalizarTexto(item.variante);
-                if (!nomeNorm.includes(termoLimpo) && !varNorm.includes(termoLimpo)) {
-                    deveMostrar = false;
-                }
-            }
-
-            // Filtro de status (chip de etapa)
-            if (filtroStatus && statusItem !== filtroStatus) {
-                deveMostrar = false;
-            }
-
-            // Filtro de prioridade (independente do status)
-            if (filtroPrioridade && parseInt(item.prioridade) !== 1) {
-                deveMostrar = false;
-            }
-
-            if (deveMostrar) p.push(item);
-        });
-
-        return { pendentesFiltrados: p, concluidas: c, divergencias: d };
-    }, [demandasAgregadas, termoBusca, filtroStatus, filtroPrioridade]);
-
-    // --- 2. PAGINAÇÃO SEGURA (Baseada nos Filtrados) ---
-    const totalPaginas = Math.ceil(pendentesFiltrados.length / ITENS_POR_PAGINA);
-    
-    // Reseta página ao mudar qualquer filtro
-    useEffect(() => { setPaginaAtual(1); }, [termoBusca, filtroStatus, filtroPrioridade]);
-
-    const itensPaginados = useMemo(() => {
-        const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
-        const fim = inicio + ITENS_POR_PAGINA;
-        return pendentesFiltrados.slice(Math.max(0, inicio), fim);
-    }, [pendentesFiltrados, paginaAtual]);
-
-    // Breakdown do badge — conta quantos pendentes estão em cada etapa
-    const { breakdownCounts, badgeEstado } = useMemo(() => {
-        const counts = { AGUARDANDO: 0, COSTURA: 0, ARREMATE: 0, EMBALAGEM: 0 };
-        let temUrgenteAguardando = false;
-        pendentesFiltrados.forEach(item => {
+        unica.forEach(item => {
             const s = calcularStatusDemanda(item);
-            if (counts[s] !== undefined) counts[s]++;
-            if (s === 'AGUARDANDO' && parseInt(item.prioridade) === 1) temUrgenteAguardando = true;
+            if (s === 'CONCLUIDO' || s === 'DIVERGENCIA') { c.push(item); return; }
+            p.push(item);
         });
-        const estado = counts.AGUARDANDO > 0
-            ? (temUrgenteAguardando ? 'urgente' : 'atencao')
-            : 'normal';
-        return { breakdownCounts: counts, badgeEstado: estado };
-    }, [pendentesFiltrados]);
+        return { pendentes: p, concluidas: c };
+    }, [demandasAgregadas]);
 
-    // ... (handleDeleteDemanda e handlePlanejarProducao mantidos iguais) ...
+    const contagensPorEstagio = useMemo(() => {
+        const c = { AGUARDANDO: 0, COSTURA: 0, ARREMATE: 0, EMBALAGEM: 0 };
+        pendentes.forEach(item => {
+            const s = calcularStatusDemanda(item);
+            if (c[s] !== undefined) c[s]++;
+        });
+        return c;
+    }, [pendentes]);
+
+    const diagnostico = useMemo(() => calcularDiagnostico(demandasAgregadas), [demandasAgregadas]);
+
+    const termoLimpo = normalizarTexto(termoBusca);
+    const filtrarItem = (item) => {
+        if (filtroPrioridade && parseInt(item.prioridade) !== 1) return false;
+        if (!termoLimpo) return true;
+        return normalizarTexto(item.produto_nome).includes(termoLimpo) ||
+               normalizarTexto(item.variante).includes(termoLimpo);
+    };
+
+    const secoesVisiveis = useMemo(() => {
+        return PILLS
+            .filter(p => filtroStatus === null || filtroStatus === p.id)
+            .map(p => ({
+                ...p,
+                items: pendentes.filter(item => calcularStatusDemanda(item) === p.id && filtrarItem(item)),
+            }))
+            .filter(s => s.items.length > 0);
+    }, [pendentes, filtroStatus, filtroPrioridade, termoLimpo]);
+
     const handleDeleteDemanda = async (demandaId) => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`/api/demandas/${demandaId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-            if (!response.ok) throw new Error('Falha ao deletar.');
-            mostrarMensagem('Demanda apagada.', 'sucesso');
-            fetchDiagnostico();
-        } catch (error) { mostrarMensagem(error.message, "erro"); }
-    };
-
-    const handleRepetirDemanda = (item) => {
-        const itemFormatado = {
-            sku: item.produto_sku,
-            nome: item.produto_nome,
-            variante: item.variante,
-            imagem: item.imagem
-        };
-        setItemParaRepetir(itemFormatado);
-        setModalAddAberto(true);
-    };
-
-    const handlePlanejarProducao = (item) => {
-        const dadosDemanda = {
-            produto_id: item.produto_id,
-            variante: item.variante === '-' ? null : item.variante,
-            quantidade: item.saldo_em_fila,
-            demanda_id: item.demanda_id
-        };
-
-        if (onIniciarProducao) {
-            // Já está na página de OPs — dispara o fluxo direto
-            onIniciarProducao(dadosDemanda);
-        } else {
-            // Em outra página — redireciona para OPs com os dados na URL
-            const params = new URLSearchParams({
-                demanda_id: item.demanda_id,
-                produto_id: item.produto_id,
-                quantidade: item.saldo_em_fila,
+            const res = await fetch(`/api/demandas/${demandaId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` },
             });
-            if (item.variante && item.variante !== '-') {
-                params.set('variante', item.variante);
-            }
-            window.location.href = `/admin/ordens-de-producao.html?${params.toString()}`;
-        }
+            if (!res.ok) throw new Error('Falha ao deletar.');
+            mostrarMensagem('Demanda apagada.', 'sucesso');
+            fetchDiagnostico(true);
+        } catch (err) { mostrarMensagem(err.message, 'erro'); }
     };
+
+    const totalPendentes = pendentes.length;
 
     return (
         <>
-            {/* ===== HEADER DO DRAWER — 2 LINHAS ===== */}
-            <div className="gs-drawer-header">
-                {/* Linha 1: ícone + título + botão histórico + fechar */}
-                <div className="gs-drawer-header-topo">
-                    <div className="gs-drawer-titulo">
+            {/* ── HEADER ── */}
+            <div className="pd-header">
+                <div className="pd-header-topo">
+                    <div className="pd-header-icone">
                         <i className="fas fa-tasks"></i>
-                        <span>Painel de Demandas</span>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <div className="pd-header-titulo-bloco">
+                        <div className="pd-header-titulo">Painel de Demandas</div>
+                        <div className="pd-header-subtitulo">
+                            {totalPendentes > 0
+                                ? `${totalPendentes} demanda${totalPendentes !== 1 ? 's' : ''} no pipeline`
+                                : 'Nenhuma demanda pendente'}
+                        </div>
+                    </div>
+                    <div className="pd-header-acoes">
                         <button
-                            className="gs-drawer-fechar"
+                            className="pd-btn-historico"
                             onClick={() => setModalHistoricoAberto(true)}
-                            title="Ver Concluídos"
-                            style={{ fontSize: '1rem', color: '#27ae60' }}
+                            title="Ver histórico"
                         >
                             <i className="fas fa-history"></i>
+                            {pendentesArquivamento > 0 && (
+                                <span className="pd-historico-badge">{pendentesArquivamento}</span>
+                            )}
                         </button>
-                        <button className="gs-drawer-fechar" onClick={onClose} title="Fechar">
+                        <button className="pd-btn-fechar" onClick={onClose} title="Fechar">
                             <i className="fas fa-times"></i>
                         </button>
                     </div>
                 </div>
 
-                {/* Linha 2: atualizar + contador + nova demanda */}
-                <div className="gs-drawer-header-acoes">
+                <div className="pd-header-controles">
                     <button
-                        className="gs-btn-refresh"
-                        onClick={fetchDiagnostico}
+                        className={`pd-btn-refresh${carregando ? ' carregando' : ''}`}
+                        onClick={() => fetchDiagnostico(false)}
                         disabled={carregando}
-                        title="Atualizar dados"
                     >
-                        <i className={`fas fa-sync-alt ${carregando ? 'gs-spin' : ''}`}></i>
+                        <i className="fas fa-sync-alt pd-btn-refresh-icone"></i>
+                        <span className="pd-btn-refresh-texto">
+                            <span className="pd-btn-refresh-label">Atualizar</span>
+                            <span className="pd-btn-refresh-tempo">{tempoTexto}</span>
+                        </span>
                     </button>
-
-                    <div className="gs-badge-wrapper" ref={badgeRef}>
-                        <button
-                            className={`gs-badge-contador-demandas gs-badge-estado-${badgeEstado}`}
-                            onClick={() => setPopoverAberto(p => !p)}
-                        >
-                            {pendentesFiltrados.length} pendente{pendentesFiltrados.length !== 1 ? 's' : ''}
-                            {badgeEstado !== 'normal' && (
-                                <span className="gs-badge-alerta-inline">
-                                    · {breakdownCounts.AGUARDANDO} aguardando
-                                </span>
-                            )}
-                            <i className="fas fa-chevron-down gs-badge-chevron"></i>
-                        </button>
-
-                        {popoverAberto && pendentesFiltrados.length > 0 && (
-                            <div className="gs-badge-popover">
-                                <div className="gs-badge-popover-titulo">Por etapa</div>
-                                {[
-                                    { key: 'AGUARDANDO', ...STATUS_META.AGUARDANDO },
-                                    { key: 'COSTURA',    ...STATUS_META.COSTURA    },
-                                    { key: 'ARREMATE',   ...STATUS_META.ARREMATE   },
-                                    { key: 'EMBALAGEM',  ...STATUS_META.EMBALAGEM  },
-                                ].filter(s => breakdownCounts[s.key] > 0).map(s => (
-                                    <div
-                                        key={s.key}
-                                        className="gs-badge-popover-linha"
-                                        onClick={() => { setFiltroStatus(s.key); setPopoverAberto(false); }}
-                                    >
-                                        <span className="gs-badge-popover-dot" style={{ backgroundColor: s.cor }}></span>
-                                        <span className="gs-badge-popover-label">{s.label}</span>
-                                        <span className="gs-badge-popover-qtd">{breakdownCounts[s.key]}</span>
-                                    </div>
-                                ))}
-                                <div className="gs-badge-popover-hint">Toque para filtrar</div>
-                            </div>
-                        )}
-                    </div>
-
-                    <button
-                        className="gs-btn gs-btn-primario gs-btn-nova-demanda"
-                        onClick={() => setModalAddAberto(true)}
-                    >
-                        <i className="fas fa-plus"></i> Nova
+                    <button className="pd-btn-nova" onClick={() => setModalAddAberto(true)}>
+                        <i className="fas fa-plus"></i>
+                        Nova Demanda
                     </button>
                 </div>
             </div>
 
-            {/* ===== CORPO SCROLLÁVEL DO DRAWER ===== */}
-            <div className="gs-drawer-body">
-                <div className="gs-painel-demandas-wrapper">
+            {/* ── SUMMARY BAR (pills) ── */}
+            {!carregando && (
+                <div className="pd-summary-bar">
+                    {PILLS.map(p => {
+                        const count = contagensPorEstagio[p.id] || 0;
+                        const ativo = filtroStatus === p.id;
+                        return (
+                            <button
+                                key={p.id}
+                                className={`pd-summary-pill${ativo ? ' ativo' : ''}${p.id === 'AGUARDANDO' ? ' aguardando' : ''}`}
+                                style={{ '--pd-pill-cor': p.cor }}
+                                onClick={() => setFiltroStatus(ativo ? null : p.id)}
+                            >
+                                <i className={`fas ${p.icone}`}></i>
+                                {p.label}
+                                <span className="pd-summary-pill-count">{count}</span>
+                            </button>
+                        );
+                    })}
+                    <button
+                        className={`pd-summary-pill${filtroPrioridade ? ' ativo' : ''}`}
+                        style={{ '--pd-pill-cor': '#e74c3c' }}
+                        onClick={() => setFiltroPrioridade(f => !f)}
+                    >
+                        <i className="fas fa-star"></i>
+                        Urgentes
+                    </button>
+                </div>
+            )}
 
-                    {/* Barra de filtros */}
-                    <div className="gs-filtros-bar-container">
+            {/* ── DIAGNÓSTICO ── */}
+            {!carregando && (
+                <div className={`pd-diagnostico ${diagnostico.tipo}`}>
+                    <i className={`fas ${diagnostico.icone}`}></i>
+                    <span>{diagnostico.texto}</span>
+                </div>
+            )}
+
+            {/* ── BODY ── */}
+            {carregando ? (
+                <div className="pd-loader-centrado">
+                    <LoaderIA fases={FASES_CHATBOT} faseAtual={chatbotFase} mensagemFinal={mensagemFinal} />
+                </div>
+            ) : (
+                <div className="pd-body">
+                    {/* Busca de texto */}
+                    <div className="pd-busca-wrapper">
+                        <i className="fas fa-search pd-busca-icone"></i>
                         <input
                             type="text"
-                            className="gs-input-busca-filtro"
+                            className={`pd-busca-input${termoBusca ? ' com-limpar' : ''}`}
                             placeholder="Buscar produto..."
                             value={termoBusca}
-                            onChange={(e) => setTermoBusca(e.target.value)}
+                            onChange={e => setTermoBusca(e.target.value)}
                         />
-
-                        {/* Chips de status — seleção exclusiva (clica no mesmo para desativar) */}
-                        <div className="gs-chips-filtro-wrapper">
-                            {CHIPS_STATUS.map(chip => (
-                                <button
-                                    key={chip.id}
-                                    className={`gs-chip-status${filtroStatus === chip.id ? ' ativo' : ''}`}
-                                    style={filtroStatus === chip.id ? { '--chip-cor': chip.cor } : {}}
-                                    onClick={() => setFiltroStatus(filtroStatus === chip.id ? null : chip.id)}
-                                >
-                                    <i className={`fas ${chip.icone}`}></i>
-                                    {chip.label}
-                                </button>
-                            ))}
-
-                            {/* Chip de prioridade — independente do status */}
+                        {termoBusca && (
                             <button
-                                className={`gs-chip-status gs-chip-prioridade${filtroPrioridade ? ' ativo' : ''}`}
-                                onClick={() => setFiltroPrioridade(!filtroPrioridade)}
+                                type="button"
+                                className="pd-busca-limpar"
+                                onClick={() => setTermoBusca('')}
+                                tabIndex={-1}
                             >
-                                <i className="fas fa-star"></i>
-                                Prioridade
+                                <i className="fas fa-times"></i>
                             </button>
-                        </div>
-                    </div>
-
-                    {/* Lista de demandas */}
-                    <div className="gs-painel-demandas-body">
-                        {carregando ? (
-                            <div className="spinner">Calculando prioridades...</div>
-                        ) : (
-                            <div className="gs-agregado-lista">
-                                {itensPaginados.length > 0 ? (
-                                    itensPaginados.map(item => (
-                                        <CardPipelineProducao
-                                            key={gerarKeyUnica(item)}
-                                            item={item}
-                                            onPlanejar={() => handlePlanejarProducao(item)}
-                                            onDelete={() => handleDeleteDemanda(item.demanda_id)}
-                                            permissoes={permissoes}
-                                            onRefresh={fetchDiagnostico}
-                                        />
-                                    ))
-                                ) : (
-                                    <UIFeedbackNotFound
-                                        icon="fa-search"
-                                        titulo="Nenhuma demanda encontrada"
-                                        mensagem={termoBusca || filtroStatus || filtroPrioridade ? "Tente ajustar os filtros." : "Tudo em dia!"}
-                                    />
-                                )}
-
-                                {totalPaginas > 1 && (
-                                    <OPPaginacaoWrapper
-                                        totalPages={totalPaginas}
-                                        currentPage={paginaAtual}
-                                        onPageChange={setPaginaAtual}
-                                    />
-                                )}
-
-                            </div>
                         )}
                     </div>
 
+                    {/* Seções por estágio */}
+                    {secoesVisiveis.length === 0 ? (
+                        <div className="pd-vazio">
+                            <i className="fas fa-search"></i>
+                            <div className="pd-vazio-titulo">Nenhuma demanda encontrada</div>
+                            <div className="pd-vazio-sub">
+                                {termoBusca || filtroPrioridade
+                                    ? 'Tente ajustar os filtros.'
+                                    : 'Tudo em dia!'}
+                            </div>
+                        </div>
+                    ) : (
+                        secoesVisiveis.map(secao => (
+                            <SecaoEstagio
+                                key={secao.id}
+                                secao={secao}
+                                expandido={!!expandidos[secao.id]}
+                                onExpandir={() => setExpandidos(e => ({ ...e, [secao.id]: !e[secao.id] }))}
+                                onDelete={handleDeleteDemanda}
+                                permissoes={permissoes}
+                                onRefresh={() => fetchDiagnostico(true)}
+                                onIniciarProducao={onIniciarProducao}
+                            />
+                        ))
+                    )}
                 </div>
-            </div>
+            )}
 
             {/* Modais */}
             {modalAddAberto && (
                 <BotaoBuscaModalAddDemanda
-                    onClose={() => { setModalAddAberto(false); setItemParaRepetir(null); }}
-                    onDemandaCriada={fetchDiagnostico}
-                    itemPreSelecionado={itemParaRepetir}
+                    onClose={() => setModalAddAberto(false)}
+                    onDemandaCriada={() => fetchDiagnostico(true)}
                 />
             )}
-
             <BotaoBuscaModalConcluidas
                 isOpen={modalHistoricoAberto}
                 onClose={() => setModalHistoricoAberto(false)}
             />
         </>
+    );
+}
+
+function SecaoEstagio({ secao, expandido, onExpandir, onDelete, permissoes, onRefresh, onIniciarProducao }) {
+    const visiveis = expandido ? secao.items : secao.items.slice(0, ITENS_INICIAIS);
+    const restantes = secao.items.length - ITENS_INICIAIS;
+
+    const ICONE_MAP = {
+        AGUARDANDO: 'fa-hourglass-start',
+        COSTURA:    'fa-cut',
+        ARREMATE:   'fa-clipboard-check',
+        EMBALAGEM:  'fa-box-open',
+    };
+    const SUBTITULO_MAP = {
+        AGUARDANDO: 'aguardando início de produção',
+        COSTURA:    'em costura',
+        ARREMATE:   'prontos para arremate',
+        EMBALAGEM:  'prontos para embalar',
+    };
+    const CLASSE_MAP = {
+        AGUARDANDO: 'aguardando',
+        COSTURA:    'costura',
+        ARREMATE:   'arremate',
+        EMBALAGEM:  'embalagem',
+    };
+
+    return (
+        <div className="pd-secao">
+            <div className={`pd-secao-header ${CLASSE_MAP[secao.id]}`}>
+                <i className={`fas ${ICONE_MAP[secao.id]} pd-secao-icone`}></i>
+                <span className="pd-secao-titulo">
+                    {secao.label}
+                    <span className="pd-secao-subtitulo"> — {SUBTITULO_MAP[secao.id]}</span>
+                </span>
+                <span className="pd-secao-count">{secao.items.length}</span>
+            </div>
+
+            <div className="pd-grid">
+                {visiveis.map(item => {
+                    const chave = `${item.demanda_id}-${item.produto_id}-${item.variante || 'padrao'}`;
+                    return (
+                        <PainelDemandaCard
+                            key={chave}
+                            item={item}
+                            onDelete={() => onDelete(item.demanda_id)}
+                            permissoes={permissoes}
+                            onRefresh={onRefresh}
+                            onIniciarProducao={onIniciarProducao}
+                        />
+                    );
+                })}
+            </div>
+
+            {!expandido && restantes > 0 && (
+                <button className="pd-ver-mais" onClick={onExpandir}>
+                    <i className="fas fa-chevron-down"></i>
+                    Ver mais {restantes} demanda{restantes !== 1 ? 's' : ''}
+                </button>
+            )}
+            {expandido && secao.items.length > ITENS_INICIAIS && (
+                <button className="pd-ver-mais" onClick={onExpandir}>
+                    <i className="fas fa-chevron-up"></i>
+                    Recolher
+                </button>
+            )}
+        </div>
     );
 }
