@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { mostrarMensagem } from '/js/utils/popups.js';
 import { obterProdutos } from '/js/utils/storage.js';
+import UICarregando from './UICarregando.jsx';
 
 // ── Helpers de API ──────────────────────────────────────────
 
@@ -370,12 +371,7 @@ export default function OPCriarModal({
     // ── Render dos blocos por cenário ──
     const renderCenario = () => {
         if (cenario === 'carregando') {
-            return (
-                <div className="op-criar-modal-loading">
-                    <i className="fas fa-circle-notch fa-spin"></i>
-                    Verificando estoque de cortes...
-                </div>
-            );
+            return <UICarregando variante="bloco" texto="Verificando estoque de cortes..." />;
         }
 
         if (cenario === 'modo2') {

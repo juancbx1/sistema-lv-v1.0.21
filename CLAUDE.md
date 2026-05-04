@@ -141,6 +141,21 @@ Regras práticas:
 - Preferir layouts em coluna única ou grid de 2 colunas para cards em tablet
 - Modais devem caber na tela sem scroll excessivo em tablets
 
+### ⚠️ CSS obrigatório em TODA página que usa `main.gs-card` (tablet)
+
+O `global-style.css` remove o `margin-left` do body no tablet (`@media max-width: 1024px`), mas **não adiciona o padding**. Sem o padding abaixo, o `main.gs-card` fica "colado nos cantos" no tablet (sem respiro em volta do card). **Cada página com `gs-card` precisa ter esse bloco no seu arquivo CSS:**
+
+```css
+@media (max-width: 1024px) {
+    body {
+        padding: 40px 40px 10px 40px;
+    }
+}
+```
+
+**Onde está hoje:** `ordens-de-producao.css` e `arremates.css`.  
+**Ao criar ou migrar uma página nova** para `gs-card`, adicione isso no CSS da página. Está faltando em: `calendario.css`, `central-de-pagamentos.css`, `usuarios-cadastrados.css`, `home.css`, e outras páginas ainda não migradas.
+
 ---
 
 ## Fluxo de Trabalho por Área/Página
@@ -231,7 +246,7 @@ Tabela de controle para evitar retrabalho. Atualizar sempre que uma etapa for co
 | Calendário da Empresa | `calendario.css` | ✅ | ✅ | ✅ | Página nova — estrutura padrão aplicada |
 | Central de Pagamentos | `central-de-pagamentos.css` | ✅ | ❌ | ❌ | |
 | Dashboard Funcionário | `dashboard.css` | ✅ | ❌ | ❌ | Mobile-first, estrutura diferente |
-| Arremates | `arremates.css` | ✅ | ❌ | ❌ | |
+| Arremates | `arremates.css` | ✅ | ❌ | ✅ | Redesign fases 1/2/3/4/5 concluídas (2026-05-04). Painel React (ArreMatePainelAtividades). JS legado mantido para histórico/modo foco. CSS ainda sujo — limpeza futura. Ver `_planejamento/arremates-redesign.md`. |
 | Embalagem de Produtos | `embalagem-de-produtos.css` | ❓ | ❌ | ❌ | Verificar migração React |
 | Estoque | `estoque.css` | ❓ | ❌ | ❌ | Verificar migração React |
 | Financeiro | `financeiro.css` | ❓ | ❌ | ❌ | Verificar migração React |

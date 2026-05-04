@@ -894,8 +894,7 @@ async function handleDesfazerTarefa(sessaoId) {
     if (!confirmado) return;
 
     try {
-        // Mostra o spinner global para feedback imediato
-        document.getElementById('carregamentoGlobal').classList.add('visivel');
+        document.getElementById('carregamentoGlobal')?.classList.add('visivel');
 
         await fetchFromAPI('/arremates/sessoes/estornar', {
             method: 'POST',
@@ -914,7 +913,7 @@ async function handleDesfazerTarefa(sessaoId) {
     } catch (error) {
         mostrarMensagem(`Erro ao desfazer tarefa: ${error.message}`, 'erro');
     } finally {
-        document.getElementById('carregamentoGlobal').classList.remove('visivel');
+        document.getElementById('carregamentoGlobal')?.classList.remove('visivel');
     }
 }
 
@@ -1653,8 +1652,7 @@ function criarElementoModalHistorico() {
     };
 
 function configurarEventListeners() {
-    window.addEventListener('forcarAtualizacaoPainelTiktik', renderizarPainelStatus);
-
+    // O painel de tiktiks é React — não ouvir o evento aqui.
     document.addEventListener('click', async (event) => {
         const barraProgressoClicada = event.target.closest('.barra-progresso-container');
         if (barraProgressoClicada && barraProgressoClicada.dataset.tooltipMobile) {
@@ -1827,20 +1825,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.abrirModalHistorico = mostrarHistoricoArremates;
 
         todosOsProdutosCadastrados = await obterProdutosDoStorage(true);
-        // Agora que temos os produtos, podemos carregar o resto que depende deles.
         window.todosOsUsuarios = await fetchFromAPI('/usuarios');
 
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                pararCronometrosVisuais();
-            } else {
-                // Ao voltar para a aba, força uma atualização dos dados da API para ter os números mais recentes
-                // antes de reiniciar os cronômetros visuais.
-                renderizarPainelStatus(); 
-            }
-        });
-
-        await renderizarPainelStatus();
+        // O painel de tiktiks é gerenciado pelo ArreMatePainelAtividades (React).
+        // O admin-arremates.js não precisa mais renderizarPainelStatus() aqui.
         configurarEventListeners();
 
     } catch (error) {

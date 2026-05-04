@@ -12,6 +12,20 @@
 
 export const changelog = [
     {
+        versao: '1.24.0',
+        data: '04/05/2026',
+        admin: [
+            'Redesign inicial da pagina de arremates implementado, espelho da pagina de OPS',
+            'Ajustes pequenos no painel de demandas, incluindo telas de transicao ao criar uma OP',
+            'Implementado logica de prestador externo para arremates, funciona bem',
+            
+        ],
+        dashboard: [
+            // Vazio — esta atualização não afeta as funcionárias
+        ],
+    },
+
+    {
         versao: '1.23.0',
         data: '03/05/2026',
         admin: [

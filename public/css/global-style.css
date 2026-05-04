@@ -4426,8 +4426,26 @@ font-weight: 500;
     justify-content: space-between;
     gap: 6px;
 }
-.pd-card-qtd { font-size: 0.75rem; color: var(--gs-texto-secundario); white-space: nowrap; }
-.pd-card-qtd strong { color: var(--gs-secundaria); font-size: 0.82rem; }
+.pd-card-qtd {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    white-space: nowrap;
+}
+.pd-card-qtd strong {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: var(--gs-secundaria);
+    letter-spacing: -0.02em;
+    line-height: 1;
+}
+.pd-card-qtd small {
+    font-size: 0.65rem;
+    color: var(--gs-texto-secundario);
+    font-weight: 500;
+    line-height: 1;
+}
 
 /* ── CTAs por estágio ── */
 .pd-cta {

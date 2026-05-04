@@ -1,14 +1,12 @@
-//public/src/components/ArremateModalTempos.jsx
+// public/src/components/ArremateModalTempos.jsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import UICarregando from './UICarregando.jsx';
 import { mostrarMensagem } from '/js/utils/popups.js';
-import { getImagemVariacao } from '../utils/ArremateProdutoHelpers.js';
 
-
-// Função para buscar dados da API com token
-async function fetchApiWithToken(endpoint, options = {}) {
+async function fetchApi(endpoint, options = {}) {
     const token = localStorage.getItem('token');
-    const response = await fetch(endpoint, {
+    const res = await fetch(endpoint, {
         ...options,
         headers: {
             'Authorization': `Bearer ${token}`,
@@ -16,11 +14,63 @@ async function fetchApiWithToken(endpoint, options = {}) {
             ...options.headers,
         },
     });
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro na requisição');
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Erro na requisição');
     }
-    return response.json();
+    return res.json();
+}
+
+function TPAProdutoCard({ produto, tempoAtual, onTempoChange }) {
+    const temValor = tempoAtual !== '' && tempoAtual !== undefined && parseFloat(tempoAtual) > 0;
+
+    return (
+        <div className="tpp-produto-card">
+            <div className="tpp-produto-card-borda"></div>
+
+            <div className="tpp-produto-header">
+                <img
+                    src={produto.imagem || '/img/placeholder-image.png'}
+                    alt={produto.nome}
+                    className="tpp-produto-img"
+                />
+                <div className="tpp-produto-info">
+                    <h4 className="tpp-produto-nome">{produto.nome}</h4>
+                    <div className="tpp-produto-meta">
+                        <span className={`tpp-progresso-badge${temValor ? ' completo' : ''}`}>
+                            {temValor
+                                ? <><i className="fas fa-check-circle"></i> Configurado</>
+                                : 'Sem TPA'
+                            }
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div className="tpp-etapas-lista">
+                <div className={`tpp-etapa-row${temValor ? ' tem-valor' : ''}`}>
+                    <div className="tpp-etapa-info">
+                        <span className="tpp-etapa-badge final">TPA</span>
+                        <div className="tpp-etapa-texto">
+                            <span className="tpp-etapa-processo">Tempo de Arremate</span>
+                        </div>
+                    </div>
+                    <div className="tpp-etapa-controle">
+                        <input
+                            type="number"
+                            className={`tpp-tempo-input${temValor ? ' preenchido' : ''}`}
+                            value={tempoAtual ?? ''}
+                            onChange={e => onTempoChange(produto.id, e.target.value)}
+                            placeholder="—"
+                            min="0.1"
+                            step="0.1"
+                        />
+                        <span className="tpp-tempo-unidade">seg</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 }
 
 export default function ArremateModalTempos({ isOpen, onClose }) {
@@ -31,35 +81,30 @@ export default function ArremateModalTempos({ isOpen, onClose }) {
     const [salvando, setSalvando] = useState(false);
 
     useEffect(() => {
-        if (isOpen) {
-            setCarregando(true);
-            // Usamos Promise.all para buscar produtos e tempos em paralelo
-            Promise.all([
-                fetchApiWithToken('/api/produtos'),
-                fetchApiWithToken('/api/arremates/tempos-padrao')
-            ]).then(([produtosData, temposData]) => {
-                // Filtramos para pegar apenas produtos que não são kits
-                setProdutos(produtosData.filter(p => !p.is_kit));
-                setTempos(temposData);
-            }).catch(err => {
-                mostrarMensagem(`Erro ao carregar dados: ${err.message}`, 'erro');
-            }).finally(() => {
-                setCarregando(false);
-            });
-        }
+        if (!isOpen) return;
+        setCarregando(true);
+        setBusca('');
+        Promise.all([
+            fetchApi('/api/produtos'),
+            fetchApi('/api/arremates/tempos-padrao')
+        ]).then(([produtosData, temposData]) => {
+            setProdutos(produtosData.filter(p => !p.is_kit));
+            setTempos(temposData || {});
+        }).catch(err => {
+            mostrarMensagem(`Erro ao carregar dados: ${err.message}`, 'erro');
+        }).finally(() => {
+            setCarregando(false);
+        });
     }, [isOpen]);
 
     const handleTempoChange = (produtoId, valor) => {
-        setTempos(prevTempos => ({
-            ...prevTempos,
-            [produtoId]: valor,
-        }));
+        setTempos(prev => ({ ...prev, [produtoId]: valor }));
     };
 
     const handleSalvar = async () => {
         setSalvando(true);
         try {
-            await fetchApiWithToken('/api/arremates/tempos-padrao', {
+            await fetchApi('/api/arremates/tempos-padrao', {
                 method: 'POST',
                 body: JSON.stringify({ tempos }),
             });
@@ -72,95 +117,107 @@ export default function ArremateModalTempos({ isOpen, onClose }) {
         }
     };
 
-    const produtosFiltrados = produtos.filter(p =>
-        p.nome.toLowerCase().includes(busca.toLowerCase())
+    const produtosFiltrados = useMemo(() =>
+        produtos.filter(p => p.nome.toLowerCase().includes(busca.toLowerCase())),
+        [produtos, busca]
     );
 
-    if (!isOpen) {
-        return null;
-    }
+    const qtdConfigurados = useMemo(() =>
+        produtos.filter(p => {
+            const v = tempos[p.id];
+            return v !== '' && v !== undefined && parseFloat(v) > 0;
+        }).length,
+        [produtos, tempos]
+    );
+
+    if (!isOpen) return null;
 
     return (
         <div className="popup-container" style={{ display: 'flex' }}>
             <div className="popup-overlay" onClick={onClose}></div>
-            {/* O modal agora usa a altura total disponível (vh) */}
-            <div className="oa-modal" style={{ maxWidth: '700px', height: '85vh' }}>
-                <div className="oa-modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h3 className="oa-modal-titulo" style={{ flexGrow: 1, padding: '15px' }}>
-                        Configurar TPA
-                    </h3>
-                    <button className="oa-modal-fechar-btn" onClick={onClose} style={{ flexShrink: 0, marginRight: 10}}>
-                        X
-                    </button>
+            <div className="oa-modal tpp-modal">
+
+                {/* Header */}
+                <div className="oa-modal-header">
+                    <div className="tpp-modal-titulo-grupo">
+                        <div className="tpp-modal-icone">
+                            <i className="fas fa-clock"></i>
+                        </div>
+                        <div>
+                            <h3 className="oa-modal-titulo" style={{ margin: 0 }}>
+                                Configurar TPA
+                            </h3>
+                            <p className="tpp-modal-subtitulo">
+                                Tempos Padrão de Arremate
+                                <span className={`tpp-stats-pill${qtdConfigurados === produtos.length && produtos.length > 0 ? ' completo' : ''}`}>
+                                    {qtdConfigurados}/{produtos.length}
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+                    <button className="oa-modal-fechar-btn" onClick={onClose}>×</button>
                 </div>
-                <div className="oa-modal-body" style={{ padding: '0 15px 15px 15px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                    <div className="input-wrapper-com-limpar" style={{ padding: '15px 0', flexShrink: 0 }}>
+
+                {/* Barra de busca */}
+                <div className="tpp-modal-busca">
+                    <div style={{ position: 'relative', flex: 1 }}>
                         <input
                             type="text"
                             className="oa-input"
-                            placeholder="Buscar produto por nome..."
+                            placeholder="Buscar produto..."
                             value={busca}
                             onChange={e => setBusca(e.target.value)}
+                            style={{ paddingRight: busca ? 32 : undefined }}
                         />
                         {busca && (
-                            <button 
-                                className="btn-limpar-input"
+                            <button
                                 onClick={() => setBusca('')}
-                                title="Limpar busca"
-                            >
-                                &times; 
-                            </button>
+                                style={{
+                                    position: 'absolute', right: 8, top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    border: 'none', background: 'none',
+                                    cursor: 'pointer', color: '#94a3b8', fontSize: '1rem'
+                                }}
+                            >&times;</button>
                         )}
                     </div>
-                    
+                    <span className="tpp-busca-meta">{produtosFiltrados.length} produto(s)</span>
+                </div>
+
+                {/* Corpo */}
+                <div className="tpp-modal-corpo oa-modal-body">
                     {carregando ? (
-                        <div className="spinner">Carregando produtos...</div>
+                        <UICarregando variante="bloco" />
+                    ) : produtosFiltrados.length === 0 ? (
+                        <div className="tpp-vazio">
+                            <i className="fas fa-box-open"></i>
+                            <p>Nenhum produto encontrado.</p>
+                        </div>
                     ) : (
-                        // <<< 2. O WRAPPER DA TABELA AGORA É FLEXÍVEL E TEM SCROLL >>>
-                        <div className="oa-tabela-wrapper" style={{ flexGrow: 1, overflowY: 'auto' }}>
-                            <table className="oa-tabela-historico">
-                                <thead>
-                                    <tr>
-                                        <th>Produto</th>
-                                        <th style={{ width: '200px' }}>Tempo por Peça (segundos)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {produtosFiltrados.map(produto => (
-                                        <tr key={produto.id}>
-                                            <td data-label="Produto">
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                                    <img 
-                                                        src={getImagemVariacao(produto, null)} 
-                                                        alt={produto.nome}
-                                                        style={{ width: '45px', height: '45px', borderRadius: '6px', objectFit: 'cover' }}
-                                                    />
-                                                    <span>{produto.nome}</span>
-                                                </div>
-                                            </td>
-                                            <td data-label="Tempo (s)">
-                                                <input
-                                                    type="number"
-                                                    className="oa-input"
-                                                    style={{ textAlign: 'center' }}
-                                                    value={tempos[produto.id] || ''}
-                                                    onChange={e => handleTempoChange(produto.id, e.target.value)}
-                                                    placeholder="Ex: 45.5"
-                                                    min="0.1"
-                                                    step="0.1"
-                                                />
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                        <div className="tpp-cards-grid">
+                            {produtosFiltrados.map(produto => (
+                                <TPAProdutoCard
+                                    key={produto.id}
+                                    produto={produto}
+                                    tempoAtual={tempos[produto.id] ?? ''}
+                                    onTempoChange={handleTempoChange}
+                                />
+                            ))}
                         </div>
                     )}
                 </div>
+
+                {/* Footer */}
                 <div className="oa-modal-footer footer-lote">
-                    <button className="gs-btn gs-btn-sucesso" onClick={handleSalvar} disabled={salvando}>
-                        {salvando ? <div className="spinner-btn-interno"></div> : <i className="fas fa-save"></i>}
-                        {salvando ? 'Salvando...' : 'Salvar Alterações'}
+                    <button
+                        className="gs-btn gs-btn-sucesso"
+                        onClick={handleSalvar}
+                        disabled={salvando}
+                    >
+                        {salvando
+                            ? <><div className="spinner-btn-interno"></div> Salvando...</>
+                            : <><i className="fas fa-save"></i> Salvar Alterações</>
+                        }
                     </button>
                 </div>
             </div>

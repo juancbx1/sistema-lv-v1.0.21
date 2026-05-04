@@ -1770,4 +1770,97 @@ router.post('/tempos-padrao', async (req, res) => {
     }
 });
 
+// GET /api/arremates/externos-recentes — últimos lançamentos externos (freelance tiktik) das últimas 24h
+router.get('/externos-recentes', async (req, res) => {
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const result = await dbClient.query(`
+            SELECT
+                a.id, a.op_numero, a.variante,
+                a.quantidade_arrematada, a.data_lancamento, a.lancado_por,
+                p.nome AS produto_nome,
+                u.nome AS freelance_nome, u.tipos AS freelance_tipos
+            FROM arremates a
+            JOIN usuarios u ON u.id = a.usuario_tiktik_id AND u.is_freelance = true
+            LEFT JOIN produtos p ON p.id = a.produto_id
+            WHERE a.data_lancamento >= NOW() - INTERVAL '24 hours'
+              AND a.tipo_lancamento = 'PRODUCAO'
+            ORDER BY a.data_lancamento DESC
+            LIMIT 20
+        `);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        console.error('[API GET /arremates/externos-recentes] Erro:', error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
+// POST /api/arremates/externo — lançamento de arremate realizado por prestador externo (freelance tiktik)
+router.post('/externo', async (req, res) => {
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        await dbClient.query('BEGIN');
+
+        const permissoes = await getPermissoesCompletasUsuarioDB(dbClient, req.usuarioLogado.id);
+        if (!permissoes.includes('lancar-arremate')) {
+            return res.status(403).json({ error: 'Permissão negada.' });
+        }
+
+        const { itens } = req.body;
+        if (!Array.isArray(itens) || itens.length === 0) {
+            return res.status(400).json({ error: 'Dados insuficientes.' });
+        }
+
+        const freelanceRes = await dbClient.query(
+            `SELECT id, nome FROM usuarios WHERE is_freelance = true AND 'tiktik' = ANY(tipos) LIMIT 1`
+        );
+        if (freelanceRes.rows.length === 0) {
+            throw new Error('Nenhum usuário freelance TikTik cadastrado. Verifique o cadastro de usuários.');
+        }
+        const freelance = freelanceRes.rows[0];
+
+        for (const item of itens) {
+            const { op_numero, op_edit_id, produto_id, variante, quantidade_arrematada } = item;
+            const qtd = parseInt(quantidade_arrematada);
+            if (!op_numero || !produto_id || !qtd || qtd <= 0) continue;
+
+            let valorPontoAplicado = 1.00;
+            const configRes = await dbClient.query(`
+                SELECT pontos_padrao FROM configuracoes_pontos_processos
+                WHERE produto_id = $1 AND tipo_atividade = 'arremate_tiktik' AND ativo = TRUE LIMIT 1
+            `, [produto_id]);
+            if (configRes.rows.length > 0 && configRes.rows[0].pontos_padrao !== null) {
+                valorPontoAplicado = parseFloat(configRes.rows[0].pontos_padrao);
+            }
+            const pontosGerados = qtd * valorPontoAplicado;
+
+            await dbClient.query(
+                `INSERT INTO arremates
+                    (op_numero, op_edit_id, produto_id, variante, quantidade_arrematada,
+                     usuario_tiktik, usuario_tiktik_id, lancado_por, valor_ponto_aplicado, pontos_gerados, tipo_lancamento)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'PRODUCAO')`,
+                [
+                    op_numero, op_edit_id || null, parseInt(produto_id), variante || null, qtd,
+                    freelance.nome, freelance.id, req.usuarioLogado.nome || 'Sistema',
+                    valorPontoAplicado, pontosGerados
+                ]
+            );
+        }
+
+        await dbClient.query('COMMIT');
+        res.status(201).json({ ok: true });
+
+    } catch (error) {
+        if (dbClient) await dbClient.query('ROLLBACK');
+        console.error('[API POST /arremates/externo] Erro:', error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
 export default router;

@@ -2738,15 +2738,10 @@ body.autenticado {
     /* 1. O Container do Header */
     .op-modal-header {
         position: relative; /* Necessário para o X absoluto funcionar */
-        /* Aumentamos o padding da DIREITA para o texto não ficar embaixo do X */
-        padding: 15px 50px 15px 15px; 
-        justify-content: flex-start; /* Alinha tudo à esquerda por padrão */
     }
 
     /* 2. O Botão "X" (Fechar) - Fixado no canto */
     .op-modal-fechar-btn {
-        position: absolute;
-        transform: translateY(-50%); /* Centraliza verticalmente exato */
         min-width: 32px; /* Garante que não amasse */
         width: 32px;
         height: 32px;

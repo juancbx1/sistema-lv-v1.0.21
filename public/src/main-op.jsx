@@ -228,7 +228,18 @@ function App() {
           />
       )}
 
-      <BotaoBuscaFunil permissoes={permissoes} />
+      <BotaoBuscaFunil
+          permissoes={permissoes}
+          onIniciarProducao={(dados) => {
+              setOpCriarModalDados({
+                  demandaId:         dados.demanda_id,
+                  produtoId:         dados.produto_id,
+                  variante:          dados.variante || null,
+                  quantidadeSugerida: dados.quantidade || 0,
+              });
+              setOpCriarModalAberto(true);
+          }}
+      />
       <AlertasFAB />
 
     </ErrorBoundary>

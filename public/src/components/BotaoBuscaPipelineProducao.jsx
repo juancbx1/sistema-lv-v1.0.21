@@ -181,7 +181,8 @@ export default function PainelDemandaCard({ item, onDelete, permissoes, onRefres
 
             <div className="pd-card-rodape" onClick={e => e.stopPropagation()}>
                 <span className="pd-card-qtd">
-                    <strong>{totalConsumido}</strong>/{totalPedido} pçs
+                    <strong>{totalPedido}</strong>
+                    <small>pçs{totalConsumido > 0 ? ` · ${totalConsumido} prod.` : ''}</small>
                 </span>
                 {renderCTA()}
             </div>

@@ -3,67 +3,76 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 
-// Importando TODOS os componentes de seus arquivos separados
 import UIHeaderPagina from './components/UIHeaderPagina.jsx';
+import ArreMatePainelAtividades from './components/ArreMatePainelAtividades.jsx';
+import ArremateExternoTela from './components/ArremateExternoTela.jsx';
 import AtribuicaoModal from './components/ArremateAtribuicaoModal.jsx';
-
-import PerdaModal from './components/ArrematePerdaModal.jsx';
-
+import ArremateRegistrarPerdaTela from './components/ArremateRegistrarPerdaTela.jsx';
 import ArremateModalTempos from './components/ArremateModalTempos.jsx';
 import BotaoBuscaFunil from './components/BotaoBuscaFunil.jsx';
 import AlertasFAB from './components/AlertasFAB.jsx';
 import { verificarAutenticacao } from '/js/utils/auth.js';
 
-// O componente raiz da aplicação React nesta página.
+class ErrorBoundary extends React.Component {
+    constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+    static getDerivedStateFromError(error) { return { hasError: true, error }; }
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div style={{ padding: 20, color: 'red', textAlign: 'center' }}>
+                    <h2>Algo deu errado.</h2>
+                    <details>{this.state.error?.toString()}</details>
+                    <button onClick={() => window.location.reload()}>Recarregar</button>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
+
 function App() {
-    const [modalAberto, setModalAberto] = useState(false);
+    const [tabAtiva, setTabAtiva] = useState('painel');
+    const [modalTemposAberto, setModalTemposAberto] = useState(false);
+    const [modalAtribuicaoAberto, setModalAtribuicaoAberto] = useState(false);
     const [tiktikSelecionado, setTiktikSelecionado] = useState(null);
     const [isBatchMode, setIsBatchMode] = useState(false);
-    const [perdaModalAberto, setPerdaModalAberto] = useState(false);
-    const [modalTemposAberto, setModalTemposAberto] = useState(false);
     const [permissoes, setPermissoes] = useState([]);
+    const [estaAutenticado, setEstaAutenticado] = useState(false);
 
     useEffect(() => {
         verificarAutenticacao('admin/arremates.html', ['acesso-ordens-de-arremates']).then(auth => {
-            if (auth) setPermissoes(auth.permissoes || []);
+            if (auth) {
+                setEstaAutenticado(true);
+                setPermissoes(auth.permissoes || []);
+                document.body.classList.add('autenticado');
+            }
         });
     }, []);
 
-    // Efeito para criar a "ponte" de comunicação do JS puro para o React
+    // Bridge para o admin-arremates.js (painel de tiktiks JS legado) e para ArremateStatusCard (FASE 3)
     useEffect(() => {
         window.abrirModalAtribuicao = (tiktik, batchMode) => {
             setTiktikSelecionado(tiktik);
-            setIsBatchMode(batchMode);
-            setModalAberto(true);
+            setIsBatchMode(batchMode || false);
+            setModalAtribuicaoAberto(true);
         };
         return () => { delete window.abrirModalAtribuicao; };
     }, []);
 
-     return (
-        // Usamos React.Fragment <> para agrupar múltiplos componentes
+    if (!estaAutenticado) return null;
+
+    return (
         <>
-            {/* 1. COMPONENTES VISÍVEIS NO FLUXO NORMAL DA PÁGINA */}
             <UIHeaderPagina titulo="Arremates">
-                <button 
+                <button
                     className="gs-btn gs-btn-secundario gs-btn-com-icone"
                     onClick={() => setModalTemposAberto(true)}
-                    title="Configurar Tempos Padrão"
+                    title="Configurar Tempos Padrão de Arremate"
                 >
                     <i className="fas fa-clock"></i>
-                    <span>Tempos Padrão</span>
+                    <span>TPA</span>
                 </button>
-
-                <button 
-                    id="btnAbrirModalPerda" 
-                    className="gs-btn gs-btn-perigo gs-btn-com-icone"
-                    onClick={() => setPerdaModalAberto(true)}
-                >
-                    <i className="fas fa-exclamation-triangle"></i>
-                    <span>Registrar Perda</span>
-                </button>
-
-                <button 
-                    id="btnAbrirHistorico" 
+                <button
                     className="gs-btn gs-btn-secundario gs-btn-com-icone"
                     onClick={() => window.abrirModalHistorico?.()}
                 >
@@ -72,28 +81,65 @@ function App() {
                 </button>
             </UIHeaderPagina>
 
-            {/* 2. COMPONENTES FLUTUANTES (MODAIS E FAB) */}
-            
-            {/* Modais são renderizados aqui, mas só aparecem quando seus estados 'isOpen' são verdadeiros */}
-            <AtribuicaoModal isOpen={modalAberto} tiktik={tiktikSelecionado} isBatchMode={isBatchMode} onClose={() => setModalAberto(false)} />
-            <PerdaModal isOpen={perdaModalAberto} onClose={() => setPerdaModalAberto(false)} />
-            <ArremateModalTempos isOpen={modalTemposAberto} onClose={() => setModalTemposAberto(false)} />
+            <nav className="gs-tab-nav">
+                <button
+                    className={`gs-tab-btn ${tabAtiva === 'painel' ? 'ativo' : ''}`}
+                    onClick={() => setTabAtiva('painel')}
+                >
+                    <i className="fas fa-users"></i> Painel
+                </button>
+                <button
+                    className={`gs-tab-btn ${tabAtiva === 'perda' ? 'ativo' : ''}`}
+                    onClick={() => setTabAtiva('perda')}
+                >
+                    <i className="fas fa-exclamation-triangle"></i> Registrar Perda
+                </button>
+                <button
+                    className={`gs-tab-btn ${tabAtiva === 'externo' ? 'ativo' : ''}`}
+                    onClick={() => setTabAtiva('externo')}
+                >
+                    <i className="fas fa-user-tie"></i> P. Externo
+                </button>
+            </nav>
 
-            {/* O Botão FAB é renderizado aqui e se posicionará corretamente via CSS */}
+            <div className="gs-conteudo-pagina">
+                {tabAtiva === 'painel' && (
+                    <>
+                        <ArreMatePainelAtividades permissoes={permissoes} />
+                    </>
+                )}
+
+                {tabAtiva === 'perda' && (
+                    <ArremateRegistrarPerdaTela
+                        onConcluido={() => setTabAtiva('painel')}
+                    />
+                )}
+
+                {tabAtiva === 'externo' && (
+                    <ArremateExternoTela />
+                )}
+            </div>
+
+            <ArremateModalTempos
+                isOpen={modalTemposAberto}
+                onClose={() => setModalTemposAberto(false)}
+            />
+            <AtribuicaoModal
+                isOpen={modalAtribuicaoAberto}
+                tiktik={tiktikSelecionado}
+                isBatchMode={isBatchMode}
+                onClose={() => setModalAtribuicaoAberto(false)}
+            />
             <BotaoBuscaFunil permissoes={permissoes} />
             <AlertasFAB />
         </>
     );
 }
 
-// ==========================================================================
-// PONTO DE ENTRADA ÚNICO
-// ==========================================================================
-const appRootElement = document.getElementById('app-react-root');
-if (appRootElement) {
-    ReactDOM.createRoot(appRootElement).render(
-        <React.StrictMode>
+ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+        <ErrorBoundary>
             <App />
-        </React.StrictMode>
-    );
-}
+        </ErrorBoundary>
+    </React.StrictMode>
+);
