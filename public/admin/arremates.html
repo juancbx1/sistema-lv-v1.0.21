@@ -18,48 +18,8 @@
 
     <main id="root" class="gs-card"></main>
 
-    <!-- MODAL DE HISTÓRICO GERAL DE ARREMATES (fora do main para z-index correto) -->
-    <div id="historicoArrematesModalContainer" class="popup-container" style="display: none;">
-        <div class="popup-overlay"></div>
-        <div class="oa-modal-historico">
-            <div class="oa-modal-header">
-                <h3 class="oa-modal-titulo">Histórico de Arremates</h3>
-                <button id="btnFecharHistoricoArremates" class="oa-modal-fechar-btn">X</button>
-            </div>
-            <div class="oa-modal-filtros">
-                <div class="oa-form-grupo" style="flex-grow: 2;">
-                    <label for="filtroBuscaHistorico">Buscar por Produto ou Usuário</label>
-                    <input type="text" id="filtroBuscaHistorico" class="oa-input" placeholder="Digite para buscar...">
-                </div>
-                <div class="oa-form-grupo">
-                    <label for="filtroTipoEventoHistorico">Tipo de Evento</label>
-                    <select id="filtroTipoEventoHistorico" class="oa-select">
-                        <option value="todos">Todos os Eventos</option>
-                        <option value="PRODUCAO">Lançamentos</option>
-                        <option value="PERDA">Perdas</option>
-                        <option value="ESTORNO">Estornos</option>
-                    </select>
-                </div>
-                <div class="oa-form-grupo">
-                    <label for="filtroPeriodoHistorico">Período</label>
-                    <select id="filtroPeriodoHistorico" class="oa-select">
-                        <option value="7d">Últimos 7 dias</option>
-                        <option value="hoje">Hoje</option>
-                        <option value="30d">Últimos 30 dias</option>
-                        <option value="mes_atual">Este Mês</option>
-                    </select>
-                </div>
-            </div>
-            <div class="oa-modal-body">
-                <div id="historicoArrematesTabelaWrapper" class="oa-tabela-wrapper"></div>
-            </div>
-            <div class="oa-modal-footer">
-                <div id="historicoArrematesPaginacao" class="oa-paginacao-container"></div>
-            </div>
-        </div>
-    </div>
-
     <!-- MODAL "MODO FOCO" (fora do main para z-index correto) -->
+    <!-- Histórico Geral de Arremates agora é ArremateHistoricoModal.jsx (React) -->
     <div id="modalModoFoco" class="popup-container" style="display: none;">
         <div class="popup-overlay"></div>
         <div class="oa-modal-foco">

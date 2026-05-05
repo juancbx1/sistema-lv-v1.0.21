@@ -1,7 +1,8 @@
 // public/src/components/BotaoBuscaModalAddDemanda.jsx
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { mostrarMensagem } from '/js/utils/popups.js';
 import { renderizarPaginacao } from '/js/utils/Paginacao.js';
+import UICarregando from './UICarregando.jsx';
 
 const RECENTES_KEY = 'demanda_recentes';
 
@@ -36,13 +37,18 @@ const ListaResultadosBusca = ({ resultados, onSelecionar, paginacaoInfo, onPageC
         }
     }, [paginacaoInfo, onPageChange]);
 
-    if (buscando) {
-        return <div className="gs-add-demanda-buscando"><i className="fas fa-circle-notch fa-spin"></i> Buscando...</div>;
+    if (buscando && resultados.length === 0) {
+        return <UICarregando variante="bloco" tamanho="sm" texto="Buscando..." />;
     }
-    if (resultados.length === 0) return null;
+    if (!buscando && resultados.length === 0) return null;
 
     return (
         <div className="gs-busca-lista-resultados" style={{ marginTop: '8px' }}>
+            {buscando && (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '6px 0 10px' }}>
+                    <UICarregando variante="inline" />
+                </div>
+            )}
             {resultados.map(item => {
                 const jaNoCarrinho = carrinhoSkus?.has(item.sku);
                 return (
@@ -175,6 +181,13 @@ const CarrinhoSection = ({ carrinho, onAtualizarQtd, onRemover, onLimpar, onTogg
     );
 };
 
+// Mapeamento de status do banco para labels amigáveis
+const STATUS_LABEL = {
+    pendente:       { label: 'Aguardando início', cor: '#6c757d', icone: 'fa-clock' },
+    em_atendimento: { label: 'Em atendimento',    cor: 'var(--gs-primaria)', icone: 'fa-spinner' },
+    em_producao:    { label: 'Em andamento',       cor: '#8e44ad', icone: 'fa-cogs' },
+};
+
 // ── Tela de duplicata (modo normal) ──────────────────────────
 const TelaDuplicata = ({ item, demandasAtivas, onCriarMesmoAssim, onVoltar, onDemandaAtualizada }) => {
     const [ajustandoId, setAjustandoId] = useState(null);
@@ -222,6 +235,9 @@ const TelaDuplicata = ({ item, demandasAtivas, onCriarMesmoAssim, onVoltar, onDe
         }
     };
 
+    // Verifica se alguma demanda está além de "pendente" (em andamento, em outro setor, etc.)
+    const temDemandasEmAndamento = demandasAtivas.some(d => d.status !== 'pendente');
+
     return (
         <div>
             <div className="gs-form-header-voltar">
@@ -234,59 +250,77 @@ const TelaDuplicata = ({ item, demandasAtivas, onCriarMesmoAssim, onVoltar, onDe
                 <i className="fas fa-exclamation-triangle"></i>
                 <span>Já existe uma demanda ativa com este produto. O que você quer fazer?</span>
             </div>
-            {demandasAtivas.map(d => (
-                <div key={d.id} className="gs-duplicata-card">
-                    <div className="card-borda-charme" style={{ backgroundColor: d.prioridade === 1 ? '#e74c3c' : 'var(--cor-primaria)' }}></div>
-                    <div className="gs-duplicata-card-header">
-                        <span className="gs-duplicata-id">Demanda #{d.id}</span>
-                        <span className={`gs-duplicata-prioridade${d.prioridade === 1 ? ' urgente' : ''}`}>
-                            {d.prioridade === 1 ? <><i className="fas fa-exclamation-triangle"></i> Urgente</> : 'Normal'}
-                        </span>
-                    </div>
-                    <div className="gs-duplicata-card-info">
-                        <strong>{d.quantidade_solicitada} pçs</strong>
-                        <span>·</span>
-                        <span>{formatarData(d.data_solicitacao)}</span>
-                        {d.solicitado_por && <><span>·</span><span>por {d.solicitado_por}</span></>}
-                        <span>·</span>
-                        <span className="gs-duplicata-status">{d.status}</span>
-                    </div>
-                    {ajustandoId === d.id ? (
-                        <div className="gs-duplicata-ajuste-qtd">
-                            <div className="gs-qtd-input-wrapper">
-                                <button type="button" className="gs-qtd-btn"
-                                    onClick={() => setNovaQtd(q => String(Math.max(1, (parseInt(q) || 0) - 1)))}>−</button>
-                                <input type="number" className="gs-input-qtd-compacto" value={novaQtd}
-                                    onChange={e => setNovaQtd(e.target.value)} min="1" autoFocus placeholder="0" />
-                                <button type="button" className="gs-qtd-btn"
-                                    onClick={() => setNovaQtd(q => String((parseInt(q) || 0) + 1))}>+</button>
-                            </div>
-                            <button type="button" className="gs-btn gs-btn-primario gs-btn-sm"
-                                onClick={() => handleConfirmarQtd(d)}
-                                disabled={!novaQtd || parseInt(novaQtd) < 1 || loadingId === d.id}>
-                                {loadingId === d.id ? <div className="spinner-btn-interno"></div> : <><i className="fas fa-check"></i> Confirmar</>}
-                            </button>
-                            <button type="button" className="gs-btn gs-btn-secundario gs-btn-sm" onClick={() => setAjustandoId(null)}>
-                                Cancelar
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="gs-duplicata-acoes">
-                            {d.prioridade !== 1 && (
-                                <button type="button" className="gs-btn gs-btn-urgente gs-btn-sm"
-                                    onClick={() => handleTornarPrioridade(d)} disabled={loadingId === d.id}>
-                                    {loadingId === d.id ? <div className="spinner-btn-interno"></div>
-                                        : <><i className="fas fa-exclamation-triangle"></i> Tornar Prioridade</>}
-                                </button>
-                            )}
-                            <button type="button" className="gs-btn gs-btn-secundario gs-btn-sm"
-                                onClick={() => { setAjustandoId(d.id); setNovaQtd(String(d.quantidade_solicitada)); }}>
-                                <i className="fas fa-edit"></i> Ajustar Qtd
-                            </button>
-                        </div>
-                    )}
+
+            {/* Nota informativa quando há demandas além do estágio inicial */}
+            {temDemandasEmAndamento && (
+                <div className="gs-duplicata-aviso-info">
+                    <i className="fas fa-info-circle"></i>
+                    <span>Pode haver peças deste produto circulando em outros setores (arremate, costura ou embalagem). Verifique o painel de demandas para detalhes.</span>
                 </div>
-            ))}
+            )}
+
+            {demandasAtivas.map(d => {
+                const statusMeta = STATUS_LABEL[d.status] || { label: d.status, cor: '#6c757d', icone: 'fa-circle' };
+                return (
+                    <div key={d.id} className="gs-duplicata-card">
+                        <div className="card-borda-charme" style={{ backgroundColor: d.prioridade === 1 ? '#e74c3c' : 'var(--cor-primaria)' }}></div>
+                        <div className="gs-duplicata-card-header">
+                            <span className="gs-duplicata-id">Demanda #{d.id}</span>
+                            <span className={`gs-duplicata-prioridade${d.prioridade === 1 ? ' urgente' : ''}`}>
+                                {d.prioridade === 1 ? <><i className="fas fa-exclamation-triangle"></i> Urgente</> : 'Normal'}
+                            </span>
+                        </div>
+                        <div className="gs-duplicata-card-info">
+                            <strong>{d.quantidade_solicitada} pçs</strong>
+                            <span>·</span>
+                            <span>{formatarData(d.data_solicitacao)}</span>
+                            {d.solicitado_por && <><span>·</span><span>por {d.solicitado_por}</span></>}
+                            <span>·</span>
+                            <span className="gs-duplicata-status" style={{ color: statusMeta.cor }}>
+                                <i className={`fas ${statusMeta.icone}`} style={{ marginRight: 4, fontSize: '0.75em' }}></i>
+                                {statusMeta.label}
+                            </span>
+                        </div>
+                        {ajustandoId === d.id ? (
+                            <div className="gs-duplicata-ajuste-qtd">
+                                <div className="gs-qtd-input-wrapper">
+                                    <button type="button" className="gs-qtd-btn"
+                                        onClick={() => setNovaQtd(q => String(Math.max(1, (parseInt(q) || 0) - 1)))}>−</button>
+                                    <input type="number" className="gs-input-qtd-compacto" value={novaQtd}
+                                        onChange={e => setNovaQtd(e.target.value)} min="1" autoFocus placeholder="0" />
+                                    <button type="button" className="gs-qtd-btn"
+                                        onClick={() => setNovaQtd(q => String((parseInt(q) || 0) + 1))}>+</button>
+                                </div>
+                                <button type="button" className="gs-btn gs-btn-primario gs-btn-sm"
+                                    onClick={() => handleConfirmarQtd(d)}
+                                    disabled={!novaQtd || parseInt(novaQtd) < 1 || loadingId === d.id}>
+                                    {loadingId === d.id ? <UICarregando variante="inline" /> : <><i className="fas fa-check"></i> Confirmar</>}
+                                </button>
+                                <button type="button" className="gs-btn gs-btn-secundario gs-btn-sm" onClick={() => setAjustandoId(null)}>
+                                    Cancelar
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="gs-duplicata-acoes">
+                                {d.prioridade !== 1 && (
+                                    <button type="button" className="gs-btn gs-btn-urgente gs-btn-sm"
+                                        onClick={() => handleTornarPrioridade(d)} disabled={loadingId === d.id}>
+                                        {loadingId === d.id ? <UICarregando variante="inline" />
+                                            : <><i className="fas fa-exclamation-triangle"></i> Tornar Prioridade</>}
+                                    </button>
+                                )}
+                                {/* Ajustar Qtd: só faz sentido quando a demanda ainda não saiu de "pendente" */}
+                                {d.status === 'pendente' && (
+                                    <button type="button" className="gs-btn gs-btn-secundario gs-btn-sm"
+                                        onClick={() => { setAjustandoId(d.id); setNovaQtd(String(d.quantidade_solicitada)); }}>
+                                        <i className="fas fa-edit"></i> Ajustar Qtd
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
             <div className="gs-duplicata-separador"><span>ou</span></div>
             <button type="button" className="gs-btn gs-btn-primario gs-btn-full" onClick={onCriarMesmoAssim}>
                 <i className="fas fa-plus"></i> Criar nova demanda mesmo assim
@@ -409,27 +443,66 @@ export default function ModalAdicionarDemanda({ onClose, onDemandaCriada, itemPr
 
     const carrinhoSkus = useMemo(() => new Set(carrinho.map(c => c.item.sku)), [carrinho]);
 
-    // ── Busca ──
-    const buscarProdutos = async (termo, page = 1) => {
-        if (termo.trim().length < 2) { setResultados([]); setPaginacaoInfo(null); return; }
+    // ── Refs para debounce e cancel de requests em voo ──
+    const debounceRef = useRef(null);
+    const abortRef    = useRef(null);
+
+    // ── Busca (com AbortController para evitar resultados stale) ──
+    const buscarProdutos = useCallback(async (termo, page = 1) => {
+        if (termo.trim().length < 2) {
+            setResultados([]);
+            setPaginacaoInfo(null);
+            return;
+        }
+        // Cancela request anterior se ainda estiver em voo
+        if (abortRef.current) abortRef.current.abort();
+        abortRef.current = new AbortController();
+        const signal = abortRef.current.signal;
+
         setBuscando(true);
         try {
             const token = localStorage.getItem('token');
             const url = `/api/demandas/buscar-produto?termo=${encodeURIComponent(termo)}&page=${page}&limit=5`;
-            const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${token}` },
+                signal,
+            });
+            if (signal.aborted) return;
             const data = await response.json();
             setResultados(data.rows || []);
             setPaginacaoInfo(data.pagination || null);
-        } catch(e) { /* silencioso */ } finally {
-            setBuscando(false);
+        } catch(e) {
+            if (e.name === 'AbortError') return; // request cancelado — normal
+        } finally {
+            if (!signal.aborted) setBuscando(false);
         }
-    };
+    }, []);
 
+    // ── Efeito único: dispara busca com debounce ao mudar termo ou página ──
+    // Debounce de 300ms evita requisições a cada tecla e o flickering visual.
+    // O AbortController garante que resultados de requests mais antigos não
+    // sobrescrevam resultados de requests mais novos (bug de race condition).
     useEffect(() => {
-        if (termoBusca.trim().length >= 2) buscarProdutos(termoBusca, paginaAtual);
-    }, [paginaAtual]);
+        if (termoBusca.trim().length < 2) {
+            setResultados([]);
+            setPaginacaoInfo(null);
+            return;
+        }
+        clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+            buscarProdutos(termoBusca, paginaAtual);
+        }, 300);
+        return () => clearTimeout(debounceRef.current);
+    }, [termoBusca, paginaAtual, buscarProdutos]);
 
-    const limparBusca = () => { setTermoBusca(''); setResultados([]); setPaginacaoInfo(null); };
+    const limparBusca = () => {
+        clearTimeout(debounceRef.current);
+        if (abortRef.current) abortRef.current.abort();
+        setTermoBusca('');
+        setResultados([]);
+        setPaginacaoInfo(null);
+        setBuscando(false);
+    };
 
     // ── Modo normal: selecionar item ──
     const handleSelecionarItem = async (item) => {
@@ -589,7 +662,7 @@ export default function ModalAdicionarDemanda({ onClose, onDemandaCriada, itemPr
             <>
                 <CampoBusca
                     value={termoBusca}
-                    onChange={e => { setTermoBusca(e.target.value); setPaginaAtual(1); buscarProdutos(e.target.value, 1); }}
+                    onChange={e => { setTermoBusca(e.target.value); setPaginaAtual(1); }}
                     onLimpar={limparBusca}
                 />
 
@@ -608,9 +681,7 @@ export default function ModalAdicionarDemanda({ onClose, onDemandaCriada, itemPr
 
                 {/* Verificando duplicata */}
                 {!modoExpress && verificandoDuplicata && (
-                    <div className="gs-add-demanda-buscando">
-                        <i className="fas fa-circle-notch fa-spin"></i> Verificando...
-                    </div>
+                    <UICarregando variante="bloco" tamanho="sm" texto="Verificando..." />
                 )}
 
                 {/* Recentes */}

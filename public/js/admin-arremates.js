@@ -1821,8 +1821,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             modalModoFocoElemento = modalFoco;
             modalFoco.parentNode.removeChild(modalFoco);
         }
-        // Expõe a função para que o componente React HeaderPagina possa chamá-la
-        window.abrirModalHistorico = mostrarHistoricoArremates;
+        // window.abrirModalHistorico removido — histórico agora é ArremateHistoricoModal.jsx (React, Item 7)
 
         todosOsProdutosCadastrados = await obterProdutosDoStorage(true);
         window.todosOsUsuarios = await fetchFromAPI('/usuarios');

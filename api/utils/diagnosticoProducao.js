@@ -4,14 +4,28 @@ export async function gerarDiagnosticoCompleto(dbClient) {
     // 1. BULK DATA
     const [
         demandasResult,
-        opsResult,       
-        arrematesResult, 
-        produtosResult
+        opsResult,
+        arrematesResult,
+        produtosResult,
+        cortesResult
     ] = await Promise.all([
         dbClient.query(`SELECT * FROM demandas_producao WHERE status NOT IN ('cancelada') AND arquivada_em IS NULL ORDER BY prioridade ASC, data_solicitacao ASC`),
         dbClient.query(`SELECT id, numero, demanda_id, produto_id, variante, quantidade, status, etapas FROM ordens_de_producao WHERE demanda_id IS NOT NULL`),
         dbClient.query(`SELECT op_numero, quantidade_arrematada, quantidade_ja_embalada FROM arremates JOIN ordens_de_producao op ON arremates.op_numero = op.numero WHERE op.demanda_id IS NOT NULL AND arremates.tipo_lancamento = 'PRODUCAO'`),
-        dbClient.query("SELECT id, nome, sku, is_kit, grade, imagem FROM produtos")
+        dbClient.query("SELECT id, nome, sku, is_kit, grade, imagem FROM produtos"),
+        // Agrega cortes DISPONÍVEIS por produto+variante para exibir no painel
+        // op IS NULL = corte ainda não consumido por nenhuma OP
+        // Não filtra por demanda_id pois cortes históricos podem ter sido criados sem vínculo de demanda
+        dbClient.query(`
+            SELECT
+                produto_id,
+                COALESCE(variante, '-') AS variante,
+                COALESCE(SUM(quantidade) FILTER (WHERE status = 'cortados'), 0)::int  AS cortado,
+                COALESCE(SUM(quantidade) FILTER (WHERE status = 'pendente'), 0)::int  AS pendente
+            FROM cortes
+            WHERE status != 'excluido' AND op IS NULL
+            GROUP BY produto_id, variante
+        `)
     ]);
 
     // 2. MAPAS DE PRODUTOS
@@ -29,7 +43,18 @@ export async function gerarDiagnosticoCompleto(dbClient) {
         }
     });
 
-    // 3. HELPERS DE CÁLCULO
+    // 3. MAPA DE CORTES — chave: "produto_id|variante"
+    // Não usa demanda_id pois cortes históricos podem não ter esse vínculo
+    const cortesMap = new Map();
+    cortesResult.rows.forEach(c => {
+        const chave = `${c.produto_id}|${c.variante}`;
+        cortesMap.set(chave, {
+            cortado: c.cortado || 0,
+            pendente: c.pendente || 0,
+        });
+    });
+
+    // 4. HELPERS DE CÁLCULO
     const obterQuantidadeFinalProduzida = (op) => {
         if (!op || !Array.isArray(op.etapas) || op.etapas.length === 0) return parseInt(op?.quantidade, 10) || 0;
         for (let i = op.etapas.length - 1; i >= 0; i--) { 
@@ -42,8 +67,8 @@ export async function gerarDiagnosticoCompleto(dbClient) {
         return parseInt(op.quantidade, 10) || 0;
     };
 
-    const arrematadoPorOp = new Map(); 
-    const embaladoPorOp = new Map();   
+    const arrematadoPorOp = new Map();
+    const embaladoPorOp = new Map();
     arrematesResult.rows.forEach(ar => {
         const opNum = String(ar.op_numero);
         arrematadoPorOp.set(opNum, (arrematadoPorOp.get(opNum) || 0) + ar.quantidade_arrematada);
@@ -102,6 +127,10 @@ export async function gerarDiagnosticoCompleto(dbClient) {
 
         const gradeInfo = produtoInfo.grade?.find(g => g.variacao === (variante === '-' ? null : variante));
 
+        // Dados de corte para este produto/variante (independe de demanda_id)
+        const chaveCorte = `${produtoId}|${variante || '-'}`;
+        const corteInfo  = cortesMap.get(chaveCorte) || { cortado: 0, pendente: 0 };
+
         // LÓGICA DE NORMALIZAÇÃO DE PRIORIDADE:
         // O banco pode ter 1, 2, 99 ou null.
         // Queremos entregar pro frontend apenas:
@@ -139,7 +168,13 @@ export async function gerarDiagnosticoCompleto(dbClient) {
             saldo_perda: prog.perda,
 
             credito_total: totalProcessado + saldoFila,
-            demandas_dependentes_ids: [demandaOriginal.id]
+            demandas_dependentes_ids: [demandaOriginal.id],
+
+            // Dados de corte — usados no badge do card e no sub-filtro da aba Aguardando
+            // corte_cortado : pçs que já foram cortadas e estão prontas
+            // corte_pendente: pçs com corte registrado mas ainda não executado
+            corte_cortado:  corteInfo.cortado,
+            corte_pendente: corteInfo.pendente
         });
     };
 

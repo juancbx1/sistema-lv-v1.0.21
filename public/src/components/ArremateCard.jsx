@@ -3,18 +3,17 @@
 import React from 'react';
 import { getImagemVariacao } from '../utils/ArremateProdutoHelpers.js';
 
-function formatarTempoDecorrido(data) {
-    if (!data) return 'Calculando...';
-    const segundos = Math.floor((new Date() - new Date(data)) / 1000);
-    if (segundos >= 86400) return `há ${Math.floor(segundos / 86400)} dias`;
-    if (segundos >= 3600)  return `há ${Math.floor(segundos / 3600)}h`;
-    if (segundos >= 60)    return `há ${Math.floor(segundos / 60)}min`;
-    return 'agora mesmo';
+function formatarData(iso) {
+    if (!iso) return '—';
+    return new Intl.DateTimeFormat('pt-BR', {
+        day: '2-digit', month: '2-digit',
+        hour: '2-digit', minute: '2-digit',
+        timeZone: 'America/Sao_Paulo',
+    }).format(new Date(iso));
 }
 
 export function ArremateCard({ item, onClick, isSelected }) {
     const imagemSrc = getImagemVariacao(item, item.variante);
-    const tempoEmFila = formatarTempoDecorrido(item.data_op_mais_antiga);
 
     const emTrabalho = !!item.tarefa_ativa_por;
     const aindaTemSaldo = item.saldo_para_arrematar > 0;
@@ -22,42 +21,24 @@ export function ArremateCard({ item, onClick, isSelected }) {
 
     const cardClassName = [
         'oa-card-arremate-react',
-        emTrabalho  ? 'em-trabalho'  : '',
+        emTrabalho   ? 'em-trabalho'  : '',
         desabilitado ? 'desabilitado' : '',
-        isSelected   ? 'selecionado'  : ''
+        isSelected   ? 'selecionado'  : '',
     ].filter(Boolean).join(' ');
 
     const handleClick = () => { if (!desabilitado) onClick(item); };
     const handleTooltipClick = (e) => e.stopPropagation();
 
-    const dataFormatada = item.data_op_mais_antiga
-        ? new Intl.DateTimeFormat('pt-BR', {
-              day: '2-digit', month: '2-digit',
-              hour: '2-digit', minute: '2-digit',
-              timeZone: 'America/Sao_Paulo'
-          }).format(new Date(item.data_op_mais_antiga))
-        : '—';
-
     return (
         <div className={cardClassName} onClick={handleClick}>
 
-            {/* Borda-charme — identidade visual da empresa */}
+            {/* Borda-charme */}
             <div className="card-borda-charme"></div>
 
-            {/* Badge de saldo — absoluto, nunca comprime o layout */}
-            {!isSelected && (
-                <div className="arremate-saldo-badge">
-                    <span className="saldo-valor">{item.saldo_para_arrematar}</span>
-                    <span className="saldo-label">disponível</span>
-                </div>
-            )}
-
-            {/* Check de seleção — aparece no lugar do badge */}
-            {isSelected && (
-                <div className="arremate-check-icone">
-                    <i className="fas fa-check"></i>
-                </div>
-            )}
+            {/* Bolinha de seleção — canto superior direito (padrão OP) */}
+            <div className="op-card-checkbox-wrapper">
+                <div className={`op-card-checkbox${isSelected ? ' marcado' : ''}`}></div>
+            </div>
 
             {/* Corpo principal: imagem + informações */}
             <div className="arremate-card-corpo">
@@ -72,9 +53,9 @@ export function ArremateCard({ item, onClick, isSelected }) {
                         {item.variante && item.variante !== '-' ? item.variante : 'Padrão'}
                     </p>
                     <div className="arremate-card-meta">
-                        <span title={`Na fila ${tempoEmFila}`}>
+                        <span title={`Entrada: ${formatarData(item.data_op_mais_antiga)}`}>
                             <i className="fas fa-calendar-alt"></i>
-                            {dataFormatada}
+                            {formatarData(item.data_op_mais_antiga)}
                         </span>
                         <span
                             data-tooltip-id="global-tooltip"
@@ -88,13 +69,20 @@ export function ArremateCard({ item, onClick, isSelected }) {
                 </div>
             </div>
 
-            {/* Banner "Em andamento" — na base, discreto */}
-            {emTrabalho && (
-                <div className="arremate-em-trabalho-banner">
-                    <i className="fas fa-cog fa-spin"></i>
-                    Em andamento com {item.tarefa_ativa_por}
-                </div>
-            )}
+            {/* Rodapé: saldo + banner em andamento */}
+            <div className="arremate-card-rodape">
+                <span className="arremate-saldo-badge">
+                    <span className="saldo-valor">{item.saldo_para_arrematar}</span>
+                    <span className="saldo-label">disponível</span>
+                </span>
+
+                {emTrabalho && (
+                    <span className="arremate-em-trabalho-inline">
+                        <i className="fas fa-cog fa-spin"></i>
+                        {item.tarefa_ativa_por}
+                    </span>
+                )}
+            </div>
         </div>
     );
 }

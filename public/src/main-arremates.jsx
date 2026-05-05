@@ -9,6 +9,7 @@ import ArremateExternoTela from './components/ArremateExternoTela.jsx';
 import AtribuicaoModal from './components/ArremateAtribuicaoModal.jsx';
 import ArremateRegistrarPerdaTela from './components/ArremateRegistrarPerdaTela.jsx';
 import ArremateModalTempos from './components/ArremateModalTempos.jsx';
+import ArremateHistoricoModal from './components/ArremateHistoricoModal.jsx';
 import BotaoBuscaFunil from './components/BotaoBuscaFunil.jsx';
 import AlertasFAB from './components/AlertasFAB.jsx';
 import { verificarAutenticacao } from '/js/utils/auth.js';
@@ -34,8 +35,8 @@ function App() {
     const [tabAtiva, setTabAtiva] = useState('painel');
     const [modalTemposAberto, setModalTemposAberto] = useState(false);
     const [modalAtribuicaoAberto, setModalAtribuicaoAberto] = useState(false);
+    const [modalHistoricoAberto, setModalHistoricoAberto] = useState(false);
     const [tiktikSelecionado, setTiktikSelecionado] = useState(null);
-    const [isBatchMode, setIsBatchMode] = useState(false);
     const [permissoes, setPermissoes] = useState([]);
     const [estaAutenticado, setEstaAutenticado] = useState(false);
 
@@ -49,11 +50,10 @@ function App() {
         });
     }, []);
 
-    // Bridge para o admin-arremates.js (painel de tiktiks JS legado) e para ArremateStatusCard (FASE 3)
+    // Bridge para o admin-arremates.js (painel de tiktiks JS legado) e para ArremateStatusCard
     useEffect(() => {
-        window.abrirModalAtribuicao = (tiktik, batchMode) => {
+        window.abrirModalAtribuicao = (tiktik) => {
             setTiktikSelecionado(tiktik);
-            setIsBatchMode(batchMode || false);
             setModalAtribuicaoAberto(true);
         };
         return () => { delete window.abrirModalAtribuicao; };
@@ -74,7 +74,7 @@ function App() {
                 </button>
                 <button
                     className="gs-btn gs-btn-secundario gs-btn-com-icone"
-                    onClick={() => window.abrirModalHistorico?.()}
+                    onClick={() => setModalHistoricoAberto(true)}
                 >
                     <i className="fas fa-clipboard-list"></i>
                     <span>Histórico</span>
@@ -127,8 +127,11 @@ function App() {
             <AtribuicaoModal
                 isOpen={modalAtribuicaoAberto}
                 tiktik={tiktikSelecionado}
-                isBatchMode={isBatchMode}
                 onClose={() => setModalAtribuicaoAberto(false)}
+            />
+            <ArremateHistoricoModal
+                isOpen={modalHistoricoAberto}
+                onClose={() => setModalHistoricoAberto(false)}
             />
             <BotaoBuscaFunil permissoes={permissoes} />
             <AlertasFAB />

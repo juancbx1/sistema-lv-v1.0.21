@@ -138,24 +138,28 @@ export default function ArremateModalTempos({ isOpen, onClose }) {
             <div className="oa-modal tpp-modal">
 
                 {/* Header */}
-                <div className="oa-modal-header">
-                    <div className="tpp-modal-titulo-grupo">
+                <div className="arremate-modal-header">
+                    <div className="arremate-modal-header-esquerda">
                         <div className="tpp-modal-icone">
                             <i className="fas fa-clock"></i>
                         </div>
-                        <div>
-                            <h3 className="oa-modal-titulo" style={{ margin: 0 }}>
-                                Configurar TPA
-                            </h3>
-                            <p className="tpp-modal-subtitulo">
+                    </div>
+                    <div className="arremate-modal-header-centro">
+                        <h3 className="arremate-modal-titulo">Configurar TPA</h3>
+                        <div className="arremate-modal-header-info">
+                            <p className="tpp-modal-subtitulo" style={{ margin: 0 }}>
                                 Tempos Padrão de Arremate
-                                <span className={`tpp-stats-pill${qtdConfigurados === produtos.length && produtos.length > 0 ? ' completo' : ''}`}>
-                                    {qtdConfigurados}/{produtos.length}
-                                </span>
                             </p>
+                            <span className={`tpp-stats-pill${qtdConfigurados === produtos.length && produtos.length > 0 ? ' completo' : ''}`}>
+                                {qtdConfigurados}/{produtos.length} configurados
+                            </span>
                         </div>
                     </div>
-                    <button className="oa-modal-fechar-btn" onClick={onClose}>×</button>
+                    <div className="arremate-modal-header-direita">
+                        <button className="arremate-modal-fechar-btn" onClick={onClose}>
+                            <i className="fas fa-times"></i>
+                        </button>
+                    </div>
                 </div>
 
                 {/* Barra de busca */}

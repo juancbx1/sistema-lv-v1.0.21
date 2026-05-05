@@ -12,6 +12,18 @@
 
 export const changelog = [
     {
+        versao: '1.25.0',
+        data: '05/05/2026',
+        admin: [
+            'Quantidade de peças já cortadas agora sao exibidas no card de demanda (Painel de Demandas)',
+            'Ajustes de interface e "integracao" entre o modo lote e modo simples de atribuir tarefas da pagina de arremates',
+            
+        ],
+        dashboard: [
+            // Vazio — esta atualização não afeta as funcionárias
+        ],
+    },
+    {
         versao: '1.24.0',
         data: '04/05/2026',
         admin: [

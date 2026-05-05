@@ -58,6 +58,7 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [], onC
     const [termoBusca, setTermoBusca]               = useState('');
     const [filtroStatus, setFiltroStatus]           = useState('AGUARDANDO');
     const [filtroPrioridade, setFiltroPrioridade]   = useState(false);
+    const [subfiltroCorte, setSubfiltroCorte]       = useState('TODOS'); // 'TODOS' | 'COM_CORTE' | 'SEM_CORTE'
     const [pendentesArquivamento, setPendentesArquivamento] = useState(0);
     const [expandidos, setExpandidos]               = useState({});
 
@@ -162,22 +163,36 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [], onC
     const diagnostico = useMemo(() => calcularDiagnostico(demandasAgregadas), [demandasAgregadas]);
 
     const termoLimpo = normalizarTexto(termoBusca);
-    const filtrarItem = (item) => {
+
+    const filtrarItem = (item, estagio) => {
         if (filtroPrioridade && parseInt(item.prioridade) !== 1) return false;
+        // Sub-filtro de corte: aplica apenas na seção AGUARDANDO
+        if (estagio === 'AGUARDANDO' && subfiltroCorte !== 'TODOS') {
+            const temCorte = ((item.corte_cortado || 0) + (item.corte_pendente || 0)) > 0;
+            if (subfiltroCorte === 'COM_CORTE' && !temCorte) return false;
+            if (subfiltroCorte === 'SEM_CORTE' && temCorte)  return false;
+        }
         if (!termoLimpo) return true;
         return normalizarTexto(item.produto_nome).includes(termoLimpo) ||
                normalizarTexto(item.variante).includes(termoLimpo);
     };
+
+    // Contagens para os chips do sub-filtro de corte
+    const contagensCorte = useMemo(() => {
+        const aguardando = pendentes.filter(item => calcularStatusDemanda(item) === 'AGUARDANDO');
+        const comCorte   = aguardando.filter(item => ((item.corte_cortado || 0) + (item.corte_pendente || 0)) > 0).length;
+        return { total: aguardando.length, comCorte, semCorte: aguardando.length - comCorte };
+    }, [pendentes]);
 
     const secoesVisiveis = useMemo(() => {
         return PILLS
             .filter(p => filtroStatus === null || filtroStatus === p.id)
             .map(p => ({
                 ...p,
-                items: pendentes.filter(item => calcularStatusDemanda(item) === p.id && filtrarItem(item)),
+                items: pendentes.filter(item => calcularStatusDemanda(item) === p.id && filtrarItem(item, p.id)),
             }))
             .filter(s => s.items.length > 0);
-    }, [pendentes, filtroStatus, filtroPrioridade, termoLimpo]);
+    }, [pendentes, filtroStatus, filtroPrioridade, termoLimpo, subfiltroCorte]);
 
     const handleDeleteDemanda = async (demandaId) => {
         try {
@@ -257,7 +272,12 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [], onC
                                 key={p.id}
                                 className={`pd-summary-pill${ativo ? ' ativo' : ''}${p.id === 'AGUARDANDO' ? ' aguardando' : ''}`}
                                 style={{ '--pd-pill-cor': p.cor }}
-                                onClick={() => setFiltroStatus(ativo ? null : p.id)}
+                                onClick={() => {
+                                    const novoStatus = ativo ? null : p.id;
+                                    setFiltroStatus(novoStatus);
+                                    // Reseta subfiltro ao sair de AGUARDANDO
+                                    if (novoStatus !== 'AGUARDANDO') setSubfiltroCorte('TODOS');
+                                }}
                             >
                                 <i className={`fas ${p.icone}`}></i>
                                 {p.label}
@@ -272,6 +292,37 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [], onC
                     >
                         <i className="fas fa-star"></i>
                         Urgentes
+                    </button>
+                </div>
+            )}
+
+            {/* ── SUB-FILTRO DE CORTE — visível apenas na aba Aguardando ── */}
+            {!carregando && filtroStatus === 'AGUARDANDO' && contagensCorte.total > 0 && (
+                <div className="pd-subfiltro-corte">
+                    <button
+                        className={`pd-subfiltro-chip${subfiltroCorte === 'TODOS' ? ' ativo' : ''}`}
+                        onClick={() => setSubfiltroCorte('TODOS')}
+                    >
+                        Todos
+                        <span className="pd-subfiltro-chip-count">{contagensCorte.total}</span>
+                    </button>
+                    <button
+                        className={`pd-subfiltro-chip com-corte${subfiltroCorte === 'COM_CORTE' ? ' ativo' : ''}`}
+                        onClick={() => setSubfiltroCorte(subfiltroCorte === 'COM_CORTE' ? 'TODOS' : 'COM_CORTE')}
+                        title="Demandas que já têm corte registrado"
+                    >
+                        <i className="fas fa-cut"></i>
+                        Com corte
+                        <span className="pd-subfiltro-chip-count">{contagensCorte.comCorte}</span>
+                    </button>
+                    <button
+                        className={`pd-subfiltro-chip sem-corte${subfiltroCorte === 'SEM_CORTE' ? ' ativo' : ''}`}
+                        onClick={() => setSubfiltroCorte(subfiltroCorte === 'SEM_CORTE' ? 'TODOS' : 'SEM_CORTE')}
+                        title="Demandas sem nenhum corte registrado"
+                    >
+                        <i className="fas fa-scissors"></i>
+                        Sem corte
+                        <span className="pd-subfiltro-chip-count">{contagensCorte.semCorte}</span>
                     </button>
                 </div>
             )}

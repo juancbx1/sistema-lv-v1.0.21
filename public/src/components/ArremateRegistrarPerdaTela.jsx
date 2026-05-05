@@ -26,7 +26,7 @@ export default function ArremateRegistrarPerdaTela({ onConcluido }) {
     };
 
     return (
-        <div className="gs-card">
+        <div className="gs-card arremate-perda-wrapper">
             <div className="arremate-perda-header">
                 {tela === 'formulario_perda' && (
                     <button className="arremate-btn-voltar" onClick={handleVoltar}>

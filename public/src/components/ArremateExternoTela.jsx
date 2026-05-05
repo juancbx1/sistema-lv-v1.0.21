@@ -5,6 +5,7 @@
 import React, { useState, useCallback } from 'react';
 import { mostrarMensagem, mostrarConfirmacao } from '/js/utils/popups.js';
 import ArremateTelaSelecaoProduto from './ArremateTelaSelecaoProduto.jsx';
+import { getImagemVariacao } from '../utils/ArremateProdutoHelpers.js';
 
 const fmtHora = (iso) => {
     if (!iso) return '--:--';
@@ -180,17 +181,17 @@ export default function ArremateExternoTela() {
     return (
         <div className="gs-card op-externo-tela-wrapper">
 
-            <div className="op-modal-header op-externo-tela-header">
-                <div className="op-modal-header-esquerda">
+            <div className="arremate-modal-header op-externo-tela-header">
+                <div className="arremate-modal-header-esquerda">
                     {tela !== 'selecao' && (
                         <button className="btn-voltar-header" onClick={handleVoltar}>
                             <i className="fas fa-arrow-left"></i> Voltar
                         </button>
                     )}
                 </div>
-                <div className="op-modal-header-centro">
-                    <h3 className="op-modal-titulo">{titulos[tela]}</h3>
-                    <div className="op-modal-header-info">
+                <div className="arremate-modal-header-centro">
+                    <h3 className="arremate-modal-titulo">{titulos[tela]}</h3>
+                    <div className="arremate-modal-header-info">
                         <span className="op-externo-badge">
                             <i className="fas fa-user-tie"></i> Prestador Externo
                         </span>
@@ -201,7 +202,7 @@ export default function ArremateExternoTela() {
                         )}
                     </div>
                 </div>
-                <div className="op-modal-header-direita">
+                <div className="arremate-modal-header-direita">
                     {/* sem botão fechar — é uma aba, não um modal */}
                 </div>
             </div>
@@ -241,7 +242,7 @@ export default function ArremateExternoTela() {
                                     <div className="card-borda-charme borda-etapa-normal"></div>
                                     <div className="item-info-visual">
                                         <img
-                                            src={itemSelecionado.imagem || '/img/placeholder-image.png'}
+                                            src={getImagemVariacao(itemSelecionado, itemSelecionado.variante)}
                                             alt={itemSelecionado.produto_nome}
                                         />
                                         <div>

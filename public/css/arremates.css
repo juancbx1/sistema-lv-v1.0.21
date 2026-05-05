@@ -1749,7 +1749,7 @@
     flex-direction: row;
     align-items: center;
     gap: 14px;
-    padding: 14px 88px 14px 22px; /* right: espaço para o badge */
+    padding: 14px 36px 10px 22px; /* right: espaço para a bolinha */
     flex: 1;
 }
 
@@ -1804,58 +1804,82 @@
     gap: 5px;
 }
 
-/* Badge de saldo — absoluto, nunca comprime o layout */
-.arremate-saldo-badge {
-    position: absolute;
-    top: 50%;
-    right: 14px;
-    transform: translateY(-50%);
+/* Rodapé do card: saldo + status em andamento */
+.arremate-card-rodape {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
+    padding: 6px 14px 10px 22px;
+    gap: 10px;
+    border-top: 1px solid #f1f5f9;
+}
+
+/* Badge de saldo — no rodapé (não mais absoluto) */
+.arremate-saldo-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     background-color: #eef6ff;
     border: 1.5px solid #b8d9f7;
-    border-radius: 10px;
-    padding: 6px 10px;
-    text-align: center;
-    min-width: 52px;
+    border-radius: 20px;
+    padding: 3px 10px;
 }
 
 .arremate-saldo-badge .saldo-valor {
-    font-size: 1.4rem;
+    font-size: 1rem;
     font-weight: 700;
     color: var(--gs-secundaria);
-    line-height: 1.1;
+    line-height: 1.2;
 }
 
 .arremate-saldo-badge .saldo-label {
-    font-size: 0.65rem;
-    font-weight: 700;
+    font-size: 0.7rem;
+    font-weight: 600;
     color: var(--gs-primaria);
     text-transform: uppercase;
     letter-spacing: 0.4px;
 }
 
-/* Ícone de check — no lugar do badge quando selecionado */
-.arremate-check-icone {
-    position: absolute;
-    top: 50%;
-    right: 14px;
-    transform: translateY(-50%);
-    width: 38px;
-    height: 38px;
-    background-color: var(--gs-primaria);
-    border-radius: 50%;
+/* Em andamento — inline no rodapé */
+.arremate-em-trabalho-inline {
     display: flex;
     align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-size: 1.1rem;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+    gap: 5px;
+    font-size: 0.75rem;
+    color: #92400e;
+    background: #fef3c7;
+    border-radius: 20px;
+    padding: 3px 9px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
 }
 
-/* Banner "Em andamento" — na base do card */
+/* Card selecionado — highlight leve + borda */
+.oa-card-arremate-react.selecionado {
+    border: 2px solid var(--gs-primaria);
+    background-color: #eff6ff;
+}
+
+.oa-card-arremate-react.selecionado .card-borda-charme {
+    background-color: var(--gs-primaria);
+}
+
+/* Grid 2 colunas fixas dentro do modal de atribuição */
+.oa-modal-atribuir-v2 .oa-cards-container-arremate {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+/* Card desabilitado */
+.oa-card-arremate-react.desabilitado {
+    opacity: 0.55;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Banner "Em andamento" — legado, mantido por compatibilidade */
 .arremate-em-trabalho-banner {
     display: flex;
     align-items: center;
@@ -2253,11 +2277,7 @@
         transform: none;
     }
 
-    /* Card selecionado */
-    .oa-card-arremate-react.selecionado {
-        background-color: #eaf5ff;
-        transform: translateY(-2px);
-    }
+    /* Card selecionado — visual via op-card-checkbox (bolinha) + borda */
 
  /* ==========================================================================
    # ESTILOS PARA MODAL DE ATRIBUIÇÃO EM LOTE
@@ -2888,7 +2908,7 @@
 
     /* Ajustes mobile do card de arremate */
     .arremate-card-corpo {
-        padding: 12px 70px 12px 18px;
+        padding: 12px 34px 8px 18px;
         gap: 10px;
     }
     .arremate-card-img {
@@ -2898,19 +2918,11 @@
     .arremate-card-nome {
         font-size: 0.95rem;
     }
-    .arremate-saldo-badge {
-        right: 10px;
-        min-width: 44px;
-        padding: 5px 8px;
+    .arremate-card-rodape {
+        padding: 5px 10px 8px 18px;
     }
-    .arremate-saldo-badge .saldo-valor {
-        font-size: 1.2rem;
-    }
-    .arremate-check-icone {
-        right: 10px;
-        width: 34px;
-        height: 34px;
-        font-size: 1rem;
+    .oa-modal-atribuir-v2 .oa-cards-container-arremate {
+        grid-template-columns: repeat(2, 1fr);
     }
 
     .coluna-conteudo-principal {
@@ -3447,6 +3459,12 @@
 
 /* Header da aba (espelho op-modal-header) */
 .op-externo-tela-wrapper { /* gs-card já aplicado — sem estilos extras */ }
+
+/* 2 colunas de cards em todos os contextos de seleção de arremate */
+.op-externo-tela-wrapper .oa-cards-container-arremate,
+.arremate-perda-wrapper .oa-cards-container-arremate {
+    grid-template-columns: repeat(2, 1fr);
+}
 .op-externo-tela-body { padding: 16px 0 8px; }
 
 .op-modal-header {
@@ -3680,6 +3698,90 @@
 .tpp-tempo-input.preenchido { border-color: #86efac; background: #f0fdf4; color: #15803d; font-weight: 600; }
 .tpp-tempo-unidade { font-size: 0.78rem; color: #94a3b8; white-space: nowrap; min-width: 24px; }
 
+/* ==========================================================================
+   # HEADER PADRÃO DE MODAIS (Items 4 + 6)
+   Cópia fiel de .op-modal-header e .op-modal-fechar-btn de ordens-de-producao.css.
+   Usar em todos os modais de arremate no lugar das classes oa-modal-header legadas.
+   ========================================================================== */
+
+.arremate-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+    flex-shrink: 0;
+    border-radius: 12px 12px 0 0;
+}
+
+.arremate-modal-header-esquerda {
+    display: flex;
+    align-items: center;
+    min-width: 90px;
+}
+
+.arremate-modal-header-centro {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    text-align: center;
+}
+
+.arremate-modal-header-direita {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    min-width: 90px;
+}
+
+.arremate-modal-header-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.arremate-modal-titulo {
+    font-size: 1.05rem;
+    color: #1e3a5f;
+    margin: 0;
+    font-weight: 600;
+}
+
+.arremate-modal-fechar-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: #f1f5f9;
+    border: none;
+    border-radius: 50%;
+    color: #64748b;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
+}
+.arremate-modal-fechar-btn:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+
+@media (max-width: 600px) {
+    .arremate-modal-header {
+        padding: 12px 14px;
+        gap: 8px;
+    }
+    .arremate-modal-header-esquerda,
+    .arremate-modal-header-direita { min-width: 60px; }
+    .arremate-modal-titulo { font-size: 0.95rem; }
+}
+
 .tpp-vazio { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 60px 20px; color: #94a3b8; }
 .tpp-vazio i { font-size: 2rem; opacity: 0.5; }
 .tpp-vazio p { font-size: 0.9rem; margin: 0; }
@@ -3690,4 +3792,692 @@
     .tpp-etapa-row { padding: 10px 12px 10px 20px; }
     .tpp-tempo-input { width: 70px; }
     .tpp-produto-img { width: 48px; height: 48px; }
+
+}
+
+/* ==========================================================================
+   # v2.0 — PAINEL DE FILTROS REDESENHADO (arremate-filtros-*)
+   ========================================================================== */
+
+.arremate-filtros-painel {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    border: 1px solid var(--gs-borda);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Header ── */
+.arremate-filtros-header {
+    padding: 16px 18px 12px;
+    border-bottom: 1px solid var(--gs-borda);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.arremate-filtros-titulo-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.arremate-filtros-titulo {
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--gs-texto-secundario);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.arremate-filtros-titulo i {
+    color: var(--gs-primaria);
+    font-size: 0.8rem;
+}
+
+.arremate-filtros-badge {
+    background: var(--gs-primaria);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    border-radius: 50%;
+    min-width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+/* ── Linha de busca ── */
+.arremate-busca-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.arremate-busca-wrapper {
+    position: relative;
+    flex: 1;
+}
+
+.arremate-busca-icone {
+    position: absolute;
+    left: 11px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 0.8rem;
+    pointer-events: none;
+}
+
+.arremate-busca-input {
+    width: 100%;
+    padding: 8px 32px 8px 32px;
+    border: 1.5px solid var(--gs-borda);
+    border-radius: 8px;
+    font-size: 0.85rem;
+    color: var(--gs-texto-principal);
+    background: #f8fafc;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    box-sizing: border-box;
+}
+
+.arremate-busca-input:focus {
+    border-color: var(--gs-primaria);
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(var(--gs-primaria-rgb, 59,130,246), 0.12);
+}
+
+.arremate-busca-limpar {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 2px 4px;
+    font-size: 0.8rem;
+    line-height: 1;
+    transition: color 0.15s;
+}
+
+.arremate-busca-limpar:hover { color: #64748b; }
+
+/* ── Dropdown de recentes ── */
+.arremate-recentes-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1.5px solid var(--gs-borda);
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+    z-index: 100;
+    overflow: hidden;
+    padding: 4px 0;
+}
+
+.arremate-recentes-label {
+    display: block;
+    padding: 6px 12px 4px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #94a3b8;
+}
+
+.arremate-recentes-label i { margin-right: 4px; }
+
+.arremate-recente-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--gs-texto-principal);
+    transition: background 0.12s;
+}
+
+.arremate-recente-item:hover { background: #f1f5f9; }
+
+.arremate-recente-remover {
+    background: none;
+    border: none;
+    color: #cbd5e1;
+    cursor: pointer;
+    padding: 2px 4px;
+    font-size: 0.75rem;
+    border-radius: 4px;
+    transition: color 0.12s, background 0.12s;
+}
+
+.arremate-recente-remover:hover { color: #ef4444; background: #fee2e2; }
+
+/* ── Toggle mobile ── */
+.arremate-filtros-mobile-toggle {
+    display: none;
+    width: 100%;
+    padding: 10px 18px;
+    background: #f8fafc;
+    border: none;
+    border-top: 1px solid var(--gs-borda);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--gs-texto-principal);
+    cursor: pointer;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
+    transition: background 0.15s;
+}
+
+.arremate-filtros-mobile-toggle:hover { background: #f1f5f9; }
+.arremate-toggle-icone { margin-left: auto; color: #94a3b8; font-size: 0.75rem; }
+
+/* ── Corpo dos filtros ── */
+.arremate-filtros-corpo {
+    padding: 14px 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* ── Grupo de chips ── */
+.arremate-filtro-grupo {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.arremate-filtro-grupo-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #94a3b8;
+}
+
+.arremate-filtro-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.arremate-filtro-chip {
+    padding: 5px 13px;
+    border-radius: 20px;
+    border: 1.5px solid var(--gs-borda);
+    background: #f8fafc;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--gs-texto-secundario);
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.arremate-filtro-chip:hover {
+    border-color: var(--gs-primaria);
+    color: var(--gs-primaria);
+    background: #eff6ff;
+}
+
+.arremate-filtro-chip.ativo {
+    background: var(--gs-primaria);
+    border-color: var(--gs-primaria);
+    color: #fff;
+    font-weight: 700;
+}
+
+/* ── Select de ordenação ── */
+.arremate-filtro-select {
+    font-size: 0.85rem;
+}
+
+/* ── Rodapé / Limpar ── */
+.arremate-filtros-footer {
+    padding-top: 4px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.arremate-filtros-limpar-btn {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 0.82rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    transition: color 0.15s;
+}
+
+.arremate-filtros-limpar-btn:hover { color: #ef4444; }
+.arremate-filtros-limpar-btn i { font-size: 0.8rem; }
+
+/* ── Banner de contexto de lote (ArremateTelaSelecaoProduto) ── */
+.arremate-banner-contexto {
+    padding: 10px 16px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 0.9rem;
+    color: #1e40af;
+    margin-bottom: 12px;
+}
+
+/* ── Cópia das classes OP para uso nos modais de arremate ── */
+/* op-card-checkbox — bolinha de seleção */
+.op-card-checkbox-wrapper {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.op-card-checkbox {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid #d1d5db;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+}
+
+.op-card-checkbox.marcado {
+    background: var(--gs-primaria);
+    border-color: var(--gs-primaria);
+    transform: scale(1.1);
+}
+
+.op-card-checkbox.marcado::after {
+    content: '';
+    width: 5px;
+    height: 9px;
+    border: 2px solid #fff;
+    border-top: none;
+    border-left: none;
+    transform: rotate(45deg) translateY(-1px);
+    display: block;
+}
+
+/* op-selecao-fab — botão flutuante de confirmação */
+.op-selecao-fab {
+    position: sticky;
+    bottom: 16px;
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 24px;
+    background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+    color: #fff;
+    border: none;
+    border-radius: 50px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 4px 22px rgba(29,78,216,0.42);
+    animation: fab-aparece 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    margin-top: 16px;
+    z-index: 10;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.op-selecao-fab:hover {
+    transform: scale(1.05) translateY(-2px);
+    box-shadow: 0 8px 30px rgba(29,78,216,0.52);
+}
+
+.op-selecao-fab:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.op-selecao-fab-badge {
+    background: rgba(255,255,255,0.22);
+    border: 1.5px solid rgba(255,255,255,0.45);
+    border-radius: 50%;
+    min-width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 800;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+@keyframes fab-aparece {
+    from { transform: scale(0.6) translateY(12px); opacity: 0; }
+    to   { transform: scale(1)   translateY(0);    opacity: 1; }
+}
+
+/* ── Responsive: Mobile ── */
+@media (max-width: 768px) {
+    .arremate-filtros-mobile-toggle { display: flex; }
+    .arremate-filtros-corpo { display: none; }
+    .arremate-filtros-corpo.aberto { display: flex; }
+}
+
+/* ==========================================================================
+   # HEADER PADRÃO DE MODAIS (Items 4 + 6)
+   Cópia fiel de .op-modal-header e .op-modal-fechar-btn de ordens-de-producao.css.
+   Usar em todos os modais de arremate no lugar das classes oa-modal-header legadas.
+   ========================================================================== */
+
+.arremate-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+    flex-shrink: 0;
+    border-radius: 12px 12px 0 0;
+}
+
+.arremate-modal-header-esquerda {
+    display: flex;
+    align-items: center;
+    min-width: 90px;
+}
+
+.arremate-modal-header-centro {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    text-align: center;
+}
+
+.arremate-modal-header-direita {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    min-width: 90px;
+}
+
+.arremate-modal-header-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.arremate-modal-titulo {
+    font-size: 1.05rem;
+    color: #1e3a5f;
+    margin: 0;
+    font-weight: 600;
+}
+
+.arremate-modal-fechar-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: #f1f5f9;
+    border: none;
+    border-radius: 50%;
+    color: #64748b;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
+}
+.arremate-modal-fechar-btn:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+
+@media (max-width: 600px) {
+    .arremate-modal-header { padding: 12px 14px; gap: 8px; }
+    .arremate-modal-header-esquerda,
+    .arremate-modal-header-direita { min-width: 60px; }
+    .arremate-modal-titulo { font-size: 0.95rem; }
+}
+
+/* ==========================================================================
+   # HISTÓRICO GERAL DE ARREMATES — ArremateHistoricoModal (Item 7)
+   ========================================================================== */
+
+.arremate-hist-modal {
+    position: relative;
+    z-index: 1001;
+    background: #fff;
+    border-radius: 14px;
+    width: 95vw;
+    max-width: 860px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+}
+
+/* Filtros */
+.arremate-hist-filtros {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    border-bottom: 1px solid #f1f5f9;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+    background: #fafbfd;
+}
+
+.arremate-hist-busca {
+    flex: 1 1 180px;
+    min-width: 0;
+}
+
+.arremate-hist-tipo-pills {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.arremate-hist-periodo-select {
+    font-size: 0.85rem;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1.5px solid #e2e8f0;
+    background: #fff;
+    color: #334155;
+    cursor: pointer;
+}
+
+/* Badge de total */
+.arremate-hist-total-badge {
+    font-size: 0.75rem;
+    background: #f1f5f9;
+    color: #64748b;
+    border-radius: 20px;
+    padding: 2px 8px;
+    font-weight: 600;
+}
+
+/* Corpo — área scrollável */
+.arremate-hist-corpo {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+}
+
+/* Grid de cards */
+.arremate-hist-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Card horizontal de evento */
+.arremate-hist-card {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px 12px 20px;
+    background: #fff;
+    border: 1px solid #e8eef4;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+.arremate-hist-card:hover { box-shadow: 0 3px 14px rgba(0,0,0,0.07); }
+
+/* Borda-charme já herda de .card-borda-charme global */
+.arremate-hist-card .card-borda-charme {
+    left: 0; top: 0;
+    width: 5px; height: 100%;
+    border-radius: 12px 0 0 12px;
+}
+
+.arremate-hist-card-img {
+    width: 52px;
+    height: 52px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #e8eef4;
+    flex-shrink: 0;
+    background: #f8fafc;
+}
+
+.arremate-hist-card-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.arremate-hist-card-topo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.arremate-hist-card-nome {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 260px;
+}
+
+.arremate-hist-tipo-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.arremate-hist-card-variante {
+    font-size: 0.78rem;
+    color: #64748b;
+    margin: 0;
+}
+
+.arremate-hist-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 2px;
+}
+.arremate-hist-card-meta span {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.arremate-hist-card-meta span i { font-size: 0.7rem; }
+
+/* Botão desfazer */
+.arremate-hist-btn-desfazer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1.5px solid #e2e8f0;
+    background: #fff;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+.arremate-hist-btn-desfazer:hover {
+    background: #fff7ed;
+    border-color: #f59e0b;
+    color: #d97706;
+}
+.arremate-hist-btn-desfazer:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Estado vazio */
+.arremate-hist-vazio {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 60px 20px;
+    color: #94a3b8;
+}
+.arremate-hist-vazio i { font-size: 2.5rem; }
+.arremate-hist-vazio p { font-size: 0.92rem; margin: 0; }
+
+/* Footer com paginação */
+.arremate-hist-footer {
+    border-top: 1px solid #f1f5f9;
+    padding: 12px 20px;
+    display: flex;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* Responsivo */
+@media (max-width: 600px) {
+    .arremate-hist-filtros { padding: 10px 14px; }
+    .arremate-hist-corpo { padding: 12px 14px; }
+    .arremate-hist-card { padding: 10px 12px 10px 18px; gap: 10px; }
+    .arremate-hist-card-img { width: 42px; height: 42px; }
+    .arremate-hist-card-nome { max-width: 160px; font-size: 0.85rem; }
+    .arremate-hist-tipo-pills { display: none; } /* pills ocultadas em mobile — período basta */
 }

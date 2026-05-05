@@ -2126,10 +2126,13 @@ font-weight: 500;
     background: none; border: none; font-size: 1.8rem;
     color: var(--gs-texto-secundario); cursor: pointer;
 }
-.gs-busca-modal-body { 
-    padding: 20px; 
+.gs-busca-modal-body {
+    padding: 20px;
     overflow-y: auto; /* Adiciona a barra de rolagem vertical APENAS se necessário */
     flex-grow: 1; /* Faz o corpo do modal ocupar todo o espaço vertical disponível */
+    /* min-height garante que o modal não mude de tamanho enquanto resultados carregam */
+    min-height: 340px;
+    max-height: calc(90vh - 72px); /* 72px = altura do header fixo */
 }
 .gs-busca-modal-resultados { 
     min-height: 200px; }
@@ -4522,6 +4525,97 @@ font-weight: 500;
 }
 .pd-btn-concluir-manual:hover { background: #d5f5e3; }
 
+/* ── Badge de corte no card (AGUARDANDO) ── */
+.pd-corte-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 7px;
+    border-radius: 5px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.pd-corte-badge i { font-size: 0.65rem; flex-shrink: 0; }
+
+/* Completo — verde */
+.pd-corte-badge--completo {
+    background: #eafaf1;
+    color: #1e8449;
+    border: 1px solid #a9dfbf;
+}
+/* Parcial — laranja */
+.pd-corte-badge--parcial {
+    background: #fef5e7;
+    color: #935116;
+    border: 1px solid #f8c471;
+}
+/* Pendente (registrado, não cortado) — amarelo */
+.pd-corte-badge--pendente {
+    background: #fefde7;
+    color: #7d6608;
+    border: 1px dashed #f4d03f;
+}
+
+/* ── Sub-filtro de corte (abaixo das pills) ── */
+.pd-subfiltro-corte {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: #f8f9fa;
+    border-bottom: 1px solid var(--gs-borda);
+    flex-wrap: wrap;
+}
+.pd-subfiltro-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1.5px solid #dee2e6;
+    background: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #6c757d;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    white-space: nowrap;
+}
+.pd-subfiltro-chip:hover { border-color: #adb5bd; background: #f1f3f5; }
+.pd-subfiltro-chip.ativo {
+    background: var(--gs-secundaria);
+    border-color: var(--gs-secundaria);
+    color: #fff;
+}
+/* Com corte — ativo em verde */
+.pd-subfiltro-chip.com-corte.ativo {
+    background: #1e8449;
+    border-color: #1e8449;
+}
+/* Sem corte — ativo em vermelho suave */
+.pd-subfiltro-chip.sem-corte.ativo {
+    background: #c0392b;
+    border-color: #c0392b;
+}
+.pd-subfiltro-chip-count {
+    background: rgba(255,255,255,0.25);
+    border-radius: 10px;
+    padding: 1px 6px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    min-width: 18px;
+    text-align: center;
+}
+.pd-subfiltro-chip:not(.ativo) .pd-subfiltro-chip-count {
+    background: #e9ecef;
+    color: #495057;
+}
+
 /* Estado vazio geral */
 .pd-vazio {
     display: flex;
@@ -5213,10 +5307,34 @@ font-weight: 500;
 }
 
 .gs-duplicata-status {
-    background: #e9ecef;
     border-radius: 8px;
-    padding: 1px 7px;
+    padding: 2px 8px;
     font-size: 0.75rem;
+    font-weight: 600;
+    background: #f1f3f5;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Nota informativa sobre peças em outros setores */
+.gs-duplicata-aviso-info {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: #e8f4fd;
+    border: 1px solid #b8d9f5;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.83rem;
+    color: #1a5276;
+    margin-bottom: 14px;
+}
+
+.gs-duplicata-aviso-info i {
+    color: #2980b9;
+    margin-top: 1px;
+    flex-shrink: 0;
 }
 
 .gs-duplicata-acoes {

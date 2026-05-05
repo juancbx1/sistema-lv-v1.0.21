@@ -324,7 +324,7 @@ router.get('/historico', async (req, res) => {
         const finalQueryParams = [...queryParams, limitNum, offset];
         
         const dataQuery = `
-            SELECT a.*, p.nome as produto
+            SELECT a.*, p.nome as produto, p.imagem as produto_imagem
             FROM arremates a
             LEFT JOIN produtos p ON a.produto_id = p.id
             ${whereString}

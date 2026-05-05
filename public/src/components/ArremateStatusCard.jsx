@@ -245,20 +245,12 @@ export default function ArremateStatusCard({ tiktik, permissoes = [], onFinaliza
                     </div>
                     <div className="arremate-card-footer">
                         <button
-                            className="arremate-btn lote"
-                            onClick={() => window.abrirModalAtribuicao?.(tiktik, true)}
-                            disabled={!podeAtribuir}
-                            title={!podeAtribuir ? 'Permissão negada' : 'Atribuir lote'}
-                        >
-                            <i className="fas fa-boxes"></i> Lote
-                        </button>
-                        <button
-                            className="arremate-btn atribuir"
-                            onClick={() => window.abrirModalAtribuicao?.(tiktik, false)}
+                            className="arremate-btn atribuir atribuir-unico"
+                            onClick={() => window.abrirModalAtribuicao?.(tiktik)}
                             disabled={!podeAtribuir}
                             title={!podeAtribuir ? 'Permissão negada' : 'Atribuir tarefa'}
                         >
-                            <i className="fas fa-play"></i> Atribuir
+                            <i className="fas fa-play"></i> Atribuir Tarefa
                         </button>
                     </div>
                 </>

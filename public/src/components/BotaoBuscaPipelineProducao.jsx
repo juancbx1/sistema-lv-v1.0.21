@@ -1,12 +1,10 @@
 // public/src/components/BotaoBuscaPipelineProducao.jsx
 
-import React, { useState } from 'react';
-import { mostrarConfirmacao, mostrarMensagem } from '/js/utils/popups.js';
+import React from 'react';
+import { mostrarConfirmacao } from '/js/utils/popups.js';
 import { calcularStatusDemanda, STATUS_META } from '/src/utils/demandaStatus.js';
 
 export default function PainelDemandaCard({ item, onDelete, permissoes, onRefresh, onIniciarProducao }) {
-    const [expandido, setExpandido] = useState(false);
-
     const totalPedido  = item.demanda_total              || 0;
     const emProducao   = item.saldo_em_producao          || 0;
     const emArremate   = item.saldo_disponivel_arremate  || 0;
@@ -22,6 +20,31 @@ export default function PainelDemandaCard({ item, onDelete, permissoes, onRefres
     const statusCalculado = calcularStatusDemanda(item);
     const meta            = STATUS_META[statusCalculado] || STATUS_META.AGUARDANDO;
     const eUrgente        = parseInt(item.prioridade) === 1;
+
+    // ── Dados de corte ──
+    const corteCortado  = item.corte_cortado  || 0;
+    const cortePendente = item.corte_pendente || 0;
+    const corteTotal    = corteCortado + cortePendente;
+
+    // Badge visível apenas na aba AGUARDANDO — corte já pressuposto nas demais fases
+    const mostrarBadgeCorte = statusCalculado === 'AGUARDANDO' && corteTotal > 0;
+
+    // Classifica o estado do corte para colorização do badge
+    const classeCorte = (() => {
+        if (corteTotal === 0)             return null;
+        if (corteCortado >= totalPedido)  return 'completo'; // verde  — tudo cortado e pronto
+        if (corteCortado > 0)             return 'parcial';  // laranja — parcialmente cortado
+        return 'pendente';                                    // amarelo — registrado, aguardando corte
+    })();
+
+    // Texto do badge de corte
+    const textoBadgeCorte = (() => {
+        if (classeCorte === 'completo') {
+            return corteCortado === 1 ? '1 pc Cortada' : `${corteCortado} pcs Cortadas`;
+        }
+        const faltam = totalPedido - corteCortado;
+        return faltam === 1 ? 'Falta 1 pc no Corte' : `Faltam ${faltam} pcs no Corte`;
+    })();
 
     const nomeVariante = (item.variante && item.variante !== '-') ? item.variante : '';
     const tituloLimpo  = nomeVariante
@@ -76,27 +99,6 @@ export default function PainelDemandaCard({ item, onDelete, permissoes, onRefres
         window.location.href = `/admin/embalagem-de-produtos.html?${params.toString()}`;
     };
 
-    const handleConcluirManual = async (e) => {
-        e.stopPropagation();
-        const ok = await mostrarConfirmacao(
-            `Marcar demanda de "${tituloLimpo}" como concluída manualmente?`,
-            { tipo: 'aviso', textoConfirmar: 'Sim, concluir', textoCancelar: 'Cancelar' }
-        );
-        if (!ok) return;
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`/api/demandas/${item.demanda_id}/concluir`, {
-                method: 'PATCH',
-                headers: { 'Authorization': `Bearer ${token}` },
-            });
-            if (!res.ok) throw new Error('Falha ao concluir demanda.');
-            mostrarMensagem('Demanda marcada como concluída!', 'sucesso');
-            if (onRefresh) onRefresh();
-        } catch (err) {
-            mostrarMensagem(err.message, 'erro');
-        }
-    };
-
     const renderCTA = () => {
         if (statusCalculado === 'AGUARDANDO' && pendenteFila > 0) {
             return (
@@ -134,10 +136,7 @@ export default function PainelDemandaCard({ item, onDelete, permissoes, onRefres
     };
 
     return (
-        <div
-            className={`pd-card${eUrgente ? ' urgente' : ''}`}
-            onClick={() => setExpandido(!expandido)}
-        >
+        <div className={`pd-card${eUrgente ? ' urgente' : ''}`}>
             <div
                 className="card-borda-charme"
                 style={!eUrgente ? { backgroundColor: meta.cor } : {}}
@@ -184,60 +183,14 @@ export default function PainelDemandaCard({ item, onDelete, permissoes, onRefres
                     <strong>{totalPedido}</strong>
                     <small>pçs{totalConsumido > 0 ? ` · ${totalConsumido} prod.` : ''}</small>
                 </span>
+                {mostrarBadgeCorte && (
+                    <span className={`pd-corte-badge pd-corte-badge--${classeCorte}`}>
+                        <i className="fas fa-ruler"></i>
+                        {textoBadgeCorte}
+                    </span>
+                )}
                 {renderCTA()}
             </div>
-
-            {expandido && (
-                <div className="pd-card-accordion" onClick={e => e.stopPropagation()}>
-                    {item.observacoes && (
-                        <div className="pd-obs">
-                            <i className="fas fa-comment-alt"></i>
-                            <span>{item.observacoes}</span>
-                        </div>
-                    )}
-                    <div className="pd-breakdown">
-                        <div className="pd-breakdown-item">
-                            <span className="dot" style={{ backgroundColor: '#ecf0f1', border: '1px solid #bdc3c7' }}></span>
-                            <span>Fila</span>
-                            <strong>{pendenteFila}</strong>
-                        </div>
-                        <div className="pd-breakdown-item">
-                            <span className="dot" style={{ backgroundColor: '#3498db' }}></span>
-                            <span>Costura</span>
-                            <strong>{emProducao}</strong>
-                        </div>
-                        <div className="pd-breakdown-item">
-                            <span className="dot" style={{ backgroundColor: '#9b59b6' }}></span>
-                            <span>Arremate</span>
-                            <strong>{emArremate}</strong>
-                        </div>
-                        <div className="pd-breakdown-item">
-                            <span className="dot" style={{ backgroundColor: '#e67e22' }}></span>
-                            <span>Embalagem</span>
-                            <strong>{emEmbalagem}</strong>
-                        </div>
-                        <div className="pd-breakdown-item">
-                            <span className="dot" style={{ backgroundColor: '#27ae60' }}></span>
-                            <span>Estoque</span>
-                            <strong>{emEstoque}</strong>
-                        </div>
-                        {emPerda > 0 && (
-                            <div className="pd-breakdown-item">
-                                <span className="dot" style={{ backgroundColor: '#e74c3c' }}></span>
-                                <span>Perda</span>
-                                <strong>{emPerda}</strong>
-                            </div>
-                        )}
-                    </div>
-
-                    {permissoes.includes('concluir-demanda-manual') && statusCalculado !== 'CONCLUIDO' && (
-                        <button className="pd-btn-concluir-manual" onClick={handleConcluirManual}>
-                            <i className="fas fa-check-double"></i>
-                            Marcar como Concluída
-                        </button>
-                    )}
-                </div>
-            )}
         </div>
     );
 }
