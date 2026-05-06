@@ -34,29 +34,65 @@ export default function TelaConfirmacaoQtd({ item, tiktik, onVoltar, onConfirmar
         setErro('');
         try {
             const token = localStorage.getItem('token');
-            const payload = {
-                usuario_tiktik_id: tiktik.id,
-                produto_id: item.produto_id,
-                variante: item.variante === '-' ? null : item.variante,
-                quantidade_entregue: quantidade,
-                dados_ops: item.ops_detalhe 
-            };
 
-            const response = await fetch('/api/arremates/sessoes/iniciar', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(payload)
-            });
+            if (tiktik.id === null) {
+                // P. Externo: distribui a quantidade pelas OPs e usa /api/arremates/externo
+                let quantidadeRestante = quantidadeNumerica;
+                const opsOrdenadas = (item.ops_detalhe || []).sort((a, b) => a.numero - b.numero);
+                const itensPayload = [];
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Erro desconhecido ao atribuir tarefa');
+                for (const op of opsOrdenadas) {
+                    if (quantidadeRestante <= 0) break;
+                    const qtdParaOp = Math.min(quantidadeRestante, op.saldo_op);
+                    if (qtdParaOp > 0) {
+                        itensPayload.push({
+                            op_numero: op.numero,
+                            op_edit_id: op.edit_id,
+                            produto_id: item.produto_id,
+                            variante: item.variante === '-' ? null : item.variante,
+                            quantidade_arrematada: qtdParaOp,
+                        });
+                        quantidadeRestante -= qtdParaOp;
+                    }
+                }
+
+                if (itensPayload.length === 0) throw new Error('Nenhuma OP disponível para este produto.');
+
+                const response = await fetch('/api/arremates/externo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ itens: itensPayload }),
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Erro ao registrar arremate externo.');
+                }
+            } else {
+                // Tiktik regular: usa sessão
+                const payload = {
+                    usuario_tiktik_id: tiktik.id,
+                    produto_id: item.produto_id,
+                    variante: item.variante === '-' ? null : item.variante,
+                    quantidade_entregue: quantidade,
+                    dados_ops: item.ops_detalhe,
+                };
+
+                const response = await fetch('/api/arremates/sessoes/iniciar', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Erro desconhecido ao atribuir tarefa');
+                }
             }
-            
-            // Avisa o componente pai (AtribuicaoModal) que a operação foi um sucesso
+
+            // Avisa o componente pai que a operação foi um sucesso
             onConfirmar();
 
         } catch (err) {

@@ -13,7 +13,6 @@ import OPCortesAgente from './OPCortesAgente.jsx';
 import OPQuickLogModal from './OPQuickLogModal.jsx';
 import { obterProdutos as obterProdutosDoStorage } from '/js/utils/storage.js';
 import { mostrarMensagem, mostrarConfirmacao } from '/js/utils/popups.js';
-import { BotaoIA } from './UIAgenteIA.jsx';
 import UICarregando from './UICarregando.jsx';
 
 async function fetchCortesEmEstoque() {
@@ -52,6 +51,8 @@ export default function OPCortesTela() {
     const [agenteRescanKey, setAgenteRescanKey] = useState(0);
     const [agenteEstado, setAgenteEstado] = useState('idle');
     const agenteRef = useRef(null);
+    const [refreshingEstoque, setRefreshingEstoque] = useState(false);
+    const primeiroLoad = useRef(true);
 
     const ITENS_POR_PAGINA_CORTES = 6;
 
@@ -84,6 +85,51 @@ export default function OPCortesTela() {
     }, []);
 
     useEffect(() => { carregarDados(); }, [carregarDados]);
+
+    // ── Auto-start: dispara o agente assim que os dados carregam pela primeira vez ──
+    useEffect(() => {
+        if (!carregando && produtos.length > 0 && primeiroLoad.current) {
+            primeiroLoad.current = false;
+            setAgenteRescanKey(k => k + 1);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [carregando, produtos.length]);
+
+    // ── Auto-refresh ao retornar à aba do navegador ──
+    useEffect(() => {
+        const handleVisibility = () => {
+            if (document.visibilityState !== 'visible') return;
+            carregarDados();
+            if (agenteEstado === 'done') setAgenteRescanKey(k => k + 1);
+        };
+        document.addEventListener('visibilitychange', handleVisibility);
+        return () => document.removeEventListener('visibilitychange', handleVisibility);
+    }, [carregarDados, agenteEstado]);
+
+    // ── Rescan ao fechar o Painel de Demandas (gaveta no mesmo DOM) ──
+    // Só rescana o agente — o restante da aba não precisa recarregar.
+    useEffect(() => {
+        const handlePainelFechado = () => {
+            if (agenteEstado === 'done') setAgenteRescanKey(k => k + 1);
+        };
+        window.addEventListener('painel-demandas-fechado', handlePainelFechado);
+        return () => window.removeEventListener('painel-demandas-fechado', handlePainelFechado);
+    }, [agenteEstado]);
+
+    // ── Refresh manual do estoque (apenas cortes, sem recarregar tudo) ──
+    const handleRefreshEstoque = useCallback(async () => {
+        setRefreshingEstoque(true);
+        try {
+            const cortesData = await fetchCortesEmEstoque();
+            setCortesEmEstoque(cortesData);
+            setPaginaCortes(1);
+            setRadarRefreshKey(k => k + 1);
+        } catch {
+            mostrarMensagem('Erro ao atualizar estoque.', 'erro');
+        } finally {
+            setRefreshingEstoque(false);
+        }
+    }, []);
 
     // ── Exclusão de corte ──
     const handleExcluirCorte = async (corte) => {
@@ -224,13 +270,18 @@ export default function OPCortesTela() {
 
                     {/* Botão do agente — fica sempre na linha dos outros botões */}
                     {!quickLogAberto && (
-                        <BotaoIA
-                            estado={agenteEstado}
-                            textoIdle="Plano de Corte"
-                            textoScanning="Analisando..."
-                            textoDone="Fechar Agente"
+                        <button
+                            className={`op-agente-corte-btn${agenteEstado !== 'idle' ? ` ${agenteEstado}` : ''}`}
                             onClick={() => agenteRef.current?.handleClick()}
-                        />
+                            title={agenteEstado === 'done' ? 'Fechar o Agente de Corte' : 'Abrir Agente de Corte'}
+                        >
+                            <i className="fas fa-robot agente-corte-icon"></i>
+                            <span>
+                                {agenteEstado === 'idle' ? 'Agente de Corte'
+                                : agenteEstado === 'scanning' ? 'Analisando...'
+                                : 'Fechar Agente'}
+                            </span>
+                        </button>
                     )}
                 </div>
 
@@ -262,10 +313,20 @@ export default function OPCortesTela() {
                 {!quickLogAberto && (
                     <div className="op-cortes-estoque-secao">
                         <div className="op-cortes-estoque-titulo-row">
-                            <h3 className="op-cortes-estoque-titulo">
-                                <i className="fas fa-boxes"></i>
-                                Estoque de Cortes
-                            </h3>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <h3 className="op-cortes-estoque-titulo">
+                                    <i className="fas fa-boxes"></i>
+                                    Estoque de Cortes
+                                </h3>
+                                <button
+                                    className="op-cortes-refresh-btn"
+                                    onClick={handleRefreshEstoque}
+                                    disabled={refreshingEstoque}
+                                    title="Atualizar estoque"
+                                >
+                                    <i className={`fas fa-sync-alt${refreshingEstoque ? ' fa-spin' : ''}`}></i>
+                                </button>
+                            </div>
                             {cortesEmEstoque.length > 0 && (
                                 <span className="op-cortes-estoque-badge">
                                     {cortesEmEstoque.length} {cortesEmEstoque.length === 1 ? 'lote' : 'lotes'}

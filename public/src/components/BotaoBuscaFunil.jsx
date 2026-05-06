@@ -64,6 +64,8 @@ export default function BotaoBuscaFunil({ onIniciarProducao, permissoes }) {
     const handleClose = () => {
         setModalAberto(false);
         checkPrioridades();
+        // Avisa outros componentes na página que o painel fechou (ex: agente de corte rescana)
+        window.dispatchEvent(new CustomEvent('painel-demandas-fechado'));
     };
 
     // --- 3 estados visuais do FAB ---

@@ -47,6 +47,8 @@ export default function ArremateTelaSelecaoProduto({
     tiktikContexto,
     onLoteConfirmado,
     itensPréselecionados,
+    onItensCarregados,   // callback: (itens) => void — notifica o pai com a lista completa da fila
+    onConfirmarLote,     // override: async (itens) => void — se fornecido, substitui o handler de sessão (ex: externo)
 }) {
     const [todosOsItens, setTodosOsItens] = useState([]);
     const [itensFiltrados, setItensFiltrados] = useState([]);
@@ -57,18 +59,12 @@ export default function ArremateTelaSelecaoProduto({
     const [paginaAtual, setPaginaAtual] = useState(1);
     const ITENS_POR_PAGINA = 6;
 
-    const [modoSelecao, setModoSelecao] = useState(isBatchMode);
+    // isBatchMode é usado DIRETAMENTE — sem estado derivado — para evitar stale closures
     const [itensSelecionados, setItensSelecionados] = useState([]);
     const [modalLoteAberto, setModalLoteAberto] = useState(false);
     const [carregandoLote, setCarregandoLote] = useState(false);
 
-    // Resetar quando o modal for reaberto ou modo mudar
-    useEffect(() => {
-        setModoSelecao(isBatchMode);
-        setItensSelecionados([]);
-    }, [isBatchMode]);
-
-    // Aplicar pré-seleção externa (ex: Auto-Lote IA)
+    // Aplicar pré-seleção externa (Auto-Lote IA): quando o pai envia itens pré-selecionados
     useEffect(() => {
         if (itensPréselecionados?.length > 0) {
             setItensSelecionados(itensPréselecionados);
@@ -76,7 +72,8 @@ export default function ArremateTelaSelecaoProduto({
     }, [itensPréselecionados]);
 
     const handleCardClick = (item) => {
-        if (modoSelecao) {
+        if (isBatchMode) {
+            // Modo seleção múltipla: toggle
             setItensSelecionados(prev => {
                 const jaSelecionado = prev.some(
                     i => i.produto_id === item.produto_id && i.variante === item.variante
@@ -89,6 +86,7 @@ export default function ArremateTelaSelecaoProduto({
                 return [...prev, item];
             });
         } else {
+            // Modo individual: navega direto para confirmação
             onItemSelect(item);
         }
     };
@@ -96,24 +94,29 @@ export default function ArremateTelaSelecaoProduto({
     const handleConfirmarAtribuicaoLote = async () => {
         setCarregandoLote(true);
         try {
-            const token = localStorage.getItem('token');
-            const payload = { tiktikId: tiktikContexto.id, itens: itensSelecionados };
-            const response = await fetch('/api/arremates/sessoes/iniciar-lote', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                },
-                body: JSON.stringify(payload),
-            });
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Erro desconhecido ao atribuir o lote');
+            if (typeof onConfirmarLote === 'function') {
+                // Delega para o pai (ex: ArremateExternoTela usa /api/arremates/externo)
+                await onConfirmarLote(itensSelecionados);
+            } else {
+                // Fluxo padrão: sessão de tiktik
+                const token = localStorage.getItem('token');
+                const payload = { tiktikId: tiktikContexto.id, itens: itensSelecionados };
+                const response = await fetch('/api/arremates/sessoes/iniciar-lote', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                    },
+                    body: JSON.stringify(payload),
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Erro desconhecido ao atribuir o lote');
+                }
+                mostrarMensagem('Lote atribuído com sucesso!', 'sucesso');
             }
-            mostrarMensagem('Lote atribuído com sucesso!', 'sucesso');
             setModalLoteAberto(false);
             setItensSelecionados([]);
-            setModoSelecao(false);
             if (typeof onLoteConfirmado === 'function') onLoteConfirmado();
         } catch (err) {
             console.error('Erro ao atribuir lote:', err);
@@ -138,6 +141,7 @@ export default function ArremateTelaSelecaoProduto({
             setTodosOsItens(itens);
             setItensFiltrados(itens);
             setOpcoesDeFiltro(extrairOpcoesDeFiltro(itens));
+            onItensCarregados?.(itens); // notifica o pai (Auto-Lote IA)
         } catch (err) {
             console.error('Erro em ArremateTelaSelecaoProduto:', err);
             setErro(err.message);
@@ -233,7 +237,7 @@ export default function ArremateTelaSelecaoProduto({
     return (
         <>
             {/* Banner de contexto de lote */}
-            {modoSelecao && tiktikContexto && (
+            {isBatchMode && tiktikContexto && (
                 <div className="arremate-banner-contexto">
                     Atribuindo lote para: <strong>{tiktikContexto.nome}</strong>
                 </div>
@@ -287,7 +291,7 @@ export default function ArremateTelaSelecaoProduto({
             </div>
 
             {/* FAB de seleção — aparece com 1+ itens selecionados */}
-            {modoSelecao && itensSelecionados.length > 0 && (
+            {isBatchMode && itensSelecionados.length > 0 && (
                 <button
                     className="op-selecao-fab"
                     onClick={() => {

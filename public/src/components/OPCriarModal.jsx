@@ -108,6 +108,11 @@ export default function OPCriarModal({
     const [carregando, setCarregando]   = useState(false);
     const [produtoInfo, setProdutoInfo] = useState(null);
 
+    // ── Vínculo de demanda (Modo 2) ──
+    const [demandasAtivas, setDemandasAtivas]       = useState([]);
+    const [vincularDemanda, setVincularDemanda]     = useState(true);
+    const [demandaVinculadaId, setDemandaVinculadaId] = useState(null);
+
     // ── Inicialização ao abrir ──
     useEffect(() => {
         if (!isOpen) return;
@@ -115,6 +120,9 @@ export default function OPCriarModal({
         setObservacoes('');
         setOpcaoParcial('A');
         setCorteUsado(null);
+        setDemandasAtivas([]);
+        setVincularDemanda(true);
+        setDemandaVinculadaId(null);
 
         if (modoComCorte) {
             setProdutoInfo({
@@ -123,6 +131,22 @@ export default function OPCriarModal({
             });
             setQuantidade(corteExistente.quantidade || 1);
             setCenario('modo2');
+
+            // Busca demandas pendentes para o produto — mostra checkbox de vínculo se encontrar
+            if (corteExistente.produto_id) {
+                const token = localStorage.getItem('token');
+                fetch(`/api/demandas/pendentes-por-produto?produto_id=${corteExistente.produto_id}`, {
+                    headers: { 'Authorization': `Bearer ${token}` },
+                })
+                    .then(r => r.ok ? r.json() : [])
+                    .then(data => {
+                        if (Array.isArray(data) && data.length > 0) {
+                            setDemandasAtivas(data);
+                            setDemandaVinculadaId(String(data[0].id));
+                        }
+                    })
+                    .catch(() => {}); // falha silenciosa — fluxo normal sem vínculo
+            }
             return;
         }
 
@@ -200,6 +224,10 @@ export default function OPCriarModal({
                 if (!dataEntrega) return mostrarMensagem('Informe a data de entrega.', 'aviso');
                 if (qtd > corteExistente.quantidade) return mostrarMensagem(`Máximo: ${corteExistente.quantidade} pçs.`, 'aviso');
 
+                const demandaIdFinal = (vincularDemanda && demandaVinculadaId)
+                    ? parseInt(demandaVinculadaId, 10)
+                    : null;
+
                 const numOP = await getNextOPNumber();
                 const op = await apiCriarOP(token, {
                     numero: numOP,
@@ -210,7 +238,7 @@ export default function OPCriarModal({
                     observacoes: observacoes || null,
                     status: 'produzindo',
                     corte_origem_id: corteExistente.id,
-                    demanda_id: null,
+                    demanda_id: demandaIdFinal,
                 });
                 mostrarMensagem(`OP #${op.numero} criada (${qtd} pçs)!`, 'sucesso');
                 onOPCriada(); onClose();
@@ -383,6 +411,48 @@ export default function OPCriarModal({
                             <span>PC #{corteExistente.pn} — {corteExistente.quantidade} pçs disponíveis</span>
                         </div>
                     )}
+
+                    {/* Vínculo de demanda — aparece só se existirem demandas pendentes para o produto */}
+                    {demandasAtivas.length > 0 && (
+                        <div className="op-criar-modal-vinculo">
+                            <label className="op-criar-modal-vinculo-label">
+                                <input
+                                    type="checkbox"
+                                    checked={vincularDemanda}
+                                    onChange={e => setVincularDemanda(e.target.checked)}
+                                    className="op-criar-modal-vinculo-check"
+                                />
+                                <span>Vincular ao Painel de Demandas</span>
+                            </label>
+                            {vincularDemanda && (
+                                demandasAtivas.length === 1 ? (
+                                    <div className="op-criar-modal-vinculo-info">
+                                        <i className="fas fa-link"></i>
+                                        <span>
+                                            {demandasAtivas[0].produto_sku} — {demandasAtivas[0].quantidade_solicitada} pçs
+                                            {demandasAtivas[0].data_solicitacao && (
+                                                ` · ${new Date(demandasAtivas[0].data_solicitacao).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`
+                                            )}
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <select
+                                        className="op-criar-modal-input op-criar-modal-vinculo-select"
+                                        value={demandaVinculadaId || ''}
+                                        onChange={e => setDemandaVinculadaId(e.target.value)}
+                                    >
+                                        {demandasAtivas.map(d => (
+                                            <option key={d.id} value={String(d.id)}>
+                                                {d.produto_sku} — {d.quantidade_solicitada} pçs
+                                                {d.data_solicitacao ? ` · ${new Date(d.data_solicitacao).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )
+                            )}
+                        </div>
+                    )}
+
                     {renderFormQtd(corteExistente.quantidade)}
                     {renderFormBase()}
                 </>

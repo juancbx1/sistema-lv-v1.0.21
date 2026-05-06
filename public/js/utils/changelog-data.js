@@ -13,6 +13,19 @@
 export const changelog = [
     {
         versao: '1.25.0',
+        data: '06/05/2026',
+        admin: [
+            'Ajustes finos de design na aba de "Cortes" da página de OPS',
+            'Sistema de cortes e ops busca as informacoes automaticamente',
+            'Ao realizar gerar uma OP a partir da aba de cortes, o sistema verifica se existe demanda para o produto, e se tiver mantem o vinculo automaticamente'
+            
+        ],
+        dashboard: [
+            // Vazio — esta atualização não afeta as funcionárias
+        ],
+    },
+    {
+        versao: '1.25.0',
         data: '05/05/2026',
         admin: [
             'Quantidade de peças já cortadas agora sao exibidas no card de demanda (Painel de Demandas)',

@@ -7619,6 +7619,29 @@ body.autenticado {
 .op-cortes-estoque-vazio p { font-size: 0.9rem; font-weight: 600; color: #64748b; margin: 0; }
 .op-cortes-estoque-vazio span { font-size: 0.8rem; color: #94a3b8; }
 
+/* Botão de refresh do estoque de cortes */
+.op-cortes-refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+}
+.op-cortes-refresh-btn:hover:not(:disabled) {
+    background: #eff6ff;
+    color: var(--gs-primaria);
+    border-color: #bfdbfe;
+}
+.op-cortes-refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* ─────────────────────────────────────────────────
    CARD DE CORTE EM ESTOQUE v2
 ───────────────────────────────────────────────── */
@@ -7852,6 +7875,40 @@ body.autenticado {
     border-radius: 10px;
     margin-top: 10px;
     overflow: hidden;
+}
+
+/* Badge "Ao vivo" */
+.op-cortes-agente-ao-vivo {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-bottom: 1px solid #f1f5f9;
+    background: #f8fffe;
+}
+.op-cortes-agente-ao-vivo-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #22c55e;
+    flex-shrink: 0;
+    animation: agente-pulso 2s ease-in-out infinite;
+}
+@keyframes agente-pulso {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+    50%       { opacity: 0.8; box-shadow: 0 0 0 4px rgba(34,197,94,0); }
+}
+.op-cortes-agente-ao-vivo-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #16a34a;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.op-cortes-agente-ao-vivo-hora {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    margin-left: 2px;
 }
 
 /* Estado "em dia" — verde */
@@ -8437,4 +8494,425 @@ body.autenticado {
         width: 48px;
         height: 48px;
     }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   BOTÃO AGENTE DE CORTE / OPS — Animação estilo IA
+   Estados: idle (gradiente azul/roxo) | scanning (scan beam) | done (azul índigo)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.op-agente-corte-btn {
+    position: relative;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 20px;
+    min-height: 44px;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    color: #fff;
+    white-space: nowrap;
+    flex-shrink: 0;
+
+    /* Gradiente animado azul → roxo */
+    background: linear-gradient(110deg, #1a6cf5 0%, #7c3aed 45%, #1a6cf5 100%);
+    background-size: 220% 100%;
+    animation:
+        agente-corte-grad   3s ease-in-out infinite,
+        agente-corte-glow   2.2s ease-in-out infinite alternate;
+
+    transition: transform 0.15s ease, filter 0.2s ease;
+}
+
+.op-agente-corte-btn:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.12);
+}
+
+.op-agente-corte-btn:active {
+    transform: translateY(0px);
+    filter: brightness(0.95);
+}
+
+/* — Shimmer sweep diagonal — */
+.op-agente-corte-btn::before {
+    content: '';
+    position: absolute;
+    top: -10%;
+    left: -90%;
+    width: 55%;
+    height: 120%;
+    background: linear-gradient(
+        105deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.12) 35%,
+        rgba(255, 255, 255, 0.28) 50%,
+        rgba(255, 255, 255, 0.12) 65%,
+        transparent 100%
+    );
+    transform: skewX(-12deg);
+    animation: agente-corte-shimmer 3s ease-in-out infinite;
+    pointer-events: none;
+}
+
+/* — Barra de energia no rodapé — */
+.op-agente-corte-btn::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 5%;
+    width: 90%;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.0) 10%,
+        rgba(255, 255, 255, 0.65) 50%,
+        rgba(255, 255, 255, 0.0) 90%,
+        transparent 100%
+    );
+    animation: agente-corte-barra 3s ease-in-out infinite;
+    pointer-events: none;
+}
+
+/* — Ícone do robô: flutua levemente no idle — */
+.op-agente-corte-btn .agente-corte-icon {
+    font-size: 0.95rem;
+    display: inline-block;
+    animation: agente-corte-icon-idle 2.4s ease-in-out infinite;
+    filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.6));
+}
+
+/* ── Estado: scanning ── */
+.op-agente-corte-btn.scanning {
+    animation:
+        agente-corte-grad      0.9s linear infinite,
+        agente-corte-glow-scan 0.7s ease-in-out infinite alternate;
+}
+
+/* Scan beam vertical varre o botão */
+.op-agente-corte-btn.scanning::before {
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.5) 30%,
+        rgba(255, 255, 255, 0.9) 50%,
+        rgba(255, 255, 255, 0.5) 70%,
+        transparent 100%
+    );
+    transform: skewX(0deg);
+    border-radius: 0;
+    animation: agente-corte-scan-beam 0.85s linear infinite;
+}
+
+.op-agente-corte-btn.scanning::after {
+    display: none;
+}
+
+/* Ícone gira quando scanning */
+.op-agente-corte-btn.scanning .agente-corte-icon {
+    animation: fa-spin 0.9s linear infinite;
+    filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.9));
+}
+
+/* ── Estado: done (azul-índigo — cores primárias da página) ── */
+.op-agente-corte-btn.done {
+    background: linear-gradient(110deg, #1e40af 0%, #4338ca 50%, #1e40af 100%);
+    background-size: 220% 100%;
+    animation:
+        agente-corte-grad      4s ease-in-out infinite,
+        agente-corte-glow-done 2.5s ease-in-out infinite alternate;
+    opacity: 0.88;
+}
+
+.op-agente-corte-btn.done::before {
+    animation: agente-corte-shimmer 4.5s ease-in-out infinite;
+    opacity: 0.6;
+}
+
+.op-agente-corte-btn.done .agente-corte-icon {
+    animation: agente-corte-icon-done 3s ease-in-out infinite;
+    filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.5));
+}
+
+/* ═══════════ Keyframes ═══════════ */
+
+@keyframes agente-corte-grad {
+    0%   { background-position: 0%   50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0%   50%; }
+}
+
+@keyframes agente-corte-glow {
+    from { box-shadow: 0 2px 10px rgba(99, 102, 241, 0.35), 0 1px 3px rgba(0,0,0,0.15); }
+    to   { box-shadow: 0 3px 18px rgba(99, 102, 241, 0.6),  0 0 10px 2px rgba(124, 58, 237, 0.2); }
+}
+
+@keyframes agente-corte-glow-scan {
+    from { box-shadow: 0 2px 14px rgba(99, 102, 241, 0.55); }
+    to   { box-shadow: 0 4px 28px rgba(99, 102, 241, 0.85), 0 0 18px 4px rgba(124, 58, 237, 0.45); }
+}
+
+@keyframes agente-corte-glow-done {
+    from { box-shadow: 0 2px 10px rgba(67, 56, 202, 0.3); }
+    to   { box-shadow: 0 3px 18px rgba(67, 56, 202, 0.5), 0 0 8px 2px rgba(30, 64, 175, 0.2); }
+}
+
+@keyframes agente-corte-shimmer {
+    0%   { left: -90%; }
+    55%  { left: 130%; }
+    100% { left: 130%; }
+}
+
+@keyframes agente-corte-barra {
+    0%   { opacity: 0; transform: scaleX(0.0); transform-origin: left; }
+    25%  { opacity: 1; transform: scaleX(1.0); transform-origin: left; }
+    75%  { opacity: 1; transform: scaleX(1.0); transform-origin: right; }
+    100% { opacity: 0; transform: scaleX(0.0); transform-origin: right; }
+}
+
+@keyframes agente-corte-scan-beam {
+    0%   { top: -3px;   opacity: 0.6; }
+    10%  { opacity: 1; }
+    90%  { opacity: 1; }
+    100% { top: 100%;   opacity: 0.4; }
+}
+
+@keyframes agente-corte-icon-idle {
+    0%   { transform: translateY(0px)  rotate(0deg);   }
+    25%  { transform: translateY(-2px) rotate(-4deg);  }
+    50%  { transform: translateY(0px)  rotate(0deg);   }
+    75%  { transform: translateY(-1px) rotate(3deg);   }
+    100% { transform: translateY(0px)  rotate(0deg);   }
+}
+
+@keyframes agente-corte-icon-done {
+    0%, 100% { transform: scale(1);    }
+    50%       { transform: scale(1.1); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   AGENTE DE CORTE — Grid de cards (2 colunas)
+   Substitui a lista linear anterior
+   ═══════════════════════════════════════════════════════════════════ */
+
+.op-cortes-agente-lista {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    padding: 14px;
+    max-height: 460px;
+    overflow-y: auto;
+}
+
+.op-cortes-agente-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    transition: box-shadow 0.2s, transform 0.15s;
+
+    /* Entrada escalonada por índice */
+    animation: agente-card-entrada 0.32s ease both;
+    animation-delay: calc(var(--card-idx, 0) * 55ms);
+}
+
+.op-cortes-agente-card:hover {
+    box-shadow: 0 4px 14px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+
+/* Borda-charme: vermelha = déficit total | âmbar = cobertura parcial */
+.op-cortes-agente-card .card-borda-charme {
+    background: #dc2626;
+}
+.op-cortes-agente-card.parcial .card-borda-charme {
+    background: #f59e0b;
+}
+.op-cortes-agente-card.parcial {
+    border-color: #fed7aa;
+    background: #fffbf5;
+}
+
+/* Corpo: imagem + info */
+.op-cortes-agente-card-corpo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 12px 8px 18px;
+    flex: 1;
+}
+
+.op-cortes-agente-card-img {
+    width: 52px;
+    height: 52px;
+    object-fit: cover;
+    border-radius: 8px;
+    flex-shrink: 0;
+    background: #f1f5f9;
+}
+
+.op-cortes-agente-card-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.op-cortes-agente-card-variante {
+    font-size: 0.9rem;
+    font-weight: 800;
+    color: #1e293b;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+
+
+/* Botão Cortar — full width no rodapé do card */
+.op-cortes-agente-card-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin: 0 10px 10px;
+    padding: 7px 12px;
+    background: linear-gradient(90deg, #dbeafe, #bfdbfe);
+    border: 1px solid #93c5fd;
+    border-radius: 8px;
+    color: #1d4ed8;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.op-cortes-agente-card-btn:hover:not(:disabled) {
+    background: linear-gradient(90deg, #bfdbfe, #93c5fd);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+}
+.op-cortes-agente-card-btn:active:not(:disabled) { transform: scale(0.97); }
+.op-cortes-agente-card-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.op-cortes-agente-card-btn i { font-size: 0.72rem; }
+
+@keyframes agente-card-entrada {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Responsivo: 1 coluna em telas pequenas */
+@media (max-width: 520px) {
+    .op-cortes-agente-lista {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   AJUSTE: Botão Cortar — centralizado, não esticado
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Sobrescreve o botão full-width anterior */
+.op-cortes-agente-card-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    /* Centralizado — não estica */
+    width: auto;
+    align-self: center;
+    margin: 0 auto 12px;
+    padding: 9px 24px;
+    background: linear-gradient(90deg, #dbeafe, #bfdbfe);
+    border: 1px solid #93c5fd;
+    border-radius: 10px;
+    color: #1d4ed8;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+}
+.op-cortes-agente-card-btn:hover:not(:disabled) {
+    background: linear-gradient(90deg, #bfdbfe, #93c5fd);
+    box-shadow: 0 2px 10px rgba(37, 99, 235, 0.28);
+    transform: translateY(-1px);
+}
+.op-cortes-agente-card-btn:active:not(:disabled) { transform: scale(0.97); }
+.op-cortes-agente-card-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.op-cortes-agente-card-btn i { font-size: 0.72rem; }
+
+/* Déficit: horizontal, não esticado */
+.op-cortes-agente-card-deficit {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BADGE "AO VIVO" — Op-Pulso (aba OPs)
+   Identidade idêntica ao badge da aba de Cortes
+   ═══════════════════════════════════════════════════════════════════ */
+
+.op-pulso-ao-vivo {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+}
+
+.op-pulso-ao-vivo-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #22c55e;
+    flex-shrink: 0;
+    animation: agente-pulso 2s ease-in-out infinite;
+}
+
+.op-pulso-ao-vivo-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #16a34a;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.op-pulso-ao-vivo-hora {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    white-space: nowrap;
+}
+
+/* Remove padding/background do op-cortes-agente-ao-vivo quando usado inline no pulso */
+.op-pulso-left .op-cortes-agente-ao-vivo {
+    padding: 0;
+    border-bottom: none;
+    background: none;
 }

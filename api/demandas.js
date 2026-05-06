@@ -562,6 +562,50 @@ router.get('/buscar-produto', async (req, res) => {
     }
 });
 
+// GET /api/demandas/pendentes-por-produto?produto_id=X
+// Retorna demandas com status 'pendente' que envolvem o produto informado.
+// Usado pelo OPCriarModal para sugerir vínculo de demanda ao criar OP pelo estoque de cortes.
+router.get('/pendentes-por-produto', async (req, res) => {
+    const { produto_id } = req.query;
+    if (!produto_id) return res.status(400).json({ error: 'produto_id obrigatório.' });
+
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const result = await dbClient.query(`
+            SELECT DISTINCT
+                dp.id,
+                dp.produto_sku,
+                dp.quantidade_solicitada,
+                dp.data_solicitacao,
+                dp.observacoes,
+                dp.prioridade
+            FROM demandas_producao dp
+            JOIN produtos p ON (
+                p.sku = dp.produto_sku
+                OR (
+                    jsonb_typeof(p.grade) = 'array'
+                    AND EXISTS (
+                        SELECT 1 FROM jsonb_array_elements(p.grade) g
+                        WHERE g->>'sku' = dp.produto_sku
+                    )
+                )
+            )
+            WHERE p.id = $1
+              AND dp.status = 'pendente'
+              AND dp.arquivada_em IS NULL
+            ORDER BY dp.prioridade ASC, dp.data_solicitacao ASC
+        `, [produto_id]);
+
+        res.json(result.rows);
+    } catch (err) {
+        console.error('[GET /demandas/pendentes-por-produto]', err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
 // POST /api/demandas/lote
 // Cria múltiplas demandas de uma vez (Demanda Express).
 // Usa Promise.allSettled por item — uma falha não cancela as outras.

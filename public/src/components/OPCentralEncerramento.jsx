@@ -1,9 +1,8 @@
 // public/src/components/OPCentralEncerramento.jsx
 // Central de Encerramento — Agente IA + Pulso do Sistema
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { obterProdutos as obterProdutosDoStorage } from '/js/utils/storage.js';
-import { BotaoIA } from './UIAgenteIA.jsx';
 
 function isParcial(op) {
     if (!op.etapas || op.etapas.length === 0) return false;
@@ -28,6 +27,8 @@ export default function OPCentralEncerramento({ ops, onAbrirLote, resetKey }) {
     const [mensagensVisiveis, setMensagensVisiveis] = useState([]);
     const [opsEscaneadas, setOpsEscaneadas] = useState([]);
     const [opsSelecionadas, setOpsSelecionadas] = useState(new Set());
+    const [ultimoScan, setUltimoScan] = useState(null);
+    const primeiroLoad = useRef(true);
 
     // Reseta o agente quando um lote é concluído
     useEffect(() => {
@@ -35,6 +36,7 @@ export default function OPCentralEncerramento({ ops, onAbrirLote, resetKey }) {
         setMensagensVisiveis([]);
         setOpsEscaneadas([]);
         setOpsSelecionadas(new Set());
+        primeiroLoad.current = true; // permite novo auto-start após reset de lote
     }, [resetKey]);
 
     // --- Pulso do Sistema: métricas calculadas das ops da página atual ---
@@ -110,6 +112,7 @@ export default function OPCentralEncerramento({ ops, onAbrirLote, resetKey }) {
             setOpsEscaneadas(elegiveis);
             // Pré-seleciona todas por padrão
             setOpsSelecionadas(new Set(elegiveis.map(op => op.edit_id || op.id)));
+            setUltimoScan(new Date());
             setAgentState('done');
 
         } catch (err) {
@@ -150,14 +153,42 @@ export default function OPCentralEncerramento({ ops, onAbrirLote, resetKey }) {
         setOpsSelecionadas(new Set());
     };
 
+    // ── Auto-start: dispara o agente assim que as OPs carregam pela primeira vez ──
+    // Colocado após iniciarScan para evitar TDZ.
+    useEffect(() => {
+        if (ops.length > 0 && primeiroLoad.current && agentState === 'idle') {
+            primeiroLoad.current = false;
+            iniciarScan();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ops.length]);
+
+    // ── Rescan ao fechar o Painel de Demandas (gaveta no mesmo DOM) ──
+    // Colocado após iniciarScan para evitar referência antes da inicialização (TDZ).
+    useEffect(() => {
+        const handlePainelFechado = () => {
+            if (agentState === 'done') iniciarScan();
+        };
+        window.addEventListener('painel-demandas-fechado', handlePainelFechado);
+        return () => window.removeEventListener('painel-demandas-fechado', handlePainelFechado);
+    }, [agentState, iniciarScan]);
+
     return (
         <div className="op-central-encerramento">
 
             {/* ── PULSO DO SISTEMA ── */}
             <div className="op-pulso-sistema">
                 <div className="op-pulso-left">
-                    <span className="op-pulso-dot" title="Sistema conectado"></span>
-                    <span className="op-pulso-label">Sistema ao vivo</span>
+                    {/* Badge "Ao vivo" — mesma identidade da aba de Cortes */}
+                    <div className="op-pulso-ao-vivo">
+                        <span className="op-pulso-ao-vivo-dot"></span>
+                        <span className="op-pulso-ao-vivo-label">Ao vivo</span>
+                        {ultimoScan && (
+                            <span className="op-pulso-ao-vivo-hora">
+                                · atualizado às {ultimoScan.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                        )}
+                    </div>
 
                     <div className="op-pulso-chips">
                         <div className="op-pulso-chip" title="OPs ativas nesta página">
@@ -180,13 +211,18 @@ export default function OPCentralEncerramento({ ops, onAbrirLote, resetKey }) {
                     </div>
                 </div>
 
-                <BotaoIA
-                    estado={agentState}
-                    textoIdle="Finalizar OPs"
-                    textoScanning="Analisando..."
-                    textoDone="Fechar Agente"
+                <button
+                    className={`op-agente-corte-btn${agentState !== 'idle' ? ` ${agentState}` : ''}`}
                     onClick={agentState === 'idle' ? iniciarScan : resetar}
-                />
+                    title={agentState === 'done' ? 'Fechar o Agente de OPs' : 'Abrir Agente de OPs'}
+                >
+                    <i className="fas fa-robot agente-corte-icon"></i>
+                    <span>
+                        {agentState === 'idle' ? 'Agente de OPs'
+                        : agentState === 'scanning' ? 'Analisando...'
+                        : 'Fechar Agente'}
+                    </span>
+                </button>
             </div>
 
             {/* ── TERMINAL DE SCAN ── */}

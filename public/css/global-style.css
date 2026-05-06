@@ -6316,3 +6316,41 @@ font-weight: 500;
 .op-criar-modal-opcao-texto { display: flex; flex-direction: column; gap: 3px; }
 .op-criar-modal-opcao-texto strong { font-size: 0.85rem; color: var(--gs-secundaria); }
 .op-criar-modal-opcao-texto span { font-size: 0.75rem; color: var(--gs-texto-secundario); line-height: 1.4; }
+
+/* ── Vínculo de demanda no OPCriarModal (Modo 2 — Estoque de Cortes) ── */
+.op-criar-modal-vinculo {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+}
+.op-criar-modal-vinculo-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.83rem;
+    font-weight: 700;
+    color: #1d4ed8;
+    cursor: pointer;
+    user-select: none;
+}
+.op-criar-modal-vinculo-check {
+    width: 15px;
+    height: 15px;
+    accent-color: var(--gs-primaria);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.op-criar-modal-vinculo-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: #1e40af;
+    padding-left: 23px;
+}
+.op-criar-modal-vinculo-info i { font-size: 0.68rem; color: #3b82f6; flex-shrink: 0; }
+.op-criar-modal-vinculo-select { font-size: 0.82rem; padding: 7px 10px; }
