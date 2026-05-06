@@ -12,7 +12,7 @@
 
 export const changelog = [
     {
-        versao: '1.25.0',
+        versao: '1.26.0',
         data: '06/05/2026',
         admin: [
             'Ajustes finos de design na aba de "Cortes" da página de OPS',
