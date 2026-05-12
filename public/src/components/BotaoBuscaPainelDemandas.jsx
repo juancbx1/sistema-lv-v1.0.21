@@ -173,8 +173,11 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [], onC
             if (subfiltroCorte === 'SEM_CORTE' && temCorte)  return false;
         }
         if (!termoLimpo) return true;
-        return normalizarTexto(item.produto_nome).includes(termoLimpo) ||
-               normalizarTexto(item.variante).includes(termoLimpo);
+        const textoItem = normalizarTexto(
+            [item.produto_nome, item.variante, item.produto_sku].filter(Boolean).join(' ')
+        );
+        const palavras = termoLimpo.split(/\s+/).filter(Boolean);
+        return palavras.every(p => textoItem.includes(p));
     };
 
     // Contagens para os chips do sub-filtro de corte

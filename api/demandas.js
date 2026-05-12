@@ -562,40 +562,77 @@ router.get('/buscar-produto', async (req, res) => {
     }
 });
 
-// GET /api/demandas/pendentes-por-produto?produto_id=X
-// Retorna demandas com status 'pendente' que envolvem o produto informado.
+// GET /api/demandas/pendentes-por-produto?produto_id=X&variante=Y
+// Retorna demandas pendentes para o produto+variante informados, sem OP já criada.
 // Usado pelo OPCriarModal para sugerir vínculo de demanda ao criar OP pelo estoque de cortes.
+// - Filtra pela variante exata do corte (resolve produto_sku → variacao via grade)
+// - Exclui demandas que já possuem uma OP vinculada
+// - Retorna nome do produto e nome da variação para display legível no dropdown
 router.get('/pendentes-por-produto', async (req, res) => {
-    const { produto_id } = req.query;
+    const { produto_id, variante } = req.query;
     if (!produto_id) return res.status(400).json({ error: 'produto_id obrigatório.' });
+
+    // Normaliza a variante: null / undefined / '-' / '' → null
+    const varianteAlvo = (!variante || variante === '-' || variante.trim() === '') ? null : variante.trim();
 
     let dbClient;
     try {
         dbClient = await pool.connect();
+
+        // Busca nome do produto para o display
+        const produtoResult = await dbClient.query(
+            `SELECT nome, grade FROM produtos WHERE id = $1`, [produto_id]
+        );
+        if (produtoResult.rows.length === 0) return res.json([]);
+        const produto = produtoResult.rows[0];
+        const grade = (() => {
+            if (!produto.grade) return [];
+            if (typeof produto.grade === 'string') try { return JSON.parse(produto.grade); } catch(e) { return []; }
+            return Array.isArray(produto.grade) ? produto.grade : [];
+        })();
+
+        // Determina os SKUs do grade que correspondem à variante alvo
+        // Se varianteAlvo é null → só SKUs de grade onde variacao é null/vazio (produto sem variante)
+        // Se varianteAlvo é string → SKUs onde variacao === varianteAlvo
+        const skusAlvo = grade
+            .filter(g => {
+                const gVariacao = (!g.variacao || g.variacao === '-' || g.variacao.trim() === '') ? null : g.variacao.trim();
+                return gVariacao === varianteAlvo;
+            })
+            .map(g => g.sku)
+            .filter(Boolean);
+
+        // Se não há entradas de grade, tenta o sku principal do produto
+        // (produtos sem variantes podem ter demandas pelo sku principal)
+        let skusProdutoPrincipal = [];
+        if (skusAlvo.length === 0 && varianteAlvo === null) {
+            const skuPrinc = await dbClient.query(`SELECT sku FROM produtos WHERE id = $1`, [produto_id]);
+            if (skuPrinc.rows[0]?.sku) skusProdutoPrincipal = [skuPrinc.rows[0].sku];
+        }
+
+        const todosSkus = [...skusAlvo, ...skusProdutoPrincipal];
+        if (todosSkus.length === 0) return res.json([]); // nenhum SKU → sem demandas possíveis
+
         const result = await dbClient.query(`
-            SELECT DISTINCT
+            SELECT
                 dp.id,
                 dp.produto_sku,
                 dp.quantidade_solicitada,
                 dp.data_solicitacao,
                 dp.observacoes,
-                dp.prioridade
+                dp.prioridade,
+                $2::text  AS produto_nome,
+                $3::text  AS variacao
             FROM demandas_producao dp
-            JOIN produtos p ON (
-                p.sku = dp.produto_sku
-                OR (
-                    jsonb_typeof(p.grade) = 'array'
-                    AND EXISTS (
-                        SELECT 1 FROM jsonb_array_elements(p.grade) g
-                        WHERE g->>'sku' = dp.produto_sku
-                    )
-                )
-            )
-            WHERE p.id = $1
-              AND dp.status = 'pendente'
+            WHERE dp.produto_sku = ANY($1::text[])
+              AND dp.status IN ('pendente', 'em_atendimento')
               AND dp.arquivada_em IS NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM ordens_de_producao op
+                  WHERE op.demanda_id = dp.id
+              )
             ORDER BY dp.prioridade ASC, dp.data_solicitacao ASC
-        `, [produto_id]);
+        `, [todosSkus, produto.nome, varianteAlvo]);
 
         res.json(result.rows);
     } catch (err) {
@@ -670,6 +707,7 @@ router.patch('/:id/concluir', async (req, res) => {
 
 // GET /api/demandas/verificar-duplicata?sku=...
 // Retorna demandas ativas (não concluídas/canceladas) para o mesmo SKU.
+// Inclui estagio_atual: AGUARDANDO | COSTURA | ARREMATE
 router.get('/verificar-duplicata', async (req, res) => {
     const { sku } = req.query;
     if (!sku) return res.status(400).json({ error: 'SKU obrigatório.' });
@@ -677,13 +715,26 @@ router.get('/verificar-duplicata', async (req, res) => {
     try {
         dbClient = await pool.connect();
         const result = await dbClient.query(`
-            SELECT id, produto_sku, quantidade_solicitada, prioridade,
-                   status, data_solicitacao, solicitado_por
-            FROM demandas_producao
-            WHERE produto_sku = $1
-              AND status NOT IN ('concluida', 'cancelada')
-              AND arquivada_em IS NULL
-            ORDER BY data_solicitacao DESC
+            SELECT dp.id, dp.produto_sku, dp.quantidade_solicitada, dp.prioridade,
+                   dp.status, dp.data_solicitacao, dp.solicitado_por,
+                   CASE
+                     WHEN EXISTS (
+                       SELECT 1 FROM ordens_de_producao op
+                       WHERE op.demanda_id = dp.id
+                         AND op.status IN ('em-aberto', 'produzindo')
+                     ) THEN 'COSTURA'
+                     WHEN EXISTS (
+                       SELECT 1 FROM ordens_de_producao op
+                       WHERE op.demanda_id = dp.id
+                         AND op.status = 'finalizado'
+                     ) THEN 'ARREMATE'
+                     ELSE 'AGUARDANDO'
+                   END as estagio_atual
+            FROM demandas_producao dp
+            WHERE dp.produto_sku = $1
+              AND dp.status NOT IN ('concluida', 'cancelada')
+              AND dp.arquivada_em IS NULL
+            ORDER BY dp.data_solicitacao DESC
             LIMIT 5
         `, [sku.trim()]);
         res.status(200).json({

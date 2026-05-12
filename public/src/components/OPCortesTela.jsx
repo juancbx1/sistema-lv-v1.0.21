@@ -39,6 +39,9 @@ export default function OPCortesTela() {
     const [usuarioLogado, setUsuarioLogado] = useState(null);
     const [gerandoOP, setGerandoOP] = useState(null);
     const [paginaCortes, setPaginaCortes] = useState(1);
+    const paginacaoRef = useRef(null);
+    // Mapa produto_id|variante → demandas pendentes — para badge visual nos cards de corte
+    const [demandasMap, setDemandasMap] = useState(new Map());
 
     // ── OPCriarModal (Modo 2 — Estoque de Cortes) ──
     const [opCriarModalAberto, setOpCriarModalAberto] = useState(false);
@@ -49,10 +52,7 @@ export default function OPCortesTela() {
     const [quickLogPreenchido, setQuickLogPreenchido] = useState(null); // {produto, variante, quantidadeSugerida}
     const [radarRefreshKey, setRadarRefreshKey] = useState(0);
     const [agenteRescanKey, setAgenteRescanKey] = useState(0);
-    const [agenteEstado, setAgenteEstado] = useState('idle');
-    const agenteRef = useRef(null);
     const [refreshingEstoque, setRefreshingEstoque] = useState(false);
-    const primeiroLoad = useRef(true);
 
     const ITENS_POR_PAGINA_CORTES = 6;
 
@@ -63,20 +63,67 @@ export default function OPCortesTela() {
             const token = localStorage.getItem('token');
             if (!token) throw new Error('Não autenticado');
 
-            const [todosProdutos, dadosUsuario, cortesData] = await Promise.all([
+            const [todosProdutos, dadosUsuario, cortesData, demandasData] = await Promise.all([
                 obterProdutosDoStorage(),
                 fetch('/api/usuarios/me', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 }).then(res => res.json()),
-                fetchCortesEmEstoque()
+                fetchCortesEmEstoque(),
+                fetch('/api/demandas', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }).then(r => r.ok ? r.json() : []).catch(() => []),
             ]);
 
             if (dadosUsuario.error) throw new Error(dadosUsuario.error);
 
-            setProdutos(todosProdutos.filter(p => !p.is_kit));
+            const produtosSimples = todosProdutos.filter(p => !p.is_kit);
+            setProdutos(produtosSimples);
             setUsuarioLogado(dadosUsuario);
             setCortesEmEstoque(cortesData);
             setPaginaCortes(1);
+
+            // Constrói mapa produto_id|variante → demandas pendentes (para badge nos cards)
+            // Filtra só demandas ativas (pendente ou em_atendimento) e não arquivadas
+            const demandasPendentes = Array.isArray(demandasData)
+                ? demandasData.filter(d => ['pendente', 'em_atendimento'].includes(d.status))
+                : [];
+
+            const novoMap = new Map();
+            for (const d of demandasPendentes) {
+                if (!d.produto_sku) continue;
+                const skuBusca = d.produto_sku.trim().toUpperCase();
+                // Resolve produto_id e variante a partir do produto_sku
+                for (const p of produtosSimples) {
+                    let match = false;
+                    let varianteResolvida = null;
+                    const gradeArr = Array.isArray(p.grade) ? p.grade : [];
+
+                    if (p.sku && p.sku.trim().toUpperCase() === skuBusca) {
+                        match = true; // SKU principal do produto
+                    } else {
+                        const g = gradeArr.find(g => g.sku && g.sku.trim().toUpperCase() === skuBusca);
+                        if (g) {
+                            match = true;
+                            varianteResolvida = g.variacao || null;
+                        }
+                    }
+
+                    if (match) {
+                        const chave = `${p.id}|${varianteResolvida || '-'}`;
+                        if (!novoMap.has(chave)) novoMap.set(chave, []);
+                        novoMap.get(chave).push({
+                            id: d.id,
+                            quantidade_solicitada: d.quantidade_solicitada,
+                            prioridade: d.prioridade,
+                            data_solicitacao: d.data_solicitacao,
+                            produto_nome: p.nome,
+                            variacao: varianteResolvida,
+                        });
+                        break;
+                    }
+                }
+            }
+            setDemandasMap(novoMap);
         } catch (err) {
             setErro(`Falha ao carregar dados: ${err.message}`);
         } finally {
@@ -86,50 +133,29 @@ export default function OPCortesTela() {
 
     useEffect(() => { carregarDados(); }, [carregarDados]);
 
-    // ── Auto-start: dispara o agente assim que os dados carregam pela primeira vez ──
-    useEffect(() => {
-        if (!carregando && produtos.length > 0 && primeiroLoad.current) {
-            primeiroLoad.current = false;
-            setAgenteRescanKey(k => k + 1);
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [carregando, produtos.length]);
-
     // ── Auto-refresh ao retornar à aba do navegador ──
     useEffect(() => {
         const handleVisibility = () => {
             if (document.visibilityState !== 'visible') return;
             carregarDados();
-            if (agenteEstado === 'done') setAgenteRescanKey(k => k + 1);
         };
         document.addEventListener('visibilitychange', handleVisibility);
         return () => document.removeEventListener('visibilitychange', handleVisibility);
-    }, [carregarDados, agenteEstado]);
+    }, [carregarDados]);
 
-    // ── Rescan ao fechar o Painel de Demandas (gaveta no mesmo DOM) ──
-    // Só rescana o agente — o restante da aba não precisa recarregar.
-    useEffect(() => {
-        const handlePainelFechado = () => {
-            if (agenteEstado === 'done') setAgenteRescanKey(k => k + 1);
-        };
-        window.addEventListener('painel-demandas-fechado', handlePainelFechado);
-        return () => window.removeEventListener('painel-demandas-fechado', handlePainelFechado);
-    }, [agenteEstado]);
-
-    // ── Refresh manual do estoque (apenas cortes, sem recarregar tudo) ──
+    // ── Refresh manual do estoque ──
+    // Chama carregarDados completo para garantir que o mapa de demandas também seja atualizado
     const handleRefreshEstoque = useCallback(async () => {
         setRefreshingEstoque(true);
         try {
-            const cortesData = await fetchCortesEmEstoque();
-            setCortesEmEstoque(cortesData);
-            setPaginaCortes(1);
+            await carregarDados();
             setRadarRefreshKey(k => k + 1);
         } catch {
             mostrarMensagem('Erro ao atualizar estoque.', 'erro');
         } finally {
             setRefreshingEstoque(false);
         }
-    }, []);
+    }, [carregarDados]);
 
     // ── Exclusão de corte ──
     const handleExcluirCorte = async (corte) => {
@@ -246,9 +272,9 @@ export default function OPCortesTela() {
                 {/* RADAR */}
                 <OPCortesRadar refreshKey={radarRefreshKey} />
 
-                {/* AÇÕES + BOTÃO DO AGENTE — linha horizontal */}
-                <div className="op-cortes-controles">
-                    {!quickLogAberto && (
+                {/* AÇÕES */}
+                {!quickLogAberto && (
+                    <div className="op-cortes-controles">
                         <div className="op-cortes-acoes-btns">
                             <button
                                 className="op-cortes-btn-quicklog"
@@ -266,33 +292,15 @@ export default function OPCortesTela() {
                                 Em breve
                             </button>
                         </div>
-                    )}
+                    </div>
+                )}
 
-                    {/* Botão do agente — fica sempre na linha dos outros botões */}
-                    {!quickLogAberto && (
-                        <button
-                            className={`op-agente-corte-btn${agenteEstado !== 'idle' ? ` ${agenteEstado}` : ''}`}
-                            onClick={() => agenteRef.current?.handleClick()}
-                            title={agenteEstado === 'done' ? 'Fechar o Agente de Corte' : 'Abrir Agente de Corte'}
-                        >
-                            <i className="fas fa-robot agente-corte-icon"></i>
-                            <span>
-                                {agenteEstado === 'idle' ? 'Agente de Corte'
-                                : agenteEstado === 'scanning' ? 'Analisando...'
-                                : 'Fechar Agente'}
-                            </span>
-                        </button>
-                    )}
-                </div>
-
-                {/* Conteúdo do agente — bloco full-width abaixo dos controles */}
+                {/* Agente de Corte — idle card + terminal + resultado */}
                 {!quickLogAberto && (
                     <OPCortesAgente
-                        ref={agenteRef}
                         produtos={produtos}
                         onCortarAgora={handleCortarAgora}
                         rescanKey={agenteRescanKey}
-                        onStateChange={setAgenteEstado}
                     />
                 )}
 
@@ -338,6 +346,8 @@ export default function OPCortesTela() {
                             {cortesPaginados.length > 0 ? (
                                 cortesPaginados.map(corte => {
                                     const produtoCompleto = produtos.find(p => p.id === corte.produto_id);
+                                    const chaveCorte = `${corte.produto_id}|${corte.variante || '-'}`;
+                                    const demandasDoCorte = demandasMap.get(chaveCorte) || [];
                                     return (
                                         <OPCorteEstoqueCard
                                             key={corte.id}
@@ -346,6 +356,7 @@ export default function OPCortesTela() {
                                             onGerarOP={handleGerarOP}
                                             onExcluir={handleExcluirCorte}
                                             isGerando={opCriarModalAberto && corteParaOP?.id === corte.id}
+                                            demandasVinculadas={demandasDoCorte}
                                         />
                                     );
                                 })
@@ -359,11 +370,19 @@ export default function OPCortesTela() {
                         </div>
 
                         {totalPaginasCortes > 1 && (
-                            <OPPaginacaoWrapper
-                                totalPages={totalPaginasCortes}
-                                currentPage={paginaCortes}
-                                onPageChange={setPaginaCortes}
-                            />
+                            <div ref={paginacaoRef}>
+                                <OPPaginacaoWrapper
+                                    totalPages={totalPaginasCortes}
+                                    currentPage={paginaCortes}
+                                    onPageChange={(novaPagina) => {
+                                        setPaginaCortes(novaPagina);
+                                        // Garante que a paginação fique visível após a troca (mesmo que a página fique maior)
+                                        requestAnimationFrame(() => {
+                                            paginacaoRef.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+                                        });
+                                    }}
+                                />
+                            </div>
                         )}
                     </div>
                 )}

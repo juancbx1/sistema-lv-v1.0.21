@@ -1,49 +1,44 @@
 // public/src/components/OPCortesAgente.jsx
 // Agente de Planejamento de Corte — scan de demandas pendentes + plano do dia
 
-import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+
+// Estado calmo — agente não sabe do déficit até escanear
+const FRASES_MONITORANDO = [
+    'Estou monitorando o estoque de cortes. Quer cortar agora?.',
+    'Acompanhando as demandas de corte em tempo real.',
+    'Nada detectado ainda. Posso analisar o plano de corte quando quiser.',
+    'Sistemas ativos. Aguardo seu comando para verificar os cortes pendentes.',
+    'Estou olhando para as pendencias de cortes. Devo verificar agora?',
+    'Tudo dentro do esperado até agora. Quer um plano de corte atualizado?',
+];
+
+// Estado pós-corte parcial — ficaram itens no plano sem corte registrado
+const FRASES_PARCIAL = [
+    'Reparei que ficaram itens no plano sem corte registrado. Verifico agora?',
+    'Você não cortou todos os itens do plano. Quer resolver o restante?',
+    'Ainda há déficit de corte na linha. Posso rever o plano?',
+    'Percebo que ficaram pendências de corte. Revejo o plano agora?',
+    'Missão incompleta! Ainda há itens aguardando corte no plano.',
+    'Deixou alguns para depois? Posso verificar o que ainda precisa de corte.',
+];
 
 const MENSAGENS_SCAN = [
     'Verificando demandas abertas...',
     'Cruzando com estoque de cortes...',
-    'Calculando déficit de produção...',
+    'Calculando solicitaçoes de produção...',
     'Gerando plano de corte...',
 ];
 
 const INTERVALO_AO_VIVO_MS = 90_000; // 90 segundos
 
-const OPCortesAgente = forwardRef(function OPCortesAgente({ produtos, onCortarAgora, rescanKey, onStateChange }, ref) {
+export default function OPCortesAgente({ produtos, onCortarAgora, rescanKey }) {
     const [agentState, setAgentState] = useState('idle'); // 'idle' | 'scanning' | 'done'
     const [mensagensVisiveis, setMensagensVisiveis] = useState([]);
     const [plano, setPlano] = useState([]);
-    const [ultimoScan, setUltimoScan] = useState(null); // timestamp do último scan completo
-
-    useEffect(() => {
-        onStateChange?.(agentState);
-    }, [agentState, onStateChange]);
-
-    // Auto-rescan quando rescanKey muda (após QuickLog com sucesso ou retorno à aba).
-    // Funciona mesmo se o agente foi desmontado e remontou em 'idle'.
-    useEffect(() => {
-        if (rescanKey > 0) {
-            iniciarScan();
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [rescanKey]);
-
-    // ── Polling "ao vivo": rescan automático a cada 90s enquanto em 'done' e aba visível ──
-    useEffect(() => {
-        if (agentState !== 'done') return;
-
-        const timer = setInterval(() => {
-            if (document.visibilityState === 'visible') {
-                iniciarScan();
-            }
-        }, INTERVALO_AO_VIVO_MS);
-
-        return () => clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [agentState]);
+    const [ultimoScan, setUltimoScan] = useState(null);
+    const [fraseIdx, setFraseIdx] = useState(() => Math.floor(Math.random() * FRASES_MONITORANDO.length));
+    const [voltouParcial, setVoltouParcial] = useState(false);
 
     const iniciarScan = useCallback(async () => {
         setAgentState('scanning');
@@ -98,23 +93,52 @@ const OPCortesAgente = forwardRef(function OPCortesAgente({ produtos, onCortarAg
         }
     }, [produtos]);
 
-    const resetar = () => {
+    const resetar = useCallback(() => {
+        // Se o plano tinha itens, o usuário fechou sem cortar tudo → parcial
+        const foiParcial = plano.length > 0;
+        setVoltouParcial(foiParcial);
         setAgentState('idle');
         setMensagensVisiveis([]);
         setPlano([]);
         setUltimoScan(null);
-    };
+        setFraseIdx(Math.floor(Math.random() * (foiParcial ? FRASES_PARCIAL : FRASES_MONITORANDO).length));
+    }, [plano]);
 
-    // Expõe handleClick para o pai acionar via ref (sem duplicar o botão)
-    useImperativeHandle(ref, () => ({
-        handleClick: () => {
-            if (agentState === 'idle') iniciarScan();
-            else resetar();
+    // Auto-rescan quando rescanKey muda (após QuickLog com sucesso).
+    useEffect(() => {
+        if (rescanKey > 0) {
+            iniciarScan();
         }
-    }), [agentState, iniciarScan]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [rescanKey]);
 
-    // Só renderiza o conteúdo — o botão fica no pai (OPCortesTela)
-    if (agentState === 'idle') return null;
+    // Polling "ao vivo": rescan automático a cada 90s enquanto em 'done' e aba visível
+    useEffect(() => {
+        if (agentState !== 'done') return;
+
+        const timer = setInterval(() => {
+            if (document.visibilityState === 'visible') {
+                iniciarScan();
+            }
+        }, INTERVALO_AO_VIVO_MS);
+
+        return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [agentState]);
+
+    // Rescan ao fechar o Painel de Demandas
+    useEffect(() => {
+        const handlePainelFechado = () => {
+            if (agentState === 'done') iniciarScan();
+        };
+        window.addEventListener('painel-demandas-fechado', handlePainelFechado);
+        return () => window.removeEventListener('painel-demandas-fechado', handlePainelFechado);
+    }, [agentState, iniciarScan]);
+
+    // Determina tom do agente no repouso
+    const frases    = voltouParcial ? FRASES_PARCIAL : FRASES_MONITORANDO;
+    const frase     = frases[fraseIdx % frases.length];
+    const classeCard = voltouParcial ? ' parcial' : '';
 
     // Formata horário do último scan
     const horaUltimoScan = ultimoScan
@@ -123,6 +147,22 @@ const OPCortesAgente = forwardRef(function OPCortesAgente({ produtos, onCortarAg
 
     return (
         <div className="op-cortes-agente">
+
+            {/* ── IDLE CARD — o agente se comunica antes de escanear ── */}
+            {agentState === 'idle' && (
+                <div className={`op-agente-idle-card${classeCard}`}>
+                    <div className="op-agente-robo-avatar">
+                        <i className="fas fa-robot"></i>
+                    </div>
+                    <div className="op-agente-idle-conteudo">
+                        <p className="op-agente-idle-msg">"{frase}"</p>
+                        <button className="op-agente-idle-btn" onClick={iniciarScan}>
+                            <i className={`fas ${voltouParcial ? 'fa-redo' : 'fa-search'}`}></i>
+                            {voltouParcial ? 'Verificar pendências' : 'Analisar agora'}
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* ── TERMINAL DE SCAN ── */}
             {agentState === 'scanning' && (
@@ -146,13 +186,22 @@ const OPCortesAgente = forwardRef(function OPCortesAgente({ produtos, onCortarAg
             {agentState === 'done' && (
                 <div className="op-cortes-agente-resultado">
 
-                    {/* Badge "ao vivo" */}
+                    {/* Badge "ao vivo" + botão fechar */}
                     <div className="op-cortes-agente-ao-vivo">
                         <span className="op-cortes-agente-ao-vivo-dot"></span>
                         <span className="op-cortes-agente-ao-vivo-label">Ao vivo</span>
                         {horaUltimoScan && (
                             <span className="op-cortes-agente-ao-vivo-hora">· atualizado às {horaUltimoScan}</span>
                         )}
+                        <button
+                            className="op-agente-corte-btn done"
+                            onClick={resetar}
+                            title="Fechar o Agente de Corte"
+                            style={{ marginLeft: 'auto' }}
+                        >
+                            <i className="fas fa-robot agente-corte-icon"></i>
+                            <span>Fechar Agente</span>
+                        </button>
                     </div>
 
                     {plano.length === 0 && (
@@ -238,6 +287,4 @@ const OPCortesAgente = forwardRef(function OPCortesAgente({ produtos, onCortarAg
             )}
         </div>
     );
-});
-
-export default OPCortesAgente;
+}

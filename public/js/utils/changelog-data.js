@@ -12,6 +12,20 @@
 
 export const changelog = [
     {
+        versao: '1.27.0',
+        data: '11/05/2026',
+        admin: [
+            'Correçäo de bug/desvinculo entre um corte (gerar op a partir do estoque) e uma demanda criada (painel de demandas)',
+            'Cards do estoque de cortes agora exibe se o corte pode ser/estar vinculado a uma demanda',
+            'Lógica aprimorada na criacao de demandas. Agora, ao tentar criar uma demanda ja existente em algum lugar do fluxo, o sistema exibe onde essa demanda está, orientando o usuario a como prosseguir e qual opcao escolher',
+            
+        ],
+        dashboard: [
+            // Vazio — esta atualização não afeta as funcionárias
+        ],
+    },
+
+    {
         versao: '1.26.0',
         data: '06/05/2026',
         admin: [

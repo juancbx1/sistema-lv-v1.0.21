@@ -158,7 +158,12 @@ const CarrinhoSection = ({ carrinho, onAtualizarQtd, onRemover, onLimpar, onTogg
                         {c.temDuplicata === true && (
                             <div className="gs-carrinho-aviso-duplicata">
                                 <i className="fas fa-exclamation-triangle"></i>
-                                Já existe demanda ativa. Pode criar mesmo assim ou remover.
+                                {(() => {
+                                    const estagios = (c.demandasAtivas || []).map(d => d.estagio_atual);
+                                    if (estagios.includes('COSTURA'))  return 'Já em costura! Pode criar mesmo assim ou remover.';
+                                    if (estagios.includes('ARREMATE')) return 'Já em arremate/embalagem. Pode criar mesmo assim ou remover.';
+                                    return 'Já existe demanda ativa. Pode criar mesmo assim ou remover.';
+                                })()}
                             </div>
                         )}
                     </div>
@@ -181,11 +186,12 @@ const CarrinhoSection = ({ carrinho, onAtualizarQtd, onRemover, onLimpar, onTogg
     );
 };
 
-// Mapeamento de status do banco para labels amigáveis
-const STATUS_LABEL = {
-    pendente:       { label: 'Aguardando início', cor: '#6c757d', icone: 'fa-clock' },
-    em_atendimento: { label: 'Em atendimento',    cor: 'var(--gs-primaria)', icone: 'fa-spinner' },
-    em_producao:    { label: 'Em andamento',       cor: '#8e44ad', icone: 'fa-cogs' },
+// Mapeamento de estágio do pipeline para labels amigáveis
+// Usa o campo estagio_atual retornado pelo endpoint verificar-duplicata
+const ESTAGIO_LABEL = {
+    AGUARDANDO: { label: 'Aguardando início',         cor: '#6c757d',            icone: 'fa-clock' },
+    COSTURA:    { label: 'Em costura',                cor: 'var(--gs-primaria)', icone: 'fa-cut' },
+    ARREMATE:   { label: 'Em arremate / embalagem',   cor: '#8e44ad',            icone: 'fa-clipboard-check' },
 };
 
 // ── Tela de duplicata (modo normal) ──────────────────────────
@@ -260,7 +266,7 @@ const TelaDuplicata = ({ item, demandasAtivas, onCriarMesmoAssim, onVoltar, onDe
             )}
 
             {demandasAtivas.map(d => {
-                const statusMeta = STATUS_LABEL[d.status] || { label: d.status, cor: '#6c757d', icone: 'fa-circle' };
+                const estagioMeta = ESTAGIO_LABEL[d.estagio_atual] || ESTAGIO_LABEL.AGUARDANDO;
                 return (
                     <div key={d.id} className="gs-duplicata-card">
                         <div className="card-borda-charme" style={{ backgroundColor: d.prioridade === 1 ? '#e74c3c' : 'var(--cor-primaria)' }}></div>
@@ -276,9 +282,9 @@ const TelaDuplicata = ({ item, demandasAtivas, onCriarMesmoAssim, onVoltar, onDe
                             <span>{formatarData(d.data_solicitacao)}</span>
                             {d.solicitado_por && <><span>·</span><span>por {d.solicitado_por}</span></>}
                             <span>·</span>
-                            <span className="gs-duplicata-status" style={{ color: statusMeta.cor }}>
-                                <i className={`fas ${statusMeta.icone}`} style={{ marginRight: 4, fontSize: '0.75em' }}></i>
-                                {statusMeta.label}
+                            <span className="gs-duplicata-status" style={{ color: estagioMeta.cor }}>
+                                <i className={`fas ${estagioMeta.icone}`} style={{ marginRight: 4, fontSize: '0.75em' }}></i>
+                                {estagioMeta.label}
                             </span>
                         </div>
                         {ajustandoId === d.id ? (
@@ -552,11 +558,13 @@ export default function ModalAdicionarDemanda({ onClose, onDemandaCriada, itemPr
             );
             const data = await res.json();
             setCarrinho(prev => prev.map(c =>
-                c.item.sku === item.sku ? { ...c, temDuplicata: data.temDuplicata } : c
+                c.item.sku === item.sku
+                    ? { ...c, temDuplicata: data.temDuplicata, demandasAtivas: data.demandasAtivas || [] }
+                    : c
             ));
         } catch(e) {
             setCarrinho(prev => prev.map(c =>
-                c.item.sku === item.sku ? { ...c, temDuplicata: false } : c
+                c.item.sku === item.sku ? { ...c, temDuplicata: false, demandasAtivas: [] } : c
             ));
         }
     };

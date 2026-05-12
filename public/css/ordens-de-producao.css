@@ -6945,6 +6945,170 @@ body.autenticado {
     }
 }
 
+/* ==========================================================================
+   AGENTE IDLE CARD — estado de repouso com comunicação ao supervisor
+   ========================================================================== */
+
+.op-agente-idle-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 18px;
+    background: #f8faff;
+    border: 1.5px solid #e0e7ff;
+    border-radius: 12px;
+    margin-top: 4px;
+    transition: border-color 0.3s, background 0.3s;
+}
+
+.op-agente-idle-card.alerta {
+    background: linear-gradient(135deg, #fff8f8 0%, #fff4ee 100%);
+    border-color: #fca5a5;
+    animation: op-idle-card-glow 2.8s ease-in-out infinite;
+}
+
+@keyframes op-idle-card-glow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.18); }
+    50%       { box-shadow: 0 0 0 7px rgba(239, 68, 68, 0); }
+}
+
+/* Parcial — retorno após encerramento incompleto (âmbar, diferente do vermelho de alerta) */
+.op-agente-idle-card.parcial {
+    background: linear-gradient(135deg, #fffbeb 0%, #fff7ed 100%);
+    border-color: #fcd34d;
+    animation: op-idle-card-glow-parcial 2.4s ease-in-out infinite;
+}
+
+@keyframes op-idle-card-glow-parcial {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.22); }
+    50%       { box-shadow: 0 0 0 7px rgba(245, 158, 11, 0); }
+}
+
+.op-agente-idle-card.parcial .op-agente-robo-avatar {
+    background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+    animation: op-robo-ring-parcial 2s ease-in-out infinite;
+}
+
+@keyframes op-robo-ring-parcial {
+    0%   { box-shadow: 0 0 0 0   rgba(245, 158, 11, 0.7),
+                       0 0 0 0   rgba(249, 115, 22, 0.35); }
+    70%  { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0),
+                       0 0 0 20px rgba(249, 115, 22, 0); }
+    100% { box-shadow: 0 0 0 0   rgba(245, 158, 11, 0),
+                       0 0 0 0   rgba(249, 115, 22, 0); }
+}
+
+.op-agente-idle-card.parcial .op-agente-idle-msg {
+    color: #78350f;
+    font-style: normal;
+    font-weight: 600;
+}
+
+.op-agente-idle-card.parcial .op-agente-idle-btn {
+    background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+    animation: op-btn-ring-parcial 2.2s ease-in-out infinite;
+}
+
+@keyframes op-btn-ring-parcial {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.45); }
+    50%       { box-shadow: 0 0 0 7px rgba(245, 158, 11, 0); }
+}
+
+/* Robô */
+.op-agente-robo-avatar {
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--gs-primaria, #3498db) 0%, #8e44ad 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 1.45rem;
+    flex-shrink: 0;
+}
+
+.op-agente-idle-card.alerta .op-agente-robo-avatar {
+    background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+    animation: op-robo-ring 1.7s ease-in-out infinite;
+}
+
+@keyframes op-robo-ring {
+    0%   { box-shadow: 0 0 0 0   rgba(239, 68, 68, 0.75),
+                       0 0 0 0   rgba(249, 115, 22, 0.35); }
+    70%  { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0),
+                       0 0 0 20px rgba(249, 115, 22, 0); }
+    100% { box-shadow: 0 0 0 0   rgba(239, 68, 68, 0),
+                       0 0 0 0   rgba(249, 115, 22, 0); }
+}
+
+/* Conteúdo textual */
+.op-agente-idle-conteudo {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    flex: 1;
+    min-width: 0;
+}
+
+.op-agente-idle-msg {
+    font-size: 0.84rem;
+    color: #374151;
+    margin: 0;
+    line-height: 1.45;
+    font-style: italic;
+}
+
+.op-agente-idle-card.alerta .op-agente-idle-msg {
+    color: #7f1d1d;
+    font-style: normal;
+    font-weight: 600;
+}
+
+/* Botão Analisar */
+.op-agente-idle-btn {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 15px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    background: var(--gs-primaria, #3498db);
+    color: #fff;
+    transition: transform 0.1s, filter 0.15s;
+}
+
+.op-agente-idle-card.alerta .op-agente-idle-btn {
+    background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+    animation: op-btn-ring 2.2s ease-in-out infinite;
+}
+
+@keyframes op-btn-ring {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45); }
+    50%       { box-shadow: 0 0 0 7px rgba(239, 68, 68, 0); }
+}
+
+.op-agente-idle-btn:hover  { transform: translateY(-1px); filter: brightness(1.08); }
+.op-agente-idle-btn:active { transform: translateY(0); }
+
+/* Tablet */
+@media (max-width: 1024px) {
+    .op-agente-idle-card { padding: 13px 14px; gap: 12px; }
+    .op-agente-robo-avatar { width: 48px; height: 48px; font-size: 1.25rem; }
+    .op-agente-idle-msg { font-size: 0.8rem; }
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+    .op-agente-idle-card { flex-wrap: wrap; }
+    .op-agente-idle-btn  { align-self: stretch; justify-content: center; }
+}
+
 /* ============================================================
    REDESIGN ABA CORTES v2
    OPCortesRadar + OPQuickLogModal + OPCorteEstoqueCard
@@ -7579,7 +7743,6 @@ body.autenticado {
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    margin-bottom: 14px;
 }
 
 .op-cortes-estoque-titulo {
@@ -7795,6 +7958,52 @@ body.autenticado {
 }
 .op-corte-card-gerar-op:active:not(:disabled) { transform: scale(0.98); }
 .op-corte-card-gerar-op:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Variante "tem-demanda" — botão Gerar OP com contexto de vínculo */
+.op-corte-card-gerar-op.tem-demanda {
+    background: linear-gradient(90deg, #dbeafe, #bfdbfe);
+    color: #1e40af;
+    font-weight: 700;
+}
+.op-corte-card-gerar-op.tem-demanda:hover:not(:disabled) {
+    background: linear-gradient(90deg, #bfdbfe, #93c5fd);
+}
+
+/* Badge de demanda vinculada no card do estoque de cortes */
+.op-corte-card-demanda-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    background: #eff6ff;
+    border-top: 1px solid #dbeafe;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #1d4ed8;
+}
+.op-corte-card-demanda-badge i {
+    font-size: 0.68rem;
+    flex-shrink: 0;
+    color: #3b82f6;
+}
+.op-corte-card-demanda-badge-texto {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.op-corte-card-demanda-badge-urgente {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fbbf24;
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
 
 /* ─────────────────────────────────────────────────
    AGENTE DE PLANEJAMENTO DE CORTE
@@ -8915,4 +9124,35 @@ body.autenticado {
     padding: 0;
     border-bottom: none;
     background: none;
+}
+
+/* ==========================================================================
+   DOT PULSANTE NA ABA DE OPs (substitui badge numérico)
+   ========================================================================== */
+
+.op-tab-pulso-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ef4444;
+    margin-left: 6px;
+    flex-shrink: 0;
+    vertical-align: middle;
+    animation: op-tab-dot-pulso 1.8s ease-in-out infinite;
+}
+
+@keyframes op-tab-dot-pulso {
+    0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+    50%       { opacity: 0.85; transform: scale(1.1); box-shadow: 0 0 0 4px rgba(239, 68, 68, 0); }
+}
+
+/* ==========================================================================
+   BOTÃO FECHAR NO TOPO DO RESULTADO DO AGENTE (OPCentralEncerramento)
+   ========================================================================== */
+
+.op-agente-resultado-top {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 8px;
 }

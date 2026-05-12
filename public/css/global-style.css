@@ -4431,23 +4431,48 @@ font-weight: 500;
 }
 .pd-card-qtd {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1px;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
     white-space: nowrap;
 }
-.pd-card-qtd strong {
-    font-size: 1.35rem;
+.pd-card-qtd-bloco {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+}
+.pd-card-qtd-num {
+    font-size: 1.25rem;
     font-weight: 800;
-    color: var(--gs-secundaria);
     letter-spacing: -0.02em;
     line-height: 1;
 }
-.pd-card-qtd small {
-    font-size: 0.65rem;
+.pd-card-qtd-bloco.pedido .pd-card-qtd-num {
+    color: var(--gs-secundaria);
+}
+.pd-card-qtd-bloco.producao .pd-card-qtd-num {
     color: var(--gs-texto-secundario);
+}
+.pd-card-qtd-bloco.producao.excedente .pd-card-qtd-num {
+    color: #16a34a;
+}
+.pd-card-qtd-label {
+    font-size: 0.62rem;
     font-weight: 500;
     line-height: 1;
+    color: var(--gs-texto-secundario);
+}
+.pd-card-qtd-bloco.excedente .pd-card-qtd-label {
+    color: #16a34a;
+    font-weight: 700;
+}
+.pd-card-qtd-sep {
+    font-size: 0.75rem;
+    color: var(--gs-texto-secundario);
+    opacity: 0.5;
+    align-self: center;
+    margin-bottom: 2px;
 }
 
 /* ── CTAs por estágio ── */
@@ -4559,6 +4584,18 @@ font-weight: 500;
     background: #fefde7;
     color: #7d6608;
     border: 1px dashed #f4d03f;
+}
+/* Vinculado — azul primário — corte em estoque reservado para esta demanda */
+.pd-corte-badge--vinculado {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #93c5fd;
+    font-weight: 700;
+    animation: pd-badge-pulse 2.2s ease-in-out infinite;
+}
+@keyframes pd-badge-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.25); }
+    50%       { box-shadow: 0 0 0 4px rgba(59,130,246,0); }
 }
 
 /* ── Sub-filtro de corte (abaixo das pills) ── */

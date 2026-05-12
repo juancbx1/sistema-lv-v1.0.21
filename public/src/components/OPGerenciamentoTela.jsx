@@ -13,7 +13,9 @@ import UICarregando from './UICarregando.jsx';
 
 export default function OPGerenciamentoTela({ opsPendentesGlobal, onRefreshContadores, permissoes = [] }) {
     const [ops, setOps] = useState([]);
+    const [totalOps, setTotalOps] = useState(0);
     const [carregando, setCarregando] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [erro, setErro] = useState(null);
 
     // Modal de detalhes individual
@@ -33,6 +35,9 @@ export default function OPGerenciamentoTela({ opsPendentesGlobal, onRefreshConta
 
     // Controla se é o primeiro carregamento (para o InitTerminal)
     const isFirstLoadRef = useRef(true);
+    // Ref para a paginação — usado para scroll após trocar de página
+    const paginacaoRef = useRef(null);
+    const isPaginatingRef = useRef(false);
 
     const ITENS_POR_PAGINA_OPS = 6;
     const lastSearchParamsRef = useRef(null);
@@ -76,6 +81,7 @@ export default function OPGerenciamentoTela({ opsPendentesGlobal, onRefreshConta
 
             setOps(opsFinais);
             setTotalPaginas(dataOps.pages || 1);
+            setTotalOps(dataOps.total || 0);
         } catch (err) {
             console.error('Erro em OPGerenciamentoTela:', err);
             setErro(err.message);
@@ -88,6 +94,16 @@ export default function OPGerenciamentoTela({ opsPendentesGlobal, onRefreshConta
     useEffect(() => {
         buscarDados(pagina, filtros);
     }, [pagina, filtros, buscarDados]);
+
+    // Após carregar nova página, rola a paginação para a tela (sem subir, só se necessário)
+    useEffect(() => {
+        if (!carregando && isPaginatingRef.current) {
+            isPaginatingRef.current = false;
+            requestAnimationFrame(() => {
+                paginacaoRef.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+            });
+        }
+    }, [carregando]);
 
     const handleFiltroChange = useCallback((novosFiltros) => {
         setFiltros(prev => ({
@@ -155,6 +171,21 @@ export default function OPGerenciamentoTela({ opsPendentesGlobal, onRefreshConta
         }
     };
 
+    // Troca de página — marca que é paginação para o useEffect de scroll
+    const handlePageChange = useCallback((novaPagina) => {
+        isPaginatingRef.current = true;
+        setPagina(novaPagina);
+    }, []);
+
+    // Refresh rápido sem spinner de tela cheia
+    const handleRefresh = useCallback(async () => {
+        setRefreshing(true);
+        lastSearchParamsRef.current = null;
+        await buscarDados(pagina, filtros);
+        if (onRefreshContadores) onRefreshContadores();
+        setRefreshing(false);
+    }, [pagina, filtros, buscarDados, onRefreshContadores]);
+
     // Decide o que mostrar no lugar do spinner
     const mostrarInitTerminal = carregando && isFirstLoadRef.current;
     const mostrarSpinnerSimples = carregando && !isFirstLoadRef.current;
@@ -171,13 +202,46 @@ export default function OPGerenciamentoTela({ opsPendentesGlobal, onRefreshConta
                 resetKey={loteResetKey}
             />
 
-            {carregando && <UICarregando variante="bloco" />}
+            {/* Spinner só no primeiro carregamento — paginações mantêm os cards visíveis */}
+            {carregando && isFirstLoadRef.current && <UICarregando variante="bloco" />}
 
             {erro && <p style={{ color: 'red', textAlign: 'center' }}>Erro: {erro}</p>}
 
-            {/* Lista de OPs */}
-            {!carregando && !erro && (
-                <>
+            {/* Lista de OPs — visível também durante reload de paginação (sem scroll-jump) */}
+            {!isFirstLoadRef.current && !erro && (
+                <div style={{
+                    opacity: carregando ? 0.45 : 1,
+                    pointerEvents: carregando ? 'none' : 'auto',
+                    transition: 'opacity 0.15s'
+                }}>
+                    {/* Título da seção — espelhado do op-cortes-estoque-titulo-row */}
+                    <div className="op-cortes-estoque-titulo-row">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <h3 className="op-cortes-estoque-titulo">
+                                <i className="fas fa-list-alt"></i>
+                                Ordens de Produção
+                            </h3>
+                            <button
+                                className="op-cortes-refresh-btn"
+                                onClick={handleRefresh}
+                                disabled={refreshing || carregando}
+                                title="Atualizar lista"
+                            >
+                                <i className={`fas fa-sync-alt${(refreshing || carregando) ? ' fa-spin' : ''}`}></i>
+                            </button>
+                        </div>
+                        {totalOps > 0 && (
+                            <span className="op-cortes-estoque-badge">
+                                {totalOps} {(() => {
+                                    if (filtros.status === 'finalizado') return totalOps === 1 ? 'finalizada' : 'finalizadas';
+                                    if (filtros.status === 'cancelada')  return totalOps === 1 ? 'cancelada'  : 'canceladas';
+                                    if (filtros.status === 'produzindo') return totalOps === 1 ? 'produzindo' : 'produzindo';
+                                    return totalOps === 1 ? 'OP em aberto' : 'OPs em aberto';
+                                })()}
+                            </span>
+                        )}
+                    </div>
+
                     <div className="op-cards-container">
                         {ops.length > 0 ? (
                             ops.map(op => (
@@ -196,13 +260,15 @@ export default function OPGerenciamentoTela({ opsPendentesGlobal, onRefreshConta
                     </div>
 
                     {totalPaginas > 1 && (
-                        <OPPaginacaoWrapper
-                            totalPages={totalPaginas}
-                            currentPage={pagina}
-                            onPageChange={setPagina}
-                        />
+                        <div ref={paginacaoRef}>
+                            <OPPaginacaoWrapper
+                                totalPages={totalPaginas}
+                                currentPage={pagina}
+                                onPageChange={handlePageChange}
+                            />
+                        </div>
                     )}
-                </>
+                </div>
             )}
 
             {/* Modal de detalhes individual */}

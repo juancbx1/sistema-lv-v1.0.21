@@ -125,17 +125,42 @@ export default function OPCriarModal({
         setDemandaVinculadaId(null);
 
         if (modoComCorte) {
-            setProdutoInfo({
-                nome: corteExistente.produto || 'Produto',
-                imagem: corteExistente.imagem_produto || '/img/placeholder-image.png',
+            // Resolve imagem da variante a partir do grade do produto (mesmo padrão do Modo 1)
+            obterProdutos().then(produtos => {
+                const p = produtos.find(x => x.id === corteExistente.produto_id);
+                if (p) {
+                    let img = p.imagem;
+                    const varNorm = corteExistente.variante && corteExistente.variante !== '-'
+                        ? corteExistente.variante : null;
+                    if (varNorm && Array.isArray(p.grade)) {
+                        const g = p.grade.find(g => g.variacao === varNorm);
+                        if (g?.imagem) img = g.imagem;
+                    }
+                    setProdutoInfo({ nome: p.nome, imagem: img || '/img/placeholder-image.png' });
+                } else {
+                    // Fallback para o dado que vem do corte
+                    setProdutoInfo({
+                        nome: corteExistente.produto || 'Produto',
+                        imagem: corteExistente.imagem_produto || '/img/placeholder-image.png',
+                    });
+                }
+            }).catch(() => {
+                setProdutoInfo({
+                    nome: corteExistente.produto || 'Produto',
+                    imagem: corteExistente.imagem_produto || '/img/placeholder-image.png',
+                });
             });
+
             setQuantidade(corteExistente.quantidade || 1);
             setCenario('modo2');
 
-            // Busca demandas pendentes para o produto — mostra checkbox de vínculo se encontrar
+            // Busca demandas pendentes para o produto+variante — mostra checkbox de vínculo se encontrar
             if (corteExistente.produto_id) {
                 const token = localStorage.getItem('token');
-                fetch(`/api/demandas/pendentes-por-produto?produto_id=${corteExistente.produto_id}`, {
+                const varParam = corteExistente.variante && corteExistente.variante !== '-'
+                    ? `&variante=${encodeURIComponent(corteExistente.variante)}`
+                    : '';
+                fetch(`/api/demandas/pendentes-por-produto?produto_id=${corteExistente.produto_id}${varParam}`, {
                     headers: { 'Authorization': `Bearer ${token}` },
                 })
                     .then(r => r.ok ? r.json() : [])
@@ -429,10 +454,14 @@ export default function OPCriarModal({
                                     <div className="op-criar-modal-vinculo-info">
                                         <i className="fas fa-link"></i>
                                         <span>
-                                            {demandasAtivas[0].produto_sku} — {demandasAtivas[0].quantidade_solicitada} pçs
+                                            {demandasAtivas[0].produto_nome || demandasAtivas[0].produto_sku}
+                                            {demandasAtivas[0].variacao && demandasAtivas[0].variacao !== '-'
+                                                ? ` — ${demandasAtivas[0].variacao}` : ''}
+                                            {' · '}{demandasAtivas[0].quantidade_solicitada} pçs
                                             {demandasAtivas[0].data_solicitacao && (
                                                 ` · ${new Date(demandasAtivas[0].data_solicitacao).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`
                                             )}
+                                            {parseInt(demandasAtivas[0].prioridade) === 1 ? ' ⚡ Urgente' : ''}
                                         </span>
                                     </div>
                                 ) : (
@@ -441,12 +470,19 @@ export default function OPCriarModal({
                                         value={demandaVinculadaId || ''}
                                         onChange={e => setDemandaVinculadaId(e.target.value)}
                                     >
-                                        {demandasAtivas.map(d => (
-                                            <option key={d.id} value={String(d.id)}>
-                                                {d.produto_sku} — {d.quantidade_solicitada} pçs
-                                                {d.data_solicitacao ? ` · ${new Date(d.data_solicitacao).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}` : ''}
-                                            </option>
-                                        ))}
+                                        {demandasAtivas.map(d => {
+                                            const nome = d.produto_nome || d.produto_sku;
+                                            const variacao = d.variacao && d.variacao !== '-' ? ` — ${d.variacao}` : '';
+                                            const data = d.data_solicitacao
+                                                ? ` · ${new Date(d.data_solicitacao).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`
+                                                : '';
+                                            const urgente = parseInt(d.prioridade) === 1 ? ' ⚡ Urgente' : '';
+                                            return (
+                                                <option key={d.id} value={String(d.id)}>
+                                                    {nome}{variacao} — {d.quantidade_solicitada} pçs{data}{urgente}
+                                                </option>
+                                            );
+                                        })}
                                     </select>
                                 )
                             )}

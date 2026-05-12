@@ -7,7 +7,7 @@ function formatarData(dataISO) {
     return new Date(dataISO).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 }
 
-export default function OPCorteEstoqueCard({ corte, produto, onGerarOP, onExcluir, isGerando }) {
+export default function OPCorteEstoqueCard({ corte, produto, onGerarOP, onExcluir, isGerando, demandasVinculadas = [] }) {
 
     const getImagem = () => {
         if (!produto) return '/img/placeholder-image.png';
@@ -66,14 +66,37 @@ export default function OPCorteEstoqueCard({ corte, produto, onGerarOP, onExclui
                 </div>
             </div>
 
+            {/* Badge de demanda vinculada — só aparece se há demandas pendentes para este produto+variante */}
+            {demandasVinculadas.length > 0 && (
+                <div className="op-corte-card-demanda-badge">
+                    <i className="fas fa-link"></i>
+                    {demandasVinculadas.length === 1 ? (
+                        <>
+                            <span className="op-corte-card-demanda-badge-texto">
+                                Demanda pendente · {demandasVinculadas[0].quantidade_solicitada} pçs
+                            </span>
+                            {parseInt(demandasVinculadas[0].prioridade) === 1 && (
+                                <span className="op-corte-card-demanda-badge-urgente">⚡ Urgente</span>
+                            )}
+                        </>
+                    ) : (
+                        <span className="op-corte-card-demanda-badge-texto">
+                            {demandasVinculadas.length} demandas pendentes
+                        </span>
+                    )}
+                </div>
+            )}
+
             {/* Tira de ação: Gerar OP */}
             <button
-                className="op-corte-card-gerar-op"
+                className={`op-corte-card-gerar-op${demandasVinculadas.length > 0 ? ' tem-demanda' : ''}`}
                 onClick={() => onGerarOP(corte)}
                 disabled={isGerando}
             >
                 {isGerando ? (
                     <><div className="op-spinner-btn"></div> Gerando OP...</>
+                ) : demandasVinculadas.length > 0 ? (
+                    <><i className="fas fa-link"></i> Gerar OP Vinculada</>
                 ) : (
                     <><i className="fas fa-arrow-right"></i> Gerar OP</>
                 )}

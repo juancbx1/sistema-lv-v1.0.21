@@ -177,9 +177,7 @@ function App() {
         >
           <i className="fas fa-list-alt"></i> OPs
           {qtdOpsPendentes > 0 && (
-              <span className="gs-tab-badge" title={`${qtdOpsPendentes} OP(s) prontas para finalizar`}>
-                  {qtdOpsPendentes}
-              </span>
+              <span className="op-tab-pulso-dot" title="Há OPs prontas para finalizar"></span>
           )}
         </button>
 

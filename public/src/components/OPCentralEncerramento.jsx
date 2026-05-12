@@ -4,6 +4,38 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { obterProdutos as obterProdutosDoStorage } from '/js/utils/storage.js';
 
+// ── Frases de repouso: o agente "não sabe de nada" até escanear ──────────────
+
+// Estado calmo — nenhuma op claramente pronta na página
+const FRASES_MONITORANDO = [
+    'Estou de olho na linha de produção. Tudo parece normal por aqui.',
+    'Monitorando as OPs em tempo real. Posso analisar quando quiser.',
+    'Nada chamou minha atenção ainda. Quer que eu faça uma verificação?',
+    'Sistemas ativos. A qualquer momento posso rodar uma análise completa.',
+    'Linha de produção sob observação. Aguardo seu comando.',
+    'Tudo dentro do esperado até agora. Devo verificar mesmo assim?',
+];
+
+// Estado alerta — o agente "sente" que algo está acontecendo
+const FRASES_ALERTA = [
+    'Detectei movimentação no setor de Cortes. Preciso analisar para confirmar.',
+    'Acho que temos OPs aguardando encerramento. Posso verificar agora?',
+    'Algo chama minha atenção na produção. Recomendo uma análise.',
+    'Meus sensores captaram atividade de OPs. Posso confirmar se autorizar.',
+    'Há indícios de OPs concluídas. Posso escanear o sistema?',
+    'Preciso verificar... — parece que há pendências no setor de Cortes.',
+];
+
+// Estado pós-encerramento parcial — o agente "lembra" que ficou coisa pra trás
+const FRASES_PARCIAL = [
+    'Reparei que ainda ficaram OPs para finalizar. Quer resolver agora?',
+    'Você não encerrou todas as OPs... Vamos terminar de uma vez?',
+    'Ainda há pendências na linha. Posso verificar o que ficou?',
+    'Percebo que algumas OPs continuam abertas. Revejo agora?',
+    'Missão incompleta! Ainda temos OPs aguardando encerramento.',
+    'Deixou algumas para depois? Posso verificar o que ficou em aberto.',
+];
+
 function isParcial(op) {
     if (!op.etapas || op.etapas.length === 0) return false;
     const ultima = op.etapas[op.etapas.length - 1];
@@ -28,31 +60,30 @@ export default function OPCentralEncerramento({ ops, onAbrirLote, resetKey }) {
     const [opsEscaneadas, setOpsEscaneadas] = useState([]);
     const [opsSelecionadas, setOpsSelecionadas] = useState(new Set());
     const [ultimoScan, setUltimoScan] = useState(null);
-    const primeiroLoad = useRef(true);
+    const [fraseIdx, setFraseIdx] = useState(() => Math.floor(Math.random() * FRASES_MONITORANDO.length));
+    const [voltouParcial, setVoltouParcial] = useState(false);
+    // Guarda quantas OPs ficaram de fora no momento do encerramento
+    const pendentesAoEncerrarRef = useRef(0);
 
     // Reseta o agente quando um lote é concluído
     useEffect(() => {
+        if (resetKey === 0) return; // ignora montagem inicial
+        const foiParcial = pendentesAoEncerrarRef.current > 0;
+        pendentesAoEncerrarRef.current = 0;
+        setVoltouParcial(foiParcial);
         setAgentState('idle');
         setMensagensVisiveis([]);
         setOpsEscaneadas([]);
         setOpsSelecionadas(new Set());
-        primeiroLoad.current = true; // permite novo auto-start após reset de lote
+        setFraseIdx(Math.floor(Math.random() * (foiParcial ? FRASES_PARCIAL : FRASES_MONITORANDO).length));
     }, [resetKey]);
 
-    // --- Pulso do Sistema: métricas calculadas das ops da página atual ---
-    const opsAtivas = ops.filter(op =>
-        op.status !== 'finalizado' && op.status !== 'cancelada'
-    ).length;
-
+    // --- Métricas calculadas das ops da página atual ---
     const opsProntasPagina = ops.filter(op => {
         if (op.status === 'finalizado' || op.status === 'cancelada') return false;
         return op.etapas && Array.isArray(op.etapas) && op.etapas.length > 0
             && op.etapas.every(e => e && e.lancado === true);
     }).length;
-
-    const opsAlerta = ops.filter(op =>
-        op.radar && op.radar.faixa !== 'normal'
-    ).length;
 
     // --- Agente de Encerramento ---
     const iniciarScan = useCallback(async () => {
@@ -143,25 +174,22 @@ export default function OPCentralEncerramento({ ops, onAbrirLote, resetKey }) {
         const lista = opsEscaneadas.filter(op =>
             opsSelecionadas.has(op.edit_id || op.id)
         );
-        if (lista.length > 0) onAbrirLote(lista);
+        if (lista.length > 0) {
+            // Guarda quantas OPs ficaram fora da seleção — usado no retorno pós-lote
+            pendentesAoEncerrarRef.current = opsEscaneadas.length - lista.length;
+            onAbrirLote(lista);
+        }
     };
 
     const resetar = () => {
+        pendentesAoEncerrarRef.current = 0;
+        setVoltouParcial(false);
         setAgentState('idle');
         setMensagensVisiveis([]);
         setOpsEscaneadas([]);
         setOpsSelecionadas(new Set());
+        setFraseIdx(Math.floor(Math.random() * FRASES_MONITORANDO.length));
     };
-
-    // ── Auto-start: dispara o agente assim que as OPs carregam pela primeira vez ──
-    // Colocado após iniciarScan para evitar TDZ.
-    useEffect(() => {
-        if (ops.length > 0 && primeiroLoad.current && agentState === 'idle') {
-            primeiroLoad.current = false;
-            iniciarScan();
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [ops.length]);
 
     // ── Rescan ao fechar o Painel de Demandas (gaveta no mesmo DOM) ──
     // Colocado após iniciarScan para evitar referência antes da inicialização (TDZ).
@@ -173,57 +201,33 @@ export default function OPCentralEncerramento({ ops, onAbrirLote, resetKey }) {
         return () => window.removeEventListener('painel-demandas-fechado', handlePainelFechado);
     }, [agentState, iniciarScan]);
 
+    // Determina o tom do agente no repouso
+    // Prioridade: parcial (voltou de encerramento incompleto) > alerta > monitorando
+    const idleAlerta  = opsProntasPagina > 0;
+    const frases      = voltouParcial ? FRASES_PARCIAL
+                      : idleAlerta    ? FRASES_ALERTA
+                      :                 FRASES_MONITORANDO;
+    const frase       = frases[fraseIdx % frases.length];
+    const classeCard  = voltouParcial ? ' parcial' : idleAlerta ? ' alerta' : '';
+
     return (
         <div className="op-central-encerramento">
 
-            {/* ── PULSO DO SISTEMA ── */}
-            <div className="op-pulso-sistema">
-                <div className="op-pulso-left">
-                    {/* Badge "Ao vivo" — mesma identidade da aba de Cortes */}
-                    <div className="op-pulso-ao-vivo">
-                        <span className="op-pulso-ao-vivo-dot"></span>
-                        <span className="op-pulso-ao-vivo-label">Ao vivo</span>
-                        {ultimoScan && (
-                            <span className="op-pulso-ao-vivo-hora">
-                                · atualizado às {ultimoScan.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                        )}
+            {/* ── IDLE CARD — o agente se comunica antes de escanear ── */}
+            {agentState === 'idle' && (
+                <div className={`op-agente-idle-card${classeCard}`}>
+                    <div className="op-agente-robo-avatar">
+                        <i className="fas fa-robot"></i>
                     </div>
-
-                    <div className="op-pulso-chips">
-                        <div className="op-pulso-chip" title="OPs ativas nesta página">
-                            <span className="chip-valor">{opsAtivas}</span>
-                            <span className="chip-rotulo">ativas</span>
-                        </div>
-                        <div
-                            className={`op-pulso-chip ${opsProntasPagina > 0 ? 'prontas destaque' : 'prontas'}`}
-                            title="OPs prontas para encerrar nesta página"
-                        >
-                            <span className="chip-valor">{opsProntasPagina}</span>
-                            <span className="chip-rotulo">prontas</span>
-                        </div>
-                        {opsAlerta > 0 && (
-                            <div className="op-pulso-chip alerta" title="OPs com alerta de tempo de produção">
-                                <span className="chip-valor">{opsAlerta}</span>
-                                <span className="chip-rotulo">em alerta</span>
-                            </div>
-                        )}
+                    <div className="op-agente-idle-conteudo">
+                        <p className="op-agente-idle-msg">"{frase}"</p>
+                        <button className="op-agente-idle-btn" onClick={iniciarScan}>
+                            <i className={`fas ${voltouParcial ? 'fa-redo' : 'fa-search'}`}></i>
+                            {voltouParcial ? 'Verificar pendências' : 'Analisar agora'}
+                        </button>
                     </div>
                 </div>
-
-                <button
-                    className={`op-agente-corte-btn${agentState !== 'idle' ? ` ${agentState}` : ''}`}
-                    onClick={agentState === 'idle' ? iniciarScan : resetar}
-                    title={agentState === 'done' ? 'Fechar o Agente de OPs' : 'Abrir Agente de OPs'}
-                >
-                    <i className="fas fa-robot agente-corte-icon"></i>
-                    <span>
-                        {agentState === 'idle' ? 'Agente de OPs'
-                        : agentState === 'scanning' ? 'Analisando...'
-                        : 'Fechar Agente'}
-                    </span>
-                </button>
-            </div>
+            )}
 
             {/* ── TERMINAL DE SCAN ── */}
             {agentState === 'scanning' && (
@@ -246,6 +250,14 @@ export default function OPCentralEncerramento({ ops, onAbrirLote, resetKey }) {
             {/* ── RESULTADO DO AGENTE ── */}
             {agentState === 'done' && (
                 <div className="op-agente-resultado">
+                    {/* Botão fechar — sempre visível no topo direito */}
+                    <div className="op-agente-resultado-top">
+                        <button className="op-agente-corte-btn done" onClick={resetar}>
+                            <i className="fas fa-robot agente-corte-icon"></i>
+                            <span>Fechar Agente</span>
+                        </button>
+                    </div>
+
                     {opsEscaneadas.length === 0 ? (
                         <div className="op-agente-vazio">
                             <i className="fas fa-check-circle"></i>

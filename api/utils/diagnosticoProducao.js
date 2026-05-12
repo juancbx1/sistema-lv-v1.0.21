@@ -7,7 +7,8 @@ export async function gerarDiagnosticoCompleto(dbClient) {
         opsResult,
         arrematesResult,
         produtosResult,
-        cortesResult
+        cortesResult,
+        cortesVinculadosResult
     ] = await Promise.all([
         dbClient.query(`SELECT * FROM demandas_producao WHERE status NOT IN ('cancelada') AND arquivada_em IS NULL ORDER BY prioridade ASC, data_solicitacao ASC`),
         dbClient.query(`SELECT id, numero, demanda_id, produto_id, variante, quantidade, status, etapas FROM ordens_de_producao WHERE demanda_id IS NOT NULL`),
@@ -25,6 +26,18 @@ export async function gerarDiagnosticoCompleto(dbClient) {
             FROM cortes
             WHERE status != 'excluido' AND op IS NULL
             GROUP BY produto_id, variante
+        `),
+        // Cortes em estoque DIRETAMENTE vinculados a uma demanda (demanda_id IS NOT NULL)
+        // Usado para mostrar o badge "corte vinculado" no card da demanda no painel
+        dbClient.query(`
+            SELECT
+                demanda_id,
+                COALESCE(SUM(quantidade) FILTER (WHERE status = 'cortados'), 0)::int AS cortado_vinculado
+            FROM cortes
+            WHERE status = 'cortados'
+              AND op IS NULL
+              AND demanda_id IS NOT NULL
+            GROUP BY demanda_id
         `)
     ]);
 
@@ -52,6 +65,13 @@ export async function gerarDiagnosticoCompleto(dbClient) {
             cortado: c.cortado || 0,
             pendente: c.pendente || 0,
         });
+    });
+
+    // 3b. MAPA DE CORTES VINCULADOS — chave: demanda_id
+    // Cortes em estoque que têm demanda_id apontando para uma demanda específica
+    const cortesVinculadosMap = new Map();
+    cortesVinculadosResult.rows.forEach(c => {
+        cortesVinculadosMap.set(c.demanda_id, (cortesVinculadosMap.get(c.demanda_id) || 0) + (c.cortado_vinculado || 0));
     });
 
     // 4. HELPERS DE CÁLCULO
@@ -131,6 +151,9 @@ export async function gerarDiagnosticoCompleto(dbClient) {
         const chaveCorte = `${produtoId}|${variante || '-'}`;
         const corteInfo  = cortesMap.get(chaveCorte) || { cortado: 0, pendente: 0 };
 
+        // Cortes DIRETAMENTE vinculados a esta demanda (pelo campo demanda_id do corte)
+        const corteVinculadoQtd = cortesVinculadosMap.get(demandaOriginal.id) || 0;
+
         // LÓGICA DE NORMALIZAÇÃO DE PRIORIDADE:
         // O banco pode ter 1, 2, 99 ou null.
         // Queremos entregar pro frontend apenas:
@@ -171,10 +194,13 @@ export async function gerarDiagnosticoCompleto(dbClient) {
             demandas_dependentes_ids: [demandaOriginal.id],
 
             // Dados de corte — usados no badge do card e no sub-filtro da aba Aguardando
-            // corte_cortado : pçs que já foram cortadas e estão prontas
-            // corte_pendente: pçs com corte registrado mas ainda não executado
-            corte_cortado:  corteInfo.cortado,
-            corte_pendente: corteInfo.pendente
+            // corte_cortado   : pçs cortadas e prontas (qualquer corte do produto+variante)
+            // corte_pendente  : pçs com corte registrado mas ainda não executado
+            // corte_vinculado : pçs de cortes que têm demanda_id apontando para ESTA demanda
+            //                   → indica que há um corte em estoque "guardado" para esta demanda
+            corte_cortado:    corteInfo.cortado,
+            corte_pendente:   corteInfo.pendente,
+            corte_vinculado:  corteVinculadoQtd
         });
     };
 

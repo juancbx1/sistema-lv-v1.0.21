@@ -22,23 +22,27 @@ export default function PainelDemandaCard({ item, onDelete, permissoes, onRefres
     const eUrgente        = parseInt(item.prioridade) === 1;
 
     // ── Dados de corte ──
-    const corteCortado  = item.corte_cortado  || 0;
-    const cortePendente = item.corte_pendente || 0;
-    const corteTotal    = corteCortado + cortePendente;
+    const corteCortado   = item.corte_cortado   || 0;
+    const cortePendente  = item.corte_pendente  || 0;
+    const corteVinculado = item.corte_vinculado || 0; // cortes em estoque com demanda_id = esta demanda
+    const corteTotal     = corteCortado + cortePendente;
 
     // Badge visível apenas na aba AGUARDANDO — corte já pressuposto nas demais fases
     const mostrarBadgeCorte = statusCalculado === 'AGUARDANDO' && corteTotal > 0;
 
     // Classifica o estado do corte para colorização do badge
+    // 'vinculado' = prioridade máxima: há corte em estoque "reservado" para ESTA demanda
     const classeCorte = (() => {
         if (corteTotal === 0)             return null;
-        if (corteCortado >= totalPedido)  return 'completo'; // verde  — tudo cortado e pronto
-        if (corteCortado > 0)             return 'parcial';  // laranja — parcialmente cortado
-        return 'pendente';                                    // amarelo — registrado, aguardando corte
+        if (corteVinculado >= totalPedido) return 'vinculado'; // azul — corte guardado p/ esta demanda
+        if (corteCortado >= totalPedido)  return 'completo';   // verde — tudo cortado e pronto
+        if (corteCortado > 0)             return 'parcial';    // laranja — parcialmente cortado
+        return 'pendente';                                      // amarelo — registrado, aguardando corte
     })();
 
     // Texto do badge de corte
     const textoBadgeCorte = (() => {
+        if (classeCorte === 'vinculado') return 'Corte pronto — gerar OP!';
         if (classeCorte === 'completo') {
             return corteCortado === 1 ? '1 pc Cortada' : `${corteCortado} pcs Cortadas`;
         }
@@ -179,10 +183,31 @@ export default function PainelDemandaCard({ item, onDelete, permissoes, onRefres
             </div>
 
             <div className="pd-card-rodape" onClick={e => e.stopPropagation()}>
-                <span className="pd-card-qtd">
-                    <strong>{totalPedido}</strong>
-                    <small>pçs{totalConsumido > 0 ? ` · ${totalConsumido} prod.` : ''}</small>
-                </span>
+                {/* Bloco de quantidade: distingue o que o gerente pediu do que foi produzido */}
+                <div className="pd-card-qtd">
+                    <div className="pd-card-qtd-bloco pedido" title="Quantidade solicitada pelo gerente">
+                        <span className="pd-card-qtd-num">{totalPedido}</span>
+                        <span className="pd-card-qtd-label">pedidas</span>
+                    </div>
+                    {totalConsumido > 0 && (
+                        <>
+                            <span className="pd-card-qtd-sep">·</span>
+                            <div
+                                className={`pd-card-qtd-bloco producao${totalConsumido > totalPedido ? ' excedente' : ''}`}
+                                title={totalConsumido > totalPedido
+                                    ? `${totalConsumido} peças em produção — ${totalConsumido - totalPedido} acima do pedido`
+                                    : `${totalConsumido} peças no pipeline`}
+                            >
+                                <span className="pd-card-qtd-num">{totalConsumido}</span>
+                                <span className="pd-card-qtd-label">
+                                    {totalConsumido > totalPedido
+                                        ? `prod. (+${totalConsumido - totalPedido})`
+                                        : 'prod.'}
+                                </span>
+                            </div>
+                        </>
+                    )}
+                </div>
                 {mostrarBadgeCorte && (
                     <span className={`pd-corte-badge pd-corte-badge--${classeCorte}`}>
                         <i className="fas fa-ruler"></i>
