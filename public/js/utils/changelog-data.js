@@ -12,6 +12,16 @@
 
 export const changelog = [
     {
+        versao: '1.27.1',
+        data: '11/05/2026',
+        admin: [
+            'Bug de renderizacao do bloco de agente de cortes resolvido'
+        ],
+        dashboard: [
+            // Vazio — esta atualização não afeta as funcionárias
+        ],
+    },
+    {
         versao: '1.27.0',
         data: '11/05/2026',
         admin: [

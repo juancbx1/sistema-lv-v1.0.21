@@ -195,12 +195,15 @@ export default function OPGerenciamentoTela({ opsPendentesGlobal, onRefreshConta
             {/* Bloco de Filtros */}
             <OPFiltros onFiltroChange={handleFiltroChange} />
 
-            {/* Central de Encerramento — Pulso do Sistema + Agente */}
-            <OPCentralEncerramento
-                ops={ops}
-                onAbrirLote={handleAbrirLote}
-                resetKey={loteResetKey}
-            />
+            {/* Central de Encerramento — só após o primeiro carregamento para evitar
+                flash com ops=[] antes dos dados chegarem (tom incorreto no idle card) */}
+            {!isFirstLoadRef.current && (
+                <OPCentralEncerramento
+                    ops={ops}
+                    onAbrirLote={handleAbrirLote}
+                    resetKey={loteResetKey}
+                />
+            )}
 
             {/* Spinner só no primeiro carregamento — paginações mantêm os cards visíveis */}
             {carregando && isFirstLoadRef.current && <UICarregando variante="bloco" />}
