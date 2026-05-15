@@ -81,31 +81,6 @@ export default function ArremateExternoTela() {
 
     return (
         <div className="gs-card op-externo-tela-wrapper">
-
-            {/* Header — espelho do arremate-modal-header do AtribuicaoModal */}
-            <div className="arremate-modal-header op-externo-tela-header">
-                <div className="arremate-modal-header-esquerda">
-                    {tela === 'confirmacao' && (
-                        <button className="btn-voltar-header" onClick={handleVoltar}>
-                            <i className="fas fa-arrow-left"></i>
-                            <span>Voltar</span>
-                        </button>
-                    )}
-                </div>
-                <div className="arremate-modal-header-centro">
-                    <h3 className="arremate-modal-titulo">
-                        {tela === 'selecao' ? 'Atribuir Tarefa' : 'Confirmar Quantidade'}
-                        <span className="nome-destaque-modal"> — P. Externo</span>
-                    </h3>
-                </div>
-                <div className="arremate-modal-header-direita">
-                    <span className="op-externo-badge">
-                        <i className="fas fa-user-tie"></i> Freelance
-                    </span>
-                </div>
-            </div>
-
-            {/* Body */}
             <div className="op-externo-tela-body">
                 {tela === 'selecao' && (
                     <ArremateTelaSelecaoProduto

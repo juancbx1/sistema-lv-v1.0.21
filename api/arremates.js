@@ -796,9 +796,10 @@ router.get('/status-tiktiks', async (req, res) => {
 
         // 2. Buscar todos os usuários Tiktik com seus dados e sessões atuais
         const query = `
-            SELECT 
-                u.id, u.nome, COALESCE(u.avatar_url, $1) as avatar_url, u.status_atual, 
-                u.status_data_modificacao, u.horario_entrada_1, u.horario_saida_1, 
+            SELECT
+                u.id, u.nome, COALESCE(u.avatar_url, $1) as avatar_url, u.foto_oficial,
+                u.nivel, u.tipos, u.dias_trabalho, u.status_atual,
+                u.status_data_modificacao, u.horario_entrada_1, u.horario_saida_1,
                 u.horario_entrada_2, u.horario_saida_2, u.horario_entrada_3, u.horario_saida_3
             FROM usuarios u
             WHERE
@@ -817,12 +818,21 @@ router.get('/status-tiktiks', async (req, res) => {
 
         // Agora, buscamos TODAS as sessões ativas de TODOS os tiktiks de uma vez
         const sessoesAtivasResult = await dbClient.query(`
-            SELECT 
-                s.id as id_sessao, s.usuario_tiktik_id, s.produto_id, s.variante, 
+            SELECT
+                s.id as id_sessao, s.usuario_tiktik_id, s.produto_id, s.variante,
                 s.quantidade_entregue, s.data_inicio, s.dados_ops,
-                p.nome as produto_nome
+                p.nome as produto_nome,
+                COALESCE(g.imagem, p.imagem) as imagem
             FROM sessoes_trabalho_arremate s
             LEFT JOIN produtos p ON s.produto_id = p.id
+            LEFT JOIN LATERAL (
+                SELECT gr.imagem
+                FROM jsonb_to_recordset(
+                    CASE WHEN jsonb_typeof(p.grade) = 'array' THEN p.grade ELSE '[]'::jsonb END
+                ) AS gr(sku TEXT, variacao TEXT, imagem TEXT)
+                WHERE gr.variacao = s.variante
+                LIMIT 1
+            ) g ON true
             WHERE s.status = 'EM_ANDAMENTO' AND s.usuario_tiktik_id = ANY($1::int[])
         `, [tiktiksBase.map(t => t.id)]);
 
@@ -835,6 +845,41 @@ router.get('/status-tiktiks', async (req, res) => {
             return acc;
         }, {});
 
+        // Busca ponto_diario e sessoes_hoje em paralelo (bulk — sem N+1)
+        const tiktikIds = tiktiksBase.map(t => t.id);
+        const [pontoDiarioResult, sessoesHojeResult] = await Promise.all([
+            dbClient.query(`
+                SELECT funcionario_id, horario_real_s1, horario_real_e2,
+                       horario_real_s2, horario_real_e3, horario_real_s3,
+                       saida_desfeita, saida_desfeita_por
+                FROM ponto_diario
+                WHERE data = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+                  AND funcionario_id = ANY($1::int[])
+            `, [tiktikIds]),
+            dbClient.query(`
+                SELECT
+                    s.usuario_tiktik_id,
+                    json_agg(
+                        json_build_object(
+                            'inicio',       to_char(s.data_inicio AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI'),
+                            'fim',          to_char(s.data_fim    AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI'),
+                            'produto_id',   s.produto_id,
+                            'produto_nome', p.nome,
+                            'variante',     s.variante,
+                            'quantidade',   s.quantidade_entregue
+                        ) ORDER BY s.data_inicio
+                    ) AS sessoes
+                FROM sessoes_trabalho_arremate s
+                LEFT JOIN produtos p ON s.produto_id = p.id
+                WHERE (s.data_inicio AT TIME ZONE 'America/Sao_Paulo')::date
+                          = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+                  AND s.status IN ('FINALIZADA', 'EM_ANDAMENTO')
+                  AND s.usuario_tiktik_id = ANY($1::int[])
+                GROUP BY s.usuario_tiktik_id
+            `, [tiktikIds])
+        ]);
+        const pontoDiarioMap = new Map(pontoDiarioResult.rows.map(p => [p.funcionario_id, p]));
+        const sessoesHojeMap = new Map(sessoesHojeResult.rows.map(r => [r.usuario_tiktik_id, r.sessoes || []]));
 
         const tiktiksComStatus = await Promise.all(tiktiksBase.map(async (tiktik) => {
             const sessoesDoTiktik = sessoesPorUsuario[tiktik.id] || [];
@@ -890,10 +935,12 @@ router.get('/status-tiktiks', async (req, res) => {
                 }
             }
             
-            return { 
-                ...tiktikComSessao, 
+            return {
+                ...tiktikComSessao,
                 tempo_decorrido_real_segundos: tempo_decor_real_segundos,
-                tpe_tarefa
+                tpe_tarefa,
+                ponto_hoje:   pontoDiarioMap.get(tiktik.id) || null,
+                sessoes_hoje: sessoesHojeMap.get(tiktik.id) || [],
             };
         }));
         

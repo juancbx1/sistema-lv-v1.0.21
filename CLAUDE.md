@@ -242,11 +242,11 @@ Tabela de controle para evitar retrabalho. Atualizar sempre que uma etapa for co
 | Área | Arquivo CSS | React 100% | CSS Limpo | Usa gs-card | Observações |
 |---|---|---|---|---|---|
 | Login / Index | `login.css` | ✅ | ✅ | N/A | React 100% (27/04). `LoginApp.jsx` único. Tablet-first (2 col), glassmorphism. Token 8h/30d via `manterConectado`. Demitidos → tela de despedida + cooldown crescente. |
-| Ordens de Produção | `ordens-de-producao.css` | ✅ | ✅ | ✅ (via alias) | Referência de qualidade para outras áreas |
+| Ordens de Produção | `ordens-de-producao.css` | ✅ | ✅ | ✅ (via alias) | Referência de qualidade para todas as outras áreas. Painel de Atividades: PERFEITO — não tocar. Em 2026-05-13, `OPStatusCard.jsx` teve apenas refactor interno: `calcularTempoEfetivo`, `formatarHora`, `formatarTempo` extraídos para `PontoHelpers.js`; `LinhaDoTempoDia` extraída para `UILinhaDoTempoDia.jsx`. Zero mudança visual ou comportamental. |
 | Calendário da Empresa | `calendario.css` | ✅ | ✅ | ✅ | Página nova — estrutura padrão aplicada |
 | Central de Pagamentos | `central-de-pagamentos.css` | ✅ | ❌ | ❌ | |
 | Dashboard Funcionário | `dashboard.css` | ✅ | ❌ | ❌ | Mobile-first, estrutura diferente |
-| Arremates | `arremates.css` | ✅ | ❌ | ✅ | Redesign fases 1/2/3/4/5 concluídas (2026-05-04). Painel React (ArreMatePainelAtividades). JS legado mantido para histórico/modo foco. CSS ainda sujo — limpeza futura. Ver `_planejamento/arremates-redesign.md`. |
+| Arremates | `arremates.css` | ✅ | ❌ | ✅ | v1.0 (2026-05-04) + v2.0 (2026-05-05) + v3.0 Items 1-4 (2026-05-13/14) concluídos. v3.0: `PontoHelpers.js` e `UILinhaDoTempoDia.jsx` extraídos como compartilhados; `ArremateStatusCard` reescrito com layout `cracha-tiktik` idêntico ao OPStatusCard (cronômetro interval-aware, bottom sheets, tolerância S3, liberar intervalo); `ArreMatePainelAtividades` refatorado com estrutura `oa-*` idêntica ao OPPainelAtividades (ALMOCO/PAUSA no grid principal, inativos completos, todos os handlers de ponto). CSS: 4657 → 5850 linhas. v3.0 implementação 100% concluída (Items 1–5). Aguarda verificação manual em browser. Deletar manualmente: `ArremateToast.jsx` e `ArremateAcoesLote.jsx`. Ver `_planejamento/arremates-redesign.md`. |
 | Embalagem de Produtos | `embalagem-de-produtos.css` | ❓ | ❌ | ❌ | Verificar migração React |
 | Estoque | `estoque.css` | ❓ | ❌ | ❌ | Verificar migração React |
 | Financeiro | `financeiro.css` | ❓ | ❌ | ❌ | Verificar migração React |
@@ -260,6 +260,36 @@ Tabela de controle para evitar retrabalho. Atualizar sempre que uma etapa for co
 ---
 
 ## Componentes de Sistema — Padrões Obrigatórios
+
+### `PontoHelpers.js` — Utilitários de Ponto/Tempo
+
+**Arquivo:** `public/src/utils/PontoHelpers.js`
+
+Funções puras compartilhadas entre `OPStatusCard` e `ArremateStatusCard` (e qualquer futuro card de funcionário).
+
+| Export | Assinatura | Descrição |
+|---|---|---|
+| `calcularTempoEfetivo` | `(dataInicio, pontoHoje) → { ms, pausado, motivo }` | Cronômetro interval-aware: desconta almoço/pausa registrados no `ponto_diario`. Retorna `pausado: true` e `motivo: 'ALMOCO'\|'PAUSA'` quando o relógio deve estar congelado. |
+| `formatarHora` | `(t) → string` | Converte 'HH:MM:SS' ou 'HH:MM' para exibição curta 'HH:MM'. Retorna '--:--' para null. |
+| `formatarTempo` | `(ms) → string` | Converte ms para 'HH:MM:SS'. |
+
+**Regra:** qualquer cronômetro de funcionário no sistema deve usar `calcularTempoEfetivo` — nunca calcular elapsed time bruto sem descontar intervalos.
+
+---
+
+### `UILinhaDoTempoDia` — Linha do Tempo do Dia
+
+**Arquivo:** `public/src/components/UILinhaDoTempoDia.jsx`
+
+Componente visual compartilhado: barra horizontal colorida mostrando toda a jornada do dia (sessões de trabalho, almoço, pausa, saída antecipada, marcador "Agora").
+
+**Props:** `{ funcionario, pontoHoje }` — mesma estrutura de dados que `OPStatusCard` já usa.
+
+**Onde já é usado:** `OPStatusCard.jsx` (no bottom sheet de horários). Será usado também em `ArremateStatusCard.jsx` quando o v3.0 for implementado.
+
+**Regra:** não criar outras implementações de linha do tempo — usar este componente.
+
+---
 
 ### `UIAgenteIA` — Identidade Visual de IA
 

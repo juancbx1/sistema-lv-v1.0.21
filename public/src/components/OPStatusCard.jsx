@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom';
+import { calcularTempoEfetivo, formatarHora, formatarTempo } from '../utils/PontoHelpers.js';
+import UILinhaDoTempoDia from './UILinhaDoTempoDia.jsx';
 
 const getRoleInfo = (tipos = []) => {
     if (tipos.includes('tiktik'))   return { label: 'TikTik',    icon: 'fa-cut',         classe: 'cracha-tiktik' };
@@ -22,14 +24,6 @@ const getStatusIdle = (status) => {
     return map[status] || { icone: 'fa-question-circle', texto: status || 'Indefinido', cor: '#aaa' };
 };
 
-const formatarTempo = (ms) => {
-    const total = Math.max(0, ms);
-    const h = Math.floor(total / 3600000);
-    const m = Math.floor((total % 3600000) / 60000);
-    const s = Math.floor((total % 60000) / 1000);
-    return [h, m, s].map(n => String(n).padStart(2, '0')).join(':');
-};
-
 const calcularRitmo = (ms, tpp, quantidade) => {
     if (!tpp || !quantidade || tpp <= 0) return null;
     const estimadoMs = tpp * quantidade * 1000;
@@ -41,246 +35,8 @@ const calcularRitmo = (ms, tpp, quantidade) => {
     return                  { texto: 'Super Rápido', emoji: '🚀', classe: 'ritmo-super',   pct };
 };
 
-// Formata 'HH:MM:SS' ou 'HH:MM' para exibição (ex: '13:10')
-const formatarHora = (t) => t ? String(t).substring(0, 5) : '--:--';
-
-/**
- * Calcula o tempo efetivo de trabalho descontando intervalos (almoço/pausa) já registrados.
- *
- * @param {string} dataInicio - ISO string com timezone (ex: "2026-04-13T16:00:00+00:00")
- * @param {object|null} pontoHoje - ponto_diario de hoje com horarios_reais
- * @returns {{ ms: number, pausado: boolean, motivo: 'ALMOCO'|'PAUSA'|null }}
- *   ms = milissegundos de trabalho efetivo (intervalos descontados)
- *   pausado = true quando o relógio deve estar congelado agora
- *   motivo = razão do congelamento automático (null se não pausado automaticamente)
- */
-function calcularTempoEfetivo(dataInicio, pontoHoje) {
-    const agora = new Date();
-    const inicioDate = new Date(dataInicio); // ISO string → Date correto em UTC
-    const n = (t) => t ? String(t).substring(0, 5) : null; // normaliza para 'HH:MM'
-
-    // Converte 'HH:MM' (horário SP) para Date absoluto de hoje.
-    // Brasil é UTC-3 sem horário de verão desde 2019 — offset fixo é seguro.
-    const toAbsolute = (hhmm) => {
-        if (!hhmm) return null;
-        const hojeSP = agora.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
-        return new Date(`${hojeSP}T${hhmm}:00-03:00`);
-    };
-
-    let descontarMs = 0;
-
-    // ── Almoço (horario_real_s1 → horario_real_e2) ───────────────────────────
-    const s1 = toAbsolute(n(pontoHoje?.horario_real_s1));
-    const e2 = toAbsolute(n(pontoHoje?.horario_real_e2));
-
-    if (s1 && s1 > inicioDate) {
-        if (e2 && agora >= e2) {
-            // Almoço já terminou — descontar duração completa
-            descontarMs += e2.getTime() - s1.getTime();
-        } else if (agora >= s1) {
-            // Ainda em almoço — congelar no momento em que o almoço começou
-            return {
-                ms: Math.max(0, s1.getTime() - inicioDate.getTime()),
-                pausado: true,
-                motivo: 'ALMOCO',
-            };
-        }
-    }
-
-    // ── Pausa (horario_real_s2 → horario_real_e3) ────────────────────────────
-    const s2 = toAbsolute(n(pontoHoje?.horario_real_s2));
-    const e3 = toAbsolute(n(pontoHoje?.horario_real_e3));
-
-    if (s2 && s2 > inicioDate) {
-        if (e3 && agora >= e3) {
-            // Pausa já terminou — descontar
-            descontarMs += e3.getTime() - s2.getTime();
-        } else if (agora >= s2) {
-            // Ainda em pausa — congelar
-            return {
-                ms: Math.max(0, s2.getTime() - inicioDate.getTime() - descontarMs),
-                pausado: true,
-                motivo: 'PAUSA',
-            };
-        }
-    }
-
-    return {
-        ms: Math.max(0, agora.getTime() - inicioDate.getTime() - descontarMs),
-        pausado: false,
-        motivo: null,
-    };
-}
-
-// ── MELHORIA-06: Linha do Tempo do Dia ──────────────────────────────────────
-function LinhaAgora({ e1Min, totalMin }) {
-    const agora = new Date().toLocaleTimeString('en-GB', {
-        timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit'
-    });
-    const [h, m] = agora.split(':').map(Number);
-    const left = ((h * 60 + m - e1Min) / totalMin) * 100;
-    if (left < 0 || left > 100) return null;
-    return <div className="bs-timeline-agora" style={{ left: `${left}%` }} title={`Agora: ${agora}`} />;
-}
-
-function ModalInfoTimeline({ onClose }) {
-    return ReactDOM.createPortal(
-        <>
-            <div className="bs-overlay" onClick={onClose} />
-            <div className="bs-sheet bs-sheet-info-tl" onClick={e => e.stopPropagation()}>
-                <div className="bs-sheet-info-tl-header">
-                    <span><i className="fas fa-chart-bar"></i> Linha do Tempo do Dia</span>
-                    <button className="bs-sheet-info-tl-fechar" onClick={onClose}>
-                        <i className="fas fa-times"></i>
-                    </button>
-                </div>
-                <div className="bs-sheet-info-tl-corpo">
-                    <p className="bs-tl-info-intro">
-                        Gráfico visual de tudo que aconteceu na jornada de hoje, do horário de entrada até a saída prevista.
-                    </p>
-                    <div className="bs-tl-info-legenda-detalhada">
-                        <div className="bs-tl-info-item">
-                            <span className="bs-tl-dot" style={{ background: '#2980b9', borderRadius: '3px' }}></span>
-                            <div>
-                                <strong>Produzindo</strong>
-                                <span>Período em que havia uma tarefa ativa sendo executada. Cada bloco = uma sessão de trabalho registrada pelo sistema.</span>
-                            </div>
-                        </div>
-                        <div className="bs-tl-info-item">
-                            <span className="bs-tl-dot" style={{ background: '#e67e22', borderRadius: '3px' }}></span>
-                            <div>
-                                <strong>Almoço</strong>
-                                <span>Intervalo de almoço, detectado automaticamente ao finalizar a tarefa próxima ao horário de almoço cadastrado.</span>
-                            </div>
-                        </div>
-                        <div className="bs-tl-info-item">
-                            <span className="bs-tl-dot" style={{ background: '#f39c12', borderRadius: '3px' }}></span>
-                            <div>
-                                <strong>Pausa / Café</strong>
-                                <span>Intervalo da tarde, detectado da mesma forma que o almoço.</span>
-                            </div>
-                        </div>
-                        <div className="bs-tl-info-item">
-                            <span className="bs-tl-dot" style={{ background: '#e74c3c', borderRadius: '3px' }}></span>
-                            <div>
-                                <strong>Saída antecipada</strong>
-                                <span>Trecho após a saída registrada antecipadamente — representa o tempo de jornada que não foi trabalhado.</span>
-                            </div>
-                        </div>
-                        <div className="bs-tl-info-item">
-                            <span className="bs-tl-dot" style={{ background: '#dfe6e9', borderRadius: '3px', border: '1px solid #bdc3c7' }}></span>
-                            <div>
-                                <strong>Tempo livre</strong>
-                                <span>A funcionária estava disponível mas sem tarefa atribuída — inclui o tempo entre o retorno do intervalo e a próxima tarefa.</span>
-                            </div>
-                        </div>
-                    </div>
-                    <p className="bs-tl-info-nota">
-                        <i className="fas fa-grip-lines-vertical" style={{ color: '#e74c3c' }}></i>
-                        A linha vermelha vertical indica o horário atual. Toque em cada bloco colorido para ver o detalhe daquele período.
-                    </p>
-                </div>
-            </div>
-        </>,
-        document.body
-    );
-}
-
-function LinhaDoTempoDia({ funcionario, pontoHoje }) {
-    const [infoAberto, setInfoAberto] = useState(false);
-    const n = (t) => t ? String(t).substring(0, 5) : null;
-    const e1 = n(funcionario.horario_entrada_1) || '07:00';
-    const s3 = n(funcionario.horario_saida_3 || funcionario.horario_saida_2 || funcionario.horario_saida_1) || '17:00';
-
-    const toMin = (hhmm) => {
-        if (!hhmm) return null;
-        const [h, m] = hhmm.split(':').map(Number);
-        return h * 60 + m;
-    };
-
-    const inicioMin = toMin(e1);
-    const fimMin    = toMin(s3);
-    const totalMin  = fimMin - inicioMin;
-    if (totalMin <= 0) return null;
-
-    // Retorna estilo de posição/largura para um segmento da barra (em %)
-    const segmento = (inicioHHMM, fimHHMM, cor, titulo) => {
-        const si = toMin(inicioHHMM);
-        const sf = toMin(fimHHMM);
-        if (si === null || sf === null || sf <= si) return null;
-        const left  = ((si - inicioMin) / totalMin) * 100;
-        const width = ((sf - si) / totalMin) * 100;
-        if (width <= 0) return null;
-        return { left: `${left.toFixed(2)}%`, width: `${width.toFixed(2)}%`, background: cor, title: titulo };
-    };
-
-    const segmentos = [];
-
-    // Sessões de produção (azul)
-    const agoraSP = new Date().toLocaleTimeString('en-GB', {
-        timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit'
-    });
-    (funcionario.sessoes_hoje || []).forEach(s => {
-        const ini = n(s.inicio); // já vem em SP (AT TIME ZONE no servidor)
-        const fim = n(s.fim) || agoraSP;
-        if (ini) {
-            const seg = segmento(ini, fim, '#2980b9', `Produzindo — OP ${s.op_numero || ''}`);
-            if (seg) segmentos.push(seg);
-        }
-    });
-
-    // Almoço (laranja)
-    const s1 = n(pontoHoje?.horario_real_s1) || n(funcionario.horario_saida_1);
-    const e2 = n(pontoHoje?.horario_real_e2) || n(funcionario.horario_entrada_2);
-    if (s1 && e2) { const seg = segmento(s1, e2, '#e67e22', 'Almoço'); if (seg) segmentos.push(seg); }
-
-    // Pausa (amarelo-ocre)
-    const s2 = n(pontoHoje?.horario_real_s2) || n(funcionario.horario_saida_2);
-    const e3 = n(pontoHoje?.horario_real_e3) || n(funcionario.horario_entrada_3);
-    if (s2 && e3) { const seg = segmento(s2, e3, '#f39c12', 'Pausa'); if (seg) segmentos.push(seg); }
-
-    // Saída antecipada — colorir do s3_real até o S3 cadastrado (vermelho)
-    if (pontoHoje?.horario_real_s3 && !pontoHoje?.saida_desfeita) {
-        const seg = segmento(n(pontoHoje.horario_real_s3), s3, '#e74c3c', 'Saída antecipada');
-        if (seg) segmentos.push(seg);
-    }
-
-    return (
-        <div className="bs-timeline-container">
-            {infoAberto && <ModalInfoTimeline onClose={() => setInfoAberto(false)} />}
-
-            <div className="bs-timeline-header">
-                <span className="bs-timeline-titulo">
-                    <i className="fas fa-chart-bar"></i> Linha do Tempo do Dia
-                </span>
-                <button
-                    className="bs-timeline-info-btn"
-                    onClick={() => setInfoAberto(true)}
-                    title="O que é isso?"
-                >
-                    <i className="fas fa-info-circle"></i>
-                </button>
-            </div>
-
-            <div className="bs-timeline-labels">
-                <span>{e1}</span>
-                <span>{s3}</span>
-            </div>
-            <div className="bs-timeline-barra">
-                <div className="bs-timeline-fundo" />
-                {segmentos.filter(Boolean).map((seg, i) => (
-                    <div key={i} className="bs-timeline-segmento" style={seg} title={seg.title} />
-                ))}
-                <LinhaAgora e1Min={inicioMin} totalMin={totalMin} />
-            </div>
-            <div className="bs-timeline-legenda">
-                <span><span className="bs-tl-dot" style={{ background: '#2980b9' }}></span>Produzindo</span>
-                <span><span className="bs-tl-dot" style={{ background: '#e67e22' }}></span>Almoço</span>
-                <span><span className="bs-tl-dot" style={{ background: '#f39c12' }}></span>Pausa</span>
-            </div>
-        </div>
-    );
-}
+// ── MELHORIA-06: Linha do Tempo do Dia (componente compartilhado) ───────────
+// Importado de UILinhaDoTempoDia.jsx — não editar aqui.
 // ────────────────────────────────────────────────────────────────────────────
 
 export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAcaoManual, onFinalizarTarefa, onCancelarTarefa, onExcecao, onLiberarIntervalo, onLiberarParaTrabalho }) {
@@ -914,7 +670,7 @@ export default function OPStatusCard({ funcionario, tpp, onAtribuirTarefa, onAca
                         </div>
 
                         {/* Linha do Tempo do Dia (MELHORIA-06) */}
-                        <LinhaDoTempoDia funcionario={funcionario} pontoHoje={ponto_hoje} />
+                        <UILinhaDoTempoDia funcionario={funcionario} pontoHoje={ponto_hoje} />
 
                         {/* Dias de trabalho */}
                         <div className="bs-info-secao">

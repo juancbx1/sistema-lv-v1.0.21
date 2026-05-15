@@ -1,12 +1,14 @@
 // public/src/components/ArremateTelaSelecaoProduto.jsx
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import PainelFiltros from './ArrematePainelFiltros.jsx';
 import { ArremateCard } from './ArremateCard.jsx';
 import UIPaginacao from './UIPaginacao.jsx';
 import UICarregando from './UICarregando.jsx';
 import UIFeedbackNotFound from './UIFeedbackNotFound.jsx';
 import { mostrarMensagem } from '/js/utils/popups.js';
+import { getImagemVariacao } from '../utils/ArremateProdutoHelpers.js';
 
 // Função auxiliar para extrair as opções para os menus de filtro
 function extrairOpcoesDeFiltro(itensDaFila) {
@@ -309,42 +311,85 @@ export default function ArremateTelaSelecaoProduto({
                 </button>
             )}
 
-            {/* Mini-modal de confirmação de lote */}
-            {modalLoteAberto && (
-                <div className="popup-container" style={{ display: 'flex' }}>
-                    <div className="popup-overlay" onClick={() => setModalLoteAberto(false)}></div>
-                    <div className="oa-modal" style={{ maxWidth: '450px' }}>
-                        <div className="oa-modal-header">
-                            <h3 className="oa-modal-titulo">Confirmar Lote</h3>
-                            <button
-                                className="oa-modal-fechar-btn"
-                                onClick={() => setModalLoteAberto(false)}
-                            >×</button>
+            {/* Modal de confirmação de lote — v3.0 (portal para evitar stacking context de modal pai) */}
+            {modalLoteAberto && ReactDOM.createPortal(
+                <div className="arremate-lote-portal-overlay" onClick={() => setModalLoteAberto(false)}>
+                    <div className="arremate-modal-lote" onClick={e => e.stopPropagation()}>
+
+                        {/* Header padrão 3 colunas */}
+                        <div className="arremate-modal-header">
+                            <div className="arremate-modal-header-esquerda">
+                                <span className="arremate-lote-contagem-badge">
+                                    {itensSelecionados.length}
+                                </span>
+                            </div>
+                            <div className="arremate-modal-header-centro">
+                                <h3 className="arremate-modal-titulo">Confirmar Lote</h3>
+                                {tiktikContexto && (
+                                    <div className="arremate-modal-header-info">
+                                        <span>Para: <strong>{tiktikContexto.nome}</strong></span>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="arremate-modal-header-direita">
+                                <button
+                                    className="arremate-modal-fechar-btn"
+                                    onClick={() => setModalLoteAberto(false)}
+                                >
+                                    <i className="fas fa-times"></i>
+                                </button>
+                            </div>
                         </div>
-                        <div className="oa-modal-body body-lote">
-                            <p style={{ textAlign: 'center', fontSize: '1.1rem', lineHeight: '1.5' }}>
-                                Você confirma a atribuição de<br />
-                                <strong>{itensSelecionados.length} produto(s)</strong>
-                                <br />para <strong>{tiktikContexto?.nome}</strong>?
-                            </p>
-                            <p style={{ textAlign: 'center', fontSize: '0.9rem', color: 'var(--gs-texto-secundario)' }}>
+
+                        {/* Lista de itens selecionados */}
+                        <div className="arremate-lote-modal-body">
+                            <div className="arremate-lote-itens-lista">
+                                {itensSelecionados.map(item => (
+                                    <div
+                                        key={`${item.produto_id}-${item.variante}`}
+                                        className="arremate-lote-item-row"
+                                    >
+                                        <img
+                                            src={getImagemVariacao(item, item.variante)}
+                                            alt={item.produto_nome}
+                                            className="arremate-lote-item-img"
+                                        />
+                                        <div className="arremate-lote-item-info">
+                                            <span className="arremate-lote-item-nome">{item.produto_nome}</span>
+                                            <span className="arremate-lote-item-variante">
+                                                {item.variante && item.variante !== '-' ? item.variante : 'Padrão'}
+                                            </span>
+                                        </div>
+                                        <div className="arremate-lote-item-saldo">
+                                            <span className="arremate-lote-saldo-valor">{item.saldo_para_arrematar}</span>
+                                            <span className="arremate-lote-saldo-label">pçs</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="arremate-lote-aviso">
+                                <i className="fas fa-info-circle"></i>
                                 As quantidades máximas disponíveis de cada produto serão atribuídas.
                             </p>
                         </div>
-                        <div className="oa-modal-footer footer-lote">
+
+                        {/* Footer com botão confirmar */}
+                        <div className="arremate-lote-modal-footer">
                             <button
-                                className="gs-btn gs-btn-sucesso"
+                                className="gs-btn gs-btn-primario"
+                                style={{ width: '100%' }}
                                 onClick={handleConfirmarAtribuicaoLote}
                                 disabled={carregandoLote}
                             >
                                 {carregandoLote
                                     ? <><div className="spinner-btn-interno"></div> Atribuindo...</>
-                                    : <><i className="fas fa-check"></i> Sim, Confirmar Atribuição</>
+                                    : <><i className="fas fa-check"></i> Confirmar Atribuição ({itensSelecionados.length} produto{itensSelecionados.length !== 1 ? 's' : ''})</>
                                 }
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </>
     );

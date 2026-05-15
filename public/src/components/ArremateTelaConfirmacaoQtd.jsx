@@ -105,6 +105,12 @@ export default function TelaConfirmacaoQtd({ item, tiktik, onVoltar, onConfirmar
     // --- RENDERIZAÇÃO DO COMPONENTE (JSX) ---
     return (
         <div className="coluna-confirmacao" style={{display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px', overflowY: 'auto'}}>
+            {onVoltar && (
+                <button className="btn-voltar-header" onClick={onVoltar} style={{ alignSelf: 'flex-start', marginBottom: '8px' }}>
+                    <i className="fas fa-arrow-left"></i>
+                    <span>Voltar</span>
+                </button>
+            )}
             <img src={imagemSrc} alt={item.produto_nome} className="img-confirmacao" />
             <h4>{item.produto_nome}</h4>
             <p>{item.variante && item.variante !== '-' ? item.variante : 'Padrão'}</p>

@@ -12,6 +12,16 @@
 
 export const changelog = [
     {
+        versao: '1.28.0',
+        data: '14/05/2026',
+        admin: [
+            'Tela de arremates completamente refeita. Pendente testes exaustivos'
+        ],
+        dashboard: [
+            // Vazio — esta atualização não afeta as funcionárias
+        ],
+    },
+    {
         versao: '1.27.1',
         data: '11/05/2026',
         admin: [

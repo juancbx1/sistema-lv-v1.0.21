@@ -146,8 +146,11 @@ export default function ArremateAtribuicaoModal({ tiktik, isOpen, onClose, itens
         }, 700);
     };
 
-    // Verifica se a IA deve aparecer
-    const mostrarBotaoIA = tiktik?.status_atual === 'LIVRE';
+    // Item 5: modo hora extra
+    const modoHoraExtra = !!tiktik?._modo_hora_extra;
+
+    // Verifica se a IA deve aparecer (só quando LIVRE e não em hora extra)
+    const mostrarBotaoIA = tiktik?.status_atual === 'LIVRE' && !modoHoraExtra;
     const semTPA = itensFila.length > 0 && !itensFila.some(item => parseFloat(temposIA[item.produto_id]) > 0);
 
     const textoDoneIA = semTPA
@@ -198,6 +201,13 @@ export default function ArremateAtribuicaoModal({ tiktik, isOpen, onClose, itens
                         </button>
                     </div>
                 </div>
+
+                {/* Banner hora extra */}
+                {modoHoraExtra && (
+                    <div className="op-modal-aviso-hora-extra">
+                        <i className="fas fa-exclamation-triangle"></i> Lançamento em Hora Extra — será registrado e o gerente será notificado
+                    </div>
+                )}
 
                 {/* Body */}
                 <div className="oa-modal-body">
