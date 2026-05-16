@@ -12,6 +12,18 @@
 
 export const changelog = [
     {
+        versao: '1.29.0',
+        data: '16/05/2026',
+        admin: [
+            'Redesenhado agente do sistema. Já esta presente em: OPs, cortes (PG ordens de producao) e no painel de demandas',
+            'Nova forma de registrar cortes avulsos no sistema. Redesign feito.',
+            'Painel de demanda reajustado para receber o agente do sistema'
+        ],
+        dashboard: [
+            // Vazio — esta atualização não afeta as funcionárias
+        ],
+    },
+    {
         versao: '1.28.0',
         data: '14/05/2026',
         admin: [

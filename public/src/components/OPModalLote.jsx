@@ -1,5 +1,5 @@
 // public/src/components/OPModalLote.jsx
-// Modal de confirmação de finalização em lote
+// Modal de confirmação de finalização em lote + popup de resultado redesenhado
 
 import React, { useState } from 'react';
 import { mostrarMensagem } from '/js/utils/popups.js';
@@ -31,7 +31,7 @@ function isParcial(op) {
 
 export default function OPModalLote({ isOpen, ops, onClose, onConcluido }) {
     const [executando, setExecutando] = useState(false);
-    const [resultado, setResultado] = useState(null); // { sucesso: N, erro: N }
+    const [resultado, setResultado] = useState(null); // { sucesso, erro, detalhes: [{op, ok}] }
 
     if (!isOpen) return null;
 
@@ -54,10 +54,11 @@ export default function OPModalLote({ isOpen, ops, onClose, onConcluido }) {
             )
         );
 
-        const sucesso = resultados.filter(r => r.status === 'fulfilled').length;
-        const erro = resultados.filter(r => r.status === 'rejected').length;
+        const detalhes = resultados.map((r, i) => ({ op: ops[i], ok: r.status === 'fulfilled' }));
+        const sucesso = detalhes.filter(d => d.ok).length;
+        const erro = detalhes.filter(d => !d.ok).length;
 
-        setResultado({ sucesso, erro });
+        setResultado({ sucesso, erro, detalhes });
         setExecutando(false);
 
         if (erro > 0) {
@@ -82,58 +83,90 @@ export default function OPModalLote({ isOpen, ops, onClose, onConcluido }) {
 
                 {resultado ? (
                     /* --- Tela de resultado pós-finalização --- */
-                    <>
-                        <div className="op-lote-resultado">
-                            <span className="op-lote-resultado-icone">
-                                {resultado.erro === 0 ? '✅' : '⚠️'}
-                            </span>
-                            <p className="op-lote-resultado-titulo">
+                    <div className="op-lote-resultado">
+                        <div className="op-lote-res-header">
+                            <div className={`op-lote-res-icone-circulo ${resultado.erro > 0 ? 'aviso' : ''}`}>
                                 {resultado.erro === 0
-                                    ? `${resultado.sucesso} OP(s) finalizadas com sucesso!`
-                                    : `${resultado.sucesso} finalizadas, ${resultado.erro} com erro`
+                                    ? <i className="fas fa-check"></i>
+                                    : <i className="fas fa-exclamation-triangle"></i>
                                 }
-                            </p>
-                            {resultado.erro > 0 && (
-                                <p className="op-lote-resultado-detalhe">
-                                    As OPs com erro permanecem na lista. Verifique e tente novamente individualmente.
-                                </p>
-                            )}
+                            </div>
+                            <div className="op-lote-res-num">{resultado.sucesso}</div>
+                            <div className="op-lote-res-txt">
+                                {resultado.sucesso === 1 ? 'OP' : 'OPs'}{' '}
+                                {resultado.erro === 0
+                                    ? 'finalizadas com sucesso!'
+                                    : <>finalizadas,{' '}<span className="op-lote-res-erro-cnt">{resultado.erro} com erro</span></>
+                                }
+                            </div>
                         </div>
+
+                        {resultado.detalhes && (
+                            <div className="op-lote-res-pills">
+                                {resultado.detalhes.map(({ op, ok }) => (
+                                    <span
+                                        key={op.edit_id || op.id}
+                                        className={`op-lote-res-pill ${ok ? 'ok' : 'err'}`}
+                                    >
+                                        OP #{op.numero}
+                                        {!ok && <i className="fas fa-times"></i>}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+
+                        {resultado.erro > 0 && (
+                            <p className="op-lote-res-detalhe">
+                                {resultado.erro === 1 ? 'A OP com erro permanece' : 'As OPs com erro permanecem'} na lista.
+                                Verifique e tente novamente individualmente.
+                            </p>
+                        )}
+
                         <div className="op-lote-modal-footer">
-                            <button className="op-lote-btn confirmar" onClick={handleFechar}>
-                                <i className="fas fa-check"></i> Fechar
+                            <button
+                                className={`op-lote-btn confirmar ${resultado.erro > 0 ? 'aviso' : ''}`}
+                                onClick={handleFechar}
+                            >
+                                <i className="fas fa-check"></i>
+                                {resultado.erro > 0 ? 'Entendido' : 'Fechar'}
                             </button>
                         </div>
-                    </>
+                    </div>
                 ) : (
                     /* --- Tela de confirmação --- */
                     <>
                         <div className="op-lote-modal-header">
                             <p className="op-lote-modal-titulo">
-                                <i className="fas fa-layer-group" style={{ marginRight: 8, color: '#3b82f6' }}></i>
-                                Finalizar em Lote
+                                <i className="fas fa-layer-group"></i>
+                                Finalizar em lote
                             </p>
                             <p className="op-lote-modal-subtitulo">
-                                {ops.length} Ordem(ns) de Produção serão liberadas para Arremates.
+                                <strong>{ops.length} {ops.length === 1 ? 'Ordem de Produção será liberada' : 'Ordens de Produção serão liberadas'}</strong> para Arremates.
                             </p>
                         </div>
 
                         <div className="op-lote-modal-lista">
                             {ops.map(op => {
                                 const parcial = isParcial(op);
+                                const nomeVariante = op.variante && op.variante !== '-' ? op.variante : 'Padrão';
                                 return (
-                                    <div key={op.edit_id || op.id} className="op-lote-item">
-                                        <span className="op-lote-item-num">OP #{op.numero}</span>
-                                        <div className="op-lote-item-info">
-                                            <div className="op-lote-item-produto">{op.produto || 'Produto'}</div>
-                                            <div className="op-lote-item-variante">
-                                                {op.variante && op.variante !== '-' ? op.variante : 'Padrão'}
-                                            </div>
+                                    <div key={op.edit_id || op.id} className={`op-lote-item ${parcial ? 'parcial' : ''}`}>
+                                        <div className="card-borda-charme"></div>
+                                        <div className="op-lote-item-img">
+                                            {op.imagem_produto
+                                                ? <img src={op.imagem_produto} alt={nomeVariante} />
+                                                : <i className="fas fa-tshirt"></i>
+                                            }
                                         </div>
-                                        <span className="op-lote-item-qtd">{op.quantidade} pçs</span>
-                                        {parcial && (
-                                            <span className="op-lote-item-badge-parcial">Parcial</span>
-                                        )}
+                                        <div className="op-lote-item-body">
+                                            <div className="op-lote-item-variante">{nomeVariante}</div>
+                                            <div className="op-lote-item-meta">OP <span>#{op.numero}</span></div>
+                                        </div>
+                                        <div className="op-lote-item-right">
+                                            <div className="op-lote-item-qty">{op.quantidade}</div>
+                                            <div className="op-lote-item-qty-label">peças</div>
+                                            {parcial && <div className="op-lote-item-badge-parcial">Parcial</div>}
+                                        </div>
                                     </div>
                                 );
                             })}
@@ -143,7 +176,7 @@ export default function OPModalLote({ isOpen, ops, onClose, onConcluido }) {
                             <div className="op-lote-modal-aviso">
                                 <i className="fas fa-exclamation-triangle"></i>
                                 <p>
-                                    <strong>Atenção:</strong> algumas OPs têm produção inferior à meta.
+                                    <strong>Atenção:</strong> algumas OPs têm produção abaixo da meta.
                                     O saldo restante será registrado como perda ao confirmar.
                                 </p>
                             </div>
@@ -164,7 +197,7 @@ export default function OPModalLote({ isOpen, ops, onClose, onConcluido }) {
                             >
                                 {executando
                                     ? <><div className="op-spinner-btn"></div> Finalizando...</>
-                                    : <><i className="fas fa-check-double"></i> Confirmar Finalização</>
+                                    : <><i className="fas fa-check-double"></i> Confirmar finalização</>
                                 }
                             </button>
                         </div>

@@ -7,9 +7,11 @@ import { calcularStatusDemanda } from '/src/utils/demandaStatus.js';
 const POLLING_INTERVAL = 3 * 60 * 1000; // 3 minutos
 
 export default function BotaoBuscaFunil({ onIniciarProducao, permissoes }) {
-    const [modalAberto, setModalAberto] = useState(false);
-    const [totalUrgentes, setTotalUrgentes] = useState(0); // prioridade=1 E pendente → alerta vermelho
-    const [totalAtivas, setTotalAtivas]    = useState(0); // qualquer demanda não concluída → badge azul
+    const [modalAberto, setModalAberto]         = useState(false);
+    const [countAguardando, setCountAguardando] = useState(0); // demandas em AGUARDANDO
+    const [countCostura, setCountCostura]       = useState(0); // demandas em COSTURA
+    const [totalUrgentes, setTotalUrgentes]     = useState(0); // AGUARDANDO + prioridade=1
+
     const refreshTimerRef = useRef(null);
 
     const checkPrioridades = async () => {
@@ -22,17 +24,24 @@ export default function BotaoBuscaFunil({ onIniciarProducao, permissoes }) {
                 const data = await res.json();
                 const todas = data.diagnosticoAgregado || [];
 
-                let urgentes = 0;
-                let ativas = 0;
+                let aguardando = 0;
+                let costura    = 0;
+                let urgentes   = 0;
+
                 todas.forEach(item => {
                     const status = calcularStatusDemanda(item);
                     if (status === 'CONCLUIDO' || status === 'DIVERGENCIA') return;
-                    ativas++;
-                    if (parseInt(item.prioridade) === 1 && status === 'AGUARDANDO') urgentes++;
+                    // Conta apenas AGUARDANDO e COSTURA para o badge do FAB
+                    if (status === 'AGUARDANDO') {
+                        aguardando++;
+                        if (parseInt(item.prioridade) === 1) urgentes++;
+                    }
+                    if (status === 'COSTURA') costura++;
                 });
 
+                setCountAguardando(aguardando);
+                setCountCostura(costura);
                 setTotalUrgentes(urgentes);
-                setTotalAtivas(ativas);
             }
         } catch (e) {
             console.error('[FAB] Erro check prioridade:', e);
@@ -40,7 +49,7 @@ export default function BotaoBuscaFunil({ onIniciarProducao, permissoes }) {
     };
 
     useEffect(() => {
-        checkPrioridades(); // Checa imediatamente ao montar
+        checkPrioridades();
 
         const agendarProxima = () => {
             refreshTimerRef.current = setTimeout(() => {
@@ -64,40 +73,61 @@ export default function BotaoBuscaFunil({ onIniciarProducao, permissoes }) {
     const handleClose = () => {
         setModalAberto(false);
         checkPrioridades();
-        // Avisa outros componentes na página que o painel fechou (ex: agente de corte rescana)
         window.dispatchEvent(new CustomEvent('painel-demandas-fechado'));
     };
 
-    // --- 3 estados visuais do FAB ---
-    // 1. temUrgente: prioridade=1 E pendente → vermelho pulsante
-    // 2. totalAtivas > 0 (mas sem urgentes pendentes) → azul + badge discreto
-    // 3. sem ativos → azul limpo
-    const temUrgente = totalUrgentes > 0;
+    // ── Estados visuais do FAB ──
+    // tem-prioridade: urgente (AGUARDANDO + prioridade=1)  → anel rápido
+    // tem-demandas:   há aguardando/costura, sem urgência  → anel normal
+    // tudo-ok:        zeros em aguardando e costura        → anel lento + dot verde
+    const temUrgente  = totalUrgentes > 0;
+    const temDemandas = !temUrgente && (countAguardando > 0 || countCostura > 0);
+    const tudoOk      = countAguardando === 0 && countCostura === 0;
+
+    const classesFab = [
+        'gs-fab-busca',
+        temUrgente  ? 'tem-prioridade' : '',
+        temDemandas ? 'tem-demandas'   : '',
+        tudoOk      ? 'tudo-ok'        : '',
+    ].filter(Boolean).join(' ');
+
+    const titulo = temUrgente
+        ? `${totalUrgentes} demanda${totalUrgentes > 1 ? 's' : ''} urgente${totalUrgentes > 1 ? 's' : ''}!`
+        : countAguardando > 0
+            ? `${countAguardando} aguardando, ${countCostura} em costura`
+            : 'Painel de Demandas — pipeline limpo';
 
     return (
         <>
-            {/* FAB — sempre visível */}
+            {/* FAB — robô sempre ativo, monitorando o pipeline */}
             <button
-                className={`gs-fab-busca${temUrgente ? ' tem-prioridade' : ''}`}
+                className={classesFab}
                 onClick={() => setModalAberto(true)}
-                title={
-                    temUrgente
-                        ? `${totalUrgentes} demanda(s) urgente(s) aguardando!`
-                        : totalAtivas > 0
-                            ? `${totalAtivas} demanda(s) em andamento`
-                            : 'Painel de Demandas'
-                }
+                title={titulo}
             >
-                <i className={`fas ${temUrgente ? 'fa-exclamation-triangle' : 'fa-tasks'}`}></i>
+                {/* Anel giratório — velocidade muda conforme urgência */}
+                <i className="fas fa-circle-notch gs-fab-anel" aria-hidden="true"></i>
 
-                {/* Badge vermelho — urgentes pendentes */}
-                {temUrgente && (
-                    <span className="gs-fab-badge-prioridade">{totalUrgentes}</span>
+                {/* Ícone do robô centralizado */}
+                <i className="fas fa-robot gs-fab-robozinho" aria-hidden="true"></i>
+
+                {/* Badge aguardando (laranja normal / vermelho urgente) */}
+                {countAguardando > 0 && (
+                    <span className={`gs-fab-badge-aguardando${temUrgente ? ' urgente' : ''}`}>
+                        {temUrgente ? `${totalUrgentes} urg.` : `${countAguardando} ag.`}
+                    </span>
                 )}
 
-                {/* Badge azul — pipeline em andamento (sem urgência) */}
-                {!temUrgente && totalAtivas > 0 && (
-                    <span className="gs-fab-badge-ativo">{totalAtivas}</span>
+                {/* Badge costura (azul) */}
+                {countCostura > 0 && (
+                    <span className="gs-fab-badge-costura">
+                        {countCostura} cost.
+                    </span>
+                )}
+
+                {/* Micro-indicador verde — pipeline limpo */}
+                {tudoOk && (
+                    <span className="gs-fab-ok-dot" title="Pipeline limpo" />
                 )}
             </button>
 

@@ -352,40 +352,83 @@ if (carregando) return <UICarregando variante="pagina" />;
 
 A **borda-charme** é um dos elementos visuais mais marcantes e consistentes do sistema. É uma barra vertical de **6px de largura** posicionada na lateral esquerda de todos os cards de produto e popups. Ela muda de cor para indicar o status ou contexto do item.
 
-**Implementação padrão (todos os cards devem seguir isso):**
+### Implementação obrigatória
+
+**JSX — sempre um `<div>` vazio com a classe global:**
 
 ```jsx
-// No JSX do card:
 <div className="meu-card">
     <div className="card-borda-charme"></div>
     {/* restante do conteúdo */}
 </div>
 ```
 
+**CSS — o posicionamento completo deve ser declarado no contexto do card pai, dentro do CSS da página:**
+
 ```css
-/* No CSS: o card precisa ter position: relative */
+/* O card pai precisa de position:relative e overflow:hidden */
 .meu-card {
     position: relative;
-    /* ... */
+    overflow: hidden;       /* essencial: garante que as bordas arredondadas funcionem */
+    border-radius: 10px;    /* o valor pode variar, mas deve existir */
 }
 
-.card-borda-charme {
+/* Declaração completa da borda-charme no contexto do card.
+   ATENÇÃO: .card-borda-charme NÃO tem definição global de posicionamento —
+   cada página/contexto precisa declarar os estilos de posicionamento e tamanho.
+   Copie sempre este bloco completo ao criar um novo card. */
+.meu-card .card-borda-charme {
     position: absolute;
     left: 0;
     top: 0;
     width: 6px;
     height: 100%;
-    border-radius: 8px 0 0 8px; /* acompanha o border-radius do card */
+    background-color: var(--cor-padrao);
+    border-radius: 10px 0 0 10px; /* DEVE acompanhar o border-radius do card pai */
 }
 
-/* Variações de cor por status/contexto */
-.card-borda-charme.status-em-aberto   { background-color: var(--cor-status-em-aberto); }
-.card-borda-charme.status-produzindo  { background-color: var(--cor-status-produzindo); }
-.card-borda-charme.status-finalizado  { background-color: var(--cor-status-finalizado); }
-/* etc. */
+/* Variações de cor por status/modificador no pai */
+.meu-card.status-a .card-borda-charme { background-color: var(--cor-a); }
+.meu-card.status-b .card-borda-charme { background-color: var(--cor-b); }
 ```
 
-**Regra:** qualquer novo card de produto ou popup criado no sistema **deve incluir a borda-charme**. Ela não é opcional — faz parte da identidade visual estabelecida.
+### Regras críticas
+
+1. **`border-radius` da borda-charme deve ser igual ao do card pai** — se o card tem `border-radius: 10px`, a borda-charme usa `border-radius: 10px 0 0 10px`. Se o card tem `8px`, usa `8px 0 0 8px`. Sem isso os cantos superiores e inferiores esquerdos ficam quadrados.
+
+2. **O card pai obrigatoriamente precisa de `overflow: hidden`** — sem isso a borda-charme pode vazar para fora dos cantos arredondados em alguns browsers (especialmente Safari/iOS).
+
+3. **Nunca colocar a cor diretamente na classe global** — a cor sempre vai no contexto do pai (`.meu-card .card-borda-charme { background-color: ... }`), nunca em `.card-borda-charme { background-color: ... }` sozinha.
+
+4. **Nunca implementar variações de cor via classe na própria borda** (ex: `.card-borda-charme.status-x`) — use sempre o modificador no elemento pai e descenda o seletor.
+
+5. **`card-borda-charme` é o nome padrão e único** — não criar outras classes de borda charme (ex: `.minha-borda`, `.borda-esquerda`). Padronização é o ponto.
+
+6. **Todo novo card deve incluir a borda-charme** — não é opcional. Faz parte da identidade visual estabelecida.
+
+### Exemplo real — Estoque de Cortes (`op-corte-item`)
+
+```css
+.op-corte-item {
+    position: relative;
+    overflow: hidden;
+    border-radius: 10px;
+}
+
+.op-corte-item .card-borda-charme {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 6px;
+    height: 100%;
+    background-color: #22c55e;      /* verde: disponível */
+    border-radius: 10px 0 0 10px;   /* acompanha os 10px do card */
+}
+.op-corte-item--com-demanda .card-borda-charme { background-color: #3b82f6; } /* azul */
+.op-corte-item--urgente     .card-borda-charme { background-color: #f97316; } /* laranja */
+```
+
+> **Atenção a cards legados:** cards mais antigos do sistema (como `oa-card-arremate-react`) usam `border-radius: var(--gs-raio-borda-card)` no pai e `border-radius: 8px 0 0 8px` na borda-charme. Estão funcionando, mas não precisam ser corrigidos agora. **Ao criar ou refatorar qualquer card, aplique o padrão acima com o `border-radius` alinhado.**
 
 ---
 
@@ -494,6 +537,67 @@ git checkout staging      # volta ao staging para continuar
 - `seed-staging.js` — cria usuário admin de teste no staging (login: `admin_staging` / `staging123`)
 
 **Banner visual:** quando `VITE_ENV=staging`, o componente `UIHeaderPagina` exibe um banner laranja fixo no topo de todas as páginas admin. Em produção, `VITE_ENV=production` — banner não aparece.
+
+---
+
+## Cortes — Número do PC (pn) e a Sequence `cortes_pn_seq`
+
+### Por que existe a sequence
+
+O campo `pn` (número do Pedido de Corte) em cada registro da tabela `cortes` deve ser **único**. O sistema antigo gerava esse número no Node.js com `SELECT MAX(pn) + 1` — uma operação leia-depois-escreva sem lock, sujeita a race condition: se dois cortes fossem registrados simultaneamente (ex: Modo Express registrando 6 de uma vez), ambos podiam ler o mesmo MAX e tentar inserir o mesmo pn, resultando em erro de chave duplicada.
+
+### Como a sequence resolve
+
+Uma **sequence do PostgreSQL** é um objeto atômico do banco — incrementar e retornar o próximo valor é uma operação indivisível. Não importa quantos clientes chamem `nextval('cortes_pn_seq')` ao mesmo tempo: cada um recebe um número diferente, sem colisão e sem necessidade de lock ou transação extra.
+
+### Como está implementado (2026-05-16)
+
+**`POST /api/cortes`** — o campo `pn` é **opcional** no body. O INSERT usa:
+```sql
+COALESCE($7, nextval('cortes_pn_seq')::text)
+```
+- Se `pn` é enviado (código legado ainda ativo): usa o valor enviado.
+- Se `pn` é `null`/não enviado: o banco gera atomicamente via sequence.
+
+**Frontend — quem NÃO envia `pn` (usa sequence automaticamente):**
+- `OPQuickLogModal.jsx` — registro rápido avulso (Normal e Express)
+- `OPCriarModal.jsx` — criação de corte+OP pelo Painel de Demandas
+
+**Frontend — quem ainda ENVIA `pn` (código legado):**
+- `OPRegistroCorte.jsx` — wizard de 3 passos (planejado para deleção após `OPQuickLogModal` ser validado em produção)
+
+**Migration rodada em produção e staging (2026-05-16):** `_planejamento/migration-cortes-pn-seq.sql`
+
+### Regra para código novo
+
+Qualquer novo código que crie cortes via `POST /api/cortes` **não deve enviar `pn`**. O banco gera o número. Não chamar `GET /api/cortes/next-pc-number` — esse endpoint existe apenas por compatibilidade com `OPRegistroCorte.jsx` e será removido junto com ele.
+
+---
+
+## OPQuickLogModal — Registro Rápido de Corte (redesign 2026-05-16)
+
+**Arquivo:** `public/src/components/OPQuickLogModal.jsx`
+
+Substitui o wizard de 3 passos (produto → variante → quantidade) por uma interface de lista plana + expansão inline.
+
+### Funcionalidades
+
+| Feature | Detalhe |
+|---|---|
+| **Lista plana** | Todos os combos produto+variante numa lista de linhas. Clicar numa linha expande os controles de quantidade inline (CSS `max-height` transition). |
+| **Busca multi-token** | "preto gg" bate em "Preto com Preto \| GG" — a busca divide por espaço e exige que todos os tokens apareçam na string composta do produto+variante. |
+| **Recentes** | Quando a busca está vazia, mostra os últimos 8 registros do usuário (`localStorage: op_cortes_recentes`). |
+| **Modo Normal** | Confirmar → registra → sucesso inline → fecha em 1,1s. |
+| **Modo Express** | Adicionar à fila → acumular N itens → "Registrar N cortes" → tela de resultado com pills verdes/vermelhas por item. O modo persiste no `localStorage: op_cortes_modo`. |
+| **Agente de Planejamento** | Quando `preenchido = { produto, variante, quantidadeSugerida }` é passado, o painel abre com a linha já expandida e a quantidade preenchida. |
+
+### Componentes a deletar após validação em produção
+
+- `OPSelecaoProdutoCorte.jsx`
+- `OPSelecaoVarianteCorte.jsx`
+- `OPRegistroCorte.jsx`
+
+Verificar antes de deletar se há outros usos além de `OPCortesTela.jsx`.
 
 ---
 

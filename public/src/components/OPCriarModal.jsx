@@ -25,16 +25,6 @@ async function fetchCortesDisponiveis(produtoId, variante) {
     );
 }
 
-async function getNextPC() {
-    const token = localStorage.getItem('token');
-    const res = await fetch('/api/cortes/next-pc-number', {
-        headers: { 'Authorization': `Bearer ${token}` },
-    });
-    if (!res.ok) throw new Error('Falha ao obter número de corte.');
-    const { nextPC } = await res.json();
-    return nextPC;
-}
-
 async function getNextOPNumber() {
     const token = localStorage.getItem('token');
     const res = await fetch('/api/ordens-de-producao?getNextNumber=true', {
@@ -276,14 +266,12 @@ export default function OPCriarModal({
                 if (!qtd || qtd <= 0) return mostrarMensagem('Quantidade inválida.', 'aviso');
                 if (!dataEntrega) return mostrarMensagem('Informe a data de entrega.', 'aviso');
 
-                const pc = await getNextPC();
                 const corte = await apiCriarCorte(token, {
                     produto_id: produtoId,
                     variante: norm(variante),
                     quantidade: qtd,
                     data: hoje(),
                     status: 'cortados',
-                    pn: pc,
                     demanda_id: demandaId || null,
                 });
                 const numOP = await getNextOPNumber();
@@ -333,14 +321,12 @@ export default function OPCriarModal({
 
                 if (opcaoParcial === 'A') {
                     // Opção A: cria corte novo de `needed` → OP de `needed`
-                    const pc = await getNextPC();
                     const corte = await apiCriarCorte(token, {
                         produto_id: produtoId,
                         variante: norm(variante),
                         quantidade: needed,
                         data: hoje(),
                         status: 'cortados',
-                        pn: pc,
                         demanda_id: demandaId || null,
                     });
                     const numOP = await getNextOPNumber();

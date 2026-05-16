@@ -7,6 +7,8 @@ import PainelDemandaCard from './BotaoBuscaPipelineProducao.jsx';
 import BotaoBuscaModalConcluidas from './BotaoBuscaModalConcluidas.jsx';
 import { calcularStatusDemanda, STATUS_META } from '/src/utils/demandaStatus.js';
 import { LoaderIA } from './UIAgenteIA.jsx';
+import UICarregando from './UICarregando.jsx';
+import PDAgenteDemandas from './PDAgenteDemandas.jsx';
 
 const normalizarTexto = (t) =>
     t ? t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase() : '';
@@ -24,7 +26,6 @@ const PILLS = [
     { id: 'EMBALAGEM',  label: 'Embalagem',  icone: 'fa-box-open',        cor: '#e67e22' },
 ];
 
-
 function calcularDiagnostico(demandas) {
     let urgentes = 0, aguardando = 0, totalAtivos = 0;
     demandas.forEach(item => {
@@ -37,7 +38,7 @@ function calcularDiagnostico(demandas) {
         }
     });
     if (totalAtivos === 0)
-        return { tipo: 'ok',      icone: 'fa-check-circle',     texto: 'Pipeline limpo — nenhuma demanda aguardando.' };
+        return { tipo: 'ok',      icone: 'fa-check-circle',      texto: 'Pipeline limpo — nenhuma demanda aguardando.' };
     if (urgentes > 0)
         return { tipo: 'urgente', icone: 'fa-exclamation-circle', texto: `${urgentes} demanda${urgentes > 1 ? 's' : ''} prioritária${urgentes > 1 ? 's' : ''} aguardando ação imediata.` };
     if (aguardando > 0)
@@ -47,9 +48,22 @@ function calcularDiagnostico(demandas) {
 
 const ITENS_INICIAIS = 6;
 
+// Extrai o primeiro nome do usuário logado diretamente do payload JWT (sem fetch extra)
+function extrairPrimeiroNome() {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) return null;
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return (payload.nome || '').split(' ')[0] || null;
+    } catch (_) { return null; }
+}
+
 export default function PainelDemandas({ onIniciarProducao, permissoes = [], onClose }) {
+    const nomeUsuario = extrairPrimeiroNome();
+
     const [demandasAgregadas, setDemandasAgregadas] = useState([]);
     const [carregando, setCarregando]               = useState(true);
+    const [recarregando, setRecarregando]           = useState(false); // spinner parcial (agente)
     const [chatbotFase, setChatbotFase]             = useState(0);
     const [mensagemFinal, setMensagemFinal]         = useState(null);
     const [ultimaAtt, setUltimaAtt]                 = useState(null);
@@ -58,7 +72,7 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [], onC
     const [termoBusca, setTermoBusca]               = useState('');
     const [filtroStatus, setFiltroStatus]           = useState('AGUARDANDO');
     const [filtroPrioridade, setFiltroPrioridade]   = useState(false);
-    const [subfiltroCorte, setSubfiltroCorte]       = useState('TODOS'); // 'TODOS' | 'COM_CORTE' | 'SEM_CORTE'
+    const [subfiltroCorte, setSubfiltroCorte]       = useState('TODOS');
     const [pendentesArquivamento, setPendentesArquivamento] = useState(0);
     const [expandidos, setExpandidos]               = useState({});
 
@@ -113,12 +127,38 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [], onC
         }
     }, []);
 
+    // Recarregamento parcial — exibe apenas o spinner nos cards, sem LoaderIA
+    const fetchParcial = useCallback(async () => {
+        setRecarregando(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch('/api/demandas/diagnostico-completo', {
+                headers: { 'Authorization': `Bearer ${token}`, 'Cache-Control': 'no-cache' },
+            });
+            if (!res.ok) throw new Error('Falha ao buscar diagnóstico.');
+            const data = await res.json();
+            const lista = data.diagnosticoAgregado || [];
+            setDemandasAgregadas(lista);
+            setUltimaAtt(new Date());
+            const pendentes = lista.filter(i => {
+                const s = calcularStatusDemanda(i);
+                return s === 'CONCLUIDO' || s === 'DIVERGENCIA';
+            }).length;
+            setPendentesArquivamento(pendentes);
+        } catch (err) {
+            console.error('[PainelDemandas] fetchParcial:', err);
+            mostrarMensagem(err.message, 'erro');
+        } finally {
+            setRecarregando(false);
+        }
+    }, []);
+
     useEffect(() => {
         fetchDiagnostico();
         return () => timersRef.current.forEach(clearTimeout);
     }, [fetchDiagnostico]);
 
-    // texto "há X min"
+    // texto "há X min" para o botão de refresh
     const [tempoTexto, setTempoTexto] = useState('—');
     useEffect(() => {
         const atualizar = () => {
@@ -160,13 +200,19 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [], onC
         return c;
     }, [pendentes]);
 
+    // Conta urgentes (prioridade=1 em AGUARDANDO) — passa para o agente
+    const totalUrgentes = useMemo(() => {
+        return pendentes.filter(item =>
+            calcularStatusDemanda(item) === 'AGUARDANDO' && parseInt(item.prioridade) === 1
+        ).length;
+    }, [pendentes]);
+
     const diagnostico = useMemo(() => calcularDiagnostico(demandasAgregadas), [demandasAgregadas]);
 
     const termoLimpo = normalizarTexto(termoBusca);
 
     const filtrarItem = (item, estagio) => {
         if (filtroPrioridade && parseInt(item.prioridade) !== 1) return false;
-        // Sub-filtro de corte: aplica apenas na seção AGUARDANDO
         if (estagio === 'AGUARDANDO' && subfiltroCorte !== 'TODOS') {
             const temCorte = ((item.corte_cortado || 0) + (item.corte_pendente || 0)) > 0;
             if (subfiltroCorte === 'COM_CORTE' && !temCorte) return false;
@@ -180,7 +226,6 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [], onC
         return palavras.every(p => textoItem.includes(p));
     };
 
-    // Contagens para os chips do sub-filtro de corte
     const contagensCorte = useMemo(() => {
         const aguardando = pendentes.filter(item => calcularStatusDemanda(item) === 'AGUARDANDO');
         const comCorte   = aguardando.filter(item => ((item.corte_cortado || 0) + (item.corte_pendente || 0)) > 0).length;
@@ -210,189 +255,183 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [], onC
         } catch (err) { mostrarMensagem(err.message, 'erro'); }
     };
 
-    const totalPendentes = pendentes.length;
+    // Callback para o agente urgente — filtra urgentes sem refetch
+    const handleFiltrarUrgentes = () => {
+        setFiltroStatus('AGUARDANDO');
+        setFiltroPrioridade(true);
+    };
 
     return (
         <>
-            {/* ── HEADER ── */}
+            {/* ── HEADER COMPACTO ── */}
             <div className="pd-header">
-                <div className="pd-header-topo">
-                    <div className="pd-header-icone">
-                        <i className="fas fa-tasks"></i>
-                    </div>
-                    <div className="pd-header-titulo-bloco">
-                        <div className="pd-header-titulo">Painel de Demandas</div>
-                        <div className="pd-header-subtitulo">
-                            {totalPendentes > 0
-                                ? `${totalPendentes} demanda${totalPendentes !== 1 ? 's' : ''} no pipeline`
-                                : 'Nenhuma demanda pendente'}
-                        </div>
-                    </div>
-                    <div className="pd-header-acoes">
-                        <button
-                            className="pd-btn-historico"
-                            onClick={() => setModalHistoricoAberto(true)}
-                            title="Ver histórico"
-                        >
-                            <i className="fas fa-history"></i>
-                            {pendentesArquivamento > 0 && (
-                                <span className="pd-historico-badge">{pendentesArquivamento}</span>
-                            )}
-                        </button>
-                        <button className="pd-btn-fechar" onClick={onClose} title="Fechar">
-                            <i className="fas fa-times"></i>
-                        </button>
-                    </div>
-                </div>
+                <span className="pd-header-label">Painel de Demandas</span>
 
-                <div className="pd-header-controles">
-                    <button
-                        className={`pd-btn-refresh${carregando ? ' carregando' : ''}`}
-                        onClick={() => fetchDiagnostico(false)}
-                        disabled={carregando}
-                    >
-                        <i className="fas fa-sync-alt pd-btn-refresh-icone"></i>
-                        <span className="pd-btn-refresh-texto">
-                            <span className="pd-btn-refresh-label">Atualizar</span>
-                            <span className="pd-btn-refresh-tempo">{tempoTexto}</span>
-                        </span>
-                    </button>
-                    <button className="pd-btn-nova" onClick={() => setModalAddAberto(true)}>
-                        <i className="fas fa-plus"></i>
-                        Nova Demanda
-                    </button>
-                </div>
+                <button
+                    className="pd-btn-historico"
+                    onClick={() => setModalHistoricoAberto(true)}
+                    title="Histórico de demandas concluídas"
+                >
+                    <i className="fas fa-history"></i>
+                    {pendentesArquivamento > 0 && (
+                        <span className="pd-historico-badge">{pendentesArquivamento}</span>
+                    )}
+                </button>
+
+                <button
+                    className={`pd-btn-refresh${carregando ? ' carregando' : ''}`}
+                    onClick={() => fetchDiagnostico(false)}
+                    disabled={carregando}
+                    title={`Atualizar — ${tempoTexto}`}
+                >
+                    <i className="fas fa-sync-alt pd-btn-refresh-icone"></i>
+                </button>
+
+                <button className="pd-btn-nova" onClick={() => setModalAddAberto(true)}>
+                    <i className="fas fa-plus"></i>
+                    Nova
+                </button>
+
+                <button className="pd-btn-fechar" onClick={onClose} title="Fechar">
+                    <i className="fas fa-times"></i>
+                </button>
             </div>
 
-            {/* ── SUMMARY BAR (pills) ── */}
-            {!carregando && (
-                <div className="pd-summary-bar">
-                    {PILLS.map(p => {
-                        const count = contagensPorEstagio[p.id] || 0;
-                        const ativo = filtroStatus === p.id;
-                        return (
-                            <button
-                                key={p.id}
-                                className={`pd-summary-pill${ativo ? ' ativo' : ''}${p.id === 'AGUARDANDO' ? ' aguardando' : ''}`}
-                                style={{ '--pd-pill-cor': p.cor }}
-                                onClick={() => {
-                                    const novoStatus = ativo ? null : p.id;
-                                    setFiltroStatus(novoStatus);
-                                    // Reseta subfiltro ao sair de AGUARDANDO
-                                    if (novoStatus !== 'AGUARDANDO') setSubfiltroCorte('TODOS');
-                                }}
-                            >
-                                <i className={`fas ${p.icone}`}></i>
-                                {p.label}
-                                <span className="pd-summary-pill-count">{count}</span>
-                            </button>
-                        );
-                    })}
-                    <button
-                        className={`pd-summary-pill${filtroPrioridade ? ' ativo' : ''}`}
-                        style={{ '--pd-pill-cor': '#e74c3c' }}
-                        onClick={() => setFiltroPrioridade(f => !f)}
-                    >
-                        <i className="fas fa-star"></i>
-                        Urgentes
-                    </button>
-                </div>
-            )}
-
-            {/* ── SUB-FILTRO DE CORTE — visível apenas na aba Aguardando ── */}
-            {!carregando && filtroStatus === 'AGUARDANDO' && contagensCorte.total > 0 && (
-                <div className="pd-subfiltro-corte">
-                    <button
-                        className={`pd-subfiltro-chip${subfiltroCorte === 'TODOS' ? ' ativo' : ''}`}
-                        onClick={() => setSubfiltroCorte('TODOS')}
-                    >
-                        Todos
-                        <span className="pd-subfiltro-chip-count">{contagensCorte.total}</span>
-                    </button>
-                    <button
-                        className={`pd-subfiltro-chip com-corte${subfiltroCorte === 'COM_CORTE' ? ' ativo' : ''}`}
-                        onClick={() => setSubfiltroCorte(subfiltroCorte === 'COM_CORTE' ? 'TODOS' : 'COM_CORTE')}
-                        title="Demandas que já têm corte registrado"
-                    >
-                        <i className="fas fa-cut"></i>
-                        Com corte
-                        <span className="pd-subfiltro-chip-count">{contagensCorte.comCorte}</span>
-                    </button>
-                    <button
-                        className={`pd-subfiltro-chip sem-corte${subfiltroCorte === 'SEM_CORTE' ? ' ativo' : ''}`}
-                        onClick={() => setSubfiltroCorte(subfiltroCorte === 'SEM_CORTE' ? 'TODOS' : 'SEM_CORTE')}
-                        title="Demandas sem nenhum corte registrado"
-                    >
-                        <i className="fas fa-scissors"></i>
-                        Sem corte
-                        <span className="pd-subfiltro-chip-count">{contagensCorte.semCorte}</span>
-                    </button>
-                </div>
-            )}
-
-            {/* ── DIAGNÓSTICO ── */}
-            {!carregando && (
-                <div className={`pd-diagnostico ${diagnostico.tipo}`}>
-                    <i className={`fas ${diagnostico.icone}`}></i>
-                    <span>{diagnostico.texto}</span>
-                </div>
-            )}
-
-            {/* ── BODY ── */}
+            {/* ── CONTEÚDO — loader ou pipeline ── */}
             {carregando ? (
                 <div className="pd-loader-centrado">
                     <LoaderIA fases={FASES_CHATBOT} faseAtual={chatbotFase} mensagemFinal={mensagemFinal} />
                 </div>
             ) : (
-                <div className="pd-body">
-                    {/* Busca de texto */}
-                    <div className="pd-busca-wrapper">
-                        <i className="fas fa-search pd-busca-icone"></i>
-                        <input
-                            type="text"
-                            className={`pd-busca-input${termoBusca ? ' com-limpar' : ''}`}
-                            placeholder="Buscar produto..."
-                            value={termoBusca}
-                            onChange={e => setTermoBusca(e.target.value)}
-                        />
-                        {termoBusca && (
-                            <button
-                                type="button"
-                                className="pd-busca-limpar"
-                                onClick={() => setTermoBusca('')}
-                                tabIndex={-1}
-                            >
-                                <i className="fas fa-times"></i>
-                            </button>
-                        )}
+                <>
+                    {/* ── SUMMARY BAR (pills de estágio) ── */}
+                    <div className="pd-summary-bar">
+                        {PILLS.map(p => {
+                            const count = contagensPorEstagio[p.id] || 0;
+                            const ativo = filtroStatus === p.id;
+                            return (
+                                <button
+                                    key={p.id}
+                                    className={`pd-summary-pill${ativo ? ' ativo' : ''}${p.id === 'AGUARDANDO' ? ' aguardando' : ''}`}
+                                    style={{ '--pd-pill-cor': p.cor }}
+                                    onClick={() => {
+                                        const novoStatus = ativo ? null : p.id;
+                                        setFiltroStatus(novoStatus);
+                                        if (novoStatus !== 'AGUARDANDO') setSubfiltroCorte('TODOS');
+                                    }}
+                                >
+                                    <i className={`fas ${p.icone}`}></i>
+                                    {p.label}
+                                    <span className="pd-summary-pill-count">{count}</span>
+                                </button>
+                            );
+                        })}
+                        <button
+                            className={`pd-summary-pill${filtroPrioridade ? ' ativo' : ''}`}
+                            style={{ '--pd-pill-cor': '#e74c3c' }}
+                            onClick={() => setFiltroPrioridade(f => !f)}
+                        >
+                            <i className="fas fa-star"></i>
+                            Urgentes
+                        </button>
                     </div>
 
-                    {/* Seções por estágio */}
-                    {secoesVisiveis.length === 0 ? (
-                        <div className="pd-vazio">
-                            <i className="fas fa-search"></i>
-                            <div className="pd-vazio-titulo">Nenhuma demanda encontrada</div>
-                            <div className="pd-vazio-sub">
-                                {termoBusca || filtroPrioridade
-                                    ? 'Tente ajustar os filtros.'
-                                    : 'Tudo em dia!'}
-                            </div>
+                    {/* ── SUB-FILTRO DE CORTE ── */}
+                    {filtroStatus === 'AGUARDANDO' && contagensCorte.total > 0 && (
+                        <div className="pd-subfiltro-corte">
+                            <button
+                                className={`pd-subfiltro-chip${subfiltroCorte === 'TODOS' ? ' ativo' : ''}`}
+                                onClick={() => setSubfiltroCorte('TODOS')}
+                            >
+                                Todos
+                                <span className="pd-subfiltro-chip-count">{contagensCorte.total}</span>
+                            </button>
+                            <button
+                                className={`pd-subfiltro-chip com-corte${subfiltroCorte === 'COM_CORTE' ? ' ativo' : ''}`}
+                                onClick={() => setSubfiltroCorte(subfiltroCorte === 'COM_CORTE' ? 'TODOS' : 'COM_CORTE')}
+                                title="Demandas que já têm corte registrado"
+                            >
+                                <i className="fas fa-cut"></i>
+                                Com corte
+                                <span className="pd-subfiltro-chip-count">{contagensCorte.comCorte}</span>
+                            </button>
+                            <button
+                                className={`pd-subfiltro-chip sem-corte${subfiltroCorte === 'SEM_CORTE' ? ' ativo' : ''}`}
+                                onClick={() => setSubfiltroCorte(subfiltroCorte === 'SEM_CORTE' ? 'TODOS' : 'SEM_CORTE')}
+                                title="Demandas sem nenhum corte registrado"
+                            >
+                                <i className="fas fa-scissors"></i>
+                                Sem corte
+                                <span className="pd-subfiltro-chip-count">{contagensCorte.semCorte}</span>
+                            </button>
                         </div>
-                    ) : (
-                        secoesVisiveis.map(secao => (
-                            <SecaoEstagio
-                                key={secao.id}
-                                secao={secao}
-                                expandido={!!expandidos[secao.id]}
-                                onExpandir={() => setExpandidos(e => ({ ...e, [secao.id]: !e[secao.id] }))}
-                                onDelete={handleDeleteDemanda}
-                                permissoes={permissoes}
-                                onRefresh={() => fetchDiagnostico(true)}
-                                onIniciarProducao={onIniciarProducao}
-                            />
-                        ))
                     )}
-                </div>
+
+                    {/* ── BUSCA — fixa acima do agente e dos cards ── */}
+                    <div className="pd-busca-outer">
+                        <div className="pd-busca-wrapper">
+                            <i className="fas fa-search pd-busca-icone"></i>
+                            <input
+                                type="text"
+                                className={`pd-busca-input${termoBusca ? ' com-limpar' : ''}`}
+                                placeholder="Buscar produto..."
+                                value={termoBusca}
+                                onChange={e => setTermoBusca(e.target.value)}
+                            />
+                            {termoBusca && (
+                                <button
+                                    type="button"
+                                    className="pd-busca-limpar"
+                                    onClick={() => setTermoBusca('')}
+                                    tabIndex={-1}
+                                >
+                                    <i className="fas fa-times"></i>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* ── AGENTE VIVO — a alma do pipeline ── */}
+                    <PDAgenteDemandas
+                        diagnostico={diagnostico}
+                        contagensPorEstagio={contagensPorEstagio}
+                        totalUrgentes={totalUrgentes}
+                        nomeUsuario={nomeUsuario}
+                        onRefresh={fetchParcial}
+                        onFiltrarUrgentes={handleFiltrarUrgentes}
+                        carregando={recarregando}
+                    />
+
+                    {/* ── CARDS POR ESTÁGIO (scrollável) ── */}
+                    <div className="pd-body">
+                        {recarregando ? (
+                            <UICarregando variante="bloco" texto="Atualizando pipeline..." />
+                        ) : secoesVisiveis.length === 0 ? (
+                            <div className="pd-vazio">
+                                <i className="fas fa-search"></i>
+                                <div className="pd-vazio-titulo">Nenhuma demanda encontrada</div>
+                                <div className="pd-vazio-sub">
+                                    {termoBusca || filtroPrioridade
+                                        ? 'Tente ajustar os filtros.'
+                                        : 'Tudo em dia!'}
+                                </div>
+                            </div>
+                        ) : (
+                            secoesVisiveis.map(secao => (
+                                <SecaoEstagio
+                                    key={secao.id}
+                                    secao={secao}
+                                    expandido={!!expandidos[secao.id]}
+                                    onExpandir={() => setExpandidos(e => ({ ...e, [secao.id]: !e[secao.id] }))}
+                                    onDelete={handleDeleteDemanda}
+                                    permissoes={permissoes}
+                                    onRefresh={() => fetchDiagnostico(true)}
+                                    onIniciarProducao={onIniciarProducao}
+                                />
+                            ))
+                        )}
+                    </div>
+                </>
             )}
 
             {/* Modais */}
@@ -411,7 +450,7 @@ export default function PainelDemandas({ onIniciarProducao, permissoes = [], onC
 }
 
 function SecaoEstagio({ secao, expandido, onExpandir, onDelete, permissoes, onRefresh, onIniciarProducao }) {
-    const visiveis = expandido ? secao.items : secao.items.slice(0, ITENS_INICIAIS);
+    const visiveis  = expandido ? secao.items : secao.items.slice(0, ITENS_INICIAIS);
     const restantes = secao.items.length - ITENS_INICIAIS;
 
     const ICONE_MAP = {

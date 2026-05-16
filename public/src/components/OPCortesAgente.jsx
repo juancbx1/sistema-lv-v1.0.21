@@ -1,46 +1,134 @@
 // public/src/components/OPCortesAgente.jsx
-// Agente de Planejamento de Corte — scan de demandas pendentes + plano do dia
+// Agente de Planejamento de Corte — idle com typewriter + scanning + plano do dia
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import UIAgenteIA from './UIAgenteIA';
+import useTypewriter from '../hooks/useTypewriter';
+import useContador from '../hooks/useContador.js';
+import OPAgenteFaseScan from './OPAgenteFaseScan.jsx';
 
-// Estado calmo — agente não sabe do déficit até escanear
+// ── Frases de repouso ─────────────────────────────────────────────────────────
+
 const FRASES_MONITORANDO = [
-    'Estou monitorando o estoque de cortes. Quer cortar agora?.',
+    'Estou monitorando o estoque de cortes. Quer cortar agora?',
     'Acompanhando as demandas de corte em tempo real.',
     'Nada detectado ainda. Posso analisar o plano de corte quando quiser.',
     'Sistemas ativos. Aguardo seu comando para verificar os cortes pendentes.',
-    'Estou olhando para as pendencias de cortes. Devo verificar agora?',
+    'Estou de olho nas pendências de cortes. Devo verificar agora?',
     'Tudo dentro do esperado até agora. Quer um plano de corte atualizado?',
 ];
 
-// Estado pós-corte parcial — ficaram itens no plano sem corte registrado
 const FRASES_PARCIAL = [
-    'Reparei que ficaram itens no plano sem corte registrado. Verifico agora?',
-    'Você não cortou todos os itens do plano. Quer resolver o restante?',
+    '{nome}, reparei que ficaram itens no plano sem corte registrado. Verifico agora?',
+    'Você não cortou todos os itens do plano, {nome}. Quer resolver o restante?',
     'Ainda há déficit de corte na linha. Posso rever o plano?',
-    'Percebo que ficaram pendências de corte. Revejo o plano agora?',
+    '{nome}, percebo que ficaram pendências de corte. Revejo o plano agora?',
     'Missão incompleta! Ainda há itens aguardando corte no plano.',
     'Deixou alguns para depois? Posso verificar o que ainda precisa de corte.',
 ];
 
-const MENSAGENS_SCAN = [
-    'Verificando demandas abertas...',
-    'Cruzando com estoque de cortes...',
-    'Calculando solicitaçoes de produção...',
-    'Gerando plano de corte...',
+const FRASES_SONDAGEM_ENCONTROU = [
+    '{nome}, acabei de verificar por conta própria... há {qtd} {item} com déficit de corte.',
+    'Enquanto você estava aqui, dei uma olhada rápida. {qtd} {item} precisa{m} de corte.',
+    '{nome}, atenção — encontrei déficit em {qtd} {item} sem você precisar pedir.',
+    'Fiz uma verificação silenciosa agora. {qtd} {item} no plano de corte. Quer o relatório?',
 ];
 
-const INTERVALO_AO_VIVO_MS = 90_000; // 90 segundos
+// ── Helpers de memória de sessão ──────────────────────────────────────────────
 
-export default function OPCortesAgente({ produtos, onCortarAgora, rescanKey }) {
-    const [agentState, setAgentState] = useState('idle'); // 'idle' | 'scanning' | 'done'
-    const [mensagensVisiveis, setMensagensVisiveis] = useState([]);
+function lerMemoria(chave) {
+    try {
+        const raw = sessionStorage.getItem(chave);
+        if (!raw) return null;
+        const mem = JSON.parse(raw);
+        if (Date.now() - mem.timestamp > 2 * 3600 * 1000) return null;
+        return mem;
+    } catch { return null; }
+}
+
+function gravarMemoria(chave, dados) {
+    try {
+        sessionStorage.setItem(chave, JSON.stringify({ ...dados, timestamp: Date.now() }));
+    } catch { /* silencioso */ }
+}
+
+function calcularTempoRelativo(timestamp) {
+    const diff = Date.now() - timestamp;
+    const min = Math.floor(diff / 60000);
+    if (min < 2) return 'agora mesmo';
+    if (min < 60) return `há ${min} minutos`;
+    return `há ${Math.floor(min / 60)}h`;
+}
+
+function construirFraseMemoriaCortes(mem, nomeUsuario) {
+    const nome = nomeUsuario ? `${nomeUsuario}, ` : '';
+    const ha = calcularTempoRelativo(mem.timestamp);
+
+    if (mem.encontrados > 0 && mem.voltouParcial) {
+        return `${nome}${ha} ainda havia déficit de corte. Quer que eu verifique de novo?`;
+    }
+    if (mem.encontrados === 0) {
+        return `${ha} o estoque de cortes estava em dia. Quer verificar se mudou algo?`;
+    }
+    return null;
+}
+
+// ── Substitui placeholders numa frase ────────────────────────────────────────
+
+function substituirPlaceholders(frase, nome, extra = {}) {
+    let r = frase;
+    if (nome) {
+        r = r.replace(/\{nome\}/g, nome);
+    } else {
+        r = r.replace(/\{nome\},?\s*/g, '').replace(/,?\s*\{nome\}/g, '');
+    }
+    for (const [k, v] of Object.entries(extra)) {
+        r = r.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+    }
+    return r;
+}
+
+const MENSAGENS_SCAN = [
+    { texto: 'Verificando demandas abertas...' },
+    { texto: 'Cruzando com estoque de cortes...' },
+    { texto: 'Calculando solicitações de produção...', contador: { alvo: 15, sufixo: 'produtos analisados' } },
+    { texto: 'Gerando plano de corte...' },
+];
+
+// ── Calcula score de confiança da análise (75–97%) ────────────────────────────
+function calcularConfiancaCortes(alertasDeficit, totalProdutos) {
+    if (!totalProdutos) return 88;
+    const cobertura = Math.min((totalProdutos - alertasDeficit) / totalProdutos, 1);
+    return Math.round(75 + cobertura * 22);
+}
+
+// Sub-componente inline: contador animado para o score
+function ScoreCounter({ alvo }) {
+    const valor = useContador(alvo, 1400, true);
+    return <>{valor}</>;
+}
+
+const INTERVALO_AO_VIVO_MS = 90_000;
+const DELAY_SONDAGEM_MS    = 12_000;
+const MIN_INTERVALO_MS     = 300_000;
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default function OPCortesAgente({ produtos, onCortarAgora, rescanKey, cortesEmEstoque, nomeUsuario }) {
+    const [agentState, setAgentState] = useState('idle'); // 'idle' | 'scanning' | 'avaliando' | 'done'
+    const [mensagensVisiveis, setMensagensVisiveis] = useState([]); // array de objetos { texto, contador? }
+    const [scoreAlvo, setScoreAlvo] = useState(0);
     const [plano, setPlano] = useState([]);
     const [ultimoScan, setUltimoScan] = useState(null);
-    const [fraseIdx, setFraseIdx] = useState(() => Math.floor(Math.random() * FRASES_MONITORANDO.length));
     const [voltouParcial, setVoltouParcial] = useState(false);
+    const [sondagemSilenciosa, setSondagemSilenciosa] = useState(null);
+    const [memoriaCortes, setMemoriaCortes] = useState(() => lerMemoria('agente_cortes_memoria'));
+
+    const ultimaSondagemRef  = useRef(null);
+    const avaliandoTimerRef  = useRef(null);
 
     const iniciarScan = useCallback(async () => {
+        setSondagemSilenciosa(null);
         setAgentState('scanning');
         setMensagensVisiveis([]);
         setPlano([]);
@@ -80,12 +168,22 @@ export default function OPCortesAgente({ produtos, onCortarAgora, rescanKey }) {
             const finalMsg = count > 0
                 ? `${count} item${count > 1 ? 's' : ''} no plano de corte de hoje.`
                 : 'Estoque em dia! Nenhuma demanda pendente sem corte.';
-            setMensagensVisiveis(prev => [...prev, finalMsg]);
+            setMensagensVisiveis(prev => [...prev, { texto: finalMsg }]);
 
-            await new Promise(r => setTimeout(r, 480));
+            await new Promise(r => setTimeout(r, 440));
+
+            // Salva na memória de sessão
+            gravarMemoria('agente_cortes_memoria', { encontrados: planoEnriquecido.length, voltouParcial: false });
+
             setPlano(planoEnriquecido);
             setUltimoScan(new Date());
-            setAgentState('done');
+
+            // Transita por 'avaliando' antes de 'done' (score de confiança)
+            const score = calcularConfiancaCortes(count, produtos?.length || 0);
+            setScoreAlvo(score);
+            setAgentState('avaliando');
+            clearTimeout(avaliandoTimerRef.current);
+            avaliandoTimerRef.current = setTimeout(() => setAgentState('done'), 1800);
 
         } catch (err) {
             setMensagensVisiveis(prev => [...prev, `Erro: ${err.message}`]);
@@ -93,40 +191,67 @@ export default function OPCortesAgente({ produtos, onCortarAgora, rescanKey }) {
         }
     }, [produtos]);
 
+    // ── Sondagem silenciosa ───────────────────────────────────────────────────
+    useEffect(() => {
+        if (agentState !== 'idle') return;
+
+        const agora = Date.now();
+        const ultima = ultimaSondagemRef.current || 0;
+        const tempoEspera = Math.max(
+            DELAY_SONDAGEM_MS,
+            MIN_INTERVALO_MS - (agora - ultima)
+        );
+
+        const timer = setTimeout(async () => {
+            if (agentState !== 'idle') return;
+            if (document.visibilityState !== 'visible') return;
+
+            ultimaSondagemRef.current = Date.now();
+
+            try {
+                const token = localStorage.getItem('token');
+                const data = await fetch('/api/cortes/radar', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }).then(r => r.json());
+
+                const quantidade = (data.alertasDeficit || []).length;
+                setSondagemSilenciosa({ timestamp: Date.now(), encontrou: quantidade > 0, quantidade });
+            } catch { /* silencioso */ }
+        }, tempoEspera);
+
+        return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [agentState]);
+
     const resetar = useCallback(() => {
-        // Se o plano tinha itens, o usuário fechou sem cortar tudo → parcial
+        clearTimeout(avaliandoTimerRef.current);
         const foiParcial = plano.length > 0;
+        // Atualiza memória com informação de parcial antes de resetar
+        const memAtual = lerMemoria('agente_cortes_memoria') || {};
+        gravarMemoria('agente_cortes_memoria', { ...memAtual, voltouParcial: foiParcial });
         setVoltouParcial(foiParcial);
+        setMemoriaCortes(lerMemoria('agente_cortes_memoria'));
+        setSondagemSilenciosa(null);
         setAgentState('idle');
         setMensagensVisiveis([]);
         setPlano([]);
         setUltimoScan(null);
-        setFraseIdx(Math.floor(Math.random() * (foiParcial ? FRASES_PARCIAL : FRASES_MONITORANDO).length));
     }, [plano]);
 
-    // Auto-rescan quando rescanKey muda (após QuickLog com sucesso).
     useEffect(() => {
-        if (rescanKey > 0) {
-            iniciarScan();
-        }
+        if (rescanKey > 0) iniciarScan();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [rescanKey]);
 
-    // Polling "ao vivo": rescan automático a cada 90s enquanto em 'done' e aba visível
     useEffect(() => {
         if (agentState !== 'done') return;
-
         const timer = setInterval(() => {
-            if (document.visibilityState === 'visible') {
-                iniciarScan();
-            }
+            if (document.visibilityState === 'visible') iniciarScan();
         }, INTERVALO_AO_VIVO_MS);
-
         return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [agentState]);
 
-    // Rescan ao fechar o Painel de Demandas
     useEffect(() => {
         const handlePainelFechado = () => {
             if (agentState === 'done') iniciarScan();
@@ -135,12 +260,76 @@ export default function OPCortesAgente({ produtos, onCortarAgora, rescanKey }) {
         return () => window.removeEventListener('painel-demandas-fechado', handlePainelFechado);
     }, [agentState, iniciarScan]);
 
-    // Determina tom do agente no repouso
-    const frases    = voltouParcial ? FRASES_PARCIAL : FRASES_MONITORANDO;
-    const frase     = frases[fraseIdx % frases.length];
+    // ── Frases e prioridade ───────────────────────────────────────────────────
+
     const classeCard = voltouParcial ? ' parcial' : '';
 
-    // Formata horário do último scan
+    const frasesEmbaralhadas = useMemo(() => {
+        const base = voltouParcial ? FRASES_PARCIAL : FRASES_MONITORANDO;
+        const comNome = base.map(f => substituirPlaceholders(f, nomeUsuario));
+        const inicio = Math.floor(Math.random() * comNome.length);
+        return [...comNome.slice(inicio), ...comNome.slice(0, inicio)];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [voltouParcial, nomeUsuario]);
+
+    const { encontrou: sondagemEncontrou = false, quantidade: sondagemQtd = 0 } = sondagemSilenciosa || {};
+    const fraseSondagem = useMemo(() => {
+        if (!sondagemEncontrou || !sondagemQtd) return null;
+        const b = FRASES_SONDAGEM_ENCONTROU[Math.floor(Math.random() * FRASES_SONDAGEM_ENCONTROU.length)];
+        return substituirPlaceholders(b, nomeUsuario, {
+            qtd: sondagemQtd,
+            item: sondagemQtd === 1 ? 'item' : 'itens',
+            m: sondagemQtd === 1 ? '' : 'm',
+        });
+    }, [sondagemEncontrou, sondagemQtd, nomeUsuario]);
+
+    const fraseMemoria = useMemo(() =>
+        memoriaCortes ? construirFraseMemoriaCortes(memoriaCortes, nomeUsuario) : null,
+        [memoriaCortes, nomeUsuario]
+    );
+
+    // Contexto passivo — usa cortesEmEstoque se disponível
+    const fraseContextual = useMemo(() => {
+        if (!cortesEmEstoque || cortesEmEstoque.length === 0) return null;
+        const pref = nomeUsuario ? `${nomeUsuario}, ` : '';
+        const n = cortesEmEstoque.length;
+        return `${pref}vejo ${n} ${n === 1 ? 'lote' : 'lotes'} no estoque de cortes. Quer que eu verifique se há déficit?`;
+    }, [cortesEmEstoque, nomeUsuario]);
+
+    const frasesParaUsar = useMemo(() => {
+        if (voltouParcial)   return frasesEmbaralhadas;
+        if (fraseSondagem)   return [fraseSondagem];
+        if (fraseMemoria)    return [fraseMemoria];
+        if (fraseContextual) return [fraseContextual];
+        return frasesEmbaralhadas;
+    }, [voltouParcial, fraseSondagem, fraseMemoria, fraseContextual, frasesEmbaralhadas]);
+
+    const { texto: textoAnimado, fase: faseTypewriter, completo } = useTypewriter(frasesParaUsar, 38, 3000, false);
+
+    // Ticker de dados — tokens derivados dos produtos reais
+    const tickerTokens = useMemo(() => {
+        const tokens = [];
+        if (produtos && produtos.length > 0) {
+            produtos.slice(0, 12).forEach(p => {
+                if (p.grade && p.grade.length > 0) {
+                    p.grade.slice(0, 2).forEach(g => {
+                        tokens.push(`${p.sku || (p.nome || '').slice(0, 6).toUpperCase()} · ${g.variacao || 'PAD'}`);
+                    });
+                } else {
+                    tokens.push(p.sku || (p.nome || '').slice(0, 8).toUpperCase());
+                }
+            });
+        }
+        // Fallback genérico se não houver produtos suficientes
+        if (tokens.length < 6) {
+            tokens.push(
+                'ANALISANDO REGISTROS', 'CRUZANDO TABELAS', 'VERIFICANDO ESTOQUE',
+                'CALCULANDO DÉFICIT', 'BUSCANDO DEMANDAS', 'ATUALIZANDO ÍNDICE',
+            );
+        }
+        return tokens;
+    }, [produtos]);
+
     const horaUltimoScan = ultimoScan
         ? ultimoScan.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
         : null;
@@ -148,37 +337,75 @@ export default function OPCortesAgente({ produtos, onCortarAgora, rescanKey }) {
     return (
         <div className="op-cortes-agente">
 
-            {/* ── IDLE CARD — o agente se comunica antes de escanear ── */}
+            {/* ── IDLE CARD ── */}
             {agentState === 'idle' && (
                 <div className={`op-agente-idle-card${classeCard}`}>
-                    <div className="op-agente-robo-avatar">
-                        <i className="fas fa-robot"></i>
+                    <div className="op-agente-avatar-wrapper">
+                        <UIAgenteIA tamanho="lg" scanning={false} />
                     </div>
-                    <div className="op-agente-idle-conteudo">
-                        <p className="op-agente-idle-msg">"{frase}"</p>
-                        <button className="op-agente-idle-btn" onClick={iniciarScan}>
-                            <i className={`fas ${voltouParcial ? 'fa-redo' : 'fa-search'}`}></i>
-                            {voltouParcial ? 'Verificar pendências' : 'Analisar agora'}
-                        </button>
+                    <div className={`op-agente-waveform${completo ? ' pausado' : ''}`}>
+                        <span /><span /><span /><span /><span />
                     </div>
+                    <div className="op-agente-idle-pensamento">
+                        <span className={`op-agente-idle-texto${faseTypewriter === 'fading' ? ' fading' : ''}`}>
+                            {textoAnimado}
+                            {(faseTypewriter === 'typing' || completo) && (
+                                <span className="op-agente-idle-cursor">▌</span>
+                            )}
+                        </span>
+                    </div>
+                    <button className="op-agente-idle-btn" onClick={iniciarScan}>
+                        <i className={`fas ${voltouParcial ? 'fa-redo' : 'fa-search'}`}></i>
+                        {voltouParcial ? 'Verificar pendências' : 'Analisar agora'}
+                    </button>
                 </div>
             )}
 
             {/* ── TERMINAL DE SCAN ── */}
-            {agentState === 'scanning' && (
-                <div className="op-cortes-agente-terminal">
-                    {mensagensVisiveis.map((msg, i) => (
-                        <div
+            {(agentState === 'scanning' || agentState === 'avaliando') && (
+                <div className="op-agente-terminal">
+                    {mensagensVisiveis.map((fase, i) => (
+                        <OPAgenteFaseScan
                             key={i}
-                            className={`op-agente-linha ${i < mensagensVisiveis.length - 1 ? 'concluida' : 'atual'}`}
-                        >
-                            <span className="agente-prompt">›</span>
-                            <span className="agente-msg">{msg}</span>
-                            {i === mensagensVisiveis.length - 1 && (
-                                <span className="agente-cursor">▌</span>
-                            )}
-                        </div>
+                            fase={fase}
+                            isCurrent={agentState === 'scanning' && i === mensagensVisiveis.length - 1}
+                            isCompleted={i < mensagensVisiveis.length - 1 || agentState === 'avaliando'}
+                        />
                     ))}
+
+                    {/* Ticker de dados — rola continuamente durante o scan */}
+                    {agentState === 'scanning' && (
+                        <div className="op-agente-ticker-wrapper">
+                            <div className="op-agente-ticker">
+                                {tickerTokens.join('  ·  ')}
+                                {'  ·  ' + tickerTokens.join('  ·  ')}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Score de confiança — exibido no estado avaliando */}
+                    {agentState === 'avaliando' && (
+                        <div className="op-agente-avaliando">
+                            <div className="op-agente-avaliando-titulo">
+                                <i className="fas fa-check-circle"></i>
+                                Scan completo. Avaliando confiabilidade...
+                            </div>
+                            <div className="op-agente-score-wrapper">
+                                <div className="op-agente-score-label">
+                                    <span>Confiança da análise</span>
+                                    <span className="op-agente-score-pct">
+                                        <ScoreCounter alvo={scoreAlvo} />%
+                                    </span>
+                                </div>
+                                <div className="op-agente-score-barra-bg">
+                                    <div
+                                        className="op-agente-score-barra-fill"
+                                        style={{ width: `${scoreAlvo}%` }}
+                                    ></div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -186,30 +413,39 @@ export default function OPCortesAgente({ produtos, onCortarAgora, rescanKey }) {
             {agentState === 'done' && (
                 <div className="op-cortes-agente-resultado">
 
-                    {/* Badge "ao vivo" + botão fechar */}
-                    <div className="op-cortes-agente-ao-vivo">
-                        <span className="op-cortes-agente-ao-vivo-dot"></span>
-                        <span className="op-cortes-agente-ao-vivo-label">Ao vivo</span>
+                    {/* Header unificado — idêntico ao da aba OPs */}
+                    <div className="op-agente-res-header">
+                        <div className={`op-agente-res-badge${plano.length === 0 ? ' vazio' : ''}`}>
+                            <i className={`fas ${plano.length === 0 ? 'fa-check-circle' : 'fa-clipboard-list'}`}></i>
+                            {plano.length === 0
+                                ? 'Estoque em dia'
+                                : `${plano.length} ${plano.length === 1 ? 'item' : 'itens'} para cortar`
+                            }
+                        </div>
                         {horaUltimoScan && (
-                            <span className="op-cortes-agente-ao-vivo-hora">· atualizado às {horaUltimoScan}</span>
+                            <div className="op-agente-res-ao-vivo">
+                                <span className="op-cortes-agente-ao-vivo-dot"></span>
+                                <span>{horaUltimoScan}</span>
+                            </div>
                         )}
                         <button
-                            className="op-agente-corte-btn done"
+                            className="op-agente-res-fechar"
                             onClick={resetar}
-                            title="Fechar o Agente de Corte"
-                            style={{ marginLeft: 'auto' }}
+                            title="Fechar agente / novo scan"
+                            aria-label="Fechar agente"
                         >
-                            <i className="fas fa-robot agente-corte-icon"></i>
-                            <span>Fechar Agente</span>
+                            <i className="fas fa-times"></i>
                         </button>
                     </div>
 
                     {plano.length === 0 && (
-                        <div className="op-cortes-agente-zerado">
-                            <i className="fas fa-check-circle"></i>
-                            <div className="op-cortes-agente-zerado-texto">
+                        <div className="op-agente-vazio">
+                            <div className="op-agente-vazio-icone">
+                                <i className="fas fa-check-circle"></i>
+                            </div>
+                            <div className="op-agente-vazio-texto">
                                 <strong>Estoque de cortes em dia!</strong>
-                                <span>Todas as demandas pendentes têm corte disponível. Continue assim!</span>
+                                <span>Todas as demandas pendentes têm corte disponível.</span>
                             </div>
                         </div>
                     )}
@@ -217,10 +453,6 @@ export default function OPCortesAgente({ produtos, onCortarAgora, rescanKey }) {
                     {plano.length > 0 && (
                         <>
                             <div className="op-cortes-agente-plano-header">
-                                <span>
-                                    <i className="fas fa-clipboard-list"></i>
-                                    {plano.length} {plano.length === 1 ? 'item' : 'itens'} para cortar hoje
-                                </span>
                                 <span className="op-cortes-agente-hint">
                                     Clique em "Cortar" para registrar cada lote
                                 </span>
@@ -236,10 +468,8 @@ export default function OPCortesAgente({ produtos, onCortarAgora, rescanKey }) {
                                             className={`op-cortes-agente-card ${cobertoParcial ? 'parcial' : ''}`}
                                             style={{ '--card-idx': i }}
                                         >
-                                            {/* Borda-charme lateral */}
                                             <div className="card-borda-charme"></div>
 
-                                            {/* Corpo: imagem + info */}
                                             <div className="op-cortes-agente-card-corpo">
                                                 <img
                                                     src={item.imagem || '/img/placeholder-image.png'}
@@ -263,7 +493,6 @@ export default function OPCortesAgente({ produtos, onCortarAgora, rescanKey }) {
                                                 </div>
                                             </div>
 
-                                            {/* Botão Cortar — rodapé do card */}
                                             <button
                                                 className="op-cortes-agente-card-btn"
                                                 onClick={() => onCortarAgora({

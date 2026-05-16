@@ -19,88 +19,89 @@ export default function OPCorteEstoqueCard({ corte, produto, onGerarOP, onExclui
     };
 
     const variante = corte.variante && corte.variante !== '-' ? corte.variante : 'Padrão';
+    const temDemanda = demandasVinculadas.length > 0;
+    const urgente = temDemanda && parseInt(demandasVinculadas[0].prioridade) === 1;
+
+    const labelDemanda = demandasVinculadas.length === 1
+        ? `${demandasVinculadas[0].quantidade_solicitada} pçs demandadas`
+        : `${demandasVinculadas.length} demandas`;
+
+    const classeItem = [
+        'op-corte-item',
+        temDemanda ? 'op-corte-item--com-demanda' : '',
+        urgente ? 'op-corte-item--urgente' : '',
+    ].filter(Boolean).join(' ');
 
     return (
-        <div className="op-corte-card-v2">
+        <div className={classeItem}>
 
-            {/* Borda-charme verde: corte disponível em estoque */}
-            <div className="card-borda-charme status-cortado"></div>
+            {/* Borda-charme — padrão global do sistema (position:absolute no pai) */}
+            <div className="card-borda-charme"></div>
 
-            {/* Botão excluir */}
-            <button
-                className="op-corte-card-excluir"
-                onClick={e => { e.stopPropagation(); onExcluir?.(corte); }}
-                title="Excluir corte do estoque"
-                aria-label="Excluir corte"
-            >
-                <i className="fas fa-trash-alt"></i>
-            </button>
-
-            {/* Corpo: imagem | info | quantidade */}
-            <div className="op-corte-card-corpo">
+            {/* Topo: imagem + info + qty/excluir */}
+            <div className="op-corte-item-topo">
                 <img
                     src={getImagem()}
                     alt={variante}
-                    className="op-corte-card-img"
+                    className="op-corte-item-img"
                 />
 
-                <div className="op-corte-card-info">
-                    <div className="op-corte-card-meta">
-                        <span className="op-corte-card-pc">PC {corte.pn}</span>
-                        <span className="op-corte-card-data">
-                            <i className="fas fa-calendar-alt"></i>
-                            {formatarData(corte.data)}
-                        </span>
+                <div className="op-corte-item-produto">
+                    <div className="op-corte-item-variante">{variante}</div>
+                    <div className="op-corte-item-meta">
+                        <span className="op-corte-item-pc">PC {corte.pn}</span>
+                        <span className="op-corte-item-sep">·</span>
+                        <span>{formatarData(corte.data)}</span>
+                        {corte.cortador && (
+                            <>
+                                <span className="op-corte-item-sep">·</span>
+                                <span className="op-corte-item-cortador">
+                                    <i className="fas fa-cut"></i> {corte.cortador}
+                                </span>
+                            </>
+                        )}
                     </div>
-                    <div className="op-corte-card-variante">{variante}</div>
-                    {corte.cortador && (
-                        <div className="op-corte-card-cortador">
-                            <i className="fas fa-user"></i> {corte.cortador}
+                    {temDemanda && (
+                        <div className="op-corte-item-demanda">
+                            {urgente && <span className="op-corte-item-demanda-urgente">⚡</span>}
+                            <i className="fas fa-link"></i>
+                            <span>{labelDemanda}</span>
                         </div>
                     )}
                 </div>
 
-                <div className="op-corte-card-qty">
-                    <span className="qty-valor">{corte.quantidade}</span>
-                    <span className="qty-label">pçs</span>
+                {/* Quantidade + excluir empilhados no lado direito */}
+                <div className="op-corte-item-direita">
+                    <div className="op-corte-item-qty">
+                        <span className="op-corte-item-qty-valor">{corte.quantidade}</span>
+                        <span className="op-corte-item-qty-label">pçs</span>
+                    </div>
+                    <button
+                        className="op-corte-item-excluir"
+                        onClick={e => { e.stopPropagation(); onExcluir?.(corte); }}
+                        title="Excluir corte do estoque"
+                        aria-label="Excluir corte"
+                    >
+                        <i className="fas fa-trash-alt"></i>
+                    </button>
                 </div>
             </div>
 
-            {/* Badge de demanda vinculada — só aparece se há demandas pendentes para este produto+variante */}
-            {demandasVinculadas.length > 0 && (
-                <div className="op-corte-card-demanda-badge">
-                    <i className="fas fa-link"></i>
-                    {demandasVinculadas.length === 1 ? (
-                        <>
-                            <span className="op-corte-card-demanda-badge-texto">
-                                Demanda pendente · {demandasVinculadas[0].quantidade_solicitada} pçs
-                            </span>
-                            {parseInt(demandasVinculadas[0].prioridade) === 1 && (
-                                <span className="op-corte-card-demanda-badge-urgente">⚡ Urgente</span>
-                            )}
-                        </>
-                    ) : (
-                        <span className="op-corte-card-demanda-badge-texto">
-                            {demandasVinculadas.length} demandas pendentes
-                        </span>
-                    )}
-                </div>
-            )}
-
-            {/* Tira de ação: Gerar OP */}
+            {/* Fundo: botão de ação full-width */}
             <button
-                className={`op-corte-card-gerar-op${demandasVinculadas.length > 0 ? ' tem-demanda' : ''}`}
+                className={`op-corte-item-acao${temDemanda ? ' tem-demanda' : ''}`}
                 onClick={() => onGerarOP(corte)}
                 disabled={isGerando}
             >
                 {isGerando ? (
                     <><div className="op-spinner-btn"></div> Gerando OP...</>
-                ) : demandasVinculadas.length > 0 ? (
+                ) : temDemanda ? (
                     <><i className="fas fa-link"></i> Gerar OP Vinculada</>
                 ) : (
                     <><i className="fas fa-arrow-right"></i> Gerar OP</>
                 )}
             </button>
+
         </div>
     );
 }

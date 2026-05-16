@@ -133,6 +133,55 @@ export default function OPCortesTela() {
 
     useEffect(() => { carregarDados(); }, [carregarDados]);
 
+    // ── Refresh silencioso: atualiza cortes + demandas sem mostrar spinner de loading ──
+    // Usado pelo polling e pelo evento painel-demandas-fechado para não piscar a tela.
+    const refreshSilencioso = useCallback(async () => {
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            const [cortesData, demandasData] = await Promise.all([
+                fetchCortesEmEstoque(),
+                fetch('/api/demandas', { headers: { 'Authorization': `Bearer ${token}` } })
+                    .then(r => r.ok ? r.json() : []).catch(() => []),
+            ]);
+            setCortesEmEstoque(cortesData);
+
+            // Reconstrói demandasMap usando produtos já carregados no estado
+            const demandasPendentes = Array.isArray(demandasData)
+                ? demandasData.filter(d => ['pendente', 'em_atendimento'].includes(d.status))
+                : [];
+            const novoMap = new Map();
+            for (const d of demandasPendentes) {
+                if (!d.produto_sku) continue;
+                const skuBusca = d.produto_sku.trim().toUpperCase();
+                for (const p of produtos) {
+                    let match = false, varianteResolvida = null;
+                    const gradeArr = Array.isArray(p.grade) ? p.grade : [];
+                    if (p.sku && p.sku.trim().toUpperCase() === skuBusca) {
+                        match = true;
+                    } else {
+                        const g = gradeArr.find(g => g.sku && g.sku.trim().toUpperCase() === skuBusca);
+                        if (g) { match = true; varianteResolvida = g.variacao || null; }
+                    }
+                    if (match) {
+                        const chave = `${p.id}|${varianteResolvida || '-'}`;
+                        if (!novoMap.has(chave)) novoMap.set(chave, []);
+                        novoMap.get(chave).push({
+                            id: d.id,
+                            quantidade_solicitada: d.quantidade_solicitada,
+                            prioridade: d.prioridade,
+                            data_solicitacao: d.data_solicitacao,
+                            produto_nome: p.nome,
+                            variacao: varianteResolvida,
+                        });
+                        break;
+                    }
+                }
+            }
+            setDemandasMap(novoMap);
+        } catch { /* falha silenciosa — não exibir erro ao usuário */ }
+    }, [produtos]);
+
     // ── Auto-refresh ao retornar à aba do navegador ──
     useEffect(() => {
         const handleVisibility = () => {
@@ -142,6 +191,26 @@ export default function OPCortesTela() {
         document.addEventListener('visibilitychange', handleVisibility);
         return () => document.removeEventListener('visibilitychange', handleVisibility);
     }, [carregarDados]);
+
+    // ── Refresh ao fechar o Painel de Demandas (FAB lateral) ──
+    // O supervisor pode abrir o painel, ver uma demanda nova criada pelo gerente,
+    // fechar o painel e voltar para o estoque — sem perceber que o badge de demanda
+    // ainda não aparece nos cards. Este listener corrige exatamente esse cenário.
+    useEffect(() => {
+        const handler = () => refreshSilencioso();
+        window.addEventListener('painel-demandas-fechado', handler);
+        return () => window.removeEventListener('painel-demandas-fechado', handler);
+    }, [refreshSilencioso]);
+
+    // ── Polling de 60s: safety net para dados ficarem sempre frescos ──
+    // Garante que mesmo sem nenhuma interação do usuário, o estoque não fique
+    // desatualizado por mais de 1 minuto enquanto a aba estiver visível.
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (document.visibilityState === 'visible') refreshSilencioso();
+        }, 60_000);
+        return () => clearInterval(interval);
+    }, [refreshSilencioso]);
 
     // ── Refresh manual do estoque ──
     // Chama carregarDados completo para garantir que o mapa de demandas também seja atualizado
@@ -269,31 +338,11 @@ export default function OPCortesTela() {
 
         return (
             <>
-                {/* RADAR */}
-                <OPCortesRadar refreshKey={radarRefreshKey} />
-
-                {/* AÇÕES */}
-                {!quickLogAberto && (
-                    <div className="op-cortes-controles">
-                        <div className="op-cortes-acoes-btns">
-                            <button
-                                className="op-cortes-btn-quicklog"
-                                onClick={() => { setQuickLogPreenchido(null); setQuickLogAberto(true); }}
-                            >
-                                <i className="fas fa-bolt"></i>
-                                Registrar Corte
-                            </button>
-                            <button
-                                className="op-cortes-btn-avancado op-cortes-btn-em-breve"
-                                disabled
-                                title="Funcionalidade em desenvolvimento"
-                            >
-                                <i className="fas fa-lock"></i>
-                                Em breve
-                            </button>
-                        </div>
-                    </div>
-                )}
+                {/* RADAR — botão "Registrar Corte" vive aqui */}
+                <OPCortesRadar
+                    refreshKey={radarRefreshKey}
+                    onRegistrarCorte={quickLogAberto ? null : () => { setQuickLogPreenchido(null); setQuickLogAberto(true); }}
+                />
 
                 {/* Agente de Corte — idle card + terminal + resultado */}
                 {!quickLogAberto && (
@@ -301,6 +350,8 @@ export default function OPCortesTela() {
                         produtos={produtos}
                         onCortarAgora={handleCortarAgora}
                         rescanKey={agenteRescanKey}
+                        cortesEmEstoque={cortesEmEstoque}
+                        nomeUsuario={(usuarioLogado?.nome || '').split(' ')[0] || null}
                     />
                 )}
 
@@ -320,6 +371,7 @@ export default function OPCortesTela() {
                 {/* ESTOQUE */}
                 {!quickLogAberto && (
                     <div className="op-cortes-estoque-secao">
+                        {/* Título — padronizado com outras seções, não mexer */}
                         <div className="op-cortes-estoque-titulo-row">
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <h3 className="op-cortes-estoque-titulo">
@@ -342,7 +394,8 @@ export default function OPCortesTela() {
                             )}
                         </div>
 
-                        <div className="op-cards-container">
+                        {/* Grid de itens em estoque */}
+                        <div className="op-corte-lista">
                             {cortesPaginados.length > 0 ? (
                                 cortesPaginados.map(corte => {
                                     const produtoCompleto = produtos.find(p => p.id === corte.produto_id);
@@ -376,7 +429,6 @@ export default function OPCortesTela() {
                                     currentPage={paginaCortes}
                                     onPageChange={(novaPagina) => {
                                         setPaginaCortes(novaPagina);
-                                        // Garante que a paginação fique visível após a troca (mesmo que a página fique maior)
                                         requestAnimationFrame(() => {
                                             paginacaoRef.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
                                         });
@@ -391,7 +443,7 @@ export default function OPCortesTela() {
     };
 
     return (
-        <div className="gs-card">
+        <div className="op-cortes-tela">
             {/* Header com voltar (wizard) */}
             {passo > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: '15px' }}>

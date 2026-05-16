@@ -19,7 +19,7 @@ function isInativo48h(ultimoLancamento) {
     return (Date.now() - new Date(ultimoLancamento.data).getTime()) > 48 * 3600 * 1000;
 }
 
-export default function OPCortesRadar({ refreshKey }) {
+export default function OPCortesRadar({ refreshKey, onRegistrarCorte }) {
     const [radar, setRadar] = useState(null);
     const [loading, setLoading] = useState(true);
     const buscar = useCallback(async () => {
@@ -82,6 +82,17 @@ export default function OPCortesRadar({ refreshKey }) {
                         <i className="fas fa-exclamation-triangle"></i>
                         <span>Nenhum corte lançado nas últimas 48h</span>
                     </div>
+                )}
+
+                {/* Botão de ação principal */}
+                {onRegistrarCorte && (
+                    <button
+                        className="op-cortes-btn-quicklog"
+                        onClick={onRegistrarCorte}
+                    >
+                        <i className="fas fa-bolt"></i>
+                        Registrar Corte
+                    </button>
                 )}
             </div>
 

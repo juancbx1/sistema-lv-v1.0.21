@@ -17,6 +17,7 @@ export default function OPGerenciamentoTela({ opsPendentesGlobal, onRefreshConta
     const [carregando, setCarregando] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [erro, setErro] = useState(null);
+    const [usuarioLogado, setUsuarioLogado] = useState(null);
 
     // Modal de detalhes individual
     const [modalAberto, setModalAberto] = useState(false);
@@ -94,6 +95,16 @@ export default function OPGerenciamentoTela({ opsPendentesGlobal, onRefreshConta
     useEffect(() => {
         buscarDados(pagina, filtros);
     }, [pagina, filtros, buscarDados]);
+
+    // Carrega nome do usuário logado (uma vez na montagem)
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        fetch('/api/usuarios/me', { headers: { 'Authorization': `Bearer ${token}` } })
+            .then(r => r.json())
+            .then(data => { if (!data.error) setUsuarioLogado(data); })
+            .catch(() => {});
+    }, []);
 
     // Após carregar nova página, rola a paginação para a tela (sem subir, só se necessário)
     useEffect(() => {
@@ -190,18 +201,21 @@ export default function OPGerenciamentoTela({ opsPendentesGlobal, onRefreshConta
     const mostrarInitTerminal = carregando && isFirstLoadRef.current;
     const mostrarSpinnerSimples = carregando && !isFirstLoadRef.current;
 
+    const primeiroNome = (usuarioLogado?.nome || '').split(' ')[0] || null;
+
     return (
         <>
             {/* Bloco de Filtros */}
             <OPFiltros onFiltroChange={handleFiltroChange} />
 
-            {/* Central de Encerramento — só após o primeiro carregamento para evitar
-                flash com ops=[] antes dos dados chegarem (tom incorreto no idle card) */}
+            {/* Central de Encerramento — opsPendentesGlobal vem do polling geral (todas as OPs)
+                — não depende da página atual da listagem */}
             {!isFirstLoadRef.current && (
                 <OPCentralEncerramento
-                    ops={ops}
+                    opsPendentesGlobal={opsPendentesGlobal}
                     onAbrirLote={handleAbrirLote}
                     resetKey={loteResetKey}
+                    nomeUsuario={primeiroNome}
                 />
             )}
 

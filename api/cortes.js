@@ -255,19 +255,19 @@ router.post('/', async (req, res) => {
         }
 
         const {
-            produto_id, // Recebe o ID do produto
+            produto_id,
             variante,
             quantidade,
             data,
             status = 'pendente',
             op = null,
-            pn,
+            pn,        // opcional: se não enviado, gerado pela sequence cortes_pn_seq
             cortador,
             demanda_id
         } = req.body;
 
-        if (!produto_id || quantidade === undefined || !data || !status || !pn) {
-            return res.status(400).json({ error: 'Dados incompletos: produto_id, quantidade, data, status e pn são obrigatórios.' });
+        if (!produto_id || quantidade === undefined || !data || !status) {
+            return res.status(400).json({ error: 'Dados incompletos: produto_id, quantidade, data e status são obrigatórios.' });
         }
 
         const parsedQuantidade = parseInt(quantidade, 10);
@@ -276,10 +276,11 @@ router.post('/', async (req, res) => {
         }
 
         const varianteFinal = (variante === undefined || variante === null || String(variante).trim() === '') ? null : String(variante).trim();
-        
+
+        // pn gerado atomicamente pela sequence quando não enviado pelo cliente
         const queryText = `
             INSERT INTO cortes (produto_id, variante, quantidade, data, status, op, pn, cortador, demanda_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, nextval('cortes_pn_seq')::text), $8, $9)
             RETURNING *
         `;
         const values = [
@@ -289,9 +290,9 @@ router.post('/', async (req, res) => {
             data,
             status,
             op,
-            pn,
+            pn || null,
             cortador,
-            demanda_id || null // Salva no banco
+            demanda_id || null
         ];
 
         const result = await dbClient.query(queryText, values);
