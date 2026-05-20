@@ -5,7 +5,8 @@ const { Pool } = pkg;
 import jwt from 'jsonwebtoken';
 import express from 'express';
 // Importe a função de buscar permissões completas
-import { getPermissoesCompletasUsuarioDB } from './usuarios.js'; 
+import { getPermissoesCompletasUsuarioDB } from './usuarios.js';
+import { verificarGincanasAposProducao } from './gincanas.js';
 
 
 
@@ -925,12 +926,17 @@ router.put('/finalizar', async (req, res) => {
         );
 
         await dbClient.query('COMMIT');
-        
-        // Log leve apenas no console do servidor (sem query extra)
-        // console.log(`[FINALIZAR] Sucesso para ${nomeFuncionario}. Detalhes:`, logAuditoria.join(' | '));
 
-        // A RESPOSTA VEM POR ÚLTIMO
         res.status(200).json({ message: 'Tarefa finalizada e distribuída com pontos calculados!' });
+
+        // Hook de gincanas — apenas costureiras (tiktiks: aguardar fase posterior, seção 4.9 plano v4.0)
+        if (dadosFuncionario.tipos.includes('costureira')) {
+            try {
+                await verificarGincanasAposProducao(dbClient, sessao.funcionario_id, new Date());
+            } catch (err) {
+                console.error('[GINCANA HOOK]', err.message);
+            }
+        }
 
     } catch (error) {
         if (dbClient) await dbClient.query('ROLLBACK');

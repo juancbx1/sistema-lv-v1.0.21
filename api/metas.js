@@ -250,30 +250,14 @@ router.delete('/regras/:id_regra', async (req, res) => {
     let dbClient;
     try {
         dbClient = await pool.connect();
-        const query = `
-            UPDATE metas_regras 
-            SET 
-                pontos_meta = $1, 
-                valor_comissao = $2, 
-                descricao_meta = $3, 
-                condicoes = $4
-                -- REMOVIDO: data_atualizacao = NOW()
-            WHERE id = $5
-            RETURNING *;
-        `;
-        
-        // Se 'condicoes' for um objeto/array, o convertemos para uma string JSON.
-        // Se for null, undefined, ou qualquer outra coisa, passamos null.
-        const condicoesParaSalvar = (condicoes && typeof condicoes === 'object') 
-                                        ? JSON.stringify(condicoes) 
-                                        : null;
-
-        const result = await dbClient.query(query, [pontos_meta, valor_comissao, descricao_meta, condicoesParaSalvar, id_regra]);
-        
+        const result = await dbClient.query(
+            'DELETE FROM metas_regras WHERE id = $1 RETURNING id',
+            [id_regra]
+        );
         if (result.rowCount === 0) {
             return res.status(404).json({ error: 'Regra não encontrada.' });
         }
-        res.status(200).json(result.rows[0]);
+        res.status(200).json({ message: 'Regra excluída com sucesso.' });
     } catch (error) {
         console.error(`[API /api/metas/regras/${id_regra} DELETE] Erro:`, error.message);
         res.status(500).json({ error: 'Erro ao excluir a regra.' });

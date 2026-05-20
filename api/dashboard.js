@@ -147,7 +147,7 @@ router.get('/desempenho', async (req, res) => {
         dbClient = await pool.connect();
 
         // 1. Busca Usuário (Com ID explícito)
-        const userRes = await dbClient.query('SELECT id, nome, tipos, nivel, avatar_url, dias_trabalho FROM usuarios WHERE id = $1', [usuarioId]);
+        const userRes = await dbClient.query('SELECT id, nome, tipos, nivel, avatar_url, dias_trabalho, horario_saida_3 FROM usuarios WHERE id = $1', [usuarioId]);
         if (userRes.rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado.' });
         const usuario = userRes.rows[0];
         const tipoUsuario = usuario.tipos?.[0] || 'costureira';
@@ -292,6 +292,34 @@ router.get('/desempenho', async (req, res) => {
         })();
 
         const diasTrabalhadosNoCiclo = historicoDias.filter(d => d.pontos > 0).length;
+
+        // Detectar se o expediente de hoje já encerrou (horario_saida_3 + 15min de buffer)
+        const agoraSP = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+        let diaHojeJaEncerrado = false;
+        if (usuario.horario_saida_3) {
+            const [hSaida, mSaida] = usuario.horario_saida_3.split(':').map(Number);
+            const saidaComBuffer = new Date(agoraSP);
+            saidaComBuffer.setHours(hSaida, mSaida + 15, 0, 0);
+            diaHojeJaEncerrado = agoraSP >= saidaComBuffer;
+        }
+
+        // Dias úteis restantes no ciclo — considera dias_trabalho + feriados + expediente encerrado
+        // Se o expediente de hoje já acabou, começa a contagem a partir de amanhã
+        const diasRestantesNoCiclo = (() => {
+            const baseDate = new Date(agoraSP);
+            if (diaHojeJaEncerrado) baseDate.setDate(baseDate.getDate() + 1);
+            const baseStr = baseDate.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+            let count = 0;
+            let cursor = new Date(baseStr + 'T12:00:00');
+            const fimDate = new Date(fimCicloStr + 'T12:00:00');
+            while (cursor <= fimDate) {
+                const dow = cursor.getDay();
+                const dateStr = cursor.toISOString().slice(0, 10);
+                if (diasTrabalhoMap[String(dow)] === true && !datasExcluidas.has(dateStr)) count++;
+                cursor.setDate(cursor.getDate() + 1);
+            }
+            return count;
+        })();
 
         // 7. PROCESSA O COFRE AUTOMATICAMENTE
         const dadosCofre = await auditarCofrePontos(dbClient, usuario.id, historicoDias, metasConfiguradas, periodo.inicio);
@@ -480,7 +508,9 @@ router.get('/desempenho', async (req, res) => {
                 diasTrabalhadosNoCiclo,
                 diasDetalhes: historicoDias,
                 diasUteisRealDoEmpregadoNoCiclo,
-                eventosCalendario
+                eventosCalendario,
+                diaHojeJaEncerrado,
+                diasRestantesNoCiclo,
             },
             pagamentoPendente: (() => {
                 // Ciclo atual tem produção → mostrar como pagamento pendente
@@ -791,152 +821,6 @@ router.get('/meus-pagamentos', async (req, res) => {
     }
 });
 
-// GET /api/dashboard/ritmo-atual
-router.get('/ritmo-atual', async (req, res) => {
-    const { id: usuarioId } = req.usuarioLogado;
-    const metaAlvo = parseInt(req.query.meta_pontos) || 0;
-    let dbClient;
-    try {
-        dbClient = await pool.connect();
-
-        // 1. Tipo e dias de trabalho do usuário
-        const tipoRes = await dbClient.query('SELECT tipos, dias_trabalho FROM usuarios WHERE id = $1', [usuarioId]);
-        const tipoUsuario = tipoRes.rows[0]?.tipos?.[0] || 'costureira';
-        const diasTrabalho = tipoRes.rows[0]?.dias_trabalho || { "1":true,"2":true,"3":true,"4":true,"5":true };
-
-        // 2. Data e dia da semana (SP)
-        const agoraSP = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-        const hojeStr = agoraSP.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
-        const diaSemana = agoraSP.getDay();
-        const nomesDia = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
-        const nomeDiaAtual = nomesDia[diaSemana];
-
-        // Se hoje não é dia de trabalho deste empregado, não exibir o card
-        if (!diasTrabalho[String(diaSemana)]) {
-            return res.status(200).json({ naoEDiaDeTrabalho: true });
-        }
-
-        // 3. Pontos de hoje (paralelo)
-        const [pontosHojeRes, sessoesRes, pontosExtrasRes] = await Promise.all([
-            tipoUsuario === 'tiktik'
-                ? dbClient.query(
-                    `SELECT COALESCE(SUM(pontos_gerados), 0)::float as total
-                     FROM arremates
-                     WHERE usuario_tiktik_id = $1 AND tipo_lancamento = 'PRODUCAO'
-                     AND data_lancamento::date = $2::date`,
-                    [usuarioId, hojeStr]
-                )
-                : dbClient.query(
-                    `SELECT COALESCE(SUM(pontos_gerados), 0)::float as total
-                     FROM producoes WHERE funcionario_id = $1 AND data::date = $2::date`,
-                    [usuarioId, hojeStr]
-                ),
-            // 4. Horas trabalhadas hoje (sessões)
-            tipoUsuario === 'tiktik'
-                ? dbClient.query(
-                    `SELECT COALESCE(SUM(
-                         EXTRACT(EPOCH FROM (COALESCE(data_fim, NOW()) - data_inicio)) / 3600.0
-                     ), 0)::float as horas_total
-                     FROM sessoes_trabalho_arremate
-                     WHERE usuario_tiktik_id = $1
-                     AND data_inicio::date = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
-                     AND status NOT IN ('CANCELADA', 'ESTORNADA')`,
-                    [usuarioId]
-                )
-                : dbClient.query(
-                    `SELECT COALESCE(SUM(
-                         EXTRACT(EPOCH FROM (COALESCE(data_fim, NOW()) - data_inicio)) / 3600.0
-                     ), 0)::float as horas_total
-                     FROM sessoes_trabalho_producao
-                     WHERE funcionario_id = $1
-                     AND data_inicio::date = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
-                     AND status != 'CANCELADA'`,
-                    [usuarioId]
-                ),
-            // Pontos extras de hoje
-            dbClient.query(
-                `SELECT COALESCE(SUM(pontos), 0)::float as total FROM pontos_extras
-                 WHERE funcionario_id = $1 AND data_referencia = $2::date AND cancelado = FALSE`,
-                [usuarioId, hojeStr]
-            )
-        ]);
-
-        const pontosHoje = pontosHojeRes.rows[0].total + pontosExtrasRes.rows[0].total;
-        const horasTrabalhadasHoje = sessoesRes.rows[0].horas_total || 0;
-
-        // 5. Ritmo atual (pts/hora) — mínimo 30 min de dados
-        const MINIMO_HORAS = 0.5;
-        const temDadosSuficientes = horasTrabalhadasHoje >= MINIMO_HORAS;
-        const ritmoAtual = temDadosSuficientes ? pontosHoje / horasTrabalhadasHoje : null;
-
-        // 6. Histórico do mesmo dia da semana (últimas 6 ocorrências)
-        const historicoRes = await dbClient.query(
-            tipoUsuario === 'tiktik'
-                ? `SELECT data_lancamento::date as data_dia, SUM(pontos_gerados)::float as pontos_dia
-                   FROM arremates
-                   WHERE usuario_tiktik_id = $1 AND tipo_lancamento = 'PRODUCAO'
-                   AND EXTRACT(DOW FROM data_lancamento AT TIME ZONE 'America/Sao_Paulo') = $2
-                   AND data_lancamento::date < $3::date
-                   GROUP BY data_dia ORDER BY data_dia DESC LIMIT 6`
-                : `SELECT data::date as data_dia, SUM(pontos_gerados)::float as pontos_dia
-                   FROM producoes
-                   WHERE funcionario_id = $1
-                   AND EXTRACT(DOW FROM data AT TIME ZONE 'America/Sao_Paulo') = $2
-                   AND data::date < $3::date
-                   GROUP BY data_dia ORDER BY data_dia DESC LIMIT 6`,
-            [usuarioId, diaSemana, hojeStr]
-        );
-
-        const pontosHistorico = historicoRes.rows.map(r => r.pontos_dia);
-        const mediaHistoricaPontosDia = pontosHistorico.length > 0
-            ? pontosHistorico.reduce((a, b) => a + b, 0) / pontosHistorico.length
-            : null;
-
-        // Ritmo histórico estimado em 8h de expediente
-        const HORAS_EXPEDIENTE = 8;
-        const ritmoHistorico = mediaHistoricaPontosDia != null
-            ? mediaHistoricaPontosDia / HORAS_EXPEDIENTE
-            : null;
-
-        // 7. Comparação ritmo atual vs histórico
-        let comparacaoHistorico = null;
-        if (ritmoAtual != null && ritmoHistorico != null && ritmoHistorico > 0) {
-            comparacaoHistorico = Math.round(((ritmoAtual - ritmoHistorico) / ritmoHistorico) * 100);
-        }
-
-        // 8. Previsão de batida de meta
-        // ritmoAtual > 0 obrigatório: se for 0, a divisão dá Infinity → new Date(Infinity) = "Invalid Date"
-        let previsao = null;
-        if (ritmoAtual != null && ritmoAtual > 0 && metaAlvo > 0 && pontosHoje < metaAlvo) {
-            const pontosRestantes = metaAlvo - pontosHoje;
-            const horasAteAMeta = pontosRestantes / ritmoAtual;
-            const previsaoMs = agoraSP.getTime() + (horasAteAMeta * 3600 * 1000);
-            const previsaoDate = new Date(previsaoMs);
-            previsao = {
-                horario: previsaoDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
-                atingivel: horasAteAMeta < 6
-            };
-        }
-
-        res.status(200).json({
-            pontosHoje: Math.round(pontosHoje),
-            horasTrabalhadasHoje: Math.round(horasTrabalhadasHoje * 10) / 10,
-            ritmoAtual: ritmoAtual != null ? Math.round(ritmoAtual) : null,
-            ritmoHistorico: ritmoHistorico != null ? Math.round(ritmoHistorico) : null,
-            comparacaoHistorico,
-            nomeDiaAtual,
-            previsao,
-            temDadosSuficientes,
-            amostrasHistorico: pontosHistorico.length
-        });
-
-    } catch (error) {
-        console.error('[API Ritmo IA] Erro:', error);
-        res.status(500).json({ error: 'Erro ao calcular ritmo.' });
-    } finally {
-        if (dbClient) dbClient.release();
-    }
-});
 
 // GET /api/dashboard/minha-tabela-pontos
 router.get('/minha-tabela-pontos', async (req, res) => {

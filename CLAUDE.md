@@ -120,6 +120,14 @@ const res = await fetch('/api/rota', {
 
 Usar `try/catch` com `dbClient` obtido via `pool.connect()` e `dbClient.release()` no `finally`. Retornar `res.status(xxx).json({ error: '...' })`.
 
+### Controle de acesso nas APIs — regra do sistema
+
+**As APIs NÃO fazem checagem de permissão ou tipo de usuário além do JWT.** O controle de acesso fica inteiramente na camada de página, via `verificarAutenticacao('caminho/pagina.html', ['permissao-necessaria'])` no entry point React.
+
+Isso significa que toda rota em `/api/*` verifica apenas se o token é válido (middleware de autenticação). Nunca adicionar `if (!isAdmin(req))`, `if (!req.usuarioLogado.tipos.includes('x'))` ou similares nas rotas — é trabalho duplicado que vai contra o padrão e vai gerar bugs de acesso.
+
+Referência: `api/alertas.js` segue esse padrão desde sempre.
+
 ### Migração JS → React
 
 O projeto foi iniciado com JavaScript puro e está em migração progressiva para React. Toda página nova ou refatorada usa 100% React. **Ao entrar em qualquer área/página para trabalhar, garantir que ela esteja 100% em React antes de avançar com novas features.**
@@ -233,6 +241,51 @@ O `main.gs-card` tem `padding: 25px` e `margin: 20px`. Dentro dele:
 4. `op-card-estilizado` em `ordens-de-producao.css` é alias legado de `gs-card`. Novas páginas usam `gs-card` direto.
 5. O componente `UIHeaderPagina` fica em `public/src/components/UIHeaderPagina.jsx`.
 
+### ⚠️ Anti-padrão crítico — onde o `gs-card` NÃO vai
+
+O erro mais comum ao redesenhar páginas é colocar `gs-card` no **lugar errado**. A regra é simples: `gs-card` existe em dois lugares e apenas nesses dois.
+
+**CORRETO — `gs-card` no `<main>` do HTML (a página inteira como card):**
+```html
+<!-- arquivo .html -->
+<main id="root" class="gs-card"></main>
+```
+```jsx
+// componente raiz — usa Fragment, NUNCA div com gs-card
+export default function MinhaPage() {
+    return (
+        <>
+            <UIHeaderPagina titulo="..." />
+            <div className="gs-conteudo-pagina">
+                <div className="gs-card">{/* seção A */}</div>
+                <div className="gs-card">{/* seção B */}</div>
+            </div>
+        </>
+    );
+}
+```
+
+**ERRADO — `gs-card` dentro do componente React raiz (cria double-nesting):**
+```html
+<!-- arquivo .html — SEM gs-card -->
+<main id="root"></main>
+```
+```jsx
+// ❌ ERRADO: wrapping no componente raiz
+export default function MinhaPage() {
+    return (
+        <div className="gs-card">  {/* ← NUNCA FAZER ISSO no componente raiz */}
+            <UIHeaderPagina titulo="..." />
+            ...
+        </div>
+    );
+}
+```
+
+**Por que acontece o double-nesting?** Quando a página já tem `class="gs-card"` no `<main>` E o componente raiz adiciona outro `<div class="gs-card">`, o resultado é um card dentro de um card — padding duplicado, sombra dentro de sombra, visual quebrado.
+
+**Subcomponentes de aba (ex: renderizados dentro de `gs-conteudo-pagina`) podem e devem usar `gs-card`** para suas seções de conteúdo — isso é correto e segue o padrão. O anti-padrão se aplica apenas ao componente que é montado diretamente no `<main id="root">`.
+
 ---
 
 ## Status das Áreas
@@ -244,8 +297,10 @@ Tabela de controle para evitar retrabalho. Atualizar sempre que uma etapa for co
 | Login / Index | `login.css` | ✅ | ✅ | N/A | React 100% (27/04). `LoginApp.jsx` único. Tablet-first (2 col), glassmorphism. Token 8h/30d via `manterConectado`. Demitidos → tela de despedida + cooldown crescente. |
 | Ordens de Produção | `ordens-de-producao.css` | ✅ | ✅ | ✅ (via alias) | Referência de qualidade para todas as outras áreas. Painel de Atividades: PERFEITO — não tocar. Em 2026-05-13, `OPStatusCard.jsx` teve apenas refactor interno: `calcularTempoEfetivo`, `formatarHora`, `formatarTempo` extraídos para `PontoHelpers.js`; `LinhaDoTempoDia` extraída para `UILinhaDoTempoDia.jsx`. Zero mudança visual ou comportamental. |
 | Calendário da Empresa | `calendario.css` | ✅ | ✅ | ✅ | Página nova — estrutura padrão aplicada |
+| Central de Alertas | `config-alertas.css` | ✅ | ❌ | ✅ | Redesenhada em 2026-05-16 com 2 abas: Alertas Gerais + Avisos Popups. `ConfigAlertasGerais.jsx` + `AvisosPopupAdmin.jsx` + `AvisosPopupModal.jsx`. Avisos Popup v1.0 completo (DB + API + UI). Permissão: `gerenciar-avisos-popup` em `permissoes.js`. |
+| Centro de Incentivos | `incentivos.css` | ✅ | ✅ | ✅ | v4.0 (2026-05-20). Detecção eager via hook em `api/producoes.js` (só costureiras; hook tiktik pendente em `api/arremates.js`). Post-mortem para corridas encerradas sem detecção. `ganho_em` registrado/exibido no dashboard e ranking. `DashFabGincana.jsx` substitui cards inline por FAB+bottom sheet. Coluna ⏱ no `IncenGincanaRankingModal`. `verificarGincanasAposProducao` exportado de `api/gincanas.js`. |
 | Central de Pagamentos | `central-de-pagamentos.css` | ✅ | ❌ | ❌ | |
-| Dashboard Funcionário | `dashboard.css` | ✅ | ❌ | ❌ | Mobile-first, estrutura diferente |
+| Dashboard Funcionário | `dashboard.css` | ✅ | ❌ | ❌ | Mobile-first, estrutura diferente. `DashFabGincana.jsx` (2026-05-20) substitui `DashGincanaCard` inline — gincanas agora em FAB + bottom sheet. |
 | Arremates | `arremates.css` | ✅ | ❌ | ✅ | v1.0 (2026-05-04) + v2.0 (2026-05-05) + v3.0 Items 1-4 (2026-05-13/14) concluídos. v3.0: `PontoHelpers.js` e `UILinhaDoTempoDia.jsx` extraídos como compartilhados; `ArremateStatusCard` reescrito com layout `cracha-tiktik` idêntico ao OPStatusCard (cronômetro interval-aware, bottom sheets, tolerância S3, liberar intervalo); `ArreMatePainelAtividades` refatorado com estrutura `oa-*` idêntica ao OPPainelAtividades (ALMOCO/PAUSA no grid principal, inativos completos, todos os handlers de ponto). CSS: 4657 → 5850 linhas. v3.0 implementação 100% concluída (Items 1–5). Aguarda verificação manual em browser. Deletar manualmente: `ArremateToast.jsx` e `ArremateAcoesLote.jsx`. Ver `_planejamento/arremates-redesign.md`. |
 | Embalagem de Produtos | `embalagem-de-produtos.css` | ❓ | ❌ | ❌ | Verificar migração React |
 | Estoque | `estoque.css` | ❓ | ❌ | ❌ | Verificar migração React |
@@ -640,18 +695,20 @@ git push --tags
 
 ### Versioning por audiência — como funciona
 
-O arquivo `public/js/utils/changelog-data.js` é a **fonte de verdade** das notas de versão. Cada entrada tem dois campos independentes:
+O arquivo `public/js/utils/changelog-data.js` é a **fonte de verdade** das notas de versão. Cada entrada tem campos independentes:
 
+- `versao` — versão do admin; vem do `package.json` via `npm version`
+- `versao_dashboard` — versão independente da dashboard; **campo opcional**, preencher apenas quando `dashboard[]` não estiver vazio. Incrementar manualmente (ex: `1.21.0` → `1.22.0`), sem se preocupar com o número do admin
 - `admin` — novidades para o painel administrativo (linguagem técnica/funcional)
 - `dashboard` — novidades para as funcionárias (linguagem simples)
 
-Deixar um dos campos como `[]` significa que aquela versão não teve mudanças para aquela audiência — ela simplesmente não aparece no modal daquele público.
+Deixar `dashboard: []` significa que aquela versão não teve mudanças para as funcionárias — ela não aparece na dashboard.
 
 **Admin (`UIHeaderPagina` / menu lateral):** exibe `__APP_VERSION__` do `package.json`. O modal mostra todas as entradas com `admin.length > 0`, marcando a primeira como "Atual".
 
-**Dashboard (`DashVersionFooter`):** exibe a versão da **última entrada com conteúdo de dashboard** — completamente independente do `__APP_VERSION__`. Isso evita que o rodapé da dashboard mude a cada release admin. O badge "Atual" vai sempre para a entrada mais recente com conteúdo de dashboard (`idx === 0` no array filtrado).
+**Dashboard (`DashVersionFooter`):** exibe `versao_dashboard` da última entrada com conteúdo de dashboard (com fallback para `versao` se o campo não existir). As sequências de versão são completamente independentes: o admin pode estar em `1.35.0` enquanto a dashboard está em `1.24.0`, e isso é intencional.
 
-> **Regra prática:** ao fazer um release só de admin (sem novidades para funcionárias), deixe `dashboard: []`. O rodapé da dashboard não vai mudar. Quando houver novidade para as funcionárias, preencha o campo `dashboard` — aí sim o rodapé delas atualiza.
+> **Regra prática:** ao fazer um release só de admin, deixe `dashboard: []` e não coloque `versao_dashboard`. Quando houver novidade para as funcionárias, preencha `dashboard[]` e adicione `versao_dashboard` com o próximo número da sequência da dashboard (olhe a última entrada que tem `versao_dashboard` e incremente).
 
 Repositório: `https://github.com/juancbx1/sistema-lv`
 
@@ -689,6 +746,158 @@ Na tela de **Usuários Cadastrados**, admins com permissão `gerenciar-permissoe
 
 ---
 
+## Sistema de Gincanas — Centro de Incentivos (v3.0 — 2026-05-19)
+
+### Regras absolutas (nunca violar)
+
+- Gincanas **só leem** dados de produção — a única exceção é escrever em `gincanas`, `gincanas_premios_ganhos` (registro de premiações). Nunca alteram `producoes`, `arremates`, `banco_pontos_log`.
+- **Exceção única à regra de isolamento (v4.0):** `api/producoes.js` chama `verificarGincanasAposProducao` (exportado de `api/gincanas.js`) **após** o COMMIT da transação principal de produção. Falha no hook nunca afeta a resposta da API de produção (try/catch silencioso). Hook executado apenas para costureiras; tiktiks aguardam implementação do hook em `api/arremates.js`.
+- **Dois mundos financeiros completamente separados** — comissões e premiações nunca se misturam (exigência legal trabalhista)
+- **Anonimato total** na dashboard — funcionária só vê sua posição numérica, nunca nomes ou pontuações alheias
+- `banco_pontos_log` é exclusivo de comissões — gincanas não tocam nessa tabela
+
+### Tabelas do banco
+
+```sql
+-- Tabela principal
+gincanas (id, nome, descricao, banner_emoji, participantes, modalidade, tipo_premiacao,
+           escopo_atividade, produto_id, tipo_recorrencia,
+           datetime_inicio, datetime_fim, hora_inicio_semana, hora_fim_semana,
+           status, visivel_dashboard,
+           vencedor_id, encerrada_com_ganhador,   -- para tipo corrida
+           criado_por, criado_em, atualizado_em)
+
+-- Premiações por nível (meta_valor = pontos OU unidades, depende do escopo)
+gincanas_premiacoes (id, gincana_id, nivel_label, emoji_icone, meta_valor, descricao_premio, ordem, criado_em)
+
+-- Prêmios ganhos — rastreamento de pagamentos (SEPARADO de banco_pontos_log)
+gincanas_premios_ganhos (id, gincana_id, usuario_id, nivel_label, descricao_premio, valor_reais,
+                          ganho_em, pago_em, pago_por, semana_ref, criado_em)
+```
+
+**Migrations:** `_planejamento/migration-gincanas.sql` (v1.0) + `_planejamento/migration-gincanas-v3.sql` (v3.0 — já rodada em produção)
+
+**Valores de enum:**
+- `status`: `'rascunho'` | `'publicada'` | `'cancelada'`
+- `tipo_premiacao`: `'meta'` (todos que atingirem ganham) | `'corrida'` (primeiro a atingir ganha)
+- `modalidade`: `'individual'` | `'equipe'` (meta coletiva, prêmio individual)
+- `escopo_atividade`: `'tudo'` | `'apenas_processos_op'` | `'apenas_arremates'` | `'produto_especifico'`
+- `participantes`: `'costureiras'` | `'tiktiks'` | `'ambos'`
+- `tipo_recorrencia`: `'unica'` | `'semanal'`
+
+**Idempotência de prêmios:** índices únicos em `gincanas_premios_ganhos` garantem 1 prêmio por (gincana, usuário) em únicas e 1 por (gincana, usuário, semana_ref) em semanais.
+
+### Dois mundos financeiros
+
+| | Comissões | Premiações |
+|---|---|---|
+| Origem | Produção real (pontos) | Gincanas (R$ fixo) |
+| Tabela fonte | `banco_pontos_log` (intocada por gincanas) | `gincanas_premios_ganhos` |
+| Cadência de pagamento | 5º dia útil do mês | Toda sexta-feira |
+| Dashboard | Bolso "Comissões" em `DashPagamentosModal` | Bolso "Premiações" em `DashPagamentosModal` |
+
+### Fase calculada em runtime
+
+A `fase` **não é armazenada** — derivada em `calcularFase()` comparando `NOW()` com os timestamps:
+
+| Fase | Significado |
+|---|---|
+| `proxima` | Antes do início |
+| `ao_vivo` | Dentro do período |
+| `encerrada` | Até 48h após o fim |
+| `arquivada` | Mais de 48h após o fim |
+| `encerrada_semana` | Gincana semanal: semana acabou, campanha ainda ativa |
+
+**Exceção corrida:** quando `encerrada_com_ganhador = TRUE`, a fase passa a `encerrada` imediatamente (independente do datetime).
+
+### Race detection — tipo corrida
+
+Detecção lazy: acontece no momento do fetch de `/api/gincanas/dashboard`. Quando `meu_valor >= meta_valor`:
+1. `UPDATE gincanas SET vencedor_id=$userId, encerrada_com_ganhador=TRUE WHERE id=$id AND encerrada_com_ganhador=FALSE RETURNING id` — atômico
+2. Se 0 linhas: alguém ganhou antes. Se 1 linha: sou o vencedor → INSERT em `gincanas_premios_ganhos`
+
+**Idempotência:** `ON CONFLICT DO NOTHING` garante que não registra duas vezes.
+
+### Escopo produto_especifico
+
+Quando `escopo_atividade = 'produto_especifico'`:
+- A métrica é `producoes.quantidade` (unidades físicas), não pontos
+- `produto_id` em `gincanas` identifica o produto monitorado
+- `meta_valor` em `gincanas_premiacoes` representa unidades (não pontos)
+- A UI troca "pontos" por "unidades" em todos os lugares
+
+### Registro lazy de vencedores (tipo meta)
+
+Para gincanas do tipo `meta` que já estão `encerrada` ou `encerrada_semana`, os vencedores são registrados em `gincanas_premios_ganhos` no momento em que qualquer usuário acessa `/dashboard` ou `/ranking`. Usa `ON CONFLICT DO NOTHING` — seguro chamar múltiplas vezes.
+
+### APIs
+
+**`api/gincanas.js`** — CRUD + dashboard + ranking:
+
+| Rota | Permissão | Descrição |
+|---|---|---|
+| `GET /api/gincanas?filtro=` | `acesso-ponto-por-processo` | Lista admin com fase calculada |
+| `GET /api/gincanas/dashboard` | JWT válido | Gincanas visíveis + progresso + race detection |
+| `GET /api/gincanas/:id` | `acesso-ponto-por-processo` | Detalhes + premiações |
+| `GET /api/gincanas/:id/ranking` | `acesso-ponto-por-processo` | Ranking completo + status pagamento |
+| `POST /api/gincanas` | `gerenciar-gincanas` | Cria rascunho |
+| `PUT /api/gincanas/:id` | `gerenciar-gincanas` | Edita (só rascunho) |
+| `PATCH /api/gincanas/:id/publicar` | `gerenciar-gincanas` | Publica + aviso popup |
+| `PATCH /api/gincanas/:id/cancelar` | `gerenciar-gincanas` | Cancela |
+| `DELETE /api/gincanas/:id` | `gerenciar-gincanas` | Deleta (rascunho ou cancelada) |
+
+**`api/gincanas-pagamentos.js`** — fila de pagamento de premiações:
+
+| Rota | Permissão | Descrição |
+|---|---|---|
+| `GET /api/gincanas-pagamentos/fila` | `gerenciar-gincanas` | Prêmios pendentes (semana atual + atrasados) |
+| `GET /api/gincanas-pagamentos/historico` | `gerenciar-gincanas` | Prêmios pagos (últimos 200) |
+| `POST /api/gincanas-pagamentos/pagar-lote` | `gerenciar-gincanas` | Paga todos os pendentes (ou IDs específicos) |
+| `POST /api/gincanas-pagamentos/:id/pagar` | `gerenciar-gincanas` | Paga prêmio individual |
+| `GET /api/gincanas-pagamentos/meus-premios` | JWT válido | Prêmios da funcionária logada (para a wallet) |
+
+### Componentes admin (prefixo `Incen*`)
+
+| Componente | Descrição |
+|---|---|
+| `IncenGincanasTab` | Aba de gincanas com sub-filtros (Ao Vivo / Próximas / Rascunhos / Arquivo) |
+| `IncenGincanaCard` | Card com badges de fase, tipo (🏁 CORRIDA / 👥 EQUIPE), borda-charme por fase |
+| `IncenGincanaModal` | **Wizard 3 passos:** O Básico → As Regras → O Prêmio |
+| `IncenGincanaRankingModal` | Ranking completo com suporte a corrida/equipe/produto_especifico + coluna 💰 de pagamento |
+| `IncenPagamentosTab` | Fila de pagamento semanal + botão "Pagar todos" + histórico |
+| `IncenMetasTab` | **Stub** — migração pendente do JS legado |
+| `IncenPontosTab` | **Stub** — migração pendente do JS legado |
+
+**Atenção no card:** `gincana.status` controla botões de ação. `gincana.fase` é só visual. Rascunho com datetime passado ainda mostra "Publicar" — correto por design.
+
+### Componentes dashboard (prefixo `Dash*`)
+
+- `DashGincanaCard` — lista de cards de gincanas para a funcionária. Suporta todos os tipos: proxima (countdown), ao_vivo (barra progresso), encerrada (resultado). Lida com corrida (vencedor/sem ganhador), equipe (progresso coletivo), produto_especifico (unidades). Mostra `InfoPagamento` quando prêmio foi registrado.
+- `DashPagamentosModal` — **dois bolsos separados:** aba "Comissões" (fonte: `banco_pontos_log`) e aba "Premiações" (fonte: `gincanas_premios_ganhos` via `/meus-premios`).
+
+### Página admin
+
+- **HTML:** `public/admin/incentivos.html`
+- **Entry point:** `public/src/main-incentivos.jsx` — 4 abas: Gincanas / Metas / Pontos / Pagamentos
+- **CSS:** `public/css/incentivos.css`
+
+### Arquivos legados (aguardam migração das abas Metas e Pontos)
+
+- `public/admin/ponto-por-processo.html`
+- `public/js/admin-ponto-por-processo.js`
+- `public/css/ponto-por-processo.css`
+
+### Fluxo de publicação
+
+1. Criar (→ rascunho)
+2. Publicar → aviso popup inserido em `avisos_popup` (se checkbox marcado)
+3. Gincana aparece na dashboard das participantes
+4. Gincana encerra → vencedores registrados em `gincanas_premios_ganhos` (lazy)
+5. Supervisor acessa aba Pagamentos no admin → paga em lote toda sexta
+6. Funcionária vê prêmio pago no bolso "Premiações" do `DashPagamentosModal`
+
+---
+
 ## Observações para o Claude
 
 - Ao criar novos componentes React, seguir o padrão de prefixo por domínio e colocar **sempre** em `public/src/components/` — nunca em subpastas.
@@ -696,7 +905,8 @@ Na tela de **Usuários Cadastrados**, admins com permissão `gerenciar-permissoe
 - **Nunca usar `saldo_op` diretamente** — calcular sempre a partir de `quantidade_real_produzida - total_ja_arrematado`.
 - O arquivo `regra de negocio das OP.txt` na raiz contém exemplos concretos das regras de OP com dados reais do banco.
 - Ao tomar uma decisão arquitetural importante ou implementar uma regra de negócio nova, **atualizar este CLAUDE.md**.
-- A pasta `_planejamento/` na raiz contém planos detalhados por funcionalidade (spec, checklist, decisões). **Sempre ler o arquivo relevante antes de começar a implementar qualquer coisa**. Arquivos existentes: `central-de-alertas.md`, `horario-empregados.md`, `producao-geral.md`, `organizacao-sistemica.md`.
+- A pasta `_planejamento/` na raiz contém planos detalhados por funcionalidade (spec, checklist, decisões). **Sempre ler o arquivo relevante antes de começar a implementar qualquer coisa**. Arquivos existentes: `central-de-alertas.md`, `horario-empregados.md`, `producao-geral.md`, `organizacao-sistemica.md`, `gincanas.md`.
 - **Nunca usar `is_test` users em cálculos, listagens ou relatórios** — o filtro já está nas queries principais, mas atentar ao criar novas queries que listem funcionários.
+- **A tabela `usuarios` NÃO tem coluna `ativo`** — usar `data_demissao IS NULL` para filtrar funcionários ativos. O campo `ativo` existe em outras tabelas (avatares, configuracoes, etc.), nunca em `usuarios`.
 
 ---

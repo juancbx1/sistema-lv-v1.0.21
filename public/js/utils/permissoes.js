@@ -120,11 +120,13 @@ export const permissoesDisponiveis = [
 
 
     // --- CONFIGURAÇÕES ---
-    { id: 'acesso-ponto-por-processo', label: 'Ver Tela de Pontos por Processo', categoria: 'Configurações' },
+    { id: 'acesso-ponto-por-processo', label: 'Acesso ao Centro de Incentivos', categoria: 'Configurações' },
+    { id: 'gerenciar-gincanas', label: 'Ação: Criar e publicar Gincanas', categoria: 'Configurações' },
     { id: 'gerenciar-comunicacoes', label: 'Ver Tela Gerenciar Comunicações', categoria: 'Configurações' },
 
-    // --- CONFIGURAR ALERTAS ---
-    { id: 'configurar-alertas', label: 'Configurar Alertas', categoria: 'Configurações de Alertas' },
+    // --- CONFIGURAR ALERTAS / AVISOS POPUP ---
+    { id: 'configurar-alertas',      label: 'Configurar Alertas',                categoria: 'Configurações de Alertas' },
+    { id: 'gerenciar-avisos-popup',  label: 'Gerenciar Avisos Popup (broadcasting)', categoria: 'Configurações de Alertas' },
 
     
     // --- ACESSAR PRODUCAO GERAL ---

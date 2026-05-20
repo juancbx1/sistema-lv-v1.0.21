@@ -38,6 +38,9 @@ import pontoRouter from './api/ponto.js';
 import calendarioRouter from './api/calendario.js';
 import cronRoutes from './api/cron.js';
 import pontosExtrasRouter from './api/pontos-extras.js';
+import avisosPopupRouter from './api/avisos-popup.js';
+import gincanasRouter from './api/gincanas.js';
+import gincanasPagamentosRouter from './api/gincanas-pagamentos.js';
 
 
 const app = express();
@@ -122,6 +125,9 @@ app.use('/api/ponto', pontoRouter);
 app.use('/api/calendario', calendarioRouter);
 app.use('/api/cron', cronRoutes);
 app.use('/api/pontos-extras', pontosExtrasRouter);
+app.use('/api/avisos-popup', avisosPopupRouter);
+app.use('/api/gincanas', gincanasRouter);
+app.use('/api/gincanas-pagamentos', gincanasPagamentosRouter);
 
 
 app.get('/api/ping', (req, res) => res.status(200).json({ message: 'pong do server.js' }));

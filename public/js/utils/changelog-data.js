@@ -2,15 +2,37 @@
 //
 // Fonte de verdade das notas de versão do Sistema LV.
 // Cada entrada tem duas seções:
-//   admin    → novidades para quem gerencia o sistema
-//   dashboard → novidades para os funcionários (linguagem simples)
+//   admin         → novidades para quem gerencia o sistema
+//   dashboard     → novidades para os funcionários (linguagem simples)
+//   versao_dashboard (opcional) → versão independente exibida na dashboard
 //
-// Ao fazer um release (npm version patch/minor/major):
+// Versões são INDEPENDENTES por audiência:
+//   - Admin usa 'versao' (vem do package.json via npm version patch/minor/major)
+//   - Dashboard usa 'versao_dashboard' quando presente, ou cai em 'versao' como fallback
+//   - Só preencher 'versao_dashboard' quando dashboard[] não estiver vazio
+//   - Incrementar versao_dashboard manualmente (ex: 1.21 → 1.22) sem se preocupar com o número do admin
+//
+// Ao fazer um release:
 //   1. Adicione uma nova entrada no INÍCIO do array
 //   2. Preencha admin e/ou dashboard conforme o que mudou
 //   3. Deixe vazio [] se a versão não teve mudanças para aquela audiência
+//   4. Se dashboard[] não estiver vazio, adicione versao_dashboard com o próximo número da sequência da dashboard
 
 export const changelog = [
+    {
+        versao: '1.30.0',
+        versao_dashboard: '1.22.0',
+        data: '20/05/2026',
+        admin: [
+            'Novo sistema de gincanas e disparo de avisos popup 100% configuráveis',
+            'Gincanas podem acontecer a qualquer hora do dia de trabalho, entre gincana de equipes, individuais, do tipo "race" etc...'
+        ],
+        dashboard: [
+            'Novo Sistema de Gincanas no ar',
+            'Redesign de algumas areas da dashboard',
+            'Sistema de Alertas Popup funcionando'
+        ],
+    },
     {
         versao: '1.29.0',
         data: '16/05/2026',
@@ -140,6 +162,7 @@ export const changelog = [
     
     {
         versao: '1.21.0',
+        versao_dashboard: '1.21.0',
         data: '01/05/2026',
         admin: [
             'Versionamento semântico implementado — versão agora aparece no menu e segue o padrão SemVer',
@@ -156,7 +179,8 @@ export const changelog = [
 
     // Template para próximas versões:
     // {
-    //     versao: 'X.Y.Z',
+    //     versao: 'X.Y.Z',           ← vem do npm version (package.json) — só admin
+    //     versao_dashboard: 'A.B.C', ← só quando dashboard[] não estiver vazio; incrementar manualmente
     //     data: 'DD/MM/AAAA',
     //     admin: [],
     //     dashboard: [],

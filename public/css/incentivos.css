@@ -1,0 +1,2389 @@
+/* incentivos.css — Centro de Incentivos */
+
+@media (max-width: 1024px) {
+    body {
+        padding: 40px 40px 10px 40px;
+    }
+}
+
+/* ============================================================
+   Sub-filtros da aba de gincanas
+   ============================================================ */
+.incen-subfiltros {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.incen-subfiltro-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1.5px solid var(--gs-borda);
+    background: #fff;
+    color: var(--gs-texto-secundario);
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.incen-subfiltro-btn:hover {
+    border-color: var(--gs-primaria);
+    color: var(--gs-primaria);
+}
+
+.incen-subfiltro-btn.ativo {
+    background: var(--gs-primaria);
+    border-color: var(--gs-primaria);
+    color: #fff;
+}
+
+.incen-subfiltro-badge {
+    background: rgba(255,255,255,0.25);
+    border-radius: 10px;
+    padding: 1px 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.incen-subfiltro-btn:not(.ativo) .incen-subfiltro-badge {
+    background: var(--gs-fundo);
+    color: var(--gs-texto-secundario);
+}
+
+/* ============================================================
+   Lista vazia
+   ============================================================ */
+.incen-lista-vazia {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--gs-texto-secundario);
+}
+
+.incen-lista-vazia i {
+    font-size: 2.5rem;
+    margin-bottom: 12px;
+    opacity: 0.35;
+}
+
+.incen-lista-vazia p {
+    font-size: 0.95rem;
+    margin: 0;
+}
+
+/* ============================================================
+   Grid de cards de gincana
+   ============================================================ */
+.incen-gincana-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* ============================================================
+   IncenGincanaCard
+   ============================================================ */
+.incen-gincana-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.incen-gincana-card .card-borda-charme {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 6px;
+    height: 100%;
+    border-radius: 10px 0 0 10px;
+    background-color: #9ca3af;
+}
+
+.incen-gincana-card.fase-ao-vivo    .card-borda-charme { background-color: #22c55e; }
+.incen-gincana-card.fase-proxima    .card-borda-charme { background-color: #3b82f6; }
+.incen-gincana-card.fase-encerrada  .card-borda-charme { background-color: #8b5cf6; }
+.incen-gincana-card.fase-cancelada  .card-borda-charme { background-color: #ef4444; }
+.incen-gincana-card.fase-rascunho   .card-borda-charme { background-color: #9ca3af; }
+
+.incen-gincana-card-body {
+    padding: 16px 20px 16px 26px;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+}
+
+.incen-gincana-emoji {
+    font-size: 1.8rem;
+    line-height: 1;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.incen-gincana-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.incen-gincana-cabecalho {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+
+.incen-gincana-nome {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--gs-texto-primario);
+    margin: 0;
+}
+
+.incen-gincana-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.incen-gincana-badge.ao-vivo {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.incen-gincana-badge.ao-vivo .badge-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #22c55e;
+    animation: pulso-badge 1.5s infinite;
+}
+
+@keyframes pulso-badge {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.incen-gincana-badge.proxima    { background: #dbeafe; color: #1d4ed8; }
+.incen-gincana-badge.encerrada  { background: #ede9fe; color: #6d28d9; }
+.incen-gincana-badge.rascunho   { background: #f3f4f6; color: #6b7280; }
+.incen-gincana-badge.cancelada  { background: #fee2e2; color: #b91c1c; }
+
+.incen-gincana-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 0.82rem;
+    color: var(--gs-texto-secundario);
+    margin-bottom: 6px;
+}
+
+.incen-gincana-meta span::before {
+    content: '·';
+    margin-right: 6px;
+}
+
+.incen-gincana-meta span:first-child::before {
+    content: '';
+    margin-right: 0;
+}
+
+.incen-gincana-periodo {
+    font-size: 0.82rem;
+    color: var(--gs-texto-secundario);
+    margin-bottom: 4px;
+}
+
+.incen-gincana-countdown {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.8rem;
+    color: #f59e0b;
+    font-weight: 500;
+}
+
+.incen-gincana-premiacoes-resumo {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.incen-premi-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    background: var(--gs-fundo);
+    color: var(--gs-texto-secundario);
+    font-weight: 500;
+}
+
+.incen-gincana-acoes {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    padding: 10px 20px 12px 26px;
+    border-top: 1px solid var(--gs-borda);
+    background: var(--gs-fundo);
+}
+
+/* ============================================================
+   Modais
+   ============================================================ */
+.gs-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.gs-modal {
+    background: #fff;
+    border-radius: 12px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    display: flex;
+    flex-direction: column;
+}
+
+.gs-modal-cabecalho {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid var(--gs-borda);
+    position: sticky;
+    top: 0;
+    background: #fff;
+    z-index: 1;
+    border-radius: 12px 12px 0 0;
+}
+
+.gs-modal-cabecalho h2 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--gs-texto-primario);
+}
+
+.gs-btn-fechar {
+    background: none;
+    border: none;
+    color: var(--gs-texto-secundario);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: background 0.15s;
+}
+
+.gs-btn-fechar:hover {
+    background: var(--gs-fundo);
+}
+
+.gs-modal-corpo {
+    padding: 20px;
+    flex: 1;
+}
+
+.gs-modal-rodape {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 14px 20px;
+    border-top: 1px solid var(--gs-borda);
+    background: var(--gs-fundo);
+    border-radius: 0 0 12px 12px;
+    position: sticky;
+    bottom: 0;
+}
+
+/* Tamanho dos modais */
+.incen-form-modal  { max-width: 560px; }
+.incen-ranking-modal { max-width: 680px; }
+
+/* ============================================================
+   Formulário de Gincana
+   ============================================================ */
+.incen-form-corpo {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.incen-form-grupo {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.incen-form-grupo--toggle {
+    flex-shrink: 0;
+    align-items: flex-start;
+}
+
+.incen-form-linha {
+    display: flex;
+    gap: 12px;
+}
+
+.incen-form-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--gs-texto-secundario);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.incen-form-hint {
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 0.78rem;
+    opacity: 0.8;
+}
+
+.incen-form-input {
+    padding: 9px 12px;
+    border: 1.5px solid var(--gs-borda);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    color: var(--gs-texto-primario);
+    background: #fff;
+    transition: border-color 0.15s;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.incen-form-input:focus {
+    outline: none;
+    border-color: var(--gs-primaria);
+}
+
+.incen-form-textarea {
+    resize: vertical;
+    min-height: 72px;
+    font-family: inherit;
+}
+
+/* Emoji grid */
+.incen-emoji-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.incen-emoji-btn {
+    font-size: 1.3rem;
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    border: 2px solid var(--gs-borda);
+    background: #fff;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.incen-emoji-btn:hover  { border-color: var(--gs-primaria); }
+.incen-emoji-btn.selecionado {
+    border-color: var(--gs-primaria);
+    background: #eff6ff;
+}
+
+/* Toggle ON/OFF */
+.incen-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
+
+.incen-toggle-knob {
+    width: 40px;
+    height: 22px;
+    border-radius: 11px;
+    position: relative;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.incen-toggle.on  .incen-toggle-knob { background: var(--gs-primaria); }
+.incen-toggle.off .incen-toggle-knob { background: #d1d5db; }
+
+.incen-toggle-knob::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    top: 3px;
+    transition: left 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.incen-toggle.on  .incen-toggle-knob::after { left: 21px; }
+.incen-toggle.off .incen-toggle-knob::after { left: 3px; }
+
+.incen-toggle-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--gs-texto-secundario);
+}
+
+/* Segmented control */
+.incen-segmented {
+    display: flex;
+    border: 1.5px solid var(--gs-borda);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.incen-seg-btn {
+    flex: 1;
+    padding: 8px 12px;
+    border: none;
+    background: #fff;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--gs-texto-secundario);
+    border-right: 1px solid var(--gs-borda);
+    font-weight: 500;
+}
+
+.incen-seg-btn:last-child { border-right: none; }
+
+.incen-seg-btn.ativo {
+    background: var(--gs-primaria);
+    color: #fff;
+}
+
+.incen-seg-btn:not(.ativo):hover {
+    background: var(--gs-fundo);
+}
+
+/* Premiações */
+.incen-form-premiacoes-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.incen-premiacoes-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.incen-premiacao-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px;
+    border: 1.5px solid var(--gs-borda);
+    border-radius: 8px;
+    background: var(--gs-fundo);
+}
+
+.incen-premiacao-linha-1 {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.incen-emoji-input {
+    width: 44px;
+    padding: 8px 4px;
+    text-align: center;
+    font-size: 1rem;
+    border: 1.5px solid var(--gs-borda);
+    border-radius: 8px;
+    background: #fff;
+    flex-shrink: 0;
+}
+
+.incen-pontos-input {
+    width: 80px;
+    flex-shrink: 0;
+}
+
+.incen-remove-btn {
+    background: none;
+    border: none;
+    color: #ef4444;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
+.incen-remove-btn:hover { background: #fee2e2; }
+
+.incen-add-premiacao-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 1.5px dashed var(--gs-borda);
+    border-radius: 8px;
+    background: none;
+    color: var(--gs-primaria);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    width: 100%;
+    justify-content: center;
+}
+
+.incen-add-premiacao-btn:hover {
+    background: #eff6ff;
+    border-color: var(--gs-primaria);
+}
+
+.incen-form-aviso {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: var(--gs-texto-secundario);
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin: 0;
+}
+
+/* ============================================================
+   Modal de Ranking
+   ============================================================ */
+.incen-ranking-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.incen-ranking-tempo {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: #f59e0b;
+    font-weight: 500;
+}
+
+.incen-ranking-metas-resumo {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.incen-ranking-tabela-wrap {
+    overflow-x: auto;
+}
+
+.incen-ranking-tabela {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.incen-ranking-tabela th {
+    text-align: left;
+    padding: 8px 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--gs-texto-secundario);
+    border-bottom: 2px solid var(--gs-borda);
+    white-space: nowrap;
+}
+
+.incen-ranking-tabela td {
+    padding: 10px 10px;
+    border-bottom: 1px solid var(--gs-borda);
+    vertical-align: middle;
+}
+
+.incen-ranking-tabela tr:last-child td { border-bottom: none; }
+.incen-ranking-row--ganhou td { background: #f0fdf4; }
+
+.incen-ranking-pos  { font-size: 1.05rem; width: 36px; text-align: center; }
+.incen-ranking-nome { font-weight: 500; }
+.incen-ranking-pts  { font-weight: 700; white-space: nowrap; text-align: right; }
+
+.incen-ranking-barra-cell {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 120px;
+}
+
+.incen-ranking-barra-wrap {
+    flex: 1;
+    height: 8px;
+    background: #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.incen-ranking-barra {
+    height: 100%;
+    border-radius: 4px;
+    background: #3b82f6;
+    transition: width 0.4s;
+}
+
+.incen-ranking-barra.ganhou { background: #22c55e; }
+
+.incen-ranking-pct {
+    font-size: 0.75rem;
+    color: var(--gs-texto-secundario);
+    white-space: nowrap;
+    min-width: 32px;
+}
+
+.incen-ranking-badge-ganhou {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #15803d;
+    white-space: nowrap;
+}
+
+.incen-ranking-badge-falta {
+    font-size: 0.78rem;
+    color: var(--gs-texto-secundario);
+    white-space: nowrap;
+}
+
+.incen-ranking-rodape-info {
+    margin-top: 12px;
+    font-size: 0.83rem;
+    color: var(--gs-texto-secundario);
+    text-align: center;
+    padding: 8px;
+    background: var(--gs-fundo);
+    border-radius: 6px;
+}
+
+/* ============================================================
+   CHIPS DE VERSÃO — seletor visual sem select
+   ============================================================ */
+.incen-v-secao {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.incen-v-chips-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.incen-v-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    flex: 1;
+}
+
+.incen-v-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 20px;
+    border: 2px solid var(--gs-borda);
+    background: #fff;
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    color: var(--gs-texto-secundario);
+}
+
+.incen-v-chip-nome { font-weight: 600; color: var(--gs-texto-primario); }
+.incen-v-chip-data { font-size: 0.75rem; color: var(--gs-texto-secundario); opacity: 0.8; }
+
+/* ATIVA */
+.incen-v-chip--ativa { border-color: #22c55e; }
+.incen-v-chip--ativa .incen-v-chip-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #22c55e;
+    animation: pulso-badge 1.5s infinite;
+}
+.incen-v-chip--ativa.incen-v-chip--sel {
+    background: #22c55e; border-color: #22c55e; color: #fff;
+}
+.incen-v-chip--ativa.incen-v-chip--sel .incen-v-chip-nome,
+.incen-v-chip--ativa.incen-v-chip--sel .incen-v-chip-data { color: #fff; opacity: 1; }
+
+/* FUTURA */
+.incen-v-chip--futura { border-color: #3b82f6; color: #3b82f6; }
+.incen-v-chip--futura .incen-v-chip-nome { color: #1d4ed8; }
+.incen-v-chip--futura.incen-v-chip--sel {
+    background: #3b82f6; border-color: #3b82f6; color: #fff;
+}
+.incen-v-chip--futura.incen-v-chip--sel .incen-v-chip-nome,
+.incen-v-chip--futura.incen-v-chip--sel .incen-v-chip-data { color: #fff; opacity: 1; }
+
+/* ARQUIVO */
+.incen-v-chip--arquivo { opacity: 0.6; }
+.incen-v-chip--arquivo.incen-v-chip--sel {
+    opacity: 1; background: var(--gs-fundo); border-color: var(--gs-texto-secundario);
+}
+
+/* Toggle histórico */
+.incen-v-chip--toggle-arquivo {
+    border-style: dashed;
+    color: var(--gs-texto-secundario);
+}
+.incen-v-chip--toggle-arquivo:hover { border-color: var(--gs-primaria); color: var(--gs-primaria); }
+
+/* Hover genérico */
+.incen-v-chip:not(.incen-v-chip--sel):hover { opacity: 0.85; transform: translateY(-1px); }
+
+.incen-v-btn-nova { flex-shrink: 0; }
+
+.incen-v-status-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding-top: 2px;
+}
+
+.incen-metas-editavel-hint,
+.incen-v-leitura-hint {
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.incen-metas-editavel-hint { color: var(--gs-primaria); }
+.incen-v-leitura-hint      { color: var(--gs-texto-secundario); }
+
+/* ============================================================
+   GRUPOS DE REGRAS — seções sempre abertas
+   ============================================================ */
+.incen-grupos-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.incen-grupo-regras { display: flex; flex-direction: column; gap: 8px; }
+
+.incen-grupo-regras-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--gs-borda);
+    flex-wrap: wrap;
+}
+
+.incen-tipo-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.incen-tipo-badge--costureira { background: #dcfce7; color: #15803d; }
+.incen-tipo-badge--tiktik     { background: #dbeafe; color: #1d4ed8; }
+
+.incen-nivel-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--gs-texto-primario);
+}
+
+.incen-grupo-count {
+    font-size: 0.8rem;
+    color: var(--gs-texto-secundario);
+    margin-left: 2px;
+}
+
+.incen-grupo-add-btn {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1.5px solid var(--gs-primaria);
+    background: none;
+    color: var(--gs-primaria);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.incen-grupo-add-btn:hover { background: var(--gs-primaria); color: #fff; }
+
+.incen-regras-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* ============================================================
+   CARDS DE REGRA — layout horizontal com borda-charme
+   ============================================================ */
+.incen-regra-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 8px;
+    border: 1.5px solid var(--gs-borda);
+    background: #fff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px 12px 20px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.incen-regra-card .card-borda-charme {
+    position: absolute;
+    left: 0; top: 0;
+    width: 6px; height: 100%;
+    background: var(--gs-borda);
+    border-radius: 8px 0 0 8px;
+}
+
+.incen-regra-card--mudou {
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 2px rgba(245,158,11,0.12);
+}
+
+.incen-regra-card--mudou .card-borda-charme { background: #f59e0b; }
+.incen-regra-card--nova   .card-borda-charme { background: var(--gs-primaria); }
+
+/* Campos da regra */
+.incen-regra-descricao {
+    flex: 1;
+    min-width: 0;
+}
+
+.incen-regra-nums {
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.incen-regra-num-grupo {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.incen-regra-num-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--gs-texto-secundario);
+}
+
+.incen-regra-valor-wrap {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.incen-regra-prefix {
+    font-size: 0.78rem;
+    color: var(--gs-texto-secundario);
+    font-weight: 600;
+}
+
+.incen-regra-input {
+    padding: 6px 8px;
+    border: 1.5px solid var(--gs-borda);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    color: var(--gs-texto-primario);
+    background: #fff;
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color 0.15s;
+    font-family: inherit;
+}
+
+.incen-regra-input:focus {
+    outline: none;
+    border-color: var(--gs-primaria);
+    box-shadow: 0 0 0 2px rgba(59,130,246,0.1);
+}
+
+.incen-regra-input:disabled {
+    background: var(--gs-fundo);
+    color: var(--gs-texto-secundario);
+    cursor: default;
+    border-color: transparent;
+}
+
+.incen-regra-input--num {
+    width: 72px;
+    text-align: right;
+}
+
+/* Botão de condições */
+.incen-regra-cond-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1.5px solid var(--gs-borda);
+    background: var(--gs-fundo);
+    font-size: 0.78rem;
+    color: var(--gs-texto-secundario);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+
+.incen-regra-cond-btn.tem {
+    border-color: #8b5cf6;
+    background: #ede9fe;
+    color: #6d28d9;
+}
+
+.incen-regra-cond-btn:hover:not(:disabled) {
+    border-color: var(--gs-primaria);
+    color: var(--gs-primaria);
+}
+
+.incen-regra-cond-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.incen-regra-nova-hint {
+    font-size: 0.72rem;
+    color: var(--gs-texto-secundario);
+    white-space: nowrap;
+    opacity: 0.7;
+    flex-shrink: 0;
+}
+
+/* Botões de ação da regra */
+.incen-regra-btns {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0;
+}
+
+.incen-regra-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+
+.incen-regra-btn--salvar {
+    background: var(--gs-fundo);
+    color: var(--gs-texto-secundario);
+    border: 1.5px solid var(--gs-borda);
+}
+
+.incen-regra-btn--salvar.ativo {
+    background: var(--gs-primaria);
+    color: #fff;
+    border-color: var(--gs-primaria);
+}
+
+.incen-regra-btn--salvar.ativo:hover { background: #2563eb; }
+
+.incen-regra-btn--excluir {
+    background: #fee2e2;
+    color: #dc2626;
+    border: 1.5px solid #fecaca;
+}
+
+.incen-regra-btn--excluir:hover { background: #dc2626; color: #fff; border-color: #dc2626; }
+
+.incen-regra-btn--cancelar {
+    background: var(--gs-fundo);
+    color: var(--gs-texto-secundario);
+    border: 1.5px solid var(--gs-borda);
+}
+
+.incen-regra-btn--cancelar:hover { background: var(--gs-borda); }
+
+.incen-regra-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Hints modais */
+.incen-metas-modal-desc {
+    font-size: 0.85rem;
+    color: var(--gs-texto-secundario);
+    margin-bottom: 14px;
+}
+
+.incen-metas-sem-condicoes {
+    text-align: center;
+    color: var(--gs-texto-secundario);
+    font-size: 0.85rem;
+    padding: 14px;
+    background: var(--gs-fundo);
+    border-radius: 6px;
+    margin-bottom: 14px;
+}
+
+.incen-metas-condicoes-lista {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 14px;
+    border: 1.5px solid var(--gs-borda);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.incen-metas-condicao-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--gs-borda);
+    font-size: 0.875rem;
+    gap: 8px;
+}
+
+.incen-metas-condicao-item:last-child { border-bottom: none; }
+
+.incen-metas-nova-condicao {
+    background: var(--gs-fundo);
+    border: 1.5px solid var(--gs-borda);
+    border-radius: 8px;
+    padding: 14px;
+    margin-top: 6px;
+}
+
+.incen-metas-nova-condicao h4 {
+    margin: 0 0 12px;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.incen-metas-muted { color: var(--gs-texto-secundario); font-size: 0.85rem; }
+
+/* ============================================================
+   ABA PONTOS — toolbar e filtros de tipo como pills
+   ============================================================ */
+.incen-pontos-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.incen-tipo-filtros {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    flex: 1;
+}
+
+/* ============================================================
+   GRUPOS DE PRODUTO — configs agrupadas por produto
+   ============================================================ */
+.incen-prod-grupos-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.incen-prod-grupo {
+    border: 1.5px solid var(--gs-borda);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.incen-prod-grupo-header {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px 12px 22px;
+    background: var(--gs-fundo);
+    flex-wrap: wrap;
+}
+
+.incen-prod-grupo-header .card-borda-charme {
+    position: absolute;
+    left: 0; top: 0;
+    width: 6px; height: 100%;
+    background: var(--gs-primaria);
+    border-radius: 0;
+}
+
+.incen-prod-nome {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--gs-texto-primario);
+    flex: 1;
+}
+
+.incen-prod-count {
+    font-size: 0.78rem;
+    color: var(--gs-texto-secundario);
+}
+
+.incen-prod-configs {
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Config row (linha dentro do produto) ── */
+.incen-config-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--gs-borda);
+    transition: background 0.1s;
+    flex-wrap: wrap;
+}
+
+.incen-config-row:hover { background: #fafafa; }
+
+.incen-config-row--mudou { background: #fffbeb; }
+
+.incen-config-tipo-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    background: color-mix(in srgb, var(--chip-cor, #6b7280) 15%, white);
+    color: var(--chip-cor, #6b7280);
+    flex-shrink: 0;
+    min-width: 80px;
+    justify-content: center;
+}
+
+.incen-config-processo {
+    flex: 1;
+    min-width: 100px;
+    font-size: 0.875rem;
+    color: var(--gs-texto-primario);
+}
+
+.incen-config-pontos-wrap {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.incen-config-pontos-input {
+    width: 70px;
+    padding: 5px 7px;
+    border: 1.5px solid var(--gs-borda);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    text-align: right;
+    background: #fff;
+    transition: border-color 0.15s;
+    font-family: inherit;
+}
+
+.incen-config-pontos-input:focus {
+    outline: none;
+    border-color: var(--gs-primaria);
+}
+
+.incen-config-pontos-sufixo {
+    font-size: 0.75rem;
+    color: var(--gs-texto-secundario);
+    font-weight: 600;
+}
+
+.incen-config-acoes {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0;
+}
+
+/* ── Toggle ativo ── */
+.incen-mini-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+.incen-mini-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.incen-mini-toggle-knob {
+    width: 34px;
+    height: 18px;
+    border-radius: 9px;
+    position: relative;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.incen-mini-toggle.on  .incen-mini-toggle-knob { background: #22c55e; }
+.incen-mini-toggle.off .incen-mini-toggle-knob { background: #d1d5db; }
+
+.incen-mini-toggle-knob::after {
+    content: '';
+    position: absolute;
+    width: 13px; height: 13px;
+    border-radius: 50%;
+    background: #fff;
+    top: 2.5px;
+    transition: left 0.2s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.incen-mini-toggle.on  .incen-mini-toggle-knob::after { left: 18px; }
+.incen-mini-toggle.off .incen-mini-toggle-knob::after { left: 3px; }
+
+.incen-mini-toggle-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.incen-mini-toggle.on  .incen-mini-toggle-label { color: #15803d; }
+.incen-mini-toggle.off .incen-mini-toggle-label { color: var(--gs-texto-secundario); }
+
+/* ── Formulário de nova config (dentro do grupo de produto) ── */
+.incen-nova-config-form {
+    padding: 14px 16px;
+    border-top: 1px solid var(--gs-borda);
+    background: #f8faff;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.incen-nova-config-titulo {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--gs-texto-primario);
+    margin: 0 0 10px;
+}
+
+.incen-nova-config-campo {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.incen-nova-config-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--gs-texto-secundario);
+}
+
+/* Chips de tipo para seleção */
+.incen-tipo-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.incen-tipo-chip-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 14px;
+    border-radius: 20px;
+    border: 2px solid color-mix(in srgb, var(--chip-cor, #6b7280) 30%, white);
+    background: color-mix(in srgb, var(--chip-cor, #6b7280) 8%, white);
+    color: var(--chip-cor, #6b7280);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.incen-tipo-chip-btn:hover { opacity: 0.85; }
+
+.incen-tipo-chip-btn.selecionado {
+    background: var(--chip-cor, #6b7280);
+    border-color: var(--chip-cor, #6b7280);
+    color: #fff;
+}
+
+/* Chips de processo das etapas */
+.incen-processo-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.incen-processo-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1.5px solid var(--gs-borda);
+    background: #fff;
+    font-size: 0.82rem;
+    color: var(--gs-texto-secundario);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.incen-processo-chip:hover { border-color: var(--gs-primaria); color: var(--gs-primaria); }
+
+.incen-processo-chip.selecionado {
+    border-color: var(--gs-primaria);
+    background: #eff6ff;
+    color: var(--gs-primaria);
+    font-weight: 600;
+}
+
+/* Footer da nova config: pts + toggle + botões */
+.incen-nova-config-footer {
+    display: flex;
+    align-items: flex-end;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding-top: 4px;
+    border-top: 1px solid var(--gs-borda);
+}
+
+.incen-nova-config-pts {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.incen-nova-config-pts-sufixo {
+    font-size: 0.75rem;
+    color: var(--gs-texto-secundario);
+    font-weight: 600;
+    margin-left: 4px;
+}
+
+.incen-nova-config-btns {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-left: auto;
+}
+
+.incen-nova-config-btns .incen-regra-btn {
+    width: auto;
+    padding: 0 12px;
+    gap: 5px;
+}
+
+/* ── Buscador de produto ── */
+.incen-busca-produto {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.incen-busca-produto-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 2px solid var(--gs-primaria);
+    border-radius: 8px;
+    background: #fff;
+}
+
+.incen-busca-icone { color: var(--gs-primaria); font-size: 0.9rem; }
+
+.incen-busca-produto-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-size: 0.9rem;
+    color: var(--gs-texto-primario);
+    background: transparent;
+    font-family: inherit;
+}
+
+.incen-busca-produto-lista {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+.incen-busca-produto-item {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1.5px solid var(--gs-borda);
+    background: #fff;
+    font-size: 0.82rem;
+    color: var(--gs-texto-primario);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.incen-busca-produto-item:hover {
+    border-color: var(--gs-primaria);
+    background: #eff6ff;
+    color: var(--gs-primaria);
+}
+
+/* ============================================================
+   Responsividade
+   ============================================================ */
+@media (max-width: 768px) {
+    .incen-v-chips-row { flex-direction: column; }
+    .incen-v-btn-nova  { width: 100%; }
+    .incen-regra-card  { flex-wrap: wrap; }
+    .incen-regra-nums  { flex-wrap: wrap; }
+    .incen-pontos-toolbar { flex-direction: column; align-items: stretch; }
+    .incen-config-row  { gap: 8px; }
+    .incen-nova-config-footer { flex-direction: column; align-items: stretch; }
+    .incen-nova-config-btns   { margin-left: 0; }
+}
+
+/* LEGADO — mantido por compatibilidade com ModalCondicoes que ainda usa select */
+.incen-metas-header {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+
+.incen-metas-select-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 1;
+    min-width: 240px;
+}
+
+.incen-metas-select-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--gs-texto-secundario);
+}
+
+.incen-metas-select {
+    width: 100%;
+}
+
+.incen-metas-versao-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-top: 6px;
+    flex-wrap: wrap;
+}
+
+.incen-metas-editavel-hint {
+    font-size: 0.8rem;
+    color: var(--gs-primaria);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* ============================================================
+   Aba Metas — acordeão de grupos
+   ============================================================ */
+.incen-metas-acordeao {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.incen-metas-grupo {
+    border: 1.5px solid var(--gs-borda);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.incen-metas-grupo-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 13px 16px;
+    background: var(--gs-fundo);
+    cursor: pointer;
+    transition: background 0.15s;
+    user-select: none;
+}
+
+.incen-metas-grupo-header:hover { background: #eaecf0; }
+.incen-metas-grupo-header.aberto { background: #eef2ff; }
+
+.incen-metas-grupo-header h4 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--gs-texto-primario);
+}
+
+.incen-metas-count {
+    font-weight: 400;
+    color: var(--gs-texto-secundario);
+    font-size: 0.85rem;
+}
+
+.incen-metas-grupo-corpo {
+    padding: 16px;
+    border-top: 1.5px solid var(--gs-borda);
+}
+
+/* ============================================================
+   Aba Metas — tabela de regras
+   ============================================================ */
+.incen-metas-tabela-wrap {
+    overflow-x: auto;
+}
+
+.incen-metas-tabela {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.incen-metas-tabela th {
+    text-align: left;
+    padding: 8px 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--gs-texto-secundario);
+    border-bottom: 2px solid var(--gs-borda);
+    white-space: nowrap;
+}
+
+.incen-metas-tabela td {
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--gs-borda);
+    vertical-align: middle;
+}
+
+.incen-metas-tabela tr:last-child td { border-bottom: none; }
+.incen-metas-nova-linha td { background: #fffbeb; }
+
+.incen-metas-input {
+    padding: 6px 8px;
+    border: 1.5px solid var(--gs-borda);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    color: var(--gs-texto-primario);
+    background: #fff;
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color 0.15s;
+}
+
+.incen-metas-input:focus {
+    outline: none;
+    border-color: var(--gs-primaria);
+}
+
+.incen-metas-input:disabled {
+    background: var(--gs-fundo);
+    color: var(--gs-texto-secundario);
+    cursor: not-allowed;
+}
+
+.incen-metas-input--num { width: 90px; text-align: right; }
+
+.incen-metas-acoes {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.incen-metas-btn-acao {
+    padding: 5px 10px !important;
+    font-size: 0.8rem !important;
+    min-height: 32px;
+}
+
+.incen-metas-btn-excluir {
+    background: #ef4444 !important;
+    color: #fff !important;
+}
+
+.incen-metas-btn-excluir:hover { background: #dc2626 !important; }
+
+.incen-metas-btn-cond {
+    font-size: 0.78rem;
+    padding: 5px 8px;
+    white-space: nowrap;
+}
+
+.incen-metas-btn-add-regra {
+    margin-top: 12px;
+    font-size: 0.83rem;
+}
+
+.incen-metas-muted {
+    color: var(--gs-texto-secundario);
+    font-size: 0.85rem;
+}
+
+/* ============================================================
+   Aba Metas — modal de condições
+   ============================================================ */
+.incen-metas-modal-desc {
+    font-size: 0.85rem;
+    color: var(--gs-texto-secundario);
+    margin-bottom: 14px;
+}
+
+.incen-metas-sem-condicoes {
+    text-align: center;
+    color: var(--gs-texto-secundario);
+    font-size: 0.85rem;
+    padding: 14px;
+    background: var(--gs-fundo);
+    border-radius: 6px;
+    margin-bottom: 14px;
+}
+
+.incen-metas-condicoes-lista {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 14px;
+    border: 1.5px solid var(--gs-borda);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.incen-metas-condicao-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--gs-borda);
+    font-size: 0.875rem;
+    gap: 8px;
+}
+
+.incen-metas-condicao-item:last-child { border-bottom: none; }
+
+.incen-metas-nova-condicao {
+    background: var(--gs-fundo);
+    border: 1.5px solid var(--gs-borda);
+    border-radius: 8px;
+    padding: 14px;
+    margin-top: 6px;
+}
+
+.incen-metas-nova-condicao h4 {
+    margin: 0 0 12px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--gs-texto-primario);
+}
+
+/* ============================================================
+   Aba Pontos — filtros e tabela
+   ============================================================ */
+.incen-pontos-filtros {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.incen-pontos-filtro-grupo {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.incen-pontos-btn-add {
+    align-self: flex-end;
+    margin-left: auto;
+}
+
+.incen-pontos-tabela th:nth-child(4),
+.incen-pontos-tabela td:nth-child(4) { width: 110px; }
+
+.incen-pontos-tabela th:nth-child(5),
+.incen-pontos-tabela td:nth-child(5) { width: 60px; text-align: center; }
+
+.incen-pontos-input-num {
+    width: 90px;
+    padding: 6px 8px;
+    border: 1.5px solid var(--gs-borda);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    text-align: right;
+    background: #fff;
+    transition: border-color 0.15s;
+}
+
+.incen-pontos-input-num:focus {
+    outline: none;
+    border-color: var(--gs-primaria);
+}
+
+.incen-pontos-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--gs-primaria);
+}
+
+.incen-pontos-td-centro { text-align: center; }
+
+.incen-pontos-select {
+    padding: 6px 8px;
+    border: 1.5px solid var(--gs-borda);
+    border-radius: 6px;
+    font-size: 0.83rem;
+    background: #fff;
+    color: var(--gs-texto-primario);
+    width: 100%;
+    transition: border-color 0.15s;
+}
+
+.incen-pontos-select:focus {
+    outline: none;
+    border-color: var(--gs-primaria);
+}
+
+/* ============================================================
+   Responsividade — abas Metas e Pontos
+   ============================================================ */
+@media (max-width: 768px) {
+    .incen-metas-header { flex-direction: column; align-items: stretch; }
+    .incen-metas-select-wrap { min-width: unset; }
+    .incen-pontos-filtros { flex-direction: column; align-items: stretch; }
+    .incen-pontos-btn-add { margin-left: 0; }
+    .incen-metas-tabela th:nth-child(3),
+    .incen-metas-tabela td:nth-child(3) { display: none; }
+}
+
+/* ============================================================
+   Badges de tipo — corrida e equipe
+   ============================================================ */
+.incen-badge-corrida {
+    background: #fef3c7 !important;
+    color: #92400e !important;
+    border: none !important;
+}
+
+.incen-badge-equipe {
+    background: #ede9fe !important;
+    color: #5b21b6 !important;
+    border: none !important;
+}
+
+/* ============================================================
+   Ranking Modal — equipe e corrida
+   ============================================================ */
+.incen-ranking-corrida-resultado {
+    background: #fef9c3;
+    border: 1px solid #fde68a;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    font-size: 0.88rem;
+    color: #78350f;
+}
+
+.incen-ranking-corrida-resultado p { margin: 0; }
+
+.incen-ranking-equipe-total {
+    background: #f5f3ff;
+    border: 1px solid #ddd6fe;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.incen-ranking-equipe-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.82rem;
+    color: #5b21b6;
+    font-weight: 600;
+}
+
+.incen-ranking-equipe-status {
+    font-size: 0.78rem;
+    color: #6b7280;
+    margin: 0;
+}
+
+/* Linha vencedor de corrida */
+.incen-ranking-row--vencedor {
+    background: #fef9c3 !important;
+}
+
+/* Coluna de pagamento */
+.incen-ranking-pagamento {
+    text-align: center;
+    font-size: 0.82rem;
+}
+
+.incen-ranking-badge-pago {
+    color: #16a34a;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.incen-ranking-badge-pendente {
+    font-size: 0.82rem;
+}
+
+.incen-ranking-ganhou-em {
+    font-size: 0.75rem;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+.incen-ranking-corrida-ganho-em {
+    font-size: 0.82rem;
+    color: #64748b;
+    margin: 4px 0 0;
+}
+
+/* ============================================================
+   Wizard de 3 passos — IncenGincanaModal v3.0
+   ============================================================ */
+.incen-wizard-steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 14px 24px 0;
+    border-bottom: 1px solid var(--gs-borda);
+    margin-bottom: 0;
+}
+
+.incen-wizard-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+    padding-bottom: 12px;
+    border-bottom: 2px solid transparent;
+    color: var(--gs-texto-secundario);
+    transition: all 0.15s;
+}
+
+.incen-wizard-step.ativo {
+    border-bottom-color: var(--gs-primaria);
+    color: var(--gs-primaria);
+}
+
+.incen-wizard-step.concluido {
+    color: #22c55e;
+}
+
+.incen-wizard-step-num {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--gs-fundo);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    border: 2px solid currentColor;
+}
+
+.incen-wizard-step.ativo .incen-wizard-step-num {
+    background: var(--gs-primaria);
+    color: #fff;
+    border-color: var(--gs-primaria);
+}
+
+.incen-wizard-step.concluido .incen-wizard-step-num {
+    background: #22c55e;
+    color: #fff;
+    border-color: #22c55e;
+}
+
+.incen-wizard-step-label {
+    font-size: 0.72rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.incen-wizard-passo {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Tipo de premiação: Meta vs Corrida */
+.incen-tipo-premiacao-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.incen-tipo-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 16px 12px;
+    border: 2px solid var(--gs-borda);
+    border-radius: 10px;
+    background: #fff;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+}
+
+.incen-tipo-card:hover {
+    border-color: var(--gs-primaria);
+}
+
+.incen-tipo-card.ativo {
+    border-color: var(--gs-primaria);
+    background: color-mix(in srgb, var(--gs-primaria) 6%, #fff);
+}
+
+.incen-tipo-icone {
+    font-size: 1.6rem;
+    line-height: 1;
+}
+
+.incen-tipo-card strong {
+    font-size: 0.9rem;
+    color: var(--gs-texto-primario);
+}
+
+.incen-tipo-desc {
+    font-size: 0.75rem;
+    color: var(--gs-texto-secundario);
+    line-height: 1.3;
+}
+
+/* Escopo de atividade */
+.incen-escopo-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.incen-escopo-btn {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 10px 12px;
+    border: 1.5px solid var(--gs-borda);
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: left;
+}
+
+.incen-escopo-btn:hover { border-color: var(--gs-primaria); }
+
+.incen-escopo-btn.ativo {
+    border-color: var(--gs-primaria);
+    background: color-mix(in srgb, var(--gs-primaria) 6%, #fff);
+}
+
+.incen-escopo-btn strong {
+    font-size: 0.82rem;
+    color: var(--gs-texto-primario);
+}
+
+.incen-escopo-btn span {
+    font-size: 0.72rem;
+    color: var(--gs-texto-secundario);
+}
+
+/* Hint em bloco (com ícone) */
+.incen-form-hint-bloco {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    font-size: 0.78rem;
+    color: var(--gs-texto-secundario);
+    background: var(--gs-fundo);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+
+.incen-form-hint-bloco i {
+    flex-shrink: 0;
+    margin-top: 1px;
+    color: var(--gs-primaria);
+    font-size: 0.82rem;
+}
+
+/* Premiação — cabeçalho de nível */
+.incen-premiacao-linha-cabecalho {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.incen-premiacao-num {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gs-primaria);
+}
+
+/* Sub-campos com label acima */
+.incen-form-campo-mini {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.incen-campo-mini-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--gs-texto-secundario);
+}
+
+/* Hint inline no label do sub-campo */
+.incen-campo-mini-hint {
+    font-weight: 400;
+    color: #9ca3af;
+    font-size: 0.68rem;
+}
+
+/* Input de meta com unidade */
+.incen-meta-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.incen-unidade-label {
+    font-size: 0.75rem;
+    color: var(--gs-texto-secundario);
+    white-space: nowrap;
+    min-width: 46px;
+}
+
+/* ============================================================
+   Aba Pagamentos — IncenPagamentosTab
+   ============================================================ */
+.incen-subfiltro-badge--alerta {
+    background: #ef4444 !important;
+    color: #fff !important;
+}
+
+.incen-pag-acoes-topo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px 0 16px;
+    border-bottom: 1px solid var(--gs-borda);
+    margin-bottom: 16px;
+}
+
+.incen-pag-resumo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    color: var(--gs-texto-secundario);
+    margin: 0;
+}
+
+.incen-pag-resumo i { color: var(--gs-primaria); }
+
+.incen-pag-grupo {
+    margin-bottom: 20px;
+}
+
+.incen-pag-grupo-titulo {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gs-texto-secundario);
+    margin: 0 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.incen-pag-grupo-titulo--atrasado { color: #f97316; }
+
+.incen-pag-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.incen-pag-linha {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px 12px 22px;
+    background: #fff;
+    border: 1px solid var(--gs-borda);
+    border-radius: 10px;
+    position: relative;
+    overflow: hidden;
+}
+
+.incen-pag-linha .card-borda-charme {
+    position: absolute;
+    left: 0; top: 0;
+    width: 6px; height: 100%;
+    background-color: var(--gs-primaria);
+    border-radius: 10px 0 0 10px;
+}
+
+.incen-pag-linha--pago .card-borda-charme {
+    background-color: #22c55e;
+}
+
+.incen-pag-linha-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.incen-pag-linha-principal {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.incen-pag-emoji { font-size: 1.3rem; flex-shrink: 0; }
+
+.incen-pag-gincana-nome {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--gs-texto-primario);
+    margin: 0;
+}
+
+.incen-pag-usuario {
+    font-size: 0.78rem;
+    color: var(--gs-texto-secundario);
+    margin: 0;
+}
+
+.incen-pag-nivel {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-left: auto;
+    text-align: right;
+}
+
+.incen-pag-nivel-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--gs-primaria);
+}
+
+.incen-pag-premio {
+    font-size: 0.75rem;
+    color: var(--gs-texto-secundario);
+}
+
+.incen-pag-linha-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.incen-pag-data {
+    font-size: 0.75rem;
+    color: var(--gs-texto-secundario);
+}
+
+.incen-pag-data--pago {
+    color: #22c55e;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.incen-pag-pago-por {
+    font-size: 0.72rem;
+    color: var(--gs-texto-secundario);
+    font-style: italic;
+}
+
+.incen-pag-valor {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--gs-texto-primario);
+    margin-left: auto;
+}
+
+.incen-pag-btn-pagar {
+    flex-shrink: 0;
+    padding: 8px 14px;
+    font-size: 0.82rem;
+}
+
+/* ============================================================
+   Dashboard — novos elementos v3.0
+   ============================================================ */
+.ds-gincana-tipo-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 12px;
+    margin-bottom: 4px;
+}
+
+.ds-gincana-tipo-badge--corrida {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.ds-gincana-tipo-badge--equipe {
+    background: #ede9fe;
+    color: #5b21b6;
+}
+
+.ds-gincana-minha-contrib {
+    font-size: 0.75rem;
+    color: var(--gs-texto-secundario);
+}
+
+.ds-gincana-corrida-vencedor {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px;
+    background: color-mix(in srgb, #22c55e 8%, #fff);
+    border-radius: 8px;
+    margin-top: 4px;
+}
+
+.ds-gincana-corrida-parabens {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #15803d;
+    margin: 0;
+}
+
+.ds-gincana-corrida-premio {
+    font-size: 0.85rem;
+    color: var(--gs-texto-primario);
+    margin: 0;
+}
+
+.ds-gincana-corrida-sem-ganho {
+    font-size: 0.85rem;
+    color: var(--gs-texto-secundario);
+    padding: 8px 0 4px;
+    margin: 0;
+}
+
+.ds-gincana-premio-pago {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: #15803d;
+    margin: 4px 0 0;
+}
+
+.ds-gincana-premio-pago i { color: #22c55e; }
+
+.ds-gincana-premio-pendente {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: #92400e;
+    margin: 4px 0 0;
+}
+
+.ds-gincana-premio-pendente i { color: #f59e0b; }

@@ -1,88 +1,16 @@
 // public/src/pages/ConfigAlertas/ConfigAlertasPage.jsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { mostrarMensagem } from '/js/utils/popups.js';
-import AlertaCard from './AlertaCard.jsx';
-import DiasTrabalhoCard from './DiasTrabalhoCard.jsx';
-import HorariosCard from './HorariosCard.jsx';
-
-async function fetchApi(endpoint, options = {}) {
-    const token = localStorage.getItem('token');
-    const response = await fetch(endpoint, {
-        ...options,
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-    });
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro na requisição');
-    }
-    return response.json();
-}
-
-const GRUPOS = [
-    {
-        titulo: 'Área de Produção',
-        icone: 'fa-industry',
-        cor: '#8e44ad',
-        tipos: [
-            'OCIOSIDADE_ARREMATE', 'LENTIDAO_CRITICA_ARREMATE', 'META_BATIDA_ARREMATE',
-            'OCIOSIDADE_COSTUREIRA', 'LENTIDAO_COSTUREIRA',
-        ],
-    },
-    {
-        titulo: 'Demandas de Produção',
-        icone: 'fa-tasks',
-        cor: '#e74c3c',
-        tipos: ['DEMANDA_NORMAL', 'DEMANDA_PRIORITARIA', 'DEMANDA_NAO_INICIADA'],
-    },
-];
+import UIHeaderPagina from '../../components/UIHeaderPagina.jsx';
+import ConfigAlertasGerais from '../../components/ConfigAlertasGerais.jsx';
+import AvisosPopupAdmin from '../../components/AvisosPopupAdmin.jsx';
+import AvisosPopupGaleria from '../../components/AvisosPopupGaleria.jsx';
 
 export default function ConfigAlertasPage() {
-    const [configuracoes, setConfiguracoes] = useState([]);
-    const [diasDeTrabalho, setDiasDeTrabalho] = useState({});
-    const [horarioInicio, setHorarioInicio]       = useState('07:00');
-    const [horarioFim, setHorarioFim]             = useState('18:00');
-    const [janelaPollInicio, setJanelaPollInicio] = useState('06:00');
-    const [janelaPollFim, setJanelaPollFim]       = useState('23:00');
-    const [carregando, setCarregando] = useState(true);
-    const [salvando, setSalvando] = useState(false);
-
-    useEffect(() => {
-        Promise.all([
-            fetchApi('/api/alertas/configuracoes'),
-            fetchApi('/api/alertas/dias-trabalho')
-        ]).then(([configsAlertas, configDias]) => {
-            setConfiguracoes(configsAlertas);
-            setDiasDeTrabalho(configDias.valor || {});
-            setHorarioInicio(configDias.horario_inicio     || '07:00');
-            setHorarioFim(configDias.horario_fim           || '18:00');
-            setJanelaPollInicio(configDias.janela_poll_inicio || '06:00');
-            setJanelaPollFim(configDias.janela_poll_fim       || '23:00');
-        }).catch(err => {
-            mostrarMensagem(`Erro ao carregar configurações: ${err.message}`, 'erro');
-        }).finally(() => {
-            setCarregando(false);
-        });
-    }, []);
-
-    const handleUpdateConfig = (id, campo, novoValor) => {
-        setConfiguracoes(prev => prev.map(c => c.id === id ? { ...c, [campo]: novoValor } : c));
-    };
-
-    const handleSalvar = async () => {
-        setSalvando(true);
-        try {
-            await Promise.all([
-                fetchApi('/api/alertas/configuracoes', { method: 'PUT', body: JSON.stringify(configuracoes) }),
-                fetchApi('/api/alertas/dias-trabalho', { method: 'PUT', body: JSON.stringify({ valor: diasDeTrabalho, horario_inicio: horarioInicio, horario_fim: horarioFim, janela_poll_inicio: janelaPollInicio, janela_poll_fim: janelaPollFim }) })
-            ]);
-            mostrarMensagem('Configurações salvas com sucesso!', 'sucesso');
-        } catch (err) {
-            mostrarMensagem(`Erro ao salvar: ${err.message}`, 'erro');
-        } finally {
-            setSalvando(false);
-        }
-    };
+    const [aba, setAba] = useState('alertas');
+    const [modalNovoAvisoAberto, setModalNovoAvisoAberto] = useState(false);
+    const [galeriaAberta, setGaleriaAberta] = useState(false);
 
     const handleTestarSom = () => {
         new Audio('/sounds/alerta.mp3').play().catch(() => {
@@ -90,73 +18,63 @@ export default function ConfigAlertasPage() {
         });
     };
 
-    if (carregando) return <div className="spinner">Carregando configurações...</div>;
-
     return (
         <>
-            <div className="config-header">
-                <h1>Configurações de Alertas</h1>
-                <div style={{ display: 'flex', gap: 10 }}>
+            <UIHeaderPagina titulo="Central de Alertas">
+                {aba === 'avisos' && (
+                    <>
+                        <button
+                            className="gs-btn gs-btn-secundario"
+                            onClick={() => setGaleriaAberta(true)}
+                            title="Galeria de imagens"
+                        >
+                            <i className="fas fa-images"></i>
+                        </button>
+                        <button
+                            className="gs-btn gs-btn-primario"
+                            onClick={() => setModalNovoAvisoAberto(true)}
+                        >
+                            <i className="fas fa-plus"></i> Novo Aviso
+                        </button>
+                    </>
+                )}
+                {aba === 'alertas' && (
                     <button className="gs-btn gs-btn-secundario" onClick={handleTestarSom}>
-                        <i className="fas fa-volume-up"></i> Testar Som
+                        <i className="fas fa-volume-up"></i>
                     </button>
-                    <button className="gs-btn gs-btn-sucesso" onClick={handleSalvar} disabled={salvando}>
-                        {salvando ? <div className="spinner-btn-interno"></div> : <i className="fas fa-save"></i>}
-                        {salvando ? 'Salvando...' : 'Salvar Alterações'}
-                    </button>
-                </div>
+                )}
+            </UIHeaderPagina>
+
+            <nav className="gs-tab-nav">
+                <button
+                    className={`gs-tab-btn ${aba === 'alertas' ? 'ativo' : ''}`}
+                    onClick={() => setAba('alertas')}
+                >
+                    <i className="fas fa-bell"></i> Alertas Gerais
+                </button>
+                <button
+                    className={`gs-tab-btn ${aba === 'avisos' ? 'ativo' : ''}`}
+                    onClick={() => setAba('avisos')}
+                >
+                    <i className="fas fa-bullhorn"></i> Avisos Popups
+                </button>
+            </nav>
+
+            <div className="gs-conteudo-pagina">
+                {aba === 'alertas' && (
+                    <ConfigAlertasGerais onTestarSom={handleTestarSom} />
+                )}
+                {aba === 'avisos' && (
+                    <AvisosPopupAdmin
+                        modalAberto={modalNovoAvisoAberto}
+                        onFecharModal={() => setModalNovoAvisoAberto(false)}
+                    />
+                )}
             </div>
 
-            <DiasTrabalhoCard
-                diasConfig={diasDeTrabalho}
-                onUpdate={setDiasDeTrabalho}
-            />
-            <HorariosCard
-                horarioInicio={horarioInicio}
-                horarioFim={horarioFim}
-                onUpdateHorario={(campo, valor) => campo === 'horario_inicio' ? setHorarioInicio(valor) : setHorarioFim(valor)}
-                janelaPollInicio={janelaPollInicio}
-                janelaPollFim={janelaPollFim}
-                onUpdateJanelaPoll={(campo, valor) => campo === 'janela_poll_inicio' ? setJanelaPollInicio(valor) : setJanelaPollFim(valor)}
-            />
-
-            {GRUPOS.map(grupo => {
-                const cardsDoGrupo = configuracoes.filter(c => grupo.tipos.includes(c.tipo_alerta));
-                if (cardsDoGrupo.length === 0) return null;
-
-                return (
-                    <section key={grupo.titulo} className="config-grupo">
-                        <div className="config-grupo-header" style={{ borderLeftColor: grupo.cor }}>
-                            <i className={`fas ${grupo.icone}`} style={{ color: grupo.cor }}></i>
-                            <h2>{grupo.titulo}</h2>
-                        </div>
-                        {cardsDoGrupo.map(config => (
-                            <AlertaCard
-                                key={config.id}
-                                config={config}
-                                onUpdate={handleUpdateConfig}
-                            />
-                        ))}
-                    </section>
-                );
-            })}
-
-            {/* Alertas que não se encaixam em nenhum grupo (segurança) */}
-            {configuracoes
-                .filter(c => !GRUPOS.flatMap(g => g.tipos).includes(c.tipo_alerta))
-                .map(config => (
-                    <AlertaCard key={config.id} config={config} onUpdate={handleUpdateConfig} />
-                ))
-            }
-
-            <div className="config-futuras-areas">
-                <i className="fas fa-flask"></i>
-                <div>
-                    <strong>Próximas áreas monitoradas</strong>
-                    <span>Financeiro · Estoque · Qualidade · RH</span>
-                </div>
-                <span className="config-futuras-badge">Em desenvolvimento</span>
-            </div>
+            {galeriaAberta && (
+                <AvisosPopupGaleria onFechar={() => setGaleriaAberta(false)} />
+            )}
         </>
     );
 }

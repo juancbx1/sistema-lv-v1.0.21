@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { contarDiasUteis } from '/js/utils/periodos-fiscais.js';
+import { getDataPagamentoEstimada } from '/js/utils/periodos-fiscais.js';
 
 const fmtReal = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -40,6 +40,9 @@ export default function DashProjecaoCiclo({
     aoMudarMeta,
     inicioCiclo,
     fimCiclo,
+    diasRestantesNoCiclo,   // da API — considera dias_trabalho + feriados + expediente encerrado
+    diaHojeJaEncerrado,     // da API — true se horario_saida_3 + 15min já passou
+    aoAbrirWallet,          // abre DashPagamentosModal ao clicar em "comissão total do ciclo"
 }) {
     const [nudgeDismissido, setNudgeDismissido] = useState(false);
     const nudge = useNudgeOuro(inicioCiclo);
@@ -50,6 +53,12 @@ export default function DashProjecaoCiclo({
     const valorBronze  = parseFloat(metasPossiveis[0]?.valor_comissao || 0);
     const valorPrata   = parseFloat(metasPossiveis[1]?.valor_comissao || 0);
     const valorOuro    = parseFloat(metasPossiveis[metasPossiveis.length - 1]?.valor_comissao || 0);
+
+    // Dias restantes — usa o valor computado pela API (mais preciso) com fallback
+    const diasRestantes = diasRestantesNoCiclo ?? Math.max(0, diasUteisNoCiclo - diasTrabalhadosNoCiclo);
+
+    // Guard contra null/undefined (funcionária sem produção alguma no ciclo)
+    const valorAcumuladoSafe = parseFloat(valorAcumulado ?? 0);
 
     const nivelAtual = useMemo(() => {
         if (!diasDetalhes || diasTrabalhadosNoCiclo === 0) return 'inconsistente';
@@ -71,19 +80,8 @@ export default function DashProjecaoCiclo({
                (freq.bronze || 0) >= 3 ? 'bronze'        : 'inconsistente';
     }, [diasDetalhes, diasTrabalhadosNoCiclo, ouroPontos, prataPontos, bronzePontos]);
 
-    // Dias úteis de hoje (inclusive, fuso SP) até o último dia do ciclo
-    const diasRestantes = useMemo(() => {
-        if (!fimCiclo) return Math.max(0, diasUteisNoCiclo - diasTrabalhadosNoCiclo);
-        const hojeStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
-        return Math.max(0, contarDiasUteis(hojeStr, fimCiclo));
-    }, [fimCiclo, diasUteisNoCiclo, diasTrabalhadosNoCiclo]);
-
-    const projecaoAspiracional =
-        nivelAtual === 'ouro'  ? valorAcumulado + (valorOuro  * diasRestantes) :
-        nivelAtual === 'prata' ? valorAcumulado + (valorOuro  * diasRestantes) :
-                                 valorAcumulado + (valorPrata * diasRestantes);
-
-    const projecaoOuro = valorAcumulado + (valorOuro * diasRestantes);
+    // Projeção máxima: e se ela bater Ouro em todos os dias restantes?
+    const projecaoOuro = valorAcumuladoSafe + (valorOuro * diasRestantes);
 
     const estado =
         diasTrabalhadosNoCiclo === 0 ? 'ciclo-novo' :
@@ -105,7 +103,7 @@ export default function DashProjecaoCiclo({
         },
         inconsistente: {
             titulo: 'Consistência é o segredo!',
-            delta: Math.max(0, (valorPrata * diasTrabalhadosNoCiclo) - valorAcumulado),
+            delta: Math.max(0, (valorPrata * diasTrabalhadosNoCiclo) - valorAcumuladoSafe),
             ctaTexto: 'Bater Prata amanhã!',
             metaAlvo: metasPossiveis[1],
         },
@@ -126,126 +124,101 @@ export default function DashProjecaoCiclo({
 
     const labelDias = (n) => n === 1 ? '1 dia' : `${n} dias`;
 
-    const renderHorizonte = () => (
-        <>
-            <div className="ds-projecao-divisor"></div>
-            <div className="ds-projecao-horizonte">
-                <div>
-                    <span className="ds-projecao-horizonte-valor">🥇 {fmtReal(projecaoOuro)}</span>
-                    <div className="ds-projecao-horizonte-label">fecharia no Ouro todo dia</div>
-                </div>
-                <span className="ds-projecao-horizonte-rotulo">horizonte</span>
-            </div>
-        </>
-    );
+    // Label de contexto temporal para as mensagens ("hoje", "amanhã", "nos próximos X dias")
+    const labelContexto = diasRestantes === 1
+        ? (diaHojeJaEncerrado ? 'amanhã' : 'hoje')
+        : `nos próximos ${labelDias(diasRestantes)}`;
 
     const renderCorpo = () => {
+        // Ciclo encerrado — não há mais dias úteis restantes para ela
+        if (diasRestantes === 0) {
+            const dataPagamento = fimCiclo ? getDataPagamentoEstimada(fimCiclo) : null;
+            return (
+                <>
+                    <div className="ds-projecao-alerta-fim ds-projecao-alerta-encerrado">
+                        <i className="fas fa-check-circle"></i> Ciclo encerrado!
+                    </div>
+                    <p className="ds-projecao-mensagem" style={{ marginTop: '14px' }}>
+                        Comissão garantida neste ciclo:
+                    </p>
+                    <div className="ds-projecao-nivel-row">
+                        <span className="ds-projecao-nivel-icone">💰</span>
+                        <span className="ds-projecao-valor-grande ouro">{fmtReal(valorAcumuladoSafe)}</span>
+                    </div>
+                    {dataPagamento && (
+                        <p className="ds-projecao-contexto">pagamento previsto para {dataPagamento}</p>
+                    )}
+                </>
+            );
+        }
+
+        // Início de ciclo — sem produção ainda
         if (estado === 'ciclo-novo') {
             const potencial = valorOuro * diasUteisNoCiclo;
             return (
                 <>
-                    <p className="ds-projecao-mensagem">O ciclo começou! Batendo Ouro todos os {diasUteisNoCiclo} dias úteis, você fecha em:</p>
+                    <p className="ds-projecao-mensagem">O ciclo começou! Batendo a meta Ouro todos os {diasUteisNoCiclo} dias úteis, você pode fechar o ciclo em:</p>
                     <div className="ds-projecao-nivel-row">
                         <span className="ds-projecao-nivel-icone">🥇</span>
-                        <span className="ds-projecao-valor-medio ouro">{fmtReal(potencial)}</span>
+                        <span className="ds-projecao-valor-grande ouro">{fmtReal(potencial)}</span>
                     </div>
+                    <p className="ds-projecao-contexto">potencial máximo do ciclo</p>
                 </>
             );
         }
 
+        // Para todos os outros estados: herói sempre é a projeção no Ouro (máximo possível)
+        let mensagem;
         if (estado === 'fim-ciclo') {
-            // diasRestantes=1 significa que o dia restante É hoje (contarDiasUteis inclui hoje)
-            const labelFim = diasRestantes <= 1 ? 'hoje' : `nos próximos ${labelDias(diasRestantes)}`;
-            const labelAlerta =
-                diasRestantes <= 1 ? 'Ciclo encerrando hoje!' : `Últimos ${labelDias(diasRestantes)} do ciclo!`;
-            return (
-                <>
+            mensagem = `Se bater a meta Ouro ${labelContexto}, fecha o ciclo em:`;
+        } else if (estado === 'ouro') {
+            mensagem = `Mantendo a meta Ouro nos ${labelDias(diasRestantes)} restantes, fecha o ciclo em:`;
+        } else if (estado === 'prata') {
+            mensagem = `Subindo para a meta Ouro nos ${labelDias(diasRestantes)} restantes, fecha o ciclo em:`;
+        } else {
+            // bronze ou inconsistente
+            mensagem = `Batendo a meta Ouro nos ${labelDias(diasRestantes)} restantes, fecha o ciclo em:`;
+        }
+
+        return (
+            <>
+                {estado === 'fim-ciclo' && (
                     <div className="ds-projecao-alerta-fim">
                         <i className="fas fa-hourglass-half"></i>
-                        {labelAlerta}
+                        {diasRestantes === 1
+                            ? (diaHojeJaEncerrado ? 'Último dia do ciclo é amanhã!' : 'Último dia do ciclo!')
+                            : `Últimos ${labelDias(diasRestantes)} do ciclo!`}
                     </div>
-                    <p className="ds-projecao-mensagem" style={{ marginTop: '14px' }}>
-                        Se bater Ouro {labelFim}, fecha o ciclo em:
-                    </p>
-                    <div className="ds-projecao-nivel-row">
-                        <span className="ds-projecao-nivel-icone">🥇</span>
-                        <span className="ds-projecao-valor-medio ouro">{fmtReal(projecaoOuro)}</span>
-                    </div>
-                    <p className="ds-projecao-contexto">comissão total do ciclo</p>
-                </>
-            );
-        }
+                )}
 
-        if (estado === 'ouro') {
-            return (
-                <>
-                    <p className="ds-projecao-mensagem">🏆 Continue assim! Mantendo Ouro nos {labelDias(diasRestantes)} restantes, fecha o ciclo em:</p>
-                    <div className="ds-projecao-nivel-row">
-                        <span className="ds-projecao-nivel-icone">🥇</span>
-                        <span className="ds-projecao-valor-medio ouro">{fmtReal(projecaoOuro)}</span>
-                    </div>
-                    <p className="ds-projecao-contexto">comissão total do ciclo</p>
+                <p className="ds-projecao-mensagem" style={estado === 'fim-ciclo' ? { marginTop: '14px' } : undefined}>
+                    {mensagem}
+                </p>
+
+                <div className="ds-projecao-nivel-row">
+                    <span className="ds-projecao-nivel-icone">🥇</span>
+                    <span className="ds-projecao-valor-grande ouro">{fmtReal(projecaoOuro)}</span>
+                </div>
+
+                {estado === 'ouro' && (
                     <div className="ds-projecao-manutencao">
                         Cada dia no Ouro vale {fmtReal(valorOuro)}. Não pare agora!
                     </div>
-                </>
-            );
-        }
+                )}
 
-        if (estado === 'prata') {
-            return (
-                <>
-                    <p className="ds-projecao-mensagem">Falta pouco para o Ouro! Subindo para Ouro nos {labelDias(diasRestantes)} restantes, fecha o ciclo em:</p>
-                    <div className="ds-projecao-nivel-row">
-                        <span className="ds-projecao-nivel-icone">🥇</span>
-                        <span className="ds-projecao-valor-medio">{fmtReal(projecaoAspiracional)}</span>
-                    </div>
-                    <p className="ds-projecao-contexto">comissão total do ciclo</p>
-                    {renderHorizonte()}
-                </>
-            );
-        }
-
-        if (estado === 'bronze') {
-            return (
-                <>
-                    <p className="ds-projecao-mensagem">Subindo para Prata nos {labelDias(diasRestantes)} restantes, fecha o ciclo em:</p>
-                    <div className="ds-projecao-nivel-row">
-                        <span className="ds-projecao-nivel-icone">🥈</span>
-                        <span className="ds-projecao-valor-medio">{fmtReal(projecaoAspiracional)}</span>
-                    </div>
-                    <p className="ds-projecao-contexto">comissão total do ciclo</p>
-                    {renderHorizonte()}
-                </>
-            );
-        }
-
-        // inconsistente
-        return (
-            <>
-                <p className="ds-projecao-mensagem">
-                    Produzindo Prata todo dia nos {labelDias(diasRestantes)} restantes, fecha o ciclo em:
-                </p>
-                <div className="ds-projecao-nivel-row">
-                    <span className="ds-projecao-nivel-icone">🥈</span>
-                    <span className="ds-projecao-valor-medio">{fmtReal(projecaoAspiracional)}</span>
-                </div>
-                <p className="ds-projecao-contexto">comissão total do ciclo</p>
-                {renderHorizonte()}
+                <button
+                    className="ds-projecao-contexto ds-projecao-contexto--link"
+                    onClick={aoAbrirWallet}
+                    type="button"
+                >
+                    comissão total do ciclo
+                </button>
             </>
         );
     };
 
     return (
         <section className="ds-card ds-projecao-card">
-            <div className="ds-projecao-acumulado-chip">
-                <i className="fas fa-check-circle"></i>
-                <div>
-                    <span className="ds-projecao-acumulado-label">já garantido este ciclo</span>
-                    <span className="ds-projecao-acumulado-valor">{fmtReal(valorAcumulado)}</span>
-                </div>
-            </div>
-
             {renderCorpo()}
 
             {mostrandoNudge && (

@@ -6,12 +6,14 @@ import DashDesempenhoModal from './components/DashDesempenhoModal';
 import { fetchAPI } from '/js/utils/api-utils';
 import { verificarAutenticacao } from '/js/utils/auth.js'; 
 import DashProjecaoCiclo from './components/DashProjecaoCiclo';
-import DashRitmoIA from './components/DashRitmoIA';
 import DashCofreModal from './components/DashCofreModal';
 import DashPerfilModal from './components/DashPerfilModal';
 import DashPagamentosModal from './components/DashPagamentosModal';
 import DashRankingCard from './components/DashRankingCard';
+import DashFabGincana from './components/DashFabGincana';
 import DashVersionFooter from './components/DashVersionFooter';
+import DashAvisoPopup from './components/DashAvisoPopup';
+import DashStatusAtualFab from './components/DashStatusAtualFab';
 
 export default function MainDashboard() {
     const [loading, setLoading] = useState(true);
@@ -22,6 +24,7 @@ export default function MainDashboard() {
     const [modalPerfilAberto, setModalPerfilAberto] = useState(false);
     const [modalPagamentosAberto, setModalPagamentosAberto] = useState(false);
     const [impersonandoNome, setImpersonandoNome] = useState(null);
+    const [avisosPopup, setAvisosPopup] = useState([]);
 
     const carregar = async () => {
         // Detecta token de impersonação na URL e o armazena em sessionStorage (isolado por aba)
@@ -45,7 +48,12 @@ export default function MainDashboard() {
                 } catch (_) { /* ignora erro de decode */ }
             }
 
-            const resultado = await fetchAPI('/api/dashboard/desempenho');
+            // Buscar avisos popup pendentes (em paralelo com os dados do dashboard)
+            const [resultado, avisosPendentes] = await Promise.all([
+                fetchAPI('/api/dashboard/desempenho'),
+                fetchAPI('/api/avisos-popup/pendentes').catch(() => []),
+            ]);
+            setAvisosPopup(avisosPendentes);
             setDados(resultado);
             
             // --- LÓGICA DE PERSISTÊNCIA DA META ---
@@ -75,6 +83,18 @@ export default function MainDashboard() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleMarcarAvisoVisto = async (avisoId) => {
+        try {
+            const token = localStorage.getItem('token')
+                || sessionStorage.getItem('impersonation_token');
+            await fetch(`/api/avisos-popup/${avisoId}/marcar-visto`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+            });
+        } catch (_) { /* silencioso — não bloqueia a UX */ }
+        setAvisosPopup(prev => prev.filter(a => a.id !== avisoId));
     };
 
     useEffect(() => {
@@ -122,6 +142,9 @@ export default function MainDashboard() {
                     aoMudarMeta={setMetaDoUsuario}
                     inicioCiclo={dados.periodo?.inicio}
                     fimCiclo={dados.periodo?.fim}
+                    diasRestantesNoCiclo={dados.acumulado.diasRestantesNoCiclo}
+                    diaHojeJaEncerrado={dados.acumulado.diaHojeJaEncerrado}
+                    aoAbrirWallet={() => setModalPagamentosAberto(true)}
                 />
                 
                 <DashFocoHoje
@@ -131,8 +154,6 @@ export default function MainDashboard() {
                     aoMudarMeta={setMetaDoUsuario}
                     diasUteisNoCiclo={dados.acumulado.diasUteisRealDoEmpregadoNoCiclo}
                 />
-
-                <DashRitmoIA metaDoUsuario={metaDoUsuario} />
 
                 <DashRankingCard />
 
@@ -145,6 +166,14 @@ export default function MainDashboard() {
             </main>
 
             <DashVersionFooter />
+
+            {/* Avisos Popup — aparece sobre tudo ao carregar */}
+            {avisosPopup.length > 0 && (
+                <DashAvisoPopup
+                    avisos={avisosPopup}
+                    onMarcarVisto={handleMarcarAvisoVisto}
+                />
+            )}
 
             {/* Modal de Detalhes (Abre ao clicar no botão "Ver Detalhes" do resumo) */}
             {modalDesempenhoAberto && (
@@ -175,11 +204,14 @@ export default function MainDashboard() {
             )}
 
             {modalPagamentosAberto && (
-                <DashPagamentosModal 
+                <DashPagamentosModal
                     pagamentoPendente={dados.pagamentoPendente} // NOVA PROP
                     onClose={() => setModalPagamentosAberto(false)}
                 />
             )}
+
+            <DashFabGincana />
+            <DashStatusAtualFab />
 
         </div>
     );

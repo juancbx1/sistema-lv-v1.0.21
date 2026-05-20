@@ -11,8 +11,10 @@ export default function DashVersionFooter() {
     // Apenas entradas que têm novidades para a dashboard
     const entradasDashboard = changelog.filter(e => e.dashboard && e.dashboard.length > 0);
 
-    // Versão exibida no rodapé = a mais recente com conteúdo de dashboard
-    const versaoRodape = entradasDashboard.length > 0 ? entradasDashboard[0].versao : __APP_VERSION__;
+    // Versão exibida no rodapé = versao_dashboard da entrada mais recente (se existir), senão versao
+    const versaoRodape = entradasDashboard.length > 0
+        ? (entradasDashboard[0].versao_dashboard ?? entradasDashboard[0].versao)
+        : __APP_VERSION__;
 
     return (
         <>
@@ -51,7 +53,7 @@ export default function DashVersionFooter() {
                                     <div key={entrada.versao} className="ds-version-entrada">
                                         <div className="ds-version-entrada-header">
                                             <span className="ds-version-badge">
-                                                v{entrada.versao}
+                                                v{entrada.versao_dashboard ?? entrada.versao}
                                             </span>
                                             {idx === 0 && (
                                                 <span className="ds-version-atual-tag">Atual</span>

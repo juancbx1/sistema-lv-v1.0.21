@@ -32,6 +32,118 @@ router.use(async (req, res, next) => {
     }
 });
 
+// GET /api/producao/meu-status — status do próprio usuário logado (para o FAB da dashboard)
+router.get('/meu-status', async (req, res) => {
+    let dbClient;
+    try {
+        dbClient = await pool.connect();
+        const userId = req.usuarioLogado.id;
+
+        const [usuarioResult, pontoResult, pontosHojeResult] = await Promise.all([
+            dbClient.query(`
+                SELECT
+                    u.id, u.nome, u.tipos, u.status_atual, u.status_data_modificacao,
+                    u.horario_entrada_1, u.horario_saida_1,
+                    u.horario_entrada_2, u.horario_saida_2,
+                    u.horario_entrada_3, u.horario_saida_3,
+                    u.dias_trabalho,
+                    COALESCE(
+                        json_agg(
+                            json_build_object(
+                                'id_sessao',   s.id,
+                                'op_numero',   s.op_numero,
+                                'produto_id',  s.produto_id,
+                                'variante',    s.variante,
+                                'processo',    s.processo,
+                                'quantidade',  s.quantidade_atribuida,
+                                'data_inicio', s.data_inicio,
+                                'produto_nome', p.nome,
+                                'imagem',      COALESCE(g.imagem, p.imagem),
+                                'valor_ponto', cpp.pontos_padrao,
+                                'tpp',         tpp_ref.tempo_segundos
+                            ) ORDER BY s.id ASC
+                        ) FILTER (WHERE s.id IS NOT NULL),
+                        '[]'
+                    ) AS tarefas_ativas
+                FROM usuarios u
+                LEFT JOIN sessoes_trabalho_producao s
+                    ON u.id = s.funcionario_id AND s.status = 'EM_ANDAMENTO'
+                LEFT JOIN produtos p ON s.produto_id = p.id
+                LEFT JOIN LATERAL (
+                    SELECT gr.imagem
+                    FROM jsonb_to_recordset(
+                        CASE WHEN jsonb_typeof(p.grade) = 'array' THEN p.grade ELSE '[]'::jsonb END
+                    ) AS gr(sku TEXT, variacao TEXT, imagem TEXT)
+                    WHERE gr.variacao = s.variante
+                    LIMIT 1
+                ) g ON true
+                LEFT JOIN configuracoes_pontos_processos cpp
+                    ON cpp.produto_id = s.produto_id
+                    AND cpp.processo_nome = s.processo
+                    AND cpp.tipo_atividade = 'costura_op_costureira'
+                    AND cpp.ativo = TRUE
+                LEFT JOIN tempos_padrao_producao tpp_ref
+                    ON tpp_ref.produto_id = s.produto_id
+                    AND tpp_ref.processo = s.processo
+                WHERE u.id = $1
+                GROUP BY u.id
+            `, [userId]),
+            dbClient.query(`
+                SELECT horario_real_s1, horario_real_e2,
+                       horario_real_s2, horario_real_e3, horario_real_s3
+                FROM ponto_diario
+                WHERE funcionario_id = $1
+                  AND data = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+            `, [userId]),
+            dbClient.query(`
+                SELECT COALESCE(SUM(pontos_gerados), 0)::numeric(10,2) AS pontos_hoje
+                FROM producoes
+                WHERE funcionario_id = $1
+                  AND (data AT TIME ZONE 'America/Sao_Paulo')::date = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+            `, [userId]),
+        ]);
+
+        if (usuarioResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Usuário não encontrado.' });
+        }
+
+        const row = usuarioResult.rows[0];
+        const pontoDiario = pontoResult.rows[0] || null;
+        const tarefas = row.tarefas_ativas || [];
+        const temTarefa = tarefas.length > 0;
+        const pontosHoje = parseFloat(pontosHojeResult.rows[0]?.pontos_hoje || 0);
+
+        let statusFinal = determinarStatusFinalServidor(row, pontoDiario);
+        if (temTarefa) statusFinal = 'PRODUZINDO';
+
+        res.status(200).json({
+            id: row.id,
+            nome: row.nome,
+            tipos: row.tipos,
+            status_atual: statusFinal,
+            pontos_hoje: pontosHoje,
+            horario_saida_1:   row.horario_saida_1,
+            horario_entrada_2: row.horario_entrada_2,
+            horario_saida_2:   row.horario_saida_2,
+            horario_entrada_3: row.horario_entrada_3,
+            ponto_hoje: pontoDiario ? {
+                horario_real_s1: pontoDiario.horario_real_s1,
+                horario_real_e2: pontoDiario.horario_real_e2,
+                horario_real_s2: pontoDiario.horario_real_s2,
+                horario_real_e3: pontoDiario.horario_real_e3,
+                horario_real_s3: pontoDiario.horario_real_s3,
+            } : null,
+            tarefa_atual:   temTarefa ? tarefas[0] : null,
+            proxima_tarefa: tarefas.length > 1 ? tarefas[1] : null,
+        });
+    } catch (error) {
+        console.error('[API /producao/meu-status] Erro:', error);
+        res.status(500).json({ error: 'Erro ao carregar status.', details: error.message });
+    } finally {
+        if (dbClient) dbClient.release();
+    }
+});
+
 // ========= NOSSO NOVO ENDPOINT =========
 router.get('/status-funcionarios', async (req, res) => {
     let dbClient;
