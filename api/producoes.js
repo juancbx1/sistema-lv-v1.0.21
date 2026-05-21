@@ -1066,25 +1066,103 @@ router.post('/externo', async (req, res) => {
                 ? etapas_unificadas
                 : [{ etapa_index: etapaIndex, processo, maquina }];
 
+            // Distribuição waterfall — mesmo algoritmo do PUT /finalizar.
+            // Busca todas as OPs ativas do produto/variante e distribui em FIFO,
+            // respeitando o saldo de cada etapa. Corrige o bug onde tudo ia para
+            // op_numero[0] sem olhar as demais OPs do grupo.
+            const opsDisponiveisResult = await dbClient.query(`
+                SELECT numero, etapas, quantidade
+                FROM ordens_de_producao
+                WHERE produto_id = $1
+                  AND (variante = $2 OR ($2 IS NULL AND variante IS NULL))
+                  AND status IN ('em-aberto', 'produzindo')
+                ORDER BY numero ASC
+            `, [produto_id, variante || null]);
+            const opsCandidatas = opsDisponiveisResult.rows;
+
+            // Fallback: se não há OPs ativas, usa a OP original (mesmo que fechada)
+            let opOriginalFallback = null;
+            if (opsCandidatas.length === 0) {
+                const opOrigRes = await dbClient.query(
+                    'SELECT numero, etapas FROM ordens_de_producao WHERE numero = $1', [op_numero]
+                );
+                if (opOrigRes.rows.length > 0) opOriginalFallback = opOrigRes.rows[0];
+            }
+
+            // Mapa de saldos já lançados (op_numero-etapa_index → total)
+            const numerosOps = opsCandidatas.map(op => op.numero);
+            const mapaSaldo = new Map();
+            if (numerosOps.length > 0) {
+                const lancamentosAnt = await dbClient.query(`
+                    SELECT op_numero, etapa_index, SUM(quantidade) as total
+                    FROM producoes WHERE op_numero = ANY($1::text[])
+                    GROUP BY op_numero, etapa_index
+                `, [numerosOps]);
+                lancamentosAnt.rows.forEach(r =>
+                    mapaSaldo.set(`${r.op_numero}-${r.etapa_index}`, parseInt(r.total))
+                );
+            }
+
             for (const etapaUnif of etapasParaRegistrar) {
                 const idxUnif = typeof etapaUnif.etapa_index === 'number' ? etapaUnif.etapa_index : etapaIndex;
                 const maquinaUnif = etapaUnif.maquina || maquina;
                 const processoUnif = etapaUnif.processo || processo;
 
-                const { pontosGerados, valorPontoAplicado } = await calcularPontosProducao(
-                    dbClient, produto_id, processoUnif, parseInt(quantidade), freelance.id
-                );
+                let quantidadeRestante = parseInt(quantidade);
 
-                await dbClient.query(
-                    `INSERT INTO producoes (id, op_numero, etapa_index, processo, produto_id, variacao, maquina, quantidade, funcionario, funcionario_id, data, lancado_por, valor_ponto_aplicado, pontos_gerados)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11, $12, $13)`,
-                    [
-                        `prod_ext_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 4)}`,
-                        op_numero, idxUnif, processoUnif, produto_id, variante || null, maquinaUnif,
-                        parseInt(quantidade), freelance.nome, freelance.id,
-                        req.usuarioLogado.nome, valorPontoAplicado, pontosGerados,
-                    ]
-                );
+                // Loop de distribuição por OP (FIFO)
+                for (const op of opsCandidatas) {
+                    if (quantidadeRestante <= 0) break;
+
+                    const etapaIdxNaOp = op.etapas.findIndex(e => (e.processo || e) === processoUnif);
+                    if (etapaIdxNaOp === -1) continue;
+
+                    const entrada = etapaIdxNaOp === 0
+                        ? parseInt(op.quantidade)
+                        : (mapaSaldo.get(`${op.numero}-${etapaIdxNaOp - 1}`) || 0);
+                    const saida = mapaSaldo.get(`${op.numero}-${etapaIdxNaOp}`) || 0;
+                    const disponivel = Math.max(0, entrada - saida);
+
+                    if (disponivel > 0) {
+                        const qtdLancar = Math.min(quantidadeRestante, disponivel);
+                        const { pontosGerados, valorPontoAplicado } = await calcularPontosProducao(
+                            dbClient, produto_id, processoUnif, qtdLancar, freelance.id
+                        );
+                        await dbClient.query(
+                            `INSERT INTO producoes (id, op_numero, etapa_index, processo, produto_id, variacao, maquina, quantidade, funcionario, funcionario_id, data, lancado_por, valor_ponto_aplicado, pontos_gerados)
+                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11, $12, $13)`,
+                            [
+                                `prod_ext_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 4)}`,
+                                op.numero, etapaIdxNaOp, processoUnif, produto_id, variante || null, maquinaUnif,
+                                qtdLancar, freelance.nome, freelance.id,
+                                req.usuarioLogado.nome, valorPontoAplicado, pontosGerados,
+                            ]
+                        );
+                        quantidadeRestante -= qtdLancar;
+                        mapaSaldo.set(`${op.numero}-${etapaIdxNaOp}`, saida + qtdLancar);
+                    }
+                }
+
+                // Estouro: peças além do saldo disponível vão para a OP de referência
+                if (quantidadeRestante > 0) {
+                    const opAlvo = opsCandidatas.find(o => o.numero === op_numero) || opsCandidatas[0] || opOriginalFallback;
+                    if (opAlvo) {
+                        const idx = opAlvo.etapas.findIndex(e => (e.processo || e) === processoUnif);
+                        const { pontosGerados, valorPontoAplicado } = await calcularPontosProducao(
+                            dbClient, produto_id, processoUnif, quantidadeRestante, freelance.id
+                        );
+                        await dbClient.query(
+                            `INSERT INTO producoes (id, op_numero, etapa_index, processo, produto_id, variacao, maquina, quantidade, funcionario, funcionario_id, data, lancado_por, valor_ponto_aplicado, pontos_gerados)
+                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11, $12, $13)`,
+                            [
+                                `prod_ext_force_${Date.now()}_${i}`,
+                                opAlvo.numero, idx, processoUnif, produto_id, variante || null, maquinaUnif,
+                                quantidadeRestante, freelance.nome, freelance.id,
+                                req.usuarioLogado.nome, valorPontoAplicado, pontosGerados,
+                            ]
+                        );
+                    }
+                }
             }
         }
 

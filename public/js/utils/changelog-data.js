@@ -20,6 +20,16 @@
 
 export const changelog = [
     {
+        versao: '1.30.1',
+        data: '20/05/2026',
+        admin: [
+            'Ajustado bug ao atribuir tarefas/lancar producoes para prestador externo'
+        ],
+        dashboard: [
+            // Vazio — esta atualização não afeta as funcionárias
+        ],
+    },
+    {
         versao: '1.30.0',
         versao_dashboard: '1.22.0',
         data: '20/05/2026',
